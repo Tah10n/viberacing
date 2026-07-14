@@ -13,6 +13,11 @@ Read:
 
 - [Project plan](docs/PROJECT_PLAN.md)
 - [Security invariants](docs/architecture/SECURITY_INVARIANTS.md)
+- [Threat model](docs/security/THREAT_MODEL.md)
+- [Abuse cases](docs/security/ABUSE_CASES.md)
+- [Privacy data map](docs/security/PRIVACY_DATA_MAP.md)
+- [Architecture decisions](docs/decisions/README.md)
+- [Compatibility policy](docs/architecture/COMPATIBILITY_POLICY.md)
 - [Repository guidance for agents](AGENTS.md)
 - [Security policy](SECURITY.md)
 - [Public repository data policy](docs/security/PUBLIC_REPOSITORY_POLICY.md)
@@ -46,7 +51,8 @@ from Git history.
    verification.
 3. Add negative tests for authorization, parsing, state transitions, and abuse paths affected by the
    change.
-4. Update public contracts and documentation in the same pull request.
+4. Update public contracts and documentation in the same pull request. Link affected threat
+   boundaries, abuse-case IDs, privacy fields, compatibility axes, and ADRs.
 5. Confirm generated artifacts match their declared source.
 6. Sign off commits under the repository's [Developer Certificate of Origin](DCO.txt), kept
    byte-for-byte equivalent to the official [DCO 1.1](https://developercertificate.org/), with

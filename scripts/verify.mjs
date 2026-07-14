@@ -28,6 +28,11 @@ const checks = [
     [resolve(import.meta.dirname, "test-community-check.mjs")],
   ],
   [
+    "architecture checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-architecture-check.mjs")],
+  ],
+  [
     "publication-readiness checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-publication-check.mjs")],
@@ -39,6 +44,11 @@ const checks = [
   ],
   ["documentation", process.execPath, [resolve(import.meta.dirname, "check-docs.mjs")]],
   ["community health", process.execPath, [resolve(import.meta.dirname, "check-community.mjs")]],
+  [
+    "architecture contracts",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-architecture.mjs")],
+  ],
   ["configuration", process.execPath, [resolve(import.meta.dirname, "check-config.mjs")]],
   [
     "formatting",

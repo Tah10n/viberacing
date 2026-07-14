@@ -1,0 +1,356 @@
+# Abuse cases
+
+This catalog turns the [threat model](THREAT_MODEL.md) into product and operational scenarios. It
+contains public control shapes, not live rate limits, detection signatures, incident evidence, or
+production capacity. Every implemented surface maps applicable cases to negative tests, alerts, and
+an owner before public beta.
+
+## Accepted-risk boundary
+
+Community activity is self-reported. A user who controls a computer can fabricate usage, share a
+device, create several GitHub identities, or declare the same Codex account as several sources. The
+product contains rather than “solves” that behavior: no reward or privilege depends on score, source
+count is visible, all sources share one profile daily cap, and Verified ingestion is unreachable.
+
+The same behavior becomes a security or abuse defect when it crosses another profile, bypasses the
+profile cap, gains authority, reaches Verified state, evades deletion/revocation, or creates
+material availability cost.
+
+## Identity, source, and scoring abuse
+
+### VR-ABUSE-IDENTITY-SYBIL — Many enrollment identities
+
+- **Attacker:** A person or automation controlling several upstream GitHub identities.
+- **Preconditions:** Enrollment is available and the attacker can obtain or redeem invitations.
+- **Abuse:** Create many profiles to occupy leaderboard positions, scrape invitations, or consume
+  capacity.
+- **Impact:** Reputation noise, invite depletion, moderation load, and infrastructure cost; no
+  direct privilege if the Community boundary holds.
+- **Controls:** Invite-only rollout, upstream immutable GitHub ID binding, one profile per ID,
+  server-side Turnstile checks, private fair-use controls, and no score-backed benefit.
+- **Detection:** Bounded enrollment telemetry, invite redemption anomalies, correlated source
+  growth, and capacity alerts without publishing evasion thresholds.
+- **Recovery:** Pause enrollment, revoke affected invites, hide abusive profiles, and preserve a
+  minimal audited reason.
+- **Residual risk:** Vibe Racing cannot prove one human per GitHub account.
+
+### VR-ABUSE-SOURCE-DUPLICATION — Duplicate declared Codex sources
+
+- **Attacker:** An enrolled user controlling their devices and source choices.
+- **Preconditions:** The profile may create or attach more than one opaque CodexSource.
+- **Abuse:** Represent the same real Codex account as separate sources so its reported usage is
+  summed more than once.
+- **Impact:** Higher Community score up to the profile cap and reduced leaderboard credibility.
+- **Controls:** Honest Community labeling, explicit source count, profile-level cap after
+  aggregation, creation budgets, and no claim of global account uniqueness.
+- **Detection:** Source-growth and repeated-pattern signals may quarantine records but never relabel
+  them Verified.
+- **Recovery:** Pause or unlink sources, recompute an open season, and use an audited correction
+  only when policy permits.
+- **Residual risk:** Duplicate declarations remain possible without a server-verifiable upstream
+  account identifier.
+
+### VR-ABUSE-USAGE-FORGERY — Fabricated or inflated token buckets
+
+- **Attacker:** A computer owner or modified connector.
+- **Preconditions:** The attacker controls signed payload content for their own registered source.
+- **Abuse:** Submit invented values, impossible ranges, decreases, or suspicious jumps.
+- **Impact:** Community rank manipulation and operational review cost, but no authorization or
+  monetary impact.
+- **Controls:** Integer/date/size bounds, monotonic open-season state, quarantine instead of blind
+  maximum, profile cap, server-derived score, and reward-free ranking.
+- **Detection:** Rejection and quarantine metrics, bounded anomaly signals, and source-level audit.
+- **Recovery:** Exclude quarantined values, allow a reasoned open-season correction, and keep
+  finalized corrections separately authorized and audited.
+- **Residual risk:** A plausible forged value inside public bounds may be indistinguishable from an
+  honest local reading.
+
+### VR-ABUSE-SEASON-RACE — Duplicate or late mutation of season state
+
+- **Attacker:** A malicious client or normal retries exploiting concurrency and timing.
+- **Preconditions:** Parallel sync, job retry, or a request near the grace/finalization boundary.
+- **Abuse:** Double-count a source/date, reopen a closed season with client time, or apply a job
+  more than once.
+- **Impact:** Persistent ranking corruption and loss of audit confidence.
+- **Controls:** Unique source/date state, transactions, idempotency, server receipt time, versioned
+  scoring, and database-enforced finalized immutability.
+- **Detection:** Constraint violations, idempotency collisions, boundary-time metrics, and
+  finalization reconciliation.
+- **Recovery:** Idempotent rerun before finalization or a separately authorized correction record
+  after finalization.
+- **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
+  is never acceptable.
+
+## Pairing, device, and connector abuse
+
+### VR-ABUSE-PAIRING-GUESS — Pairing code guessing or swapping
+
+- **Attacker:** A remote client or nearby person who sees or guesses a short user code.
+- **Preconditions:** A live device authorization transaction exists.
+- **Abuse:** Approve the attacker's public key, swap source choice, or race the legitimate browser.
+- **Impact:** Durable unauthorized submission authority for the selected source.
+- **Controls:** High-entropy device secret kept local, short-lived user code, bounded attempts,
+  exact transaction display, authenticated GitHub session, and fresh passkey approval.
+- **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
+  device inventory.
+- **Recovery:** Revoke the device, rotate source device authority where needed, and notify the
+  profile through a non-sensitive channel.
+- **Residual risk:** A user can knowingly approve the wrong device; the confirmation screen must
+  make the binding understandable.
+
+### VR-ABUSE-DEVICE-KEY-THEFT — Stolen device signing key
+
+- **Attacker:** Malware or another local account able to extract credential-store material.
+- **Preconditions:** A registered device private key is compromised.
+- **Abuse:** Submit signed Community usage or replay requests as that device.
+- **Impact:** Source-level score manipulation and request cost until revocation; no profile
+  administration.
+- **Controls:** OS credential store with no plaintext fallback, source-bound scope, nonce and
+  idempotency checks, version visibility, revoke, and rotation.
+- **Detection:** Signature source, replay, platform/version, and unusual activity signals;
+  user-visible device inventory.
+- **Recovery:** Immediate device revoke, optional source key rotation, quarantine affected
+  open-season records, and audited investigation.
+- **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
+  using the same unlocked local identity.
+
+### VR-ABUSE-DEVICE-ESCALATION — Device credential used as profile authority
+
+- **Attacker:** A malicious connector or holder of a stolen device key.
+- **Preconditions:** The service accepts device-authenticated requests.
+- **Abuse:** Attempt to add devices, issue invites, unlink sources, change recovery, approve a car,
+  delete a profile, or reach admin functions.
+- **Impact:** Account takeover or destructive cross-capability access.
+- **Controls:** Separate routes and principals, deny-by-default device scope, fresh user-session
+  passkey step-up, database capability separation, and IDOR tests.
+- **Detection:** Authorization-denial metrics and audit for every sensitive attempted transition.
+- **Recovery:** Revoke device authority, inspect affected profile state, and correct only through
+  the user/admin audited path.
+- **Residual risk:** A future endpoint can accidentally reuse the wrong middleware; a scope matrix
+  is required in CI.
+
+### VR-ABUSE-CONNECTOR-LOCAL — Hostile local process or execution context
+
+- **Attacker:** A local user, replaced Codex binary, hostile JSONL producer, writable path, or
+  poisoned scheduler/environment.
+- **Preconditions:** The connector launches or communicates with a local process.
+- **Abuse:** Substitute an executable, exploit parsing, flood stdout/stderr, hang shutdown, inject a
+  shell argument, or induce upload of prohibited fields.
+- **Impact:** Local code execution under the user, resource exhaustion, key theft, or prompt and
+  credential disclosure.
+- **Controls:** User-scoped install, resolved trusted binary path, fixed argument array, no shell,
+  sanitized environment, bounded process/output/time, stable schema adapter, and egress allowlist.
+- **Detection:** Local safe diagnostics for selected binary/version, bounded failure reason, and
+  child cleanup verification without uploading content.
+- **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified
+  binary, and rotate the device key after suspected compromise.
+- **Residual risk:** A computer owner can replace all local components; official signing and clear
+  diagnostics reduce accidental compromise, not owner control.
+
+## Web, privacy, and content abuse
+
+### VR-ABUSE-AUTH-TAKEOVER — OAuth, session, passkey, or recovery abuse
+
+- **Attacker:** A remote attacker with a crafted callback, stolen session, replayed ceremony, or
+  recovery material.
+- **Preconditions:** An enrollment, login, recovery, or step-up flow is active.
+- **Abuse:** Bind the wrong GitHub identity, fix a session, replay a challenge, or skip user
+  verification for a critical action.
+- **Impact:** Profile takeover, device binding, source unlink, privacy change, or deletion.
+- **Controls:** State, PKCE, exact redirect, one-time code handling, secure session rotation, exact
+  RP ID/origin, transaction-bound challenges, user verification, and fresh step-up.
+- **Detection:** Failed and replayed ceremony events, identity-binding changes, recovery use, and
+  sensitive-action audit.
+- **Recovery:** Revoke sessions/devices, restore control through documented recovery, rotate
+  recovery material, and inspect destructive actions.
+- **Residual risk:** Compromise of all registered passkeys and recovery material may require a
+  manually governed recovery path with strong anti-social-engineering controls.
+
+### VR-ABUSE-PUBLIC-SCRAPE — Profiling work habits from public data
+
+- **Attacker:** A visitor or scraper collecting public profiles over time.
+- **Preconditions:** Public ranking and profile fields are available.
+- **Abuse:** Correlate exact sync time, token totals, GitHub identity, and activity to infer a
+  person's schedule or workload.
+- **Impact:** Privacy harm, unwanted profiling, or harassment.
+- **Controls:** Exact totals private by default, freshness rounded to a day, optional GitHub link,
+  minimal public fields, hide control, cache purge, and rate policy.
+- **Detection:** Scrape and enumeration patterns at the edge without invasive behavioral analytics.
+- **Recovery:** Hide the profile immediately, purge public caches, delete on request, and
+  investigate bypass of non-public fields.
+- **Residual risk:** Any intentionally public score and active-day history can be observed and
+  archived by others.
+
+### VR-ABUSE-HANDLE-IMPERSONATION — Misleading or abusive public identity
+
+- **Attacker:** An enrolled user choosing a confusing, abusive, or brand-like handle.
+- **Preconditions:** Handle creation or change is allowed.
+- **Abuse:** Impersonate another participant, evade moderation with Unicode, inject markup, or claim
+  OpenAI/project endorsement.
+- **Impact:** Harassment, deception, brand confusion, or browser injection if rendering is unsafe.
+- **Controls:** Bounded normalization, reserved names, plain-text rendering, no HTML, optional
+  verified GitHub link shown separately, moderation state, and conduct policy.
+- **Detection:** User reports and normalization collision checks; no broad content surveillance.
+- **Recovery:** Rename or hide the profile through an audited action and preserve only the minimum
+  abuse-prevention record.
+- **Residual risk:** Similar-looking names cannot be eliminated without collecting stronger identity
+  evidence that the product does not need.
+
+### VR-ABUSE-CAR-INJECTION — Executable or remote content in customization
+
+- **Attacker:** A user, connector, or agent proposing a crafted car configuration.
+- **Preconditions:** A CarRecipe proposal endpoint exists.
+- **Abuse:** Submit markup, script, URL, path, arbitrary color, oversized seed, unknown enum, or
+  unlicensed asset.
+- **Impact:** XSS, SSRF, supply-chain content, nondeterminism, privacy leak, or legal exposure.
+- **Controls:** Versioned enum-only schema, project-owned assets, strict server validation, browser
+  preview, explicit user approval, and deterministic snapshots.
+- **Detection:** Schema rejection metrics, generated-asset drift, provenance and license review.
+- **Recovery:** Reject or disable the recipe/version, restore a safe default, and remove invalid
+  generated artifacts.
+- **Residual risk:** Project-owned combinations may still resemble protected trade dress and need
+  visual review.
+
+### VR-ABUSE-REPORT-DISCLOSURE — Sensitive data posted to public support
+
+- **Attacker:** Usually an accidental reporter; potentially someone publishing another person's
+  data.
+- **Preconditions:** Public issue, pull-request, discussion, or support channel is available.
+- **Abuse:** Paste credentials, local paths, raw logs, screenshots, account IDs, usage, exploit
+  details, or private messages.
+- **Impact:** Irreversible public disclosure and possible credential compromise.
+- **Controls:** Structured forms with warnings and required confirmations, no fields for contact or
+  raw diagnostics, private vulnerability/conduct channels, moderation procedure, and public scans.
+- **Detection:** Maintainer review and platform secret scanning; avoid echoing the content into more
+  systems.
+- **Recovery:** Restrict or redact using platform capability, rotate exposed secrets, notify
+  affected parties privately, and retain only a non-sensitive incident reference.
+- **Residual risk:** GitHub notifications and third-party archives may retain already published
+  content.
+
+## Infrastructure, administration, and supply-chain abuse
+
+### VR-ABUSE-ORIGIN-BYPASS — Direct Railway access or forged edge identity
+
+- **Attacker:** A network client aware of an origin route or able to send arbitrary headers.
+- **Preconditions:** The service origin is reachable or forwarding trust is misconfigured.
+- **Abuse:** Bypass WAF/request shaping, spoof a client address, replay an edge proof, or alter the
+  body after proof generation.
+- **Impact:** Unauthorized ingestion, weaker abuse controls, misleading audit, or denial of service.
+- **Controls:** Cloudflare-only ingress, fresh method/path/body-bound proof, replay store, exact
+  clock policy, direct-origin negative tests, and protected origin configuration.
+- **Detection:** Missing/invalid proof, direct-origin probes, forwarding anomalies, and rotation
+  events.
+- **Recovery:** Deny the origin route, rotate proof keys, invalidate the replay window, and
+  quarantine affected writes.
+- **Residual risk:** Infrastructure metadata exposure can increase probing but must not be the only
+  protection.
+
+### VR-ABUSE-DATABASE-ROLE — Service or query exceeds its database capability
+
+- **Attacker:** A compromised Web, Ingest, Jobs process, malicious input, or operator using the
+  wrong role.
+- **Preconditions:** A runtime reaches PostgreSQL.
+- **Abuse:** Ingest edits profiles/passkeys, Web mutates finalized scores, a query injects SQL, or a
+  runtime role changes schema/grants.
+- **Impact:** Cross-profile compromise, credential loss, ranking corruption, deletion bypass, or
+  persistent control.
+- **Controls:** Separate non-owner roles, procedure-only ingest, parameterization, constraints,
+  transaction boundaries, migration-only ownership, and full forbidden-capability tests.
+- **Detection:** Database audit, denied grants, unusual procedure failure, migration drift, and role
+  inventory.
+- **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
+  deletions, and audit affected rows without exporting private data.
+- **Residual risk:** A migration owner is highly privileged and belongs only in a protected
+  migration workflow.
+
+### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
+
+- **Attacker:** A normal user attempting escalation or a malicious/compromised operator.
+- **Preconditions:** Admin or moderation capabilities exist.
+- **Abuse:** Quarantine, correct, reveal, delete, invite, or change security state without policy,
+  reason, or trace.
+- **Impact:** Broad integrity/privacy harm and loss of governance trust.
+- **Controls:** Separate origin behind Access, individual least-privileged roles, fresh passkey,
+  reason, external append-only audit, conflict rules, and no shared account.
+- **Detection:** Audit completeness checks, access review, anomaly alerts, and independent review of
+  sensitive actions.
+- **Recovery:** Revoke the role, rotate credentials, reverse only reversible actions through an
+  audited process, notify affected users, and perform incident review.
+- **Residual risk:** A single bootstrap maintainer concentrates authority; external review
+  substitutes for self-approval until roles can be separated.
+
+### VR-ABUSE-DEPENDENCY-PR — Malicious contribution or upstream dependency
+
+- **Attacker:** A fork author, compromised maintainer account, package publisher, action, image, or
+  toolchain.
+- **Preconditions:** CI installs or executes source and dependencies.
+- **Abuse:** Exfiltrate credentials, alter checks, run install scripts, poison a cache, or publish
+  from an untrusted revision.
+- **Impact:** CI compromise, source backdoor, or a path to production/release authority.
+- **Controls:** Secretless read-only PR CI, `pull_request_target` ban, full-SHA actions, image
+  digests, frozen locks, install scripts denied, no writable cache, protected review, and dependency
+  policy.
+- **Detection:** Workflow/config policy tests, lockfile review, advisory and provenance checks, and
+  hosted secret scanning.
+- **Recovery:** Close the contribution, rotate any exposed credential, remove the dependency,
+  invalidate affected artifacts, and audit protected history.
+- **Residual risk:** A malicious change can modify its own tests; test success never authorizes
+  merge or release by itself.
+
+### VR-ABUSE-RELEASE-SUBSTITUTION — Unofficial or compromised connector presented as official
+
+- **Attacker:** A release-account attacker, mirror operator, compromised runner, or deceptive fork.
+- **Preconditions:** Users download a connector binary or installer.
+- **Abuse:** Replace the artifact, omit verification, reuse branding, or sign malware with stolen
+  authority.
+- **Impact:** Code execution on participant computers and theft of local Codex or project data.
+- **Controls:** Protected revision, isolated trusted build, platform and project signatures,
+  checksums, SBOM, provenance, trademark clarity, and clean-machine verification instructions.
+- **Detection:** Signature/provenance validation, reproducibility comparison, release audit, and
+  reports of signer or checksum mismatch.
+- **Recovery:** Revoke the artifact/signer, publish an advisory, disable affected connector
+  versions, rotate device keys, and ship a verified replacement.
+- **Residual risk:** Users who ignore verification can install deceptive third-party builds.
+
+### VR-ABUSE-DELETE-RESURRECTION — Partial deletion or restore revives a profile
+
+- **Attacker:** Usually a failure or operator error; possibly a user racing ingestion against
+  deletion.
+- **Preconditions:** Deletion, backup, restore, cache, or retry is in progress.
+- **Abuse:** Continue submitting after confirmation, show cached profile data, leave a copy, or
+  restore deleted rows and keys.
+- **Impact:** Violation of user control, privacy commitments, and revoked authority.
+- **Controls:** Transactional immediate hide/revoke/reject, idempotent purge, cache invalidation,
+  bounded tombstone, backup expiry, and deletion replay before restored service opens.
+- **Detection:** Deletion job age/failure, post-delete request denial, residual-data reconciliation,
+  and restore drills.
+- **Recovery:** Re-hide and revoke synchronously, rerun purge, replay markers, purge caches, and
+  report honest progress without record identifiers.
+- **Residual risk:** Immutable backup media may retain encrypted data until documented expiry.
+
+### VR-ABUSE-RESOURCE-EXHAUSTION — Expensive endpoint or state-table growth
+
+- **Attacker:** Anonymous automation, enrolled clients, compromised devices, or accidental retry
+  storms.
+- **Preconditions:** Public reads, pairing, ingest, nonce/idempotency records, jobs, or database
+  pools are available.
+- **Abuse:** Send oversized/slow input, create unbounded state, force expensive ranking, or
+  synchronize many devices concurrently.
+- **Impact:** Increased cost, degraded service, job delay, or unavailable deletion and security
+  actions.
+- **Controls:** Body and collection bounds, deadlines, concurrency and connection limits,
+  backpressure, quotas, cache, jittered retries, table cleanup, and independent kill switches.
+- **Detection:** Latency, saturation, queue age, rejection, source growth, state-table size, and
+  cost alerts.
+- **Recovery:** Load shed, disable the narrow feature, drain queues, expire bounded state, and
+  restore service without weakening authentication or signature checks.
+- **Residual risk:** Public availability always permits some resource pressure; beta capacity and
+  thresholds remain deployment-specific.
+
+## Verification mapping
+
+Each case is covered by one or more [security invariants](../architecture/SECURITY_INVARIANTS.md).
+Implementation pull requests identify the case IDs they affect and provide positive, negative,
+concurrency, and recovery evidence. A case can be accepted only when its residual risk matches the
+Community trust model and grants no hidden privilege.

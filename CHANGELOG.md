@@ -14,6 +14,10 @@ Versioning where its guarantees are applicable.
 - Governance, conduct, DCO, support, roadmap, release, trademark, and third-party notice policies.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
+- Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
+  fail-closed compatibility policy and matrix, and six initial ADRs.
+- Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
+  lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 
 ### Security
 

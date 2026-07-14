@@ -23,6 +23,13 @@ keys, or arbitrary user-uploaded files.
 - [Public implementation plan](docs/PROJECT_PLAN.md)
 - [Implementation status](docs/IMPLEMENTATION_STATUS.md)
 - [Security invariants](docs/architecture/SECURITY_INVARIANTS.md)
+- [Threat model](docs/security/THREAT_MODEL.md)
+- [Abuse cases](docs/security/ABUSE_CASES.md)
+- [Privacy data map](docs/security/PRIVACY_DATA_MAP.md)
+- [System context](docs/architecture/SYSTEM_CONTEXT.md) and
+  [data flows](docs/architecture/DATA_FLOW.md)
+- [Compatibility policy](docs/architecture/COMPATIBILITY_POLICY.md)
+- [Architecture decisions](docs/decisions/README.md)
 - [Local development](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Dependency policy](docs/security/DEPENDENCY_POLICY.md)
 - [Pull-request CI trust model](docs/architecture/CI_TRUST_MODEL.md)

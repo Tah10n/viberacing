@@ -8,10 +8,15 @@ Read these files before changing the project:
 2. `docs/PROJECT_PLAN.md` for the selected architecture and delivery gates.
 3. `docs/architecture/SECURITY_INVARIANTS.md` for non-negotiable behavior.
 4. `docs/IMPLEMENTATION_STATUS.md` for claims backed by current evidence.
-5. `docs/security/DEPENDENCY_POLICY.md` before changing dependencies or CI.
-6. `SECURITY.md` and `CONTRIBUTING.md` before handling reports or public contributions.
-7. `GOVERNANCE.md` and `MAINTAINERS.md` before changing roles, ownership, release, or publication
-   state.
+5. `docs/security/THREAT_MODEL.md` and `docs/security/ABUSE_CASES.md` for attacker stories and
+   severity.
+6. `docs/security/PRIVACY_DATA_MAP.md` before collecting, logging, caching, exporting, or retaining
+   data.
+7. `docs/decisions/README.md` for accepted architecture decisions and the ADR process.
+8. `docs/security/DEPENDENCY_POLICY.md` before changing dependencies or CI.
+9. `SECURITY.md` and `CONTRIBUTING.md` before handling reports or public contributions.
+10. `GOVERNANCE.md` and `MAINTAINERS.md` before changing roles, ownership, release, or publication
+    state.
 
 The repository is currently building its public foundation. Do not claim that a command, service,
 connector, deployment, or security control exists until its implementation and verification are
@@ -19,7 +24,8 @@ present in the working tree.
 
 ## Repository map
 
-- `docs/` contains public canonical plans, status, architecture, and policy.
+- `docs/` contains public canonical plans, status, threat/privacy/abuse models, architecture,
+  compatibility, ADRs, and policy.
 - `.github/` contains read-only pull-request CI, dependency-update configuration, and structured
   public-safe contribution forms.
 - `scripts/` contains repository verification and black-box policy tests.
@@ -36,6 +42,9 @@ present in the working tree.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
 - `pnpm run check:public:staged` scans the exact staged blobs before a commit.
 - `pnpm run check:community` validates governance and community-health files and forms.
+- `pnpm run check:architecture` validates required security/architecture contracts, structured abuse
+  cases, ADR metadata/indexes, compatibility fail-closed state, privacy classes, and Mermaid fence
+  structure.
 - `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS, and
   private reporting controls are configured.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
@@ -107,6 +116,8 @@ until the user supplies and verifies the intended public project identities.
 - Keep the root `AGENTS.md` concise. Add nested `AGENTS.md` files only when a subtree has genuinely
   different commands or security constraints.
 - Put durable design decisions in ADRs, not only in pull-request discussion.
+- Name affected threat-boundary and abuse-case IDs when changing a security-sensitive flow.
+- Map every collected, logged, cached, exported, or retained field to the privacy data map.
 - Update the architecture, compatibility matrix, public API reference, threat model, and operational
   runbooks when their corresponding behavior changes.
 - Examples must be safe to copy and must not rely on unpublished local state.

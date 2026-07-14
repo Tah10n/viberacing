@@ -39,19 +39,35 @@ connector, real-user ingestion, or verified ranking exists.
 - A fail-closed publication-readiness checker with regression coverage for GitHub remote,
   MAINTAINERS/CODEOWNERS agreement, protected policy ownership, private conduct reporting, and
   private vulnerability reporting state.
+- A repository-scoped design threat model with assets, attacker capabilities, trust boundaries,
+  realistic/out-of-scope stories, required mitigations, implemented-versus-planned status, and
+  severity calibration.
+- Twenty structured abuse cases covering identity/source/scoring, pairing/device/connector,
+  web/privacy/content, edge/database/admin/supply-chain, deletion, and resource exhaustion.
+- A privacy classification and field inventory with prohibited data, provider boundaries, user
+  controls, logging rules, retention decisions, deletion, restore, and launch review gates.
+- Planned system/container and enrollment, pairing, sync, public-read, deletion, and trusted-release
+  Mermaid views.
+- A fail-closed Codex compatibility policy and empty support matrix; no upstream or connector
+  version is claimed supported without pinned schema/fixture/platform evidence.
+- An ADR lifecycle/template and six accepted design decisions covering Community trust, multi-source
+  aggregation, identity/device authority, edge/service/database isolation, CarRecipe, and public
+  repository safety.
+- Architecture-contract validation and black-box regression cases for missing threat sections,
+  duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
+  fences, and accidental compatibility claims.
 
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume.
 
 These checks are defense in depth. They do not prove that a file is safe, scan binary metadata,
-validate external links, or replace manual staged-diff review and GitHub secret scanning. The CI
-definition is locally parsed and policy-tested but has not run on GitHub because no remote
-repository is configured yet.
+fully parse/render Mermaid, validate external links, or replace manual staged-diff review and GitHub
+secret scanning. The CI definition is locally parsed and policy-tested but has not run on GitHub
+because no remote repository is configured yet.
 
 ## Phase 0 still pending
 
-- Threat model, abuse cases, privacy data map, compatibility policy, architecture views, and ADRs.
 - A confirmed public maintainer identity, conduct-reporting channel, CODEOWNERS entry, and remote
   GitHub security/branch settings; private details will not be inferred from the workstation.
 - External-link, spelling, license inventory, history secret scan, and hosted CI evidence.

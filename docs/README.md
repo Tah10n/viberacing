@@ -19,6 +19,17 @@ remain safe to publish verbatim.
   supply-chain requirements.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary
   and enforced workflow rules.
+- [Threat model](security/THREAT_MODEL.md), [abuse cases](security/ABUSE_CASES.md), and
+  [privacy data map](security/PRIVACY_DATA_MAP.md) — repository-wide attackers, assets, severity,
+  misuse/recovery scenarios, field classification, retention, and deletion gates.
+- [System context](architecture/SYSTEM_CONTEXT.md) and [data flows](architecture/DATA_FLOW.md) —
+  planned containers, trust boundaries, capabilities, enrollment, pairing, sync, read, deletion, and
+  release sequences.
+- [Compatibility policy](architecture/COMPATIBILITY_POLICY.md) and
+  [empty Codex support matrix](reference/codex-compatibility.md) — independently versioned contracts
+  and fail-closed upstream admission.
+- [Architecture decision records](decisions/README.md) — accepted decisions, alternatives,
+  consequences, verification, and supersession.
 - [Governance](../GOVERNANCE.md), [maintainers](../MAINTAINERS.md), and
   [code of conduct](../CODE_OF_CONDUCT.md) — authority, decision, enforcement, and publication
   boundaries.
@@ -30,13 +41,12 @@ remain safe to publish verbatim.
 ## Required before implementation reaches public beta
 
 - `getting-started/` — first product run once an application exists.
-- `architecture/` — system context, containers, product data flow, database model, protocol
-  boundaries, and compatibility policy.
-- `security/` — threat model, abuse cases, privacy data map, and incident response.
+- `architecture/` — implementation-level database model and protocol boundaries as code lands.
+- `security/` — incident-response and launch privacy/legal artifacts as operations become real.
 - `reference/` — public API, connector CLI, configuration, scoring, and CarRecipe reference.
 - `operations/` — Railway/Cloudflare deployment, migrations, backups, restore, alerts, SLOs,
   incident and deletion runbooks.
-- `decisions/` — numbered architecture decision records.
+- `decisions/` — new records whenever durable decisions change; initial ADRs exist now.
 - `releasing/` — versioning, changelog, signing, provenance, rollback, and supported-version policy.
 
 Root community-health files establish policy now; the directories above will contain component

@@ -6,6 +6,17 @@ This is an explicit publication blocker. Do not announce the repository or invit
 reports until GitHub private vulnerability reporting has been enabled, tested with authorized
 responders, and the status line above has been changed through review.
 
+## Repository threat model
+
+The canonical public [threat model](docs/security/THREAT_MODEL.md) defines assets, attacker
+capabilities, trust boundaries, required mitigations, accepted limitations, and severity
+calibration. The [abuse-case catalog](docs/security/ABUSE_CASES.md),
+[privacy data map](docs/security/PRIVACY_DATA_MAP.md), and
+[security invariants](docs/architecture/SECURITY_INVARIANTS.md) are normative companion documents.
+
+The current repository has no runtime product. Planned controls in those documents are release
+gates, not claims that a deployed service exists.
+
 ## Supported versions
 
 Vibe Racing has no public runtime or connector release yet. There are currently no supported
