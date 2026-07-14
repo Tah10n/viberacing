@@ -7,5 +7,5 @@
     },
     "MD033": false,
   },
-  "globs": ["**/*.md", "!node_modules", "!.git"],
+  "globs": ["**/*.md", "!**/.git/**", "!**/.next/**", "!**/node_modules/**"],
 }

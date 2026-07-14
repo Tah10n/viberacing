@@ -6,11 +6,11 @@ Every dependency, action, container, toolchain, and generated lockfile is execut
 input. Convenience is not enough reason to add one. Prefer platform APIs and small repository-owned
 checks when they are clear and maintainable.
 
-CSpell is the current deliberate exception for English code/document spelling: a mature offline
-dictionary is materially more reliable than a home-grown word list. It is exact-pinned,
-development-only, installed without lifecycle scripts, and its larger transitive graph is fully
-represented in the dependency inventory. It never receives secrets in CI because pull-request CI is
-secretless.
+Mature frameworks and analysis tools are used only where their maintained behavior materially
+reduces project risk. The current deliberate set includes Next.js and React for the web runtime and
+CSpell, TypeScript, ESLint, Vitest, jsdom, and axe-core for offline verification. Every direct
+package is exact-pinned, installs without lifecycle scripts, and is represented with its complete
+transitive graph in the dependency inventory. Pull-request CI is secretless.
 
 The project does not auto-merge dependency updates. A green dependency pull request still requires
 human review of purpose, provenance, release history, permissions, transitive changes, and license.
@@ -22,22 +22,47 @@ uses an exact version. Internal packages use only `workspace:*`. Workspace manif
 until a separate publication review. `pnpm-lock.yaml` is committed and CI installs it with
 `--frozen-lockfile --ignore-scripts` from the official npm registry.
 
-`docs/reference/dependency-inventory.json` must exactly match every lockfile package and installed
-manifest. Its direct-dependency records identify every declaring workspace and dependency scope, so
-an application dependency cannot hide behind a clean root manifest. `config/license-policy.json` is
-a reviewed allowlist of the license expressions currently present; it is not a general statement
-that a license is suitable for every future distribution. The checker also binds pinned Actions and
-container images to explicit notices. Unknown, missing, changed, or unreviewed declarations fail
-closed.
+`docs/reference/dependency-inventory.json` must exactly match every reachable lockfile package and
+installed manifest. Its direct-dependency records identify every declaring workspace and dependency
+scope, so an application dependency cannot hide behind a clean root manifest. Cross-platform
+optional packages may not be installed on the current host; their exact official-registry license
+metadata is committed in `config/npm-package-metadata.json` and cryptographically bound to the
+lockfile integrity. Normal verification is offline. Only the explicit
+`node scripts/check-licenses.mjs --refresh-npm-metadata` workflow may fetch missing exact manifests;
+it refuses redirects, oversized responses, identity/integrity mismatches, and non-official registry
+origins.
+
+The offline gate rejects missing, extra, stale, malformed, unapproved, or inventory-drifted
+metadata, including an installed package absent from the lockfile. `pnpm run audit:dependencies` is
+a separate online check pinned to the official npm registry and fails on moderate, high, or critical
+advisories.
+
+`config/license-policy.json` is a reviewed allowlist of the license expressions currently present;
+it is not a general statement that a license is suitable for every future distribution. The checker
+also binds pinned Actions and container images to explicit notices. Unknown, missing, changed,
+orphaned, or unreviewed declarations fail closed.
 
 `pnpm-workspace.yaml` enforces:
 
 - a minimum 24-hour release quarantine, with failure when registry publish time is absent;
 - `trustPolicy: no-downgrade` and lockfile revalidation;
+- a repository-local virtual store so CI and interactive installs do not depend on hidden global
+  dependency layout state;
 - rejection of exotic transitive package sources;
 - strict peer and engine handling;
 - an explicit dependency-build allowlist, empty by default;
 - no tracked registry redirection or project `.npmrc`.
+
+Resolution overrides are exceptions, not invisible configuration. Each exact selector and
+replacement must be mirrored in `config/dependency-overrides.json` with a reason, review date,
+expiry date, and removal condition. One current override moves Next.js's PostCSS dependency from the
+advisory-affected 8.4.31 release to the patched 8.5.19 release; another removes Next.js's optional
+`sharp` graph because this application disables remote images and does not use image optimization.
+Both expire on 2026-10-12. The PostCSS override must be removed when the pinned Next.js release
+resolves a patched version itself; `sharp` must be restored and re-reviewed before any feature
+depends on image optimization. A `never`-typed declaration satisfies Next.js's upstream type-only
+`sharp` reference without exposing a runtime implementation, and the effective ESLint policy rejects
+static, dynamic, re-export, and CommonJS product imports of the package.
 
 An install-script exception requires source review, exact package and version scope, a documented
 reason, and a regression check. `dangerouslyAllowAllBuilds` is prohibited.
@@ -86,9 +111,11 @@ Before adding or updating a dependency:
 ## Automated updates and audits
 
 Dependabot proposes weekly npm, Cargo, Docker, and GitHub Actions updates with bounded open pull
-requests. CI runs a high-severity npm audit in addition to deterministic offline-capable checks.
-Network audit outages are reported separately from test failures; they are not silently treated as
-success.
+requests. Deterministic pull-request CI uses offline-capable lock, metadata, license, override, and
+inventory checks. Maintainers run the separate online `pnpm run audit:dependencies` gate against the
+official npm registry before releases and during dependency maintenance; it fails on
+moderate-or-higher advisories. Network audit outages are reported separately from test failures and
+are never silently treated as success.
 
 Emergency security updates may bypass the quarantine only for one exact reviewed version. A broad or
 permanent exclusion is not acceptable.

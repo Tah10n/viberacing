@@ -1,6 +1,7 @@
 # Vibe Racing
 
-> Статус: Phase 0, публичный фундамент. Production-сервис и готовый connector пока не выпущены.
+> Статус: Phase 1, визуальный прототип на синтетических данных. Production-сервис и готовый
+> connector не выпущены.
 
 Внешние contributions пока закрыты: сначала нужны реальные публичные maintainers, CODEOWNERS и
 проверенные приватные каналы для security/conduct reports. Локальные имена и контакты не будут
@@ -9,6 +10,10 @@
 Vibe Racing — открытый пиксельный недельный рейтинг пользователей Codex. Локальный connector
 передаёт только заявленные пользователем дневные buckets, а участники отображаются как болиды на
 общей трассе.
+
+Сейчас сайт уже можно запустить локально, но он намеренно использует только синтетические данные:
+без аккаунта, connector, базы приложения, аналитики и реальной статистики. Так можно безопасно
+проверить гонку, таблицу, профиль, три темы, русский/английский интерфейс и reduced-motion режим.
 
 ## Модель доверия
 
@@ -33,8 +38,10 @@ Verified-лига останется выключенной до появлен�
 - [Architecture decisions (EN)](docs/decisions/README.md)
 - [Политика данных публичного репозитория (EN)](docs/security/PUBLIC_REPOSITORY_POLICY.md)
 - [Локальная разработка (EN)](docs/getting-started/LOCAL_DEVELOPMENT.md)
+- [Веб-прототип и его границы (EN)](apps/web/README.md)
 - [Dependency policy (EN)](docs/security/DEPENDENCY_POLICY.md)
 - [Dependency inventory (EN)](docs/reference/dependency-inventory.json)
+- [Происхождение визуальных assets (EN)](docs/reference/ASSET_PROVENANCE.md)
 - [Индекс документации](docs/README.md)
 - [Инструкции для coding agents](AGENTS.md)
 - [Политика безопасности (EN)](SECURITY.md)
@@ -55,6 +62,16 @@ Verified-лига останется выключенной до появлен�
 
 Перед коммитом нужно выполнить `pnpm run verify`, затем проверить точный staged snapshot командой
 `pnpm run check:public:staged` и вручную просмотреть `git diff --cached`.
+
+Локальный запуск:
+
+```text
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm run dev:web
+```
+
+Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
+заменяйте синтетические fixtures приватными экспортами.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

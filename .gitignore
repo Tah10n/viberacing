@@ -38,6 +38,7 @@ coverage/
 .cache/
 playwright-report/
 test-results/
+*.tsbuildinfo
 
 # Rust
 target/

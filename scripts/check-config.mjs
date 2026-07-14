@@ -8,6 +8,8 @@ import { parseDocument } from "yaml";
 const root = resolve(import.meta.dirname, "..");
 const exactVersion = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const exactPackageSelector = /^(?:@[^/\s]+\/[^@\s]+|[^@\s]+)@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const exactOverrideSelector =
+  /^(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?>(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)$/;
 const hostedRunners = new Set(["ubuntu-24.04", "windows-2025", "macos-15"]);
 
 function isObject(value) {
@@ -181,6 +183,7 @@ export function validatePnpmWorkspace(workspace) {
     ["nodeVersion", "24.18.0"],
     ["engineStrict", true],
     ["verifyDepsBeforeRun", "error"],
+    ["enableGlobalVirtualStore", false],
     ["autoInstallPeers", false],
     ["strictPeerDependencies", true],
     ["savePrefix", ""],
@@ -327,6 +330,89 @@ export function validateWorkspacePackage(path, manifest) {
   return findings;
 }
 
+function parseDateOnly(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== value ? null : date;
+}
+
+export function validateDependencyOverrides(workspace, policy, now = new Date()) {
+  const findings = [];
+  if (policy?.schemaVersion !== 1 || !Array.isArray(policy?.overrides)) {
+    return ["dependency override policy must use schemaVersion 1 with an overrides array"];
+  }
+  const declaredOverrides = workspace?.overrides ?? {};
+  if (!isObject(declaredOverrides)) {
+    return ["pnpm-workspace.yaml overrides must be a map"];
+  }
+
+  const documented = new Map();
+  let previousSelector = "";
+  for (const [index, entry] of policy.overrides.entries()) {
+    const scope = `dependency override policy entry ${index + 1}`;
+    if (
+      !isObject(entry) ||
+      Object.keys(entry).sort().join(",") !==
+        "expiresOn,reason,removalCondition,replacement,reviewedOn,selector"
+    ) {
+      findings.push(`${scope} has an invalid shape`);
+      continue;
+    }
+    if (!exactOverrideSelector.test(entry.selector)) {
+      findings.push(`${scope} selector must pin one exact parent and one child package`);
+    }
+    if (entry.replacement !== "-" && !exactVersion.test(entry.replacement)) {
+      findings.push(`${scope} replacement must be one exact version or an explicit removal`);
+    }
+    if (typeof entry.reason !== "string" || entry.reason.length < 100) {
+      findings.push(`${scope} reason must contain at least 100 characters of review evidence`);
+    }
+    if (typeof entry.removalCondition !== "string" || entry.removalCondition.length < 80) {
+      findings.push(`${scope} removalCondition must contain at least 80 characters`);
+    }
+    if (documented.has(entry.selector)) {
+      findings.push(`${scope} duplicates selector ${entry.selector}`);
+    }
+    if (previousSelector && previousSelector.localeCompare(entry.selector) >= 0) {
+      findings.push("dependency override policy entries must be uniquely sorted by selector");
+    }
+    previousSelector = entry.selector;
+    documented.set(entry.selector, entry.replacement);
+
+    const reviewedOn = parseDateOnly(entry.reviewedOn);
+    const expiresOn = parseDateOnly(entry.expiresOn);
+    if (reviewedOn === null || expiresOn === null) {
+      findings.push(`${scope} review dates must be real YYYY-MM-DD dates`);
+    } else {
+      const lifetimeDays = (expiresOn.valueOf() - reviewedOn.valueOf()) / 86_400_000;
+      if (lifetimeDays <= 0 || lifetimeDays > 120) {
+        findings.push(`${scope} review window must be between 1 and 120 days`);
+      }
+      const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      if (reviewedOn.valueOf() > today) {
+        findings.push(`${scope} reviewedOn must not be in the future`);
+      }
+      if (expiresOn.valueOf() < today) {
+        findings.push(`${scope} expired on ${entry.expiresOn}`);
+      }
+    }
+  }
+
+  for (const [selector, replacement] of Object.entries(declaredOverrides)) {
+    if (documented.get(selector) !== replacement) {
+      findings.push(`pnpm-workspace.yaml override is undocumented or stale: ${selector}`);
+    }
+  }
+  for (const [selector, replacement] of documented) {
+    if (declaredOverrides[selector] !== replacement) {
+      findings.push(`documented override is missing or stale in pnpm-workspace.yaml: ${selector}`);
+    }
+  }
+  return findings;
+}
+
 function workspaceManifestPaths(failures) {
   const paths = [];
   for (const parent of ["apps", "packages"]) {
@@ -448,6 +534,17 @@ function main() {
     } catch (error) {
       failures.push(`${manifestName} — invalid JSON: ${error.message}`);
     }
+  }
+  try {
+    const workspace = parseYaml("pnpm-workspace.yaml", failures);
+    const overridePolicy = JSON.parse(
+      readFileSync(resolve(root, "config/dependency-overrides.json"), "utf8"),
+    );
+    for (const finding of validateDependencyOverrides(workspace, overridePolicy)) {
+      failures.push(`config/dependency-overrides.json — ${finding}`);
+    }
+  } catch (error) {
+    failures.push(`config/dependency-overrides.json — invalid JSON: ${error.message}`);
   }
   validateEnvExample(failures);
 

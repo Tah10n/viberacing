@@ -5,6 +5,7 @@ packages:
 nodeVersion: 24.18.0
 engineStrict: true
 verifyDepsBeforeRun: error
+enableGlobalVirtualStore: false
 
 autoInstallPeers: false
 strictPeerDependencies: true
@@ -19,3 +20,7 @@ blockExoticSubdeps: true
 
 strictDepBuilds: true
 allowBuilds: {}
+
+overrides:
+  next@16.2.10>postcss: "8.5.19"
+  next@16.2.10>sharp: "-"

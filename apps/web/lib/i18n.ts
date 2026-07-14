@@ -1,0 +1,212 @@
+import type { CarBody, CarPaint, CarSpoiler, CarTrim } from "./car-recipe";
+
+export const locales = ["en", "ru"] as const;
+export type Locale = (typeof locales)[number];
+
+type CarPart = CarBody | CarPaint | CarSpoiler | CarTrim;
+
+const english = {
+  activeDays: "Active days",
+  brand: "Vibe Racing",
+  car: "Car",
+  carBody: "Body",
+  carPaint: "Paint",
+  carProposal: "Next-week car proposal",
+  carSpoiler: "Spoiler",
+  carTrim: "Trim",
+  communityDetail:
+    "Scores are self-reported by participating users. They are not audited or endorsed by OpenAI.",
+  communityNotice: "Community leaderboard",
+  currentWeek: "Current demo week",
+  dailyActivity: "Daily score",
+  dataControl: "Data control",
+  dataControlCopy:
+    "The production profile will offer source removal, export, and deletion. This preview stores no account data.",
+  demoBadge: "Synthetic preview",
+  demoProfile: "Demo garage",
+  deviceCount: "Devices",
+  driver: "Driver",
+  exactTokensPrivate: "Exact token counts and source identifiers stay private.",
+  freshness: "Freshness",
+  heroCopy:
+    "A privacy-first weekly leaderboard where coding activity becomes a deterministic pixel-art race.",
+  heroTitle: "Build fast. Race fair.",
+  language: "Language",
+  leaderboard: "Leaderboard",
+  liveRace: "Weekly race",
+  methodology: "Scoring method",
+  methodologyCopy:
+    "Each day uses a capped logarithmic score. Weekly rank uses score, then active days; equal results share a rank.",
+  motion: "Motion",
+  motionOff: "Reduced",
+  motionOn: "On",
+  motionSystem: "Device setting",
+  noGlobalClaim: "Ranking covers Vibe Racing participants only — never every Codex user.",
+  noRawTokens: "No raw token totals",
+  pauseRace: "Pause race",
+  points: "pts",
+  primaryNavigation: "Primary navigation",
+  privacyByDefault: "Privacy by default",
+  profile: "Profile",
+  rank: "Rank",
+  resumeRace: "Resume race",
+  score: "Weekly score",
+  securityNote:
+    "This page uses synthetic fixtures, no trackers, no remote fonts, and no account or connector credentials.",
+  sharedRank: "Shared rank",
+  sourceCount: "Sources",
+  sourcesAggregated: "Multiple accounts can be summed as separate approved sources.",
+  streak: "Streak",
+  streakUnavailable: "—",
+  theme: "Theme",
+  themeClassic: "Classic Grand Prix",
+  themeCyber: "Cyber Rally",
+  themeNeon: "Neon Night Arcade",
+  todayScore: "Today",
+  unavailable: "Unavailable",
+  verified: "Verified league",
+  verifiedCopy: "Disabled until an authoritative verification boundary exists.",
+  viewLeaderboard: "View standings",
+} as const;
+
+export type TranslationKey = keyof typeof english;
+
+const russian: Record<TranslationKey, string> = {
+  activeDays: "Активные дни",
+  brand: "Vibe Racing",
+  car: "Машина",
+  carBody: "Кузов",
+  carPaint: "Цвет",
+  carProposal: "Машина на следующую неделю",
+  carSpoiler: "Спойлер",
+  carTrim: "Отделка",
+  communityDetail:
+    "Результаты заявляют сами участники. Они не проверяются и не подтверждаются OpenAI.",
+  communityNotice: "Рейтинг сообщества",
+  currentWeek: "Текущая демо-неделя",
+  dailyActivity: "Баллы по дням",
+  dataControl: "Управление данными",
+  dataControlCopy:
+    "В рабочем профиле можно будет удалить источник, экспортировать и удалить данные. Превью не хранит данные аккаунта.",
+  demoBadge: "Синтетическое превью",
+  demoProfile: "Демо-гараж",
+  deviceCount: "Устройства",
+  driver: "Пилот",
+  exactTokensPrivate: "Точные токены и идентификаторы источников остаются приватными.",
+  freshness: "Обновление",
+  heroCopy:
+    "Приватный недельный рейтинг, где активность в кодинге превращается в детерминированную пиксельную гонку.",
+  heroTitle: "Коди быстро. Гоняй честно.",
+  language: "Язык",
+  leaderboard: "Таблица лидеров",
+  liveRace: "Недельная гонка",
+  methodology: "Формула баллов",
+  methodologyCopy:
+    "За день начисляются ограниченные логарифмические баллы. Ранг зависит от суммы и активных дней; равные результаты делят место.",
+  motion: "Анимация",
+  motionOff: "Снижена",
+  motionOn: "Включена",
+  motionSystem: "Как на устройстве",
+  noGlobalClaim: "Рейтинг охватывает только участников Vibe Racing, а не всех пользователей Codex.",
+  noRawTokens: "Без публикации токенов",
+  pauseRace: "Остановить гонку",
+  points: "б.",
+  primaryNavigation: "Основная навигация",
+  privacyByDefault: "Приватность по умолчанию",
+  profile: "Профиль",
+  rank: "Место",
+  resumeRace: "Продолжить гонку",
+  score: "Баллы за неделю",
+  securityNote:
+    "На странице только синтетические данные: без трекеров, внешних шрифтов, аккаунтов и ключей коннектора.",
+  sharedRank: "Общее место",
+  sourceCount: "Источники",
+  sourcesAggregated:
+    "Несколько аккаунтов можно суммировать как отдельные подтверждённые источники.",
+  streak: "Серия",
+  streakUnavailable: "—",
+  theme: "Тема",
+  themeClassic: "Классический гран-при",
+  themeCyber: "Кибер-ралли",
+  themeNeon: "Неоновая аркада",
+  todayScore: "Сегодня",
+  unavailable: "Недоступно",
+  verified: "Проверенная лига",
+  verifiedCopy: "Отключена до появления авторитетного механизма проверки.",
+  viewLeaderboard: "Смотреть таблицу",
+};
+
+export const translations: Readonly<Record<Locale, Readonly<Record<TranslationKey, string>>>> = {
+  en: english,
+  ru: russian,
+};
+
+const carPartLabels: Readonly<Record<Locale, Readonly<Record<CarPart, string>>>> = {
+  en: {
+    chrome: "Chrome",
+    dark: "Dark",
+    formula: "Formula",
+    high: "High",
+    light: "Light",
+    low: "Low",
+    magenta: "Magenta",
+    mint: "Mint",
+    none: "None",
+    rally: "Rally",
+    redline: "Redline",
+    roadster: "Roadster",
+    sunburst: "Sunburst",
+    "turbo-blue": "Turbo blue",
+  },
+  ru: {
+    chrome: "Хром",
+    dark: "Тёмная",
+    formula: "Формула",
+    high: "Высокий",
+    light: "Светлая",
+    low: "Низкий",
+    magenta: "Маджента",
+    mint: "Мятный",
+    none: "Нет",
+    rally: "Ралли",
+    redline: "Красный",
+    roadster: "Родстер",
+    sunburst: "Солнечный",
+    "turbo-blue": "Турбо-синий",
+  },
+};
+
+export function isLocale(value: unknown): value is Locale {
+  return typeof value === "string" && locales.includes(value as Locale);
+}
+
+export function formatScore(value: number, locale: Locale): string {
+  return new Intl.NumberFormat(locale === "ru" ? "ru-RU" : "en-US").format(value);
+}
+
+export function formatCarPart(value: CarPart, locale: Locale): string {
+  return carPartLabels[locale][value];
+}
+
+export function formatFreshness(days: number, locale: Locale): string {
+  if (days === 0) {
+    return locale === "ru" ? "сегодня" : "today";
+  }
+  if (locale === "ru") {
+    return `${String(days)} ${days === 1 ? "день" : days < 5 ? "дня" : "дней"}`;
+  }
+  return `${String(days)} ${days === 1 ? "day" : "days"}`;
+}
+
+export function formatDayCount(days: number, locale: Locale): string {
+  if (locale === "ru") {
+    return `${String(days)} ${days % 10 === 1 && days % 100 !== 11 ? "день" : "дн."}`;
+  }
+  return `${String(days)}d`;
+}
+
+export function dayLabels(locale: Locale): readonly string[] {
+  return locale === "ru"
+    ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+}

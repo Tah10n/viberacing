@@ -5,8 +5,19 @@ import process from "node:process";
 
 const root = resolve(import.meta.dirname, "..");
 const require = createRequire(import.meta.url);
+const webRoot = resolve(root, "apps", "web");
+const webRequire = createRequire(resolve(webRoot, "package.json"));
+const eslintBin = resolve(dirname(webRequire.resolve("eslint")), "..", "bin", "eslint.js");
+const nextBin = webRequire.resolve("next/dist/bin/next");
+const tscBin = webRequire.resolve("typescript/bin/tsc");
+const vitestBin = resolve(dirname(webRequire.resolve("vitest")), "vitest.mjs");
 const nodeOnly = process.argv.includes("--node-only");
 const checks = [
+  [
+    "PNG content policy behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-png-content-policy.mjs")],
+  ],
   [
     "public-file checker behavior",
     process.execPath,
@@ -82,6 +93,20 @@ const checks = [
     [resolve(import.meta.dirname, "test-spelling-check.mjs")],
   ],
   ["spelling", process.execPath, [resolve(import.meta.dirname, "check-spelling.mjs")]],
+  ["web lint", process.execPath, [eslintBin, "."], webRoot],
+  ["web types", process.execPath, [tscBin, "--noEmit"], webRoot],
+  ["web tests and coverage", process.execPath, [vitestBin, "run", "--coverage"], webRoot],
+  [
+    "web build checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-web-build-check.mjs")],
+  ],
+  ["web production build", process.execPath, [nextBin, "build"], webRoot],
+  [
+    "web production artifact",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-web-build.mjs")],
+  ],
   [
     "formatting",
     process.execPath,
@@ -102,10 +127,10 @@ if (!nodeOnly) {
   ]);
 }
 
-for (const [label, command, args] of checks) {
+for (const [label, command, args, cwd = root] of checks) {
   console.log(`\n==> Checking ${label}`);
   const result = spawnSync(command, args, {
-    cwd: root,
+    cwd,
     encoding: "utf8",
     stdio: "inherit",
   });

@@ -2,9 +2,10 @@
 
 ## Current scope
 
-The repository currently provides Phase 0 tooling and a disposable PostgreSQL service. It does not
-yet contain a web application, API, jobs process, or connector. A successful setup proves the
-repository gates and local database work; it does not prove product behavior.
+The repository provides Phase 0 tooling, a disposable PostgreSQL service, and a Phase 1 web
+prototype that uses synthetic data only. It does not contain authentication, an application API,
+jobs process, real-user ingestion, or a connector. A successful setup proves the repository gates,
+synthetic frontend behavior, and local database service; it does not prove a production flow.
 
 ## Prerequisites
 
@@ -30,20 +31,53 @@ unreviewed dependency build scripts, newly published packages inside the quarant
 untrusted registry redirects, and exotic transitive sources.
 
 `pnpm run verify` is deterministic and offline after installation. It includes a complete reachable
-Git-history scan, external-host policy, English spelling, and dependency-license inventory. The
-optional `pnpm run check:external-links:online` performs bounded network validation and may fail
-closed behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
+Git-history scan, external-host policy, English spelling, dependency-license inventory, web lint,
+strict type checking, component coverage, and a production web build. The optional
+`pnpm run check:external-links:online` performs bounded network validation and may fail closed
+behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
 workstation.
 
 After an intentionally reviewed dependency change, regenerate the machine inventory with
 `node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
-verification. Regeneration is evidence capture, not approval.
+verification. Regeneration is evidence capture, not approval. Platform-specific package metadata is
+refreshed only with the explicit `--refresh-npm-metadata` flag; review that network-derived diff as
+carefully as the lockfile.
+
+## Run the synthetic web prototype
+
+No environment file, account, database, or Codex installation is needed for Phase 1. From the
+repository root:
+
+```text
+pnpm run dev:web
+```
+
+Open the loopback URL printed by Next.js. The development server binds to `127.0.0.1`; do not change
+it to a LAN-wide address for convenience. All displayed participants and activity are synthetic.
+
+Useful focused commands:
+
+```text
+pnpm run lint:web
+pnpm run typecheck:web
+pnpm run test:web
+pnpm run test:web:coverage
+pnpm run build:web
+```
+
+The product components and libraries must meet the committed coverage thresholds. Small Next.js
+entrypoints are covered by the production build. See
+[`apps/web/README.md`](../../apps/web/README.md) for the frontend trust boundaries and data
+contract.
 
 ## Local configuration
 
 `.env.example` is a public schema containing placeholders and a known local-only database password.
-If an implementation phase needs environment variables, copy it to `.env`; `.env` is ignored and
-must never be committed.
+The current web prototype optionally reads `VIBERACING_PUBLIC_ORIGIN` for absolute social metadata.
+Without it, development uses loopback and production builds use a reserved `.example` origin that is
+not suitable for deployment. A real hosted build must receive its public HTTPS DNS origin through
+the deployment environment. If local work needs the public schema, copy `.env.example` to `.env`;
+`.env` is ignored and must never be committed.
 
 Do not put production or staging values on a development workstation. Do not use the example
 database password anywhere except the loopback-only Compose service.

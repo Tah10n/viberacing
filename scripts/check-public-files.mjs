@@ -7,6 +7,7 @@ import {
   inspectPublicPath,
   maxReviewBytes,
 } from "./lib/public-content-policy.mjs";
+import { inspectPublicPng } from "./lib/png-content-policy.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const mode = process.argv[2] ?? "--all";
@@ -124,6 +125,11 @@ for (const path of candidatePaths()) {
   }
   for (const finding of inspection.findings) {
     report(path, finding.line, finding.kind);
+  }
+  if (name.endsWith(".png")) {
+    for (const finding of inspectPublicPng(buffer)) {
+      report(path, null, finding);
+    }
   }
 }
 

@@ -8,16 +8,26 @@ import { parse as parseYaml } from "yaml";
 const args = process.argv.slice(2);
 let root = resolve(import.meta.dirname, "..");
 let write = false;
+let refreshNpmMetadata = false;
 while (args.length > 0) {
   const argument = args.shift();
   if (argument === "--write") {
     write = true;
+  } else if (argument === "--refresh-npm-metadata") {
+    refreshNpmMetadata = true;
   } else if (argument === "--root" && args[0]) {
     root = resolve(args.shift());
   } else {
-    console.error("Usage: node scripts/check-licenses.mjs [--write] [--root <directory>]");
+    console.error(
+      "Usage: node scripts/check-licenses.mjs [--write] [--refresh-npm-metadata] [--root <directory>]",
+    );
     process.exit(2);
   }
+}
+
+if (refreshNpmMetadata && process.argv.includes("--root")) {
+  console.error("--refresh-npm-metadata is available only for the repository root");
+  process.exit(2);
 }
 
 const findings = [];
@@ -150,6 +160,134 @@ function discoverInstalledNpmPackages() {
   return packages;
 }
 
+const npmRegistry = "https://registry.npmjs.org";
+const npmMetadataRelativePath = "config/npm-package-metadata.json";
+
+function parseNpmMetadataCache() {
+  if (!existsSync(resolve(root, npmMetadataRelativePath))) {
+    report(npmMetadataRelativePath, "integrity-bound npm license metadata cache is missing");
+    return new Map();
+  }
+  const cache = readJson(npmMetadataRelativePath);
+  if (
+    cache?.schemaVersion !== 1 ||
+    cache?.registry !== npmRegistry ||
+    !Array.isArray(cache?.packages)
+  ) {
+    report(
+      npmMetadataRelativePath,
+      `expected schemaVersion 1, registry ${npmRegistry}, and a packages array`,
+    );
+    return new Map();
+  }
+  const packages = new Map();
+  let previousEntry = null;
+  for (const [index, entry] of cache.packages.entries()) {
+    const scope = `${npmMetadataRelativePath} packages[${index}]`;
+    if (
+      entry === null ||
+      typeof entry !== "object" ||
+      Object.keys(entry).sort().join(",") !== "integrity,license,name,version" ||
+      typeof entry.name !== "string" ||
+      typeof entry.version !== "string" ||
+      typeof entry.license !== "string" ||
+      !entry.license.trim() ||
+      typeof entry.integrity !== "string" ||
+      !/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(entry.integrity)
+    ) {
+      report(scope, "entry shape or value is invalid");
+      continue;
+    }
+    const key = packageKey(entry.name, entry.version);
+    const order =
+      previousEntry === null
+        ? -1
+        : previousEntry.name === entry.name
+          ? previousEntry.version.localeCompare(entry.version)
+          : previousEntry.name.localeCompare(entry.name);
+    if (packages.has(key) || order >= 0) {
+      report(scope, "entries must be uniquely sorted by package name and version");
+    }
+    previousEntry = entry;
+    packages.set(key, entry);
+  }
+  return packages;
+}
+
+async function fetchRegistryLicense(name, version, integrity) {
+  const encodedName = encodeURIComponent(name).replace("%40", "@");
+  const url = `${npmRegistry}/${encodedName}/${encodeURIComponent(version)}`;
+  const response = await fetch(url, {
+    headers: {
+      accept: "application/json",
+      "user-agent": "viberacing-license-metadata/1",
+    },
+    redirect: "error",
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) {
+    throw new Error(`registry returned HTTP ${response.status}`);
+  }
+  const declaredLength = Number(response.headers.get("content-length") ?? "0");
+  if (declaredLength > 1_048_576) {
+    throw new Error(`registry response exceeds 1 MiB (${declaredLength} bytes)`);
+  }
+  const body = await response.text();
+  if (Buffer.byteLength(body, "utf8") > 1_048_576) {
+    throw new Error("registry response exceeds 1 MiB");
+  }
+  const manifest = JSON.parse(body);
+  if (manifest?.name !== name || manifest?.version !== version) {
+    throw new Error("registry response identity does not match the requested package");
+  }
+  if (manifest?.dist?.integrity !== integrity) {
+    throw new Error("registry integrity does not match pnpm-lock.yaml");
+  }
+  if (typeof manifest.license !== "string" || !manifest.license.trim()) {
+    throw new Error("registry manifest has no string license declaration");
+  }
+  return { name, version, license: manifest.license.trim(), integrity };
+}
+
+async function refreshMetadata(lockedPackages, installedPackages) {
+  const entries = [];
+  const missing = [];
+  for (const [key, locked] of lockedPackages) {
+    const installed = installedPackages.get(key);
+    if (installed) {
+      entries.push({
+        name: installed.name,
+        version: installed.version,
+        license: installed.license,
+        integrity: locked.integrity,
+      });
+    } else {
+      missing.push({ key, ...locked });
+    }
+  }
+
+  for (let index = 0; index < missing.length; index += 8) {
+    const batch = missing.slice(index, index + 8);
+    const results = await Promise.allSettled(
+      batch.map((entry) => fetchRegistryLicense(entry.name, entry.version, entry.integrity)),
+    );
+    for (const [resultIndex, result] of results.entries()) {
+      const entry = batch[resultIndex];
+      if (result.status === "fulfilled") {
+        entries.push(result.value);
+      } else {
+        report(entry.key, `could not refresh npm license metadata: ${result.reason.message}`);
+      }
+    }
+  }
+
+  return entries.sort((left, right) =>
+    left.name === right.name
+      ? left.version.localeCompare(right.version)
+      : left.name.localeCompare(right.name),
+  );
+}
+
 const policy = readJson("config/license-policy.json");
 if (policy === null) {
   process.exit(1);
@@ -181,13 +319,29 @@ try {
   report("pnpm-lock.yaml", `could not parse lockfile: ${error.message}`);
   lock = {};
 }
-const lockedNpmKeys = new Set();
-for (const rawKey of Object.keys(lock.packages ?? {})) {
+const lockedNpmPackages = new Map();
+for (const [rawKey, lockEntry] of Object.entries(lock.packages ?? {})) {
   const key = lockPackageKey(rawKey);
   if (key === null) {
     report("pnpm-lock.yaml", `unsupported package key: ${rawKey}`);
+    continue;
+  }
+  const integrity = lockEntry?.resolution?.integrity;
+  if (typeof integrity !== "string" || !/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(integrity)) {
+    report("pnpm-lock.yaml", `package has no sha512 registry integrity: ${rawKey}`);
+    continue;
+  }
+  const separator = key.lastIndexOf("@");
+  const entry = {
+    name: key.slice(0, separator),
+    version: key.slice(separator + 1),
+    integrity,
+  };
+  const existing = lockedNpmPackages.get(key);
+  if (existing && existing.integrity !== integrity) {
+    report("pnpm-lock.yaml", `peer variants disagree on integrity: ${key}`);
   } else {
-    lockedNpmKeys.add(key);
+    lockedNpmPackages.set(key, entry);
   }
 }
 
@@ -287,20 +441,59 @@ for (const references of directPackageReferences.values()) {
 }
 
 const installedPackages = discoverInstalledNpmPackages();
-for (const key of lockedNpmKeys) {
-  if (!installedPackages.has(key)) {
-    report(key, "locked npm package has no installed manifest for license verification");
+
+const metadataStartFindingCount = findings.length;
+let npmMetadata;
+if (refreshNpmMetadata) {
+  const refreshedEntries = await refreshMetadata(lockedNpmPackages, installedPackages);
+  npmMetadata = new Map(
+    refreshedEntries.map((entry) => [packageKey(entry.name, entry.version), entry]),
+  );
+  if (
+    findings.length === metadataStartFindingCount &&
+    npmMetadata.size === lockedNpmPackages.size
+  ) {
+    const metadataPath = resolve(root, npmMetadataRelativePath);
+    const prettierConfig = (await resolvePrettierConfig(metadataPath)) ?? {};
+    const serializedMetadata = await formatWithPrettier(
+      JSON.stringify({ schemaVersion: 1, registry: npmRegistry, packages: refreshedEntries }),
+      { ...prettierConfig, parser: "json" },
+    );
+    writeFileSync(metadataPath, serializedMetadata, "utf8");
+    console.log(
+      `npm license metadata refreshed (${refreshedEntries.length} integrity-bound package release(s)).`,
+    );
+  }
+} else {
+  npmMetadata = parseNpmMetadataCache();
+}
+
+for (const [key, locked] of lockedNpmPackages) {
+  const metadata = npmMetadata.get(key);
+  if (!metadata) {
+    report(key, "locked package is missing from the npm license metadata cache");
+  } else if (metadata.integrity !== locked.integrity) {
+    report(key, "cached npm license metadata integrity differs from pnpm-lock.yaml");
+  }
+  const installed = installedPackages.get(key);
+  if (metadata && installed && metadata.license !== installed.license) {
+    report(key, "installed manifest license differs from the integrity-bound metadata cache");
+  }
+}
+for (const key of npmMetadata.keys()) {
+  if (!lockedNpmPackages.has(key)) {
+    report(npmMetadataRelativePath, `metadata contains an unlocked package release: ${key}`);
   }
 }
 for (const key of installedPackages.keys()) {
-  if (!lockedNpmKeys.has(key)) {
+  if (!lockedNpmPackages.has(key)) {
     report(key, "installed npm package is absent from pnpm-lock.yaml");
   }
 }
 
 const approvedNpm = new Set(policy.approvedNpmLicenseExpressions ?? []);
-const npmPackages = [...lockedNpmKeys]
-  .map((key) => installedPackages.get(key))
+const npmPackages = [...lockedNpmPackages.keys()]
+  .map((key) => npmMetadata.get(key))
   .filter(Boolean)
   .map((entry) => ({
     name: entry.name,
@@ -446,6 +639,7 @@ const inventory = {
   generatedFrom: [
     ...manifestPaths,
     "pnpm-lock.yaml",
+    npmMetadataRelativePath,
     "Cargo.lock",
     "compose.yaml",
     ".github/workflows/ci.yml",
@@ -475,7 +669,7 @@ if (!write) {
   } else if (readFileSync(inventoryPath, "utf8") !== serialized) {
     report(
       "docs/reference/dependency-inventory.json",
-      "inventory does not match locks, installed manifests, or external-artifact policy; review and regenerate",
+      "inventory does not match locks, integrity-bound metadata, installed manifests, or external-artifact policy; review and regenerate",
     );
   }
 }

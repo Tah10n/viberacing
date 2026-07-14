@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   validateCompose,
+  validateDependencyOverrides,
   validatePnpmWorkspace,
   validateRootPackage,
   validateWorkspacePackage,
@@ -144,6 +145,7 @@ const goodWorkspace = {
   nodeVersion: "24.18.0",
   engineStrict: true,
   verifyDepsBeforeRun: "error",
+  enableGlobalVirtualStore: false,
   autoInstallPeers: false,
   strictPeerDependencies: true,
   savePrefix: "",
@@ -161,6 +163,10 @@ assert.deepEqual(validatePnpmWorkspace(goodWorkspace), []);
 assert.match(
   validatePnpmWorkspace({ ...goodWorkspace, trustLockfile: true }).join("\n"),
   /trustLockfile/,
+);
+assert.match(
+  validatePnpmWorkspace({ ...goodWorkspace, enableGlobalVirtualStore: true }).join("\n"),
+  /enableGlobalVirtualStore/,
 );
 assert.match(
   validatePnpmWorkspace({ ...goodWorkspace, allowBuilds: { tool: true } }).join("\n"),
@@ -216,4 +222,101 @@ assert.match(
   /must remain private/,
 );
 
-console.log("Configuration checker tests passed (22 cases).");
+const overrideSelector = "eslint-config-next@16.2.10>eslint-import-resolver-typescript";
+const goodOverrideWorkspace = { overrides: { [overrideSelector]: "3.10.0" } };
+const goodOverridePolicy = {
+  schemaVersion: 1,
+  overrides: [
+    {
+      selector: overrideSelector,
+      replacement: "3.10.0",
+      reviewedOn: "2026-07-14",
+      expiresOn: "2026-10-12",
+      reason:
+        "A compatible newer transitive release lost stronger trust evidence after an attested release had already been published.",
+      removalCondition:
+        "Remove when the parent package selects a compatible release that passes the trust policy without an override.",
+    },
+  ],
+};
+const reviewDate = new Date("2026-07-14T12:00:00.000Z");
+assert.deepEqual(
+  validateDependencyOverrides(goodOverrideWorkspace, goodOverridePolicy, reviewDate),
+  [],
+);
+assert.match(
+  validateDependencyOverrides(
+    goodOverrideWorkspace,
+    {
+      ...goodOverridePolicy,
+      overrides: [{ ...goodOverridePolicy.overrides[0], expiresOn: "2026-07-13" }],
+    },
+    reviewDate,
+  ).join("\n"),
+  /expired/,
+);
+assert.match(
+  validateDependencyOverrides(
+    goodOverrideWorkspace,
+    {
+      ...goodOverridePolicy,
+      overrides: [
+        {
+          ...goodOverridePolicy.overrides[0],
+          reviewedOn: "2026-07-15",
+          expiresOn: "2026-10-13",
+        },
+      ],
+    },
+    reviewDate,
+  ).join("\n"),
+  /reviewedOn must not be in the future/,
+);
+assert.match(
+  validateDependencyOverrides(
+    { overrides: { [overrideSelector]: "3.10.1" } },
+    goodOverridePolicy,
+    reviewDate,
+  ).join("\n"),
+  /undocumented or stale/,
+);
+assert.match(
+  validateDependencyOverrides(
+    goodOverrideWorkspace,
+    {
+      ...goodOverridePolicy,
+      overrides: [
+        {
+          ...goodOverridePolicy.overrides[0],
+          selector: "eslint-config-next>eslint-import-resolver-typescript",
+        },
+      ],
+    },
+    reviewDate,
+  ).join("\n"),
+  /pin one exact parent/,
+);
+assert.deepEqual(
+  validateDependencyOverrides(
+    { overrides: { "next@16.2.10>sharp": "-" } },
+    {
+      schemaVersion: 1,
+      overrides: [
+        {
+          selector: "next@16.2.10>sharp",
+          replacement: "-",
+          reviewedOn: "2026-07-14",
+          expiresOn: "2026-10-12",
+          reason:
+            "The application does not use runtime image optimization, so this optional native dependency is unnecessary distribution surface.",
+          removalCondition:
+            "Remove before enabling image optimization, then review the native binary and all redistribution obligations.",
+        },
+      ],
+    },
+    reviewDate,
+  ),
+  [],
+);
+
+console.log("Configuration checker tests passed (29 cases).");

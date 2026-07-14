@@ -52,6 +52,10 @@ try {
     join(sourceRoot, "scripts", "lib", "public-content-policy.mjs"),
     join(temporaryRoot, "scripts", "lib", "public-content-policy.mjs"),
   );
+  copyFileSync(
+    join(sourceRoot, "scripts", "lib", "png-content-policy.mjs"),
+    join(temporaryRoot, "scripts", "lib", "png-content-policy.mjs"),
+  );
   git("init", "--quiet", "--initial-branch=main", "--template=");
 
   const safePath = join(temporaryRoot, "safe.txt");
@@ -109,7 +113,12 @@ try {
   git("update-index", "--add", "--cacheinfo", `120000,${linkObject},link.md`);
   expectFailure("staged symbolic link", scan("--staged"), "symbolic links are not publishable");
 
-  console.log("Public-file checker tests passed (10 cases).");
+  const fakePngPath = join(temporaryRoot, "unsafe.png");
+  writeFileSync(fakePngPath, "not a png", "utf8");
+  expectFailure("malformed PNG", scan("--all"), "PNG validation failed");
+  unlinkSync(fakePngPath);
+
+  console.log("Public-file checker tests passed (11 cases).");
 } finally {
   rmSync(temporaryRoot, { force: true, recursive: true });
 }

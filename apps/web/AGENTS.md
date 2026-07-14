@@ -1,0 +1,52 @@
+# Web workspace agent guidance
+
+Read the root `AGENTS.md`, this directory's `README.md`, and the current implementation status
+before editing. The root security, privacy, documentation, dependency, and staged-review rules all
+apply.
+
+## Non-negotiable boundaries
+
+- `lib/race-data.ts` is synthetic test/demo input only. Never paste exports, logs, account data, or
+  workstation-derived values into it.
+- Client-facing `SyntheticRacePayload` contains scores and presentation fields, not raw tokens or
+  source/account identifiers. Keep raw activity on the server side of the page boundary.
+- Community results are self-reported. Keep the disclaimer visible and Verified mode unreachable.
+- `CarRecipe` remains a closed enum with fixed repository-owned output. Do not add arbitrary text,
+  markup, styles, colors, files, SVG, or URLs.
+- Browser persistence is limited to locale, theme, and motion. Do not add trackers, analytics,
+  fingerprinting, or account state to local storage.
+- Preserve per-navigation nonce CSP and repository-root build isolation. Do not add a CSP origin,
+  remote asset, or capability merely to silence a failure.
+
+## Commands
+
+Run from the repository root:
+
+```text
+pnpm run lint:web
+pnpm run typecheck:web
+pnpm run test:web:coverage
+pnpm run build:web
+pnpm run check:web-build
+```
+
+Run `pnpm run verify` before completion. The focused commands do not replace repository history,
+public-data, license, documentation, or staged-snapshot gates.
+
+## Implementation conventions
+
+- Keep strict TypeScript and typed lint rules green; do not use broad casts to bypass an input
+  boundary.
+- Update `lib/i18n.ts` with EN/RU key parity for every user-visible string.
+- Prefer semantic HTML as the authoritative experience. Canvas is enhancement and must retain a
+  useful accessible description and reduced-motion behavior.
+- Keep scoring/ranking deterministic, bounded, and covered at caps, invalid inputs, and ties.
+- Exercise actual state changes and production code paths in tests. Do not lower coverage thresholds
+  or disable axe rules except for jsdom's documented inability to measure visual contrast; browser
+  evidence must cover that gap.
+- Keep Next.js entrypoints thin. Add product logic to testable modules with explicit input/output
+  types.
+
+Before committing, review generated `.next`, coverage, screenshots, and local fixtures to ensure
+none are tracked. Stage only intended files, run `pnpm run check:public:staged`, and manually
+inspect `git diff --cached`.

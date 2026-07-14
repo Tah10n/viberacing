@@ -14,11 +14,17 @@ remain safe to publish verbatim.
 - [Public repository data policy](security/PUBLIC_REPOSITORY_POLICY.md) — publishable/private
   boundaries and the commit/publication checklist.
 - [Local development](getting-started/LOCAL_DEVELOPMENT.md) — pinned tools, repository gates, and
-  disposable PostgreSQL startup.
+  synthetic web prototype and disposable PostgreSQL startup.
+- [Web prototype](../apps/web/README.md) — frontend commands, module map, privacy boundary, CSP,
+  synthetic data contract, and test strategy.
+- [Phase 1 browser matrix](testing/PHASE1_BROWSER_MATRIX.md) — responsive, contrast, interaction,
+  runtime-header, artifact-budget evidence, and explicitly open manual gates.
 - [Dependency policy](security/DEPENDENCY_POLICY.md) — package, action, container, update, and
   supply-chain requirements.
 - [Dependency inventory](reference/dependency-inventory.json) — deterministic locked npm/Cargo and
   external artifact/license evidence.
+- [Asset provenance](reference/ASSET_PROVENANCE.md) — generation/source records, integrity digests,
+  metadata sanitation, accessibility text, and release-review status for non-code visuals.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary
   and enforced workflow rules.
 - [Threat model](security/THREAT_MODEL.md), [abuse cases](security/ABUSE_CASES.md), and

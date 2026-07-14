@@ -21,13 +21,34 @@ Versioning where its guarantees are applicable.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
 - Offline spelling, reviewed external-link policy, and deterministic dependency/license inventory
   covering the exact npm lock graph, pinned Actions, and local PostgreSQL image.
+- Synthetic EN/RU Next.js race, leaderboard, demo profile, three code-native themes, reduced-motion
+  controls, and deterministic pixel-car renderer.
+- Strict frontend lint/type/build gates plus unit, interaction, accessibility, CSP/header, scoring,
+  localization, and data-boundary tests with enforced coverage thresholds.
+- Integrity-bound cross-platform npm license metadata and an expiring reviewed override for the
+  unused Next.js image-optimization graph.
+- Manifest-driven production asset budgets with path, source-map, font, standalone-output, and
+  black-box regression checks.
+- A documented AI-generated social preview, accessible alternative text, reproducible metadata
+  sanitation, and a fail-closed PNG structure/chunk policy with regression coverage.
+- Strict server-only public-origin validation for absolute social metadata, with HTTPS-only hosted
+  origins, loopback-only development HTTP, safe reserved defaults, and negative tests.
 
 ### Security
 
+- Patched the transitive Next.js PostCSS resolution from 8.4.31 to 8.5.19 for GHSA-qx2v-qp2m-jg93,
+  with an exact expiring override and removal condition.
+- Pinned pnpm to a repository-local virtual store for deterministic CI/developer dependency layout.
+- Kept the unused native Sharp graph absent while satisfying Next.js's type-only declaration with a
+  `never` sentinel and a regression-tested production import ban.
+- Made official-registry audits fail on moderate-or-higher advisories, rejected future-dated
+  override reviews, and restored extraneous-install detection alongside cross-platform metadata.
 - Exact staged-blob scanning for common secret, personal-data, local-path, symlink, and submodule
   hazards.
 - Read-only, secretless pull-request CI with pinned actions and policy-tested workflow constraints.
 - Explicit publication blockers for real maintainers, CODEOWNERS, private reporting, and hosted
   controls rather than unsafe inferred identities.
+- Per-response nonce CSP, browser isolation/capability headers, local-only preference storage,
+  closed-enum car recipes, and score-only client fixtures with no raw token buckets.
 
 No version has been released.

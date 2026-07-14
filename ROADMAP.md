@@ -15,35 +15,49 @@ stop any phase.
 
 Exit criterion: the repository is safe to publish and its claims match executable evidence.
 
-## Phase 1 — Contracts and identity
+## Phase 1 — Visual prototype with synthetic data
+
+- Build the responsive EN/RU race, accessible leaderboard and profile shell, three themes,
+  reduced-motion behavior, and deterministic pixel renderer.
+- Use synthetic fixtures only, without authentication or real ingestion.
+- Complete browser visual, accessibility, localization, and performance evidence.
+
+Exit criterion: contributors can evaluate the intended product without opening a trust or privacy
+surface.
+
+## Phase 2 — Identity and single-source vertical slice
 
 - Introduce versioned language-neutral contracts and generated validators.
-- Implement GitHub identity, passkeys, sessions, invite-only enrollment, and deletion foundations.
-- Create least-privileged database roles and auditable migrations.
+- Implement invite redemption, GitHub identity, passkeys, sessions, recovery, profile controls, and
+  deletion foundations.
+- Implement one source-bound connector flow, isolated ingest, scoring/finalization, and the
+  Community disclaimer.
 
-Exit criterion: authorization and lifecycle invariants pass positive and negative integration tests.
+Exit criterion: one real user can pair and sync without prompts, email, credentials, repository
+content, or raw account identifiers leaving the machine.
 
-## Phase 2 — Community race
+## Phase 3 — Multi-source and lifecycle hardening
 
-- Build the EN/RU pixel-art weekly race and accessible leaderboard experience.
-- Implement opaque multi-source profiles, bounded daily aggregation, scoring, finalization, and
-  ranking.
-- Keep every Community result clearly labeled self-reported and unverified.
+- Add explicit new-source versus existing-source pairing, opaque multi-account aggregation, and
+  same-source device deduplication.
+- Add source pause/unlink, quarantine, retention, finalized-season immutability, abuse controls,
+  backpressure, alerts, audit events, and kill switches.
+- Keep the profile cap and source count visible so adding devices cannot multiply one source.
 
-Exit criterion: the web flow works end to end with synthetic data and no valuable benefit depends on
-Community scores.
+Exit criterion: source multiplication cannot exceed the profile score cap or gain privilege, and
+bounded infrastructure survives load tests.
 
-## Phase 3 — Native connector
+## Phase 4 — Agent car proposal and connector packaging
 
-- Implement the least-privileged Rust connector over allowlisted stable Codex App Server methods.
-- Add pairing, local key protection, signed requests, replay resistance, resumable delivery, and
-  compatibility diagnostics.
-- Produce signed, checksummed, provenance-backed release artifacts.
+- Add the versioned bounded CarRecipe proposal/approval flow without arbitrary content.
+- Finish connector compatibility diagnostics and clean-machine install, upgrade, revoke, and
+  uninstall tests.
+- Produce signed, checksummed, SBOM- and provenance-backed connector artifacts.
 
-Exit criterion: supported platforms pass clean-machine install, upgrade, revoke, and uninstall
-tests.
+Exit criterion: no arbitrary content or conversation text enters the service, and supported
+connector artifacts pass release verification.
 
-## Phase 4 — Operations and public beta
+## Phase 5 — Staging and public beta
 
 - Deploy isolated services and databases to Railway behind Cloudflare controls.
 - Exercise migrations, backups, restores, deletion, incident response, rollback, alerts, and SLOs.

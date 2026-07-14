@@ -7,6 +7,9 @@ import process from "node:process";
 
 const checker = resolve(import.meta.dirname, "check-licenses.mjs");
 const fixtureRoot = mkdtempSync(join(tmpdir(), "viberacing-license-check-"));
+const fixtureToolIntegrity = `sha512-${Buffer.from("fixture-tool").toString("base64")}`;
+const fixtureRuntimeIntegrity = `sha512-${Buffer.from("fixture-runtime").toString("base64")}`;
+const platformOnlyIntegrity = `sha512-${Buffer.from("platform-only").toString("base64")}`;
 
 function makeFixture(name, { workspace = false } = {}) {
   const directory = join(fixtureRoot, name);
@@ -106,8 +109,17 @@ ${
 `
     : ""
 }packages:
-  fixture-tool@1.0.0: {}
-${workspace ? "  fixture-runtime@2.0.0: {}\n" : ""}`,
+  fixture-tool@1.0.0:
+    resolution: {integrity: ${fixtureToolIntegrity}}
+  platform-only@1.0.0:
+    resolution: {integrity: ${platformOnlyIntegrity}}
+${
+  workspace
+    ? `  fixture-runtime@2.0.0:
+    resolution: {integrity: ${fixtureRuntimeIntegrity}}
+`
+    : ""
+}`,
     "utf8",
   );
   writeFileSync(
@@ -130,6 +142,43 @@ ${workspace ? "  fixture-runtime@2.0.0: {}\n" : ""}`,
         approvedNpmLicenseExpressions: ["MIT"],
         approvedCargoLicenseExpressions: [],
         externalArtifacts: [],
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  const metadataPackages = [
+    ...(workspace
+      ? [
+          {
+            name: "fixture-runtime",
+            version: "2.0.0",
+            license: "MIT",
+            integrity: fixtureRuntimeIntegrity,
+          },
+        ]
+      : []),
+    {
+      name: "fixture-tool",
+      version: "1.0.0",
+      license: "MIT",
+      integrity: fixtureToolIntegrity,
+    },
+    {
+      name: "platform-only",
+      version: "1.0.0",
+      license: "MIT",
+      integrity: platformOnlyIntegrity,
+    },
+  ];
+  writeFileSync(
+    join(directory, "config", "npm-package-metadata.json"),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        registry: "https://registry.npmjs.org",
+        packages: metadataPackages,
       },
       null,
       2,
@@ -206,7 +255,70 @@ try {
     readFileSync(manifestPath, "utf8").replace('"MIT"', '"GPL-3.0-only"'),
     "utf8",
   );
+  const unapprovedMetadataPath = join(unapproved, "config", "npm-package-metadata.json");
+  writeFileSync(
+    unapprovedMetadataPath,
+    readFileSync(unapprovedMetadataPath, "utf8").replace(
+      '"name": "fixture-tool",\n      "version": "1.0.0",\n      "license": "MIT"',
+      '"name": "fixture-tool",\n      "version": "1.0.0",\n      "license": "GPL-3.0-only"',
+    ),
+    "utf8",
+  );
   expectFailure("unapproved license", run(unapproved, "--write"), "npm license is not approved");
+
+  const missingMetadata = makeFixture("missing-metadata");
+  const missingMetadataPath = join(missingMetadata, "config", "npm-package-metadata.json");
+  writeFileSync(
+    missingMetadataPath,
+    readFileSync(missingMetadataPath, "utf8").replace(
+      /,\n    \{\n      "name": "platform-only"[\s\S]+?\n    \}/,
+      "",
+    ),
+    "utf8",
+  );
+  expectFailure(
+    "missing cross-platform metadata",
+    run(missingMetadata, "--write"),
+    "missing from the npm license metadata cache",
+  );
+
+  const staleMetadata = makeFixture("stale-metadata");
+  const staleMetadataPath = join(staleMetadata, "config", "npm-package-metadata.json");
+  writeFileSync(
+    staleMetadataPath,
+    readFileSync(staleMetadataPath, "utf8").replace(
+      platformOnlyIntegrity,
+      "sha512-c3RhbGUtbWV0YWRhdGE=",
+    ),
+    "utf8",
+  );
+  expectFailure(
+    "stale metadata integrity",
+    run(staleMetadata, "--write"),
+    "integrity differs from pnpm-lock.yaml",
+  );
+
+  const extraneousInstall = makeFixture("extraneous-install");
+  const extraneousManifest = join(
+    extraneousInstall,
+    "node_modules",
+    ".pnpm",
+    "stale-package@1.0.0",
+    "node_modules",
+    "stale-package",
+    "package.json",
+  );
+  mkdirSync(resolve(extraneousManifest, ".."), { recursive: true });
+  writeFileSync(
+    extraneousManifest,
+    `${JSON.stringify({ name: "stale-package", version: "1.0.0", license: "MIT" })}\n`,
+    "utf8",
+  );
+  expectFailure(
+    "extraneous installed package",
+    run(extraneousInstall, "--write"),
+    "installed npm package is absent from pnpm-lock.yaml",
+  );
 
   const missingNotice = makeFixture("missing-notice");
   writeFileSync(join(missingNotice, "THIRD_PARTY_NOTICES.md"), "# Empty notices\n", "utf8");
@@ -236,7 +348,7 @@ try {
     "referenced external artifact is missing",
   );
 
-  console.log("License checker tests passed (7 cases).");
+  console.log("License checker tests passed (10 cases).");
 } finally {
   rmSync(fixtureRoot, { force: true, recursive: true });
 }

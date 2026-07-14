@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "overrides": [
+    {
+      "selector": "next@16.2.10>postcss",
+      "replacement": "8.5.19",
+      "reviewedOn": "2026-07-14",
+      "expiresOn": "2026-10-12",
+      "reason": "Next.js 16.2.10 resolves postcss 8.4.31, which is affected by GHSA-qx2v-qp2m-jg93. The patched 8.5.19 release is already exercised by this workspace's Vite graph and remains within the same major API line.",
+      "removalCondition": "Remove this override once the pinned Next.js release resolves postcss 8.5.10 or newer itself, then rerun the registry audit, production build, and CSS/browser verification."
+    },
+    {
+      "selector": "next@16.2.10>sharp",
+      "replacement": "-",
+      "reviewedOn": "2026-07-14",
+      "expiresOn": "2026-10-12",
+      "reason": "The current web application does not use next/image or runtime image optimization, so the native sharp and libvips graph is unnecessary product code and distribution surface. A never-typed ambient sentinel satisfies Next.js's upstream type-only reference, while ESLint forbids product imports.",
+      "removalCondition": "Remove this override and the type-only sentinel before enabling Next.js image optimization or any feature that requires sharp, then review the native binary and LGPL obligations."
+    }
+  ]
+}
