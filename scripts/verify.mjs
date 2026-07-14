@@ -5,8 +5,18 @@ import process from "node:process";
 
 const root = resolve(import.meta.dirname, "..");
 const require = createRequire(import.meta.url);
+const contractsRoot = resolve(root, "packages", "contracts");
+const contractsRequire = createRequire(resolve(contractsRoot, "package.json"));
 const webRoot = resolve(root, "apps", "web");
 const webRequire = createRequire(resolve(webRoot, "package.json"));
+const contractsEslintBin = resolve(
+  dirname(contractsRequire.resolve("eslint")),
+  "..",
+  "bin",
+  "eslint.js",
+);
+const contractsTscBin = contractsRequire.resolve("typescript/bin/tsc");
+const contractsVitestBin = resolve(dirname(contractsRequire.resolve("vitest")), "vitest.mjs");
 const eslintBin = resolve(dirname(webRequire.resolve("eslint")), "..", "bin", "eslint.js");
 const nextBin = webRequire.resolve("next/dist/bin/next");
 const tscBin = webRequire.resolve("typescript/bin/tsc");
@@ -54,6 +64,11 @@ const checks = [
     [resolve(import.meta.dirname, "test-architecture-check.mjs")],
   ],
   [
+    "contract checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-contract-check.mjs")],
+  ],
+  [
     "publication-readiness checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-publication-check.mjs")],
@@ -80,6 +95,7 @@ const checks = [
     process.execPath,
     [resolve(import.meta.dirname, "check-architecture.mjs")],
   ],
+  ["versioned contracts", process.execPath, [resolve(import.meta.dirname, "check-contracts.mjs")]],
   ["configuration", process.execPath, [resolve(import.meta.dirname, "check-config.mjs")]],
   [
     "license checker behavior",
@@ -93,6 +109,14 @@ const checks = [
     [resolve(import.meta.dirname, "test-spelling-check.mjs")],
   ],
   ["spelling", process.execPath, [resolve(import.meta.dirname, "check-spelling.mjs")]],
+  ["contract lint", process.execPath, [contractsEslintBin, "."], contractsRoot],
+  ["contract types", process.execPath, [contractsTscBin, "--noEmit"], contractsRoot],
+  [
+    "contract tests and coverage",
+    process.execPath,
+    [contractsVitestBin, "run", "--coverage"],
+    contractsRoot,
+  ],
   ["web lint", process.execPath, [eslintBin, "."], webRoot],
   ["web types", process.execPath, [tscBin, "--noEmit"], webRoot],
   ["web tests and coverage", process.execPath, [vitestBin, "run", "--coverage"], webRoot],

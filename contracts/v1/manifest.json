@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "v1",
+  "schemas": [
+    {
+      "file": "connector-sync-result.schema.json",
+      "exportName": "connectorSyncResultV1",
+      "typeName": "ConnectorSyncResultV1"
+    },
+    {
+      "file": "connector-sync.schema.json",
+      "exportName": "connectorSyncV1",
+      "typeName": "ConnectorSyncV1"
+    },
+    {
+      "file": "problem-details.schema.json",
+      "exportName": "problemDetailsV1",
+      "typeName": "ProblemDetailsV1"
+    }
+  ]
+}

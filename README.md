@@ -33,6 +33,7 @@ keys, or arbitrary user-uploaded files.
 - [System context](docs/architecture/SYSTEM_CONTEXT.md) and
   [data flows](docs/architecture/DATA_FLOW.md)
 - [Compatibility policy](docs/architecture/COMPATIBILITY_POLICY.md)
+- [Versioned public contracts](contracts/README.md)
 - [Architecture decisions](docs/decisions/README.md)
 - [Local development](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Web prototype](apps/web/README.md)
@@ -67,6 +68,10 @@ governance, and signed and attested connector releases remain gates before publi
 The governance documents and structured contribution forms are now present and policy-tested. The
 repository still has no GitHub remote, public maintainer registry, CODEOWNERS file, or verified
 private reporting channels; those hosted controls cannot be safely invented from local data.
+
+Phase 2 contract foundations are also present: three closed, bounded JSON Schemas plus generated
+TypeScript validators and OpenAPI components. They are pre-implementation contracts, not a live API
+or evidence that real Codex data can be submitted.
 
 ## Run and verify the synthetic prototype
 

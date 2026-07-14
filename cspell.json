@@ -6,7 +6,9 @@
     "*.md",
     "*.{json,jsonc,yaml,yml,toml}",
     ".github/**/*.{md,yaml,yml}",
+    "contracts/**/*.{json,md}",
     "docs/**/*.md",
+    "packages/contracts/**/*.md",
     "scripts/**/*.mjs"
   ],
   "ignorePaths": [

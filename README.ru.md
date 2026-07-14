@@ -35,6 +35,7 @@ Verified-лига останется выключенной до появлен�
 - [System context (EN)](docs/architecture/SYSTEM_CONTEXT.md) и
   [data flows (EN)](docs/architecture/DATA_FLOW.md)
 - [Compatibility policy (EN)](docs/architecture/COMPATIBILITY_POLICY.md)
+- [Версионированные публичные контракты (EN)](contracts/README.md)
 - [Architecture decisions (EN)](docs/decisions/README.md)
 - [Политика данных публичного репозитория (EN)](docs/security/PUBLIC_REPOSITORY_POLICY.md)
 - [Локальная разработка (EN)](docs/getting-started/LOCAL_DEVELOPMENT.md)
@@ -72,6 +73,10 @@ pnpm run dev:web
 
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.
+
+В репозитории уже есть закрытые JSON Schemas и генерируемые TypeScript/OpenAPI artifacts для
+будущего sync-протокола. Это пока только проверяемая граница данных: работающего API, connector и
+приёма реальной статистики ещё нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

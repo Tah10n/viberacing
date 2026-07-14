@@ -117,6 +117,16 @@ const cases = [
     expectedText: "Mermaid code fence is not closed",
   },
   {
+    name: "rejects regression to a plaintext pairing secret design",
+    mutate(directory) {
+      mutate(directory, "docs/architecture/DATA_FLOW.md", (text) =>
+        text.replace("keyed poll verifier", "plaintext device secret"),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "keyed poll verifier",
+  },
+  {
     name: "rejects a privacy map without a required classification",
     mutate(directory) {
       mutate(directory, "docs/security/PRIVACY_DATA_MAP.md", (text) =>

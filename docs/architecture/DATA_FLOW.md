@@ -49,21 +49,26 @@ sequenceDiagram
 
   Connector->>Connector: Generate Ed25519 key in OS credential store
   Connector->>Web: Start short-lived pairing with public key and safe metadata
-  Web-->>Connector: Device secret plus short user code
-  Connector->>Connector: Keep device secret local
+  Web->>DB: Store keyed poll verifier, challenge, and immutable key fingerprint
+  Web-->>Connector: One-time poll token, challenge, and short user code
+  Connector->>Connector: Keep plaintext poll token local until expiry
   User->>Browser: Enter or confirm short code
   Browser->>Web: Authenticated pairing lookup
-  Web-->>Browser: Show device, platform, version, and source choice
+  Web-->>Browser: Show key fingerprint, device, platform, version, and source choice
   User->>Browser: Choose new source or existing source
   Web->>Authenticator: Fresh transaction-bound step-up
   Authenticator-->>Web: User-verified response
-  Web->>DB: Atomically bind public key to exactly one source
-  Web-->>Connector: Public device ID after possession check
+  Web->>DB: Approve exact pending transaction and source choice
+  Connector->>Web: Poll token plus Ed25519 proof over bound challenge
+  Web->>DB: Atomically activate public key for exactly one source
+  Web-->>Connector: Public device ID after verifier and possession checks
 ```
 
-The short user code is not a bearer credential by itself. The browser needs a current GitHub session
-and fresh passkey. Device authority begins only after atomic source binding and never includes
-profile administration.
+The short user code and poll token cannot approve or activate a device by themselves. The browser
+needs a current GitHub session and fresh passkey, the connector must prove private-key possession,
+and the pending public key is immutable. The server returns the plaintext poll token once, stores
+only a keyed verifier, and never logs it. Device authority begins only after atomic source binding
+and never includes profile administration.
 
 ## Local collection and signed synchronization
 

@@ -32,10 +32,10 @@ untrusted registry redirects, and exotic transitive sources.
 
 `pnpm run verify` is deterministic and offline after installation. It includes a complete reachable
 Git-history scan, external-host policy, English spelling, dependency-license inventory, web lint,
-strict type checking, component coverage, and a production web build. The optional
-`pnpm run check:external-links:online` performs bounded network validation and may fail closed
-behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
-workstation.
+strict type checking, contract generation/drift checks and coverage, web component coverage, and a
+production web build. The optional `pnpm run check:external-links:online` performs bounded network
+validation and may fail closed behind a private DNS/proxy; do not weaken its address or redirect
+rules to accommodate a workstation.
 
 After an intentionally reviewed dependency change, regenerate the machine inventory with
 `node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
@@ -64,6 +64,19 @@ pnpm run test:web
 pnpm run test:web:coverage
 pnpm run build:web
 ```
+
+Contract-focused commands do not accept or read real account data:
+
+```text
+pnpm run check:contracts
+pnpm run lint:contracts
+pnpm run typecheck:contracts
+pnpm run test:contracts:coverage
+```
+
+Run `pnpm run generate:contracts` only after intentionally changing a canonical file under
+`contracts/v1/`; review both generated diffs and their source digest. The generated OpenAPI document
+currently has no paths because no API endpoint exists.
 
 The product components and libraries must meet the committed coverage thresholds. Small Next.js
 entrypoints are covered by the production build. See

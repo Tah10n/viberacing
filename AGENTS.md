@@ -33,10 +33,14 @@ until its implementation and verification are present in the working tree.
   allowlist as a workaround for a failing check.
 - `apps/web/` contains the synthetic Next.js frontend and nested agent guidance. Read
   `apps/web/AGENTS.md` before editing it.
+- `contracts/v1/` contains canonical public JSON Schemas; `contracts/generated/` contains
+  drift-checked derivatives.
+- `packages/contracts/` contains generated TypeScript types plus the bounded runtime validator and
+  nested security guidance. Read `packages/contracts/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
-- Package, contract, and connector workspaces are not present yet; follow `docs/PROJECT_PLAN.md`
-  when they are introduced.
+- Ingest, jobs, database, and connector workspaces are not present yet; follow
+  `docs/PROJECT_PLAN.md` when they are introduced.
 
 ## Verified commands
 
@@ -49,6 +53,8 @@ until its implementation and verification are present in the working tree.
 - `pnpm run check:architecture` validates required security/architecture contracts, structured abuse
   cases, ADR metadata/indexes, compatibility fail-closed state, privacy classes, and Mermaid fence
   structure.
+- `pnpm run check:contracts` validates bounded JSON Schema structure, the connector writable-field
+  allowlist, generated TypeScript/OpenAPI drift, and version-manifest integrity.
 - `pnpm run check:history` scans every reachable ref, commit message, historical path, text blob,
   and printable binary metadata; it refuses shallow history.
 - `pnpm run check:external-links` enforces HTTPS and the reviewed host policy without network

@@ -282,13 +282,21 @@ event.
 2. The user or agent downloads a GitHub Release and verifies checksum, platform signature, and
    provenance.
 3. The connector creates an Ed25519 key for the selected source.
-4. A short-lived user code is displayed; the device code stays local.
-5. The browser displays the code, source choice, connector version, platform, and device label.
-6. GitHub session plus passkey approves the binding.
-7. The server issues a public device ID bound to the public key and source.
+4. The connector starts a transaction with its immutable public key and safe metadata. The server
+   returns a high-entropy poll token, a transaction challenge, and a short user code; only keyed
+   verifiers are persisted.
+5. The browser displays the code, public-key fingerprint, source choice, connector version,
+   platform, and device label.
+6. A GitHub session plus fresh passkey approves the exact pending transaction and source choice.
+7. The connector presents the poll token and proves private-key possession by signing the bound
+   challenge.
+8. The server atomically activates the binding and issues a public device ID tied to that public key
+   and exactly one source.
 
-There is no long-lived bearer credential. Each request signs a canonical method, path, body hash,
-device ID, nonce, timestamp, and idempotency key.
+The poll token is short-lived, one-time, and insufficient to approve or activate a device without
+the browser step-up and key-possession proof. Its plaintext is returned once and is never persisted
+or logged. There is no long-lived bearer credential. Each later sync request signs a canonical
+method, path, body hash, device ID, nonce, timestamp, and idempotency key.
 
 Nonce records expire after the replay window. Idempotency records have bounded retention. Neither
 table can grow without cleanup.

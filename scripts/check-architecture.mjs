@@ -64,6 +64,7 @@ const requiredContent = new Map([
       "## Planned field inventory",
       "## Prohibited data",
       "## User controls and deletion",
+      "Pairing poll token, verifier, challenge, user code, and transaction",
       "launch decision required",
     ],
   ],
@@ -89,10 +90,16 @@ const requiredContent = new Map([
     [
       "## Enrollment and passkey bootstrap",
       "## Device pairing and source choice",
+      "keyed poll verifier",
+      "Ed25519 proof over bound challenge",
       "## Local collection and signed synchronization",
       "## Hide and deletion",
       "## Trusted release",
     ],
+  ],
+  [
+    "docs/decisions/0003-identity-step-up-and-device-authority.md",
+    ["persist only a keyed token verifier", "an Ed25519 proof over the bound"],
   ],
 ]);
 

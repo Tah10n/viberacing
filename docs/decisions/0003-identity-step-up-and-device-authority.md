@@ -31,6 +31,12 @@ Give each connector an Ed25519 device key stored in the operating-system credent
 to exactly one source. Device requests are canonical signed messages, not long-lived bearer tokens.
 Device authority can submit Community sync for its source and nothing else.
 
+Bind the pending public key immutably when pairing starts. Return a high-entropy, short-lived poll
+token and transaction challenge once, persist only a keyed token verifier, and never log plaintext.
+The token can poll but cannot approve or activate a device. Activation requires the authenticated
+browser's fresh passkey approval of the displayed transaction plus an Ed25519 proof over the bound
+challenge.
+
 ## Security and privacy consequences
 
 This separates profile identity, human step-up, and unattended device authority. A stolen device key
@@ -71,7 +77,7 @@ compromised format/key triggers device revoke/rotation, not promotion to a broad
 - WebAuthn RP/origin, challenge replay/expiry, transaction binding, user verification, multiple
   passkey, recovery, and fresh-step-up tests.
 - Pairing code expiry/guess/race, displayed transaction, source choice, possession, revoke, and
-  rotation tests.
+  rotation tests, including plaintext poll-token storage/log rejection and immutable-key tests.
 - Scope matrix proving device credentials cannot manage profile, devices, invites, sources,
   recovery, deletion, or admin.
 - Canonical-signature, body tamper, nonce, idempotency, cross-source, clock, and stolen-key tests.

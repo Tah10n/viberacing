@@ -3,6 +3,7 @@
   "generatedFrom": [
     "package.json",
     "apps/web/package.json",
+    "packages/contracts/package.json",
     "pnpm-lock.yaml",
     "config/npm-package-metadata.json",
     "Cargo.lock",
@@ -151,7 +152,10 @@
       "name": "@eslint/js",
       "version": "9.39.5",
       "license": "MIT",
-      "direct": [{ "workspace": "apps/web", "scope": "development" }]
+      "direct": [
+        { "workspace": "apps/web", "scope": "development" },
+        { "workspace": "packages/contracts", "scope": "development" }
+      ]
     },
     { "name": "@eslint/object-schema", "version": "2.1.7", "license": "Apache-2.0", "direct": [] },
     { "name": "@eslint/plugin-kit", "version": "0.4.1", "license": "Apache-2.0", "direct": [] },
@@ -280,7 +284,10 @@
       "name": "@types/node",
       "version": "24.13.3",
       "license": "MIT",
-      "direct": [{ "workspace": "apps/web", "scope": "development" }]
+      "direct": [
+        { "workspace": "apps/web", "scope": "development" },
+        { "workspace": "packages/contracts", "scope": "development" }
+      ]
     },
     {
       "name": "@types/react",
@@ -344,7 +351,10 @@
       "name": "@vitest/coverage-v8",
       "version": "4.1.10",
       "license": "MIT",
-      "direct": [{ "workspace": "apps/web", "scope": "development" }]
+      "direct": [
+        { "workspace": "apps/web", "scope": "development" },
+        { "workspace": "packages/contracts", "scope": "development" }
+      ]
     },
     { "name": "@vitest/expect", "version": "4.1.10", "license": "MIT", "direct": [] },
     { "name": "@vitest/mocker", "version": "4.1.10", "license": "MIT", "direct": [] },
@@ -436,7 +446,10 @@
       "name": "eslint",
       "version": "9.39.5",
       "license": "MIT",
-      "direct": [{ "workspace": "apps/web", "scope": "development" }]
+      "direct": [
+        { "workspace": "apps/web", "scope": "development" },
+        { "workspace": "packages/contracts", "scope": "development" }
+      ]
     },
     {
       "name": "eslint-plugin-react-hooks",
@@ -756,13 +769,19 @@
       "name": "typescript",
       "version": "6.0.3",
       "license": "Apache-2.0",
-      "direct": [{ "workspace": "apps/web", "scope": "development" }]
+      "direct": [
+        { "workspace": "apps/web", "scope": "development" },
+        { "workspace": "packages/contracts", "scope": "development" }
+      ]
     },
     {
       "name": "typescript-eslint",
       "version": "8.63.0",
       "license": "MIT",
-      "direct": [{ "workspace": "apps/web", "scope": "development" }]
+      "direct": [
+        { "workspace": "apps/web", "scope": "development" },
+        { "workspace": "packages/contracts", "scope": "development" }
+      ]
     },
     { "name": "uc.micro", "version": "2.1.0", "license": "MIT", "direct": [] },
     { "name": "undici", "version": "7.28.0", "license": "MIT", "direct": [] },
@@ -774,7 +793,10 @@
       "name": "vitest",
       "version": "4.1.10",
       "license": "MIT",
-      "direct": [{ "workspace": "apps/web", "scope": "development" }]
+      "direct": [
+        { "workspace": "apps/web", "scope": "development" },
+        { "workspace": "packages/contracts", "scope": "development" }
+      ]
     },
     {
       "name": "vscode-languageserver-textdocument",

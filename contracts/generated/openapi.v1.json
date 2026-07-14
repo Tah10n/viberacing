@@ -1,0 +1,165 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Vibe Racing contract components",
+    "version": "1.0.0",
+    "description": "Generated schema components only. No endpoint is implemented or deployed merely because it appears here."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "ConnectorSyncResultV1": {
+        "title": "ConnectorSyncResultV1",
+        "description": "Non-sensitive acknowledgement for a validated connector synchronization. Internal anomaly reasons are intentionally absent.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schemaVersion", "requestId", "syncId", "outcome", "acceptedEntries"],
+        "properties": {
+          "schemaVersion": { "type": "integer", "const": 1, "minimum": 1, "maximum": 1 },
+          "requestId": {
+            "type": "string",
+            "minLength": 26,
+            "maxLength": 26,
+            "pattern": "^req_[A-Za-z0-9_-]{22}$"
+          },
+          "syncId": {
+            "type": "string",
+            "minLength": 26,
+            "maxLength": 26,
+            "pattern": "^syn_[A-Za-z0-9_-]{22}$"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["accepted", "duplicate", "quarantined"],
+            "minLength": 8,
+            "maxLength": 11
+          },
+          "acceptedEntries": { "type": "integer", "minimum": 0, "maximum": 31 }
+        }
+      },
+      "ConnectorSyncV1": {
+        "title": "ConnectorSyncV1",
+        "description": "Bounded self-reported Community usage submitted by one source-bound device. Derived ranking and trust fields are server-owned and intentionally absent.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "sourceId",
+          "syncId",
+          "observedAt",
+          "connectorVersion",
+          "codexVersion",
+          "dailyEntries"
+        ],
+        "properties": {
+          "schemaVersion": { "type": "integer", "const": 1, "minimum": 1, "maximum": 1 },
+          "sourceId": {
+            "type": "string",
+            "minLength": 26,
+            "maxLength": 26,
+            "pattern": "^src_[A-Za-z0-9_-]{22}$"
+          },
+          "syncId": {
+            "type": "string",
+            "minLength": 26,
+            "maxLength": 26,
+            "pattern": "^syn_[A-Za-z0-9_-]{22}$"
+          },
+          "observedAt": {
+            "type": "string",
+            "minLength": 24,
+            "maxLength": 24,
+            "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+            "format": "date-time"
+          },
+          "connectorVersion": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 64,
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+          },
+          "codexVersion": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 64,
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+          },
+          "dailyEntries": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 31,
+            "x-viberacing-uniqueBy": "codexReportedDate",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["codexReportedDate", "tokens"],
+              "properties": {
+                "codexReportedDate": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 10,
+                  "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}$",
+                  "format": "date"
+                },
+                "tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+              }
+            }
+          }
+        }
+      },
+      "ProblemDetailsV1": {
+        "title": "ProblemDetailsV1",
+        "description": "Bounded public error response that carries a request ID and stable code without stack traces, SQL details, secrets, or internal hostnames.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schemaVersion", "requestId", "status", "errorCode", "title", "retryable"],
+        "properties": {
+          "schemaVersion": { "type": "integer", "const": 1, "minimum": 1, "maximum": 1 },
+          "requestId": {
+            "type": "string",
+            "minLength": 26,
+            "maxLength": 26,
+            "pattern": "^req_[A-Za-z0-9_-]{22}$"
+          },
+          "status": { "type": "integer", "minimum": 400, "maximum": 599 },
+          "errorCode": {
+            "type": "string",
+            "enum": [
+              "conflict",
+              "forbidden",
+              "internal_error",
+              "invalid_request",
+              "not_found",
+              "rate_limited",
+              "temporarily_unavailable",
+              "unauthorized",
+              "validation_failed"
+            ],
+            "minLength": 8,
+            "maxLength": 23
+          },
+          "title": {
+            "type": "string",
+            "enum": [
+              "Conflict",
+              "Forbidden",
+              "Internal server error",
+              "Invalid request",
+              "Not found",
+              "Rate limited",
+              "Temporarily unavailable",
+              "Unauthorized",
+              "Validation failed"
+            ],
+            "minLength": 1,
+            "maxLength": 23
+          },
+          "retryable": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "x-viberacing-contract-source": "sha256:5605117d761023dbc6a73d4c4cbe34e6376e7f9cde7aeb0d264be2f9a3ec1bbb",
+  "x-viberacing-status": "pre-implementation"
+}

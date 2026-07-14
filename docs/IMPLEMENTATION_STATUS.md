@@ -5,10 +5,11 @@ This page records only evidence that exists in the public working tree. The
 
 ## Current phase
 
-Phase 1, visual prototype with synthetic data, is in progress locally. The Phase 0
-hosted-publication controls are still blocked on real maintainer identities and GitHub
-configuration. No authentication, application database, production deployment, released connector,
-real-user ingestion, or verified ranking exists.
+Phase 1 product code is locally complete, with the manual release-evidence items below still open.
+The Phase 2 language-neutral contract foundation has started. Phase 0 hosted-publication controls
+remain blocked on real maintainer identities and GitHub configuration. No authentication,
+application database, production deployment, released connector, real-user ingestion, or verified
+ranking exists.
 
 ## Implemented and locally verified
 
@@ -69,6 +70,19 @@ real-user ingestion, or verified ranking exists.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
+- Three canonical JSON Schema 2020-12 contracts for a bounded Community connector sync, a
+  non-sensitive sync acknowledgement, and stable problem details. Every object is closed; scalar and
+  collection values are bounded; connector input has an executable writable-field allowlist that
+  excludes identity, trust, rank, score, season, moderation, credentials, and prohibited data.
+- Deterministically generated readonly TypeScript types, embedded validator wrappers, source digest,
+  and OpenAPI 3.1 components with no advertised paths. A manifest/schema/drift checker has nine
+  black-box cases for unknown fields, missing bounds, client-derived fields,
+  unlisted/path-traversing schemas, unsupported keywords, missing date deduplication, and stale
+  generated output.
+- A dependency-free runtime contract validator with fail-closed reflection handling; strict
+  calendar/UTC timestamp and safe-integer checks; depth, node, key, item, and issue budgets; and
+  privacy-safe issue output that never echoes unknown property names or submitted values. Fifteen
+  unit/security cases cover 100% of statements, lines, and functions plus 97.14% of branches.
 - A strict Next.js 16 and React 19 web workspace with a synthetic EN/RU race, accessible
   leaderboard, demo profile, three repository-owned CSS/canvas themes, reduced-motion controls, and
   a deterministic 16-by-8 pixel-car renderer.
@@ -87,8 +101,9 @@ real-user ingestion, or verified ranking exists.
   accessibility tests. The coverage gate currently reports 98.57% statements, 91.01% branches, 100%
   functions, and 98.51% lines over product components and libraries; framework entrypoints are
   verified by the production build instead of artificial unit coverage.
-- A root verification pipeline that now includes web lint, strict type checking, coverage, and a
-  production Next.js build on every deterministic CI run.
+- A root verification pipeline that now includes contract generation/drift, lint, strict type
+  checking and coverage, plus web lint, strict type checking, coverage, and a production Next.js
+  build on every deterministic CI run.
 - A manifest-driven production artifact gate with nine black-box cases and enforced limits for
   initial raw/gzip bytes, application/CSS gzip bytes, asset count, source maps, fonts, path safety,
   and standalone output. The current initial route is 180,646 gzip bytes across seven assets.
@@ -142,6 +157,7 @@ Run from the repository root:
 
 ```text
 pnpm run verify
+pnpm run check:contracts
 pnpm run check:web-build
 pnpm run check:public:staged
 git diff --cached --check

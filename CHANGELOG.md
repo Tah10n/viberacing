@@ -33,6 +33,11 @@ Versioning where its guarantees are applicable.
   sanitation, and a fail-closed PNG structure/chunk policy with regression coverage.
 - Strict server-only public-origin validation for absolute social metadata, with HTTPS-only hosted
   origins, loopback-only development HTTP, safe reserved defaults, and negative tests.
+- Canonical closed JSON Schema contracts for connector sync, bounded acknowledgement, and public
+  problem details, with generated readonly TypeScript validators and pre-implementation OpenAPI
+  components.
+- Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
+  drift gates and black-box regression coverage.
 
 ### Security
 
@@ -50,5 +55,8 @@ Versioning where its guarantees are applicable.
   controls rather than unsafe inferred identities.
 - Per-response nonce CSP, browser isolation/capability headers, local-only preference storage,
   closed-enum car recipes, and score-only client fixtures with no raw token buckets.
+- Refined pairing so a one-time poll token is stored only as a keyed verifier and cannot activate a
+  device without fresh browser passkey approval and Ed25519 possession proof over an immutable
+  pending key.
 
 No version has been released.

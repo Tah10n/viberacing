@@ -89,8 +89,10 @@ material availability cost.
 - **Preconditions:** A live device authorization transaction exists.
 - **Abuse:** Approve the attacker's public key, swap source choice, or race the legitimate browser.
 - **Impact:** Durable unauthorized submission authority for the selected source.
-- **Controls:** High-entropy device secret kept local, short-lived user code, bounded attempts,
-  exact transaction display, authenticated GitHub session, and fresh passkey approval.
+- **Controls:** One-time high-entropy poll token with a server-side keyed verifier, immutable
+  pending public key, short-lived user code and challenge, bounded attempts, exact key/transaction
+  display, authenticated GitHub session, fresh passkey approval, and Ed25519 possession proof. The
+  poll token alone cannot approve or activate a device.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the

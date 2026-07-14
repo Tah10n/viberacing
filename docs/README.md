@@ -17,6 +17,8 @@ remain safe to publish verbatim.
   synthetic web prototype and disposable PostgreSQL startup.
 - [Web prototype](../apps/web/README.md) — frontend commands, module map, privacy boundary, CSP,
   synthetic data contract, and test strategy.
+- [Public protocol contracts](../contracts/README.md) — canonical JSON Schemas, generated
+  TypeScript/OpenAPI artifacts, writable-field boundary, validation limits, and versioning rules.
 - [Phase 1 browser matrix](testing/PHASE1_BROWSER_MATRIX.md) — responsive, contrast, interaction,
   runtime-header, artifact-budget evidence, and explicitly open manual gates.
 - [Dependency policy](security/DEPENDENCY_POLICY.md) — package, action, container, update, and
