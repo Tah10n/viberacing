@@ -3,11 +3,12 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and the first two Phase 2 database migrations. Everything runnable uses synthetic data only. It has
-procedure-only identity database capabilities but no authentication application code, HTTP API,
-OAuth/WebAuthn verifier, jobs process, real-user ingestion, or connector. A successful setup proves
-repository gates, synthetic frontend behavior, SQL constraints, session-bound procedure behavior,
-and database role isolation; it does not prove a production flow.
+and four Phase 2/3 database-foundation migrations. Everything runnable uses synthetic data only. It
+has procedure-only identity, pairing, and source/device lifecycle database capabilities but no
+authentication application code, HTTP API, OAuth/WebAuthn verifier, jobs process, real-user
+ingestion, or connector. A successful setup proves repository gates, synthetic frontend behavior,
+SQL constraints, session-bound procedure behavior, lifecycle concurrency, and database role
+isolation; it does not prove a production flow.
 
 ## Prerequisites
 
@@ -125,7 +126,7 @@ docker compose ps
 The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
 index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
 stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
-this persistent service automatically; revisions 0001 through 0003 are currently exercised by the
+this persistent service automatically; revisions 0001 through 0004 are currently exercised by the
 isolated integration runner only.
 
 Stop the service without deleting its volume:

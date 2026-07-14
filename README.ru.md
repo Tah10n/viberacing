@@ -1,7 +1,7 @@
 # Vibe Racing
 
-> Статус: идёт Phase 2 — безопасный persistence foundation. Production-сервис и готовый connector не
-> выпущены.
+> Статус: создаются безопасные persistence foundations для Phase 2/3. Production-сервис и готовый
+> connector не выпущены.
 
 Внешние contributions пока закрыты: сначала нужны реальные публичные maintainers, CODEOWNERS и
 проверенные приватные каналы для security/conduct reports. Локальные имена и контакты не будут
@@ -79,15 +79,18 @@ Dev-сервер слушает только loopback. В интерфейсе �
 будущего sync-протокола. Это пока только проверяемая граница данных: работающего API, connector и
 приёма реальной статистики ещё нет.
 
-Также добавлены три SQL migrations: 13 приватных identity/source/device/pairing/audit/deletion
+Также добавлены четыре SQL migrations: 13 приватных identity/source/device/pairing/audit/deletion
 tables, deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL.
 Узкая procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
 initial-passkey challenge, rotate/revoke сессии, немедленную блокировку при запросе удаления и
-одноразовую привязку устройства к новому или существующему opaque source. Несколько объявленных
-источников одного профиля позже будут суммироваться под единым лимитом score; email и идентификатор
-Codex-аккаунта не читаются и не сохраняются. Но HTTP-auth routes, OAuth callback, WebAuthn/Ed25519
-verifier, connector ingest, purge worker и deployed database ещё не реализованы, поэтому готовой
-пользовательской авторизации пока нет.
+одноразовую привязку устройства к новому или существующему opaque source. Также реализованы
+приватный inventory источников и устройств, pause/reactivation/unlink источника и немедленный revoke
+устройства. Для reactivation/unlink база требует свежий одноразовый source-bound step-up, но
+проверяющего WebAuthn приложения пока нет. Несколько объявленных источников одного профиля позже
+будут суммироваться под единым лимитом score; email и идентификатор Codex-аккаунта не читаются и не
+сохраняются. Но HTTP-auth routes, OAuth callback, WebAuthn/Ed25519 verifier, connector ingest, purge
+worker и deployed database ещё не реализованы, поэтому готовой пользовательской авторизации пока
+нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

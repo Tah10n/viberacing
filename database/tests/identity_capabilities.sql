@@ -33,13 +33,13 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 15
+    SELECT pg_catalog.count(*) = 21
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.prokind = 'f'
   ),
-  'the API surface contains only the reviewed identity functions'
+  'the API surface contains only the reviewed identity and source lifecycle functions'
 );
 
 SELECT pg_temp.assert_true(

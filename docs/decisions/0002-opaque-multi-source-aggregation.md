@@ -1,6 +1,6 @@
 # ADR 0002: Opaque multi-source profiles with one profile cap
 
-- Status: Accepted (pairing/source persistence slice implemented; aggregation pending)
+- Status: Accepted (pairing/source lifecycle database slices implemented; aggregation pending)
 - Date: 2026-07-14
 - Decision owners: Product, Pairing, Ingest, Scoring, and Database
 - Supersedes: None
@@ -76,6 +76,10 @@ automatically from inferred personal data.
   revision 0003.
 - Cross-connection tests hold the relevant profile row, release two approvals together, and prove
   one closed loser at each public ceiling. Expired approvals do not consume live-authority slots.
+- Revision 0004 adds exact-session private inventory, source pause/reactivation/unlink, device
+  revoke, stale-authority invalidation, and cross-connection pause/approval plus unlink/activation
+  races. Every current race observes its tagged contenders in the holder's blocker chain before
+  release. It does not implement ingest rejection or score aggregation.
 - Concurrency tests for one current source/date value and idempotent retry.
 - UI/API assertions for opaque wording and public source count without identifiers.
 - Privacy tests proving account email has no connector egress, schema, log, fixture, or support

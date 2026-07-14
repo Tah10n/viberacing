@@ -1,6 +1,6 @@
 # Vibe Racing
 
-> Status: Phase 2 persistence foundation in progress. No production service or released connector
+> Status: Phase 2/3 persistence foundations in progress. No production service or released connector
 > exists.
 
 External participation is closed until real public maintainers, CODEOWNERS, and private reporting
@@ -71,15 +71,18 @@ The governance documents and structured contribution forms are now present and p
 repository still has no GitHub remote, public maintainer registry, CODEOWNERS file, or verified
 private reporting channels; those hosted controls cannot be safely invented from local data.
 
-Phase 2 contract foundations are also present: three closed, bounded JSON Schemas plus generated
-TypeScript validators and OpenAPI components. They are pre-implementation contracts, not a live API
-or evidence that real Codex data can be submitted. Three SQL migrations now add 13 private identity,
-source, device, pairing, audit, and deletion tables with deny-by-default runtime roles, forced RLS,
-state-machine constraints, checksum drift detection, and an isolated PostgreSQL capability test. A
-narrow procedure boundary implements invite issuance, atomic enrollment, session-bound
-initial-passkey challenges, session rotation/revocation, the immediate lock-down portion of profile
-deletion, and one-time new/existing-source device pairing. Pairing creates only opaque user-declared
-sources: it never reads or stores Codex account email or claims account uniqueness. There is still
+Phase 2/3 contract and persistence foundations are also present: three closed, bounded JSON Schemas
+plus generated TypeScript validators and OpenAPI components. They are pre-implementation contracts,
+not a live API or evidence that real Codex data can be submitted. Four SQL migrations now add 13
+private identity, source, device, pairing, audit, and deletion tables with deny-by-default runtime
+roles, forced RLS, state-machine constraints, checksum drift detection, and an isolated PostgreSQL
+capability test. A narrow procedure boundary implements invite issuance, atomic enrollment,
+session-bound initial-passkey challenges, session rotation/revocation, the immediate lock-down
+portion of profile deletion, one-time new/existing-source device pairing, private source/device
+inventory, source pause/reactivation/unlink, and immediate device revoke. Pairing creates only
+opaque user-declared sources: it never reads or stores Codex account email or claims account
+uniqueness. The source unlink/reactivation procedures require a fresh consumed source-bound step-up
+record, but the application that cryptographically verifies WebAuthn is still absent. There is still
 no HTTP authentication route, OAuth callback, WebAuthn/Ed25519 verifier, connector ingest,
 asynchronous purge worker, or deployed database.
 

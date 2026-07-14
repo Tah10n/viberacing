@@ -46,6 +46,8 @@ Versioning where its guarantees are applicable.
 - Procedure-only pairing capabilities for new or existing opaque sources, session/passkey-bound
   approval, minimal external Ed25519 verification material, exact single-device activation, and
   public 32-source/64-authority safety ceilings.
+- Procedure-only private source/device inventory, immediate source pause and device revoke, plus
+  fresh-step-up source reactivation/unlink with terminal unlink and recursive authority revoke.
 
 ### Security
 
@@ -81,5 +83,10 @@ Versioning where its guarantees are applicable.
 - Added deterministic cross-connection lock races proving first-winner pairing approval and atomic
   enforcement of the 32-source and 64-live-authority ceilings, including exclusion of expired
   approvals from live authority.
+- Added lifecycle IDOR, replay, quarantine, stale-challenge, audit-rollback, and role-denial
+  scenarios plus cross-connection races proving pause dominates concurrent approval and unlink
+  dominates concurrent activation without leaving protected authority live.
+- Made all five race gates observe every tagged contender in the holder's PostgreSQL blocker chain
+  before releasing the holder, removing timer-only concurrency evidence.
 
 No version has been released.

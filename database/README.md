@@ -2,11 +2,11 @@
 
 ## Status
 
-This directory contains three SQL-first revisions for identity, source, device, pairing, audit, and
+This directory contains four SQL-first revisions for identity, source, device, pairing, audit, and
 deletion state. The migrations, narrow identity procedures, and PostgreSQL integration tests are
 implemented. No application route, OAuth callback, WebAuthn verifier, production credential, or
-deployed database consumes them yet. Recovery, login, source lifecycle, ingest, scoring, purge, and
-cleanup procedures are not implemented.
+deployed database consumes them yet. Recovery, login, ingest, scoring, purge, and cleanup procedures
+are not implemented.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -25,31 +25,41 @@ procedure; the current repository has no such application code.
   invite, enrollment, initial-passkey, session, challenge, and deletion capabilities.
 - `migrations/0003_pairing_capabilities.sql` adds session-approved new/existing-source pairing,
   immutable approval/activation bindings, and bounded device/source creation capabilities.
+- `migrations/0004_source_device_lifecycle.sql` adds private inventory, immediate source pause and
+  device revoke, fresh-step-up source reactivation/unlink, stale-authority invalidation, and bounded
+  lifecycle audit events.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
   cross-profile denial, expiry, replay, rollback, audit redaction, and synchronous deletion effects.
 - `tests/pairing_capabilities.sql` exercises new/existing-source choice, first-winner rebinding
   denial, replay, poll possession, exact activation, immutable binding, and public safety ceilings.
+- `tests/source_device_lifecycle.sql` exercises inventory isolation, source/device IDOR denial,
+  step-up binding, replay, quarantine separation, stale challenge/pairing cancellation, recursive
+  device revoke, and audit-failure rollback.
 - `tests/pairing_concurrency_setup.sql` and `tests/pairing_concurrency_assertions.sql` create only
   ephemeral synthetic state and prove cross-connection first-winner, source-ceiling, and live
   device-authority-ceiling serialization.
+- `tests/lifecycle_concurrency_setup.sql` and `tests/lifecycle_concurrency_assertions.sql` prove
+  pause dominates concurrent approval and unlink dominates concurrent activation without leaving
+  approved pairing or active device authority live.
 - `scripts/check-database.mjs` and its black-box tests enforce migration shape, checksums, paths,
   transactions, bounded execution, owner context, and forbidden grants or SQL capabilities.
 - `scripts/test-database-integration.mjs` owns an isolated Compose project, executes PostgreSQL
-  assertions and deterministic lock-contention races, proves runtime denials, and removes the
-  container, network, and ephemeral storage.
+  assertions and lock-contention races, waits until every tagged contender is observed in the
+  holder's transitive blocker chain, proves runtime denials, and removes the container, network, and
+  ephemeral storage.
 
 ## Capability model
 
-| Role                | Login | Private schema | API schema | Current executable capability                                                  |
-| ------------------- | ----- | -------------- | ---------- | ------------------------------------------------------------------------------ |
-| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                                         |
-| `viberacing_web`    | No    | None           | Usage      | Enrollment, session/challenge/passkey/deletion, pairing, and session lifecycle |
-| `viberacing_ingest` | No    | None           | Usage      | None                                                                           |
-| `viberacing_jobs`   | No    | None           | Usage      | None                                                                           |
-| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                                   |
-| `PUBLIC`            | N/A   | None           | None       | None                                                                           |
+| Role                | Login | Private schema | API schema | Current executable capability                                     |
+| ------------------- | ----- | -------------- | ---------- | ----------------------------------------------------------------- |
+| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                            |
+| `viberacing_web`    | No    | None           | Usage      | Identity, pairing, private inventory, and source/device lifecycle |
+| `viberacing_ingest` | No    | None           | Usage      | None                                                              |
+| `viberacing_jobs`   | No    | None           | Usage      | None                                                              |
+| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                      |
+| `PUBLIC`            | N/A   | None           | None       | None                                                              |
 
 Deployment login principals are environment-owned secrets and are not declared here. Each service
 will receive one group role through protected infrastructure. Runtime roles are not members of the
@@ -92,6 +102,17 @@ Runtime access must remain procedure-only and must have positive and negative in
 - `read_pairing_verification_material`, `activate_pairing`, and `poll_pairing_status` expose only
   the minimum material needed for external Ed25519 proof verification and poll possession.
   Activation atomically binds the exact pending key to the approved source and one public device ID.
+- `read_source_inventory` derives the profile from the exact possessed session and returns only its
+  opaque source lifecycle plus bounded device metadata. Internal key IDs, public keys, profile IDs,
+  account email, and exact usage are absent from the result.
+- `pause_source` and `revoke_device` are immediate protective actions. They accept no caller-chosen
+  profile, close on cross-profile IDs and replay, and append one bounded audit reference. Pausing
+  invalidates unused source-bound challenges and cancels approved-but-not-activated pairings.
+- `create_source_action_challenge`, `reactivate_source`, and `unlink_source` bind a short-lived
+  source action to the exact active session, profile, purpose, source, and context. Reactivation is
+  limited to paused sources; normal user authority cannot lift quarantine. Unlink is terminal,
+  revokes every active device, cancels approved pairings, and invalidates unused source actions in
+  the same transaction.
 
 The public schema safety ceilings are 32 lifetime source records and 64 active plus unexpired
 approved device authorities per profile. They bound worst-case database growth and authority
@@ -182,13 +203,14 @@ hard failure, not something the script silently broadens or repairs.
 
 - Implement OAuth/cookie/CSRF and WebAuthn application flows without weakening the session-bound
   database contract.
-- Add procedure-only recovery, passkey-change, login, source-management, ingest, scoring, purge, and
-  cleanup capabilities.
+- Add procedure-only recovery, passkey-change, login, ingest, scoring, purge, and cleanup
+  capabilities.
 - Add edge/service rate limiting and bounded cleanup for unauthenticated pairing starts and
   authenticated short-code lookups; do not encode deployable private thresholds in this repository.
 - Add adversarial concurrent-connection coverage for session rotation, challenge consumption,
-  enrollment, deletion, and future ingest procedures. Pairing approval and both public pairing
-  ceilings already have deterministic cross-connection coverage.
+  enrollment, deletion, and future ingest procedures. Pairing approval, both public pairing
+  ceilings, pause-versus-approval, and unlink-versus-activation already have observed blocker-chain
+  cross-connection coverage.
 - Implement bounded cleanup for expired ceremonies, sessions, pairings, jobs, and tombstones.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback

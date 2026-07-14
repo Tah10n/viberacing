@@ -16,6 +16,7 @@ const composePrefix = [
   "--profile",
   "test",
 ];
+let raceSequence = 0;
 
 function docker(args, options = {}) {
   const result = spawnSync("docker", args, {
@@ -62,10 +63,20 @@ function psql(sql) {
   return docker(psqlArguments(), { input: sql, timeout: 30_000 });
 }
 
-function startPsql(sql, readyMarker) {
+function psqlScalar(sql, label) {
+  const result = docker([...psqlArguments(), "--tuples-only", "--no-align", "--command", sql], {
+    timeout: 10_000,
+  });
+  requireSuccess(result, label);
+  return result.stdout.trim();
+}
+
+function startPsql(sql, readyMarker, { keepStdinOpen = false } = {}) {
   let stdout = "";
   let stderr = "";
   let readySettled = false;
+  let inputClosed = false;
+  let child;
   let resolveReady;
   let rejectReady;
 
@@ -80,7 +91,7 @@ function startPsql(sql, readyMarker) {
   }
 
   const completion = new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn("docker", psqlArguments(), {
+    child = spawn("docker", psqlArguments(), {
       cwd: root,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
@@ -120,34 +131,122 @@ function startPsql(sql, readyMarker) {
     });
     child.on("close", (status, signal) => {
       clearTimeout(timeout);
+      inputClosed = true;
       if (!readySettled) {
         readySettled = true;
         rejectReady(new Error(`lock holder exited before marker ${readyMarker}`));
       }
       resolvePromise({ status, signal, stdout, stderr });
     });
-    child.stdin.end(sql);
+    if (keepStdinOpen) {
+      child.stdin.write(`${sql}\n`);
+    } else {
+      inputClosed = true;
+      child.stdin.end(sql);
+    }
   });
 
-  return { ready, completion };
+  function closeInput(finalSql = "") {
+    if (inputClosed || !child) {
+      return;
+    }
+    inputClosed = true;
+    child.stdin.end(finalSql);
+  }
+
+  return { ready, completion, closeInput };
+}
+
+function sqlStringLiteral(value) {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function withApplicationName(applicationName, sql) {
+  return `SET application_name = ${sqlStringLiteral(applicationName)};\n${sql}`;
+}
+
+async function waitForBlockedContenders(label, holderName, contenderNames) {
+  const deadline = Date.now() + 10_000;
+  const contenderList = contenderNames.map(sqlStringLiteral).join(", ");
+  const query = `WITH RECURSIVE blocking_chain(contender_pid, blocker_pid) AS (
+  SELECT contender.pid, blocker.blocker_pid
+  FROM pg_catalog.pg_stat_activity AS contender
+  CROSS JOIN LATERAL pg_catalog.unnest(
+    pg_catalog.pg_blocking_pids(contender.pid)
+  ) AS blocker(blocker_pid)
+  WHERE contender.application_name IN (${contenderList})
+    AND contender.wait_event_type = 'Lock'
+  UNION ALL
+  SELECT chain.contender_pid, blocker.blocker_pid
+  FROM blocking_chain AS chain
+  CROSS JOIN LATERAL pg_catalog.unnest(
+    pg_catalog.pg_blocking_pids(chain.blocker_pid)
+  ) AS blocker(blocker_pid)
+)
+SELECT pg_catalog.count(DISTINCT chain.contender_pid)
+FROM blocking_chain AS chain
+JOIN pg_catalog.pg_stat_activity AS holder
+  ON holder.pid = chain.blocker_pid
+WHERE holder.application_name = ${sqlStringLiteral(holderName)};`;
+  let blockedCount = 0;
+
+  while (Date.now() < deadline) {
+    const output = psqlScalar(query, `${label} lock observation`);
+    blockedCount = Number.parseInt(output, 10);
+    if (!Number.isInteger(blockedCount)) {
+      throw new Error(`${label} returned an invalid blocked-contender count: ${output}`);
+    }
+    if (blockedCount === contenderNames.length) {
+      return;
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+  }
+
+  throw new Error(
+    `${label} observed ${blockedCount}/${contenderNames.length} contenders blocked by the holder`,
+  );
+}
+
+async function runObservedRace(label, lockSql, readyMarker, contenderSql) {
+  raceSequence += 1;
+  const racePrefix = `vr-race-${process.pid}-${raceSequence}`;
+  const holderName = `${racePrefix}-holder`;
+  const contenderNames = contenderSql.map((_, index) => `${racePrefix}-contender-${index + 1}`);
+  const lockHolder = startPsql(withApplicationName(holderName, lockSql), readyMarker, {
+    keepStdinOpen: true,
+  });
+  const contenders = [];
+  let holderReleased = false;
+
+  try {
+    await lockHolder.ready;
+    for (const [index, sql] of contenderSql.entries()) {
+      contenders.push(startPsql(withApplicationName(contenderNames[index], sql)));
+    }
+    await waitForBlockedContenders(label, holderName, contenderNames);
+    holderReleased = true;
+    lockHolder.closeInput("\nCOMMIT;\n");
+
+    const [lockResult, contenderResults] = await Promise.all([
+      lockHolder.completion,
+      Promise.all(contenders.map(({ completion }) => completion)),
+    ]);
+    requireSuccess(lockResult, `${label} lock holder`);
+    return contenderResults;
+  } catch (error) {
+    if (!holderReleased) {
+      lockHolder.closeInput("\nROLLBACK;\n");
+    }
+    await Promise.allSettled([
+      lockHolder.completion,
+      ...contenders.map(({ completion }) => completion),
+    ]);
+    throw error;
+  }
 }
 
 async function expectOneConcurrentWinner(label, lockSql, readyMarker, contenderSql) {
-  const lockHolder = startPsql(lockSql, readyMarker);
-  try {
-    await lockHolder.ready;
-  } catch (error) {
-    await lockHolder.completion.catch(() => undefined);
-    throw error;
-  }
-
-  const contenders = contenderSql.map((sql) => startPsql(sql).completion);
-  const [lockResult, contenderResults] = await Promise.all([
-    lockHolder.completion,
-    Promise.all(contenders),
-  ]);
-  requireSuccess(lockResult, `${label} lock holder`);
-
+  const contenderResults = await runObservedRace(label, lockSql, readyMarker, contenderSql);
   const winners = contenderResults.filter((result) => result.status === 0);
   const losers = contenderResults.filter((result) => result.status !== 0);
   const expectedClosedFailure = losers.every((result) =>
@@ -161,6 +260,30 @@ async function expectOneConcurrentWinner(label, lockSql, readyMarker, contenderS
       )
       .join("\n");
     throw new Error(`${label} did not produce one winner and one closed loser:\n${evidence}`);
+  }
+}
+
+async function expectProtectiveActionDominates(
+  label,
+  lockSql,
+  readyMarker,
+  protectiveSql,
+  competingSql,
+) {
+  const [protectiveResult, competingResult] = await runObservedRace(label, lockSql, readyMarker, [
+    protectiveSql,
+    competingSql,
+  ]);
+
+  const competingClosed =
+    competingResult.status !== 0 &&
+    /operation cannot be completed/i.test(`${competingResult.stdout}\n${competingResult.stderr}`);
+  if (protectiveResult.status !== 0 || (competingResult.status !== 0 && !competingClosed)) {
+    throw new Error(
+      `${label} did not preserve the protective action:\n` +
+        `protective status=${protectiveResult.status}\n${protectiveResult.stdout}\n${protectiveResult.stderr}\n` +
+        `competing status=${competingResult.status}\n${competingResult.stdout}\n${competingResult.stderr}`,
+    );
   }
 }
 
@@ -231,8 +354,16 @@ try {
       sql: readFileSync(resolve(root, "database/tests/pairing_capabilities.sql"), "utf8"),
     },
     {
+      label: "source and device lifecycle scenarios",
+      sql: readFileSync(resolve(root, "database/tests/source_device_lifecycle.sql"), "utf8"),
+    },
+    {
       label: "pairing concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/pairing_concurrency_setup.sql"), "utf8"),
+    },
+    {
+      label: "source lifecycle concurrency setup",
+      sql: readFileSync(resolve(root, "database/tests/lifecycle_concurrency_setup.sql"), "utf8"),
     },
   ];
   for (const { sql, label } of databaseInputs) {
@@ -247,9 +378,7 @@ SELECT pairing_id
 FROM viberacing_private.pairing_transactions
 WHERE pairing_id = '00000000-0000-4000-8000-000000008501'
 FOR UPDATE;
-\\echo pairing-race-lock-ready
-SELECT pg_catalog.pg_sleep(2);
-COMMIT;`,
+\\echo pairing-race-lock-ready`,
     "pairing-race-lock-ready",
     [
       `SET ROLE viberacing_web;
@@ -283,9 +412,7 @@ SELECT profile_id
 FROM viberacing_private.profiles
 WHERE profile_id = '00000000-0000-4000-8000-000000008103'
 FOR UPDATE;
-\\echo source-cap-lock-ready
-SELECT pg_catalog.pg_sleep(2);
-COMMIT;`,
+\\echo source-cap-lock-ready`,
     "source-cap-lock-ready",
     [
       `SET ROLE viberacing_web;
@@ -319,9 +446,7 @@ SELECT profile_id
 FROM viberacing_private.profiles
 WHERE profile_id = '00000000-0000-4000-8000-000000008104'
 FOR UPDATE;
-\\echo device-cap-lock-ready
-SELECT pg_catalog.pg_sleep(2);
-COMMIT;`,
+\\echo device-cap-lock-ready`,
     "device-cap-lock-ready",
     [
       `SET ROLE viberacing_web;
@@ -350,6 +475,73 @@ SELECT viberacing_api.approve_pairing(
   requireSuccess(
     psql(readFileSync(resolve(root, "database/tests/pairing_concurrency_assertions.sql"), "utf8")),
     "pairing concurrency assertions",
+  );
+
+  await expectProtectiveActionDominates(
+    "source pause versus pairing approval race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000007101'
+FOR UPDATE;
+\\echo source-pause-lock-ready`,
+    "source-pause-lock-ready",
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.pause_source(
+  '00000000-0000-4000-8000-000000007201',
+  pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
+  'src_' || pg_catalog.repeat('L', 22),
+  '00000000-0000-4000-8000-000000007801',
+  'req_' || pg_catalog.repeat('K', 22)
+);`,
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.approve_pairing(
+  '00000000-0000-4000-8000-000000007201',
+  pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
+  '00000000-0000-4000-8000-000000007501',
+  '00000000-0000-4000-8000-000000007701',
+  pg_catalog.decode(pg_catalog.repeat('e2', 32), 'hex'),
+  '00000000-0000-4000-8000-000000007802',
+  'req_' || pg_catalog.repeat('L', 22)
+);`,
+  );
+
+  await expectProtectiveActionDominates(
+    "source unlink versus device activation race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000007102'
+FOR UPDATE;
+\\echo source-unlink-lock-ready`,
+    "source-unlink-lock-ready",
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.unlink_source(
+  '00000000-0000-4000-8000-000000007202',
+  pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
+  'src_' || pg_catalog.repeat('N', 22),
+  '00000000-0000-4000-8000-000000007702',
+  pg_catalog.decode(pg_catalog.repeat('e4', 32), 'hex'),
+  '00000000-0000-4000-8000-000000007803',
+  'req_' || pg_catalog.repeat('M', 22)
+);`,
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.activate_pairing(
+  pg_catalog.decode(pg_catalog.repeat('d6', 32), 'hex'),
+  '00000000-0000-4000-8000-000000007502',
+  'dev_' || pg_catalog.repeat('X', 22),
+  '00000000-0000-4000-8000-000000007804',
+  'req_' || pg_catalog.repeat('N', 22)
+);`,
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(resolve(root, "database/tests/lifecycle_concurrency_assertions.sql"), "utf8"),
+    ),
+    "source lifecycle concurrency assertions",
   );
 
   for (const role of [
@@ -437,9 +629,20 @@ SELECT viberacing_api.approve_pairing(
     );`,
     "admin pairing start",
   );
+  expectDenied(
+    "viberacing_ingest",
+    `SELECT viberacing_api.pause_source(
+      '00000000-0000-4000-8000-000000009051',
+      pg_catalog.decode(pg_catalog.repeat('9b', 32), 'hex'),
+      'src_' || pg_catalog.repeat('Z', 22),
+      '00000000-0000-4000-8000-000000009052',
+      'req_' || pg_catalog.repeat('W', 22)
+    );`,
+    "ingest source pause",
+  );
 
   console.log(
-    "Database integration passed (13 schema tables, 3 pairing races, 4 relation-denial and 5 cross-capability checks).",
+    "Database integration passed (13 schema tables, 5 observed lock-wait races, 4 relation-denial and 6 cross-capability checks).",
   );
 } finally {
   if (started) {

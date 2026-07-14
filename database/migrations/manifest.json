@@ -18,6 +18,12 @@
       "name": "pairing_capabilities",
       "path": "database/migrations/0003_pairing_capabilities.sql",
       "sha256": "4e9987822543cf31ce8a3ad6740118f466da83cd1e559e30759226e34706f96e"
+    },
+    {
+      "revision": 4,
+      "name": "source_device_lifecycle",
+      "path": "database/migrations/0004_source_device_lifecycle.sql",
+      "sha256": "5a80bdf80559437e056d5ec67bce09a893ea23fcbe30594a5c1420fd7201de22"
     }
   ]
 }

@@ -68,7 +68,11 @@ Opaque sources deliberately contain no Codex account email or upstream account i
 implemented pairing database caps each profile at 32 lifetime source records and 64 active plus
 unexpired approved device authorities. These public safety ceilings do not replace lower
 deployment-private rate and fair-use controls, and exact per-source details remain non-public
-Account data.
+Account data. Revision 0004 adds no new personal-data column: its private inventory procedure
+returns only the requesting session profile's opaque source state and bounded device metadata.
+Lifecycle procedures retain the existing source/device rows, append only closed audit references,
+and never accept or expose account email, upstream account identity, exact usage, public keys, or
+internal key IDs.
 
 ## Prohibited data
 

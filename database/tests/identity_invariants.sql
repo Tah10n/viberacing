@@ -332,6 +332,7 @@ INSERT INTO viberacing_private.auth_challenges (
   purpose,
   challenge_digest,
   context_digest,
+  authorized_source_id,
   created_at,
   expires_at
 )
@@ -342,6 +343,7 @@ VALUES (
   'source_unlink',
   pg_catalog.decode(pg_catalog.repeat('40', 32), 'hex'),
   pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+  'src_' || pg_catalog.repeat('A', 22),
   '2020-01-01T00:00:00.000Z',
   '2020-01-01T00:05:00.000Z'
 );

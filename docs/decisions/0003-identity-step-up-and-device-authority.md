@@ -1,6 +1,6 @@
 # ADR 0003: GitHub identity, passkey step-up, and source-bound device authority
 
-- Status: Accepted
+- Status: Accepted (identity, pairing, and source/device lifecycle database slices implemented)
 - Date: 2026-07-14
 - Decision owners: Web/Auth, Pairing, Ingest, and Database
 - Supersedes: None
@@ -82,7 +82,15 @@ verification, or Ed25519 proof verification in an application service.
 
 Revision 0003 also has deterministic cross-connection evidence: two valid profile approvals wait
 behind one locked pairing and produce exactly one winner; separate same-profile races prove the
-source and live-device ceilings cannot be crossed by concurrent approvals.
+source and live-device ceilings cannot be crossed by concurrent approvals. The runner tags every
+session and releases the holder only after every contender appears in its transitive blocker chain.
+
+Revision 0004 adds session-derived private source/device inventory, immediate owned-device revoke,
+and fresh consumed source-bound step-up claims for reactivation and unlink. It proves cross-profile
+ID denial, replay denial, quarantine separation, stale challenge/approval invalidation, atomic audit
+failure rollback, recursive revoke on unlink, and protective outcomes under concurrent approval or
+activation. It still relies on a future application service to verify the WebAuthn ceremony before
+challenge consumption.
 
 Remaining application and protocol evidence includes:
 
@@ -91,7 +99,8 @@ Remaining application and protocol evidence includes:
 - WebAuthn RP/origin, challenge replay/expiry, transaction binding, user verification, multiple
   passkey, recovery, and fresh-step-up tests.
 - Application-level pairing code attempt/rate limits, displayed-transaction rendering, external
-  Ed25519 proof verification, revoke/rotation, bounded cleanup, and plaintext token log rejection.
+  Ed25519 proof verification, device-revoke UI/route, key rotation, bounded cleanup, and plaintext
+  token log rejection.
 - Scope matrix proving device credentials cannot manage profile, devices, invites, sources,
   recovery, deletion, or admin.
 - Canonical-signature, body tamper, nonce, idempotency, cross-source, clock, and stolen-key tests.

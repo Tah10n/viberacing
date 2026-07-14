@@ -2,12 +2,12 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revisions 0001 through 0003 provide private
+These sequences remain planned application contracts. Revisions 0001 through 0004 provide private
 identity/source/device/pairing/audit/deletion tables, deny-by-default roles, and a narrow database
 slice for invite issuance, enrollment, exact-session challenges, initial-passkey activation, session
-rotation/revocation, immediate deletion lock-down, and source-bound pairing. No endpoint, OAuth
-callback, WebAuthn or Ed25519 verifier, ingest procedure, purge worker, or deployed service executes
-the complete sequences. Data labels refer to the classifications in the
+rotation/revocation, immediate deletion lock-down, source-bound pairing, and source/device lifecycle
+controls. No endpoint, OAuth callback, WebAuthn or Ed25519 verifier, ingest procedure, purge worker,
+or deployed service executes the complete sequences. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -89,6 +89,45 @@ replay, immutable binding, 32 lifetime sources, and 64 active/unexpired-approved
 per profile. The browser, HTTP, WebAuthn, Ed25519, edge-rate-limit, and cleanup layers remain
 planned. The ceiling and first-winner assertions use separate PostgreSQL connections held behind a
 real row lock before simultaneous release.
+
+## Source and device lifecycle
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant Browser
+  participant Web as Web/Auth
+  participant Authenticator as Passkey authenticator
+  participant DB as Profile/Auth database role
+
+  Browser->>Web: Authenticated private inventory request
+  Web->>DB: Exact session ID and keyed verifier
+  DB-->>Web: Owned opaque sources and bounded device metadata only
+  alt Pause source or revoke one device
+    User->>Browser: Select immediate protective action
+    Web->>DB: Exact session plus owned source or device ID
+    DB-->>Web: State change and bounded audit reference
+  else Reactivate or unlink source
+    User->>Browser: Confirm exact source and action
+    Web->>Authenticator: Fresh source-bound step-up
+    Authenticator-->>Web: User-verified response
+    Web->>DB: Consume exact challenge then claim exact source action
+    DB-->>Web: Reactivated source or terminal unlink with device revoke
+  end
+```
+
+Revision 0004 implements only this database boundary. Inventory derives the profile from the
+possessed session and omits internal key IDs, public keys, profile IDs, exact usage, and account
+email. Pause and device revoke are immediate session-authenticated protective actions. Reactivation
+works only from `paused`; a normal user cannot lift `quarantined`. Unlink accepts an exact fresh
+source-bound challenge, moves the source to terminal `unlinked`, revokes every active device,
+cancels approved pairings, and invalidates unused source challenges atomically.
+
+The PostgreSQL runner releases pause against pairing approval and unlink against device activation
+on separate connections. Either ordering ends without approved authority on a paused source or an
+active device on an unlinked source. HTTP authorization, CSRF protection, WebAuthn verification,
+private no-store response handling, user notifications, and ingest enforcement remain application
+work.
 
 ## Local collection and signed synchronization
 
