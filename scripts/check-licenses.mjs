@@ -38,6 +38,43 @@ function packageKey(name, version) {
   return `${name}@${version}`;
 }
 
+const dependencyFields = [
+  ["dependencies", "runtime"],
+  ["devDependencies", "development"],
+  ["optionalDependencies", "optional"],
+];
+
+function importerManifestPath(importer) {
+  if (importer === ".") {
+    return "package.json";
+  }
+  if (!/^(?:apps|packages)\/[A-Za-z0-9._-]+$/.test(importer)) {
+    report("pnpm-lock.yaml", `importer is outside the bounded workspace: ${importer}`);
+    return null;
+  }
+  return `${importer}/package.json`;
+}
+
+function discoverWorkspaceImporters() {
+  const importers = [];
+  for (const parent of ["apps", "packages"]) {
+    const parentPath = resolve(root, parent);
+    if (!existsSync(parentPath)) {
+      continue;
+    }
+    for (const entry of readdirSync(parentPath, { withFileTypes: true })) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const importer = `${parent}/${entry.name}`;
+      if (existsSync(resolve(root, importer, "package.json"))) {
+        importers.push(importer);
+      }
+    }
+  }
+  return importers.sort((left, right) => left.localeCompare(right));
+}
+
 function lockPackageKey(rawKey) {
   const withoutPeers = rawKey.replace(/\(.+$/, "");
   const separator = withoutPeers.lastIndexOf("@");
@@ -137,20 +174,6 @@ for (const field of ["approvedNpmLicenseExpressions", "approvedCargoLicenseExpre
   }
 }
 
-const packageManifest = readJson("package.json") ?? {};
-const declaredDirectScopes = new Map();
-for (const [scope, dependencies] of [
-  ["runtime", packageManifest.dependencies],
-  ["development", packageManifest.devDependencies],
-]) {
-  for (const name of Object.keys(dependencies ?? {})) {
-    if (declaredDirectScopes.has(name)) {
-      report("package.json", `direct dependency is declared in multiple scopes: ${name}`);
-    }
-    declaredDirectScopes.set(name, scope);
-  }
-}
-
 let lock;
 try {
   lock = parseYaml(readFileSync(resolve(root, "pnpm-lock.yaml"), "utf8"));
@@ -163,37 +186,104 @@ for (const rawKey of Object.keys(lock.packages ?? {})) {
   const key = lockPackageKey(rawKey);
   if (key === null) {
     report("pnpm-lock.yaml", `unsupported package key: ${rawKey}`);
-  } else if (lockedNpmKeys.has(key)) {
-    report("pnpm-lock.yaml", `duplicate normalized package key: ${key}`);
   } else {
     lockedNpmKeys.add(key);
   }
 }
 
-const directPackageKeys = new Map();
-for (const [lockField, scope] of [
-  ["dependencies", "runtime"],
-  ["devDependencies", "development"],
-]) {
-  for (const [name, lockEntry] of Object.entries(lock.importers?.["."]?.[lockField] ?? {})) {
-    const rawVersion = typeof lockEntry === "string" ? lockEntry : lockEntry.version;
-    const version = rawVersion?.replace(/\(.+$/, "");
-    if (!version) {
-      report("pnpm-lock.yaml", `direct dependency has no resolved version: ${name}`);
-      continue;
-    }
-    directPackageKeys.set(packageKey(name, version), scope);
+const lockImporters = lock.importers ?? {};
+const expectedImporters = [".", ...discoverWorkspaceImporters()];
+for (const importer of expectedImporters) {
+  if (!Object.hasOwn(lockImporters, importer)) {
+    report("pnpm-lock.yaml", `workspace manifest is missing an importer: ${importer}`);
   }
 }
-for (const [name, scope] of declaredDirectScopes) {
-  if (
-    ![...directPackageKeys].some(([key, value]) => key.startsWith(`${name}@`) && value === scope)
-  ) {
-    report(
-      "pnpm-lock.yaml",
-      `direct ${scope} dependency is missing from the root importer: ${name}`,
-    );
+for (const importer of Object.keys(lockImporters)) {
+  if (!expectedImporters.includes(importer)) {
+    report("pnpm-lock.yaml", `importer has no workspace manifest: ${importer}`);
   }
+}
+
+const directPackageReferences = new Map();
+const manifestPaths = [];
+for (const importer of Object.keys(lockImporters).sort((left, right) =>
+  left.localeCompare(right),
+)) {
+  const manifestPath = importerManifestPath(importer);
+  if (manifestPath === null) {
+    continue;
+  }
+  manifestPaths.push(manifestPath);
+  const manifest = readJson(manifestPath);
+  if (manifest === null) {
+    continue;
+  }
+
+  const declaredScopes = new Map();
+  for (const [field, scope] of dependencyFields) {
+    const dependencies = manifest[field] ?? {};
+    for (const [name, specifier] of Object.entries(dependencies)) {
+      if (declaredScopes.has(name)) {
+        report(manifestPath, `direct dependency is declared in multiple scopes: ${name}`);
+      }
+      declaredScopes.set(name, { field, scope, specifier });
+    }
+
+    for (const [name, lockEntry] of Object.entries(lockImporters[importer]?.[field] ?? {})) {
+      const declaration = declaredScopes.get(name);
+      if (declaration?.field !== field) {
+        report(
+          "pnpm-lock.yaml",
+          `importer ${importer} contains undeclared ${scope} dependency: ${name}`,
+        );
+        continue;
+      }
+      const lockSpecifier =
+        lockEntry !== null && typeof lockEntry === "object" ? lockEntry.specifier : undefined;
+      if (lockSpecifier !== undefined && lockSpecifier !== declaration.specifier) {
+        report(
+          "pnpm-lock.yaml",
+          `importer ${importer} specifier differs from ${manifestPath}: ${name}`,
+        );
+      }
+      const rawVersion = typeof lockEntry === "string" ? lockEntry : lockEntry?.version;
+      if (
+        typeof declaration.specifier === "string" &&
+        (declaration.specifier.startsWith("workspace:") || rawVersion?.startsWith("link:"))
+      ) {
+        continue;
+      }
+      const version = rawVersion?.replace(/\(.+$/, "");
+      if (!version) {
+        report(
+          "pnpm-lock.yaml",
+          `direct dependency has no resolved version in importer ${importer}: ${name}`,
+        );
+        continue;
+      }
+      const key = packageKey(name, version);
+      const references = directPackageReferences.get(key) ?? [];
+      references.push({ workspace: importer, scope });
+      directPackageReferences.set(key, references);
+    }
+  }
+
+  for (const [name, declaration] of declaredScopes) {
+    if (!Object.hasOwn(lockImporters[importer]?.[declaration.field] ?? {}, name)) {
+      report(
+        "pnpm-lock.yaml",
+        `direct ${declaration.scope} dependency is missing from importer ${importer}: ${name}`,
+      );
+    }
+  }
+}
+
+for (const references of directPackageReferences.values()) {
+  references.sort((left, right) =>
+    left.workspace === right.workspace
+      ? left.scope.localeCompare(right.scope)
+      : left.workspace.localeCompare(right.workspace),
+  );
 }
 
 const installedPackages = discoverInstalledNpmPackages();
@@ -216,7 +306,7 @@ const npmPackages = [...lockedNpmKeys]
     name: entry.name,
     version: entry.version,
     license: entry.license,
-    direct: directPackageKeys.get(packageKey(entry.name, entry.version)) ?? null,
+    direct: directPackageReferences.get(packageKey(entry.name, entry.version)) ?? [],
   }))
   .sort((left, right) =>
     left.name === right.name
@@ -332,12 +422,15 @@ for (const identifier of externalIdentifiers) {
 
 const notices = readFileSync(resolve(root, "THIRD_PARTY_NOTICES.md"), "utf8");
 const noticeLines = notices.split(/\r?\n/);
-for (const [key] of directPackageKeys) {
+for (const [key, references] of directPackageReferences) {
   const entry = npmPackages.find(
     (candidate) => packageKey(candidate.name, candidate.version) === key,
   );
   if (!entry) {
-    report("package.json", `direct dependency is missing from the inventory: ${key}`);
+    report(
+      references.map((reference) => reference.workspace).join(", "),
+      `direct dependency is missing from the inventory: ${key}`,
+    );
     continue;
   }
   const row = noticeLines.find((line) =>
@@ -349,8 +442,14 @@ for (const [key] of directPackageKeys) {
 }
 
 const inventory = {
-  schemaVersion: 1,
-  generatedFrom: ["pnpm-lock.yaml", "Cargo.lock", "compose.yaml", ".github/workflows/ci.yml"],
+  schemaVersion: 2,
+  generatedFrom: [
+    ...manifestPaths,
+    "pnpm-lock.yaml",
+    "Cargo.lock",
+    "compose.yaml",
+    ".github/workflows/ci.yml",
+  ],
   npmPackages,
   cargoPackages,
   externalArtifacts: policy.externalArtifacts ?? [],

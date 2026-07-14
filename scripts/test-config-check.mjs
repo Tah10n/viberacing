@@ -3,6 +3,7 @@ import {
   validateCompose,
   validatePnpmWorkspace,
   validateRootPackage,
+  validateWorkspacePackage,
   validateWorkflow,
 } from "./check-config.mjs";
 
@@ -183,4 +184,36 @@ assert.match(
   /exact version/,
 );
 
-console.log("Configuration checker tests passed (18 cases).");
+const goodWebPackage = {
+  name: "@viberacing/web",
+  version: "0.0.0",
+  private: true,
+  type: "module",
+  engines: { node: ">=24.14.0 <25" },
+  dependencies: { react: "19.2.7" },
+  scripts: { test: "vitest run" },
+};
+assert.deepEqual(validateWorkspacePackage("apps/web/package.json", goodWebPackage), []);
+assert.match(
+  validateWorkspacePackage("apps/web/package.json", {
+    ...goodWebPackage,
+    name: "@personal/web",
+  }).join("\n"),
+  /workspace name/,
+);
+assert.match(
+  validateWorkspacePackage("apps/web/package.json", {
+    ...goodWebPackage,
+    dependencies: { react: "^19.2.7" },
+  }).join("\n"),
+  /exact version/,
+);
+assert.match(
+  validateWorkspacePackage("apps/web/package.json", {
+    ...goodWebPackage,
+    private: false,
+  }).join("\n"),
+  /must remain private/,
+);
+
+console.log("Configuration checker tests passed (22 cases).");

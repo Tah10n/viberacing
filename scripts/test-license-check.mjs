@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,7 +8,7 @@ import process from "node:process";
 const checker = resolve(import.meta.dirname, "check-licenses.mjs");
 const fixtureRoot = mkdtempSync(join(tmpdir(), "viberacing-license-check-"));
 
-function makeFixture(name) {
+function makeFixture(name, { workspace = false } = {}) {
   const directory = join(fixtureRoot, name);
   mkdirSync(join(directory, "config"), { recursive: true });
   mkdirSync(join(directory, "docs", "reference"), { recursive: true });
@@ -18,6 +19,20 @@ function makeFixture(name) {
     },
   );
   mkdirSync(join(directory, ".github", "workflows"), { recursive: true });
+  if (workspace) {
+    mkdirSync(join(directory, "apps", "web"), { recursive: true });
+    mkdirSync(
+      join(
+        directory,
+        "node_modules",
+        ".pnpm",
+        "fixture-runtime@2.0.0",
+        "node_modules",
+        "fixture-runtime",
+      ),
+      { recursive: true },
+    );
+  }
   writeFileSync(
     join(directory, "package.json"),
     `${JSON.stringify(
@@ -44,9 +59,55 @@ function makeFixture(name) {
     `${JSON.stringify({ name: "fixture-tool", version: "1.0.0", license: "MIT" }, null, 2)}\n`,
     "utf8",
   );
+  if (workspace) {
+    writeFileSync(
+      join(directory, "apps", "web", "package.json"),
+      `${JSON.stringify(
+        {
+          name: "@fixture/web",
+          private: true,
+          dependencies: { "fixture-runtime": "2.0.0" },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    writeFileSync(
+      join(
+        directory,
+        "node_modules",
+        ".pnpm",
+        "fixture-runtime@2.0.0",
+        "node_modules",
+        "fixture-runtime",
+        "package.json",
+      ),
+      `${JSON.stringify({ name: "fixture-runtime", version: "2.0.0", license: "MIT" }, null, 2)}\n`,
+      "utf8",
+    );
+  }
   writeFileSync(
     join(directory, "pnpm-lock.yaml"),
-    "lockfileVersion: '9.0'\nimporters:\n  .:\n    devDependencies:\n      fixture-tool:\n        specifier: 1.0.0\n        version: 1.0.0\npackages:\n  fixture-tool@1.0.0: {}\n",
+    `lockfileVersion: '9.0'
+importers:
+  .:
+    devDependencies:
+      fixture-tool:
+        specifier: 1.0.0
+        version: 1.0.0
+${
+  workspace
+    ? `  apps/web:
+    dependencies:
+      fixture-runtime:
+        specifier: 2.0.0
+        version: 2.0.0
+`
+    : ""
+}packages:
+  fixture-tool@1.0.0: {}
+${workspace ? "  fixture-runtime@2.0.0: {}\n" : ""}`,
     "utf8",
   );
   writeFileSync(
@@ -77,7 +138,8 @@ function makeFixture(name) {
   );
   writeFileSync(
     join(directory, "THIRD_PARTY_NOTICES.md"),
-    "| [fixture-tool](https://example.com/) | Test | MIT |\n",
+    `| [fixture-tool](https://example.com/) | Test | MIT |
+${workspace ? "| [fixture-runtime](https://example.com/runtime) | Runtime test | MIT |\n" : ""}`,
     "utf8",
   );
   return directory;
@@ -107,6 +169,17 @@ try {
   const baseline = makeFixture("baseline");
   expectPass("inventory generation", run(baseline, "--write"));
   expectPass("matching inventory", run(baseline));
+
+  const workspace = makeFixture("workspace", { workspace: true });
+  expectPass("workspace inventory generation", run(workspace, "--write"));
+  expectPass("matching workspace inventory", run(workspace));
+  const workspaceInventory = JSON.parse(
+    readFileSync(join(workspace, "docs", "reference", "dependency-inventory.json"), "utf8"),
+  );
+  assert.deepEqual(
+    workspaceInventory.npmPackages.find((entry) => entry.name === "fixture-runtime").direct,
+    [{ workspace: "apps/web", scope: "runtime" }],
+  );
 
   const stale = makeFixture("stale");
   expectPass("stale fixture generation", run(stale, "--write"));
@@ -139,6 +212,18 @@ try {
   writeFileSync(join(missingNotice, "THIRD_PARTY_NOTICES.md"), "# Empty notices\n", "utf8");
   expectFailure("missing direct notice", run(missingNotice, "--write"), "direct dependency notice");
 
+  const missingWorkspaceNotice = makeFixture("missing-workspace-notice", { workspace: true });
+  writeFileSync(
+    join(missingWorkspaceNotice, "THIRD_PARTY_NOTICES.md"),
+    "| [fixture-tool](https://example.com/) | Test | MIT |\n",
+    "utf8",
+  );
+  expectFailure(
+    "missing workspace direct notice",
+    run(missingWorkspaceNotice, "--write"),
+    "fixture-runtime",
+  );
+
   const unlistedArtifact = makeFixture("unlisted-artifact");
   writeFileSync(
     join(unlistedArtifact, "compose.yaml"),
@@ -151,7 +236,7 @@ try {
     "referenced external artifact is missing",
   );
 
-  console.log("License checker tests passed (5 cases).");
+  console.log("License checker tests passed (7 cases).");
 } finally {
   rmSync(fixtureRoot, { force: true, recursive: true });
 }

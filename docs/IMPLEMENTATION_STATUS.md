@@ -24,16 +24,17 @@ connector, real-user ingestion, or verified ranking exists.
   every historical path/blob, forbidden modes, oversize objects, and printable binary metadata, with
   six black-box cases including deleted-history and unreachable-object scope.
 - Pinned Node, pnpm, and Rust toolchains with committed pnpm and Cargo lockfiles.
-- A pnpm workspace with release quarantine, trust and source policy, exact direct dependencies, and
-  install-script denial by default.
+- A pnpm workspace with release quarantine, trust and source policy, exact external direct
+  dependencies in every bounded workspace, `workspace:*` internal references, private workspace
+  manifests, and install-script denial by default.
 - Prettier, Markdownlint, CSpell 10.0.1, YAML/configuration policy, and Rust workspace gates.
 - An offline external-link gate with 12 reviewed hosts, HTTPS/credential/port/query/address rules,
   no dormant host permissions, and eight black-box cases. A separate online mode pins public DNS
   results, sends no credentials, follows no redirects, and is excluded from deterministic PR CI.
 - A deterministic dependency inventory covering 194 locked npm packages, zero Cargo dependencies,
   two pinned GitHub Actions, and one pinned local-development container. License expressions,
-  installed manifests, lock membership, direct notices, and external-artifact usage are checked with
-  five black-box cases.
+  installed manifests, every root/workspace importer, dependency scopes, direct notices, and
+  external-artifact usage are checked with seven black-box cases.
 - Positive and negative workflow-policy tests for action pins, permissions, secrets, shell
   interpolation, timeouts, complete-history checkout, checkout credentials, and forbidden triggers.
 - A secretless, read-only GitHub Actions CI definition and bounded weekly Dependabot configuration.

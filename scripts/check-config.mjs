@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -244,19 +244,113 @@ export function validateRootPackage(manifest) {
   if (manifest?.packageManager !== "pnpm@11.7.0") {
     findings.push("root packageManager must pin pnpm@11.7.0");
   }
-  for (const group of ["dependencies", "devDependencies", "optionalDependencies"]) {
-    for (const [name, version] of Object.entries(manifest?.[group] ?? {})) {
-      if (!exactVersion.test(version)) {
-        findings.push(`${group}.${name} must use an exact version, received ${version}`);
+  findings.push(...validateDependencyDeclarations(manifest));
+  findings.push(...validatePackageScripts(manifest));
+  return findings;
+}
+
+function validateDependencyDeclarations(manifest) {
+  const findings = [];
+  const declared = new Map();
+  for (const group of [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "peerDependencies",
+  ]) {
+    const dependencies = manifest?.[group] ?? {};
+    if (!isObject(dependencies)) {
+      findings.push(`${group} must be a dependency map`);
+      continue;
+    }
+    for (const [name, version] of Object.entries(dependencies)) {
+      if (declared.has(name)) {
+        findings.push(`${name} must not be declared in both ${declared.get(name)} and ${group}`);
+      }
+      declared.set(name, group);
+      const workspaceReference = version === "workspace:*";
+      if (typeof version !== "string" || (!exactVersion.test(version) && !workspaceReference)) {
+        findings.push(`${group}.${name} must use an exact version, received ${String(version)}`);
+      }
+      if (workspaceReference && !name.startsWith("@viberacing/")) {
+        findings.push(`${group}.${name} uses workspace:* but is outside the @viberacing scope`);
+      }
+      if (name.startsWith("@viberacing/") && !workspaceReference) {
+        findings.push(`${group}.${name} must use workspace:* for an internal package`);
       }
     }
   }
+  return findings;
+}
+
+function validatePackageScripts(manifest) {
+  const findings = [];
+  if (!isObject(manifest?.scripts ?? {})) {
+    return ["scripts must be a command map"];
+  }
   for (const [name, command] of Object.entries(manifest?.scripts ?? {})) {
-    if (/\b(?:curl|wget|Invoke-WebRequest)\b/i.test(command)) {
+    if (typeof command !== "string") {
+      findings.push(`script ${name} must be a string`);
+    } else if (/\b(?:curl|wget|Invoke-WebRequest)\b/i.test(command)) {
       findings.push(`script ${name} must not download and execute remote content`);
     }
   }
   return findings;
+}
+
+export function validateWorkspacePackage(path, manifest) {
+  const findings = [];
+  const match = /^(?:apps|packages)\/([A-Za-z0-9._-]+)\/package\.json$/.exec(path);
+  if (!match) {
+    return ["workspace manifest path is outside apps/* or packages/*"];
+  }
+  if (manifest?.private !== true) {
+    findings.push("workspace package must remain private until a separate publication review");
+  }
+  if (manifest?.name !== `@viberacing/${match[1]}`) {
+    findings.push(`workspace name must be @viberacing/${match[1]}`);
+  }
+  if (!exactVersion.test(manifest?.version ?? "")) {
+    findings.push("workspace version must be an exact semantic version");
+  }
+  if (manifest?.type !== "module") {
+    findings.push("workspace package must use type: module");
+  }
+  if (manifest?.engines?.node !== ">=24.14.0 <25") {
+    findings.push("workspace Node engine must match >=24.14.0 <25");
+  }
+  if (manifest?.packageManager !== undefined) {
+    findings.push("workspace packageManager must be inherited from the root");
+  }
+  findings.push(...validateDependencyDeclarations(manifest));
+  findings.push(...validatePackageScripts(manifest));
+  return findings;
+}
+
+function workspaceManifestPaths(failures) {
+  const paths = [];
+  for (const parent of ["apps", "packages"]) {
+    const parentPath = resolve(root, parent);
+    if (!existsSync(parentPath)) {
+      continue;
+    }
+    for (const entry of readdirSync(parentPath, { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) {
+        failures.push(`${parent}/${entry.name} — symbolic workspace directories are not allowed`);
+        continue;
+      }
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const path = `${parent}/${entry.name}/package.json`;
+      if (!existsSync(resolve(root, path))) {
+        failures.push(`${parent}/${entry.name} — workspace directory must contain package.json`);
+      } else {
+        paths.push(path);
+      }
+    }
+  }
+  return paths.sort((left, right) => left.localeCompare(right));
 }
 
 function yamlPaths() {
@@ -336,17 +430,23 @@ function main() {
     }
   }
 
-  const manifestPath = resolve(root, "package.json");
-  if (lstatSync(manifestPath).isSymbolicLink()) {
-    failures.push("package.json — symbolic configuration files are not allowed");
-  } else {
+  for (const manifestName of ["package.json", ...workspaceManifestPaths(failures)]) {
+    const manifestPath = resolve(root, manifestName);
+    if (lstatSync(manifestPath).isSymbolicLink()) {
+      failures.push(`${manifestName} — symbolic configuration files are not allowed`);
+      continue;
+    }
     try {
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-      for (const finding of validateRootPackage(manifest)) {
-        failures.push(`package.json — ${finding}`);
+      const manifestFindings =
+        manifestName === "package.json"
+          ? validateRootPackage(manifest)
+          : validateWorkspacePackage(manifestName, manifest);
+      for (const finding of manifestFindings) {
+        failures.push(`${manifestName} — ${finding}`);
       }
     } catch (error) {
-      failures.push(`package.json — invalid JSON: ${error.message}`);
+      failures.push(`${manifestName} — invalid JSON: ${error.message}`);
     }
   }
   validateEnvExample(failures);

@@ -17,14 +17,18 @@ human review of purpose, provenance, release history, permissions, transitive ch
 
 ## JavaScript and TypeScript
 
-Root direct dependencies use exact versions. `pnpm-lock.yaml` is committed and CI installs it with
+Every external direct dependency in the root and in each bounded `apps/*` or `packages/*` workspace
+uses an exact version. Internal packages use only `workspace:*`. Workspace manifests remain private
+until a separate publication review. `pnpm-lock.yaml` is committed and CI installs it with
 `--frozen-lockfile --ignore-scripts` from the official npm registry.
 
 `docs/reference/dependency-inventory.json` must exactly match every lockfile package and installed
-manifest. `config/license-policy.json` is a reviewed allowlist of the license expressions currently
-present; it is not a general statement that a license is suitable for every future distribution. The
-checker also binds pinned Actions and container images to explicit notices. Unknown, missing,
-changed, or unreviewed declarations fail closed.
+manifest. Its direct-dependency records identify every declaring workspace and dependency scope, so
+an application dependency cannot hide behind a clean root manifest. `config/license-policy.json` is
+a reviewed allowlist of the license expressions currently present; it is not a general statement
+that a license is suitable for every future distribution. The checker also binds pinned Actions and
+container images to explicit notices. Unknown, missing, changed, or unreviewed declarations fail
+closed.
 
 `pnpm-workspace.yaml` enforces:
 
