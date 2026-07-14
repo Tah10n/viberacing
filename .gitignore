@@ -1,0 +1,56 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+*.secrets
+secrets/
+credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+
+# Codex and agent-local state
+.codex/
+.codex-log/
+session-*.jsonl
+codex-tui.log
+
+# Logs, databases, and local runtime data
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+data/
+
+# JavaScript / TypeScript
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.turbo/
+.cache/
+playwright-report/
+test-results/
+
+# Rust
+target/
+
+# Editors and operating systems
+.idea/
+.vscode/settings.json
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp

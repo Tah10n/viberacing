@@ -1,0 +1,20 @@
+{
+  "name": "viberacing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Public-safe workspace for the Vibe Racing open-source project.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24.14.0 <25",
+    "pnpm": "11.7.x"
+  },
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "check:docs": "node scripts/check-docs.mjs",
+    "check:public": "node scripts/check-public-files.mjs --all",
+    "check:public:staged": "node scripts/check-public-files.mjs --staged",
+    "test:docs-check": "node scripts/test-docs-check.mjs",
+    "test:public-check": "node scripts/test-public-file-check.mjs",
+    "verify": "node scripts/verify.mjs"
+  }
+}
