@@ -43,6 +43,9 @@ Versioning where its guarantees are applicable.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,
   exact-session initial-passkey challenges, session rotation/revocation, synchronous deletion
   lock-down, opaque purge queueing, and bounded audit references.
+- Procedure-only pairing capabilities for new or existing opaque sources, session/passkey-bound
+  approval, minimal external Ed25519 verification material, exact single-device activation, and
+  public 32-source/64-authority safety ceilings.
 
 ### Security
 
@@ -71,5 +74,12 @@ Versioning where its guarantees are applicable.
   bound challenges to the exact session/profile pair, removed caller-selected profile IDs from the
   procedure surface, and added replay, expiry, IDOR, rollback, role-separation, and deletion-revoke
   PostgreSQL scenarios using synthetic data only.
+- Prevented short-code-only activation, post-approval competing-profile takeover, poll replay,
+  source-choice swaps, key rebinding, and authority fan-out beyond the public database ceilings;
+  external WebAuthn and Ed25519 verification remain mandatory before the matching procedures are
+  called.
+- Added deterministic cross-connection lock races proving first-winner pairing approval and atomic
+  enforcement of the 32-source and 64-live-authority ceilings, including exclusion of expired
+  approvals from live authority.
 
 No version has been released.

@@ -12,6 +12,12 @@
       "name": "identity_capabilities",
       "path": "database/migrations/0002_identity_capabilities.sql",
       "sha256": "c4cbc69993c21fa42f113237122717bc2186974a3c11e64974e7f00ab7011538"
+    },
+    {
+      "revision": 3,
+      "name": "pairing_capabilities",
+      "path": "database/migrations/0003_pairing_capabilities.sql",
+      "sha256": "4e9987822543cf31ce8a3ad6740118f466da83cd1e559e30759226e34706f96e"
     }
   ]
 }

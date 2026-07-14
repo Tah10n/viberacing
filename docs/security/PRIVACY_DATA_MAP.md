@@ -64,6 +64,12 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Security/admin audit event and reason                               | Security; Operational           | Auth/admin/jobs/release; accountability                            | Restricted responders/auditors; user-visible subset where appropriate | Bounded `audit_events` reference; external append-only sink planned     | Publicly documented bounded policy; profile link redacted on purge; delete unrelated personal data       |
 | Deletion state and security tombstone                               | Security                        | Deletion workflow; prevent ingestion and restore resurrection      | Deletion/jobs/auth and limited audit                                  | Deletion job plus minimal tombstone                                     | Primary data purged in service window; tombstone expires after disclosed minimum security period         |
 
+Opaque sources deliberately contain no Codex account email or upstream account identifier. The
+implemented pairing database caps each profile at 32 lifetime source records and 64 active plus
+unexpired approved device authorities. These public safety ceilings do not replace lower
+deployment-private rate and fair-use controls, and exact per-source details remain non-public
+Account data.
+
 ## Prohibited data
 
 The connector, schemas, services, logs, analytics, support process, fixtures, and release artifacts

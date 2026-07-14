@@ -2,12 +2,12 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revisions 0001 and 0002 provide private
+These sequences remain planned application contracts. Revisions 0001 through 0003 provide private
 identity/source/device/pairing/audit/deletion tables, deny-by-default roles, and a narrow database
 slice for invite issuance, enrollment, exact-session challenges, initial-passkey activation, session
-rotation/revocation, and immediate deletion lock-down. No endpoint, OAuth callback, WebAuthn
-verifier, pairing/ingest procedure, purge worker, or deployed service executes the complete
-sequences. Data labels refer to the classifications in the
+rotation/revocation, immediate deletion lock-down, and source-bound pairing. No endpoint, OAuth
+callback, WebAuthn or Ed25519 verifier, ingest procedure, purge worker, or deployed service executes
+the complete sequences. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -80,6 +80,15 @@ needs a current GitHub session and fresh passkey, the connector must prove priva
 and the pending public key is immutable. The server returns the plaintext poll token once, stores
 only a keyed verifier, and never logs it. Device authority begins only after atomic source binding
 and never includes profile administration.
+
+Revision 0003 implements only the database steps in this sequence. It supports an explicit new or
+existing opaque source, binds approval to the exact session/pairing/source-choice challenge, exposes
+minimal public-key material for an external Ed25519 verifier, and activates the exact key only after
+that verifier succeeds. PostgreSQL scenarios cover competing profiles, wrong poll possession,
+replay, immutable binding, 32 lifetime sources, and 64 active/unexpired-approved device authorities
+per profile. The browser, HTTP, WebAuthn, Ed25519, edge-rate-limit, and cleanup layers remain
+planned. The ceiling and first-winner assertions use separate PostgreSQL connections held behind a
+real row lock before simultaneous release.
 
 ## Local collection and signed synchronization
 

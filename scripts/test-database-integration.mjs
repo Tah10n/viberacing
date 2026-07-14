@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -39,26 +39,129 @@ function requireSuccess(result, label) {
   throw new Error(`${label} failed${output ? `:\n${output}` : ""}`);
 }
 
+function psqlArguments() {
+  return [
+    ...composePrefix,
+    "exec",
+    "-T",
+    "postgres-test",
+    "psql",
+    "--no-psqlrc",
+    "--username",
+    "viberacing_local",
+    "--dbname",
+    "viberacing_local",
+    "--set",
+    "ON_ERROR_STOP=1",
+    "--set",
+    "VERBOSITY=terse",
+  ];
+}
+
 function psql(sql) {
-  return docker(
-    [
-      ...composePrefix,
-      "exec",
-      "-T",
-      "postgres-test",
-      "psql",
-      "--no-psqlrc",
-      "--username",
-      "viberacing_local",
-      "--dbname",
-      "viberacing_local",
-      "--set",
-      "ON_ERROR_STOP=1",
-      "--set",
-      "VERBOSITY=terse",
-    ],
-    { input: sql, timeout: 30_000 },
+  return docker(psqlArguments(), { input: sql, timeout: 30_000 });
+}
+
+function startPsql(sql, readyMarker) {
+  let stdout = "";
+  let stderr = "";
+  let readySettled = false;
+  let resolveReady;
+  let rejectReady;
+
+  const ready = new Promise((resolvePromise, rejectPromise) => {
+    resolveReady = resolvePromise;
+    rejectReady = rejectPromise;
+  });
+
+  if (!readyMarker) {
+    readySettled = true;
+    resolveReady();
+  }
+
+  const completion = new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn("docker", psqlArguments(), {
+      cwd: root,
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    const timeout = setTimeout(() => {
+      const error = new Error("concurrent PostgreSQL command exceeded 30 seconds");
+      child.kill();
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(error);
+      }
+      rejectPromise(error);
+    }, 30_000);
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      if (!readySettled && stdout.includes(readyMarker)) {
+        readySettled = true;
+        resolveReady();
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.stdin.on("error", (error) => {
+      stderr += `\nstdin: ${error.message}`;
+    });
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(error);
+      }
+      rejectPromise(error);
+    });
+    child.on("close", (status, signal) => {
+      clearTimeout(timeout);
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error(`lock holder exited before marker ${readyMarker}`));
+      }
+      resolvePromise({ status, signal, stdout, stderr });
+    });
+    child.stdin.end(sql);
+  });
+
+  return { ready, completion };
+}
+
+async function expectOneConcurrentWinner(label, lockSql, readyMarker, contenderSql) {
+  const lockHolder = startPsql(lockSql, readyMarker);
+  try {
+    await lockHolder.ready;
+  } catch (error) {
+    await lockHolder.completion.catch(() => undefined);
+    throw error;
+  }
+
+  const contenders = contenderSql.map((sql) => startPsql(sql).completion);
+  const [lockResult, contenderResults] = await Promise.all([
+    lockHolder.completion,
+    Promise.all(contenders),
+  ]);
+  requireSuccess(lockResult, `${label} lock holder`);
+
+  const winners = contenderResults.filter((result) => result.status === 0);
+  const losers = contenderResults.filter((result) => result.status !== 0);
+  const expectedClosedFailure = losers.every((result) =>
+    /operation cannot be completed/i.test(`${result.stdout}\n${result.stderr}`),
   );
+  if (winners.length !== 1 || losers.length !== 1 || !expectedClosedFailure) {
+    const evidence = contenderResults
+      .map(
+        (result, index) =>
+          `contender ${index + 1} status=${result.status}\n${result.stdout}\n${result.stderr}`,
+      )
+      .join("\n");
+    throw new Error(`${label} did not produce one winner and one closed loser:\n${evidence}`);
+  }
 }
 
 function expectDenied(role, statement, label) {
@@ -123,10 +226,131 @@ try {
       label: "identity capability scenarios",
       sql: readFileSync(resolve(root, "database/tests/identity_capabilities.sql"), "utf8"),
     },
+    {
+      label: "source-bound pairing scenarios",
+      sql: readFileSync(resolve(root, "database/tests/pairing_capabilities.sql"), "utf8"),
+    },
+    {
+      label: "pairing concurrency setup",
+      sql: readFileSync(resolve(root, "database/tests/pairing_concurrency_setup.sql"), "utf8"),
+    },
   ];
   for (const { sql, label } of databaseInputs) {
     requireSuccess(psql(sql), label);
   }
+
+  await expectOneConcurrentWinner(
+    "single pairing approval race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT pairing_id
+FROM viberacing_private.pairing_transactions
+WHERE pairing_id = '00000000-0000-4000-8000-000000008501'
+FOR UPDATE;
+\\echo pairing-race-lock-ready
+SELECT pg_catalog.pg_sleep(2);
+COMMIT;`,
+    "pairing-race-lock-ready",
+    [
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.approve_pairing(
+  '00000000-0000-4000-8000-000000008201',
+  pg_catalog.decode(pg_catalog.repeat('81', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008501',
+  '00000000-0000-4000-8000-000000008701',
+  pg_catalog.decode(pg_catalog.repeat('22', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008801',
+  'req_' || pg_catalog.repeat('C', 22)
+);`,
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.approve_pairing(
+  '00000000-0000-4000-8000-000000008202',
+  pg_catalog.decode(pg_catalog.repeat('82', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008501',
+  '00000000-0000-4000-8000-000000008702',
+  pg_catalog.decode(pg_catalog.repeat('24', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008802',
+  'req_' || pg_catalog.repeat('D', 22)
+);`,
+    ],
+  );
+
+  await expectOneConcurrentWinner(
+    "source ceiling race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000008103'
+FOR UPDATE;
+\\echo source-cap-lock-ready
+SELECT pg_catalog.pg_sleep(2);
+COMMIT;`,
+    "source-cap-lock-ready",
+    [
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.approve_pairing(
+  '00000000-0000-4000-8000-000000008203',
+  pg_catalog.decode(pg_catalog.repeat('83', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008502',
+  '00000000-0000-4000-8000-000000008703',
+  pg_catalog.decode(pg_catalog.repeat('26', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008803',
+  'req_' || pg_catalog.repeat('E', 22)
+);`,
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.approve_pairing(
+  '00000000-0000-4000-8000-000000008204',
+  pg_catalog.decode(pg_catalog.repeat('84', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008503',
+  '00000000-0000-4000-8000-000000008704',
+  pg_catalog.decode(pg_catalog.repeat('28', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008804',
+  'req_' || pg_catalog.repeat('F', 22)
+);`,
+    ],
+  );
+
+  await expectOneConcurrentWinner(
+    "device authority ceiling race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000008104'
+FOR UPDATE;
+\\echo device-cap-lock-ready
+SELECT pg_catalog.pg_sleep(2);
+COMMIT;`,
+    "device-cap-lock-ready",
+    [
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.approve_pairing(
+  '00000000-0000-4000-8000-000000008205',
+  pg_catalog.decode(pg_catalog.repeat('85', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008504',
+  '00000000-0000-4000-8000-000000008705',
+  pg_catalog.decode(pg_catalog.repeat('2a', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008805',
+  'req_' || pg_catalog.repeat('G', 22)
+);`,
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.approve_pairing(
+  '00000000-0000-4000-8000-000000008206',
+  pg_catalog.decode(pg_catalog.repeat('86', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008505',
+  '00000000-0000-4000-8000-000000008706',
+  pg_catalog.decode(pg_catalog.repeat('2c', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008806',
+  'req_' || pg_catalog.repeat('H', 22)
+);`,
+    ],
+  );
+
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database/tests/pairing_concurrency_assertions.sql"), "utf8")),
+    "pairing concurrency assertions",
+  );
 
   for (const role of [
     "viberacing_web",
@@ -196,9 +420,26 @@ try {
     );`,
     "jobs challenge consumption",
   );
+  expectDenied(
+    "viberacing_admin",
+    `SELECT viberacing_api.start_pairing(
+      '00000000-0000-4000-8000-000000009041',
+      pg_catalog.decode(pg_catalog.repeat('97', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('98', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('99', 32), 'hex'),
+      '00000000-0000-4000-8000-000000009042',
+      pg_catalog.decode(pg_catalog.repeat('9a', 32), 'hex'),
+      'denied-device',
+      '0.0.0-test',
+      'test-os',
+      'test-arch',
+      pg_catalog.statement_timestamp() + INTERVAL '5 minutes'
+    );`,
+    "admin pairing start",
+  );
 
   console.log(
-    "Database integration passed (13 schema tables, 4 relation-denial and 4 cross-capability checks).",
+    "Database integration passed (13 schema tables, 3 pairing races, 4 relation-denial and 5 cross-capability checks).",
   );
 } finally {
   if (started) {

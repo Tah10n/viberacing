@@ -1,6 +1,6 @@
 # ADR 0002: Opaque multi-source profiles with one profile cap
 
-- Status: Accepted (design; implementation pending)
+- Status: Accepted (pairing/source persistence slice implemented; aggregation pending)
 - Date: 2026-07-14
 - Decision owners: Product, Pairing, Ingest, Scoring, and Database
 - Supersedes: None
@@ -22,6 +22,10 @@ Represent each user-declared account grouping as an opaque `CodexSource`. During
 GitHub session plus fresh passkey chooses either a new source or an existing source. Every
 persistent device key binds to exactly one source.
 
+Enforce public fail-safe ceilings of 32 lifetime source records and 64 active plus unexpired
+approved device authorities per profile. Deployments may apply lower private fair-use and rate
+limits; those limits must not change score authority or imply verified account identity.
+
 For one source/date, device snapshots update one current value and never sum. Separate active
 sources sum into `profileDailyTokens`, after which the daily score cap is applied once per profile.
 The public season projection includes the number of contributing sources.
@@ -35,6 +39,10 @@ Source duplication remains possible, but cannot multiply score beyond the single
 authority. Cross-source submission is an authorization defect even when both sources belong to one
 profile. Source state transitions are server-side, constrained, reasoned where exceptional, and
 audited.
+
+The public ceilings bound storage and authority fan-out but do not prevent a user from duplicating
+one real account across opaque sources. Edge rate limiting, cleanup, profile-level scoring caps, and
+abuse response remain independent controls.
 
 The source ID is opaque Account/Security data. Public output exposes only a contributing count, not
 source identifiers, device details, account email, exact per-source usage, or exact sync time.
@@ -63,6 +71,11 @@ automatically from inferred personal data.
 
 - Property tests for same-source device dedup, distinct-source sum, and one profile cap.
 - Signature/database tests for device-to-source binding and cross-source denial.
+- Pairing database tests for new/existing choice, post-approval competing-profile denial, replay,
+  immutable activation, and the 32-source/64-authority ceilings. This slice is implemented in
+  revision 0003.
+- Cross-connection tests hold the relevant profile row, release two approvals together, and prove
+  one closed loser at each public ceiling. Expired approvals do not consume live-authority slots.
 - Concurrency tests for one current source/date value and idempotent retry.
 - UI/API assertions for opaque wording and public source count without identifiers.
 - Privacy tests proving account email has no connector egress, schema, log, fixture, or support

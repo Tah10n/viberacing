@@ -211,8 +211,9 @@ The current contract does not document a timezone for startDate. Version 1 there
 A CodexSource is an opaque Community source created by the user. It is not marketed as a verified
 OpenAI account identity.
 
-The user can create any number of sources. Creation and synchronization remain subject to private
-fair-use and infrastructure budgets.
+One profile can hold at most 32 lifetime source records and 64 active plus unexpired approved device
+authorities. These are public fail-safe ceilings, not product targets. Creation and synchronization
+also remain subject to lower private fair-use, rate, and infrastructure budgets.
 
 When pairing a device, the user chooses:
 

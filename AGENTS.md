@@ -19,9 +19,9 @@ Read these files before changing the project:
     state.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync
-contracts, and a procedure-only identity database slice. Do not claim that HTTP authentication,
-OAuth/WebAuthn verification, real ingestion, a connector, deployment, or a hosted security control
-exists until its implementation and verification are present in the working tree.
+contracts, and procedure-only identity and pairing database slices. Do not claim that HTTP
+authentication, OAuth/WebAuthn verification, real ingestion, a connector, deployment, or a hosted
+security control exists until its implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -78,7 +78,8 @@ exists until its implementation and verification are present in the working tree
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability
   policy. `pnpm run test:database:integration` separately uses an isolated, portless, ephemeral
   PostgreSQL Compose project to apply the reviewed manifest in order and exercise state constraints,
-  session-bound identity procedures, rollback, and every current runtime deny matrix.
+  session-bound identity procedures, deterministic pairing lock races, rollback, and every current
+  runtime deny matrix.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 

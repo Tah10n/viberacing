@@ -18,6 +18,9 @@ cases, and privacy data map before changing this subtree.
 - Keep schema ownership and deployment migration authority out of runtime services.
 - Pending device keys have no authority. Activation must bind the exact immutable key record to one
   source and one public device ID in the same transaction.
+- Pairing creates only opaque user-declared sources. Preserve the public ceilings of 32 lifetime
+  sources and 64 active plus unexpired approved device authorities per profile; lower deployable
+  anti-abuse thresholds remain private configuration and must not enter fixtures or documentation.
 - Do not weaken forced RLS, state constraints, digest/length checks, or role denials to simplify
   application code.
 

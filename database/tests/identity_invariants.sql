@@ -339,7 +339,7 @@ VALUES (
   '00000000-0000-4000-8000-000000000501',
   '00000000-0000-4000-8000-000000000001',
   '00000000-0000-4000-8000-000000000201',
-  'pairing_approval',
+  'source_unlink',
   pg_catalog.decode(pg_catalog.repeat('40', 32), 'hex'),
   pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
   '2020-01-01T00:00:00.000Z',

@@ -75,8 +75,14 @@ compromised format/key triggers device revoke/rotation, not promotion to a broad
 Current database evidence covers exact session-verifier possession, composite session/profile
 challenge binding, bounded expiry, challenge and action replay, atomic invite redemption, initial
 passkey activation, session rotation/revocation, cross-profile deletion denial, failed-operation
-rollback, immediate authority revoke, and least-privilege role grants. This evidence does not prove
-OAuth, cookies, CSRF, or WebAuthn cryptographic verification.
+rollback, immediate authority revoke, least-privilege role grants, exact pairing/source-choice
+binding, post-approval competing-profile denial, poll possession, single activation, and immutable
+device binding. This evidence does not prove OAuth, cookies, CSRF, WebAuthn cryptographic
+verification, or Ed25519 proof verification in an application service.
+
+Revision 0003 also has deterministic cross-connection evidence: two valid profile approvals wait
+behind one locked pairing and produce exactly one winner; separate same-profile races prove the
+source and live-device ceilings cannot be crossed by concurrent approvals.
 
 Remaining application and protocol evidence includes:
 
@@ -84,8 +90,8 @@ Remaining application and protocol evidence includes:
   fixation tests.
 - WebAuthn RP/origin, challenge replay/expiry, transaction binding, user verification, multiple
   passkey, recovery, and fresh-step-up tests.
-- Pairing code expiry/guess/race, displayed transaction, source choice, possession, revoke, and
-  rotation tests, including plaintext poll-token storage/log rejection and immutable-key tests.
+- Application-level pairing code attempt/rate limits, displayed-transaction rendering, external
+  Ed25519 proof verification, revoke/rotation, bounded cleanup, and plaintext token log rejection.
 - Scope matrix proving device credentials cannot manage profile, devices, invites, sources,
   recovery, deletion, or admin.
 - Canonical-signature, body tamper, nonce, idempotency, cross-source, clock, and stolen-key tests.
