@@ -9,6 +9,7 @@ dependency.
 
 | Component                                                            | Purpose                                | Declared license |
 | -------------------------------------------------------------------- | -------------------------------------- | ---------------- |
+| [cspell](https://cspell.org/)                                        | Offline spelling policy checks         | MIT              |
 | [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) | Markdown policy checks                 | MIT              |
 | [Prettier](https://prettier.io/)                                     | Repository formatting                  | MIT              |
 | [YAML](https://eemeli.org/yaml/)                                     | Safe parsing of repository YAML policy | ISC              |
@@ -16,6 +17,13 @@ dependency.
 The root Rust workspace currently has no third-party crates. `compose.yaml` references an official
 PostgreSQL image for disposable local development; the image is pulled separately and is not
 redistributed in this source tree.
+
+The machine-readable [dependency inventory](docs/reference/dependency-inventory.json) records every
+locked npm package, every future non-workspace Cargo package, and reviewed external CI/container
+artifact. It is deterministically compared with lockfiles and installed package manifests. The
+CSpell graph includes an English common-misspellings dictionary declared under CC BY-SA 4.0 and an
+argument parser declared under Python-2.0; both are development-only inputs and are not
+redistributed as part of the planned product.
 
 ## Release obligation
 

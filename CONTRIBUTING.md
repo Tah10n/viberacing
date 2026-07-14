@@ -41,7 +41,8 @@ Use synthetic data only. Never contribute:
 - third-party assets without documented permission and attribution.
 
 Review the complete diff before submission. Removing a secret in a later commit does not remove it
-from Git history.
+from Git history. `pnpm run check:history` scans all locally reachable history and rejects shallow
+clones, but contributors must still rotate a real exposed credential before history repair.
 
 ## Contribution workflow
 
@@ -53,7 +54,9 @@ from Git history.
    change.
 4. Update public contracts and documentation in the same pull request. Link affected threat
    boundaries, abuse-case IDs, privacy fields, compatibility axes, and ADRs.
-5. Confirm generated artifacts match their declared source.
+5. Confirm generated artifacts match their declared source. Dependency changes require review of the
+   full lockfile, `config/license-policy.json`, `THIRD_PARTY_NOTICES.md`, and the regenerated
+   dependency inventory; regeneration alone is not approval.
 6. Sign off commits under the repository's [Developer Certificate of Origin](DCO.txt), kept
    byte-for-byte equivalent to the official [DCO 1.1](https://developercertificate.org/), with
    `git commit -s`.
@@ -84,8 +87,8 @@ git diff --cached --check
 ```
 
 Then inspect the complete `git diff --cached`. Automated pattern checks do not replace review of
-meaning, binary metadata, asset provenance, or Git history. Do not claim application build or test
-success until those checks exist.
+meaning, decoded binary metadata, asset provenance, unreachable local Git objects, or remotes that
+will actually be pushed. Do not claim application build or test success until those checks exist.
 
 Project maintainers also run `pnpm run check:publication` before the first public announcement. It
 is intentionally not part of normal verification because a correctly disclosed pre-public tree is

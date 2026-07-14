@@ -115,6 +115,9 @@ export function validateWorkflow(path, workflow) {
         ) {
           findings.push(`job ${jobName} checkout must set persist-credentials: false`);
         }
+        if (action.startsWith("actions/checkout@") && step.with?.["fetch-depth"] !== 0) {
+          findings.push(`job ${jobName} checkout must fetch complete history for leak scanning`);
+        }
         if (action.startsWith("actions/cache@")) {
           findings.push(`job ${jobName} must not use a writable dependency cache`);
         }

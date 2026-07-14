@@ -17,6 +17,8 @@ remain safe to publish verbatim.
   disposable PostgreSQL startup.
 - [Dependency policy](security/DEPENDENCY_POLICY.md) — package, action, container, update, and
   supply-chain requirements.
+- [Dependency inventory](reference/dependency-inventory.json) — deterministic locked npm/Cargo and
+  external artifact/license evidence.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary
   and enforced workflow rules.
 - [Threat model](security/THREAT_MODEL.md), [abuse cases](security/ABUSE_CASES.md), and

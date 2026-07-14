@@ -6,6 +6,12 @@ Every dependency, action, container, toolchain, and generated lockfile is execut
 input. Convenience is not enough reason to add one. Prefer platform APIs and small repository-owned
 checks when they are clear and maintainable.
 
+CSpell is the current deliberate exception for English code/document spelling: a mature offline
+dictionary is materially more reliable than a home-grown word list. It is exact-pinned,
+development-only, installed without lifecycle scripts, and its larger transitive graph is fully
+represented in the dependency inventory. It never receives secrets in CI because pull-request CI is
+secretless.
+
 The project does not auto-merge dependency updates. A green dependency pull request still requires
 human review of purpose, provenance, release history, permissions, transitive changes, and license.
 
@@ -13,6 +19,12 @@ human review of purpose, provenance, release history, permissions, transitive ch
 
 Root direct dependencies use exact versions. `pnpm-lock.yaml` is committed and CI installs it with
 `--frozen-lockfile --ignore-scripts` from the official npm registry.
+
+`docs/reference/dependency-inventory.json` must exactly match every lockfile package and installed
+manifest. `config/license-policy.json` is a reviewed allowlist of the license expressions currently
+present; it is not a general statement that a license is suitable for every future distribution. The
+checker also binds pinned Actions and container images to explicit notices. Unknown, missing,
+changed, or unreviewed declarations fail closed.
 
 `pnpm-workspace.yaml` enforces:
 

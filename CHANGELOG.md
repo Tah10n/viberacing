@@ -18,6 +18,9 @@ Versioning where its guarantees are applicable.
   fail-closed compatibility policy and matrix, and six initial ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
+- Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
+- Offline spelling, reviewed external-link policy, and deterministic dependency/license inventory
+  covering the exact npm lock graph, pinned Actions, and local PostgreSQL image.
 
 ### Security
 

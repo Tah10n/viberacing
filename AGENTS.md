@@ -29,6 +29,8 @@ present in the working tree.
 - `.github/` contains read-only pull-request CI, dependency-update configuration, and structured
   public-safe contribution forms.
 - `scripts/` contains repository verification and black-box policy tests.
+- `config/` contains reviewed external-host and dependency-license policy; do not widen either
+  allowlist as a workaround for a failing check.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned empty monorepo
   workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
@@ -37,14 +39,25 @@ present in the working tree.
 
 ## Verified commands
 
-- `pnpm run verify` runs public-data, checker regression, formatting, Markdown, configuration,
-  workflow-policy, and Rust workspace gates.
+- `pnpm run verify` runs public-data/history, checker regression, documentation/link, spelling,
+  license inventory, formatting, Markdown, configuration, workflow-policy, and Rust workspace gates.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
 - `pnpm run check:public:staged` scans the exact staged blobs before a commit.
 - `pnpm run check:community` validates governance and community-health files and forms.
 - `pnpm run check:architecture` validates required security/architecture contracts, structured abuse
   cases, ADR metadata/indexes, compatibility fail-closed state, privacy classes, and Mermaid fence
   structure.
+- `pnpm run check:history` scans every reachable ref, commit message, historical path, text blob,
+  and printable binary metadata; it refuses shallow history.
+- `pnpm run check:external-links` enforces HTTPS and the reviewed host policy without network
+  access. `pnpm run check:external-links:online` additionally pins public DNS results and refuses
+  redirects; it is a trusted/manual or hosted scheduled check, not a pull-request network gate.
+- `pnpm run check:spelling` checks English documentation and repository text offline. Technical
+  words require deliberate review before entering `cspell.json`.
+- `pnpm run check:licenses` compares lockfiles, installed manifests, direct notices, external
+  artifacts, and the committed dependency inventory. After reviewing a dependency/license change,
+  regenerate with `node scripts/check-licenses.mjs --write`, inspect the entire JSON diff, and rerun
+  the check; never regenerate merely to silence a failure.
 - `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS, and
   private reporting controls are configured.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
@@ -71,8 +84,9 @@ Never commit or paste:
 Use synthetic fixtures with reserved example domains and obviously fake IDs. Configuration examples
 must contain placeholders only. If a value might be sensitive, stop and ask before adding it.
 
-`.gitignore` is defense in depth, not proof that a commit is safe. Before any commit or publication,
-inspect the complete staged diff and run `pnpm run check:public:staged`.
+`.gitignore` is defense in depth, not proof that a commit is safe. Before any commit, inspect the
+complete staged diff and run `pnpm run check:public:staged`. Before publication, also run
+`pnpm run check:history` from a non-shallow clone.
 
 Do not create CODEOWNERS, maintainer profiles, conduct contacts, or support contacts from local Git
 identity, filesystem names, browser sessions, or private account context. Leave publication blocked

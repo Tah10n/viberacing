@@ -13,8 +13,8 @@ does not persist credentials, dependency caches are disabled, and every job has 
 
 ```mermaid
 flowchart LR
-  PR["Untrusted pull request"] --> CO["Pinned checkout; no persisted token"]
-  CO --> PS["Public-file scan"]
+  PR["Untrusted pull request"] --> CO["Pinned checkout; complete history; no persisted token"]
+  CO --> PS["Public-file and reachable-history scan"]
   PS --> DI["Frozen dependency install; lifecycle scripts disabled"]
   DI --> VG["Format, docs, config, policy, and unit gates"]
   VG --> AU["Registry advisory audit"]
@@ -34,6 +34,8 @@ does not make the pull request trusted; review and protected-branch policy remai
 - Remote actions require a full commit SHA; container actions require an image digest.
 - Top-level and job permissions may be only `read` or `none` in pull-request CI.
 - Checkout must set `persist-credentials: false`.
+- Checkout must fetch complete history so the reachable-history leak gate cannot pass on a shallow
+  snapshot.
 - Expressions cannot be interpolated directly into shell source; untrusted values must cross an
   explicit environment boundary and be treated as data.
 - Secret references are rejected.

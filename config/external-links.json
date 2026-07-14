@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "hosts": [
+    {
+      "hostname": "creativecommons.org",
+      "purpose": "License terms for Contributor Covenant text"
+    },
+    {
+      "hostname": "cspell.org",
+      "purpose": "Canonical CSpell project documentation"
+    },
+    {
+      "hostname": "developercertificate.org",
+      "purpose": "Canonical Developer Certificate of Origin"
+    },
+    {
+      "hostname": "docs.github.com",
+      "purpose": "GitHub security, OAuth, contribution, and release guidance"
+    },
+    {
+      "hostname": "eemeli.org",
+      "purpose": "Canonical documentation for the YAML parser"
+    },
+    {
+      "hostname": "github.com",
+      "purpose": "Canonical upstream source repositories and pinned documentation"
+    },
+    {
+      "hostname": "keepachangelog.com",
+      "purpose": "Canonical Keep a Changelog specification"
+    },
+    {
+      "hostname": "learn.chatgpt.com",
+      "purpose": "Official Codex and agent documentation"
+    },
+    {
+      "hostname": "prettier.io",
+      "purpose": "Canonical Prettier project documentation"
+    },
+    {
+      "hostname": "scorecard.dev",
+      "purpose": "OpenSSF Scorecard project documentation"
+    },
+    {
+      "hostname": "www.contributor-covenant.org",
+      "purpose": "Canonical Contributor Covenant text"
+    },
+    {
+      "hostname": "www.w3.org",
+      "purpose": "Canonical WebAuthn recommendation"
+    }
+  ]
+}

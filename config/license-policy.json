@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "approvedNpmLicenseExpressions": [
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC BY-SA 4.0",
+    "ISC",
+    "MIT",
+    "Python-2.0"
+  ],
+  "approvedCargoLicenseExpressions": [],
+  "externalArtifacts": [
+    {
+      "kind": "github-action",
+      "identifier": "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
+      "declaredLicense": "MIT",
+      "redistributed": false,
+      "purpose": "Read-only source checkout in CI"
+    },
+    {
+      "kind": "github-action",
+      "identifier": "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e",
+      "declaredLicense": "MIT",
+      "redistributed": false,
+      "purpose": "Pinned Node.js setup in CI"
+    },
+    {
+      "kind": "container-image",
+      "identifier": "postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15",
+      "declaredLicense": "PostgreSQL",
+      "redistributed": false,
+      "purpose": "Disposable local PostgreSQL development service"
+    }
+  ]
+}

@@ -17,7 +17,7 @@ const goodWorkflow = {
       steps: [
         {
           uses: pinnedCheckout,
-          with: { "persist-credentials": false },
+          with: { "fetch-depth": 0, "persist-credentials": false },
         },
         { run: "pnpm run verify" },
       ],
@@ -32,6 +32,23 @@ assert.match(
     jobs: { verify: { ...goodWorkflow.jobs.verify, steps: [{ uses: "actions/checkout@v6" }] } },
   }).join("\n"),
   /does not pin uses/,
+);
+assert.match(
+  validateWorkflow("shallow.yml", {
+    ...goodWorkflow,
+    jobs: {
+      verify: {
+        ...goodWorkflow.jobs.verify,
+        steps: [
+          {
+            uses: pinnedCheckout,
+            with: { "fetch-depth": 1, "persist-credentials": false },
+          },
+        ],
+      },
+    },
+  }).join("\n"),
+  /fetch complete history/,
 );
 assert.match(
   validateWorkflow("write.yml", { ...goodWorkflow, permissions: { contents: "write" } }).join("\n"),

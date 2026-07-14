@@ -29,6 +29,16 @@ Direct dependencies are exact versions and the lockfile is committed. The worksp
 unreviewed dependency build scripts, newly published packages inside the quarantine window,
 untrusted registry redirects, and exotic transitive sources.
 
+`pnpm run verify` is deterministic and offline after installation. It includes a complete reachable
+Git-history scan, external-host policy, English spelling, and dependency-license inventory. The
+optional `pnpm run check:external-links:online` performs bounded network validation and may fail
+closed behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
+workstation.
+
+After an intentionally reviewed dependency change, regenerate the machine inventory with
+`node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
+verification. Regeneration is evidence capture, not approval.
+
 ## Local configuration
 
 `.env.example` is a public schema containing placeholders and a known local-only database password.

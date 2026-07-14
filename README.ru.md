@@ -34,6 +34,7 @@ Verified-лига останется выключенной до появлен�
 - [Политика данных публичного репозитория (EN)](docs/security/PUBLIC_REPOSITORY_POLICY.md)
 - [Локальная разработка (EN)](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Dependency policy (EN)](docs/security/DEPENDENCY_POLICY.md)
+- [Dependency inventory (EN)](docs/reference/dependency-inventory.json)
 - [Индекс документации](docs/README.md)
 - [Инструкции для coding agents](AGENTS.md)
 - [Политика безопасности (EN)](SECURITY.md)

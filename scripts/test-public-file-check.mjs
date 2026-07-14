@@ -43,14 +43,19 @@ function expectFailure(label, result, expectedFinding) {
 
 try {
   mkdirSync(join(temporaryRoot, "scripts"));
+  mkdirSync(join(temporaryRoot, "scripts", "lib"));
   copyFileSync(
     join(sourceRoot, "scripts", "check-public-files.mjs"),
     join(temporaryRoot, "scripts", "check-public-files.mjs"),
   );
+  copyFileSync(
+    join(sourceRoot, "scripts", "lib", "public-content-policy.mjs"),
+    join(temporaryRoot, "scripts", "lib", "public-content-policy.mjs"),
+  );
   git("init", "--quiet", "--initial-branch=main", "--template=");
 
   const safePath = join(temporaryRoot, "safe.txt");
-  writeFileSync(safePath, "safe@example.com\n192.0.2.10\n", "utf8");
+  writeFileSync(safePath, "safe@example.com\n192.0.0.1\n192.0.2.10\n198.18.0.1\n", "utf8");
   expectPass("reserved example data", scan("--all"));
 
   const candidatePath = join(temporaryRoot, "candidate.txt");
@@ -67,6 +72,11 @@ try {
   const userHome = ["C:", "\\", "Users", "\\", "private-user", "\\", "repo"].join("");
   writeFileSync(candidatePath, `${userHome}\n`, "utf8");
   expectFailure("local path", scan("--all"), "Windows user-home path");
+  unlinkSync(candidatePath);
+
+  const binaryToken = ["ghp", "_", "B".repeat(24)].join("");
+  writeFileSync(candidatePath, Buffer.concat([Buffer.from([0, 1, 2]), Buffer.from(binaryToken)]));
+  expectFailure("binary metadata secret", scan("--all"), "GitHub token");
   unlinkSync(candidatePath);
 
   const unsafeEnvironmentPath = join(temporaryRoot, ".env.production");
@@ -99,7 +109,7 @@ try {
   git("update-index", "--add", "--cacheinfo", `120000,${linkObject},link.md`);
   expectFailure("staged symbolic link", scan("--staged"), "symbolic links are not publishable");
 
-  console.log("Public-file checker tests passed (9 cases).");
+  console.log("Public-file checker tests passed (10 cases).");
 } finally {
   rmSync(temporaryRoot, { force: true, recursive: true });
 }

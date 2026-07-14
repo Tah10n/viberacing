@@ -18,6 +18,16 @@ const checks = [
     [resolve(import.meta.dirname, "check-public-files.mjs"), "--all"],
   ],
   [
+    "Git history checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-git-history-check.mjs")],
+  ],
+  [
+    "reachable Git history",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-git-history.mjs")],
+  ],
+  [
     "documentation checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-docs-check.mjs")],
@@ -43,6 +53,16 @@ const checks = [
     [resolve(import.meta.dirname, "test-config-check.mjs")],
   ],
   ["documentation", process.execPath, [resolve(import.meta.dirname, "check-docs.mjs")]],
+  [
+    "external-link checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-external-links-check.mjs")],
+  ],
+  [
+    "external-link policy",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-external-links.mjs")],
+  ],
   ["community health", process.execPath, [resolve(import.meta.dirname, "check-community.mjs")]],
   [
     "architecture contracts",
@@ -50,6 +70,18 @@ const checks = [
     [resolve(import.meta.dirname, "check-architecture.mjs")],
   ],
   ["configuration", process.execPath, [resolve(import.meta.dirname, "check-config.mjs")]],
+  [
+    "license checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-license-check.mjs")],
+  ],
+  ["dependency licenses", process.execPath, [resolve(import.meta.dirname, "check-licenses.mjs")]],
+  [
+    "spelling checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-spelling-check.mjs")],
+  ],
+  ["spelling", process.execPath, [resolve(import.meta.dirname, "check-spelling.mjs")]],
   [
     "formatting",
     process.execPath,

@@ -32,6 +32,7 @@ keys, or arbitrary user-uploaded files.
 - [Architecture decisions](docs/decisions/README.md)
 - [Local development](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Dependency policy](docs/security/DEPENDENCY_POLICY.md)
+- [Dependency inventory](docs/reference/dependency-inventory.json)
 - [Pull-request CI trust model](docs/architecture/CI_TRUST_MODEL.md)
 - [Public repository data policy](docs/security/PUBLIC_REPOSITORY_POLICY.md)
 - [Documentation index](docs/README.md)
