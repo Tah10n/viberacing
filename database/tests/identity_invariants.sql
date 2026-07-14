@@ -57,13 +57,13 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 12
+    SELECT pg_catalog.count(*) = 13
     FROM pg_catalog.pg_class AS relation
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
     WHERE namespace.nspname = 'viberacing_private'
       AND relation.relkind = 'r'
   ),
-  'all identity foundation tables exist'
+  'all identity and audit tables exist'
 );
 
 SELECT pg_temp.assert_true(
@@ -328,6 +328,7 @@ SELECT pg_temp.expect_integrity_failure(
 INSERT INTO viberacing_private.auth_challenges (
   challenge_id,
   profile_id,
+  session_id,
   purpose,
   challenge_digest,
   context_digest,
@@ -337,6 +338,7 @@ INSERT INTO viberacing_private.auth_challenges (
 VALUES (
   '00000000-0000-4000-8000-000000000501',
   '00000000-0000-4000-8000-000000000001',
+  '00000000-0000-4000-8000-000000000201',
   'pairing_approval',
   pg_catalog.decode(pg_catalog.repeat('40', 32), 'hex'),
   pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),

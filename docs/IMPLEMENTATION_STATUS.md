@@ -8,8 +8,8 @@ This page records only evidence that exists in the public working tree. The
 Phase 1 product code is locally complete, with the manual release-evidence items below still open.
 The Phase 2 language-neutral contract and SQL persistence foundations have started. Phase 0
 hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
-No authentication route, runtime database procedure, production deployment, released connector,
-real-user ingestion, or verified ranking exists.
+No authentication HTTP route, OAuth/WebAuthn application flow, production deployment, released
+connector, real-user ingestion, or verified ranking exists.
 
 ## Implemented and locally verified
 
@@ -88,11 +88,11 @@ real-user ingestion, or verified ranking exists.
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- A checksum-ledgered, transactional SQL migration with bounded lock/statement execution and 12
-  forced-RLS private tables for profiles, invites, sessions, passkeys, recovery, challenges, opaque
-  sources, pending/active/revoked device keys, pairing, deletion work/tombstones, and schema
-  revisions. There is intentionally no GitHub token, account email, prompt, repository, credential,
-  arbitrary JSON, or free-form diagnostic column.
+- Two checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and 13
+  forced-RLS private tables for profiles, invites, sessions, passkeys, recovery, session-bound
+  challenges, opaque sources, pending/active/revoked device keys, pairing, bounded audit references,
+  deletion work/tombstones, and schema revisions. There is intentionally no GitHub token, account
+  email, prompt, repository, credential, arbitrary JSON, or free-form diagnostic column.
 - Database constraints and triggers enforce unique GitHub bindings, normalized handles, keyed
   verifier lengths, Argon2id recovery-verifier shape, exact device-key/source/pairing binding,
   terminal unlink/deletion states, state-dependent timestamps, and bounded lifecycle values. The
@@ -101,11 +101,20 @@ real-user ingestion, or verified ranking exists.
 - A database policy checker with 16 black-box cases for migration drift/path/revision, transaction
   and timeout omissions, unsafe SQL features, `PUBLIC`/direct runtime grants, unsafe
   `SECURITY DEFINER`, role options, passwords, and owner membership. The real PostgreSQL gate runs
-  deterministic synthetic fixtures in a rollback and proves four runtime roles cannot read private
+  deterministic synthetic fixtures in rollbacks and proves four runtime roles cannot read private
   tables or create API objects.
-- An empty API schema that runtime roles may resolve but cannot mutate. No procedure is exposed, so
-  the storage foundation cannot yet redeem an invite, authenticate a user, approve a device, ingest
-  usage, or execute deletion.
+- A closed procedure-only API boundary: Admin can issue bounded, reasoned invites; Web can
+  atomically redeem an invite, create an enrolling profile/session, create and consume exact-session
+  challenges, register the initial passkey, rotate/revoke a possessed session, and request immediate
+  profile lock-down plus a deletion job. Ingest and Jobs have no identity function. Profile-scoped
+  functions derive identity from an active session ID plus keyed verifier and do not accept a
+  caller-selected profile ID.
+- PostgreSQL scenarios prove invalid invite rollback, absolute invite/session/challenge lifetimes,
+  wrong-verifier denial, cross-profile challenge denial, one-time challenge/action use, old-session
+  invalidation after rotation, typed-handle deletion binding, full rollback after failed deletion,
+  synchronous browser/passkey/device revoke, source unlink, approved-pairing cancellation, opaque
+  job queueing, and audit-link redaction on profile purge. The procedures do not perform OAuth or
+  WebAuthn cryptographic verification; those application boundaries remain absent.
 - A strict Next.js 16 and React 19 web workspace with a synthetic EN/RU race, accessible
   leaderboard, demo profile, three repository-owned CSS/canvas themes, reduced-motion controls, and
   a deterministic 16-by-8 pixel-car renderer.
@@ -142,8 +151,9 @@ real-user ingestion, or verified ranking exists.
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, applied role bootstrap and revision 0001, passed 12-table state/ownership/RLS
-assertions plus four runtime deny matrices, and removed its portless container, network, and
+reached `healthy`, validated and applied revisions 0001 and 0002 from the checksum manifest, passed
+13-table state/ownership/RLS assertions, four relation-denial matrices, four cross-capability
+denials, and the identity lifecycle scenarios, then removed its portless container, network, and
 ephemeral storage.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
@@ -173,10 +183,11 @@ defect found and corrected during review. The report names its local-only limita
 
 ## Not implemented yet
 
-Authentication application flows, invite/session/passkey/recovery procedures, cleanup workers,
-ingest API, scoring jobs, Codex connector, release signing, deployment, and public beta operations
-remain proposed. The current scoring and ranking code operates only on clearly synthetic in-process
-fixtures; the application does not connect to revision 0001.
+Authentication application flows, OAuth/cookie/CSRF handling, WebAuthn cryptographic verification,
+login/multi-passkey/recovery/pairing procedures, concurrent-connection race evidence, cleanup and
+purge workers, ingest API, scoring jobs, Codex connector, release signing, deployment, and public
+beta operations remain proposed. The current scoring and ranking code operates only on clearly
+synthetic in-process fixtures; the application does not connect to revisions 0001 or 0002.
 
 ## Evidence commands
 

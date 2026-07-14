@@ -6,6 +6,12 @@
       "name": "identity_foundation",
       "path": "database/migrations/0001_identity_foundation.sql",
       "sha256": "a10cb46e3b67591dc6a8d86b0ce9b720d31178dc7e1af26d86aa79df62a11a3a"
+    },
+    {
+      "revision": 2,
+      "name": "identity_capabilities",
+      "path": "database/migrations/0002_identity_capabilities.sql",
+      "sha256": "c4cbc69993c21fa42f113237122717bc2186974a3c11e64974e7f00ab7011538"
     }
   ]
 }

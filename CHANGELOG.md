@@ -40,6 +40,9 @@ Versioning where its guarantees are applicable.
   drift gates and black-box regression coverage.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
+- Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,
+  exact-session initial-passkey challenges, session rotation/revocation, synchronous deletion
+  lock-down, opaque purge queueing, and bounded audit references.
 
 ### Security
 
@@ -64,5 +67,9 @@ Versioning where its guarantees are applicable.
   `PUBLIC` database/schema access, safe database/role search paths, zero direct runtime table
   grants, and exact pending-key/source/device binding enforced by state triggers and composite
   foreign keys.
+- Bound every implemented profile action to possession of an active session ID and keyed verifier,
+  bound challenges to the exact session/profile pair, removed caller-selected profile IDs from the
+  procedure surface, and added replay, expiry, IDOR, rollback, role-separation, and deletion-revoke
+  PostgreSQL scenarios using synthetic data only.
 
 No version has been released.

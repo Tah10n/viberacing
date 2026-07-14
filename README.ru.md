@@ -79,9 +79,12 @@ Dev-сервер слушает только loopback. В интерфейсе �
 будущего sync-протокола. Это пока только проверяемая граница данных: работающего API, connector и
 приёма реальной статистики ещё нет.
 
-Также добавлена первая SQL migration: приватные identity/source/device/pairing/deletion tables,
-deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Runtime
-API schema пока намеренно пустая, поэтому наличие tables не означает готовую авторизацию.
+Также добавлены две SQL migrations: 13 приватных identity/source/device/pairing/audit/deletion
+tables, deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL.
+Узкая procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
+initial-passkey challenge, rotate/revoke сессии и немедленную блокировку при запросе удаления. Но
+HTTP-auth routes, OAuth callback, WebAuthn verifier, connector ingest, purge worker и deployed
+database ещё не реализованы, поэтому готовой пользовательской авторизации пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

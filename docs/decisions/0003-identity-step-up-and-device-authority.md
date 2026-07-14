@@ -1,6 +1,6 @@
 # ADR 0003: GitHub identity, passkey step-up, and source-bound device authority
 
-- Status: Accepted (storage foundation implemented; application flows pending)
+- Status: Accepted
 - Date: 2026-07-14
 - Decision owners: Web/Auth, Pairing, Ingest, and Database
 - Supersedes: None
@@ -71,6 +71,14 @@ Device signing-format changes use an explicit version and bounded dual-verificat
 compromised format/key triggers device revoke/rotation, not promotion to a broader credential.
 
 ## Verification
+
+Current database evidence covers exact session-verifier possession, composite session/profile
+challenge binding, bounded expiry, challenge and action replay, atomic invite redemption, initial
+passkey activation, session rotation/revocation, cross-profile deletion denial, failed-operation
+rollback, immediate authority revoke, and least-privilege role grants. This evidence does not prove
+OAuth, cookies, CSRF, or WebAuthn cryptographic verification.
+
+Remaining application and protocol evidence includes:
 
 - OAuth state, PKCE, exact callback, code replay, token disposal, user-ID uniqueness, and session
   fixation tests.

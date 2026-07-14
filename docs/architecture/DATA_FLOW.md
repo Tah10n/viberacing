@@ -2,9 +2,12 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revision 0001 now provides private
-identity/source/device/pairing/deletion tables and deny-by-default roles, but no runtime procedure
-or endpoint executes these sequences. Data labels refer to the classifications in the
+These sequences remain planned application contracts. Revisions 0001 and 0002 provide private
+identity/source/device/pairing/audit/deletion tables, deny-by-default roles, and a narrow database
+slice for invite issuance, enrollment, exact-session challenges, initial-passkey activation, session
+rotation/revocation, and immediate deletion lock-down. No endpoint, OAuth callback, WebAuthn
+verifier, pairing/ingest procedure, purge worker, or deployed service executes the complete
+sequences. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -37,6 +40,12 @@ sequenceDiagram
 Only the numeric GitHub user ID crosses into persistent Account data. GitHub access tokens are
 callback-memory data and are discarded. The public handle and optional GitHub link require a later
 explicit preview/choice; neither is inferred from local or OAuth-private data.
+
+Revision 0002 enforces the database steps shown here only after Web/Auth supplies a resolved numeric
+GitHub ID and, for the passkey step, a cryptographically verified WebAuthn result. It creates a
+fresh session during enrollment, binds each stored challenge to that exact session/profile pair, and
+makes the initial activation one-time. It does not implement the browser, edge, OAuth, cookie, CSRF,
+RP ID, origin, signature, or user-verification checks.
 
 ## Device pairing and source choice
 
@@ -160,6 +169,10 @@ sequenceDiagram
 
 Hide and authority revocation are synchronous security actions; bulk purge is retryable. Failure of
 the asynchronous job does not make the profile public or the device valid again.
+
+Revision 0002 implements the database transaction behind the immediate hide/revoke/enqueue step and
+proves its rollback behavior with synthetic PostgreSQL scenarios. Cache purge, job execution,
+tombstone policy, backup replay, and the authenticated application endpoint are still planned.
 
 ## Trusted release
 

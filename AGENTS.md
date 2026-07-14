@@ -18,9 +18,10 @@ Read these files before changing the project:
 10. `GOVERNANCE.md` and `MAINTAINERS.md` before changing roles, ownership, release, or publication
     state.
 
-The repository currently contains a public foundation and a synthetic web prototype. Do not claim
-that authentication, real ingestion, a connector, deployment, or a hosted security control exists
-until its implementation and verification are present in the working tree.
+The repository currently contains a public foundation, a synthetic web prototype, versioned sync
+contracts, and a procedure-only identity database slice. Do not claim that HTTP authentication,
+OAuth/WebAuthn verification, real ingestion, a connector, deployment, or a hosted security control
+exists until its implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -76,13 +77,15 @@ until its implementation and verification are present in the working tree.
   private reporting controls are configured.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability
   policy. `pnpm run test:database:integration` separately uses an isolated, portless, ephemeral
-  PostgreSQL Compose project to exercise state constraints and every current runtime deny matrix.
+  PostgreSQL Compose project to apply the reviewed manifest in order and exercise state constraints,
+  session-bound identity procedures, rollback, and every current runtime deny matrix.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 
 These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`. The web tests use
-synthetic data and do not prove authentication, ingestion, connector, database, deployment, or
-production behavior. Install dependencies with `pnpm install --frozen-lockfile --ignore-scripts`.
+synthetic data and do not prove authentication, ingestion, connector, deployment, or production
+behavior; the database integration proves only its isolated SQL boundary. Install dependencies with
+`pnpm install --frozen-lockfile --ignore-scripts`.
 
 ## Public repository boundary
 
