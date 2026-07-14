@@ -6,10 +6,10 @@ This page records only evidence that exists in the public working tree. The
 ## Current phase
 
 Phase 1 product code is locally complete, with the manual release-evidence items below still open.
-The Phase 2 language-neutral contract foundation has started. Phase 0 hosted-publication controls
-remain blocked on real maintainer identities and GitHub configuration. No authentication,
-application database, production deployment, released connector, real-user ingestion, or verified
-ranking exists.
+The Phase 2 language-neutral contract and SQL persistence foundations have started. Phase 0
+hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
+No authentication route, runtime database procedure, production deployment, released connector,
+real-user ingestion, or verified ranking exists.
 
 ## Implemented and locally verified
 
@@ -41,7 +41,8 @@ ranking exists.
 - Positive and negative workflow-policy tests for action pins, permissions, secrets, shell
   interpolation, timeouts, complete-history checkout, checkout credentials, and forbidden triggers.
 - A secretless, read-only GitHub Actions CI definition and bounded weekly Dependabot configuration.
-- A loopback-only disposable PostgreSQL Compose service pinned to a version and index digest.
+- A loopback-only disposable PostgreSQL Compose service plus an opt-in portless `tmpfs` integration
+  service, both pinned to the same version and index digest.
 - Cross-platform root verification entry point: `pnpm run verify`.
 - Governance, maintainer, conduct, DCO, support, roadmap, changelog, release, trademark, and
   third-party notice policies.
@@ -83,6 +84,28 @@ ranking exists.
   calendar/UTC timestamp and safe-integer checks; depth, node, key, item, and issue budgets; and
   privacy-safe issue output that never echoes unknown property names or submitted values. Fifteen
   unit/security cases cover 100% of statements, lines, and functions plus 97.14% of branches.
+- An idempotent cluster-role bootstrap for separate `NOLOGIN`, non-owner Web, Ingest, Jobs, Admin,
+  and schema-owner groups. The default database and `public` schema capabilities are revoked;
+  database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
+  principal retains explicit connection authority; unexpected group-role memberships fail closed.
+- A checksum-ledgered, transactional SQL migration with bounded lock/statement execution and 12
+  forced-RLS private tables for profiles, invites, sessions, passkeys, recovery, challenges, opaque
+  sources, pending/active/revoked device keys, pairing, deletion work/tombstones, and schema
+  revisions. There is intentionally no GitHub token, account email, prompt, repository, credential,
+  arbitrary JSON, or free-form diagnostic column.
+- Database constraints and triggers enforce unique GitHub bindings, normalized handles, keyed
+  verifier lengths, Argon2id recovery-verifier shape, exact device-key/source/pairing binding,
+  terminal unlink/deletion states, state-dependent timestamps, and bounded lifecycle values. The
+  public-key record itself moves from authority-free pending state to one source/device, then only
+  to revoked.
+- A database policy checker with 16 black-box cases for migration drift/path/revision, transaction
+  and timeout omissions, unsafe SQL features, `PUBLIC`/direct runtime grants, unsafe
+  `SECURITY DEFINER`, role options, passwords, and owner membership. The real PostgreSQL gate runs
+  deterministic synthetic fixtures in a rollback and proves four runtime roles cannot read private
+  tables or create API objects.
+- An empty API schema that runtime roles may resolve but cannot mutate. No procedure is exposed, so
+  the storage foundation cannot yet redeem an invite, authenticate a user, approve a device, ingest
+  usage, or execute deletion.
 - A strict Next.js 16 and React 19 web workspace with a synthetic EN/RU race, accessible
   leaderboard, demo profile, three repository-owned CSS/canvas themes, reduced-motion controls, and
   a deterministic 16-by-8 pixel-car renderer.
@@ -118,7 +141,10 @@ ranking exists.
 
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
-then removed its test container, network, and volume.
+then removed its test container, network, and volume. The separate database integration project also
+reached `healthy`, applied role bootstrap and revision 0001, passed 12-table state/ownership/RLS
+assertions plus four runtime deny matrices, and removed its portless container, network, and
+ephemeral storage.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -147,9 +173,10 @@ defect found and corrected during review. The report names its local-only limita
 
 ## Not implemented yet
 
-Authentication, invitations, passkeys, application database schema, ingest API, scoring jobs, Codex
-connector, release signing, deployment, and public beta operations remain proposed. The current
-scoring and ranking code operates only on clearly synthetic in-process fixtures.
+Authentication application flows, invite/session/passkey/recovery procedures, cleanup workers,
+ingest API, scoring jobs, Codex connector, release signing, deployment, and public beta operations
+remain proposed. The current scoring and ranking code operates only on clearly synthetic in-process
+fixtures; the application does not connect to revision 0001.
 
 ## Evidence commands
 
@@ -158,6 +185,8 @@ Run from the repository root:
 ```text
 pnpm run verify
 pnpm run check:contracts
+pnpm run check:database
+pnpm run test:database:integration
 pnpm run check:web-build
 pnpm run check:public:staged
 git diff --cached --check

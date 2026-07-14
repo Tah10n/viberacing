@@ -38,6 +38,8 @@ Versioning where its guarantees are applicable.
   components.
 - Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
   drift gates and black-box regression coverage.
+- SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
+  deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 
 ### Security
 
@@ -58,5 +60,9 @@ Versioning where its guarantees are applicable.
 - Refined pairing so a one-time poll token is stored only as a keyed verifier and cannot activate a
   device without fresh browser passkey approval and Ed25519 possession proof over an immutable
   pending key.
+- Added separate `NOLOGIN` owner/Web/Ingest/Jobs/Admin groups, forced owner-only RLS, revoked
+  `PUBLIC` database/schema access, safe database/role search paths, zero direct runtime table
+  grants, and exact pending-key/source/device binding enforced by state triggers and composite
+  foreign keys.
 
 No version has been released.

@@ -1,6 +1,6 @@
 # ADR 0004: Cloudflare ingress plus service and database capability isolation
 
-- Status: Accepted (design; implementation pending)
+- Status: Accepted (database roles implemented; edge and services pending)
 - Date: 2026-07-14
 - Decision owners: Edge, Web/Auth, Ingest, Jobs, Database, and Operations
 - Supersedes: None

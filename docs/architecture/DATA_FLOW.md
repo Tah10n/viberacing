@@ -2,9 +2,11 @@
 
 ## Status and notation
 
-These sequences are planned contracts. No runtime endpoint or database table exists yet. Data labels
-refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public,
-Account, Security, Usage, Operational, and Prohibited.
+These sequences remain planned application contracts. Revision 0001 now provides private
+identity/source/device/pairing/deletion tables and deny-by-default roles, but no runtime procedure
+or endpoint executes these sequences. Data labels refer to the classifications in the
+[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
+and Prohibited.
 
 ## Enrollment and passkey bootstrap
 

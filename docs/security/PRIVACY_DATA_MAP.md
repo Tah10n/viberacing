@@ -2,10 +2,12 @@
 
 ## Status and principles
 
-The current repository has no application database, user accounts, production deployment, or real
-user data. This document is the required design inventory for future implementation. A field may not
-be collected merely because it appears here: its schema, purpose, visibility, retention, deletion,
-and access tests must exist first.
+The current repository contains a private SQL schema and synthetic PostgreSQL integration test, but
+no deployed application database, user accounts, production service, or real user data. This
+document remains the required inventory for implementation. A field may not be collected merely
+because it appears here: its schema, purpose, visibility, retention, deletion, and access tests must
+exist first. The implemented column-level mapping is documented in
+[`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
 

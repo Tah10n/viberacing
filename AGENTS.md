@@ -37,10 +37,12 @@ until its implementation and verification are present in the working tree.
   drift-checked derivatives.
 - `packages/contracts/` contains generated TypeScript types plus the bounded runtime validator and
   nested security guidance. Read `packages/contracts/AGENTS.md` before editing it.
+- `database/` contains the SQL migration ledger, non-login role bootstrap, identity/source/device
+  persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
-- Ingest, jobs, database, and connector workspaces are not present yet; follow
-  `docs/PROJECT_PLAN.md` when they are introduced.
+- Ingest, jobs, authentication application code, and connector workspaces are not present yet;
+  follow `docs/PROJECT_PLAN.md` when they are introduced.
 
 ## Verified commands
 
@@ -72,6 +74,9 @@ until its implementation and verification are present in the working tree.
   focused gates do not replace root verification.
 - `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS, and
   private reporting controls are configured.
+- `pnpm run check:database` verifies immutable migration paths/checksums and static capability
+  policy. `pnpm run test:database:integration` separately uses an isolated, portless, ephemeral
+  PostgreSQL Compose project to exercise state constraints and every current runtime deny matrix.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 

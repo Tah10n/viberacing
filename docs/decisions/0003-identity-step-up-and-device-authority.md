@@ -1,6 +1,6 @@
 # ADR 0003: GitHub identity, passkey step-up, and source-bound device authority
 
-- Status: Accepted (design; implementation pending)
+- Status: Accepted (storage foundation implemented; application flows pending)
 - Date: 2026-07-14
 - Decision owners: Web/Auth, Pairing, Ingest, and Database
 - Supersedes: None

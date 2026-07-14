@@ -19,8 +19,10 @@ flowchart LR
   DI --> VG["Format, docs, config, policy, and unit gates"]
   VG --> AU["Registry advisory audit"]
   PR --> RT["Pinned Rust toolchain and workspace gate"]
+  PR --> DB["Pinned, portless PostgreSQL; synthetic role and invariant gate"]
   AU --> R["Read-only check result"]
   RT --> R
+  DB --> R
   R -. "never" .-> DP["Deploy, sign, publish, or release"]
 ```
 
@@ -43,6 +45,9 @@ does not make the pull request trusted; review and protected-branch policy remai
 - Writable dependency caches, privileged environments, and mutable job/service containers are
   rejected.
 - Package installation uses the frozen lockfile, the official registry, and `--ignore-scripts`.
+- The database job uses the same digest-pinned PostgreSQL artifact as local development, no host
+  port or persistent volume, a uniquely named Compose project, synthetic credentials/data, and
+  cleanup in `finally`. It remains untrusted-code execution on a disposable, secretless runner.
 
 The repository tests these rules with positive and negative fixtures. The tests are defense in
 depth; a malicious pull request can edit its own tests, so protected review of workflow changes is

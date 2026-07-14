@@ -1,6 +1,7 @@
 # Vibe Racing
 
-> Status: Phase 1 synthetic visual prototype. No production service or released connector exists.
+> Status: Phase 2 persistence foundation in progress. No production service or released connector
+> exists.
 
 External participation is closed until real public maintainers, CODEOWNERS, and private reporting
 channels are configured. Local identities are never copied into the repository to fill that gap.
@@ -11,7 +12,7 @@ racing cars on a public track.
 
 The current runnable site is deliberately synthetic: it lets contributors evaluate the race,
 leaderboard, profile, themes, localization, accessibility, and scoring presentation without an
-account, connector, database, analytics, or real usage data.
+account, connector, attached application database, analytics, or real usage data.
 
 ## Trust model
 
@@ -34,6 +35,7 @@ keys, or arbitrary user-uploaded files.
   [data flows](docs/architecture/DATA_FLOW.md)
 - [Compatibility policy](docs/architecture/COMPATIBILITY_POLICY.md)
 - [Versioned public contracts](contracts/README.md)
+- [Database foundation](database/README.md)
 - [Architecture decisions](docs/decisions/README.md)
 - [Local development](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Web prototype](apps/web/README.md)
@@ -71,7 +73,10 @@ private reporting channels; those hosted controls cannot be safely invented from
 
 Phase 2 contract foundations are also present: three closed, bounded JSON Schemas plus generated
 TypeScript validators and OpenAPI components. They are pre-implementation contracts, not a live API
-or evidence that real Codex data can be submitted.
+or evidence that real Codex data can be submitted. A first SQL migration now adds private identity,
+source, device, pairing, and deletion tables with deny-by-default runtime roles, forced RLS,
+state-machine constraints, checksum drift detection, and an isolated PostgreSQL capability test. The
+API schema intentionally exposes no function yet; authentication and ingestion remain absent.
 
 ## Run and verify the synthetic prototype
 

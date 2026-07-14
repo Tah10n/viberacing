@@ -2,10 +2,10 @@
 
 ## Status
 
-This is the planned runtime architecture. The current repository contains no application service,
-connector, Cloudflare/Railway deployment, or production database. Component status is tracked in
-[implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required boundaries, not
-deployed evidence.
+This is the planned runtime architecture. The current repository contains a tested SQL persistence
+foundation but no application service, connector, Cloudflare/Railway deployment, or production
+database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
+diagrams describe required runtime boundaries, not deployed evidence.
 
 ## System context
 

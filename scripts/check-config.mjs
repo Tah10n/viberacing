@@ -174,6 +174,48 @@ export function validateCompose(compose) {
   if (postgres.environment?.POSTGRES_PASSWORD !== "local-development-only") {
     findings.push("compose.yaml must use only the documented synthetic local password");
   }
+
+  const postgresTest = compose?.services?.["postgres-test"];
+  if (!isObject(postgresTest)) {
+    findings.push("compose.yaml must define the isolated postgres-test service");
+    return findings;
+  }
+  if (postgresTest.image !== postgres.image) {
+    findings.push("postgres-test must use the same pinned image as local PostgreSQL");
+  }
+  if (
+    !Array.isArray(postgresTest.profiles) ||
+    postgresTest.profiles.length !== 1 ||
+    postgresTest.profiles[0] !== "test"
+  ) {
+    findings.push("postgres-test must be opt-in through only the test profile");
+  }
+  if (Array.isArray(postgresTest.ports) && postgresTest.ports.length > 0) {
+    findings.push("postgres-test must not publish a host port");
+  }
+  if (Array.isArray(postgresTest.volumes) && postgresTest.volumes.length > 0) {
+    findings.push("postgres-test must not use persistent volumes");
+  }
+  if (
+    !Array.isArray(postgresTest.tmpfs) ||
+    !postgresTest.tmpfs.some(
+      (entry) => typeof entry === "string" && entry.startsWith("/var/lib/postgresql:"),
+    )
+  ) {
+    findings.push("postgres-test must keep its database on an ephemeral tmpfs");
+  }
+  if (postgresTest.privileged === true || postgresTest.network_mode === "host") {
+    findings.push("postgres-test must not use privileged or host-network mode");
+  }
+  if (
+    !Array.isArray(postgresTest.security_opt) ||
+    !postgresTest.security_opt.includes("no-new-privileges:true")
+  ) {
+    findings.push("postgres-test must enable no-new-privileges");
+  }
+  if (postgresTest.environment?.POSTGRES_PASSWORD !== "local-development-only") {
+    findings.push("postgres-test must use only the documented synthetic local password");
+  }
   return findings;
 }
 

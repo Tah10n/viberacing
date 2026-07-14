@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "migrations": [
+    {
+      "revision": 1,
+      "name": "identity_foundation",
+      "path": "database/migrations/0001_identity_foundation.sql",
+      "sha256": "a10cb46e3b67591dc6a8d86b0ce9b720d31178dc7e1af26d86aa79df62a11a3a"
+    }
+  ]
+}

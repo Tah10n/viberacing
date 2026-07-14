@@ -2,10 +2,12 @@
 
 ## Current scope
 
-The repository provides Phase 0 tooling, a disposable PostgreSQL service, and a Phase 1 web
-prototype that uses synthetic data only. It does not contain authentication, an application API,
-jobs process, real-user ingestion, or a connector. A successful setup proves the repository gates,
-synthetic frontend behavior, and local database service; it does not prove a production flow.
+The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
+and the first Phase 2 database migration. Everything runnable uses synthetic data only. It does not
+contain authentication application code, an application API, runtime database procedures, jobs
+process, real-user ingestion, or a connector. A successful setup proves repository gates, synthetic
+frontend behavior, SQL constraints, and database role isolation; it does not prove a production
+flow.
 
 ## Prerequisites
 
@@ -33,9 +35,11 @@ untrusted registry redirects, and exotic transitive sources.
 `pnpm run verify` is deterministic and offline after installation. It includes a complete reachable
 Git-history scan, external-host policy, English spelling, dependency-license inventory, web lint,
 strict type checking, contract generation/drift checks and coverage, web component coverage, and a
-production web build. The optional `pnpm run check:external-links:online` performs bounded network
-validation and may fail closed behind a private DNS/proxy; do not weaken its address or redirect
-rules to accommodate a workstation.
+production web build. It also runs the offline migration manifest/capability checker; the real
+PostgreSQL integration is a separate Docker command and a secretless CI job. The optional
+`pnpm run check:external-links:online` performs bounded network validation and may fail closed
+behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
+workstation.
 
 After an intentionally reviewed dependency change, regenerate the machine inventory with
 `node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
@@ -83,6 +87,19 @@ entrypoints are covered by the production build. See
 [`apps/web/README.md`](../../apps/web/README.md) for the frontend trust boundaries and data
 contract.
 
+Database-focused commands use deterministic synthetic fixtures:
+
+```text
+pnpm run test:database-check
+pnpm run check:database
+pnpm run test:database:integration
+```
+
+The integration command creates a uniquely named Compose project containing only `postgres-test`.
+That service publishes no host port, stores data on `tmpfs`, and is removed with its network and
+storage after the test. It does not touch the normal local database volume. See
+[`database/README.md`](../../database/README.md) before changing SQL, roles, or migrations.
+
 ## Local configuration
 
 `.env.example` is a public schema containing placeholders and a known local-only database password.
@@ -107,7 +124,9 @@ docker compose ps
 
 The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
 index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
-stored in the local `postgres-data` Docker volume.
+stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
+this persistent service automatically; revision 0001 is currently exercised by the isolated
+integration runner only.
 
 Stop the service without deleting its volume:
 

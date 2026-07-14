@@ -132,6 +132,13 @@ assert.deepEqual(
         security_opt: ["no-new-privileges:true"],
         environment: { POSTGRES_PASSWORD: "local-development-only" },
       },
+      "postgres-test": {
+        image: `postgres:example@sha256:${"b".repeat(64)}`,
+        profiles: ["test"],
+        security_opt: ["no-new-privileges:true"],
+        environment: { POSTGRES_PASSWORD: "local-development-only" },
+        tmpfs: ["/var/lib/postgresql:rw,noexec,nosuid,nodev"],
+      },
     },
   }),
   [],
@@ -139,6 +146,27 @@ assert.deepEqual(
 assert.match(
   validateCompose({ services: { postgres: { image: "postgres:latest" } } }).join("\n"),
   /sha256/,
+);
+assert.match(
+  validateCompose({
+    services: {
+      postgres: {
+        image: `postgres:example@sha256:${"b".repeat(64)}`,
+        ports: ["127.0.0.1:54329:5432"],
+        security_opt: ["no-new-privileges:true"],
+        environment: { POSTGRES_PASSWORD: "local-development-only" },
+      },
+      "postgres-test": {
+        image: `postgres:example@sha256:${"b".repeat(64)}`,
+        profiles: ["test"],
+        ports: ["127.0.0.1:54330:5432"],
+        security_opt: ["no-new-privileges:true"],
+        environment: { POSTGRES_PASSWORD: "local-development-only" },
+        tmpfs: ["/var/lib/postgresql:rw"],
+      },
+    },
+  }).join("\n"),
+  /must not publish/,
 );
 
 const goodWorkspace = {
@@ -319,4 +347,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (29 cases).");
+console.log("Configuration checker tests passed (30 cases).");

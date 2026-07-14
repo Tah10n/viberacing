@@ -69,6 +69,11 @@ const checks = [
     [resolve(import.meta.dirname, "test-contract-check.mjs")],
   ],
   [
+    "database checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-database-check.mjs")],
+  ],
+  [
     "publication-readiness checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-publication-check.mjs")],
@@ -96,6 +101,7 @@ const checks = [
     [resolve(import.meta.dirname, "check-architecture.mjs")],
   ],
   ["versioned contracts", process.execPath, [resolve(import.meta.dirname, "check-contracts.mjs")]],
+  ["database migrations", process.execPath, [resolve(import.meta.dirname, "check-database.mjs")]],
   ["configuration", process.execPath, [resolve(import.meta.dirname, "check-config.mjs")]],
   [
     "license checker behavior",
