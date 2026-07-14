@@ -56,9 +56,12 @@ remove it from Git history.
 
 ## Required review before GitHub publication
 
+- run `pnpm run verify` and require `pnpm run check:publication` to pass;
 - scan every reachable Git object, not only the current tree;
+- record real public maintainers and CODEOWNERS without copying private workstation identities;
 - confirm the remote owner, repository visibility, default branch, license, security policy, and
   private vulnerability reporting;
+- test the private conduct-reporting channel and restrict its access and retention;
 - inspect workflow permissions and prove untrusted pull requests receive no secrets or privileged
   tokens;
 - enable GitHub secret scanning and push protection when the repository and account support them;

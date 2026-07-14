@@ -3,6 +3,10 @@
 Vibe Racing is currently building its public foundation. Contributions should preserve the public
 trust model and keep the repository safe to publish.
 
+External contribution status: closed during pre-public preparation. Do not open or solicit outside
+issues or pull requests until the publication gate in [MAINTAINERS.md](MAINTAINERS.md) is complete.
+These instructions define the future contribution contract and apply to maintainer changes now.
+
 ## Before contributing
 
 Read:
@@ -14,6 +18,10 @@ Read:
 - [Public repository data policy](docs/security/PUBLIC_REPOSITORY_POLICY.md)
 - [Local development](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Dependency policy](docs/security/DEPENDENCY_POLICY.md)
+- [Governance](GOVERNANCE.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+- [Maintainers and publication gate](MAINTAINERS.md)
+- [Support policy](SUPPORT.md)
 
 Security vulnerabilities must follow SECURITY.md and must not be opened as ordinary public issues.
 
@@ -40,8 +48,9 @@ from Git history.
    change.
 4. Update public contracts and documentation in the same pull request.
 5. Confirm generated artifacts match their declared source.
-6. Sign off commits under the [Developer Certificate of Origin](https://developercertificate.org/)
-   with `git commit -s`.
+6. Sign off commits under the repository's [Developer Certificate of Origin](DCO.txt), kept
+   byte-for-byte equivalent to the official [DCO 1.1](https://developercertificate.org/), with
+   `git commit -s`.
 
 ## Review requirements
 
@@ -71,3 +80,7 @@ git diff --cached --check
 Then inspect the complete `git diff --cached`. Automated pattern checks do not replace review of
 meaning, binary metadata, asset provenance, or Git history. Do not claim application build or test
 success until those checks exist.
+
+Project maintainers also run `pnpm run check:publication` before the first public announcement. It
+is intentionally not part of normal verification because a correctly disclosed pre-public tree is
+expected to fail until hosted identities and controls exist.

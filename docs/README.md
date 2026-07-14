@@ -19,6 +19,13 @@ remain safe to publish verbatim.
   supply-chain requirements.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary
   and enforced workflow rules.
+- [Governance](../GOVERNANCE.md), [maintainers](../MAINTAINERS.md), and
+  [code of conduct](../CODE_OF_CONDUCT.md) — authority, decision, enforcement, and publication
+  boundaries.
+- [Support](../SUPPORT.md), [roadmap](../ROADMAP.md), and [release policy](../RELEASE.md) — current
+  service limits, delivery order, artifact evidence, and rollback expectations.
+- [Third-party notices](../THIRD_PARTY_NOTICES.md) and [trademark policy](../TRADEMARKS.md) —
+  current dependency and branding obligations.
 
 ## Required before implementation reaches public beta
 
@@ -31,6 +38,9 @@ remain safe to publish verbatim.
   incident and deletion runbooks.
 - `decisions/` — numbered architecture decision records.
 - `releasing/` — versioning, changelog, signing, provenance, rollback, and supported-version policy.
+
+Root community-health files establish policy now; the directories above will contain component
+runbooks and reference once the corresponding implementation exists.
 
 ## Documentation principles
 

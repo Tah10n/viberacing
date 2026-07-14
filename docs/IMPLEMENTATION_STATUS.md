@@ -29,6 +29,16 @@ connector, real-user ingestion, or verified ranking exists.
 - A secretless, read-only GitHub Actions CI definition and bounded weekly Dependabot configuration.
 - A loopback-only disposable PostgreSQL Compose service pinned to a version and index digest.
 - Cross-platform root verification entry point: `pnpm run verify`.
+- Governance, maintainer, conduct, DCO, support, roadmap, changelog, release, trademark, and
+  third-party notice policies.
+- Structured bug, feature, documentation, and pull-request forms that warn against sensitive data
+  and do not request contact details, raw logs, screenshots, or account identifiers.
+- Community-health policy validation and black-box regression cases for missing policies, invalid
+  issue forms, automatic assignment, unresolved ownership, modified DCO text, and missing privacy
+  warnings.
+- A fail-closed publication-readiness checker with regression coverage for GitHub remote,
+  MAINTAINERS/CODEOWNERS agreement, protected policy ownership, private conduct reporting, and
+  private vulnerability reporting state.
 
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
@@ -41,7 +51,6 @@ repository is configured yet.
 
 ## Phase 0 still pending
 
-- Remaining community health, governance, DCO, issue, pull-request, and release-policy files.
 - Threat model, abuse cases, privacy data map, compatibility policy, architecture views, and ADRs.
 - A confirmed public maintainer identity, conduct-reporting channel, CODEOWNERS entry, and remote
   GitHub security/branch settings; private details will not be inferred from the workstation.
@@ -62,6 +71,10 @@ pnpm run verify
 pnpm run check:public:staged
 git diff --cached --check
 ```
+
+`pnpm run check:publication` is intentionally failing in this pre-public tree. It becomes a required
+passing gate only after the public maintainer identity, CODEOWNERS, GitHub remote, and private
+reporting settings are real and verified.
 
 The staged check reads blobs from the Git index, not potentially different working-tree copies.
 Review `git diff --cached` manually before every commit.

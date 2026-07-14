@@ -10,6 +10,8 @@ Read these files before changing the project:
 4. `docs/IMPLEMENTATION_STATUS.md` for claims backed by current evidence.
 5. `docs/security/DEPENDENCY_POLICY.md` before changing dependencies or CI.
 6. `SECURITY.md` and `CONTRIBUTING.md` before handling reports or public contributions.
+7. `GOVERNANCE.md` and `MAINTAINERS.md` before changing roles, ownership, release, or publication
+   state.
 
 The repository is currently building its public foundation. Do not claim that a command, service,
 connector, deployment, or security control exists until its implementation and verification are
@@ -18,7 +20,8 @@ present in the working tree.
 ## Repository map
 
 - `docs/` contains public canonical plans, status, architecture, and policy.
-- `.github/` contains read-only pull-request CI and dependency-update configuration.
+- `.github/` contains read-only pull-request CI, dependency-update configuration, and structured
+  public-safe contribution forms.
 - `scripts/` contains repository verification and black-box policy tests.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned empty monorepo
   workspaces.
@@ -32,6 +35,9 @@ present in the working tree.
   workflow-policy, and Rust workspace gates.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
 - `pnpm run check:public:staged` scans the exact staged blobs before a commit.
+- `pnpm run check:community` validates governance and community-health files and forms.
+- `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS, and
+  private reporting controls are configured.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 
@@ -58,6 +64,10 @@ must contain placeholders only. If a value might be sensitive, stop and ask befo
 
 `.gitignore` is defense in depth, not proof that a commit is safe. Before any commit or publication,
 inspect the complete staged diff and run `pnpm run check:public:staged`.
+
+Do not create CODEOWNERS, maintainer profiles, conduct contacts, or support contacts from local Git
+identity, filesystem names, browser sessions, or private account context. Leave publication blocked
+until the user supplies and verifies the intended public project identities.
 
 ## Security rules
 

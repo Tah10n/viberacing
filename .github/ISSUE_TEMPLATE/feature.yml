@@ -1,0 +1,74 @@
+name: Feature proposal
+description: Propose a product or engineering improvement with trust-boundary analysis.
+title: "[Feature]: "
+labels: []
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Proposals are public. Do not include credentials, private account context, internal abuse
+        thresholds, or real user data. Sensitive or security-related details belong in SECURITY.md
+        and never in this public form.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user need and who experiences it without identifying individuals.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe observable behavior and boundaries, not only an implementation choice.
+    validations:
+      required: true
+
+  - type: textarea
+    id: trust_impact
+    attributes:
+      label: Security, privacy, and abuse impact
+      description: Explain new data, permissions, trust boundaries, incentives, and misuse paths.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include a simpler or lower-risk option and why it may be insufficient.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: compatibility
+    attributes:
+      label: Compatibility effect
+      description: Select the most likely effect on public contracts or stored data.
+      options:
+        - No compatibility change
+        - Backward-compatible extension
+        - Migration or deprecation required
+        - Unknown and needs design work
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Trust-model confirmation
+      description: Confirm that the proposal respects the current product boundaries.
+      options:
+        - label: Community scores remain self-reported and grant no reward, privilege, or access.
+          required: true
+        - label:
+            The proposal does not require prompts, repository contents, credentials, or arbitrary
+            uploads.
+          required: true
+        - label: I used only synthetic examples and included no private project information.
+          required: true
+    validations:
+      required: true

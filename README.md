@@ -2,6 +2,9 @@
 
 > Status: Phase 0 public foundation. No production service or released connector exists yet.
 
+External participation is closed until real public maintainers, CODEOWNERS, and private reporting
+channels are configured. Local identities are never copied into the repository to fill that gap.
+
 Vibe Racing is an open-source, pixel-art weekly leaderboard for people using Codex. Participants
 connect a local, least-privileged connector, submit their own token-activity buckets, and appear as
 racing cars on a public track.
@@ -28,6 +31,14 @@ keys, or arbitrary user-uploaded files.
 - [Repository guidance for coding agents](AGENTS.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
+- [Governance](GOVERNANCE.md)
+- [Maintainers and publication gate](MAINTAINERS.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+- [Support](SUPPORT.md)
+- [Roadmap](ROADMAP.md)
+- [Release policy](RELEASE.md)
+- [Changelog](CHANGELOG.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [Russian overview](README.ru.md)
 
 ## Open-source baseline
@@ -38,12 +49,19 @@ dependencies, reproducible repository gates, read-only secretless pull-request C
 loopback-only PostgreSQL service. Protected reviews, remote security settings, documented
 governance, and signed and attested connector releases remain gates before public beta.
 
+The governance documents and structured contribution forms are now present and policy-tested. The
+repository still has no GitHub remote, public maintainer registry, CODEOWNERS file, or verified
+private reporting channels; those hosted controls cannot be safely invented from local data.
+
 ## Verify the current foundation
 
 ```text
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm run verify
 ```
+
+`pnpm run check:publication` is a separate fail-closed gate. It is expected to fail in the current
+pre-public state and must pass only after real hosted identities and controls are configured.
 
 See [local development](docs/getting-started/LOCAL_DEVELOPMENT.md) before starting PostgreSQL. No
 application starts at this phase.

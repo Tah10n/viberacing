@@ -1,0 +1,63 @@
+name: Documentation improvement
+description: Report unclear, incorrect, missing, or inaccessible public documentation.
+title: "[Docs]: "
+labels: []
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Documentation issues are public. Quote only public project text and use synthetic examples.
+        Sensitive or security-related details belong in SECURITY.md and never in this public form.
+
+  - type: input
+    id: location
+    attributes:
+      label: Document location
+      description:
+        Provide a repository-relative file or public documentation URL, never a local path.
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What is unclear or incorrect?
+      description: Explain the gap, contradiction, accessibility issue, or unsafe example.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested_change
+    attributes:
+      label: Suggested improvement
+      description: Propose wording, structure, or an example that is safe to publish.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Primary audience
+      description: Identify who would benefit most from the improvement.
+      options:
+        - Product user
+        - Contributor
+        - Maintainer or operator
+        - Security reviewer
+        - Coding agent
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-data confirmation
+      description: Confirm that the issue can be handled in public.
+      options:
+        - label: I used no credentials, personal data, private logs, screenshots, or local paths.
+          required: true
+        - label: I checked the canonical English document before reporting translation drift.
+          required: true
+    validations:
+      required: true

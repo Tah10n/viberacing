@@ -518,8 +518,8 @@ The planned public tree is:
 - Cross-platform root scripts; no Unix-only command is the sole documented development path.
 - Docker Compose supplies disposable local PostgreSQL only; no production data is used for
   development.
-- One root verification entry point, planned as pnpm verify, invokes the language-specific and
-  documentation checks.
+- One root verification entry point, `pnpm run verify`, invokes the currently implemented
+  language-specific, policy, and documentation checks.
 
 ### Community and governance
 
@@ -528,12 +528,17 @@ Before the repository is announced publicly it includes:
 - Apache-2.0 LICENSE and clear asset licensing;
 - CONTRIBUTING with setup, architecture map, review expectations, DCO sign-off, and safe test-data
   rules;
-- CODE_OF_CONDUCT with a real enforcement contact kept outside source when necessary;
+- CODE_OF_CONDUCT with a tested project-controlled private enforcement channel;
 - SECURITY with supported versions and GitHub private vulnerability reporting;
 - GOVERNANCE, MAINTAINERS, SUPPORT, ROADMAP, changelog, release policy, issue forms, and
   pull-request template;
 - Developer Certificate of Origin rather than a custom CLA for the initial contributor model;
 - a documented trademark and branding policy before the name or logo is promoted broadly.
+
+Pre-public policy files and forms may exist before public identities are known, but they must state
+that participation is closed. Publication remains blocked until a real maintainer, matching
+CODEOWNERS rules, and tested private reporting channels replace that status. Local workstation
+identity is never used as a substitute.
 
 Repository badges are added only after the corresponding check exists. The project does not display
 aspirational security, coverage, or compliance badges.

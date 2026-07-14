@@ -1,5 +1,11 @@
 # Security policy
 
+Private vulnerability reporting status: not enabled or verified.
+
+This is an explicit publication blocker. Do not announce the repository or invite vulnerability
+reports until GitHub private vulnerability reporting has been enabled, tested with authorized
+responders, and the status line above has been changed through review.
+
 ## Supported versions
 
 Vibe Racing has no public runtime or connector release yet. There are currently no supported

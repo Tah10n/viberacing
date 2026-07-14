@@ -23,11 +23,22 @@ const checks = [
     [resolve(import.meta.dirname, "test-docs-check.mjs")],
   ],
   [
+    "community-health checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-community-check.mjs")],
+  ],
+  [
+    "publication-readiness checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-publication-check.mjs")],
+  ],
+  [
     "configuration checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-config-check.mjs")],
   ],
   ["documentation", process.execPath, [resolve(import.meta.dirname, "check-docs.mjs")]],
+  ["community health", process.execPath, [resolve(import.meta.dirname, "check-community.mjs")]],
   ["configuration", process.execPath, [resolve(import.meta.dirname, "check-config.mjs")]],
   [
     "formatting",

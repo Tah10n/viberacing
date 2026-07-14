@@ -2,6 +2,10 @@
 
 > Статус: Phase 0, публичный фундамент. Production-сервис и готовый connector пока не выпущены.
 
+Внешние contributions пока закрыты: сначала нужны реальные публичные maintainers, CODEOWNERS и
+проверенные приватные каналы для security/conduct reports. Локальные имена и контакты не будут
+копироваться в репозиторий ради заполнения этих полей.
+
 Vibe Racing — открытый пиксельный недельный рейтинг пользователей Codex. Локальный connector
 передаёт только заявленные пользователем дневные buckets, а участники отображаются как болиды на
 общей трассе.
@@ -27,6 +31,12 @@ Verified-лига останется выключенной до появлен�
 - [Инструкции для coding agents](AGENTS.md)
 - [Политика безопасности (EN)](SECURITY.md)
 - [Правила участия (EN)](CONTRIBUTING.md)
+- [Governance (EN)](GOVERNANCE.md)
+- [Maintainers и publication gate (EN)](MAINTAINERS.md)
+- [Code of conduct (EN)](CODE_OF_CONDUCT.md)
+- [Support (EN)](SUPPORT.md)
+- [Roadmap (EN)](ROADMAP.md)
+- [Release policy (EN)](RELEASE.md)
 - [English README](README.md)
 
 ## Важно
@@ -37,3 +47,6 @@ Verified-лига останется выключенной до появлен�
 
 Перед коммитом нужно выполнить `pnpm run verify`, затем проверить точный staged snapshot командой
 `pnpm run check:public:staged` и вручную просмотреть `git diff --cached`.
+
+Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
+публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

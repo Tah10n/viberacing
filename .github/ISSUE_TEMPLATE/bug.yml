@@ -1,0 +1,83 @@
+name: Bug report
+description: Report a reproducible problem using synthetic, public-safe details.
+title: "[Bug]: "
+labels: []
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Thank you for helping. This is public. Never paste credentials, private logs, local paths,
+        account data, screenshots, or real usage records. Sensitive or security-related details
+        belong in SECURITY.md and never in this public form.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      description: Select the narrowest public component that shows the problem.
+      options:
+        - Repository tooling
+        - Documentation
+        - Web application
+        - Connector
+        - Other public component
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the user-visible problem without sensitive or identifying data.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description:
+        Use synthetic input and the fewest deterministic steps that demonstrate the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: State the documented or reasonably expected result.
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: State what happened, with secrets and personal context removed.
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Public environment details
+      description:
+        Include only public version numbers and an OS family; omit device names and paths.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: disclosure
+    attributes:
+      label: Public-data confirmation
+      description: Confirm that this report is safe to publish and belongs in the public tracker.
+      options:
+        - label:
+            I removed credentials, personal data, private logs, screenshots, account data, and local
+            paths.
+          required: true
+        - label: This is not a vulnerability or confidential conduct report.
+          required: true
+    validations:
+      required: true

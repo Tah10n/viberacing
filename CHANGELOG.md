@@ -1,0 +1,26 @@
+# Changelog
+
+All notable project changes will be documented in this file. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and released versions will follow Semantic
+Versioning where its guarantees are applicable.
+
+## [Unreleased]
+
+### Added
+
+- Public-safe repository baseline, implementation plan, security invariants, and contribution
+  guidance.
+- Pinned Node, pnpm, Rust, PostgreSQL, dependency, formatting, documentation, and CI foundations.
+- Governance, conduct, DCO, support, roadmap, release, trademark, and third-party notice policies.
+- Structured issue and pull-request templates with public-data safeguards.
+- Community-health and publication-readiness policy checks with regression coverage.
+
+### Security
+
+- Exact staged-blob scanning for common secret, personal-data, local-path, symlink, and submodule
+  hazards.
+- Read-only, secretless pull-request CI with pinned actions and policy-tested workflow constraints.
+- Explicit publication blockers for real maintainers, CODEOWNERS, private reporting, and hosted
+  controls rather than unsafe inferred identities.
+
+No version has been released.
