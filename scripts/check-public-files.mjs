@@ -31,14 +31,29 @@ function nulPaths(buffer) {
 
 function candidatePaths() {
   if (mode === "--staged") {
-    return nulPaths(
-      git(["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"], "buffer"),
-    );
+    return nulPaths(git(["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"], "buffer"));
   }
 
-  return nulPaths(
-    git(["ls-files", "--cached", "--others", "--exclude-standard", "-z"], "buffer"),
-  );
+  return nulPaths(git(["ls-files", "--cached", "--others", "--exclude-standard", "-z"], "buffer"));
+}
+
+function trackedFileModes() {
+  const modes = new Map();
+  const records = git(["ls-files", "--stage", "-z"], "buffer")
+    .toString("utf8")
+    .split("\0")
+    .filter(Boolean);
+  for (const record of records) {
+    const separator = record.indexOf("\t");
+    if (separator === -1) {
+      continue;
+    }
+    const [fileMode, , stage] = record.slice(0, separator).split(" ");
+    if (stage === "0") {
+      modes.set(record.slice(separator + 1), fileMode);
+    }
+  }
+  return modes;
 }
 
 function readCandidate(path) {
@@ -135,6 +150,7 @@ const literalDetectors = [
 const forbiddenKeyExtensions = new Set([".key", ".keystore", ".p12", ".pem", ".pfx"]);
 const forbiddenKeyNames = new Set(["id_dsa", "id_ecdsa", "id_ed25519", "id_rsa"]);
 const findings = [];
+const indexModes = trackedFileModes();
 let scannedTextFiles = 0;
 let skippedBinaryFiles = 0;
 
@@ -146,9 +162,26 @@ function report(path, line, kind) {
 for (const path of candidatePaths()) {
   const name = basename(path).toLowerCase();
   const extension = extname(name);
+  const absolutePath = resolve(root, path);
+  const indexMode = indexModes.get(path);
+  const symbolicLink =
+    indexMode === "120000" ||
+    (mode === "--all" && existsSync(absolutePath) && lstatSync(absolutePath).isSymbolicLink());
+
+  if (symbolicLink) {
+    report(path, null, "symbolic links are not publishable");
+    continue;
+  }
+  if (indexMode === "160000" || name === ".gitmodules") {
+    report(path, null, "Git submodules are not publishable");
+    continue;
+  }
 
   if (/^\.env(?:\..+)?$/.test(name) && name !== ".env.example") {
     report(path, null, "environment file is not publishable");
+  }
+  if (name === ".npmrc") {
+    report(path, null, "project npm authentication or registry configuration is not publishable");
   }
   if (forbiddenKeyExtensions.has(extension) || forbiddenKeyNames.has(name)) {
     report(path, null, "private-key-shaped filename is not publishable");

@@ -1,0 +1,26 @@
+name: viberacing
+
+services:
+  postgres:
+    image: postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    restart: "no"
+    environment:
+      POSTGRES_DB: viberacing_local
+      POSTGRES_PASSWORD: local-development-only
+      POSTGRES_USER: viberacing_local
+    ports:
+      - "127.0.0.1:54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viberacing_local -d viberacing_local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 10s
+    volumes:
+      - postgres-data:/var/lib/postgresql
+
+volumes:
+  postgres-data:

@@ -29,6 +29,7 @@ data/
 
 # JavaScript / TypeScript
 node_modules/
+.pnpm-store/
 .next/
 dist/
 build/

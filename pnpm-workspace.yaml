@@ -1,0 +1,21 @@
+packages:
+  - apps/*
+  - packages/*
+
+nodeVersion: 24.18.0
+engineStrict: true
+verifyDepsBeforeRun: error
+
+autoInstallPeers: false
+strictPeerDependencies: true
+savePrefix: ""
+
+minimumReleaseAge: 1440
+minimumReleaseAgeIgnoreMissingTime: false
+minimumReleaseAgeStrict: true
+trustPolicy: no-downgrade
+trustLockfile: false
+blockExoticSubdeps: true
+
+strictDepBuilds: true
+allowBuilds: {}

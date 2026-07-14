@@ -1,0 +1,10 @@
+.git
+node_modules
+.next
+coverage
+dist
+target
+
+Cargo.lock
+pnpm-lock.yaml
+LICENSE

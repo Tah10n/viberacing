@@ -1,0 +1,17 @@
+[workspace]
+members = []
+resolver = "3"
+
+[workspace.package]
+authors = ["Vibe Racing contributors"]
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.94"
+version = "0.0.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }

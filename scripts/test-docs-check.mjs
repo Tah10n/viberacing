@@ -1,11 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import process from "node:process";
 import { tmpdir } from "node:os";
@@ -68,7 +62,7 @@ try {
   writeFileSync(readmePath, `# Project\n\n[Outside](${escapedTarget})\n`, "utf8");
   expectFailure("repository escape", scan(), "relative link escapes repository root");
 
-  console.log("Documentation checker tests passed (5 cases)." );
+  console.log("Documentation checker tests passed (5 cases).");
 } finally {
   rmSync(temporaryRoot, { force: true, recursive: true });
   rmSync(outsidePath, { force: true });

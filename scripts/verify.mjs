@@ -1,18 +1,57 @@
 import { spawnSync } from "node:child_process";
-import { resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 
 const root = resolve(import.meta.dirname, "..");
+const require = createRequire(import.meta.url);
+const nodeOnly = process.argv.includes("--node-only");
 const checks = [
-  ["public-file checker behavior", "test-public-file-check.mjs"],
-  ["documentation checker behavior", "test-docs-check.mjs"],
-  ["public files", "check-public-files.mjs", "--all"],
-  ["documentation", "check-docs.mjs"],
+  [
+    "public-file checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-public-file-check.mjs")],
+  ],
+  [
+    "public files",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-public-files.mjs"), "--all"],
+  ],
+  [
+    "documentation checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-docs-check.mjs")],
+  ],
+  [
+    "configuration checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-config-check.mjs")],
+  ],
+  ["documentation", process.execPath, [resolve(import.meta.dirname, "check-docs.mjs")]],
+  ["configuration", process.execPath, [resolve(import.meta.dirname, "check-config.mjs")]],
+  [
+    "formatting",
+    process.execPath,
+    [join(dirname(require.resolve("prettier")), "bin", "prettier.cjs"), "--check", "."],
+  ],
+  [
+    "Markdown style",
+    process.execPath,
+    [join(dirname(require.resolve("markdownlint-cli2")), "markdownlint-cli2-bin.mjs")],
+  ],
 ];
 
-for (const [label, script, ...args] of checks) {
+if (!nodeOnly) {
+  checks.push([
+    "Rust workspace",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-rust.mjs")],
+  ]);
+}
+
+for (const [label, command, args] of checks) {
   console.log(`\n==> Checking ${label}`);
-  const result = spawnSync(process.execPath, [resolve(import.meta.dirname, script), ...args], {
+  const result = spawnSync(command, args, {
     cwd: root,
     encoding: "utf8",
     stdio: "inherit",
@@ -26,4 +65,4 @@ for (const [label, script, ...args] of checks) {
   }
 }
 
-console.log("\nBaseline verification passed.");
+console.log("\nRepository verification passed.");
