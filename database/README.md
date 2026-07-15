@@ -2,18 +2,18 @@
 
 ## Status
 
-This directory contains eleven SQL-first revisions for identity, passkey login and management,
+This directory contains twelve SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
 implemented. No authentication/HTTP Ingest route, OAuth callback, Argon2id/WebAuthn or
 pairing-possession verifier, production credential, or deployed database consumes the protected
 identity/ingest capabilities. A local Ingest kernel verifies a bounded exact-body origin/device
-request, and a separate fixed-query adapter maps its output to these two capabilities through a
-probed least-privileged pool. Mock tests do not call PostgreSQL or supply a working login. One local
-public-score route and one local one-shot Jobs runner wrap narrow capabilities without a working
-database login. The database-only ingest and Jobs-only ingest-retention, open-season scoring, and
-terminal finalization procedures plus one Web-only public score projection are implemented; HTTP
-ingest, scheduled execution, audited corrections, and purge are not.
+request, and a separate fixed-query adapter maps origin replay plus its output to three capabilities
+through a probed least-privileged pool. Mock tests do not call PostgreSQL or supply a working login.
+One local public-score route and one local one-shot Jobs runner wrap narrow capabilities without a
+working database login. The database-only ingest and Jobs-only ingest-retention, open-season
+scoring, and terminal finalization procedures plus one Web-only public score projection are
+implemented; HTTP ingest, scheduled execution, audited corrections, and purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -54,6 +54,8 @@ procedure; the current repository has no such application code.
   Jobs-only idempotent finalization capability.
 - `migrations/0011_community_public_score_read.sql` adds one Web-only, active-profile, bounded score
   projection with a fixed public field allowlist and post-visibility rank/display positions.
+- `migrations/0012_origin_replay_store.sql` adds one forced-RLS origin replay table, atomic
+  Ingest-only nonce consumption, and origin-nonce deletion to the existing Jobs cleanup procedure.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -72,6 +74,8 @@ procedure; the current repository has no such application code.
 - `tests/usage_ingest.sql` exercises exact device/source binding, strict bounds, canonical time,
   replay/idempotency, same-source device deduplication, monotonic state, quarantine, lifecycle
   rejection, retention markers, direct-transition constraints, and the exact role boundary.
+- `tests/origin_replay.sql` exercises first use, exact replay, rotation-key separation,
+  expired-tuple reuse, strict digest/key/time input, and bounded proof lifetime.
 - `tests/ingest_cleanup.sql` exercises batch bounds, deterministic expiry order, idempotency,
   live-row preservation, entry cascade, retained current values, and detached raw provenance.
 - `tests/identity_concurrency_setup.sql` and `tests/identity_concurrency_assertions.sql` prove one
@@ -92,6 +96,9 @@ procedure; the current repository has no such application code.
 - `tests/ingest_concurrency_setup.sql` and `tests/ingest_concurrency_assertions.sql` prove
   concurrent exact retries create one snapshot, same-source devices converge on one monotonic
   current value, and source pause/device revoke serialize ahead of later submission.
+- `tests/origin_replay_concurrency_setup.sql` and `tests/origin_replay_concurrency_assertions.sql`
+  prove two ordered contenders for one locked expired tuple yield exactly one fresh consume and
+  leave one live row.
 - `tests/ingest_season_lock_assertions.sql` plus the integration runner prove two payloads listing
   the same seasons in opposite order acquire the lower season first and both complete without a
   deadlock.
@@ -126,7 +133,7 @@ procedure; the current repository has no such application code.
 | ------------------- | ----- | -------------- | ---------- | ------------------------------------------------------------------ |
 | `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                             |
 | `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus public score read |
-| `viberacing_ingest` | No    | None           | Usage      | Device verification lookup and Community sync submission only      |
+| `viberacing_ingest` | No    | None           | Usage      | Origin replay, device verification, and Community sync only        |
 | `viberacing_jobs`   | No    | None           | Usage      | Ingest cleanup plus Community refresh and finalization             |
 | `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                       |
 | `PUBLIC`            | N/A   | None           | None       | None                                                               |
@@ -217,6 +224,10 @@ Runtime access must remain procedure-only and must have positive and negative in
   source ID, and Ed25519 public key. Paused/unlinked sources, revoked devices, and deletion-pending
   profiles return no material; quarantined sources remain verifiable so their submissions can be
   retained as quarantined evidence.
+- `consume_origin_nonce` accepts only one closed origin key ID, 32-byte domain-separated digest, and
+  millisecond expiry within 65 seconds of the database clock. It atomically inserts or replaces only
+  an expired exact tuple, returns `false` for an unexpired replay, and rechecks expiry after lock
+  wait so delayed work cannot reopen acceptance.
 - `submit_community_sync` revalidates the exact activated device/source binding, schema-level
   identifier/version/date/token/digest bounds, millisecond timestamp precision, and a server-time
   replay window. It records one nonce per device and one snapshot per device/sync ID, returns an
@@ -225,10 +236,10 @@ Runtime access must remain procedure-only and must have positive and negative in
   devices. Server `receivedAt` is captured after the affected season locks so waiting cannot
   backdate acceptance. Paused/unlinked sources, revoked devices, and deletion-pending profiles fail
   closed.
-- `cleanup_expired_ingest_state` accepts only a batch size from 1 through 1000, derives both cutoffs
-  from server time, and serializes Jobs callers. Each call deletes at most one batch of expired
-  device nonces and one batch of expired raw snapshots. Snapshot entries cascade; current source/day
-  values remain and only their expired raw-snapshot reference is cleared.
+- `cleanup_expired_ingest_state` accepts only a batch size from 1 through 1000, derives its cutoff
+  from server time, and serializes Jobs callers. Each call independently deletes at most one batch
+  of expired origin nonces, device nonces, and raw snapshots. Snapshot entries cascade; current
+  source/day values remain and only their expired raw-snapshot reference is cleared.
 - `refresh_community_season` accepts only a bounded ISO Monday before its exact grace deadline,
   serializes Jobs and Ingest at that season, and atomically replaces the private Community score
   projection. An open no-data week remains a state-free no-op.
@@ -253,21 +264,22 @@ user-verification result against the returned credential material. It must verif
 Ed25519 possession proof over the exact returned pairing material before activation. These SQL
 procedures implement neither cryptographic verification nor network rate limiting. ADR 0015's local
 Ingest kernel validates the exact bounded `ConnectorSyncV1` body, body-bound origin proof, and
-canonical strict Ed25519 request against an injected minimal lookup. ADR 0016's adapter can provide
-that lookup and map only a reconstructed, contract-revalidated allowlist to `submit_community_sync`
-through fixed parameterized SQL, a four-client deadline-bound pool, and an exact Ingest
-login/role/search-path probe. The database still independently enforces binding, replay, time,
-lifecycle, season, and monotonic state. A future HTTP service must preserve the exact raw envelope,
-use ADR 0017's protected key reader plus persistent replay, compose verifier and adapter, and map
-only a generic public acknowledgement. The mock-pool evidence is not a live login or PostgreSQL
-integration result. In particular, the anonymous login-challenge endpoint is not launch-ready
-without edge/service limits and bounded expiry cleanup. Procedures use one generic failure message
-for closed authorization and constraint failures; HTTP status mapping and response shaping remain
-application work. Recovery SQL now uses a short-lived restricted authority and never represents it
-as an ordinary session, but application Argon2id/pepper and WebAuthn verification, timing
-normalization, rate limits, cleanup, notifications, and UI remain absent. The deletion procedure
-implements immediate lock-down only; primary purge, cache purge, tombstones, backup replay, and
-user-visible progress remain unimplemented.
+canonical strict Ed25519 request against an injected minimal lookup. ADRs 0016 and 0018 let the
+adapter atomically consume the origin replay tuple, provide that lookup, and map only a
+reconstructed, contract-revalidated allowlist to `submit_community_sync` through fixed parameterized
+SQL, a four-client deadline-bound pool, and an exact Ingest login/role/search-path probe. The
+database still independently enforces binding, replay, time, lifecycle, season, and monotonic state.
+A future HTTP service must preserve the exact raw envelope, use ADR 0017's protected key reader plus
+ADR 0018's persistent replay capability, compose verifier and adapter, and map only a generic public
+acknowledgement. The mock-pool evidence is not a live login or PostgreSQL integration result. In
+particular, the anonymous login-challenge endpoint is not launch-ready without edge/service limits
+and bounded expiry cleanup. Procedures use one generic failure message for closed authorization and
+constraint failures; HTTP status mapping and response shaping remain application work. Recovery SQL
+now uses a short-lived restricted authority and never represents it as an ordinary session, but
+application Argon2id/pepper and WebAuthn verification, timing normalization, rate limits, cleanup,
+notifications, and UI remain absent. The deletion procedure implements immediate lock-down only;
+primary purge, cache purge, tombstones, backup replay, and user-visible progress remain
+unimplemented.
 
 ## Data and privacy map
 
@@ -284,6 +296,7 @@ All current columns map to the canonical [privacy data map](../docs/security/PRI
 | `deletion_jobs`, `deletion_tombstones`      | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry            |
 | `audit_events`                              | Security; Operational         | Closed event/actor enums, request reference, reason code, and server time          |
 | `maintenance_locks`                         | Operational                   | Fixed owner-only cleanup/scoring mutex rows; no user or request data               |
+| `origin_nonces`                             | Security                      | Origin key ID, domain-separated replay digest, and millisecond expiry              |
 | `device_nonces`                             | Security                      | Device-bound replay digest and 15-minute expiry marker                             |
 | `usage_snapshots`, `usage_snapshot_entries` | Usage; Security               | Bounded signed snapshot metadata, exact private daily values, 30-day expiry marker |
 | `source_day_values`                         | Usage                         | One monotonic current token value and accepted provenance per source/date          |
@@ -367,6 +380,14 @@ dates to text, and applies that mapper. No HTTP route, cache/invalidation, car, 
 freshness, profile detail, rate limit, deployment login/TLS integration, or live adapter connection
 is implemented.
 
+Revision 0012 stores only the already mapped Security replay tuple: a closed origin key ID, the
+verifier's domain-separated 32-byte nonce digest, and millisecond expiry. It stores no raw nonce,
+proof, HMAC key, body, header, device, source, profile, IP address, or free-form metadata. An
+Ingest-only function atomically consumes one tuple under five-second lock/statement bounds and
+rechecks expiry after contention. The existing Jobs cleanup now independently caps deletion of
+origin nonces, device nonces, and snapshots under its private mutex. Expiry ends replay acceptance;
+physical deletion still needs a production schedule, monitor, backup policy, and purge evidence.
+
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
 belong to private deployment configuration and require application-level tests before use.
@@ -420,10 +441,10 @@ hard failure, not something the script silently broadens or repairs.
   passkey-login challenges, and recovery-code lookups; do not encode deployable private thresholds
   in this repository.
 - Wrap the local Ingest verification kernel and protected key reader with an exact-byte HTTP
-  boundary, live secret-manager/edge key injection, persistent replay store, generic public errors,
-  no-queue admission, socket deadlines, backpressure, and rate limits. Compose them with the local
-  least-privileged PostgreSQL adapter through a deployment-provisioned login and verified TLS, then
-  add integration/load evidence.
+  boundary, live secret-manager/edge key injection, generic public errors, no-queue admission,
+  socket deadlines, backpressure, and rate limits. Compose them with the local least-privileged
+  PostgreSQL adapter through a deployment-provisioned login and verified TLS, then add
+  integration/load evidence.
 - Implement a scheduler, monitoring, retry/overlap policy, live login/TLS integration, and capacity
   evidence around the local one-shot Jobs cleanup/refresh/finalization runner, plus audited
   corrections and freshness/streak projection.
@@ -434,7 +455,7 @@ hard failure, not something the script silently broadens or repairs.
   detail have real persistence and lifecycle evidence.
 - Schedule and monitor the implemented ingest-retention procedure, and implement bounded cleanup for
   ceremonies, sessions, pairings, jobs, recovery authority, and tombstones. Expiry columns outside
-  the revision 0008 boundary are not cleanup.
+  the revisions 0008/0012 boundary are not cleanup.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
   in isolated staging before real-user ingestion.

@@ -225,7 +225,7 @@ async function runObservedRace(
   lockSql,
   readyMarker,
   contenderSql,
-  { orderedContenders = false } = {},
+  { orderedContenders = false, releaseDelayMilliseconds = 0 } = {},
 ) {
   raceSequence += 1;
   const racePrefix = `vr-race-${process.pid}-${raceSequence}`;
@@ -251,6 +251,9 @@ async function runObservedRace(
     }
     if (!orderedContenders) {
       await waitForBlockedContenders(label, holderName, contenderNames);
+    }
+    if (releaseDelayMilliseconds > 0) {
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, releaseDelayMilliseconds));
     }
     holderReleased = true;
     lockHolder.closeInput("\nCOMMIT;\n");
@@ -291,8 +294,14 @@ async function expectOneConcurrentWinner(label, lockSql, readyMarker, contenderS
   }
 }
 
-async function expectConcurrentSuccesses(label, lockSql, readyMarker, contenderSql) {
-  const contenderResults = await runObservedRace(label, lockSql, readyMarker, contenderSql);
+async function expectConcurrentSuccesses(label, lockSql, readyMarker, contenderSql, options) {
+  const contenderResults = await runObservedRace(
+    label,
+    lockSql,
+    readyMarker,
+    contenderSql,
+    options,
+  );
   if (contenderResults.some((result) => result.status !== 0)) {
     const evidence = contenderResults
       .map(
@@ -420,6 +429,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/usage_ingest.sql"), "utf8"),
     },
     {
+      label: "origin proof replay scenarios",
+      sql: readFileSync(resolve(root, "database/tests/origin_replay.sql"), "utf8"),
+    },
+    {
       label: "Community ingest retention cleanup scenarios",
       sql: readFileSync(resolve(root, "database/tests/ingest_cleanup.sql"), "utf8"),
     },
@@ -442,6 +455,13 @@ try {
     {
       label: "Community ingest concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/ingest_concurrency_setup.sql"), "utf8"),
+    },
+    {
+      label: "origin proof replay concurrency setup",
+      sql: readFileSync(
+        resolve(root, "database/tests/origin_replay_concurrency_setup.sql"),
+        "utf8",
+      ),
     },
     {
       label: "Community ingest cleanup concurrency setup",
@@ -845,6 +865,76 @@ WHERE device_key_id = '00000000-0000-4000-8000-000000011405';`,
   requireSuccess(
     psql(readFileSync(resolve(root, "database/tests/ingest_concurrency_assertions.sql"), "utf8")),
     "Community ingest concurrency assertions",
+  );
+
+  await expectConcurrentSuccesses(
+    "expired origin nonce replacement race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT origin_key_id
+FROM viberacing_private.origin_nonces
+WHERE origin_key_id = 'edge_race'
+  AND nonce_digest = pg_catalog.decode(pg_catalog.repeat('88', 32), 'hex')
+FOR UPDATE;
+\\echo origin-replay-lock-ready`,
+    "origin-replay-lock-ready",
+    [
+      `SET ROLE viberacing_ingest;
+SELECT viberacing_api.consume_origin_nonce(
+  'edge_race',
+  pg_catalog.decode(pg_catalog.repeat('88', 32), 'hex'),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp()) + INTERVAL '60 seconds'
+) AS consumed \\gset
+\\if :consumed
+\\else
+  \\quit 1
+\\endif`,
+      `SET ROLE viberacing_ingest;
+SELECT viberacing_api.consume_origin_nonce(
+  'edge_race',
+  pg_catalog.decode(pg_catalog.repeat('88', 32), 'hex'),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp()) + INTERVAL '60 seconds'
+) AS consumed \\gset
+\\if :consumed
+  \\quit 1
+\\endif`,
+    ],
+    { orderedContenders: true },
+  );
+
+  await expectConcurrentSuccesses(
+    "origin proof expiry during lock wait",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT origin_key_id
+FROM viberacing_private.origin_nonces
+WHERE origin_key_id = 'edge_expiring_race'
+  AND nonce_digest = pg_catalog.decode(pg_catalog.repeat('99', 32), 'hex')
+FOR UPDATE;
+\\echo origin-expiry-lock-ready`,
+    "origin-expiry-lock-ready",
+    [
+      `SET ROLE viberacing_ingest;
+SELECT viberacing_api.consume_origin_nonce(
+  'edge_expiring_race',
+  pg_catalog.decode(pg_catalog.repeat('99', 32), 'hex'),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp()) + INTERVAL '2 seconds'
+) AS consumed \\gset
+\\if :consumed
+  \\quit 1
+\\endif`,
+    ],
+    { releaseDelayMilliseconds: 2_500 },
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/origin_replay_concurrency_assertions.sql"),
+        "utf8",
+      ),
+    ),
+    "origin proof replay concurrency assertions",
   );
 
   await expectConcurrentSuccesses(
@@ -1587,7 +1677,7 @@ SELECT viberacing_api.complete_passkey_login(
   }
 
   console.log(
-    "Database integration passed (23 schema tables, 22 observed lock-wait races, 8 relation-denial and 25 cross-capability checks).",
+    "Database integration passed (24 schema tables, 23 observed lock-wait races, 8 relation-denial and 25 cross-capability checks).",
   );
 } finally {
   if (started) {

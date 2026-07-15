@@ -66,6 +66,12 @@
       "name": "community_public_score_read",
       "path": "database/migrations/0011_community_public_score_read.sql",
       "sha256": "1b3bd146acbece4d3644d4859578de99f7c55aab4d02a221df80d1aa9c53d804"
+    },
+    {
+      "revision": 12,
+      "name": "origin_replay_store",
+      "path": "database/migrations/0012_origin_replay_store.sql",
+      "sha256": "bfa8e8e373bf3e7d9875f1f6c6ccd4d699987dcbbd54a37445328e2e0ea79d27"
     }
   ]
 }

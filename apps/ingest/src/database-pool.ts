@@ -45,6 +45,13 @@ const deviceVerificationQuery = `SELECT
   material.public_key AS public_key
 FROM viberacing_api.read_device_verification_material($1::text) AS material`;
 
+const consumeOriginNonceQuery = `SELECT
+  viberacing_api.consume_origin_nonce(
+    $1::text,
+    $2::bytea,
+    $3::timestamptz
+  ) AS consumed`;
+
 const submitCommunitySyncQuery = `SELECT
   submission.outcome AS outcome,
   submission.accepted_entries AS accepted_entries
@@ -80,12 +87,19 @@ export interface IngestDatabaseSubmission {
   readonly tokens: readonly number[];
 }
 
+export interface IngestDatabaseOriginNonce {
+  readonly expiresAt: string;
+  readonly nonceDigest: Uint8Array;
+  readonly originKeyId: string;
+}
+
 export type IngestDatabasePoolSignal = "idle_client_error";
 export type IngestDatabasePoolSignalSink = (
   signal: IngestDatabasePoolSignal,
 ) => Promise<void> | void;
 
 export interface IngestDatabaseClient {
+  consumeOriginNonce(input: IngestDatabaseOriginNonce): Promise<unknown>;
   readDeviceVerificationMaterial(deviceId: string): Promise<unknown>;
   release(destroy?: boolean): void;
   submitCommunitySync(input: IngestDatabaseSubmission): Promise<unknown>;
@@ -135,6 +149,13 @@ function wrapClient(client: NodePostgresClient): IngestDatabaseClient {
   }
 
   return Object.freeze({
+    consumeOriginNonce(input: IngestDatabaseOriginNonce): Promise<unknown> {
+      return fixedQuery(consumeOriginNonceQuery, [
+        input.originKeyId,
+        Buffer.from(input.nonceDigest),
+        input.expiresAt,
+      ]);
+    },
     readDeviceVerificationMaterial(deviceId: string): Promise<unknown> {
       return fixedQuery(deviceVerificationQuery, [deviceId]);
     },

@@ -2,7 +2,7 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revisions 0001 through 0011 provide private
+These sequences remain planned application contracts. Revisions 0001 through 0012 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
@@ -13,10 +13,11 @@ the bounded adapter lazily after closed request admission. One local one-shot Jo
 only cleanup, refresh, or finalization, but no authentication/ingest endpoint, OAuth callback,
 Argon2id/WebAuthn or pairing-possession application verifier, connector, purge worker, Jobs
 scheduler/monitor, audited correction, or deployed service executes the complete sequences. A local
-Ingest kernel now verifies the bounded exact-body origin/device request, and a separate mock-pool
-adapter proves only its fixed database mapping. There is no HTTP, persistent replay, live database,
-composed, or deployment integration. No deployment login, certificate, edge policy, or live
-route/Jobs evidence is supplied. Data labels refer to the classifications in the
+Ingest kernel now verifies the bounded exact-body origin/device request, while the separate adapter
+maps origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic
+origin replay consumption and bounded cleanup. There is no HTTP, live database, composed, or
+deployment integration. No deployment login, certificate, edge policy, or live route/Jobs evidence
+is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -247,7 +248,7 @@ sequenceDiagram
   Ingest->>Ingest: Validate proof, signature, source, schema, replay, and bounds
   Ingest->>DB: Execute narrow idempotent submission procedure
   DB-->>Ingest: Accepted, quarantined, duplicate, or rejected outcome
-  Jobs->>DB: Delete a bounded expired nonce/raw-snapshot batch
+  Jobs->>DB: Delete bounded expired origin/device nonce and raw-snapshot batches
   Jobs->>DB: Aggregate sources then apply one profile daily cap
 ```
 
@@ -270,31 +271,38 @@ the exact body and required headers, enforces transport and JSON budgets, reject
 headers and decoded JSON keys, and verifies a fresh HMAC-SHA-256 origin proof before body parsing or
 device lookup. The parser then validates `ConnectorSyncV1`; timestamp and idempotency headers must
 equal their body fields; and a minimal injected device tuple verifies the exact-body request with
-strict Ed25519 semantics before a frozen database-ready allowlist is returned. The injected origin
-nonce consumer is only a seam: there is no live replay store.
+strict Ed25519 semantics before a frozen database-ready allowlist is returned.
 
-ADR 0016 adds the local application-to-database mapping without joining it to that seam. A dedicated
-four-client pool parses only namespaced settings, requires certificate-verified non-loopback TLS,
-and probes the exact Ingest role, restricted login scope, and safe search path before either fixed
-parameterized procedure. Device lookup accepts only zero or one closed row. Submission reconstructs
-and revalidates the verifier allowlist, copies its values, creates a server UUID, and accepts only a
-coherent `accepted`, `duplicate`, or `quarantined` row. PostgreSQL remains authoritative for receipt
-time, replay, lifecycle, season closure, quarantine, and locks. Tests use mock pools; no database
-connection occurs.
+ADR 0016 adds the local application-to-database mapping. A dedicated four-client pool parses only
+namespaced settings, requires certificate-verified non-loopback TLS, and probes the exact Ingest
+role, restricted login scope, and safe search path before any fixed parameterized procedure. Device
+lookup accepts only zero or one closed row. Submission reconstructs and revalidates the verifier
+allowlist, copies its values, creates a server UUID, and accepts only a coherent `accepted`,
+`duplicate`, or `quarantined` row. PostgreSQL remains authoritative for receipt time, replay,
+lifecycle, season closure, quarantine, and locks. Tests use mock pools; no database connection
+occurs.
 
 ADR 0017 implements the protected local origin-key input to the verifier. One mandatory primary and
 one optional complete secondary rotation pair use exact namespaced process values, closed IDs, and
 canonical 32-byte keys. Construction returns only the verifier and clears the reader's temporary
 decoded buffers. No real key or secret-manager binding exists in the repository.
 
-The connector, edge, Ingest HTTP service, live secret-manager/edge key injection, persistent origin
-replay, live PostgreSQL login/TLS connection, public acknowledgement, composed verifier-to-procedure
-path, rate controls, socket deadlines, no-queue admission, backpressure, and load evidence are still
-absent. Revision 0008 gives Jobs only a server-time, 1-to-1000 batch procedure for expired nonces
-and raw snapshots. It serializes callers, cascades raw entries, preserves current source/day values,
-and clears only their deleted raw reference. The expiry columns still do not delete rows by
-themselves. The local one-shot Jobs command can invoke one fixed 1000-row batch, but no scheduler,
-monitor, live login, or deployment invokes it automatically.
+ADR 0018 and revision 0012 implement the injected replay seam as one procedure-only PostgreSQL tuple
+keyed by origin key ID and the verifier's domain-separated 32-byte nonce digest. Atomic consume
+inserts or replaces only an already expired tuple, returns `false` for an unexpired replay, and
+rechecks expiry after lock wait. The local adapter strictly reconstructs the three inputs and
+accepts only one boolean row. An ordered observed race proves exactly one fresh consume when two
+callers contend for one expired tuple.
+
+The connector, edge, Ingest HTTP service, live secret-manager/edge key injection, live PostgreSQL
+login/TLS connection, public acknowledgement, composed verifier-to-procedure path, rate controls,
+socket deadlines, no-queue admission, backpressure, and load evidence are still absent. Revisions
+0008 and 0012 give Jobs a server-time, 1-to-1000 batch procedure for expired origin nonces, device
+nonces, and raw snapshots. It serializes callers, caps each class independently, cascades raw
+entries, preserves current source/day values, and clears only their deleted raw reference. The
+expiry columns still do not delete rows by themselves. The local one-shot Jobs command can invoke
+one fixed 1000-row batch, but no scheduler, monitor, live login, or deployment invokes it
+automatically.
 
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct

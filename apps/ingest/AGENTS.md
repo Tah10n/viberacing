@@ -1,7 +1,7 @@
 # Ingest workspace guidance
 
 Read the root `AGENTS.md`, `contracts/README.md`, `contracts/v1/connector-sync-authentication.json`,
-the security invariants, threat model, abuse cases, privacy data map, and ADRs 0015–0017 before
+the security invariants, threat model, abuse cases, privacy data map, and ADRs 0015–0018 before
 changing this workspace.
 
 ## Non-negotiable boundaries
@@ -15,9 +15,10 @@ changing this workspace.
   binding, and invalid signatures without reflecting submitted values.
 - Device signatures authenticate one registered Community device only. They do not verify Codex,
   usage honesty, account uniqueness, or a trust tier.
-- The PostgreSQL adapter may expose only fixed device lookup and verified submission calls. Probe
-  the exact Ingest role/login/search path before each capability, copy all bytes/arrays, accept only
-  closed results, and destroy failed clients. Never expose a general query or reuse another role.
+- The PostgreSQL adapter may expose only fixed origin-nonce consume, device lookup, and verified
+  submission calls. Probe the exact Ingest role/login/search path before each capability, copy all
+  bytes/arrays, accept only closed results, and destroy failed clients. Never expose a general query
+  or reuse another role.
 - Only `database-pool.ts` imports `pg`. Only `database-config.ts` and `origin-proof-config.ts` read
   process environment. Keep database settings namespaced, redacted, loopback-only without TLS, and
   certificate-verified elsewhere.
@@ -25,9 +26,9 @@ changing this workspace.
   distinct secondary rotation pair. Keys are canonical 32-byte base64url values from protected
   configuration only. Never add defaults, literals, files, commands, general keyrings, or
   key-returning APIs.
-- This workspace owns no HTTP listener, persistent origin replay store, OAuth, passkey, admin,
-  signing, deployment, logging, analytics, monitoring backend, or scheduler. It contains no real
-  origin key or secret-manager integration.
+- This workspace owns no HTTP listener, OAuth, passkey, admin, signing, deployment, logging,
+  analytics, monitoring backend, or scheduler. It contains no real origin key or secret-manager
+  integration.
 - Never log or serialize bodies, signatures, nonces, proof keys, public keys, callback errors, or
   internal failure stacks. Future public response mapping must remain generic.
 

@@ -26,6 +26,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0015](0015-bounded-community-sync-verification-kernel.md) | Bounded Community sync request verification kernel                  | Accepted; local kernel; integration pending         |
 | [0016](0016-bounded-ingest-postgresql-adapter.md)          | Bounded least-privileged Ingest PostgreSQL adapter                  | Accepted; local adapter; live integration pending   |
 | [0017](0017-protected-ingest-origin-key-configuration.md)  | Protected two-key Ingest origin proof configuration                 | Accepted; local reader; deployment pending          |
+| [0018](0018-persistent-ingest-origin-replay-store.md)      | Persistent atomic Ingest origin replay consumption                  | Accepted; database and local adapter implemented    |
 
 ## Lifecycle
 

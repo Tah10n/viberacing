@@ -31,6 +31,7 @@ export type CommunityMaintenanceJob =
 export type CommunityMaintenanceResult =
   | Readonly<{
       deletedNonces: number;
+      deletedOriginNonces: number;
       deletedSnapshots: number;
       kind: "cleanup_expired_ingest_state";
     }>
@@ -198,9 +199,13 @@ function readCount(row: object, key: string, maximum: number): number {
 
 function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaintenanceResult {
   if (job.kind === "cleanup_expired_ingest_state") {
-    const row = readSingleRow(value, new Set(["deleted_nonces", "deleted_snapshots"]));
+    const row = readSingleRow(
+      value,
+      new Set(["deleted_nonces", "deleted_origin_nonces", "deleted_snapshots"]),
+    );
     return Object.freeze({
       deletedNonces: readCount(row, "deleted_nonces", job.batchSize),
+      deletedOriginNonces: readCount(row, "deleted_origin_nonces", job.batchSize),
       deletedSnapshots: readCount(row, "deleted_snapshots", job.batchSize),
       kind: job.kind,
     });

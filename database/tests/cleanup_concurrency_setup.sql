@@ -198,4 +198,22 @@ VALUES
     pg_catalog.statement_timestamp() + INTERVAL '15 minutes'
   );
 
+INSERT INTO viberacing_private.origin_nonces (origin_key_id, nonce_digest, expires_at)
+VALUES
+  (
+    'edge_cleanup_race',
+    pg_catalog.decode(pg_catalog.lpad('53501', 64, '0'), 'hex'),
+    pg_catalog.statement_timestamp() - INTERVAL '30 minutes'
+  ),
+  (
+    'edge_cleanup_race',
+    pg_catalog.decode(pg_catalog.lpad('53502', 64, '0'), 'hex'),
+    pg_catalog.statement_timestamp() - INTERVAL '15 minutes'
+  ),
+  (
+    'edge_cleanup_race',
+    pg_catalog.decode(pg_catalog.lpad('53503', 64, '0'), 'hex'),
+    pg_catalog.statement_timestamp() + INTERVAL '15 minutes'
+  );
+
 COMMIT;

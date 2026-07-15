@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 40
+    SELECT pg_catalog.count(*) = 41
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 4
+    SELECT pg_catalog.count(*) = 5
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -67,6 +67,7 @@ SELECT pg_temp.assert_true(
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.proname IN (
+        'consume_origin_nonce',
         'cleanup_expired_ingest_state',
         'refresh_community_season',
         'finalize_community_season',
@@ -78,7 +79,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 3
+    SELECT pg_catalog.count(*) = 4
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -86,12 +87,27 @@ SELECT pg_temp.assert_true(
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.proname IN (
+        'cleanup_expired_ingest_state',
         'submit_community_sync',
         'refresh_community_season',
         'finalize_community_season'
       )
   ),
   'bounded ingest and scoring mutations have database-enforced statement deadlines'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.bool_and(
+        procedure.proconfig @> ARRAY['statement_timeout=5s']::text[]
+      )
+    FROM pg_catalog.pg_proc AS procedure
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'viberacing_api'
+      AND procedure.proname = 'consume_origin_nonce'
+  ),
+  'origin replay consumption has a database-enforced statement deadline'
 );
 
 SELECT pg_temp.assert_true(
@@ -143,6 +159,7 @@ SELECT pg_temp.assert_true(
       = (
         procedure.proname NOT IN (
           'issue_invite',
+          'consume_origin_nonce',
           'read_device_verification_material',
           'submit_community_sync',
           'cleanup_expired_ingest_state',
@@ -164,6 +181,7 @@ SELECT pg_temp.assert_true(
       pg_catalog.has_function_privilege('viberacing_ingest', procedure.oid, 'EXECUTE')
       = (
         procedure.proname IN (
+          'consume_origin_nonce',
           'read_device_verification_material',
           'submit_community_sync'
         )
@@ -188,7 +206,7 @@ SELECT pg_temp.assert_true(
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
   ),
-  'ingest has only verification and sync while jobs have only reviewed maintenance procedures'
+  'ingest has only origin verification and sync while jobs have reviewed maintenance procedures'
 );
 
 SELECT pg_temp.assert_true(

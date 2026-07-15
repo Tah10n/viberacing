@@ -83,12 +83,13 @@ describe("Community maintenance runner", () => {
     {
       expected: {
         deletedNonces: 7,
+        deletedOriginNonces: 3,
         deletedSnapshots: 5,
         kind: "cleanup_expired_ingest_state",
       },
       functionName: "cleanup_expired_ingest_state",
       input: { batchSize: 10, kind: "cleanup_expired_ingest_state" },
-      rows: [{ deleted_nonces: 7, deleted_snapshots: 5 }],
+      rows: [{ deleted_nonces: 7, deleted_origin_nonces: 3, deleted_snapshots: 5 }],
       values: [10],
     },
     {
@@ -174,7 +175,9 @@ describe("Community maintenance runner", () => {
         },
       },
     );
-    const fixture = createPoolFixture([{ deleted_nonces: 0, deleted_snapshots: 0 }]);
+    const fixture = createPoolFixture([
+      { deleted_nonces: 0, deleted_origin_nonces: 0, deleted_snapshots: 0 },
+    ]);
     const runner = createCommunityMaintenanceRunner(fixture.pool);
 
     await expectMaintenanceError(runner.execute(accessorInput), "job_invalid");
@@ -275,8 +278,12 @@ describe("Community maintenance runner", () => {
     expect(getterCalls).toBe(0);
   });
 
-  it("bounds cleanup result counts to the requested batch", async () => {
-    const fixture = createPoolFixture([{ deleted_nonces: 2, deleted_snapshots: 0 }]);
+  it.each([
+    { deleted_nonces: 2, deleted_origin_nonces: 0, deleted_snapshots: 0 },
+    { deleted_nonces: 0, deleted_origin_nonces: 2, deleted_snapshots: 0 },
+    { deleted_nonces: 0, deleted_origin_nonces: 0, deleted_snapshots: 2 },
+  ])("bounds every cleanup result count to the requested batch", async (row) => {
+    const fixture = createPoolFixture([row]);
     await expectMaintenanceError(
       createCommunityMaintenanceRunner(fixture.pool).execute({
         batchSize: 1,

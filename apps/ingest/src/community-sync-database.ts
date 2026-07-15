@@ -5,18 +5,23 @@ import { validateConnectorSyncV1, type ConnectorSyncV1 } from "@viberacing/contr
 import {
   createIngestDatabasePool,
   type IngestDatabaseClient,
+  type IngestDatabaseOriginNonce,
   type IngestDatabasePool,
   type IngestDatabasePoolSignalSink,
   type IngestDatabaseSubmission,
 } from "./database-pool.js";
 import { resolveIngestDatabaseConfig } from "./database-config.js";
-import type { DeviceVerificationMaterial } from "./community-sync-verifier.js";
+import type {
+  DeviceVerificationMaterial,
+  OriginNonceConsumption,
+} from "./community-sync-verifier.js";
 import {
   decodeCanonicalBase64Url,
   deviceIdPattern,
   devicePublicKeyBytes,
   deviceSignatureBytes,
   idempotencyKeyPattern,
+  originKeyIdPattern,
 } from "./protocol.js";
 
 const verifiedSubmissionKeys = new Set([
@@ -39,6 +44,8 @@ const payloadKeys = new Set([
 ]);
 const dailyEntryKeys = new Set(["codexReportedDate", "tokens"]);
 const deviceRowKeys = new Set(["device_key_id", "public_key", "source_id"]);
+const originNonceKeys = new Set(["expiresAtMilliseconds", "keyId", "nonceDigestHex"]);
+const originNonceRowKeys = new Set(["consumed"]);
 const submissionRowKeys = new Set(["accepted_entries", "outcome"]);
 const runtimeBoundaryColumns = ["role_ok", "login_scope_ok", "search_path_ok"] as const;
 const runtimeBoundaryColumnSet = new Set<string>(runtimeBoundaryColumns);
@@ -73,6 +80,7 @@ export interface CommunitySyncSubmissionResult {
 }
 
 export interface CommunitySyncDatabase {
+  consumeOriginNonce(input: unknown): Promise<boolean>;
   readDeviceVerificationMaterial(deviceId: string): Promise<DeviceVerificationMaterial | null>;
   submit(verifiedSubmission: unknown): Promise<CommunitySyncSubmissionResult>;
 }
@@ -90,6 +98,41 @@ interface ValidatedSubmission {
   readonly nonceDigest: Buffer;
   readonly payload: ConnectorSyncV1;
   readonly signature: Buffer;
+}
+
+function readOriginNonceConsumption(value: unknown): IngestDatabaseOriginNonce {
+  try {
+    if (!isPlainRecord(value) || !hasExactKeys(value, originNonceKeys)) {
+      fail("input_invalid");
+    }
+    const expiresAtMilliseconds = ownDataValue(value, "expiresAtMilliseconds", "input_invalid");
+    const keyId = ownDataValue(value, "keyId", "input_invalid");
+    const nonceDigest = decodeHex(ownDataValue(value, "nonceDigestHex", "input_invalid"));
+    const expiresAt =
+      typeof expiresAtMilliseconds === "number" ? new Date(expiresAtMilliseconds) : undefined;
+    if (
+      typeof expiresAtMilliseconds !== "number" ||
+      !Number.isSafeInteger(expiresAtMilliseconds) ||
+      expiresAtMilliseconds < 0 ||
+      expiresAt === undefined ||
+      !Number.isFinite(expiresAt.valueOf()) ||
+      typeof keyId !== "string" ||
+      !originKeyIdPattern.test(keyId) ||
+      nonceDigest === undefined
+    ) {
+      fail("input_invalid");
+    }
+    return Object.freeze({
+      expiresAt: expiresAt.toISOString(),
+      nonceDigest,
+      originKeyId: keyId,
+    });
+  } catch (error) {
+    if (error instanceof CommunitySyncDatabaseError) {
+      throw error;
+    }
+    fail("input_invalid");
+  }
 }
 
 function fail(code: CommunitySyncDatabaseErrorCode): never {
@@ -346,6 +389,28 @@ function readSubmissionResult(
   }
 }
 
+function readOriginNonceResult(value: unknown): boolean {
+  try {
+    if (!validArrayShape(value, 1)) {
+      fail("result_invalid");
+    }
+    const row = ownDataValue(value, "0", "result_invalid");
+    if (!isPlainRecord(row) || !hasExactKeys(row, originNonceRowKeys)) {
+      fail("result_invalid");
+    }
+    const consumed = ownDataValue(row, "consumed", "result_invalid");
+    if (typeof consumed !== "boolean") {
+      fail("result_invalid");
+    }
+    return consumed;
+  } catch (error) {
+    if (error instanceof CommunitySyncDatabaseError) {
+      throw error;
+    }
+    fail("result_invalid");
+  }
+}
+
 function validRuntimeBoundary(value: unknown): boolean {
   try {
     if (!validArrayShape(value, 1)) {
@@ -449,6 +514,12 @@ export function createCommunitySyncDatabase(
   snapshotIdFactory: SnapshotIdFactory = randomUUID,
 ): CommunitySyncDatabase {
   return Object.freeze({
+    async consumeOriginNonce(value: unknown): Promise<boolean> {
+      const input = readOriginNonceConsumption(value);
+      return withClient(pool, async (client) =>
+        readOriginNonceResult(await client.consumeOriginNonce(input)),
+      );
+    },
     async readDeviceVerificationMaterial(
       deviceId: string,
     ): Promise<DeviceVerificationMaterial | null> {
@@ -486,6 +557,7 @@ export function createCloseableCommunitySyncDatabase(
         fail("pool_close_failed");
       }
     },
+    consumeOriginNonce: (input: OriginNonceConsumption) => database.consumeOriginNonce(input),
     readDeviceVerificationMaterial: (deviceId: string) =>
       database.readDeviceVerificationMaterial(deviceId),
     submit: (submission: unknown) => database.submit(submission),

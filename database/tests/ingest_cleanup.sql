@@ -225,14 +225,32 @@ VALUES
     pg_catalog.statement_timestamp() + INTERVAL '15 minutes'
   );
 
+INSERT INTO viberacing_private.origin_nonces (origin_key_id, nonce_digest, expires_at)
+VALUES
+  (
+    'edge_cleanup',
+    pg_catalog.decode(pg_catalog.lpad('52501', 64, '0'), 'hex'),
+    pg_catalog.statement_timestamp() - INTERVAL '30 minutes'
+  ),
+  (
+    'edge_cleanup',
+    pg_catalog.decode(pg_catalog.lpad('52502', 64, '0'), 'hex'),
+    pg_catalog.statement_timestamp() - INTERVAL '15 minutes'
+  ),
+  (
+    'edge_cleanup',
+    pg_catalog.decode(pg_catalog.lpad('52503', 64, '0'), 'hex'),
+    pg_catalog.statement_timestamp() + INTERVAL '15 minutes'
+  );
+
 SET LOCAL ROLE viberacing_jobs;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT deleted_nonces = 1 AND deleted_snapshots = 1
+    SELECT deleted_origin_nonces = 1 AND deleted_nonces = 1 AND deleted_snapshots = 1
     FROM viberacing_api.cleanup_expired_ingest_state(1)
   ),
-  'the first bounded cleanup removes exactly one expired nonce and snapshot'
+  'the first bounded cleanup removes one expired origin nonce, device nonce, and snapshot'
 );
 
 SET LOCAL ROLE viberacing_owner;
@@ -250,15 +268,15 @@ SET LOCAL ROLE viberacing_jobs;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT deleted_nonces = 1 AND deleted_snapshots = 1
+    SELECT deleted_origin_nonces = 1 AND deleted_nonces = 1 AND deleted_snapshots = 1
     FROM viberacing_api.cleanup_expired_ingest_state(1)
   ),
-  'a second bounded cleanup removes the remaining expired rows'
+  'a second bounded cleanup removes the remaining expired rows in every class'
 );
 
 SELECT pg_temp.assert_true(
   (
-    SELECT deleted_nonces = 0 AND deleted_snapshots = 0
+    SELECT deleted_origin_nonces = 0 AND deleted_nonces = 0 AND deleted_snapshots = 0
     FROM viberacing_api.cleanup_expired_ingest_state(1)
   ),
   'cleanup is idempotent after no expired rows remain'
@@ -268,6 +286,11 @@ SET LOCAL ROLE viberacing_owner;
 
 SELECT pg_temp.assert_true(
   (
+    SELECT pg_catalog.count(*) = 1
+    FROM viberacing_private.origin_nonces
+    WHERE origin_key_id = 'edge_cleanup'
+  )
+  AND (
     SELECT pg_catalog.count(*) = 1
     FROM viberacing_private.device_nonces
     WHERE device_key_id = '00000000-0000-4000-8000-000000012401'
@@ -282,7 +305,7 @@ SELECT pg_temp.assert_true(
     FROM viberacing_private.usage_snapshot_entries
     WHERE usage_snapshot_id = '00000000-0000-4000-8000-000000012503'
   ),
-  'live nonce, snapshot, and entry remain after cleanup'
+  'live origin nonce, device nonce, snapshot, and entry remain after cleanup'
 );
 
 SELECT pg_temp.assert_true(

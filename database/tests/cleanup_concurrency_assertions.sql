@@ -25,6 +25,11 @@ BEGIN
     )
     OR (
       SELECT pg_catalog.count(*)
+      FROM viberacing_private.origin_nonces
+      WHERE origin_key_id = 'edge_cleanup_race'
+    ) <> 1
+    OR (
+      SELECT pg_catalog.count(*)
       FROM viberacing_private.device_nonces
       WHERE device_key_id = '00000000-0000-4000-8000-000000013401'
     ) <> 1 THEN
@@ -32,6 +37,12 @@ BEGIN
   END IF;
 
   IF (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.origin_nonces
+    WHERE origin_key_id = 'edge_cleanup_race'
+      AND expires_at > pg_catalog.statement_timestamp()
+  ) <> 1
+    OR (
     SELECT pg_catalog.count(*)
     FROM viberacing_private.usage_snapshots
     WHERE usage_snapshot_id = '00000000-0000-4000-8000-000000013503'

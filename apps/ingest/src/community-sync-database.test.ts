@@ -9,6 +9,7 @@ import {
 } from "./community-sync-database.js";
 import type {
   IngestDatabaseClient,
+  IngestDatabaseOriginNonce,
   IngestDatabasePool,
   IngestDatabaseSubmission,
 } from "./database-pool.js";
@@ -18,6 +19,7 @@ const sourceId = "src_BBBBBBBBBBBBBBBBBBBBBB";
 const syncId = "syn_CCCCCCCCCCCCCCCCCCCCCC";
 const deviceKeyId = "00000000-0000-4000-8000-000000000201";
 const snapshotId = "00000000-0000-4000-8000-000000000202";
+const originExpiryMilliseconds = Date.parse("2026-07-15T12:01:00.000Z");
 const runtimeBoundary = [{ role_ok: true, login_scope_ok: true, search_path_ok: true }];
 const deviceRow = {
   device_key_id: deviceKeyId,
@@ -57,8 +59,17 @@ function verifiedSubmission(): Record<string, unknown> {
   };
 }
 
+function originNonceConsumption(): Record<string, unknown> {
+  return {
+    expiresAtMilliseconds: originExpiryMilliseconds,
+    keyId: "edge_primary",
+    nonceDigestHex: "33".repeat(32),
+  };
+}
+
 interface FixtureOptions {
   readonly deviceRows?: unknown;
+  readonly originRows?: unknown;
   readonly runtimeRows?: unknown;
   readonly submissionRows?: unknown;
 }
@@ -68,6 +79,7 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
   close: ReturnType<typeof vi.fn>;
   connect: ReturnType<typeof vi.fn>;
   pool: IngestDatabasePool;
+  consumeOrigin: ReturnType<typeof vi.fn>;
   readDevice: ReturnType<typeof vi.fn>;
   release: ReturnType<typeof vi.fn>;
   submit: ReturnType<typeof vi.fn>;
@@ -75,6 +87,11 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
 }> {
   const readDevice = vi.fn(() =>
     Promise.resolve(Object.hasOwn(options, "deviceRows") ? options.deviceRows : [deviceRow]),
+  );
+  const consumeOrigin = vi.fn(() =>
+    Promise.resolve(
+      Object.hasOwn(options, "originRows") ? options.originRows : [{ consumed: true }],
+    ),
   );
   const submit = vi.fn(() =>
     Promise.resolve(
@@ -88,6 +105,7 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
   );
   const release = vi.fn();
   const client: IngestDatabaseClient = {
+    consumeOriginNonce: consumeOrigin,
     readDeviceVerificationMaterial: readDevice,
     release,
     submitCommunitySync: submit,
@@ -100,6 +118,7 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
     close,
     connect,
     pool: Object.freeze({ close, connect }),
+    consumeOrigin,
     readDevice,
     release,
     submit,
@@ -124,6 +143,105 @@ afterEach(() => {
 });
 
 describe("Community sync database adapter", () => {
+  it.each([true, false])("maps the exact origin nonce result %s", async (consumed) => {
+    const fixture = createFixture({ originRows: [{ consumed }] });
+    const database = createCommunitySyncDatabase(fixture.pool, () => snapshotId);
+    const input = originNonceConsumption();
+
+    await expect(database.consumeOriginNonce(input)).resolves.toBe(consumed);
+
+    expect(fixture.consumeOrigin).toHaveBeenCalledOnce();
+    const mapped = fixture.consumeOrigin.mock.calls[0]![0] as IngestDatabaseOriginNonce;
+    expect(mapped).toEqual({
+      expiresAt: "2026-07-15T12:01:00.000Z",
+      nonceDigest: Buffer.alloc(32, 0x33),
+      originKeyId: "edge_primary",
+    });
+    expect(Object.isFrozen(mapped)).toBe(true);
+    expect(fixture.verifyBoundary).toHaveBeenCalledOnce();
+    expect(fixture.release).toHaveBeenCalledWith(false);
+  });
+
+  it.each([
+    null,
+    [],
+    { ...originNonceConsumption(), extra: true },
+    { ...originNonceConsumption(), expiresAtMilliseconds: "invalid" },
+    { ...originNonceConsumption(), expiresAtMilliseconds: 1.5 },
+    { ...originNonceConsumption(), expiresAtMilliseconds: -1 },
+    { ...originNonceConsumption(), expiresAtMilliseconds: Number.MAX_SAFE_INTEGER },
+    { ...originNonceConsumption(), keyId: 42 },
+    { ...originNonceConsumption(), keyId: "primary" },
+    { ...originNonceConsumption(), nonceDigestHex: "AA".repeat(32) },
+    { ...originNonceConsumption(), nonceDigestHex: "33".repeat(31) },
+  ])("rejects malformed origin nonce input before acquiring a connection", async (input) => {
+    const fixture = createFixture();
+    const database = createCommunitySyncDatabase(fixture.pool, () => snapshotId);
+
+    await expectDatabaseError(database.consumeOriginNonce(input), "input_invalid");
+    expect(fixture.connect).not.toHaveBeenCalled();
+  });
+
+  it("contains accessors and proxies in origin nonce input", async () => {
+    const accessor = originNonceConsumption();
+    Object.defineProperty(accessor, "keyId", {
+      enumerable: true,
+      get() {
+        throw new Error("must not execute");
+      },
+    });
+    const proxy = new Proxy(originNonceConsumption(), {
+      ownKeys() {
+        throw new Error("must not escape");
+      },
+    });
+
+    for (const input of [accessor, proxy]) {
+      const fixture = createFixture();
+      await expectDatabaseError(
+        createCommunitySyncDatabase(fixture.pool, () => snapshotId).consumeOriginNonce(input),
+        "input_invalid",
+      );
+      expect(fixture.connect).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each([
+    null,
+    [],
+    [{ consumed: true }, { consumed: false }],
+    [null],
+    [{ consumed: true, extra: true }],
+    [{ consumed: "true" }],
+  ])("destroys the client for malformed origin nonce result rows", async (originRows) => {
+    const fixture = createFixture({ originRows });
+
+    await expectDatabaseError(
+      createCommunitySyncDatabase(fixture.pool, () => snapshotId).consumeOriginNonce(
+        originNonceConsumption(),
+      ),
+      "result_invalid",
+    );
+    expect(fixture.release).toHaveBeenCalledWith(true);
+  });
+
+  it("contains unexpected origin nonce result proxy failures", async () => {
+    const originRows = new Proxy([{ consumed: true }], {
+      getPrototypeOf() {
+        throw new Error("synthetic result trap");
+      },
+    });
+    const fixture = createFixture({ originRows });
+
+    await expectDatabaseError(
+      createCommunitySyncDatabase(fixture.pool, () => snapshotId).consumeOriginNonce(
+        originNonceConsumption(),
+      ),
+      "result_invalid",
+    );
+    expect(fixture.release).toHaveBeenCalledWith(true);
+  });
+
   it("maps one device row into copied, frozen verifier material", async () => {
     const fixture = createFixture();
     const database = createCommunitySyncDatabase(fixture.pool, () => snapshotId);
@@ -467,6 +585,16 @@ describe("Community sync database adapter", () => {
       "query_failed",
     );
     expect(queryFixture.release).toHaveBeenCalledWith(true);
+
+    const originFixture = createFixture();
+    originFixture.consumeOrigin.mockRejectedValueOnce(new Error("synthetic origin detail"));
+    await expectDatabaseError(
+      createCommunitySyncDatabase(originFixture.pool, () => snapshotId).consumeOriginNonce(
+        originNonceConsumption(),
+      ),
+      "query_failed",
+    );
+    expect(originFixture.release).toHaveBeenCalledWith(true);
   });
 
   it("fails closed for throwing or malformed snapshot identifier dependencies", async () => {
@@ -497,6 +625,7 @@ describe("Community sync database adapter", () => {
   it("provides a closeable wrapper and maps close failure generically", async () => {
     const fixture = createFixture();
     const database = createCloseableCommunitySyncDatabase(fixture.pool, () => snapshotId);
+    await expect(database.consumeOriginNonce(originNonceConsumption())).resolves.toBe(true);
     await expect(database.readDeviceVerificationMaterial(deviceId)).resolves.toMatchObject({
       deviceKeyId,
     });

@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and seventeen accepted ADRs.
+  fail-closed compatibility policy and matrix, and eighteen accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -63,24 +63,27 @@ Versioning where its guarantees are applicable.
   duplicate security headers and decoded object keys, verifies a replay-consumed exact-body origin
   HMAC before parsing or device lookup, validates `ConnectorSyncV1`, strictly verifies the
   source-bound exact-body Ed25519 request, and returns only a frozen database-ready allowlist. Its
-  117 adversarial tests reach 100% statement/branch/function/line coverage; no HTTP listener, live
-  replay store, public response, connector, rate/deadline/backpressure control, or deployment is
-  implied.
+  117 adversarial tests reach 100% statement/branch/function/line coverage; no HTTP listener, public
+  response, connector, rate/deadline/backpressure control, or deployment is implied.
 - A bounded Ingest PostgreSQL adapter that revalidates the verifier allowlist, copies mutable
   values, creates a server snapshot UUID, probes the exact Ingest login/role/search-path boundary on
-  every checkout, and exposes only fixed parameterized device lookup and submission calls. Its
-  redacted namespaced config requires loopback development/test or certificate-verified TLS, its
-  four-client pool has fixed deadlines/recycling, and malformed rows or failures destroy the client.
-  Ninety-seven adapter/configuration/boundary cases remain in the current Ingest suite at 100%
-  statement/branch/function/line coverage; no live login, HTTP/replay integration, or deployment is
-  implied.
+  every checkout, and exposes only fixed parameterized origin replay, device lookup, and submission
+  calls. Its redacted namespaced config requires loopback development/test or certificate-verified
+  TLS, its four-client pool has fixed deadlines/recycling, and malformed rows or failures destroy
+  the client. One hundred eighteen adapter/configuration/boundary cases remain in the current Ingest
+  suite at 100% statement/branch/function/line coverage; no live login, HTTP/replay integration, or
+  deployment is implied.
 - A protected Ingest origin-proof configuration reader and config-backed verifier factory. Four
   exact namespaced values encode one mandatory primary and one optional complete secondary rotation
   pair; canonical 32-byte keys and IDs must be distinct, no fallback or key container is exposed,
   and temporary decoded buffers are overwritten after verifier construction. Twenty-eight new
-  adversarial cases bring the Ingest suite to 242 tests at 100% statement/branch/function/line
-  coverage; no real key, secret-manager binding, replay store, edge signer, HTTP route, or
-  deployment is implied.
+  adversarial cases remain in the 263-test Ingest suite at 100% statement/branch/function/line
+  coverage; no real key, secret-manager binding, edge signer, HTTP route, or deployment is implied.
+- A forced-RLS origin replay table and Ingest-only atomic consume function storing only the closed
+  key ID, domain-separated 32-byte digest, and millisecond expiry. Exact replay returns `false`, an
+  expired tuple may be reused, expiry is rechecked after contention, and an ordered observed race
+  proves exactly one fresh consume. The bounded Jobs cleanup now independently deletes origin
+  nonces, device nonces, and snapshots; the local Ingest adapter maps only one fixed boolean call.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,
@@ -99,9 +102,9 @@ Versioning where its guarantees are applicable.
 - Procedure-only Community usage persistence with minimal active-device verification lookup, bounded
   raw snapshot/replay state, exact idempotent retry, monotonic source/day values, and quarantine for
   decreases or quarantined sources.
-- Jobs-only bounded cleanup for expired device nonces and raw Community snapshots, with server-time
-  cutoffs, an owner-only mutex row, bounded lock wait, preserved current source/day values, strict
-  batch limits, and no implied scheduler.
+- Jobs-only bounded cleanup for expired origin/device nonces and raw Community snapshots, with
+  server-time cutoffs, an owner-only mutex row, bounded lock wait, preserved current source/day
+  values, strict batch limits, and no implied scheduler.
 - Jobs-only atomic open-season Community scoring refresh with immutable formula/season binding,
   distinct-source aggregation under one profile cap, shared-rank semantics, private derived score
   tables, bounded lock/statement waits, no empty-season growth, and observed concurrent idempotent
@@ -113,7 +116,7 @@ Versioning where its guarantees are applicable.
   finalization, with strict command/object/result parsing, a distinct redacted database namespace,
   one-client pool, fixed deadlines, an exact role/login/capability/search-path probe, prepared
   procedure calls, destructive failure release, stable non-reflective CLI output, production build,
-  and 94 tests at 100% coverage. It adds no scheduler, live credential, monitoring, retry loop, or
+  and 96 tests at 100% coverage. It adds no scheduler, live credential, monitoring, retry loop, or
   deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
@@ -159,7 +162,7 @@ Versioning where its guarantees are applicable.
 - Added observed identity races proving one-winner invite enrollment, initial-passkey challenge
   consumption, and session rotation plus deletion dominance over concurrent rotation without stale
   authority or losing transaction artifacts.
-- Made all twenty-two race gates observe every tagged contender in the holder's PostgreSQL blocker
+- Made all twenty-three race gates observe every tagged contender in the holder's PostgreSQL blocker
   chain before releasing the holder, and made protective races prove first-contender queue order
   before launching the competing action, removing timer-only and scheduler-order evidence.
 - Added Community ingest rejection, replay, binding, role, and lifecycle scenarios plus observed

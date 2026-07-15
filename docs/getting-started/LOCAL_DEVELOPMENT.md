@@ -3,21 +3,22 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and eleven Phase 2/3 database-foundation migrations. Everything runnable uses synthetic data only.
+and twelve Phase 2/3 database-foundation migrations. Everything runnable uses synthetic data only.
 It has procedure-only identity, passkey login/management, restricted recovery, pairing, and
 source/device lifecycle database capabilities plus Community ingest, retention cleanup, scoring, and
 terminal finalization and public score-projection procedures, but no authentication or recovery
 application code, OAuth/Argon2id/WebAuthn or pairing-possession verifier, Jobs scheduler, real-user
 ingestion, audited correction, or connector. A local Ingest kernel bounds and authenticates a
-synthetic exact-body sync request, and a separate adapter constrains its database lookup/submission
-mapping with mock-pool evidence. They have no HTTP listener, live replay store, working database
-login/certificate, end-to-end PostgreSQL flow, edge path, or deployment. A bounded local one-shot
-Jobs process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor,
-or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
-implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
-certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
-boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
-database role isolation; it does not prove a live adapter, deployed API, or production flow.
+synthetic exact-body sync request, and a separate adapter constrains origin replay, database lookup,
+and submission mapping with mock-pool evidence. Isolated PostgreSQL tests separately prove atomic
+replay and cleanup. They have no HTTP listener, working database login/certificate, end-to-end
+PostgreSQL flow, edge path, or deployment. A bounded local one-shot Jobs process now wraps only
+cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A bounded
+server-only Web PostgreSQL adapter and local public-score GET are implemented and unit/build-tested,
+but this repository supplies no working deployment login or TLS certificate. A successful setup
+proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
+session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
+does not prove a live adapter, deployed API, or production flow.
 
 ## Prerequisites
 
@@ -187,7 +188,7 @@ docker compose ps
 The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
 index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
 stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
-this persistent service automatically; revisions 0001 through 0011 are currently exercised by the
+this persistent service automatically; revisions 0001 through 0012 are currently exercised by the
 isolated integration runner only.
 
 Stop the service without deleting its volume:

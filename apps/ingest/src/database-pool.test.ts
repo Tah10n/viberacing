@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { resolveIngestDatabaseConfig } from "./database-config.js";
-import { createIngestDatabasePool, type IngestDatabaseSubmission } from "./database-pool.js";
+import {
+  createIngestDatabasePool,
+  type IngestDatabaseOriginNonce,
+  type IngestDatabaseSubmission,
+} from "./database-pool.js";
 
 const config = resolveIngestDatabaseConfig({
   NODE_ENV: "test",
@@ -29,6 +33,12 @@ const submission: IngestDatabaseSubmission = {
   tokens: [42],
 };
 
+const originNonce: IngestDatabaseOriginNonce = {
+  expiresAt: "2026-07-15T12:01:00.000Z",
+  nonceDigest: Buffer.alloc(32, 4),
+  originKeyId: "edge_primary",
+};
+
 describe("Ingest database pool", () => {
   it("exposes only fixed structured capabilities and copies binary and array parameters", async () => {
     const query = vi.fn((structuredQuery: { text: string; values: unknown[] }) => {
@@ -53,12 +63,13 @@ describe("Ingest database pool", () => {
     const client = await pool.connect();
 
     await expect(client.verifyRuntimeBoundary()).resolves.toEqual([{ value: 1 }]);
+    await expect(client.consumeOriginNonce(originNonce)).resolves.toEqual([{ value: 1 }]);
     await expect(client.readDeviceVerificationMaterial(submission.deviceId)).resolves.toEqual([
       { value: 1 },
     ]);
     await expect(client.submitCommunitySync(submission)).resolves.toEqual([{ value: 1 }]);
     expect(client).not.toHaveProperty("query");
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(4);
     expect(query.mock.calls[0]![0]).toMatchObject({ values: [] });
     const boundaryQuery = query.mock.calls[0]![0].text;
     expect(boundaryQuery).toContain("CURRENT_USER = 'viberacing_ingest'");
@@ -74,15 +85,30 @@ describe("Ingest database pool", () => {
     expect(boundaryQuery).toContain(
       "pg_catalog.current_setting('search_path') = 'pg_catalog,pg_temp'",
     );
-    expect(query.mock.calls[1]![0]).toMatchObject({ values: [submission.deviceId] });
-    expect(query.mock.calls[1]![0].text).toBe(
+    const originQuery = query.mock.calls[1]![0];
+    expect(originQuery.text).toBe(
+      `SELECT
+  viberacing_api.consume_origin_nonce(
+    $1::text,
+    $2::bytea,
+    $3::timestamptz
+  ) AS consumed`,
+    );
+    expect(originQuery.values).toEqual([
+      originNonce.originKeyId,
+      originNonce.nonceDigest,
+      originNonce.expiresAt,
+    ]);
+    expect(originQuery.values[1]).not.toBe(originNonce.nonceDigest);
+    expect(query.mock.calls[2]![0]).toMatchObject({ values: [submission.deviceId] });
+    expect(query.mock.calls[2]![0].text).toBe(
       `SELECT
   material.device_key_id::text AS device_key_id,
   material.source_id AS source_id,
   material.public_key AS public_key
 FROM viberacing_api.read_device_verification_material($1::text) AS material`,
     );
-    const submitQuery = query.mock.calls[2]![0];
+    const submitQuery = query.mock.calls[3]![0];
     expect(submitQuery.text).toContain("viberacing_api.submit_community_sync(");
     expect(submitQuery.text).not.toContain(";");
     expect(submitQuery.text.match(/\$[0-9]+/g)).toEqual(

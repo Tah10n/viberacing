@@ -29,14 +29,15 @@ contract. A local Ingest kernel bounds the raw sync envelope and parser, verifie
 replay-consumed origin proof, validates the sync contract, and strictly verifies the source-bound
 device request. A protected local reader supplies one mandatory and one optional rotation proof key
 from exact namespaced configuration without returning a reusable key container. A separate bounded
-Ingest PostgreSQL adapter wraps only the reviewed device lookup and submission procedures through a
-probed least-privileged login contract. The public score route and Ingest boundaries are locally
-verified but have no real proof key, secret-manager binding, live database login, HTTP Ingest
-listener, edge deployment, persistent origin replay store, or visible-component/connector consumer.
-Do not claim that HTTP authentication, OAuth/Argon2id/WebAuthn application verification, real-user
-ingestion, a connector, a Jobs scheduler or deployed public-race read, season correction, scheduled
-or broader cleanup, deployment, or a hosted security control exists until its implementation and
-verification are present in the working tree.
+Ingest PostgreSQL adapter wraps only reviewed origin replay, device lookup, and submission
+procedures through a probed least-privileged login contract. A forced-RLS origin replay tuple and
+Jobs cleanup extension have isolated PostgreSQL evidence. The public score route and Ingest
+boundaries are locally verified but have no real proof key, secret-manager binding, live database
+login, HTTP Ingest listener, edge deployment, or visible-component/connector consumer. Do not claim
+that HTTP authentication, OAuth/Argon2id/WebAuthn application verification, real-user ingestion, a
+connector, a Jobs scheduler or deployed public-race read, season correction, scheduled or broader
+cleanup, deployment, or a hosted security control exists until its implementation and verification
+are present in the working tree.
 
 ## Repository map
 

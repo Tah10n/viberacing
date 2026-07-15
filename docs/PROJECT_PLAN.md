@@ -147,10 +147,10 @@ flowchart LR
 - Web/Auth: Next.js App Router and strict TypeScript.
 - Ingest: a small Fastify service with no OAuth, admin, signing, or deployment credentials. Its
   first local slices are a pure raw-request verification kernel and a bounded least-privileged
-  PostgreSQL adapter plus a protected exact two-key origin configuration reader. The listener,
-  secret-manager/edge key injection, replay store, public response, admission/socket-deadline/
-  backpressure controls, live login/certificate, end-to-end integration, and deployment remain
-  separate gates.
+  PostgreSQL adapter, a protected exact two-key origin configuration reader, and an atomic
+  PostgreSQL origin-replay capability. The listener, secret-manager/edge key injection, public
+  response, admission/socket-deadline/ backpressure controls, live login/certificate, end-to-end
+  integration, and deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
   The first local runner now wraps only the reviewed Community cleanup/refresh/finalization
   procedures; scheduling, deletion purge, monitoring, live credentials, and deployment remain
@@ -406,9 +406,10 @@ generated payload contract, and verifies the source-bound exact-body request und
 semantics. ADR 0016 adds a separate bounded PostgreSQL config/pool/mapper for only the minimal
 device lookup and verified submission procedures, with per-checkout least-privilege probes and
 mock-pool evidence. ADR 0017 adds exact protected primary/secondary origin-key configuration and a
-factory that constructs the verifier without returning raw configuration. None is an HTTP endpoint,
-live secret-manager/edge integration, replay store, working database login/TLS connection, composed
-sync path, connector, edge path, or deployment.
+factory that constructs the verifier without returning raw configuration. ADR 0018 adds the
+forced-RLS origin replay tuple, atomic Ingest-only consume, Jobs cleanup extension, and strict local
+adapter mapping. None is an HTTP endpoint, live secret-manager/edge integration, working database
+login/TLS connection, composed sync path, connector, edge path, or deployment.
 
 ### Storage
 
@@ -416,13 +417,15 @@ Primary tables include:
 
 - profiles, sessions, passkeys, recovery codes, and invites;
 - codex sources and device keys;
+- short-lived origin and device replay digests;
 - signed usage snapshots and current source/day values;
 - seasons, score-version records, entries, and source-count snapshots;
 - CarRecipe and proposals;
 - audit events, deletion jobs, and short-lived security tombstones.
 
-Important constraints include unique GitHub identity, unique device public key, unique device nonce
-within its replay window, unique source/date current state, and valid state-transition checks.
+Important constraints include unique GitHub identity, unique device public key, unique origin
+key/digest and device nonce within their replay windows, unique source/date current state, and valid
+state-transition checks.
 
 The ingest database role receives EXECUTE only on narrowly owned submission procedures and cannot
 directly modify profiles, passkeys, invites, admin state, schema, or finalized seasons. Migration

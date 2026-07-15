@@ -40,6 +40,7 @@ const runtimeBoundaryQuery = `SELECT
   pg_catalog.current_setting('search_path') = 'pg_catalog,pg_temp' AS search_path_ok`;
 
 const cleanupQuery = `SELECT
+  cleanup.deleted_origin_nonces AS deleted_origin_nonces,
   cleanup.deleted_nonces AS deleted_nonces,
   cleanup.deleted_snapshots AS deleted_snapshots
 FROM viberacing_api.cleanup_expired_ingest_state($1::integer) AS cleanup`;

@@ -95,16 +95,18 @@ Community sync, до JSON и device lookup проверяет body-bound origin 
 и строго проверяет source-bound Ed25519 request. Оно возвращает только frozen database-ready
 allowlist. Отдельный bounded Ingest PostgreSQL adapter повторно проверяет этот allowlist, копирует
 binary/array parameters, при каждом checkout проверяет точный least-privileged Ingest login/role и
-вызывает только fixed device lookup или submission через four-client pool с deadlines. Без TLS
-разрешён только loopback development/test, в остальных случаях обязательна certificate verification.
-Тесты используют mock pools и не содержат рабочего login. Локальная protected factory теперь требует
-точную primary origin-HMAC пару и допускает только одну полную distinct rotation-пару из namespaced
-configuration; наружу она возвращает только verifier, а реальных key и secret-manager binding в
-репозитории нет. HTTP listener, live protected key injection, persistent replay store, public
-response, no-queue admission, socket/backpressure controls, connector, live database connection и
-deployment всё ещё отсутствуют.
+вызывает только fixed origin-replay consume, device lookup или submission через four-client pool с
+deadlines. Без TLS разрешён только loopback development/test, в остальных случаях обязательна
+certificate verification. Тесты используют mock pools и не содержат рабочего login. Локальная
+protected factory теперь требует точную primary origin-HMAC пару и допускает только одну полную
+distinct rotation-пару из namespaced configuration; наружу она возвращает только verifier, а
+реальных key и secret-manager binding в репозитории нет. Forced-RLS PostgreSQL table хранит только
+origin key ID, domain-separated nonce digest и millisecond expiry; Ingest-only function атомарно
+consume-ит tuple, а observed race доказывает одного победителя. HTTP listener, live protected key
+injection, public response, no-queue admission, socket/backpressure controls, connector, live
+database connection и deployment всё ещё отсутствуют.
 
-Также добавлены одиннадцать SQL migrations: 23 приватные
+Также добавлены двенадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
 deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая
 procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
@@ -129,16 +131,17 @@ allowlist, а server-only mapper, bounded Web PostgreSQL adapter и локаль
 verifier, generic response и edge rate limits для анонимных challenges и recovery lookup пока
 отсутствуют. Database-only Community ingest capability уже выдаёт минимальный материал активного
 устройства и принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic
-source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure удаляет bounded
-batches истёкших nonces и raw snapshots, сохраняя current source/day values. Локальный one-shot Jobs
-runner теперь вызывает только cleanup, scoring refresh или finalization через отдельный
-least-privileged config, single-client pool, проверку role/login/search path, fixed deadlines,
-prepared parameters, closed result validation и стабильный non-reflective CLI output. Сама база не
-проверяет wire signature; kernel и adapter ещё не объединены за HTTP/replay boundary и не проверены
-через реальный PostgreSQL login. HTTP ingest route, pairing-possession verifier, connector,
-cleanup/scoring scheduler, live Ingest/Jobs login/TLS integration, monitoring backend, deployed
-public score read, audited correction flow, purge worker и deployed database ещё не реализованы,
-поэтому готовой пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
+source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure независимо
+удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots, сохраняя current
+source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup, scoring refresh
+или finalization через отдельный least-privileged config, single-client pool, проверку
+role/login/search path, fixed deadlines, prepared parameters, closed result validation и стабильный
+non-reflective CLI output. Сама база не проверяет wire signature; kernel и adapter ещё не объединены
+за HTTP boundary и не проверены через реальный PostgreSQL login. HTTP ingest route,
+pairing-possession verifier, connector, cleanup/scoring scheduler, live Ingest/Jobs login/TLS
+integration, monitoring backend, deployed public score read, audited correction flow, purge worker и
+deployed database ещё не реализованы, поэтому готовой пользовательской авторизации, публичного
+рейтинга и приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

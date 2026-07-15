@@ -48,6 +48,9 @@ describe("Jobs database pool", () => {
     expect(query.mock.calls[1]![0].text).toContain(
       "viberacing_api.cleanup_expired_ingest_state($1::integer)",
     );
+    expect(query.mock.calls[1]![0].text).toContain(
+      "cleanup.deleted_origin_nonces AS deleted_origin_nonces",
+    );
     expect(query.mock.calls[2]![0]).toMatchObject({ values: ["2026-07-13"] });
     expect(query.mock.calls[2]![0].text).toContain(
       "viberacing_api.refresh_community_season($1::date)",
