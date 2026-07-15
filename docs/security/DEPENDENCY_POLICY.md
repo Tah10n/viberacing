@@ -8,10 +8,11 @@ checks when they are clear and maintainable.
 
 Mature frameworks and analysis tools are used only where their maintained behavior materially
 reduces project risk. The current deliberate set includes Next.js and React for the web runtime,
-`@noble/ed25519` for one strict server-side device-signature check, and CSpell, TypeScript, ESLint,
-Vitest, jsdom, and axe-core for offline verification. Every direct package is exact-pinned, installs
-without lifecycle scripts, and is represented with its complete transitive graph in the dependency
-inventory. Pull-request CI is secretless.
+`@noble/ed25519` for one strict server-side device-signature check, `pg` for three narrow
+server-side PostgreSQL adapters, and CSpell, TypeScript, ESLint, Vitest, jsdom, and axe-core for
+offline verification. Every direct package is exact-pinned, installs without lifecycle scripts, and
+is represented with its complete transitive graph in the dependency inventory. Pull-request CI is
+secretless.
 
 The project does not auto-merge dependency updates. A green dependency pull request still requires
 human review of purpose, provenance, release history, permissions, transitive changes, and license.
@@ -47,6 +48,16 @@ inclusion, network capability, or public API exposure. Its exact registry integr
 canonical repository/release, maintenance and security-review history, and adversarial zero-key
 regression were reviewed under ADR 0015. Replacing or updating it requires the same review and proof
 of strict behavior on every supported runtime; permissive native fallback is prohibited.
+
+`pg@8.22.0` is the only application PostgreSQL client. It is confined to fixed pool-wrapper files
+inside the private Web, Jobs, and Ingest workspaces; each workspace lint policy rejects static,
+dynamic, re-export, and CommonJS driver access elsewhere. The adapters expose only their reviewed
+parameterized functions and no general query or ORM surface. Its exact registry integrity, MIT
+license, transitive graph, optional unused native peer, absence of install lifecycle scripts,
+maintenance, and advisory state were reviewed under ADRs 0011, 0014, and 0016. Adding the Ingest
+importer changes no package version or transitive node. An update requires renewed
+source/release/advisory/license/script/transitive review plus all role, query, result, timeout, and
+failure-isolation regressions.
 
 `config/license-policy.json` is a reviewed allowlist of the license expressions currently present;
 it is not a general statement that a license is suitable for every future distribution. The checker

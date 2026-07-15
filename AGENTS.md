@@ -25,14 +25,16 @@ route, and procedure-only identity, passkey, restricted-recovery, pairing, sourc
 Community usage-ingest, Jobs-only ingest-retention, and open-season Community scoring plus terminal
 finalization and bounded public score-projection database slices. A local one-shot Jobs runner now
 invokes only those three reviewed maintenance functions through a probed least-privileged login
-contract. A pure local Ingest kernel bounds the raw sync envelope and parser, verifies an injected
+contract. A local Ingest kernel bounds the raw sync envelope and parser, verifies an injected
 replay-consumed origin proof, validates the sync contract, and strictly verifies the source-bound
-device request. The public score route and Ingest kernel are locally verified but have no live
-database login, HTTP Ingest listener, edge deployment, persistent origin replay store, or
-visible-component/connector consumer. Do not claim that HTTP authentication, OAuth/Argon2id/WebAuthn
-application verification, real-user ingestion, a connector, a Jobs scheduler or deployed public-race
-read, season correction, scheduled or broader cleanup, deployment, or a hosted security control
-exists until its implementation and verification are present in the working tree.
+device request. A separate bounded Ingest PostgreSQL adapter wraps only the reviewed device lookup
+and submission procedures through a probed least-privileged login contract. The public score route
+and Ingest boundaries are locally verified but have no live database login, HTTP Ingest listener,
+edge deployment, persistent origin replay store, or visible-component/connector consumer. Do not
+claim that HTTP authentication, OAuth/Argon2id/WebAuthn application verification, real-user
+ingestion, a connector, a Jobs scheduler or deployed public-race read, season correction, scheduled
+or broader cleanup, deployment, or a hosted security control exists until its implementation and
+verification are present in the working tree.
 
 ## Repository map
 
@@ -47,8 +49,8 @@ exists until its implementation and verification are present in the working tree
   agent guidance. Read `apps/web/AGENTS.md` before editing it.
 - `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
   least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
-- `apps/ingest/` contains the pure bounded Community sync request-verification kernel and nested
-  security guidance. Read `apps/ingest/AGENTS.md` before editing it.
+- `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL
+  adapter, and nested security guidance. Read `apps/ingest/AGENTS.md` before editing it.
 - `contracts/v1/` contains canonical public JSON Schemas; `contracts/generated/` contains
   drift-checked derivatives.
 - `packages/contracts/` contains generated TypeScript types plus the bounded runtime validator and
@@ -57,8 +59,8 @@ exists until its implementation and verification are present in the working tree
   persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
-- HTTP Ingest, authentication application code, and connector workspaces are not present yet; follow
-  `docs/PROJECT_PLAN.md` when they are introduced.
+- The HTTP Ingest listener, authentication application code, and connector workspaces are not
+  present yet; follow `docs/PROJECT_PLAN.md` when they are introduced.
 
 ## Verified commands
 

@@ -1,6 +1,6 @@
 # ADR 0015: Bounded Community sync verification kernel
 
-- Status: Accepted (local verification kernel implemented; HTTP and database integration pending)
+- Status: Accepted (local verification kernel implemented; HTTP and live integration pending)
 - Date: 2026-07-15
 - Decision owners: Ingest, Edge, Connector, Security, Privacy, Contracts, and Database
 - Supersedes: None
@@ -63,8 +63,8 @@ alone is not an allowed fallback. Backend exceptions fail as an invalid device p
 
 Success returns a frozen allowlist containing the canonical validated payload, public device ID,
 internal device-key ID, idempotency key, submitted signature, exact-body SHA-256 hex digest, and
-device-nonce SHA-256 hex digest. It returns neither an origin proof nor an origin secret. A future
-database adapter may map only this record to the existing submission procedure and must still let
+device-nonce SHA-256 hex digest. It returns neither an origin proof nor an origin secret. ADR 0016's
+database adapter now maps only this record to the existing submission procedure and still lets
 PostgreSQL decide server receipt time, replay, idempotency, source lifecycle, season closure, and
 quarantine.
 
@@ -80,10 +80,11 @@ stream limits, admission control, backpressure, edge rate policy, or capacity ev
 The kernel collects and retains no new field. During one call it transiently handles the private
 Usage payload and Security values already mapped for sync: public device ID, source ID, timestamps,
 nonces, idempotency key, signature, public key, edge key ID, proof, and exact body. It has no
-logging, analytics, cache, export, network, or persistence sink. A future origin replay store, HTTP
-log, metric, database adapter, or response correlation field requires its own mapped access and
-retention policy. Raw bodies, usage values, public keys, signatures, nonces, proof material, and
-dependency errors must not enter general logs.
+logging, analytics, cache, export, network, or persistence sink. An origin replay store, HTTP log,
+metric, database adapter, or response correlation field requires its own mapped access and retention
+policy. ADR 0016 now maps only the local database adapter; the other sinks remain absent. Raw
+bodies, usage values, public keys, signatures, nonces, proof material, and dependency errors must
+not enter general logs.
 
 A valid device signature authenticates only one registered Community device and its exact request.
 It does not prove that Codex produced the values, that the values are honest, that one source maps
@@ -138,7 +139,7 @@ listener, stored row, response, external destination, or deployment.
 Rollback removes the workspace, policy, direct dependency, lock importer, generated dependency
 evidence, scripts, and documentation. The existing sync contract and procedure-only database
 capability remain disabled at the application boundary. A future HTTP server may wrap the verifier
-and inject a real edge-nonce store and minimal device/database adapters. Any change to the proof
+and inject a real edge-nonce store plus ADR 0016's minimal database adapter. Any change to the proof
 message, header set, algorithms, bounds, path, or accepted encoding requires a new version or a
 superseding ADR rather than silent reinterpretation.
 

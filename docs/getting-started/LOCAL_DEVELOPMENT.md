@@ -8,15 +8,16 @@ It has procedure-only identity, passkey login/management, restricted recovery, p
 source/device lifecycle database capabilities plus Community ingest, retention cleanup, scoring, and
 terminal finalization and public score-projection procedures, but no authentication or recovery
 application code, OAuth/Argon2id/WebAuthn or pairing-possession verifier, Jobs scheduler, real-user
-ingestion, audited correction, or connector. A pure local Ingest kernel bounds and authenticates a
-synthetic exact-body sync request, but has no HTTP listener, live replay store, database adapter,
-edge path, or deployment. A bounded local one-shot Jobs process now wraps only
-cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A bounded
-server-only Web PostgreSQL adapter and local public-score GET are implemented and unit/build-tested,
-but this repository supplies no working deployment login or TLS certificate. A successful setup
-proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
-session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
-does not prove a live adapter, deployed API, or production flow.
+ingestion, audited correction, or connector. A local Ingest kernel bounds and authenticates a
+synthetic exact-body sync request, and a separate adapter constrains its database lookup/submission
+mapping with mock-pool evidence. They have no HTTP listener, live replay store, working database
+login/certificate, end-to-end PostgreSQL flow, edge path, or deployment. A bounded local one-shot
+Jobs process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor,
+or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
+implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
+certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
+boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
+database role isolation; it does not prove a live adapter, deployed API, or production flow.
 
 ## Prerequisites
 
@@ -93,7 +94,8 @@ OpenAPI document contains one path marked `implemented-local`. The corresponding
 route has request/response and build evidence, but no working database login is tracked and no
 deployment exists merely because the local route is documented.
 
-Ingest-focused commands use only synthetic key material and injected in-memory capabilities:
+Ingest-focused commands use only synthetic key material, injected capabilities, and mock database
+pools:
 
 ```text
 pnpm run lint:ingest
@@ -102,10 +104,12 @@ pnpm run test:ingest:coverage
 pnpm run build:ingest
 ```
 
-They verify a pure raw-envelope/origin/parser/contract/device kernel, not an HTTP endpoint or
-database flow. Do not supply a real edge key, public key, signature, nonce, usage payload, database
-credential, or captured request. See [`apps/ingest/README.md`](../../apps/ingest/README.md) for the
-exact boundary and remaining integration work.
+They verify the raw-envelope/origin/parser/contract/device kernel plus redacted database config,
+fixed SQL, role/session probe, mapper, result, and failure boundaries. They do not open a database
+connection or HTTP endpoint. Do not supply a real edge key, public key, signature, nonce, usage
+payload, database credential, or captured request. See
+[`apps/ingest/README.md`](../../apps/ingest/README.md) for the exact boundary and remaining
+integration work.
 
 Jobs-focused commands use injected synthetic results and never need a database credential:
 

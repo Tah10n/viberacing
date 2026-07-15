@@ -2,12 +2,13 @@
 
 ## Status and principles
 
-The current repository contains a private SQL schema, synthetic PostgreSQL integration test, and
-pure local Community sync verification kernel, but no deployed application database, user accounts,
-production service, connector, or real user data. This document remains the required inventory for
-implementation. A field may not be collected merely because it appears here: its schema, purpose,
-visibility, retention, deletion, and access tests must exist first. The implemented column-level
-mapping is documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
+The current repository contains a private SQL schema, synthetic PostgreSQL integration test, local
+Community sync verification kernel, and mock-pool database adapter, but no deployed application
+database, user accounts, production service, connector, or real user data. This document remains the
+required inventory for implementation. A field may not be collected merely because it appears here:
+its schema, purpose, visibility, retention, deletion, and access tests must exist first. The
+implemented column-level mapping is documented in
+[`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
 
@@ -48,6 +49,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Invite verifier and state                                                  | Security                        | Operator-issued invite; gate beta enrollment                           | Invite procedure and limited admin role                                   | Slow/keyed hash, status, expiry, non-sensitive audit                                                  | Expiry/redemption plus bounded abuse/audit window; launch decision required                                 |
 | Session verifier and metadata                                              | Security                        | Web/Auth; maintain an authenticated browser session                    | Web/Auth only                                                             | Keyed verifier, expiry, state, and authenticating-passkey provenance                                  | Short expiry and bounded revocation window; delete/revoke on profile deletion                               |
 | Web PostgreSQL deployment login and password                               | Security                        | Deployment; authorize only the Web score adapter                       | Adapter and PostgreSQL driver process memory only                         | Protected environment/secret manager; never tracked or logged                                         | Rotate on exposure/role change and remove when the adapter is disabled                                      |
+| Ingest PostgreSQL deployment login and password                            | Security                        | Deployment; authorize only device lookup and sync submission           | Ingest adapter and PostgreSQL driver process memory only                  | Protected environment/secret manager; never tracked or logged                                         | Rotate on exposure/role change and remove when ingestion is disabled                                        |
 | WebAuthn credential public key and credential ID                           | Security                        | User authenticator; login and fresh step-up                            | Web/Auth; user can list only bounded friendly metadata                    | `passkeys`; no attestation fingerprint store                                                          | Active until removal; revoked reference until bounded cleanup/profile deletion; launch decision required    |
 | WebAuthn challenge, context, and verifying-passkey reference               | Security                        | Server; bind one ceremony to one action and exact credential           | Web/Auth only                                                             | Short-lived challenge with exact session/profile/action/passkey binding                               | One-time, at most minutes; bounded expiry cleanup required before launch                                    |
 | Recovery-code selector and verifier                                        | Security                        | Web/Auth-generated; recover profile access                             | Web/Auth only; plaintext secret shown once to the user                    | Opaque selector and Argon2id PHC; protected pepper stays outside DB                                   | PHC scrubbed on use; batch removed on regeneration, completion, or deletion; cleanup before launch          |
@@ -103,6 +105,16 @@ device public key, callback error, or parser detail and has no log, cache, analy
 network, or persistence sink. The injected origin-nonce callback is tested only with synthetic
 in-memory implementations; a real replay store must retain no more than the key ID, domain-separated
 digest, and exact expiry, and requires access/deletion tests before deployment.
+
+ADR 0016 also adds no user field or retention. Its adapter reconstructs the verifier allowlist,
+copies the existing body/nonce digests, signature, canonical payload, and identifiers, creates one
+opaque snapshot UUID, reads the existing minimal device tuple, and sends only those values to the
+existing submission procedure. Mock pools retain nothing. The Ingest deployment login and password
+are a separate Security configuration class: protected environment and driver memory only, never a
+tracked value, log field, metric, response, or error cause. The config makes the password
+non-enumerable and JSON-redacted, and monitoring receives only `idle_client_error`. Real secret
+delivery, rotation, access review, and live TLS/login evidence remain deployment work. Existing
+15-minute device-nonce and 30-day raw-snapshot retention are unchanged.
 
 Revision 0008 adds deletion evidence for only those raw nonce and snapshot rows: a Jobs-only
 procedure derives cutoff time on the server, deletes bounded expired batches, cascades raw entries,
@@ -200,9 +212,10 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   approval, deletion initiation, and one active-profile public score projection; it cannot use a
   device credential or recovery authority as a user session or read private score inputs.
 - Ingest accepts only source-bound signed sync through a narrow procedure; it cannot read or change
-  passkeys, sessions, invites, admin roles, schema, or finalized seasons. The pure local verifier
-  currently has only injected origin-nonce and minimal device-lookup capabilities and no database,
-  HTTP, logging, or persistence authority.
+  passkeys, sessions, invites, admin roles, schema, or finalized seasons. The local verifier has
+  only injected origin-nonce and minimal device-lookup capabilities. The separate adapter owns only
+  a fixed lookup/submission pool and protected database config contract; mock evidence opens no
+  connection. Neither boundary has HTTP, logging, analytics, export, or deployment authority.
 - Jobs currently receive only bounded expired ingest-state cleanup, open-season Community scoring
   refresh, and terminal finalization. The local one-shot adapter rechecks the exact Jobs-only login
   and invokes one prepared capability without logging inputs or results. Correction and deletion
@@ -259,11 +272,11 @@ legal review and explicit public disclosure; they are not assumed here.
 
 The server-only problem factory and local score route create a new 128-bit opaque request ID and
 return it in the bounded body/header without accepting an inbound correlation value or retaining a
-copy. The local Ingest kernel has no request-ID or log sink. Future operational logs may use stable
-event names, those request IDs, coarse outcomes, and bounded numeric metrics. They omit raw URLs,
-request bodies, raw token values, handles when not needed, OAuth/passkey material, device public
-keys/signatures/nonces, origin keys/proofs/nonces, idempotency keys, recovery
-selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
+copy. The local Ingest kernel and database adapter have no request-ID or log sink. Future
+operational logs may use stable event names, those request IDs, coarse outcomes, and bounded numeric
+metrics. They omit raw URLs, request bodies, raw token values, handles when not needed,
+OAuth/passkey material, device public keys/signatures/nonces, origin keys/proofs/nonces, idempotency
+keys, recovery selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
 
 Connector telemetry is off by default. A future diagnostic export is local, explicit, redacted,
 previewed before sharing, and generated from an allowlist. Public issue forms do not request raw

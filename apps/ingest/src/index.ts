@@ -9,3 +9,32 @@ export {
   type OriginNonceConsumption,
   type VerifiedCommunitySync,
 } from "./community-sync-verifier.js";
+export {
+  CommunitySyncDatabaseError,
+  createCloseableCommunitySyncDatabase,
+  createCommunitySyncDatabase,
+  createConfiguredCommunitySyncDatabase,
+  type CommunitySyncDatabase,
+  type CommunitySyncDatabaseErrorCode,
+  type CommunitySyncSubmissionResult,
+  type ConfiguredCommunitySyncDatabase,
+  type SnapshotIdFactory,
+} from "./community-sync-database.js";
+export {
+  IngestDatabaseConfigurationError,
+  ingestDatabaseConcurrencyLimit,
+  ingestDatabaseConnectionTimeoutMs,
+  ingestDatabaseQueryTimeoutMs,
+  ingestDatabaseStatementTimeoutMs,
+  resolveIngestDatabaseConfig,
+  type IngestDatabaseConfig,
+  type IngestDatabaseConfigurationErrorCode,
+} from "./database-config.js";
+export {
+  createIngestDatabasePool,
+  type IngestDatabaseClient,
+  type IngestDatabasePool,
+  type IngestDatabasePoolSignal,
+  type IngestDatabasePoolSignalSink,
+  type IngestDatabaseSubmission,
+} from "./database-pool.js";

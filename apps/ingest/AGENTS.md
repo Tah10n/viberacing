@@ -1,8 +1,8 @@
 # Ingest workspace guidance
 
 Read the root `AGENTS.md`, `contracts/README.md`, `contracts/v1/connector-sync-authentication.json`,
-the security invariants, threat model, abuse cases, privacy data map, and ADR 0015 before changing
-this workspace.
+the security invariants, threat model, abuse cases, privacy data map, and ADRs 0015–0016 before
+changing this workspace.
 
 ## Non-negotiable boundaries
 
@@ -15,8 +15,14 @@ this workspace.
   binding, and invalid signatures without reflecting submitted values.
 - Device signatures authenticate one registered Community device only. They do not verify Codex,
   usage honesty, account uniqueness, or a trust tier.
-- This first workspace slice owns no HTTP listener, database pool, environment secret, OAuth,
-  passkey, admin, signing, deployment, logging, analytics, or scheduler capability.
+- The PostgreSQL adapter may expose only fixed device lookup and verified submission calls. Probe
+  the exact Ingest role/login/search path before each capability, copy all bytes/arrays, accept only
+  closed results, and destroy failed clients. Never expose a general query or reuse another role.
+- Only `database-pool.ts` imports `pg`; only `database-config.ts` reads process environment. Keep
+  database settings namespaced, redacted, loopback-only without TLS, and certificate-verified
+  elsewhere.
+- This workspace owns no HTTP listener, origin-key reader, persistent origin replay store, OAuth,
+  passkey, admin, signing, deployment, logging, analytics, monitoring backend, or scheduler.
 - Never log or serialize bodies, signatures, nonces, proof keys, public keys, callback errors, or
   internal failure stacks. Future public response mapping must remain generic.
 

@@ -4,8 +4,9 @@ This directory is the language-neutral source of truth for Vibe Racing wire shap
 files establish request and response boundaries plus one locally implemented public score operation;
 revision 0007 maps the bounded Community sync into a database-only procedure and revision 0011
 provides a database-only score projection. A local pure Ingest kernel now authenticates and parses
-the exact bounded sync request, but no connector, HTTP ingest listener, live replay store, deployed
-endpoint, or live database credential exists.
+the exact bounded sync request, and a separate local adapter constrains its PostgreSQL mapping. No
+connector, HTTP ingest listener, live replay store, deployed endpoint, working database credential,
+or composed live flow exists.
 
 ## Canonical version 1 schemas
 
@@ -78,6 +79,6 @@ The local Ingest kernel enforces the content type, raw envelope/parser budgets, 
 rejection, exact-body proofs, generated contract, and strict device signature before returning a
 frozen allowlist. A future HTTP wrapper must preserve the exact raw bytes and duplicate raw headers
 when constructing that envelope and must add socket/stream limits, trusted-proxy handling, a durable
-origin replay store, deadlines, backpressure, generic responses, rate controls, and the narrow
-database adapter. Runtime parsing budgets do not replace those transport, edge, or database
-constraints.
+origin replay store, deadlines, backpressure, generic responses, and rate controls. It may compose
+only the existing fixed-query adapter through a deployment-provisioned Ingest login and verified
+TLS. Runtime parsing budgets do not replace those transport, edge, or database constraints.

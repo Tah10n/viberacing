@@ -33,6 +33,9 @@ importers:
       '@viberacing/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      pg:
+        specifier: 8.22.0
+        version: 8.22.0
     devDependencies:
       '@eslint/js':
         specifier: 9.39.5
@@ -40,6 +43,9 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
+      '@types/pg':
+        specifier: 8.20.0
+        version: 8.20.0
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)

@@ -146,9 +146,10 @@ flowchart LR
 
 - Web/Auth: Next.js App Router and strict TypeScript.
 - Ingest: a small Fastify service with no OAuth, admin, signing, or deployment credentials. Its
-  first local slice is a pure raw-request verification kernel; the listener, protected
-  configuration, replay store, PostgreSQL adapter, admission/deadline/backpressure controls, and
-  deployment remain separate gates.
+  first local slices are a pure raw-request verification kernel and a bounded least-privileged
+  PostgreSQL adapter. The listener, protected origin configuration, replay store, public response,
+  admission/socket-deadline/backpressure controls, live login/certificate, end-to-end integration,
+  and deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
   The first local runner now wraps only the reviewed Community cleanup/refresh/finalization
   procedures; scheduling, deletion purge, monitoring, live credentials, and deployment remain
@@ -401,8 +402,11 @@ boundary executable. They fix the exact method/target/media type, copied raw env
 budgets, canonical base64url/timestamps, and LF-separated origin/device messages. A pure verifier
 checks a replay-consumed exact-body origin HMAC before parsing or device lookup, validates the
 generated payload contract, and verifies the source-bound exact-body request under strict Ed25519
-semantics. This is reusable by the planned service but is not an HTTP endpoint, live replay store,
-database integration, connector, edge path, or deployment.
+semantics. ADR 0016 adds a separate bounded PostgreSQL config/pool/mapper for only the minimal
+device lookup and verified submission procedures, with per-checkout least-privilege probes and
+mock-pool evidence. Neither slice is an HTTP endpoint, protected origin configuration, live replay
+store, working database login/TLS connection, composed sync path, connector, edge path, or
+deployment.
 
 ### Storage
 

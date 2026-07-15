@@ -67,9 +67,9 @@ material availability cost.
   Revision 0009 excludes quarantined sources and derives open-season score only after one profile
   cap across eligible distinct sources. Revision 0010 also quarantines the whole late snapshot so it
   cannot change accepted historical state. The local Ingest kernel now validates the bounded exact
-  request and source-bound device signature, but intentionally makes no usage-honesty claim.
-  Suspicious-jump policy, HTTP/database service execution, and correction authority remain
-  unimplemented.
+  request and source-bound device signature, and the local adapter proves only the closed submission
+  mapping, but neither intentionally makes a usage-honesty claim. Suspicious-jump policy, live
+  HTTP/database service execution, and correction authority remain unimplemented.
 - **Residual risk:** A plausible forged value inside public bounds may be indistinguishable from an
   honest local reading.
 
@@ -136,9 +136,10 @@ material availability cost.
 - **Current evidence:** PostgreSQL verifies exact device/source binding, nonce/idempotency replay,
   revoke rejection, and revoke-versus-submit ordering. The local Ingest kernel verifies the exact
   body-bound request under strict Ed25519 semantics, takes unknown devices through a valid dummy-key
-  path, compares the lookup source, and rejects the observed zero-key/zero-signature bypass. OS key
-  storage, rotation, metrics, HTTP controls, and application-to-PostgreSQL integration remain
-  unimplemented.
+  path, compares the lookup source, and rejects the observed zero-key/zero-signature bypass. The
+  local adapter proves the fixed lookup/submission mapping and relies on the procedure to close a
+  revoke race. OS key storage, rotation, metrics, HTTP controls, live login, and the composed
+  verifier-to-PostgreSQL path remain unimplemented.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity.
 
@@ -350,10 +351,15 @@ material availability cost.
   not forwarded. The local Jobs adapter independently checks an exact Jobs-only login/membership,
   CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the three prepared
   function calls. Its pool maximum is one, input/result shapes are closed, failed clients are
-  destroyed, and CLI output reflects no configuration, command, SQL, count, or error detail.
+  destroyed, and CLI output reflects no configuration, command, SQL, count, or error detail. The
+  local Ingest adapter independently caps its pool at four, probes the exact Ingest login/role and
+  safe search path before each capability, exposes only fixed parameterized device lookup and
+  submission calls, reconstructs and revalidates verifier output, copies mutable values, accepts
+  only closed rows, and destroys failed clients without forwarding driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
-  migration workflow. Web and Jobs deployment login/TLS integration and live adapter connections
-  have not been exercised because no credential or certificate is supplied.
+  migration workflow. Web, Jobs, and Ingest deployment login/TLS integration and live adapter
+  connections have not been exercised because no credential or certificate is supplied. No HTTP or
+  origin-replay boundary composes the Ingest verifier and adapter.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -468,8 +474,11 @@ material availability cost.
   exists. The local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client
   deadlines, one fixed 1000-row cleanup command, canonical season validation, closed one-row
   results, and destructive release on failure. The kernel has no socket/stream timeout, admission
-  ceiling, database pool, or backpressure. Scheduling, cache, scoring/read capacity evidence,
-  quotas, edge shaping, and production load evidence remain unimplemented.
+  ceiling, or backpressure. The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
+  checkout/lock/server/client deadlines, idle/lifetime recycling, exact zero-or-one device lookup
+  and one-row submission results, and destructive release on failure. There is no live login, HTTP
+  no-queue admission, or combined capacity evidence. Scheduling, cache, scoring/read capacity
+  evidence, quotas, edge shaping, and production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

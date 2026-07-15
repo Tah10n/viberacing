@@ -9,17 +9,18 @@ Racing profiles in a self-reported Community league.
 
 This is a repository-scoped design threat model. The current tree contains public repository policy,
 toolchain, CI, documentation, local PostgreSQL identity/passkey/recovery foundations, and one local
-Next.js public-score route, one local one-shot Jobs runner, and one pure local Community sync
-verification kernel; it does not yet contain an HTTP Ingest service, Jobs scheduler, connector,
-deployment, or production data. Its database-only Community ingest and bounded ingest-retention
-boundaries have synthetic executable evidence. The pure kernel has raw-envelope, origin-proof,
-bounded-parser, contract, and strict device-signature evidence, but no live proof store, HTTP edge,
-or database adapter. The public score route has request/response, admission, and production-build
-evidence, and the Jobs runner has strict command/config/pool/role/result evidence; neither has a
-live database login, edge, scheduler, or network deployment. Controls below are marked
-**implemented** only when executable evidence exists in
-[implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
-security claims about the current tree.
+Next.js public-score route, one local one-shot Jobs runner, and local Community sync verification
+plus PostgreSQL-adapter boundaries; it does not yet contain an HTTP Ingest service, Jobs scheduler,
+connector, deployment, or production data. Its database-only Community ingest and bounded
+ingest-retention boundaries have synthetic executable evidence. The kernel has raw-envelope,
+origin-proof, bounded-parser, contract, and strict device-signature evidence; the adapter has
+configuration, fixed-query, role-probe, mapper, and failure evidence with mock pools. Neither has a
+live proof store, HTTP edge, working database login/TLS connection, or composed sync path. The
+public score route has request/response, admission, and production-build evidence, and the Jobs
+runner has strict command/config/pool/role/result evidence; neither has a live database login, edge,
+scheduler, or network deployment. Controls below are marked **implemented** only when executable
+evidence exists in [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release
+requirements, not security claims about the current tree.
 
 ### Assets and security objectives
 
@@ -130,7 +131,7 @@ and migration or rollback where applicable.
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Planned                                                                                      |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                    | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                        | Local strict verifier and DB state tested; connector, HTTP, rate, live integration planned   |
 | Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                     | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                  | Local proof verifier seam tested; edge, keys, replay store, and direct-origin deny planned   |
-| Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections             | Strict versioned schema, bounded bodies, stored procedure, non-owner role, constraints, deadlines, backpressure                  | Local verifier plus ingest/retention SQL tested; HTTP/DB adapter and operations planned      |
+| Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections             | Strict versioned schema, bounded bodies, fixed adapter, stored procedure, non-owner role, constraints, deadlines, backpressure   | Local verifier, adapter, and ingest/retention SQL tested; HTTP/live operations planned       |
 | Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons        | SQL and local one-shot runner tested; live login, scheduler, correction planned              |
 | CarRecipe and assets                | A proposal smuggles a URL, markup, executable value, copyrighted binary, or nondeterministic output        | Enum-only schema, project-owned assets, preview and approval, provenance, deterministic snapshots                                | Planned                                                                                      |
 | Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                        | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                               | Invite role/reason/reference implemented; hosted controls planned                            |
@@ -156,7 +157,8 @@ and migration or rollback where applicable.
    for another source. The local kernel binds method, path, exact-body digest and therefore source,
    device, nonce, timestamp, and idempotency key under strict Ed25519 verification, then compares
    the minimal lookup source. The database independently checks the device/source relation. No HTTP
-   wrapper or application-to-database integration yet proves the combined path.
+   wrapper, origin replay store, or live verifier-to-database integration yet proves the combined
+   path. The local adapter separately proves only the closed fixed-query mapping with mock pools.
 4. **Local data overcollection.** A connector update starts reading prompts, account email,
    repositories, credentials, or broad App Server events. The adapter allowlists version-pinned
    stable response fields, egress schemas contain no such fields, and fixture inspection and release

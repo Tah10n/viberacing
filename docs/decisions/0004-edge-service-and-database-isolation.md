@@ -76,9 +76,10 @@ or granting broader database rights.
   narrow login, exact membership, database capability, search path, and read-only state before each
   fixed score query. ADR 0013 later adds local HTTP score delivery around that adapter. ADR 0015
   adds a pure local bounded raw-request, origin-proof, contract, and strict device-signature
-  verification kernel. A deployment login/TLS connection, edge/network signer and direct-origin
-  evidence, persistent origin replay store, HTTP Ingest and database adapter, cleanup/scoring
-  scheduler, and correction authority remain pending.
+  verification kernel. ADR 0016 adds the dedicated bounded Ingest pool, per-checkout role/login/
+  search-path probe, and fixed device-lookup/submission mapping. A deployment login/TLS connection,
+  edge/network signer and direct-origin evidence, persistent origin replay store, HTTP Ingest and
+  composed live database flow, cleanup/scoring scheduler, and correction authority remain pending.
 - Staging key rotation, service rollback, database migration overlap, restore, and kill-switch
   drills.
 - Admin user-to-role separation, step-up, reason, audit completeness, and conflict tests.

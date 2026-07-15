@@ -7,12 +7,13 @@ restricted recovery, source, device, pairing, audit, deletion, Community usage, 
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
 implemented. No authentication/HTTP Ingest route, OAuth callback, Argon2id/WebAuthn or
 pairing-possession verifier, production credential, or deployed database consumes the protected
-identity/ingest capabilities. A pure local Ingest kernel now verifies a bounded exact-body
-origin/device request, but it has no PostgreSQL adapter and does not call these procedures. One
-local public-score route and one local one-shot Jobs runner wrap narrow capabilities without a
-working database login. The database-only ingest and Jobs-only ingest-retention, open-season
-scoring, and terminal finalization procedures plus one Web-only public score projection are
-implemented; HTTP ingest, scheduled execution, audited corrections, and purge are not.
+identity/ingest capabilities. A local Ingest kernel verifies a bounded exact-body origin/device
+request, and a separate fixed-query adapter maps its output to these two capabilities through a
+probed least-privileged pool. Mock tests do not call PostgreSQL or supply a working login. One local
+public-score route and one local one-shot Jobs runner wrap narrow capabilities without a working
+database login. The database-only ingest and Jobs-only ingest-retention, open-season scoring, and
+terminal finalization procedures plus one Web-only public score projection are implemented; HTTP
+ingest, scheduled execution, audited corrections, and purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -250,14 +251,16 @@ The application must call `complete_passkey_login` or `consume_passkey_challenge
 verified the exact WebAuthn RP ID, origin, challenge, transaction context, signature, and
 user-verification result against the returned credential material. It must verify the connector's
 Ed25519 possession proof over the exact returned pairing material before activation. These SQL
-procedures implement neither cryptographic verification nor network rate limiting. ADR 0015's pure
-local Ingest kernel now validates the exact bounded `ConnectorSyncV1` body, body-bound origin proof,
-and canonical strict Ed25519 request against an injected minimal lookup. A future HTTP service must
-preserve the exact raw envelope while wrapping that kernel, provide a persistent origin replay
-capability, and map only its frozen output through a least-privileged adapter to
-`read_device_verification_material` and `submit_community_sync`; the database treats that call as an
-assertion by the isolated Ingest role while independently enforcing binding, replay, time, and
-monotonic state. In particular, the anonymous login-challenge endpoint is not launch-ready without
+procedures implement neither cryptographic verification nor network rate limiting. ADR 0015's local
+Ingest kernel validates the exact bounded `ConnectorSyncV1` body, body-bound origin proof, and
+canonical strict Ed25519 request against an injected minimal lookup. ADR 0016's adapter can provide
+that lookup and map only a reconstructed, contract-revalidated allowlist to `submit_community_sync`
+through fixed parameterized SQL, a four-client deadline-bound pool, and an exact Ingest
+login/role/search-path probe. The database still independently enforces binding, replay, time,
+lifecycle, season, and monotonic state. A future HTTP service must preserve the exact raw envelope,
+provide protected origin keys and persistent replay, compose verifier and adapter, and map only a
+generic public acknowledgement. The mock-pool evidence is not a live login or PostgreSQL integration
+result. In particular, the anonymous login-challenge endpoint is not launch-ready without
 edge/service limits and bounded expiry cleanup. Procedures use one generic failure message for
 closed authorization and constraint failures; HTTP status mapping and response shaping remain
 application work. Recovery SQL now uses a short-lived restricted authority and never represents it
@@ -417,8 +420,9 @@ hard failure, not something the script silently broadens or repairs.
   passkey-login challenges, and recovery-code lookups; do not encode deployable private thresholds
   in this repository.
 - Wrap the local Ingest verification kernel with an exact-byte HTTP boundary, protected origin-key
-  configuration, persistent replay store, generic public errors, least-privileged PostgreSQL
-  lookup/submission adapter, rate limits, deadlines, admission, backpressure, and integration/load
+  configuration, persistent replay store, generic public errors, no-queue admission, socket
+  deadlines, backpressure, and rate limits. Compose it with the local least-privileged PostgreSQL
+  adapter through a deployment-provisioned login and verified TLS, then add integration/load
   evidence.
 - Implement a scheduler, monitoring, retry/overlap policy, live login/TLS integration, and capacity
   evidence around the local one-shot Jobs cleanup/refresh/finalization runner, plus audited

@@ -306,6 +306,7 @@
       "version": "8.20.0",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" }
       ]
@@ -734,6 +735,7 @@
       "version": "8.22.0",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/ingest", "scope": "runtime" },
         { "workspace": "apps/jobs", "scope": "runtime" },
         { "workspace": "apps/web", "scope": "runtime" }
       ]

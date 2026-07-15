@@ -12,7 +12,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0001](0001-community-trust-tier.md)                       | Community-only launch and disabled Verified tier                    | Accepted; Community DB lifecycle implemented        |
 | [0002](0002-opaque-multi-source-aggregation.md)            | Opaque multi-source profiles with one profile cap                   | Accepted; aggregation/finalization DB implemented   |
 | [0003](0003-identity-step-up-and-device-authority.md)      | GitHub identity, passkey step-up, and source-bound device authority | Accepted; identity/passkey/recovery/device DB       |
-| [0004](0004-edge-service-and-database-isolation.md)        | Cloudflare ingress plus service and database capability isolation   | Accepted; role DB and score/Jobs adapters           |
+| [0004](0004-edge-service-and-database-isolation.md)        | Cloudflare ingress plus service and database capability isolation   | Accepted; role DB and local service adapters        |
 | [0005](0005-enum-only-car-recipe.md)                       | Enum-only deterministic car customization                           | Accepted design; implementation pending             |
 | [0006](0006-public-repository-boundary.md)                 | Every tracked artifact is immediately public-safe                   | Accepted; repository controls partially implemented |
 | [0007](0007-restricted-recovery-authority.md)              | Recovery codes grant only short-lived passkey-replacement authority | Accepted; recovery DB capability implemented        |
@@ -24,6 +24,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0013](0013-public-community-score-http-contract.md)       | Closed query and local Community score GET                          | Accepted; implemented locally; deployment pending   |
 | [0014](0014-bounded-community-maintenance-job-runner.md)   | Bounded one-shot Community maintenance runner                       | Accepted; local runner; scheduler pending           |
 | [0015](0015-bounded-community-sync-verification-kernel.md) | Bounded Community sync request verification kernel                  | Accepted; local kernel; integration pending         |
+| [0016](0016-bounded-ingest-postgresql-adapter.md)          | Bounded least-privileged Ingest PostgreSQL adapter                  | Accepted; local adapter; live integration pending   |
 
 ## Lifecycle
 

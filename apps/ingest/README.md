@@ -1,10 +1,11 @@
-# Vibe Racing Ingest verification kernel
+# Vibe Racing Ingest boundaries
 
-This private TypeScript workspace implements the first local application boundary for Community sync
-requests. It validates a bounded raw request, verifies a fresh replay-consumed edge proof, parses
-JSON without losing duplicate-key evidence, validates `ConnectorSyncV1`, reads minimal device
-verification material through an injected capability, and verifies the canonical Ed25519 device
-signature.
+This private TypeScript workspace implements two local application boundaries for Community sync
+requests. The verification kernel validates a bounded raw request, verifies a fresh replay-consumed
+edge proof, parses JSON without losing duplicate-key evidence, validates `ConnectorSyncV1`, reads
+minimal device verification material through an injected capability, and verifies the canonical
+Ed25519 device signature. The database adapter can provide that lookup and submit only the verified
+allowlist through the existing least-privileged PostgreSQL procedures.
 
 The language-neutral wire policy is
 [`contracts/v1/connector-sync-authentication.json`](../../contracts/v1/connector-sync-authentication.json).
@@ -12,12 +13,19 @@ Both proof messages use UTF-8 fields separated by one LF and no trailing LF. Bot
 digest of the exact received body bytes. The device timestamp and idempotency header must exactly
 match `observedAt` and `syncId` in the validated body.
 
-The verifier returns only a frozen, allowlisted submission record suitable for a future narrow
-database adapter. It does not expose an HTTP listener, read environment variables, connect to
-PostgreSQL, consume a live replay store, submit usage, or return a public acknowledgement. Tests use
-synthetic keys and injected in-memory capabilities. Therefore this workspace is not a deployed
-Ingest API and does not prove real-user synchronization, edge delivery, a live device binding, rate
-limits, deadlines, backpressure, or production capacity.
+The verifier returns only a frozen, allowlisted submission record. The adapter reconstructs and
+revalidates that record, copies its binary and array values, generates a server-side snapshot UUID,
+and issues only fixed parameterized device-lookup or submission calls. Each checkout verifies the
+exact Ingest role, dedicated non-privileged login scope, database capability, and safe search path.
+Its config permits cleartext only for explicit loopback development/test and otherwise requires
+certificate-verified TLS. Pool, statement, lock, and driver waits are bounded; failed clients are
+destroyed; driver/configuration details are never attached to adapter errors.
+
+The current tests use synthetic keys and mock pools. This workspace has no HTTP listener, live
+origin-key configuration, persistent origin replay store, public acknowledgement, socket deadline,
+no-queue admission, backpressure, monitoring backend, working database login/certificate, live
+PostgreSQL connection, connector, edge path, or deployment. It therefore does not prove real-user
+synchronization or production capacity.
 
 Run from the repository root:
 

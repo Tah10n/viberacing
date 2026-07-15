@@ -12,10 +12,11 @@ season finalization, and a Web-only public score projection. One local public-sc
 the bounded adapter lazily after closed request admission. One local one-shot Jobs runner can invoke
 only cleanup, refresh, or finalization, but no authentication/ingest endpoint, OAuth callback,
 Argon2id/WebAuthn or pairing-possession application verifier, connector, purge worker, Jobs
-scheduler/monitor, audited correction, or deployed service executes the complete sequences. A pure
-local Ingest kernel now verifies the bounded exact-body origin/device request, but has no HTTP,
-persistent replay, database, or deployment integration. No deployment login, certificate, edge
-policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+scheduler/monitor, audited correction, or deployed service executes the complete sequences. A local
+Ingest kernel now verifies the bounded exact-body origin/device request, and a separate mock-pool
+adapter proves only its fixed database mapping. There is no HTTP, persistent replay, live database,
+composed, or deployment integration. No deployment login, certificate, edge policy, or live
+route/Jobs evidence is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -272,14 +273,23 @@ equal their body fields; and a minimal injected device tuple verifies the exact-
 strict Ed25519 semantics before a frozen database-ready allowlist is returned. The injected origin
 nonce consumer is only a seam: there is no live replay store.
 
-The connector, edge, Ingest HTTP service, origin-key configuration, persistent origin replay,
-PostgreSQL adapter/login, public acknowledgement, rate controls, socket deadlines, admission,
-backpressure, and load evidence are still absent. Revision 0008 gives Jobs only a server-time,
-1-to-1000 batch procedure for expired nonces and raw snapshots. It serializes callers, cascades raw
-entries, preserves current source/day values, and clears only their deleted raw reference. The
-expiry columns still do not delete rows by themselves. The local one-shot Jobs command can invoke
-one fixed 1000-row batch, but no scheduler, monitor, live login, or deployment invokes it
-automatically.
+ADR 0016 adds the local application-to-database mapping without joining it to that seam. A dedicated
+four-client pool parses only namespaced settings, requires certificate-verified non-loopback TLS,
+and probes the exact Ingest role, restricted login scope, and safe search path before either fixed
+parameterized procedure. Device lookup accepts only zero or one closed row. Submission reconstructs
+and revalidates the verifier allowlist, copies its values, creates a server UUID, and accepts only a
+coherent `accepted`, `duplicate`, or `quarantined` row. PostgreSQL remains authoritative for receipt
+time, replay, lifecycle, season closure, quarantine, and locks. Tests use mock pools; no database
+connection occurs.
+
+The connector, edge, Ingest HTTP service, origin-key configuration, persistent origin replay, live
+PostgreSQL login/TLS connection, public acknowledgement, composed verifier-to-procedure path, rate
+controls, socket deadlines, no-queue admission, backpressure, and load evidence are still absent.
+Revision 0008 gives Jobs only a server-time, 1-to-1000 batch procedure for expired nonces and raw
+snapshots. It serializes callers, cascades raw entries, preserves current source/day values, and
+clears only their deleted raw reference. The expiry columns still do not delete rows by themselves.
+The local one-shot Jobs command can invoke one fixed 1000-row batch, but no scheduler, monitor, live
+login, or deployment invokes it automatically.
 
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct
