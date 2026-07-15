@@ -104,10 +104,10 @@ pnpm run test:ingest:coverage
 pnpm run build:ingest
 ```
 
-They verify the raw-envelope/origin/parser/contract/device kernel plus redacted database config,
-fixed SQL, role/session probe, mapper, result, and failure boundaries. They do not open a database
-connection or HTTP endpoint. Do not supply a real edge key, public key, signature, nonce, usage
-payload, database credential, or captured request. See
+They verify protected primary/secondary origin-key parsing, the raw-envelope/origin/parser/contract/
+device kernel, and redacted database config, fixed SQL, role/session probe, mapper, result, and
+failure boundaries. They do not open a database connection or HTTP endpoint. Do not supply a real
+edge key, public key, signature, nonce, usage payload, database credential, or captured request. See
 [`apps/ingest/README.md`](../../apps/ingest/README.md) for the exact boundary and remaining
 integration work.
 

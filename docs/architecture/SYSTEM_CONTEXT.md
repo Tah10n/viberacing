@@ -98,8 +98,10 @@ the raw envelope and JSON parser, verifies a replay-consumed body-bound origin p
 validates the sync contract, and verifies the exact source-bound device request under strict Ed25519
 semantics. ADR 0016 adds a fixed-query four-client PostgreSQL adapter with strict TLS/config,
 per-checkout Ingest role/login/search-path verification, closed device/submission mappers, copied
-parameters, and destructive failure release. The HTTP listener, live origin/replay store, working
-deployment login/certificate, composed end-to-end flow, socket deadlines/admission/backpressure,
+parameters, and destructive failure release. ADR 0017 adds an exact primary/secondary origin-key
+reader and config-backed verifier factory without exposing a reusable key container. The HTTP
+listener, live secret-manager/edge key injection and replay store, working deployment
+login/certificate, composed end-to-end flow, socket deadlines/admission/backpressure,
 Cloudflare/Railway path, connector, Jobs scheduler/monitoring, public cache, and audited correction
 authority shown in the design remain planned.
 

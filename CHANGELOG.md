@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and sixteen accepted ADRs.
+  fail-closed compatibility policy and matrix, and seventeen accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -71,9 +71,16 @@ Versioning where its guarantees are applicable.
   every checkout, and exposes only fixed parameterized device lookup and submission calls. Its
   redacted namespaced config requires loopback development/test or certificate-verified TLS, its
   four-client pool has fixed deadlines/recycling, and malformed rows or failures destroy the client.
-  Ninety-seven new adapter/configuration/boundary cases keep the 214-test Ingest suite at 100%
+  Ninety-seven adapter/configuration/boundary cases remain in the current Ingest suite at 100%
   statement/branch/function/line coverage; no live login, HTTP/replay integration, or deployment is
   implied.
+- A protected Ingest origin-proof configuration reader and config-backed verifier factory. Four
+  exact namespaced values encode one mandatory primary and one optional complete secondary rotation
+  pair; canonical 32-byte keys and IDs must be distinct, no fallback or key container is exposed,
+  and temporary decoded buffers are overwritten after verifier construction. Twenty-eight new
+  adversarial cases bring the Ingest suite to 242 tests at 100% statement/branch/function/line
+  coverage; no real key, secret-manager binding, replay store, edge signer, HTTP route, or
+  deployment is implied.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

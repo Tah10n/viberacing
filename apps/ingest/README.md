@@ -13,6 +13,13 @@ Both proof messages use UTF-8 fields separated by one LF and no trailing LF. Bot
 digest of the exact received body bytes. The device timestamp and idempotency header must exactly
 match `observedAt` and `syncId` in the validated body.
 
+The config-backed verifier factory requires an exact primary origin key ID and canonical 32-byte
+base64url key through namespaced process configuration. It accepts a secondary ID/key only as one
+complete, distinct rotation pair. It returns only the verifier, clears its temporary decoded key
+buffers after the verifier copies them, and reports only generic bounded startup errors. The
+repository provides no actual key, checked-in environment example, secret-manager binding, or edge
+signer.
+
 The verifier returns only a frozen, allowlisted submission record. The adapter reconstructs and
 revalidates that record, copies its binary and array values, generates a server-side snapshot UUID,
 and issues only fixed parameterized device-lookup or submission calls. Each checkout verifies the
@@ -22,7 +29,7 @@ certificate-verified TLS. Pool, statement, lock, and driver waits are bounded; f
 destroyed; driver/configuration details are never attached to adapter errors.
 
 The current tests use synthetic keys and mock pools. This workspace has no HTTP listener, live
-origin-key configuration, persistent origin replay store, public acknowledgement, socket deadline,
+protected key injection, persistent origin replay store, public acknowledgement, socket deadline,
 no-queue admission, backpressure, monitoring backend, working database login/certificate, live
 PostgreSQL connection, connector, edge path, or deployment. It therefore does not prove real-user
 synchronization or production capacity.

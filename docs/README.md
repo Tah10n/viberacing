@@ -17,8 +17,9 @@ remain safe to publish verbatim.
   synthetic web prototype and disposable PostgreSQL startup.
 - [Web prototype](../apps/web/README.md) — frontend commands, module map, privacy boundary, CSP,
   synthetic data contract, and test strategy.
-- [Ingest boundaries](../apps/ingest/README.md) — exact raw-request policy, origin/device proof,
-  parser limits, bounded PostgreSQL adapter, focused checks, and explicit integration gaps.
+- [Ingest boundaries](../apps/ingest/README.md) — protected origin-key reader, exact raw-request
+  policy, origin/device proof, parser limits, bounded PostgreSQL adapter, focused checks, and
+  explicit integration gaps.
 - [Public protocol contracts](../contracts/README.md) — canonical JSON Schemas, generated
   TypeScript/OpenAPI artifacts, writable-field boundary, validation limits, and versioning rules.
 - [Database foundation](../database/README.md) — SQL migration ledger, privacy/table map,

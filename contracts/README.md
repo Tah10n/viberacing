@@ -77,8 +77,10 @@ generated file to make a check pass.
 
 The local Ingest kernel enforces the content type, raw envelope/parser budgets, duplicate object-key
 rejection, exact-body proofs, generated contract, and strict device signature before returning a
-frozen allowlist. A future HTTP wrapper must preserve the exact raw bytes and duplicate raw headers
-when constructing that envelope and must add socket/stream limits, trusted-proxy handling, a durable
-origin replay store, deadlines, backpressure, generic responses, and rate controls. It may compose
-only the existing fixed-query adapter through a deployment-provisioned Ingest login and verified
-TLS. Runtime parsing budgets do not replace those transport, edge, or database constraints.
+frozen allowlist. A protected local factory now supplies only one exact primary and optional
+secondary origin-key pair to that verifier; no real key or deployment binding is present. A future
+HTTP wrapper must preserve the exact raw bytes and duplicate raw headers when constructing that
+envelope and must add socket/stream limits, trusted-proxy handling, a durable origin replay store,
+deadlines, backpressure, generic responses, and rate controls. It may compose only the existing
+fixed-query adapter through a deployment-provisioned Ingest login and verified TLS. Runtime parsing
+budgets do not replace those transport, edge, or database constraints.

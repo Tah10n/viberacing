@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
-describe("Ingest database boundary lint policy", () => {
+describe("Ingest capability lint policy", () => {
   it("rejects every PostgreSQL driver import outside the fixed pool adapter", async () => {
     const eslint = new ESLint({ cwd: resolve(import.meta.dirname, "..") });
     const [result] = await eslint.lintText(
@@ -45,4 +45,19 @@ describe("Ingest database boundary lint policy", () => {
       ),
     ).toHaveLength(4);
   }, 15_000);
+
+  it.each(["database-config.ts", "origin-proof-config.ts"])(
+    "permits environment reads only in the reviewed %s boundary",
+    async (fileName) => {
+      const eslint = new ESLint({ cwd: resolve(import.meta.dirname, "..") });
+      const [result] = await eslint.lintText("const environment = process.env; void environment;", {
+        filePath: resolve(import.meta.dirname, fileName),
+      });
+
+      expect(
+        result?.messages.filter(({ ruleId }) => ruleId === "no-restricted-syntax"),
+      ).toHaveLength(0);
+    },
+    15_000,
+  );
 });

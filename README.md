@@ -94,21 +94,23 @@ frozen database-ready allowlist. A separate bounded Ingest PostgreSQL adapter no
 allowlist, copies all binary/array parameters, verifies the exact least-privileged Ingest login/role
 boundary on every checkout, and exposes only fixed device-lookup and submission calls through a
 four-client deadline-bound pool. Its transport config is loopback-only without TLS and otherwise
-certificate-verified; tests use mock pools and no working login. There is still no HTTP listener,
-origin-key configuration, persistent replay store, public response, no-queue admission,
-socket/backpressure control, connector, live database connection, or deployment. Eleven SQL
-migrations now add 23 private identity, passkey, restricted-recovery, source, device, pairing,
-audit, deletion, replay, usage, and Community scoring tables with deny-by-default runtime roles,
-forced RLS, state-machine constraints, checksum drift detection, and an isolated PostgreSQL
-capability test. A narrow procedure boundary implements invite issuance, atomic enrollment,
-session-bound initial-passkey challenges, credential-derived login, bounded multi-passkey
-management, session rotation/revocation, the immediate lock-down portion of profile deletion,
-one-time new/existing-source device pairing, private source/device inventory, source
-pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation, and
-short-lived recovery-only replacement-passkey authority. Pairing creates only opaque user-declared
-sources: it never reads or stores Codex account email or claims account uniqueness. The source
-unlink/reactivation procedures require a fresh consumed source-bound step-up record, but the
-application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
+certificate-verified; tests use mock pools and no working login. A protected local factory now
+requires one exact primary origin HMAC pair and permits one complete distinct rotation pair through
+namespaced configuration; it returns only the verifier and the repository contains no real key or
+secret-manager binding. There is still no HTTP listener, live protected key injection, persistent
+replay store, public response, no-queue admission, socket/backpressure control, connector, live
+database connection, or deployment. Eleven SQL migrations now add 23 private identity, passkey,
+restricted-recovery, source, device, pairing, audit, deletion, replay, usage, and Community scoring
+tables with deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift
+detection, and an isolated PostgreSQL capability test. A narrow procedure boundary implements invite
+issuance, atomic enrollment, session-bound initial-passkey challenges, credential-derived login,
+bounded multi-passkey management, session rotation/revocation, the immediate lock-down portion of
+profile deletion, one-time new/existing-source device pairing, private source/device inventory,
+source pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation,
+and short-lived recovery-only replacement-passkey authority. Pairing creates only opaque
+user-declared sources: it never reads or stores Codex account email or claims account uniqueness.
+The source unlink/reactivation procedures require a fresh consumed source-bound step-up record, but
+the application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
 also require edge rate limits and bounded cleanup before exposure. A database-only Community ingest
 capability now exposes minimal active-device verification material and accepts bounded source-bound
 snapshots with exact retry, nonce replay, monotonic source/date, quarantine, and lifecycle-race

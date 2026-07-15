@@ -282,14 +282,19 @@ coherent `accepted`, `duplicate`, or `quarantined` row. PostgreSQL remains autho
 time, replay, lifecycle, season closure, quarantine, and locks. Tests use mock pools; no database
 connection occurs.
 
-The connector, edge, Ingest HTTP service, origin-key configuration, persistent origin replay, live
-PostgreSQL login/TLS connection, public acknowledgement, composed verifier-to-procedure path, rate
-controls, socket deadlines, no-queue admission, backpressure, and load evidence are still absent.
-Revision 0008 gives Jobs only a server-time, 1-to-1000 batch procedure for expired nonces and raw
-snapshots. It serializes callers, cascades raw entries, preserves current source/day values, and
-clears only their deleted raw reference. The expiry columns still do not delete rows by themselves.
-The local one-shot Jobs command can invoke one fixed 1000-row batch, but no scheduler, monitor, live
-login, or deployment invokes it automatically.
+ADR 0017 implements the protected local origin-key input to the verifier. One mandatory primary and
+one optional complete secondary rotation pair use exact namespaced process values, closed IDs, and
+canonical 32-byte keys. Construction returns only the verifier and clears the reader's temporary
+decoded buffers. No real key or secret-manager binding exists in the repository.
+
+The connector, edge, Ingest HTTP service, live secret-manager/edge key injection, persistent origin
+replay, live PostgreSQL login/TLS connection, public acknowledgement, composed verifier-to-procedure
+path, rate controls, socket deadlines, no-queue admission, backpressure, and load evidence are still
+absent. Revision 0008 gives Jobs only a server-time, 1-to-1000 batch procedure for expired nonces
+and raw snapshots. It serializes callers, cascades raw entries, preserves current source/day values,
+and clears only their deleted raw reference. The expiry columns still do not delete rows by
+themselves. The local one-shot Jobs command can invoke one fixed 1000-row batch, but no scheduler,
+monitor, live login, or deployment invokes it automatically.
 
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct

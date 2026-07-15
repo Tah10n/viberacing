@@ -54,7 +54,12 @@ export default defineConfig([
   },
   {
     files: ["src/**/*.ts"],
-    ignores: ["src/**/*.test.ts", "src/database-config.ts", "src/database-pool.ts"],
+    ignores: [
+      "src/**/*.test.ts",
+      "src/database-config.ts",
+      "src/database-pool.ts",
+      "src/origin-proof-config.ts",
+    ],
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -115,6 +120,38 @@ export default defineConfig([
   },
   {
     files: ["src/database-config.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportDeclaration[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ImportExpression[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ExportNamedDeclaration[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ExportAllDeclaration[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ImportExpression[source.value=/^(fastify|node:http|node:https)$/]",
+          message: "The current Ingest slice must not own an HTTP server.",
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/origin-proof-config.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",

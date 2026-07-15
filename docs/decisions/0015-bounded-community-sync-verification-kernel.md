@@ -82,9 +82,9 @@ Usage payload and Security values already mapped for sync: public device ID, sou
 nonces, idempotency key, signature, public key, edge key ID, proof, and exact body. It has no
 logging, analytics, cache, export, network, or persistence sink. An origin replay store, HTTP log,
 metric, database adapter, or response correlation field requires its own mapped access and retention
-policy. ADR 0016 now maps only the local database adapter; the other sinks remain absent. Raw
-bodies, usage values, public keys, signatures, nonces, proof material, and dependency errors must
-not enter general logs.
+policy. ADR 0016 maps only the local database adapter, and ADR 0017 maps the protected process-side
+key reader without adding a sink; the other sinks remain absent. Raw bodies, usage values, public
+keys, signatures, nonces, proof material, and dependency errors must not enter general logs.
 
 A valid device signature authenticates only one registered Community device and its exact request.
 It does not prove that Codex produced the values, that the values are honest, that one source maps

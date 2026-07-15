@@ -258,11 +258,11 @@ that lookup and map only a reconstructed, contract-revalidated allowlist to `sub
 through fixed parameterized SQL, a four-client deadline-bound pool, and an exact Ingest
 login/role/search-path probe. The database still independently enforces binding, replay, time,
 lifecycle, season, and monotonic state. A future HTTP service must preserve the exact raw envelope,
-provide protected origin keys and persistent replay, compose verifier and adapter, and map only a
-generic public acknowledgement. The mock-pool evidence is not a live login or PostgreSQL integration
-result. In particular, the anonymous login-challenge endpoint is not launch-ready without
-edge/service limits and bounded expiry cleanup. Procedures use one generic failure message for
-closed authorization and constraint failures; HTTP status mapping and response shaping remain
+use ADR 0017's protected key reader plus persistent replay, compose verifier and adapter, and map
+only a generic public acknowledgement. The mock-pool evidence is not a live login or PostgreSQL
+integration result. In particular, the anonymous login-challenge endpoint is not launch-ready
+without edge/service limits and bounded expiry cleanup. Procedures use one generic failure message
+for closed authorization and constraint failures; HTTP status mapping and response shaping remain
 application work. Recovery SQL now uses a short-lived restricted authority and never represents it
 as an ordinary session, but application Argon2id/pepper and WebAuthn verification, timing
 normalization, rate limits, cleanup, notifications, and UI remain absent. The deletion procedure
@@ -419,11 +419,11 @@ hard failure, not something the script silently broadens or repairs.
 - Add edge/service rate limiting and bounded cleanup for unauthenticated pairing starts,
   passkey-login challenges, and recovery-code lookups; do not encode deployable private thresholds
   in this repository.
-- Wrap the local Ingest verification kernel with an exact-byte HTTP boundary, protected origin-key
-  configuration, persistent replay store, generic public errors, no-queue admission, socket
-  deadlines, backpressure, and rate limits. Compose it with the local least-privileged PostgreSQL
-  adapter through a deployment-provisioned login and verified TLS, then add integration/load
-  evidence.
+- Wrap the local Ingest verification kernel and protected key reader with an exact-byte HTTP
+  boundary, live secret-manager/edge key injection, persistent replay store, generic public errors,
+  no-queue admission, socket deadlines, backpressure, and rate limits. Compose them with the local
+  least-privileged PostgreSQL adapter through a deployment-provisioned login and verified TLS, then
+  add integration/load evidence.
 - Implement a scheduler, monitoring, retry/overlap policy, live login/TLS integration, and capacity
   evidence around the local one-shot Jobs cleanup/refresh/finalization runner, plus audited
   corrections and freshness/streak projection.

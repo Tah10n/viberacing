@@ -130,7 +130,7 @@ and migration or rollback where applicable.
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration           | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, revoke and rotate                        | Pairing/lifecycle DB tested; app crypto, routes, and rate planned                            |
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Planned                                                                                      |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                    | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                        | Local strict verifier and DB state tested; connector, HTTP, rate, live integration planned   |
-| Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                     | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                  | Local proof verifier seam tested; edge, keys, replay store, and direct-origin deny planned   |
+| Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                     | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                  | Local verifier/config reader tested; edge injection, replay, direct-origin deny planned      |
 | Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections             | Strict versioned schema, bounded bodies, fixed adapter, stored procedure, non-owner role, constraints, deadlines, backpressure   | Local verifier, adapter, and ingest/retention SQL tested; HTTP/live operations planned       |
 | Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons        | SQL and local one-shot runner tested; live login, scheduler, correction planned              |
 | CarRecipe and assets                | A proposal smuggles a URL, markup, executable value, copyrighted binary, or nondeterministic output        | Enum-only schema, project-owned assets, preview and approval, provenance, deterministic snapshots                                | Planned                                                                                      |
@@ -165,9 +165,11 @@ and migration or rollback where applicable.
    review fail closed on drift.
 5. **Direct-origin and header spoofing.** A client avoids edge shaping or supplies a false
    forwarding address. The local kernel verifies one fresh, replay-consumed HMAC proof bound to key
-   ID, method, path, exact body, time, and nonce before JSON or device work. A real Cloudflare
-   signer, key configuration, persistent replay store, Railway direct-origin denial, trusted proxy
-   chain, and HTTP integration remain required.
+   ID, method, path, exact body, time, and nonce before JSON or device work. A protected local
+   reader now requires one exact primary and at most one complete distinct rotation pair without a
+   default or returned key container. A real Cloudflare signer, secret-manager/edge key injection,
+   persistent replay store, Railway direct-origin denial, trusted proxy chain, and HTTP integration
+   remain required.
 6. **Season race and cap bypass.** Parallel source updates or jobs double count, exceed the daily
    profile cap, or mutate a finalized season. Current SQL proves unique source/day state, one
    transactional profile cap, immutable formula/season binding, serialized idempotent open-season

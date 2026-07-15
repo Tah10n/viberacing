@@ -147,9 +147,10 @@ flowchart LR
 - Web/Auth: Next.js App Router and strict TypeScript.
 - Ingest: a small Fastify service with no OAuth, admin, signing, or deployment credentials. Its
   first local slices are a pure raw-request verification kernel and a bounded least-privileged
-  PostgreSQL adapter. The listener, protected origin configuration, replay store, public response,
-  admission/socket-deadline/backpressure controls, live login/certificate, end-to-end integration,
-  and deployment remain separate gates.
+  PostgreSQL adapter plus a protected exact two-key origin configuration reader. The listener,
+  secret-manager/edge key injection, replay store, public response, admission/socket-deadline/
+  backpressure controls, live login/certificate, end-to-end integration, and deployment remain
+  separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
   The first local runner now wraps only the reviewed Community cleanup/refresh/finalization
   procedures; scheduling, deletion purge, monitoring, live credentials, and deployment remain
@@ -404,9 +405,10 @@ checks a replay-consumed exact-body origin HMAC before parsing or device lookup,
 generated payload contract, and verifies the source-bound exact-body request under strict Ed25519
 semantics. ADR 0016 adds a separate bounded PostgreSQL config/pool/mapper for only the minimal
 device lookup and verified submission procedures, with per-checkout least-privilege probes and
-mock-pool evidence. Neither slice is an HTTP endpoint, protected origin configuration, live replay
-store, working database login/TLS connection, composed sync path, connector, edge path, or
-deployment.
+mock-pool evidence. ADR 0017 adds exact protected primary/secondary origin-key configuration and a
+factory that constructs the verifier without returning raw configuration. None is an HTTP endpoint,
+live secret-manager/edge integration, replay store, working database login/TLS connection, composed
+sync path, connector, edge path, or deployment.
 
 ### Storage
 

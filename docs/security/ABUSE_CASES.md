@@ -319,9 +319,11 @@ material availability cost.
   method/path/exact-body/time/nonce-bound HMAC before parsing or device lookup, permits only a
   strictly younger-than-60-second age and inclusive five-second future skew, and requires one
   injected nonce-consumption result. Tests cover unknown keys, rotation, stale/future proof, replay,
-  body/header mutation, and failing nonce dependencies. Cloudflare signing, protected key
-  configuration, a persistent replay store, Railway direct-origin denial, trusted forwarding, and
-  HTTP integration remain unimplemented.
+  body/header mutation, and failing nonce dependencies. A protected local reader now requires one
+  exact primary and at most one complete, distinct secondary key pair, constructs only the verifier,
+  and has no default or checked-in value. Cloudflare signing, secret-manager/edge key injection, a
+  persistent replay store, Railway direct-origin denial, trusted forwarding, and HTTP integration
+  remain unimplemented.
 - **Residual risk:** Infrastructure metadata exposure can increase probing but must not be the only
   protection.
 

@@ -97,9 +97,12 @@ allowlist. Отдельный bounded Ingest PostgreSQL adapter повторно
 binary/array parameters, при каждом checkout проверяет точный least-privileged Ingest login/role и
 вызывает только fixed device lookup или submission через four-client pool с deadlines. Без TLS
 разрешён только loopback development/test, в остальных случаях обязательна certificate verification.
-Тесты используют mock pools и не содержат рабочего login. HTTP listener, origin-key configuration,
-persistent replay store, public response, no-queue admission, socket/backpressure controls,
-connector, live database connection и deployment всё ещё отсутствуют.
+Тесты используют mock pools и не содержат рабочего login. Локальная protected factory теперь требует
+точную primary origin-HMAC пару и допускает только одну полную distinct rotation-пару из namespaced
+configuration; наружу она возвращает только verifier, а реальных key и secret-manager binding в
+репозитории нет. HTTP listener, live protected key injection, persistent replay store, public
+response, no-queue admission, socket/backpressure controls, connector, live database connection и
+deployment всё ещё отсутствуют.
 
 Также добавлены одиннадцать SQL migrations: 23 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,

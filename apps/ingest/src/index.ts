@@ -38,3 +38,9 @@ export {
   type IngestDatabasePoolSignalSink,
   type IngestDatabaseSubmission,
 } from "./database-pool.js";
+export {
+  OriginProofConfigurationError,
+  createConfiguredCommunitySyncVerifier,
+  type ConfiguredCommunitySyncVerifierDependencies,
+  type OriginProofConfigurationErrorCode,
+} from "./origin-proof-config.js";
