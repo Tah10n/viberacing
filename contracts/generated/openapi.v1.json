@@ -9,6 +9,74 @@
   "paths": {},
   "components": {
     "schemas": {
+      "CommunityScorePageV1": {
+        "title": "CommunityScorePageV1",
+        "description": "Bounded response-only Community score page with explicit self-reported trust metadata and no private identifiers, raw usage, daily detail, or exact timestamps.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schemaVersion", "trustTier", "selfReported", "participants"],
+        "properties": {
+          "schemaVersion": { "type": "integer", "const": 1, "minimum": 1, "maximum": 1 },
+          "trustTier": { "type": "string", "const": "community", "minLength": 9, "maxLength": 9 },
+          "selfReported": { "type": "boolean", "const": true },
+          "participants": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 32,
+            "x-viberacing-uniqueBy": "displayPosition",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "seasonStart",
+                "seasonEnd",
+                "scoreVersion",
+                "seasonFinalized",
+                "handle",
+                "weeklyScore",
+                "activeDays",
+                "sourceCount",
+                "rankPosition",
+                "displayPosition"
+              ],
+              "properties": {
+                "seasonStart": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 10,
+                  "pattern": "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$",
+                  "format": "date"
+                },
+                "seasonEnd": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 10,
+                  "pattern": "^(?:20[0-9]{2}-[0-9]{2}-[0-9]{2}|2100-01-03)$",
+                  "format": "date"
+                },
+                "scoreVersion": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 32,
+                  "pattern": "^[a-z][a-z0-9_]{2,31}$"
+                },
+                "seasonFinalized": { "type": "boolean" },
+                "handle": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 24,
+                  "pattern": "^[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]$"
+                },
+                "weeklyScore": { "type": "integer", "minimum": 0, "maximum": 7000 },
+                "activeDays": { "type": "integer", "minimum": 0, "maximum": 7 },
+                "sourceCount": { "type": "integer", "minimum": 0, "maximum": 32 },
+                "rankPosition": { "type": "integer", "minimum": 1, "maximum": 32 },
+                "displayPosition": { "type": "integer", "minimum": 1, "maximum": 32 }
+              }
+            }
+          }
+        }
+      },
       "ConnectorSyncResultV1": {
         "title": "ConnectorSyncResultV1",
         "description": "Non-sensitive acknowledgement for a validated connector synchronization. Internal anomaly reasons are intentionally absent.",
@@ -160,6 +228,6 @@
       }
     }
   },
-  "x-viberacing-contract-source": "sha256:5605117d761023dbc6a73d4c4cbe34e6376e7f9cde7aeb0d264be2f9a3ec1bbb",
+  "x-viberacing-contract-source": "sha256:725f4148fe882248b510b37724a8f4df7433a8e6898b92e5c5dd0e7c51d0e491",
   "x-viberacing-status": "pre-implementation"
 }

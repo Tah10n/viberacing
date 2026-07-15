@@ -308,7 +308,9 @@ Exact token values, exact sync time, GitHub binding, passkeys, devices, source d
 data are absent. Authenticated responses use private `no-store` policy and never populate this
 cache. This complete read flow remains planned. Revision 0011 implements only the database score
 subset: season metadata, handle, weekly score, active days, source count, shared rank, and display
-position. It grants no HTTP route, cache, car, streak, freshness, daily detail, or profile read.
+position. ADR 0010 wraps at most 32 such rows in a closed response component with constant Community
+and self-reported metadata, but advertises no path. There is still no HTTP route/mapper, cache, car,
+streak, freshness, daily detail, or profile read.
 
 ## Hide and deletion
 

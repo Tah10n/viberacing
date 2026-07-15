@@ -99,6 +99,71 @@ try {
     /server-owned or prohibited field trustTier/,
   );
   await expectFailure(
+    "derived-client-score-alias",
+    (root) => {
+      const { path, schema } = readSchema(root, "connector-sync.schema.json");
+      const dailyEntry = schema.properties.dailyEntries.items;
+      dailyEntry.required.push("weeklyScore");
+      dailyEntry.properties.weeklyScore = {
+        type: "integer",
+        minimum: 0,
+        maximum: 7000,
+      };
+      writeJson(path, schema);
+    },
+    /server-owned or prohibited field weeklyScore/,
+  );
+  await expectFailure(
+    "connector-extra-daily-field",
+    (root) => {
+      const { path, schema } = readSchema(root, "connector-sync.schema.json");
+      const dailyEntry = schema.properties.dailyEntries.items;
+      dailyEntry.required.push("points");
+      dailyEntry.properties.points = {
+        type: "integer",
+        minimum: 0,
+        maximum: 7000,
+      };
+      writeJson(path, schema);
+    },
+    /connector daily-entry fields differ from the exact writable allowlist/,
+  );
+  await expectFailure(
+    "community-trust-drift",
+    (root) => {
+      const { path, schema } = readSchema(root, "community-score-page.schema.json");
+      schema.properties.trustTier.const = "verified";
+      schema.properties.trustTier.minLength = 8;
+      schema.properties.trustTier.maxLength = 8;
+      writeJson(path, schema);
+    },
+    /Community score trust metadata must remain explicit and constant/,
+  );
+  await expectFailure(
+    "community-private-field",
+    (root) => {
+      const { path, schema } = readSchema(root, "community-score-page.schema.json");
+      const participant = schema.properties.participants.items;
+      participant.required.push("profileId");
+      participant.properties.profileId = {
+        type: "string",
+        minLength: 1,
+        maxLength: 64,
+      };
+      writeJson(path, schema);
+    },
+    /Community score participant fields differ from the public allowlist/,
+  );
+  await expectFailure(
+    "community-score-bound-drift",
+    (root) => {
+      const { path, schema } = readSchema(root, "community-score-page.schema.json");
+      schema.properties.participants.items.properties.weeklyScore.maximum = 7001;
+      writeJson(path, schema);
+    },
+    /Community score participant bounds differ from the reviewed projection/,
+  );
+  await expectFailure(
     "generated-drift",
     (root) => {
       const path = resolve(root, "packages", "contracts", "src", "generated.ts");

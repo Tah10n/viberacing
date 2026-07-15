@@ -25,9 +25,10 @@ policy, records whether any exact Codex and connector combination is currently s
 These axes are independently versioned. A connector version does not imply a database migration or
 scoring change, and a web deployment does not silently change a finalized season.
 
-Revision 0011's internal PostgreSQL score projection is not a public HTTP contract. A future route
-still requires a versioned response schema, generated derivatives, cache semantics, and the HTTP
-compatibility evidence described here.
+Revision 0011's internal PostgreSQL score projection is not itself a public HTTP contract. ADR 0010
+now defines a closed response-only v1 component and generated derivatives. A future route still
+requires request/path validation, exact mapping, response headers, cache semantics, and the HTTP
+compatibility evidence described here; no path is advertised yet.
 
 ## Codex App Server contract
 
@@ -91,6 +92,8 @@ through local timezone conversion.
   collection, string, integer, and timestamp bounds.
 - Unknown request fields are rejected. Responses may gain additive fields only where clients are
   documented and tested to ignore them safely.
+- `CommunityScorePageV1` is closed and its generated consumers reject unknown fields; extend it only
+  through a separately reviewed component/version, not an unannounced additive response field.
 - Client-writable schemas exclude profile identity, accepted source binding, trust tier, score,
   rank, streak, season, server receipt time, moderation, and deletion state.
 - Errors use a versioned bounded problem-details shape and request ID without stack, SQL, hostname,

@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and nine accepted ADRs.
+  fail-closed compatibility policy and matrix, and ten accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -33,9 +33,9 @@ Versioning where its guarantees are applicable.
   sanitation, and a fail-closed PNG structure/chunk policy with regression coverage.
 - Strict server-only public-origin validation for absolute social metadata, with HTTPS-only hosted
   origins, loopback-only development HTTP, safe reserved defaults, and negative tests.
-- Canonical closed JSON Schema contracts for connector sync, bounded acknowledgement, and public
-  problem details, with generated readonly TypeScript validators and pre-implementation OpenAPI
-  components.
+- Canonical closed JSON Schema contracts for connector sync, bounded acknowledgement, public problem
+  details, and a response-only top-32 Community score page with constant self-reported trust
+  metadata, generated readonly TypeScript validators, and pre-endpoint OpenAPI components.
 - Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
   drift gates and black-box regression coverage.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
@@ -125,6 +125,9 @@ Versioning where its guarantees are applicable.
 - Added public score field-allowlist, visibility, shared-rank, result-ceiling, statement-deadline,
   and role-denial scenarios; hiding a profile removes it and closes public rank/display gaps without
   granting Web direct table access.
+- Added response-contract regression coverage for Community trust constants, the ten public score
+  fields, empty/top-32 pages, duplicate display positions, bounds, private-field rejection, and
+  privacy-safe validation issues without advertising an HTTP route.
 - Made passkey race preservation assertions fail when an expected row is missing and added a static
   regression check that rejects missing-row-unsafe scalar-subquery `IF NOT` assertions.
 - Made passkey revoke terminal, protected the last active key, preserved monotonic sign state, and

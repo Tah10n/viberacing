@@ -1,12 +1,17 @@
 # Public protocol contracts
 
 This directory is the language-neutral source of truth for Vibe Racing wire shapes. The current
-files establish a pre-HTTP boundary; revision 0007 maps the bounded Community sync into a
-database-only procedure, but no API endpoint, connector, application signature verifier, or
-deployment exists.
+files establish pre-endpoint request and response boundaries; revision 0007 maps the bounded
+Community sync into a database-only procedure and revision 0011 provides a database-only score
+projection, but no API endpoint, connector, application signature verifier, or deployment exists.
 
 ## Canonical version 1 schemas
 
+- [`CommunityScorePageV1`](v1/community-score-page.schema.json) is a response-only top-32 score
+  page. It fixes the trust tier to `community`, fixes `selfReported` to true, mirrors only the ten
+  reviewed revision 0011 fields, and permits an empty result without private-state disclosure. It
+  contains no profile/source/device ID, raw or daily usage, exact timestamp, car, streak, freshness,
+  profile detail, cursor, or caller-controlled sorting/filtering.
 - [`ConnectorSyncV1`](v1/connector-sync.schema.json) accepts one bounded, self-reported Community
   snapshot from a source-bound device. It contains no trust tier, profile ID, rank, score, season,
   moderation state, account email, prompt, repository, credential, or server receipt time.
@@ -19,14 +24,15 @@ deployment exists.
   names.
 
 Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
-timestamp is bounded. Dates use the upstream-neutral `codexReportedDate` name; only `observedAt`
-uses a canonical UTC timestamp, and server receipt time remains authoritative for replay and season
-deadlines. Duplicate dates in one sync are rejected by the documented `x-viberacing-uniqueBy`
-extension.
+timestamp is bounded. Dates use the upstream-neutral `codexReportedDate` name for connector input;
+only `observedAt` uses a canonical UTC timestamp, and server receipt time remains authoritative for
+replay and season deadlines. Duplicate sync dates and duplicate public display positions are
+rejected by the documented `x-viberacing-uniqueBy` extension.
 
 The token maximum is a numeric serialization safety bound, not an honesty claim. A valid signature
 identifies the registered device, not the truth of self-reported usage. Server-side anomaly and
-fair-use policies remain separate and do not become client-writable fields.
+fair-use policies remain separate and do not become client-writable fields. Server-derived score and
+trust fields exist only in the response component and never become writable connector input.
 
 ## Derived artifacts
 
@@ -49,8 +55,9 @@ generated file to make a check pass.
    connector requests.
 4. Add positive and negative runtime tests, regenerate, review the complete diff, and run
    `pnpm run verify`.
-5. Use a new contract version for a breaking wire change. Do not silently reinterpret an existing
-   field or enum.
+5. Use a new contract version or separately named component for a breaking wire change. Generated
+   consumers reject unknown response fields, so do not silently expand or reinterpret an existing
+   shape.
 
 Runtime validation is defense in depth after a service has already enforced content type and a small
 raw-body limit. A future ingest parser must also reject duplicate object keys and excessive nesting

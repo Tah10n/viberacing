@@ -3,6 +3,11 @@
   "contractVersion": "v1",
   "schemas": [
     {
+      "file": "community-score-page.schema.json",
+      "exportName": "communityScorePageV1",
+      "typeName": "CommunityScorePageV1"
+    },
+    {
       "file": "connector-sync-result.schema.json",
       "exportName": "connectorSyncResultV1",
       "typeName": "ConnectorSyncResultV1"

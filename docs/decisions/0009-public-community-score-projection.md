@@ -1,6 +1,6 @@
 # ADR 0009: Public Community score projection boundary
 
-- Status: Accepted (database projection implemented; HTTP and cache pending)
+- Status: Accepted (database projection implemented; response contract in ADR 0010)
 - Date: 2026-07-15
 - Decision owners: Product, Web, Database, Security, and Privacy
 - Supersedes: None
@@ -53,10 +53,11 @@ with no visible score state returns an empty result; it does not reveal whether 
 participant existed.
 
 `viberacing_ingest`, `viberacing_jobs`, `viberacing_admin`, and `PUBLIC` cannot execute the
-function. The Web role still has no direct private-schema access. Anonymous HTTP policy, request
-shaping, response schema, caching, cache purge, conditional requests, and deployment credentials
-remain future application work. In particular, this decision does not authorize a long-lived
-database snapshot or a cache that can outlive a committed hide/delete action.
+function. The Web role still has no direct private-schema access. ADR 0010 later defines a bounded
+response-only schema; anonymous HTTP policy, request shaping, route mapping, caching, cache purge,
+conditional requests, and deployment credentials remain future application work. In particular, this
+decision does not authorize a long-lived database snapshot or a cache that can outlive a committed
+hide/delete action.
 
 ## Security and privacy consequences
 
@@ -84,8 +85,8 @@ VR-ABUSE-PUBLIC-SCRAPE, and VR-ABUSE-DELETE-RESURRECTION.
   profile detail, and their retention/compatibility contracts are not implemented.
 - **Return raw daily scores or exact timestamps:** rejected because the leaderboard does not need
   them and exact timing can reveal a working schedule.
-- **Allow arbitrary pagination and sorting:** rejected until a versioned HTTP contract, stable cache
-  semantics, and load evidence define their behavior.
+- **Allow arbitrary pagination and sorting:** rejected for the initial fixed top-32 response; any
+  later pagination requires stable hide/delete, cache, and load semantics.
 - **Publish only finalized seasons:** rejected because the selected product is a live weekly race;
   the same privacy-filtered fields are safe for an open materialization.
 
@@ -115,10 +116,11 @@ Current PostgreSQL evidence proves:
 - Web-only execution, no runtime direct-table access, a five-second statement deadline, and explicit
   Ingest/Jobs/Admin denial.
 
-The repository still lacks an HTTP response schema and route, CarRecipe storage, streak/freshness
-derivation, authenticated profile detail, public cache and invalidation, rate limits,
-query-plan/load evidence, monitoring, deployment, and real-user data. The database projection alone
-is not a public API or launch evidence.
+ADR 0010 now adds a response-only schema and validators. The repository still lacks an HTTP route,
+database mapper, CarRecipe storage, streak/freshness derivation, authenticated profile detail,
+public cache and invalidation, rate limits, query-plan/load evidence, monitoring, deployment, and
+real-user data. The database projection and generated response component are not a public API or
+launch evidence.
 
 ## References
 
@@ -126,6 +128,7 @@ is not a public API or launch evidence.
 - [Opaque multi-source aggregation](0002-opaque-multi-source-aggregation.md)
 - [Service and database isolation](0004-edge-service-and-database-isolation.md)
 - [Community grace and finalization](0008-community-season-grace-and-finalization.md)
+- [Community score response contract](0010-community-score-response-contract.md)
 - [Project plan](../PROJECT_PLAN.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
 - [Data flow](../architecture/DATA_FLOW.md)

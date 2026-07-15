@@ -136,7 +136,7 @@ function codePointLength(value: string, maximum: number | undefined): number {
 }
 
 function isCalendarDate(value: string): boolean {
-  const match = /^(20[0-9]{2})-([0-9]{2})-([0-9]{2})$/.exec(value);
+  const match = /^((?:1999|20[0-9]{2}|2100))-([0-9]{2})-([0-9]{2})$/.exec(value);
   if (match === null) {
     return false;
   }

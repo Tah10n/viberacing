@@ -73,6 +73,10 @@ describe("bounded primitive validation", () => {
       format: "date-time",
     } as const satisfies ContractSchema;
     expect(codes(dateSchema, "not-a-date")).toContain("format");
+    expect(validateContract(dateSchema, "1999-12-27").ok).toBe(true);
+    expect(validateContract(dateSchema, "2100-01-03").ok).toBe(true);
+    expect(codes(dateSchema, "1998-12-31")).toContain("format");
+    expect(codes(dateSchema, "2101-01-01")).toContain("format");
     expect(codes(dateTimeSchema, "not-a-time")).toContain("format");
   });
 });

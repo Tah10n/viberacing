@@ -69,25 +69,26 @@ ranking, or finalization scheduler exists.
   trusted-release Mermaid views.
 - A fail-closed Codex compatibility policy and empty support matrix; no upstream or connector
   version is claimed supported without pinned schema/fixture/platform evidence.
-- An ADR lifecycle/template and nine accepted design decisions covering Community trust,
-  multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
-  isolation, CarRecipe, public repository safety, season finalization, and the public score
-  projection boundary.
+- An ADR lifecycle/template and ten accepted design decisions covering Community trust, multi-source
+  aggregation, identity/device authority, restricted recovery, edge/service/database isolation,
+  CarRecipe, public repository safety, season finalization, and the public score projection/response
+  boundaries.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
-- Three canonical JSON Schema 2020-12 contracts for a bounded Community connector sync, a
-  non-sensitive sync acknowledgement, and stable problem details. Every object is closed; scalar and
-  collection values are bounded; connector input has an executable writable-field allowlist that
-  excludes identity, trust, rank, score, season, moderation, credentials, and prohibited data.
+- Four canonical JSON Schema 2020-12 contracts for a bounded Community connector sync, a
+  non-sensitive sync acknowledgement, stable problem details, and a response-only top-32 Community
+  score page with constant trust metadata. Every object is closed; scalar and collection values are
+  bounded; connector input has an executable writable-field allowlist that excludes identity, trust,
+  rank, score, season, moderation, credentials, and prohibited data.
 - Deterministically generated readonly TypeScript types, embedded validator wrappers, source digest,
-  and OpenAPI 3.1 components with no advertised paths. A manifest/schema/drift checker has nine
-  black-box cases for unknown fields, missing bounds, client-derived fields,
-  unlisted/path-traversing schemas, unsupported keywords, missing date deduplication, and stale
-  generated output.
+  and OpenAPI 3.1 components with no advertised paths. A manifest/schema/drift checker has fourteen
+  black-box cases for unknown fields, missing bounds, client-derived score aliases, Community trust
+  drift, private response fields, unlisted/path-traversing schemas, unsupported keywords, missing
+  date deduplication, and stale generated output.
 - A dependency-free runtime contract validator with fail-closed reflection handling; strict
   calendar/UTC timestamp and safe-integer checks; depth, node, key, item, and issue budgets; and
-  privacy-safe issue output that never echoes unknown property names or submitted values. Fifteen
+  privacy-safe issue output that never echoes unknown property names or submitted values. Eighteen
   unit/security cases cover 100% of statements, lines, and functions plus 97.14% of branches.
 - An idempotent cluster-role bootstrap for separate `NOLOGIN`, non-owner Web, Ingest, Jobs, Admin,
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
@@ -182,8 +183,10 @@ ranking, or finalization scheduler exists.
   denial, late-snapshot quarantine, and profile-purge compatibility. Public-read scenarios prove an
   exact ten-field allowlist, active-only filtering, post-hide shared-rank/display re-numbering, a
   100-row result ceiling, open/finalized metadata, a five-second statement deadline, generic input
-  failure, Web-only authority, and Ingest/Jobs/Admin denial. No HTTP score route/schema/cache,
-  audited correction flow, scoring service, or scheduler exists.
+  failure, Web-only authority, and Ingest/Jobs/Admin denial. The response-only contract separately
+  proves constant Community/self-reported metadata, the same ten-field allowlist, a top-32 ceiling,
+  empty results, bounds, unique display positions, private-field rejection, and generated drift. No
+  HTTP score route/mapper/cache, audited correction flow, scoring service, or scheduler exists.
 - Twenty-two deterministic cross-connection races hold a relevant invite, challenge, session,
   source, device, pairing, or profile row, or a season advisory lock; tag every session; and observe
   every contender in the holder's transitive PostgreSQL blocker chain before releasing it.
@@ -284,11 +287,11 @@ login/pairing/recovery edge rate limits and cleanup, raw-body/signature/origin v
 ingest API, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring
 state, the scoring Jobs service/scheduler, audited corrections, HTTP public-score delivery, purge
 workers, Codex connector, release signing, deployment, and public beta operations remain proposed. A
-bounded database score projection now exists, but its versioned HTTP route/schema,
-cache/invalidation, CarRecipe, streak/freshness, profile detail, rate/capacity controls, and
-monitoring do not. The web scoring and ranking code still operates only on clearly synthetic
-in-process fixtures; its application does not connect to the database-only scoring/finalization/read
-state in revisions 0001 through 0011.
+bounded database score projection and versioned response-only schema now exist, but their HTTP
+route/mapper, cache/invalidation, CarRecipe, streak/freshness, profile detail, rate/capacity
+controls, and monitoring do not. The web scoring and ranking code still operates only on clearly
+synthetic in-process fixtures; its application does not connect to the database-only
+scoring/finalization/read state in revisions 0001 through 0011.
 
 ## Evidence commands
 

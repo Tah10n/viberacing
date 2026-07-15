@@ -36,5 +36,5 @@ pnpm run test:contracts:coverage
 ```
 
 Generated code is committed so TypeScript and future Rust consumers can review an immutable source
-digest. It is still pre-implementation: no current web route imports the connector contract and no
-real usage data is accepted.
+digest. It is still pre-endpoint: no current web route imports the Community response component, no
+service imports the connector contract, and no real usage data is accepted.

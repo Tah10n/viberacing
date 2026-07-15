@@ -18,6 +18,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0007](0007-restricted-recovery-authority.md)           | Recovery codes grant only short-lived passkey-replacement authority | Accepted; recovery DB capability implemented        |
 | [0008](0008-community-season-grace-and-finalization.md) | Server-time Community grace and immutable finalization              | Accepted; finalization DB capability implemented    |
 | [0009](0009-public-community-score-projection.md)       | Bounded active-only public Community score projection               | Accepted; score-read DB capability implemented      |
+| [0010](0010-community-score-response-contract.md)       | Closed Community score response with explicit trust metadata        | Accepted; response schema/validators implemented    |
 
 ## Lifecycle
 

@@ -345,7 +345,7 @@ state to `active`, then recomputes shared rank and contiguous display position s
 no public gap. Its exact ten fields omit private IDs, raw/daily values, and exact timestamps;
 Ingest, Jobs, Admin, and `PUBLIC` are denied. Ranking still evaluates the visible season before the
 100-row result cap, so the five-second database deadline is defense in depth rather than capacity
-evidence. No HTTP route/schema, cache/invalidation, car, streak, rounded freshness, profile detail,
+evidence. No HTTP route/mapper, cache/invalidation, car, streak, rounded freshness, profile detail,
 rate limit, or deployment is implemented.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
@@ -404,9 +404,10 @@ hard failure, not something the script silently broadens or repairs.
   Ed25519 verification, origin proof, generic errors, rate limits, deadlines, and backpressure.
 - Implement the Jobs service and scheduler around the database scoring refresh and finalization,
   plus audited corrections and freshness/streak projection.
-- Implement the versioned HTTP public-race schema/route, CarRecipe/profile detail,
-  cache/invalidation, request shaping, query-plan/load evidence, and monitoring around the bounded
-  database score read.
+- Implement the versioned HTTP score route/mapper around `CommunityScorePageV1`, including response
+  validation, cache/invalidation, request shaping, query-plan/load evidence, and monitoring.
+- Define a separate complete race/profile contract when CarRecipe, streak, freshness, and profile
+  detail have real persistence and lifecycle evidence.
 - Schedule and monitor the implemented ingest-retention procedure, and implement bounded cleanup for
   ceremonies, sessions, pairings, jobs, recovery authority, and tombstones. Expiry columns outside
   the revision 0008 boundary are not cleanup.

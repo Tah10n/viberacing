@@ -38,21 +38,38 @@ const schemaTypes = new Set(["array", "boolean", "integer", "object", "string"])
 const forbiddenConnectorFields = new Set([
   "accessToken",
   "accountId",
+  "activeDays",
   "apiKey",
   "conversation",
+  "dailyScore",
+  "displayPosition",
   "email",
+  "githubUserId",
+  "handle",
   "moderationState",
   "profileId",
   "prompt",
   "rank",
+  "rankPosition",
   "receivedAt",
   "repository",
   "score",
+  "scoreVersion",
   "season",
+  "seasonEnd",
+  "seasonFinalized",
+  "seasonStart",
+  "selfReported",
+  "sourceCount",
   "streak",
   "trustTier",
+  "weeklyScore",
 ]);
 const expectedFields = new Map([
+  [
+    "community-score-page.schema.json",
+    ["schemaVersion", "trustTier", "selfReported", "participants"],
+  ],
   [
     "connector-sync.schema.json",
     [
@@ -288,9 +305,15 @@ if (sources !== undefined) {
     const fields = Object.keys(schema?.properties ?? {});
     const expected = expectedFields.get(entry.file);
     if (expected === undefined || !sameEntries(fields, expected)) {
-      report(scope, "top-level writable fields differ from the reviewed contract boundary");
+      report(scope, "top-level fields differ from the reviewed contract boundary");
     }
     if (entry.file === "connector-sync.schema.json") {
+      const dailyEntry = schema?.properties?.dailyEntries?.items;
+      if (
+        !sameEntries(Object.keys(dailyEntry?.properties ?? {}), ["codexReportedDate", "tokens"])
+      ) {
+        report(scope, "connector daily-entry fields differ from the exact writable allowlist");
+      }
       const nestedNames = [];
       const collectNames = (node) => {
         for (const [name, child] of Object.entries(node?.properties ?? {})) {
@@ -312,6 +335,66 @@ if (sources !== undefined) {
       }
       if (schema?.properties?.dailyEntries?.["x-viberacing-uniqueBy"] !== "codexReportedDate") {
         report(scope, "daily entries must remain unique by codexReportedDate");
+      }
+    }
+    if (entry.file === "community-score-page.schema.json") {
+      const participantArray = schema?.properties?.participants;
+      const participantProperties = participantArray?.items?.properties ?? {};
+      const participantFields = Object.keys(participantProperties);
+      if (
+        schema?.properties?.trustTier?.const !== "community" ||
+        schema?.properties?.selfReported?.const !== true
+      ) {
+        report(scope, "Community score trust metadata must remain explicit and constant");
+      }
+      if (
+        participantArray?.minItems !== 0 ||
+        participantArray?.maxItems !== 32 ||
+        participantArray?.["x-viberacing-uniqueBy"] !== "displayPosition"
+      ) {
+        report(scope, "Community score participants must remain a bounded unique display page");
+      }
+      if (
+        !sameEntries(participantFields, [
+          "seasonStart",
+          "seasonEnd",
+          "scoreVersion",
+          "seasonFinalized",
+          "handle",
+          "weeklyScore",
+          "activeDays",
+          "sourceCount",
+          "rankPosition",
+          "displayPosition",
+        ])
+      ) {
+        report(scope, "Community score participant fields differ from the public allowlist");
+      }
+      const exactIntegerBounds = [
+        ["weeklyScore", 0, 7000],
+        ["activeDays", 0, 7],
+        ["sourceCount", 0, 32],
+        ["rankPosition", 1, 32],
+        ["displayPosition", 1, 32],
+      ];
+      if (
+        exactIntegerBounds.some(([name, minimum, maximum]) => {
+          const field = participantProperties[name];
+          return field?.minimum !== minimum || field?.maximum !== maximum;
+        }) ||
+        participantProperties.scoreVersion?.minLength !== 3 ||
+        participantProperties.scoreVersion?.maxLength !== 32 ||
+        participantProperties.scoreVersion?.pattern !== "^[a-z][a-z0-9_]{2,31}$" ||
+        participantProperties.handle?.minLength !== 3 ||
+        participantProperties.handle?.maxLength !== 24 ||
+        participantProperties.handle?.pattern !== "^[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]$" ||
+        participantProperties.seasonStart?.format !== "date" ||
+        participantProperties.seasonStart?.pattern !==
+          "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$" ||
+        participantProperties.seasonEnd?.format !== "date" ||
+        participantProperties.seasonEnd?.pattern !== "^(?:20[0-9]{2}-[0-9]{2}-[0-9]{2}|2100-01-03)$"
+      ) {
+        report(scope, "Community score participant bounds differ from the reviewed projection");
       }
     }
   }
