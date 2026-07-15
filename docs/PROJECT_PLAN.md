@@ -146,7 +146,10 @@ flowchart LR
 
 - Web/Auth: Next.js App Router and strict TypeScript.
 - Ingest: a small Fastify service with no OAuth, admin, signing, or deployment credentials.
-- Jobs: idempotent Node.js jobs for season finalization, deletion, retention, and cleanup.
+- Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
+  The first local runner now wraps only the reviewed Community cleanup/refresh/finalization
+  procedures; scheduling, deletion purge, monitoring, live credentials, and deployment remain
+  separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.

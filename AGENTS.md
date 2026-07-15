@@ -23,12 +23,14 @@ Community score query/response contracts, one locally implemented OpenAPI GET, a
 PostgreSQL score adapter/mapper, a closed public problem-response factory and request/admission
 route, and procedure-only identity, passkey, restricted-recovery, pairing, source/device lifecycle,
 Community usage-ingest, Jobs-only ingest-retention, and open-season Community scoring plus terminal
-finalization and bounded public score-projection database slices. The public score route is locally
-verified but has no live database login, deployment, edge controls, or visible-component consumer.
-Do not claim that HTTP authentication, OAuth/Argon2id/WebAuthn/Ed25519 application verification,
-real-user ingestion, a connector, a scoring service or deployed public-race read, season correction,
-a finalization scheduler, scheduled or broader cleanup, deployment, or a hosted security control
-exists until its implementation and verification are present in the working tree.
+finalization and bounded public score-projection database slices. A local one-shot Jobs runner now
+invokes only those three reviewed maintenance functions through a probed least-privileged login
+contract. The public score route is locally verified but has no live database login, deployment,
+edge controls, or visible-component consumer. Do not claim that HTTP authentication,
+OAuth/Argon2id/WebAuthn/Ed25519 application verification, real-user ingestion, a connector, a Jobs
+scheduler or deployed public-race read, season correction, scheduled or broader cleanup, deployment,
+or a hosted security control exists until its implementation and verification are present in the
+working tree.
 
 ## Repository map
 
@@ -39,8 +41,10 @@ exists until its implementation and verification are present in the working tree
 - `scripts/` contains repository verification and black-box policy tests.
 - `config/` contains reviewed external-host and dependency-license policy; do not widen either
   allowlist as a workaround for a failing check.
-- `apps/web/` contains the synthetic Next.js frontend, dormant score adapter, and nested agent
-  guidance. Read `apps/web/AGENTS.md` before editing it.
+- `apps/web/` contains the synthetic Next.js frontend, local public-score route/adapter, and nested
+  agent guidance. Read `apps/web/AGENTS.md` before editing it.
+- `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
+  least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `contracts/v1/` contains canonical public JSON Schemas; `contracts/generated/` contains
   drift-checked derivatives.
 - `packages/contracts/` contains generated TypeScript types plus the bounded runtime validator and
@@ -49,14 +53,14 @@ exists until its implementation and verification are present in the working tree
   persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
-- Ingest, jobs, authentication application code, and connector workspaces are not present yet;
-  follow `docs/PROJECT_PLAN.md` when they are introduced.
+- Ingest, authentication application code, and connector workspaces are not present yet; follow
+  `docs/PROJECT_PLAN.md` when they are introduced.
 
 ## Verified commands
 
 - `pnpm run verify` runs public-data/history, checker regression, documentation/link, spelling,
-  license inventory, formatting, Markdown, configuration, workflow-policy, frontend lint/type/
-  coverage/production-build, and Rust workspace gates.
+  license inventory, formatting, Markdown, configuration, workflow-policy, contract/Jobs/frontend
+  lint/type/coverage/production-build, and Rust workspace gates.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
 - `pnpm run check:public:staged` scans the exact staged blobs before a commit.
 - `pnpm run check:community` validates governance and community-health files and forms.
@@ -80,6 +84,9 @@ exists until its implementation and verification are present in the working tree
   `pnpm run typecheck:web`, `pnpm run test:web:coverage`, and `pnpm run build:web` are focused web
   gates. `pnpm run check:web-build` enforces the production asset/privacy budget after a build;
   focused gates do not replace root verification.
+- `pnpm run lint:jobs`, `pnpm run typecheck:jobs`, `pnpm run test:jobs:coverage`, and
+  `pnpm run build:jobs` verify the local one-shot Jobs boundary. They use injected fakes and do not
+  prove a live Jobs login, scheduler, production TLS, monitoring, capacity, or deployment.
 - `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS, and
   private reporting controls are configured.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability
@@ -91,10 +98,11 @@ exists until its implementation and verification are present in the working tree
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 
-These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`. The web tests use
-synthetic data and do not prove authentication, real-user ingestion, connector, deployment, or
-production behavior; the database integration proves only its isolated SQL boundary. Install
-dependencies with `pnpm install --frozen-lockfile --ignore-scripts`.
+These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`. The web and Jobs
+tests use synthetic/injected data and do not prove authentication, real-user ingestion, connector,
+scheduler, live database login, deployment, or production behavior; the database integration proves
+only its isolated SQL boundary. Install dependencies with
+`pnpm install --frozen-lockfile --ignore-scripts`.
 
 ## Public repository boundary
 

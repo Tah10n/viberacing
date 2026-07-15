@@ -2,6 +2,7 @@
   "schemaVersion": 2,
   "generatedFrom": [
     "package.json",
+    "apps/jobs/package.json",
     "apps/web/package.json",
     "packages/contracts/package.json",
     "pnpm-lock.yaml",
@@ -153,6 +154,7 @@
       "version": "9.39.5",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -285,6 +287,7 @@
       "version": "24.13.3",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -293,7 +296,10 @@
       "name": "@types/pg",
       "version": "8.20.0",
       "license": "MIT",
-      "direct": [{ "workspace": "apps/web", "scope": "development" }]
+      "direct": [
+        { "workspace": "apps/jobs", "scope": "development" },
+        { "workspace": "apps/web", "scope": "development" }
+      ]
     },
     {
       "name": "@types/react",
@@ -358,6 +364,7 @@
       "version": "4.1.10",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -453,6 +460,7 @@
       "version": "9.39.5",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -714,7 +722,10 @@
       "name": "pg",
       "version": "8.22.0",
       "license": "MIT",
-      "direct": [{ "workspace": "apps/web", "scope": "runtime" }]
+      "direct": [
+        { "workspace": "apps/jobs", "scope": "runtime" },
+        { "workspace": "apps/web", "scope": "runtime" }
+      ]
     },
     { "name": "pg-cloudflare", "version": "1.4.0", "license": "MIT", "direct": [] },
     { "name": "pg-connection-string", "version": "2.14.0", "license": "MIT", "direct": [] },
@@ -794,6 +805,7 @@
       "version": "6.0.3",
       "license": "Apache-2.0",
       "direct": [
+        { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -803,6 +815,7 @@
       "version": "8.63.0",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -818,6 +831,7 @@
       "version": "4.1.10",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]

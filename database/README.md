@@ -5,11 +5,12 @@
 This directory contains eleven SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
-implemented. No application route, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier, production
-credential, or deployed database consumes them yet. The database-only ingest and Jobs-only
-ingest-retention, open-season scoring, and terminal finalization procedures plus one Web-only public
-score projection are implemented; HTTP ingest/read routes, scheduled execution, audited corrections,
-and purge are not.
+implemented. No authentication/ingest route, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier,
+production credential, or deployed database consumes the protected identity/ingest capabilities. One
+local public-score route and one local one-shot Jobs runner wrap narrow capabilities without a
+working database login. The database-only ingest and Jobs-only ingest-retention, open-season
+scoring, and terminal finalization procedures plus one Web-only public score projection are
+implemented; HTTP ingest, scheduled execution, audited corrections, and purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -319,7 +320,9 @@ Revision 0008 turns those two expiry markers into one callable Jobs-only deletio
 server time, rejects null, zero, negative, or over-1000 batch sizes, serializes workers with a
 private owner-only mutex row plus a five-second lock timeout, and leaves live rows untouched. The
 procedure and observed two-worker race are deletion evidence for the isolated SQL boundary only: no
-Jobs service, scheduler, production retention policy, or real-user purge evidence exists.
+production scheduler, monitoring, retention policy, or real-user purge evidence exists. ADR 0014's
+local runner can invoke one fixed maximum-size batch only after its Jobs-role probe; no live login
+or Node-to-PostgreSQL integration is supplied.
 
 Revision 0009 materializes only an open Community season. It binds each ISO Monday-through-Sunday
 season to immutable `community_v1` parameters, sums current eligible source/day values with numeric
@@ -340,7 +343,9 @@ terminal transition rematerializes once, records its immutable timestamp, suppor
 idempotent retry, and rejects direct metadata or projection mutation. Profile purge can still
 cascade personal score rows without reopening the non-personal season record. A closed no-data week
 stores one terminal season, bounded to the ISO weeks reachable from the contract's `20xx` dates. No
-correction record, Jobs service, scheduler, or production capacity claim is implemented.
+correction record, Jobs scheduler/monitor, live integration, or production capacity claim is
+implemented. The local one-shot runner selects only the prepared refresh/finalization call after a
+closed canonical-season command and a least-privilege session probe.
 
 Revision 0011 exposes only a bounded score projection to the Web role. It filters current profile
 state to `active`, then recomputes shared rank and contiguous display position so hide/purge leaves
@@ -408,12 +413,12 @@ hard failure, not something the script silently broadens or repairs.
   in this repository.
 - Implement the HTTP Ingest boundary with exact raw-body canonicalization, strict contract parsing,
   Ed25519 verification, origin proof, generic errors, rate limits, deadlines, and backpressure.
-- Implement the Jobs service and scheduler around the database scoring refresh and finalization,
-  plus audited corrections and freshness/streak projection.
-- Integrate the bounded database adapter with a deployment-provisioned Web-only login and verified
-  TLS, then implement the versioned HTTP score route around `CommunityScorePageV1`, including
-  cache/invalidation, request shaping, query-plan/load evidence, route-level deadlines/backpressure,
-  and monitoring.
+- Implement a scheduler, monitoring, retry/overlap policy, live login/TLS integration, and capacity
+  evidence around the local one-shot Jobs cleanup/refresh/finalization runner, plus audited
+  corrections and freshness/streak projection.
+- Integrate the bounded database adapter and local score route with a deployment-provisioned
+  Web-only login and verified TLS, then add cache/invalidation, edge request shaping,
+  query-plan/load evidence, monitoring, and deployment verification.
 - Define a separate complete race/profile contract when CarRecipe, streak, freshness, and profile
   detail have real persistence and lifecycle evidence.
 - Schedule and monitor the implemented ingest-retention procedure, and implement bounded cleanup for

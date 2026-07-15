@@ -9,11 +9,12 @@ activation, passkey login and management, restricted recovery, session rotation/
 immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
 ingest, bounded ingest-retention cleanup, open-season scoring refresh, late-ingest closure, terminal
 season finalization, and a Web-only public score projection. One local public-score GET constructs
-the bounded adapter lazily after closed request admission, but no authentication/ingest endpoint,
-OAuth callback, Argon2id/WebAuthn/Ed25519 application verifier, connector, purge/maintenance/scoring
-service or scheduler, audited correction, or deployed service executes the complete sequences. No
-deployment login, certificate, edge policy, or live route evidence is supplied. Data labels refer to
-the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account,
+the bounded adapter lazily after closed request admission. One local one-shot Jobs runner can invoke
+only cleanup, refresh, or finalization, but no authentication/ingest endpoint, OAuth callback,
+Argon2id/WebAuthn/Ed25519 application verifier, connector, purge worker, Jobs scheduler/monitor,
+audited correction, or deployed service executes the complete sequences. No deployment login,
+certificate, edge policy, or live route/Jobs evidence is supplied. Data labels refer to the
+classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account,
 Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
@@ -264,8 +265,8 @@ The connector, edge, Ingest HTTP service, raw-body canonicalization, Ed25519 ver
 proof, and rate controls are still absent. Revision 0008 gives Jobs only a server-time, 1-to-1000
 batch procedure for expired nonces and raw snapshots. It serializes callers, cascades raw entries,
 preserves current source/day values, and clears only their deleted raw reference. The expiry columns
-still do not delete rows by themselves: no Jobs service, scheduler, monitor, or deployment invokes
-the procedure.
+still do not delete rows by themselves. The local one-shot Jobs command can invoke one fixed
+1000-row batch, but no scheduler, monitor, live login, or deployment invokes it automatically.
 
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct
@@ -279,8 +280,10 @@ deadline, and terminal triggers reject silent metadata or score rewrites while a
 purge to remove personal rows. Ingest and Jobs share the canonical
 `season → profile → source → device` lock order. Revision 0011 gives only Web a bounded score-only
 read that filters current profile visibility before re-ranking and omits private identifiers, raw
-values, daily detail, and exact timestamps. No Jobs process invokes the maintenance procedures, and
-no audited correction, freshness/streak/car projection, HTTP route, or public cache exists.
+values, daily detail, and exact timestamps. ADR 0014's local one-shot Jobs process invokes exactly
+one reviewed cleanup, refresh, or finalization function after a per-checkout least-privilege probe;
+no scheduler, live login/certificate, application database integration, audited correction,
+freshness/streak/car projection, deployed route, or public cache exists.
 
 ## Public race read
 

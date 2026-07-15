@@ -12,10 +12,12 @@ ingest-retention cleanup, open-season scoring, terminal season finalization, and
 database projection plus its server-only projection-to-contract mapper; a Phase 3 database-only
 source/device lifecycle and same-source deduplication slice has also started. A server-only public
 problem-response factory, closed query/OpenAPI operation, and locally implemented public-score GET
-now exist. Phase 0 hosted-publication controls remain blocked on real maintainer identities and
-GitHub configuration. No authentication route, OAuth/Argon2id/WebAuthn application flow, production
-deployment, live score-database login/TLS integration, released connector, real-user ingestion,
-end-to-end public ranking, or finalization scheduler exists.
+now exist. A local one-shot Jobs runner invokes only the three existing maintenance procedures
+through a bounded least-privileged adapter. Phase 0 hosted-publication controls remain blocked on
+real maintainer identities and GitHub configuration. No authentication route,
+OAuth/Argon2id/WebAuthn application flow, production deployment, live Web/Jobs database login/TLS
+integration, released connector, real-user ingestion, end-to-end public ranking, or finalization
+scheduler exists.
 
 ## Implemented and locally verified
 
@@ -71,7 +73,7 @@ end-to-end public ranking, or finalization scheduler exists.
   trusted-release Mermaid views.
 - A fail-closed Codex compatibility policy and empty support matrix; no upstream or connector
   version is claimed supported without pinned schema/fixture/platform evidence.
-- An ADR lifecycle/template and thirteen accepted design decisions covering Community trust,
+- An ADR lifecycle/template and fourteen accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -197,7 +199,8 @@ end-to-end public ranking, or finalization scheduler exists.
   1-to-1000 batches, idempotent reruns, live-row preservation, entry cascade, and raw-reference
   clearing that preserves current values. Ingest also applies the server grace deadline before its
   profile/source/device locks: a late whole snapshot is retained as `season_closed` but updates no
-  accepted source/day state. No Ingest or Jobs service or scheduler exists.
+  accepted source/day state. No Ingest API, live Jobs database integration, or scheduler exists; the
+  local runner described below is the only Jobs application boundary.
 - Community scoring PostgreSQL scenarios prove immutable `community_v1` formula parameters and
   season binding, ISO Monday-to-Sunday grouping, exact logarithmic rounding, numeric overflow
   protection, one profile cap after distinct-source aggregation, weekly caps, active-day and
@@ -226,7 +229,25 @@ end-to-end public ranking, or finalization scheduler exists.
   query; destroys a failed client; releases a healthy client before mapping; and returns only stable
   non-reflective error/signal codes. Config, pool, and store tests cover positive and negative
   boundaries without a live deployment credential. The local route is wired to this adapter, but no
-  cache, live login/certificate, audited correction flow, scoring service, or scheduler exists.
+  cache, live login/certificate, audited correction flow, or scheduler exists.
+- A private TypeScript Jobs workspace now accepts exactly one fixed 1000-row cleanup command or one
+  canonical Monday refresh/finalization command. It revalidates closed plain job data, reads only
+  redacted `VIBERACING_JOBS_DATABASE_*` configuration, permits cleartext only for explicit
+  development/test loopback, and otherwise requires certificate-verifying TLS with a DNS hostname.
+  Its pool maximum is one; client connect/statement/query deadlines are 2/31/32 seconds, outside the
+  database functions' 30-second deadline. Every checkout probes the exact `viberacing_jobs`
+  effective role, a distinct non-privileged login with only that membership, CONNECT without
+  CREATE/TEMPORARY, and `pg_catalog,pg_temp` search path. It then selects one of three fixed
+  prepared function calls, requires one exact allowlisted result row, holds the client through
+  settlement, destroys it after failure, and closes the pool on every acquired CLI path. Success and
+  failure output are stable sentences without command/date/count/config/SQL/exception reflection.
+  Ninety-four focused tests cover config, TLS, pool/signal behavior, hostile
+  command/object/array/result inputs, exact SQL parameters, role mismatch, settlement/release/close,
+  CLI output, and failure translation at 100% statement/branch/function/line coverage. A lint-policy
+  regression also prevents every production module except the fixed pool adapter from importing
+  `pg`. A TypeScript production build passes. No live Jobs login, Node-to-PostgreSQL integration,
+  scheduler, monitoring backend, retry policy, capacity result, correction, deletion purge, or
+  deployment is claimed.
 - Twenty-two deterministic cross-connection races hold a relevant invite, challenge, session,
   source, device, pairing, or profile row, or a season advisory lock; tag every session; and observe
   every contender in the holder's transitive PostgreSQL blocker chain before releasing it.
@@ -271,9 +292,9 @@ end-to-end public ranking, or finalization scheduler exists.
   coverage gate currently reports 99.01% statements, 95.98% branches, 100% functions, and 98.98%
   lines over product components and libraries; framework entrypoints are verified by the production
   build instead of artificial unit coverage.
-- A root verification pipeline that now includes contract generation/drift, lint, strict type
-  checking and coverage, plus web lint, strict type checking, coverage, and a production Next.js
-  build on every deterministic CI run.
+- A root verification pipeline that now includes contract generation/drift, contract and Jobs lint,
+  strict type checking and coverage, Jobs production compilation, plus web lint, strict type
+  checking, coverage, and a production Next.js build on every deterministic CI run.
 - A manifest-driven production artifact gate with nine black-box cases and enforced limits for
   initial raw/gzip bytes, application/CSS gzip bytes, asset count, source maps, fonts, path safety,
   and standalone output. The current initial route is 180,646 gzip bytes across seven assets.
@@ -326,17 +347,17 @@ Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/
 authentication-route generic HTTP response translation, WebAuthn and Ed25519 cryptographic
 verification, anonymous login/pairing/recovery edge rate limits and cleanup,
 raw-body/signature/origin validation in an ingest API, scheduled execution/monitoring of
-ingest-retention cleanup, cleanup for other expiring state, the scoring Jobs service/scheduler,
-audited corrections, deployed public-score delivery, purge workers, Codex connector, release
-signing, deployment, and public beta operations remain proposed. A bounded database score
-projection, versioned response-only schema, fail-closed server mapper, bounded PostgreSQL adapter,
-and local HTTP route now exist, including URL/media parsing, admission/deadline policy, store
-translation, and final serialization. Cache/invalidation, CarRecipe, streak/freshness, profile
-detail, client-rate and production-capacity controls, monitoring backend, deployment login,
-certificate, edge policy, and live adapter integration do not. The visible web scoring and ranking
-experience still operates only on clearly synthetic in-process fixtures; no component calls the
-route or connects that page to the database-only scoring/finalization/read state in revisions 0001
-through 0011.
+ingest-retention cleanup, cleanup for other expiring state, the Jobs scheduler/live login and
+application-to-PostgreSQL integration, audited corrections, deployed public-score delivery, purge
+workers, Codex connector, release signing, deployment, and public beta operations remain proposed. A
+bounded database score projection, versioned response-only schema, fail-closed server mapper,
+bounded PostgreSQL adapter, and local HTTP route now exist, including URL/media parsing,
+admission/deadline policy, store translation, and final serialization. Cache/invalidation,
+CarRecipe, streak/freshness, profile detail, client-rate and production-capacity controls,
+monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
+The visible web scoring and ranking experience still operates only on clearly synthetic in-process
+fixtures; no component calls the route or connects that page to the database-only
+scoring/finalization/read state in revisions 0001 through 0011.
 
 ## Evidence commands
 
@@ -347,6 +368,8 @@ pnpm run verify
 pnpm run check:contracts
 pnpm run check:database
 pnpm run test:database:integration
+pnpm run test:jobs:coverage
+pnpm run build:jobs
 pnpm run check:web-build
 pnpm run check:public:staged
 git diff --cached --check

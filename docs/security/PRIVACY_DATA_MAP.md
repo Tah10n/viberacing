@@ -99,6 +99,8 @@ owner-only mutex row and five-second lock timeout prevent runtime roles from sei
 key or waiting without a database bound. The synthetic PostgreSQL suite proves idempotency, live-row
 preservation, role denial, and two-worker serialization. No scheduler, service, production retention
 monitor, backup policy, or real-user purge evidence exists, so real-user ingestion remains blocked.
+The later local one-shot runner can invoke one fixed batch, but does not make cleanup scheduled or
+prove a production retention policy.
 
 Revision 0009 reads exact current values only inside an owner-defined Jobs procedure and writes a
 strictly smaller private derived set: daily and weekly score, active days, contributing-source
@@ -115,7 +117,16 @@ with `season_closed` and creates no accepted source/day value. Finalized metadat
 immutable except that profile purge removes the profile-linked weekly/daily rows while retaining the
 non-personal terminal season definition. A no-data closed week stores only that definition. No
 public serializer/cache, audited correction record, finalized public-history retention rule, Jobs
-service, or scheduler exists.
+deployment/scheduler, or monitoring backend exists.
+
+ADR 0014 stores no new data. Its local Jobs process transiently receives only a fixed cleanup batch
+or one Public season-start label, plus the private aggregate counts already returned by the
+procedures. It validates and discards those values within one process invocation. The CLI emits only
+one constant completion/failure sentence; it does not log the command, date, counts, identifiers,
+SQL, environment, exception, or stack. The optional pool hook receives only the closed Operational
+signal `idle_client_error` and has no built-in storage or network sink. A future scheduler, run
+history, metric, alert, retry record, or monitoring backend must map its exact fields, access,
+retention, and deletion behavior here before collection.
 
 Revision 0011 stores no new data. One owner-defined function gives only the Web role a fixed
 ten-field score projection: season dates/version/finalized state, handle, weekly score, active days,
@@ -179,8 +190,9 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
 - Ingest accepts only source-bound signed sync through a narrow procedure; it cannot read or change
   passkeys, sessions, invites, admin roles, schema, or finalized seasons.
 - Jobs currently receive only bounded expired ingest-state cleanup, open-season Community scoring
-  refresh, and terminal finalization. Correction and deletion capabilities require separate
-  migrations and tests; migrations use a different non-runtime owner.
+  refresh, and terminal finalization. The local one-shot adapter rechecks the exact Jobs-only login
+  and invokes one prepared capability without logging inputs or results. Correction and deletion
+  capabilities require separate migrations and tests; migrations use a different non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The

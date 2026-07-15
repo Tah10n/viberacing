@@ -1,0 +1,160 @@
+# ADR 0014: Bounded Community maintenance job runner
+
+- Status: Accepted (local one-shot runner implemented; scheduler and deployment pending)
+- Date: 2026-07-15
+- Decision owners: Jobs, Database, Security, Privacy, and Operations
+- Supersedes: None
+- Superseded by: None
+
+## Context
+
+Revisions 0008 through 0010 expose three narrow `viberacing_jobs` database capabilities: delete one
+bounded batch of expired ingest state, refresh one open Community season, and idempotently finalize
+one Community season after grace. PostgreSQL integration proves their role grants, server-time
+decisions, serialization, bounds, rollback, and concurrency semantics. Until now, no application
+process could invoke those procedures without inventing a generic database client or relying on an
+operator's owner credentials.
+
+A production scheduler, service login, certificate, monitoring backend, retry policy, and capacity
+result do not yet exist. The first application slice therefore needs to make one invocation safe and
+testable without claiming scheduled execution or accepting arbitrary maintenance work. This boundary
+crosses TB-07 and touches TB-11 because cleanup removes retained raw state and scoring writes public
+derived state.
+
+## Decision
+
+Add a private `apps/jobs` TypeScript workspace containing one local one-shot command runner. It
+accepts exactly these command forms:
+
+- `cleanup-expired-ingest-state`, mapped to a fixed batch of 1000;
+- `refresh-community-season YYYY-MM-DD`; and
+- `finalize-community-season YYYY-MM-DD`.
+
+Season input must be one canonical Monday from `1999-12-27` through `2099-12-28`. Unknown commands,
+arguments, fields, sparse or exotic arrays, accessors, prototypes, and values fail before database
+configuration or connection. Programmatic job objects are separately revalidated as closed plain
+data, so the CLI parser is not the only enforcement point.
+
+The runner reads only `VIBERACING_JOBS_DATABASE_*`. Cleartext is allowed solely for explicit
+development/test loopback use; every other connection requires certificate-verifying TLS with a DNS
+hostname. Passwords are non-enumerable and JSON-redacted. The pool maximum is one, connection
+acquisition is bounded to two seconds, the client statement deadline is 31 seconds, and its query
+deadline is 32 seconds, outside the procedures' 30-second statement deadline. A failed client is
+destroyed, a healthy client is released only after the procedure result settles and validates, and
+the pool is closed on every acquired CLI path.
+
+Every checkout first verifies all of the following in one fixed query:
+
+- `CURRENT_USER` is exactly `viberacing_jobs`;
+- `SESSION_USER` is a distinct, non-superuser login that can set `viberacing_jobs`;
+- the login can connect but cannot create or use temporary database objects;
+- it has no other group membership; and
+- the search path is exactly `pg_catalog,pg_temp`.
+
+The second and only capability query is selected in code from the three fixed parameterized SQL
+strings. There is no generic query, table access, migration, owner, Web, Ingest, Admin, interactive
+auth, correction, or deletion capability. The returned array and row must contain exactly one plain
+dense row and the allowlisted integer columns. Cleanup counts cannot exceed the requested batch;
+scoring counts must fit PostgreSQL `integer`. Accessors, extra columns, missing rows, invalid
+counts, and driver/runtime exceptions produce one stable error type without reflecting values.
+
+The CLI prints only one stable success or failure sentence. It does not print the command, season,
+counts, configuration, SQL, exception, or stack. The pool monitoring seam accepts only the closed
+`idle_client_error` signal and contains sink failures. There is deliberately no scheduled loop,
+network listener, health endpoint, retry loop, telemetry backend, or production login provisioning
+in this decision.
+
+## Security and privacy consequences
+
+The application can exercise only authority the database already grants to `viberacing_jobs`, and it
+rechecks effective authority on every connection instead of trusting configuration alone. Fixed
+queries and closed results reduce SQL-injection, capability-confusion, prototype/accessor, and
+unexpected-driver-data paths. Single-client operation plus layered deadlines bounds one process;
+PostgreSQL remains authoritative for mutexes, server time, idempotency, grace, score caps, and final
+immutability.
+
+No new personal or usage field is collected, retained, cached, exported, or logged. The runner
+transiently receives a public season label or a fixed cleanup batch and private aggregate counts,
+then discards them when the process exits. Stable CLI outcomes are operational control flow, not an
+analytics or retention sink. Production scheduler metadata, run history, alerts, and aggregate
+metrics still require a privacy-map and retention review before collection.
+
+Residual risk remains: no live login/certificate path or application-to-PostgreSQL integration test
+proves deployment membership; no scheduler enforces cadence, backoff, overlap, or alerting; cleanup
+does not cover other expiring identity state; no correction or deletion purge worker exists; and no
+capacity test proves the selected deadlines under production load. A compromised Jobs login still
+has all three database capabilities, so principal separation and revocation remain required.
+
+Affected invariants are VR-PUBLIC-001, VR-INGEST-002, VR-ABUSE-001, VR-DATA-001, and VR-DELETE-001.
+Primary attacker stories are VR-ABUSE-SEASON-RACE, VR-ABUSE-DATABASE-ROLE,
+VR-ABUSE-RESOURCE-EXHAUSTION, and VR-ABUSE-DELETE-RESURRECTION.
+
+## Alternatives considered
+
+- **Let an operator call SQL directly:** rejected because it encourages owner credentials, bypasses
+  the runtime-role probe, and has no closed command or result boundary.
+- **Add a generic Jobs SQL adapter:** rejected because generic SQL would erase the procedure-only
+  capability model and make future configuration or command input an injection/privilege surface.
+- **Implement the scheduler immediately:** rejected because deployment cadence, overlap, retry,
+  alert, retention, and production login policy have not been selected or capacity-tested. The
+  one-shot boundary is the reusable unit a future scheduler may invoke.
+- **Expose an HTTP maintenance endpoint:** rejected because Jobs are not a public request surface
+  and no edge/auth/origin contract grants remote maintenance authority.
+- **Accept a caller-selected cleanup batch on the CLI:** rejected for the initial runner because the
+  database's reviewed 1000-row maximum already bounds one useful invocation and removes one
+  operational tuning input. Programmatic validation retains the database range for direct tests and
+  future reviewed orchestration.
+- **Reuse the Web database login or configuration namespace:** rejected because scoring/cleanup are
+  write capabilities and must remain independently revocable from the public read principal.
+
+## Migration and rollback
+
+This change adds one private workspace, public-safe placeholder environment names, root verification
+gates, and a direct declaration of the already locked and reviewed `pg@8.22.0` client. It adds no
+database migration, role grant, credential, network route, stored field, cache, or deployment.
+
+Rollback is to stop invoking and remove the Jobs workspace, scripts, placeholders, documentation,
+lockfile importer, and dependency-inventory references. The database capabilities remain safe and
+idempotently callable by a future reviewed implementation. Rollback must not replace the runner with
+owner SQL, weaken procedure grants, or edit released migrations. A future scheduler wraps the same
+closed runner or supersedes this ADR if it changes commands, overlap, telemetry, authority, or retry
+semantics.
+
+## Verification
+
+Current local evidence includes:
+
+- strict configuration bounds, local-only cleartext, verified production TLS, redacted password
+  enumeration/serialization, and hostile environment reads;
+- exact one-client pool configuration, structured query forwarding, close/release behavior, and
+  contained synchronous/asynchronous signal-sink failures;
+- canonical season and batch bounds, closed object/array/result allowlists, sparse/exotic/accessor/
+  proxy rejection, aggregate count bounds, and non-reflective failures;
+- effective-role/login/capability/search-path rejection before every procedure call;
+- exact prepared parameters for all three functions, healthy versus destructive release, connection
+  and query translation, and a deferred query proving release occurs only after settlement;
+- CLI rejection before configuration, pool close after success or failure, stable output, writer
+  failure containment, and no reflected command/error detail;
+- 94 unit tests with 100% statement, branch, function, and line coverage, including a lint-policy
+  regression that keeps direct `pg` imports inside the fixed pool adapter; and
+- strict lint, type checking, production TypeScript build, dependency/license inventory, root
+  deterministic verification, and staged public-data review.
+
+The SQL integration suite separately proves the three procedure bodies and concurrency behavior in
+ephemeral PostgreSQL. It does not exercise the Node adapter with a real Jobs login. Such an
+application integration test, scheduler behavior, production TLS/login, capacity, monitoring, and
+deployment evidence remain required before those behaviors may be claimed.
+
+## References
+
+- [Project plan](../PROJECT_PLAN.md)
+- [Implementation status](../IMPLEMENTATION_STATUS.md)
+- [System context](../architecture/SYSTEM_CONTEXT.md)
+- [Data flow](../architecture/DATA_FLOW.md)
+- [Security invariants](../architecture/SECURITY_INVARIANTS.md)
+- [Threat model](../security/THREAT_MODEL.md)
+- [Abuse cases](../security/ABUSE_CASES.md)
+- [Privacy data map](../security/PRIVACY_DATA_MAP.md)
+- [Database capability boundary](../../database/README.md)
+- [Edge, service, and database isolation](0004-edge-service-and-database-isolation.md)
+- [Community season grace and finalization](0008-community-season-grace-and-finalization.md)

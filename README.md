@@ -101,20 +101,25 @@ also require edge rate limits and bounded cleanup before exposure. A database-on
 capability now exposes minimal active-device verification material and accepts bounded source-bound
 snapshots with exact retry, nonce replay, monotonic source/date, quarantine, and lifecycle-race
 enforcement. A Jobs-only procedure deletes bounded batches of expired nonces and raw snapshots while
-preserving current source/day values; no scheduler invokes it. The database does not verify a wire
-signature. A second Jobs-only procedure serializes an atomic refresh of one open ISO-week Community
-season: it sums distinct eligible sources before one profile daily cap, stores an immutable formula
-and season binding, shares rank on equal score and active days, and persists no raw token or source
-identifier in the score tables. Revision 0010 adds a public 48-hour server-time grace rule,
-late-snapshot quarantine, and a Jobs-only idempotent finalization procedure whose terminal metadata
-and score projection reject silent rewrites while profile purge can still remove personal rows.
+preserving current source/day values. The database does not verify a wire signature. A second
+Jobs-only procedure serializes an atomic refresh of one open ISO-week Community season: it sums
+distinct eligible sources before one profile daily cap, stores an immutable formula and season
+binding, shares rank on equal score and active days, and persists no raw token or source identifier
+in the score tables. Revision 0010 adds a public 48-hour server-time grace rule, late-snapshot
+quarantine, and a Jobs-only idempotent finalization procedure whose terminal metadata and score
+projection reject silent rewrites while profile purge can still remove personal rows. One local
+one-shot Jobs runner now wraps exactly cleanup, refresh, or finalization with a distinct
+least-privileged configuration namespace, one-client pool, per-checkout role/login/search-path
+probe, fixed deadlines and prepared parameters, closed result validation, destructive release after
+failure, and stable non-reflective CLI output. It has no scheduler, live login/certificate,
+monitoring backend, retry loop, application-to-PostgreSQL integration result, or deployment.
 Revision 0011 gives only the Web database role a bounded active-profile score projection containing
 no raw values, private identifiers, or exact timestamps. The score response component and Web
 PostgreSQL adapter preserve only that public allowlist through the local score route; the visible
 site still uses synthetic fixtures. There is still no HTTP authentication, recovery, or ingest
 route, OAuth callback, Argon2id/WebAuthn/Ed25519 application verifier, deployed score API,
-connector, cleanup/scoring scheduler or service, audited correction flow, asynchronous purge worker,
-or deployed database.
+connector, cleanup/scoring scheduler, audited correction flow, asynchronous purge worker, live Jobs
+database integration, or deployed database.
 
 ## Run and verify the synthetic prototype
 

@@ -17,6 +17,12 @@ const requiredEnvExampleValues = new Map([
   ["DATABASE_PASSWORD", "local-development-only"],
   ["DATABASE_PORT", "54329"],
   ["DATABASE_USER", "viberacing_local"],
+  ["VIBERACING_JOBS_DATABASE_HOST", "127.0.0.1"],
+  ["VIBERACING_JOBS_DATABASE_NAME", "viberacing_local"],
+  ["VIBERACING_JOBS_DATABASE_PASSWORD", "replace-with-local-jobs-password"],
+  ["VIBERACING_JOBS_DATABASE_PORT", "54329"],
+  ["VIBERACING_JOBS_DATABASE_TLS_MODE", "disable"],
+  ["VIBERACING_JOBS_DATABASE_USER", "replace_with_local_jobs_login"],
   ["VIBERACING_WEB_DATABASE_HOST", "127.0.0.1"],
   ["VIBERACING_WEB_DATABASE_NAME", "viberacing_local"],
   ["VIBERACING_WEB_DATABASE_PASSWORD", "replace-with-local-web-password"],
@@ -550,6 +556,12 @@ export function validateEnvExampleText(text) {
   }
   if (values.get("VIBERACING_WEB_DATABASE_USER") === values.get("DATABASE_USER")) {
     findings.push("Web database example credentials must not reuse the bootstrap owner");
+  }
+  if (values.get("VIBERACING_JOBS_DATABASE_USER") === values.get("DATABASE_USER")) {
+    findings.push("Jobs database example credentials must not reuse the bootstrap owner");
+  }
+  if (values.get("VIBERACING_JOBS_DATABASE_USER") === values.get("VIBERACING_WEB_DATABASE_USER")) {
+    findings.push("Jobs and Web database examples must use distinct login principals");
   }
   return findings;
 }

@@ -92,7 +92,10 @@ material availability cost.
   refresh denial after finalization, and an observed finalization-versus-late-Ingest race. That race
   exposed and then verified the canonical deadlock-free `season → profile → source → device` lock
   order; a second observed race proves opposing multi-season payload orders both lock seasons in
-  ascending order. Correction authority and the Jobs service/scheduler remain unimplemented.
+  ascending order. A local one-shot Jobs runner now admits only canonical refresh/finalization
+  commands, probes the exact role/login boundary, calls one prepared function, holds one client
+  through settlement, and discards invalid results. Correction authority, scheduling, live database
+  integration, and operational reconciliation remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -330,10 +333,13 @@ material availability cost.
   adapter uses one dedicated pool, a fixed parameterized function call, and checks effective role,
   distinct non-privileged login, exact Web-only membership, database capability, search path, and
   read-only state before every pooled read. Failed sessions are destroyed and raw driver errors are
-  not forwarded.
+  not forwarded. The local Jobs adapter independently checks an exact Jobs-only login/membership,
+  CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the three prepared
+  function calls. Its pool maximum is one, input/result shapes are closed, failed clients are
+  destroyed, and CLI output reflects no configuration, command, SQL, count, or error detail.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
-  migration workflow. Deployment login/TLS integration and a live adapter connection have not been
-  exercised because no credential or certificate is supplied.
+  migration workflow. Web and Jobs deployment login/TLS integration and live adapter connections
+  have not been exercised because no credential or certificate is supplied.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -439,9 +445,11 @@ material availability cost.
   out-of-range, and non-Monday seasons before the route may call the store. The local route rejects
   bodies and oversized/malformed URL or `Accept` work, admits at most four active reads with no
   queue, holds each lease through adapter settlement, and returns 503 on exhaustion. The operation
-  reserves a 429 response without claiming a client-rate limiter exists. Scheduling, cache,
-  scoring/read capacity evidence, quotas, edge shaping, and production load evidence remain
-  unimplemented.
+  reserves a 429 response without claiming a client-rate limiter exists. The local Jobs runner adds
+  a one-client ceiling, 2/31/32-second connect/server/client deadlines, one fixed 1000-row cleanup
+  command, canonical season validation, closed one-row results, and destructive release on failure.
+  Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and production load
+  evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

@@ -7,13 +7,14 @@ and eleven Phase 2/3 database-foundation migrations. Everything runnable uses sy
 It has procedure-only identity, passkey login/management, restricted recovery, pairing, and
 source/device lifecycle database capabilities plus Community ingest, retention cleanup, scoring, and
 terminal finalization and public score-projection procedures, but no authentication or recovery
-application code, OAuth/Argon2id/WebAuthn/Ed25519 verifier, Jobs process or scheduler, real-user
-ingestion, audited correction, or connector. A bounded server-only Web PostgreSQL adapter and local
-public-score GET are implemented and unit/build-tested, but this repository supplies no working
-deployment login or TLS certificate. A successful setup proves repository gates, synthetic frontend
-behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
-lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
-deployed API, or production flow.
+application code, OAuth/Argon2id/WebAuthn/Ed25519 verifier, Jobs scheduler, real-user ingestion,
+audited correction, or connector. A bounded local one-shot Jobs process now wraps only
+cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A bounded
+server-only Web PostgreSQL adapter and local public-score GET are implemented and unit/build-tested,
+but this repository supplies no working deployment login or TLS certificate. A successful setup
+proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
+session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
+does not prove a live adapter, deployed API, or production flow.
 
 ## Prerequisites
 
@@ -39,13 +40,13 @@ unreviewed dependency build scripts, newly published packages inside the quarant
 untrusted registry redirects, and exotic transitive sources.
 
 `pnpm run verify` is deterministic and offline after installation. It includes a complete reachable
-Git-history scan, external-host policy, English spelling, dependency-license inventory, web lint,
-strict type checking, contract generation/drift checks and coverage, web component coverage, and a
-production web build. It also runs the offline migration manifest/capability checker; the real
-PostgreSQL integration is a separate Docker command and a secretless CI job. The optional
-`pnpm run check:external-links:online` performs bounded network validation and may fail closed
-behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
-workstation.
+Git-history scan, external-host policy, English spelling, dependency-license inventory, contract and
+Jobs lint/types/coverage, Jobs production compilation, contract generation/drift checks and
+coverage, web component coverage, and a production web build. It also runs the offline migration
+manifest/capability checker; the real PostgreSQL integration is a separate Docker command and a
+secretless CI job. The optional `pnpm run check:external-links:online` performs bounded network
+validation and may fail closed behind a private DNS/proxy; do not weaken its address or redirect
+rules to accommodate a workstation.
 
 After an intentionally reviewed dependency change, regenerate the machine inventory with
 `node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
@@ -90,6 +91,22 @@ OpenAPI document contains one path marked `implemented-local`. The corresponding
 route has request/response and build evidence, but no working database login is tracked and no
 deployment exists merely because the local route is documented.
 
+Jobs-focused commands use injected synthetic results and never need a database credential:
+
+```text
+pnpm run lint:jobs
+pnpm run typecheck:jobs
+pnpm run test:jobs:coverage
+pnpm run build:jobs
+```
+
+The built one-shot CLI accepts only `cleanup-expired-ingest-state`,
+`refresh-community-season YYYY-MM-DD`, or `finalize-community-season YYYY-MM-DD`. Do not invoke it
+against a database until an environment-owned login has been separately provisioned with only
+`viberacing_jobs`; the repository does not create that login or provide an application integration
+test. See [`apps/jobs/README.md`](../../apps/jobs/README.md) for the exact boundary and remaining
+scheduler/deployment work.
+
 The product components and libraries must meet the committed coverage thresholds. Small Next.js
 entrypoints are covered by the production build. See
 [`apps/web/README.md`](../../apps/web/README.md) for the frontend trust boundaries and data
@@ -124,12 +141,18 @@ requires explicit `NODE_ENV=development` or `test` plus loopback. Every other en
 `verify-full`, a certificate-valid multi-label DNS hostname, and TLS 1.2 or later. The synthetic
 page and build never construct the adapter, so they need none of these settings.
 
+The one-shot Jobs runner independently uses only `VIBERACING_JOBS_DATABASE_*`. Its tracked
+user/password are separate non-working placeholders, and configuration checks reject reuse of the
+compose owner or Web login. Local integration requires another externally provisioned login whose
+only membership is `viberacing_jobs`. It follows the same loopback-only cleartext and verified-TLS
+rules as Web. Focused tests/builds do not construct a connection and need none of these settings.
+
 If local work needs the public schema, copy `.env.example` to `.env`; `.env` is ignored and must
 never be committed.
 
 Do not put production or staging values on a development workstation. Do not use the example
 database password anywhere except the loopback-only Compose service, and never pass that owner to
-the Web adapter.
+the Web or Jobs adapter.
 
 ## Start PostgreSQL
 

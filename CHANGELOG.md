@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and thirteen accepted ADRs.
+  fail-closed compatibility policy and matrix, and fourteen accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -86,6 +86,12 @@ Versioning where its guarantees are applicable.
 - Jobs-only immutable Community season finalization after an exact 48-hour server-time grace period,
   with whole-payload late quarantine, terminal no-data seasons, idempotent retry, bounded calendar
   support, and no implied scheduler, correction capability, or public read surface.
+- A private local one-shot Jobs workspace for exactly cleanup, open-season refresh, or terminal
+  finalization, with strict command/object/result parsing, a distinct redacted database namespace,
+  one-client pool, fixed deadlines, an exact role/login/capability/search-path probe, prepared
+  procedure calls, destructive failure release, stable non-reflective CLI output, production build,
+  and 94 tests at 100% coverage. It adds no scheduler, live credential, monitoring, retry loop, or
+  deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.

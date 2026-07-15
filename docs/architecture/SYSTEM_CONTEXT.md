@@ -3,9 +3,10 @@
 ## Status
 
 This is the planned runtime architecture. The current repository contains a tested SQL persistence
-foundation but no application service, connector, Cloudflare/Railway deployment, or production
-database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
-diagrams describe required runtime boundaries, not deployed evidence.
+foundation, one local public-score route, and one local one-shot Jobs runner, but no complete
+application service, connector, Cloudflare/Railway deployment, or production database. Component
+status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
+required runtime boundaries, not deployed evidence.
 
 ## System context
 
@@ -89,10 +90,11 @@ shape and its cross-row invariants before returning a validated frozen contract.
 bounded server-only PostgreSQL pool/config/store boundary around that read, including strict
 production TLS, fixed deadlines/query, and per-checkout effective-role and least-privileged-login
 verification. ADR 0013 adds a locally implemented request/admission/response route around it. These
-capabilities have role, contract, route, adapter, mapping, and concurrency evidence. The deployment
-login/certificate and live connection, Ingest and Jobs services, cleanup/scoring schedulers,
-edge/origin proof, request signature verification, public cache, and audited correction authority
-shown in the design remain planned.
+capabilities have role, contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a
+local one-shot Jobs adapter/CLI for only cleanup, refresh, and finalization, with its own role/login
+probe, one-client pool, and fixed deadlines. The deployment logins/certificates and live
+connections, Ingest service, Jobs scheduler/monitoring, edge/origin proof, request signature
+verification, public cache, and audited correction authority shown in the design remain planned.
 
 ## Component responsibilities
 

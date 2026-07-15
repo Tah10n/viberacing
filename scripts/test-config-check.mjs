@@ -14,6 +14,12 @@ DATABASE_PORT=54329
 DATABASE_NAME=viberacing_local
 DATABASE_USER=viberacing_local
 DATABASE_PASSWORD=local-development-only
+VIBERACING_JOBS_DATABASE_HOST=127.0.0.1
+VIBERACING_JOBS_DATABASE_PORT=54329
+VIBERACING_JOBS_DATABASE_NAME=viberacing_local
+VIBERACING_JOBS_DATABASE_USER=replace_with_local_jobs_login
+VIBERACING_JOBS_DATABASE_PASSWORD=replace-with-local-jobs-password
+VIBERACING_JOBS_DATABASE_TLS_MODE=disable
 VIBERACING_WEB_DATABASE_HOST=127.0.0.1
 VIBERACING_WEB_DATABASE_PORT=54329
 VIBERACING_WEB_DATABASE_NAME=viberacing_local
@@ -30,6 +36,24 @@ assert.match(
     ),
   ).join("\n"),
   /must not reuse the bootstrap owner/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_JOBS_DATABASE_USER=replace_with_local_jobs_login",
+      "VIBERACING_JOBS_DATABASE_USER=viberacing_local",
+    ),
+  ).join("\n"),
+  /Jobs database example credentials must not reuse the bootstrap owner/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_JOBS_DATABASE_USER=replace_with_local_jobs_login",
+      "VIBERACING_JOBS_DATABASE_USER=replace_with_local_web_login",
+    ),
+  ).join("\n"),
+  /Jobs and Web database examples must use distinct login principals/,
 );
 assert.match(
   validateEnvExampleText(

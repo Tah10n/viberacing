@@ -1,6 +1,6 @@
 # ADR 0008: Community season grace and immutable finalization
 
-- Status: Accepted (database capability implemented; Jobs service and corrections pending)
+- Status: Accepted (database and local runner implemented; scheduler and corrections pending)
 - Date: 2026-07-15
 - Decision owners: Product, Ingest, Jobs, Database, Security, and Privacy
 - Supersedes: None
@@ -143,10 +143,10 @@ Current PostgreSQL evidence covers:
 - an observed opposing-order multi-season Ingest race that proves both callers acquire ascending
   season locks rather than forming an `A → B` / `B → A` advisory-lock cycle.
 
-The repository still lacks the Ingest and Jobs services, Ed25519 verification, edge/origin proof,
-rate limits, schedulers, corrections, monitoring, capacity evidence, purge, and deployment. Revision
-0011 later adds a bounded database score projection and ADR 0013 adds local HTTP delivery, but
-database finalization, projection, and a route that is not deployed are not launch evidence.
+The repository still lacks the Ingest service, Ed25519 verification, edge/origin proof, rate limits,
+Jobs scheduler, corrections, monitoring, capacity evidence, purge, and deployment. Revision 0011
+later adds a bounded database score projection and ADR 0013 adds local HTTP delivery, but database
+finalization, projection, and a route that is not deployed are not launch evidence.
 
 ## References
 

@@ -116,10 +116,13 @@ verifier, generic response и edge rate limits для анонимных challen
 отсутствуют. Database-only Community ingest capability уже выдаёт минимальный материал активного
 устройства и принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic
 source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure удаляет bounded
-batches истёкших nonces и raw snapshots, сохраняя current source/day values, но scheduler для неё
-отсутствует. Сама база не проверяет wire signature. HTTP ingest route, приложение с
-Ed25519-проверкой, connector, cleanup/scoring scheduler или service, deployed public score read,
-audited correction flow, purge worker и deployed database login/TLS ещё не реализованы, поэтому
+batches истёкших nonces и raw snapshots, сохраняя current source/day values. Локальный one-shot Jobs
+runner теперь вызывает только cleanup, scoring refresh или finalization через отдельный
+least-privileged config, single-client pool, проверку role/login/search path, fixed deadlines,
+prepared parameters, closed result validation и стабильный non-reflective CLI output. Сама база не
+проверяет wire signature. HTTP ingest route, приложение с Ed25519-проверкой, connector,
+cleanup/scoring scheduler, live Jobs login/TLS integration, monitoring backend, deployed public
+score read, audited correction flow, purge worker и deployed database ещё не реализованы, поэтому
 готовой пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
