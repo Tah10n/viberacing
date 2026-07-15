@@ -269,6 +269,7 @@ async function expectProtectiveActionDominates(
   readyMarker,
   protectiveSql,
   competingSql,
+  diagnosticSql,
 ) {
   const [protectiveResult, competingResult] = await runObservedRace(label, lockSql, readyMarker, [
     protectiveSql,
@@ -279,10 +280,15 @@ async function expectProtectiveActionDominates(
     competingResult.status !== 0 &&
     /operation cannot be completed/i.test(`${competingResult.stdout}\n${competingResult.stderr}`);
   if (protectiveResult.status !== 0 || (competingResult.status !== 0 && !competingClosed)) {
+    const diagnosticResult = diagnosticSql ? psql(diagnosticSql) : null;
+    const diagnostics = diagnosticResult
+      ? `\ndiagnostics status=${diagnosticResult.status}\n${diagnosticResult.stdout}\n${diagnosticResult.stderr}`
+      : "";
     throw new Error(
       `${label} did not preserve the protective action:\n` +
         `protective status=${protectiveResult.status}\n${protectiveResult.stdout}\n${protectiveResult.stderr}\n` +
-        `competing status=${competingResult.status}\n${competingResult.stdout}\n${competingResult.stderr}`,
+        `competing status=${competingResult.status}\n${competingResult.stdout}\n${competingResult.stderr}` +
+        diagnostics,
     );
   }
 }
@@ -354,6 +360,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/passkey_capabilities.sql"), "utf8"),
     },
     {
+      label: "restricted recovery scenarios",
+      sql: readFileSync(resolve(root, "database/tests/recovery_capabilities.sql"), "utf8"),
+    },
+    {
       label: "source-bound pairing scenarios",
       sql: readFileSync(resolve(root, "database/tests/pairing_capabilities.sql"), "utf8"),
     },
@@ -372,6 +382,10 @@ try {
     {
       label: "passkey concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/passkey_concurrency_setup.sql"), "utf8"),
+    },
+    {
+      label: "recovery concurrency setup",
+      sql: readFileSync(resolve(root, "database/tests/recovery_concurrency_setup.sql"), "utf8"),
     },
   ];
   for (const { sql, label } of databaseInputs) {
@@ -638,6 +652,153 @@ SELECT viberacing_api.complete_passkey_login(
     "passkey concurrency assertions",
   );
 
+  await expectOneConcurrentWinner(
+    "single recovery code start race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000005101'
+FOR UPDATE;
+\\echo recovery-code-lock-ready`,
+    "recovery-code-lock-ready",
+    [
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.start_recovery(
+  '00000000-0000-4000-8000-000000005701',
+  '00000000-0000-4000-8000-000000005911',
+  pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('a3', 32), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '9 minutes',
+  '00000000-0000-4000-8000-000000005901',
+  'req_' || pg_catalog.repeat('T', 22)
+);`,
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.start_recovery(
+  '00000000-0000-4000-8000-000000005701',
+  '00000000-0000-4000-8000-000000005912',
+  pg_catalog.decode(pg_catalog.repeat('b1', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('b2', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('b3', 32), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '9 minutes',
+  '00000000-0000-4000-8000-000000005902',
+  'req_' || pg_catalog.repeat('U', 22)
+);`,
+    ],
+  );
+
+  await expectProtectiveActionDominates(
+    "recovery-code rotation versus old-code start race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000005102'
+FOR UPDATE;
+\\echo recovery-rotation-lock-ready`,
+    "recovery-rotation-lock-ready",
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.replace_recovery_codes(
+  '00000000-0000-4000-8000-000000005202',
+  pg_catalog.decode(pg_catalog.repeat('52', 32), 'hex'),
+  '00000000-0000-4000-8000-000000005802',
+  pg_catalog.decode(pg_catalog.repeat('83', 32), 'hex'),
+  '00000000-0000-4000-8000-000000005612',
+  ARRAY(
+    SELECT ('00000000-0000-4000-8005-' || pg_catalog.lpad((7500 + value)::text, 12, '0'))::uuid
+    FROM pg_catalog.generate_series(1, 8) AS generated(value)
+  ),
+  ARRAY(
+    SELECT '$argon2id$v=19$m=65536,t=3,p=1$c2FsdA$' || pg_catalog.repeat('o', 31) || value
+    FROM pg_catalog.generate_series(1, 8) AS generated(value)
+  ),
+  '00000000-0000-4000-8000-000000005904',
+  'req_' || pg_catalog.repeat('V', 22)
+);`,
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.start_recovery(
+  '00000000-0000-4000-8000-000000005702',
+  '00000000-0000-4000-8000-000000005914',
+  pg_catalog.decode(pg_catalog.repeat('c1', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('c2', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('c3', 32), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '9 minutes',
+  '00000000-0000-4000-8000-000000005905',
+  'req_' || pg_catalog.repeat('W', 22)
+);`,
+    `SET ROLE viberacing_owner;
+SELECT
+  challenge_record.consumed_at IS NOT NULL AS challenge_consumed,
+  challenge_record.authorized_action_used_at IS NOT NULL AS action_claimed,
+  session_record.state AS session_state,
+  passkey_record.state AS passkey_state,
+  recovery_code.used_at IS NOT NULL AS old_code_used,
+  recovery_code.verifier_phc IS NULL AS old_verifier_scrubbed,
+  recovery_authority.state AS authority_state
+FROM viberacing_private.auth_challenges AS challenge_record
+JOIN viberacing_private.sessions AS session_record
+  ON session_record.session_id = '00000000-0000-4000-8000-000000005202'
+JOIN viberacing_private.passkeys AS passkey_record
+  ON passkey_record.passkey_id = '00000000-0000-4000-8000-000000005302'
+LEFT JOIN viberacing_private.recovery_codes AS recovery_code
+  ON recovery_code.recovery_code_id = '00000000-0000-4000-8000-000000005702'
+LEFT JOIN viberacing_private.recovery_authorities AS recovery_authority
+  ON recovery_authority.recovery_authority_id = '00000000-0000-4000-8000-000000005914'
+WHERE challenge_record.challenge_id = '00000000-0000-4000-8000-000000005802';`,
+  );
+
+  await expectProtectiveActionDominates(
+    "recovery completion versus old-passkey login race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000005103'
+FOR UPDATE;
+\\echo recovery-completion-lock-ready`,
+    "recovery-completion-lock-ready",
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.complete_recovery_registration(
+  '00000000-0000-4000-8000-000000005913',
+  pg_catalog.decode(pg_catalog.repeat('91', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('92', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('93', 32), 'hex'),
+  '00000000-0000-4000-8000-000000005313',
+  pg_catalog.decode(pg_catalog.repeat('34', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('44', 64), 'hex'),
+  'Recovery race replacement',
+  0,
+  false,
+  false,
+  '00000000-0000-4000-8000-000000005213',
+  pg_catalog.decode(pg_catalog.repeat('f9', 32), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+  '00000000-0000-4000-8000-000000005906',
+  'req_' || pg_catalog.repeat('X', 22)
+);`,
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.complete_passkey_login(
+  '00000000-0000-4000-8000-000000005803',
+  pg_catalog.decode(pg_catalog.repeat('84', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('85', 32), 'hex'),
+  '00000000-0000-4000-8000-000000005303',
+  pg_catalog.decode(pg_catalog.repeat('33', 32), 'hex'),
+  1,
+  false,
+  '00000000-0000-4000-8000-000000005214',
+  pg_catalog.decode(pg_catalog.repeat('54', 32), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+  '00000000-0000-4000-8000-000000005907',
+  'req_' || pg_catalog.repeat('Y', 22)
+);`,
+  );
+
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database/tests/recovery_concurrency_assertions.sql"), "utf8")),
+    "recovery concurrency assertions",
+  );
+
   for (const role of [
     "viberacing_web",
     "viberacing_ingest",
@@ -734,9 +895,23 @@ SELECT viberacing_api.complete_passkey_login(
     );`,
     "ingest source pause",
   );
+  expectDenied(
+    "viberacing_jobs",
+    `SELECT viberacing_api.start_recovery(
+      '00000000-0000-4000-8000-000000009061',
+      '00000000-0000-4000-8000-000000009062',
+      pg_catalog.decode(pg_catalog.repeat('9c', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('9d', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('9e', 32), 'hex'),
+      pg_catalog.statement_timestamp() + INTERVAL '5 minutes',
+      '00000000-0000-4000-8000-000000009063',
+      'req_' || pg_catalog.repeat('V', 22)
+    );`,
+    "jobs recovery start",
+  );
 
   console.log(
-    "Database integration passed (13 schema tables, 7 observed lock-wait races, 4 relation-denial and 6 cross-capability checks).",
+    "Database integration passed (14 schema tables, 10 observed lock-wait races, 4 relation-denial and 7 cross-capability checks).",
   );
 } finally {
   if (started) {

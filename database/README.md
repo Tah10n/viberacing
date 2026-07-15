@@ -2,11 +2,11 @@
 
 ## Status
 
-This directory contains five SQL-first revisions for identity, passkey login and management, source,
-device, pairing, audit, and deletion state. The migrations, narrow database procedures, and
-PostgreSQL integration tests are implemented. No application route, OAuth callback, WebAuthn
-verifier, production credential, or deployed database consumes them yet. Recovery, ingest, scoring,
-purge, and cleanup procedures are not implemented.
+This directory contains six SQL-first revisions for identity, passkey login and management,
+restricted recovery, source, device, pairing, audit, and deletion state. The migrations, narrow
+database procedures, and PostgreSQL integration tests are implemented. No application route, OAuth
+callback, Argon2id/WebAuthn verifier, production credential, or deployed database consumes them yet.
+Ingest, scoring, purge, and cleanup procedures are not implemented.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -31,6 +31,9 @@ procedure; the current repository has no such application code.
 - `migrations/0005_passkey_login_and_management.sql` adds minimal passkey verification lookup,
   anonymous login ceremonies, passkey-bound sessions, exact step-up provenance, bounded
   multi-passkey add/revoke, and recursive stale-authority invalidation.
+- `migrations/0006_restricted_recovery_authority.sql` adds passkey-protected recovery-code batch
+  replacement, used-PHC scrubbing, one short-lived recovery-only authority, atomic replacement-key
+  completion, deletion revoke, and post-lock protective race semantics.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -43,6 +46,9 @@ procedure; the current repository has no such application code.
 - `tests/passkey_capabilities.sql` exercises credential-derived login, replay and rollback,
   monotonic usage state, session provenance, private inventory, multi-passkey add/revoke, last-key
   protection, cross-profile denial, and public safety ceilings.
+- `tests/recovery_capabilities.sql` exercises exact-passkey code rotation, bounded PHC batches,
+  profile-free lookup, one-time scrub and authority, exact completion binding, deletion revoke,
+  retained activated devices, role denial, rollback, and the lifetime-passkey fail-closed edge.
 - `tests/pairing_concurrency_setup.sql` and `tests/pairing_concurrency_assertions.sql` create only
   ephemeral synthetic state and prove cross-connection first-winner, source-ceiling, and live
   device-authority-ceiling serialization.
@@ -52,6 +58,9 @@ procedure; the current repository has no such application code.
 - `tests/passkey_concurrency_setup.sql` and `tests/passkey_concurrency_assertions.sql` prove one
   login challenge has one winner and passkey revoke dominates concurrent login without leaving its
   browser or pending device authority live.
+- `tests/recovery_concurrency_setup.sql` and `tests/recovery_concurrency_assertions.sql` prove one
+  code creates one authority, fresh code rotation dominates concurrent old-code start, and recovery
+  completion dominates concurrent old-passkey login in the committed final state.
 - `scripts/check-database.mjs` and its black-box tests enforce migration shape, checksums, paths,
   transactions, bounded execution, owner context, forbidden grants or SQL capabilities, and reject
   scalar-subquery `IF NOT` assertions whose missing row would otherwise pass as SQL `NULL`.
@@ -62,14 +71,14 @@ procedure; the current repository has no such application code.
 
 ## Capability model
 
-| Role                | Login | Private schema | API schema | Current executable capability                                      |
-| ------------------- | ----- | -------------- | ---------- | ------------------------------------------------------------------ |
-| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                             |
-| `viberacing_web`    | No    | None           | Usage      | Identity, passkey, pairing, inventory, and source/device lifecycle |
-| `viberacing_ingest` | No    | None           | Usage      | None                                                               |
-| `viberacing_jobs`   | No    | None           | Usage      | None                                                               |
-| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                       |
-| `PUBLIC`            | N/A   | None           | None       | None                                                               |
+| Role                | Login | Private schema | API schema | Current executable capability                                  |
+| ------------------- | ----- | -------------- | ---------- | -------------------------------------------------------------- |
+| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                         |
+| `viberacing_web`    | No    | None           | Usage      | Identity, passkey, restricted recovery, pairing, and lifecycle |
+| `viberacing_ingest` | No    | None           | Usage      | None                                                           |
+| `viberacing_jobs`   | No    | None           | Usage      | None                                                           |
+| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                   |
+| `PUBLIC`            | N/A   | None           | None       | None                                                           |
 
 Deployment login principals are environment-owned secrets and are not declared here. Each service
 will receive one group role through protected infrastructure. Runtime roles are not members of the
@@ -109,6 +118,20 @@ Runtime access must remain procedure-only and must have positive and negative in
   last active passkey; it revokes sessions derived from the target and cancels its unused challenges
   and approved-but-not-activated pairing authority. Already activated devices remain separately
   visible and explicitly revocable.
+- `create_recovery_change_challenge` plus `consume_passkey_challenge` bind code regeneration to an
+  exact active session and fresh owned-passkey assertion. `replace_recovery_codes` accepts only a
+  complete 8-to-16-code batch of opaque IDs and bounded Argon2id PHCs, atomically removes the old
+  batch, revokes active old-code authority, and never receives plaintext code secrets.
+- `read_recovery_code_verification_material` returns only the supplied unused opaque code ID and its
+  PHC, never a profile ID. After Web/Auth performs bounded Argon2id/pepper verification,
+  `start_recovery` consumes and scrubs exactly that code and creates one recovery-only authority for
+  at most ten minutes. It creates no browser session.
+- `complete_recovery_registration` is callable only with the exact authority verifier, challenge,
+  and context after application WebAuthn verification. One transaction installs the replacement
+  passkey, revokes previous active passkeys and sessions, cancels approved pairings, removes profile
+  challenges and remaining codes, completes the authority, and then creates the new passkey-bound
+  session. Activated source-bound devices remain active and explicitly revocable. Completion fails
+  closed at 32 lifetime passkey records until bounded provenance-preserving cleanup exists.
 - `rotate_session` and `revoke_session` require the exact keyed verifier. Rotation serializes on the
   current session/profile, preserves its authentication provenance, and creates a fresh bounded
   record before ending the old one.
@@ -138,10 +161,11 @@ Runtime access must remain procedure-only and must have positive and negative in
   revokes every active device, cancels approved pairings, and invalidates unused source actions in
   the same transaction.
 
-The public schema safety ceilings are 32 lifetime passkey records, 32 active unexpired browser
-sessions, 32 lifetime source records, and 64 active plus unexpired approved device authorities per
-profile. They bound retained credential growth and authority fan-out and are not substitutes for
-lower deployment-specific fair-use limits, edge rate limits, or bounded cleanup.
+The public schema safety ceilings are 8 to 16 codes per replacement recovery batch, one active
+recovery authority per profile for at most ten minutes, 32 lifetime passkey records, 32 active
+unexpired browser sessions, 32 lifetime source records, and 64 active plus unexpired approved device
+authorities per profile. They bound retained credential growth and authority fan-out and are not
+substitutes for lower deployment-specific fair-use limits, edge rate limits, or bounded cleanup.
 
 The application must call `complete_passkey_login` or `consume_passkey_challenge` only after it has
 verified the exact WebAuthn RP ID, origin, challenge, transaction context, signature, and
@@ -150,10 +174,12 @@ Ed25519 possession proof over the exact returned pairing material before activat
 procedures implement neither cryptographic verification nor network rate limiting. In particular,
 the anonymous login-challenge endpoint is not launch-ready without edge/service limits and bounded
 expiry cleanup. Procedures use one generic failure message for closed authorization and constraint
-failures; HTTP status mapping and response shaping remain application work. Recovery needs its own
-short-lived restricted authority and is intentionally not represented as an ordinary session. The
-deletion procedure implements immediate lock-down only; primary purge, cache purge, tombstones,
-backup replay, and user-visible progress remain unimplemented.
+failures; HTTP status mapping and response shaping remain application work. Recovery SQL now uses a
+short-lived restricted authority and never represents it as an ordinary session, but application
+Argon2id/pepper and WebAuthn verification, timing normalization, rate limits, cleanup,
+notifications, and UI remain absent. The deletion procedure implements immediate lock-down only;
+primary purge, cache purge, tombstones, backup replay, and user-visible progress remain
+unimplemented.
 
 ## Data and privacy map
 
@@ -163,7 +189,8 @@ All current columns map to the canonical [privacy data map](../docs/security/PRI
 | ---------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------- |
 | `profiles`                               | Account; handle is Public     | Numeric GitHub binding, normalized handle, explicit preferences, lifecycle time |
 | `invites`, `sessions`, `auth_challenges` | Security                      | Keyed verifiers, exact session/passkey provenance, expiry, and one-time use     |
-| `passkeys`, `recovery_codes`             | Security; label is Account    | Public credential material and Argon2id PHC verifiers; never plaintext secrets  |
+| `passkeys`, `recovery_codes`             | Security; label is Account    | Public credential material, opaque selectors, and unused PHCs; no plaintext     |
+| `recovery_authorities`                   | Security                      | Keyed/challenge/context digests, terminal state, expiry, and opaque provenance  |
 | `codex_sources`                          | Account                       | Opaque source ID, owning profile, and constrained lifecycle state               |
 | `device_keys`, `pairing_transactions`    | Security; metadata is Account | Ed25519 public key, exact source/device binding, keyed poll/code verifiers      |
 | `deletion_jobs`, `deletion_tombstones`   | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry         |
@@ -189,6 +216,11 @@ pairing because they lack exact verifying-passkey provenance. It also revokes le
 sessions for profiles that already have passkeys, requiring one fresh login after upgrade. This is a
 security migration, not a user-data purge: profiles, passkeys, sources, and activated devices
 remain.
+
+Revision 0006 preserves existing unused recovery-code rows, makes used verifier state terminal and
+scrubbed, and adds no HTTP endpoint. Protective operations serialize on the profile and use time
+captured after lock acquisition: an old-code start can never survive fresh rotation, and an
+old-passkey login can never remain active after successful recovery completion.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
@@ -236,16 +268,17 @@ hard failure, not something the script silently broadens or repairs.
 
 - Implement OAuth/cookie/CSRF and WebAuthn application flows without weakening the
   session/passkey-bound database contract.
-- Add a separate short-lived recovery-only authority plus procedure-only ingest, scoring, purge, and
-  cleanup capabilities. Recovery must not mint a normal session before a new passkey is safely
-  established.
-- Add edge/service rate limiting and bounded cleanup for unauthenticated pairing starts and
-  passkey-login challenges plus authenticated short-code lookups; do not encode deployable private
-  thresholds in this repository.
+- Implement the application recovery boundary: bounded Argon2id with protected pepper, exact
+  WebAuthn verification, generic response/timing behavior, cookies/CSRF, notifications, inventory,
+  and provenance-preserving cleanup at the 32-passkey lifetime edge.
+- Add edge/service rate limiting and bounded cleanup for unauthenticated pairing starts,
+  passkey-login challenges, and recovery-code lookups; do not encode deployable private thresholds
+  in this repository.
 - Add adversarial concurrent-connection coverage for session rotation, challenge consumption,
   enrollment, deletion, and future ingest procedures. Pairing approval, both public pairing
   ceilings, pause-versus-approval, unlink-versus-activation, single-challenge login, and
-  revoke-versus-login already have observed blocker-chain cross-connection coverage.
+  revoke-versus-login, one-code recovery, rotation-versus-start, and completion-versus-login already
+  have observed blocker-chain cross-connection coverage.
 - Implement bounded cleanup for expired ceremonies, sessions, pairings, jobs, and tombstones.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback

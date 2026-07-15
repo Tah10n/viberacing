@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and six initial ADRs.
+  fail-closed compatibility policy and matrix, and seven accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -50,6 +50,9 @@ Versioning where its guarantees are applicable.
   fresh-step-up source reactivation/unlink with terminal unlink and recursive authority revoke.
 - Procedure-only passkey login and multi-passkey management with minimal verification lookup,
   credential-derived sessions, private inventory, bounded add/revoke, and exact step-up provenance.
+- Procedure-only restricted recovery with passkey-protected 8-to-16-code batch rotation, used-PHC
+  scrubbing, minimal selector lookup, a one-time ten-minute replacement authority, and atomic
+  replacement-passkey/session completion.
 
 ### Security
 
@@ -88,7 +91,7 @@ Versioning where its guarantees are applicable.
 - Added lifecycle IDOR, replay, quarantine, stale-challenge, audit-rollback, and role-denial
   scenarios plus cross-connection races proving pause dominates concurrent approval and unlink
   dominates concurrent activation without leaving protected authority live.
-- Made all seven race gates observe every tagged contender in the holder's PostgreSQL blocker chain
+- Made all ten race gates observe every tagged contender in the holder's PostgreSQL blocker chain
   before releasing the holder, removing timer-only concurrency evidence.
 - Made passkey race preservation assertions fail when an expected row is missing and added a static
   regression check that rejects missing-row-unsafe scalar-subquery `IF NOT` assertions.
@@ -98,5 +101,10 @@ Versioning where its guarantees are applicable.
 - Documented revision 0005 as a security upgrade: it invalidates pre-revision authentication
   challenges, cancels approved-but-not-activated pairings, and revokes legacy active sessions for
   profiles that already have passkeys so they must sign in again under attributable provenance.
+- Added recovery replay, scope, PHC scrub, deletion, role-denial, lifetime-cap, and atomic rollback
+  scenarios plus observed races proving one-code/one-authority use, fresh rotation dominates
+  old-code start, and recovery completion dominates old-passkey login. Protective timestamps are
+  captured after row-lock acquisition so concurrent authority created after statement start cannot
+  survive or make revocation predate creation.
 
 No version has been released.

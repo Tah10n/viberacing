@@ -161,14 +161,40 @@ material availability cost.
 - **Impact:** Profile takeover, device binding, source unlink, privacy change, or deletion.
 - **Controls:** State, PKCE, exact redirect, one-time code handling, secure session rotation, exact
   RP ID/origin, transaction-bound challenges, user verification, exact session/passkey provenance,
-  fresh step-up, last-passkey protection, and terminal credential revoke that closes stale browser
-  and pending device authority.
+  fresh step-up, last-passkey protection, restricted recovery authority, and terminal credential
+  revoke that closes stale browser and pending device authority.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a
   restricted recovery flow; rotate recovery material; and inspect destructive actions.
 - **Residual risk:** Compromise of all registered passkeys and recovery material may require a
   manually governed recovery path with strong anti-social-engineering controls.
+
+### VR-ABUSE-RECOVERY-ORACLE — Recovery enumeration, replay, or authority expansion
+
+- **Attacker:** Anonymous automation, a holder of one stolen recovery code, or a compromised
+  Web/Auth runtime role.
+- **Preconditions:** Recovery lookup or completion is reachable, or an unused recovery code is
+  disclosed.
+- **Abuse:** Enumerate selectors, distinguish known profiles by response or timing, brute-force
+  returned PHCs, reuse a consumed code, race code rotation, replay a registration ceremony, or use
+  recovery authority as a normal session or device-administration credential.
+- **Impact:** Profile takeover, targeted account discovery, recovery denial of service, or durable
+  unauthorized browser/device authority.
+- **Controls:** High-entropy opaque selectors and secrets, Argon2id with protected deployment
+  pepper, bounded body/collection shapes, generic unknown/used responses and timing, edge/service
+  attempt limits, immediate PHC scrub, one active authority per profile for at most ten minutes,
+  exact challenge/context binding, no session before replacement WebAuthn, and profile-serialized
+  rotation/completion that dominates old-code start and old-passkey login.
+- **Detection:** Coarse lookup failure and saturation metrics, recovery start/completion audit
+  without selectors or verifier material, unusual code rotation, and repeated completion failure
+  signals.
+- **Recovery:** Disable only the recovery endpoints, rotate the code batch from an existing passkey,
+  revoke affected sessions/passkeys and explicitly review activated connectors, then restore the
+  bounded flow after investigation.
+- **Residual risk:** The database trusts Web/Auth to report Argon2id and WebAuthn success. A
+  compromised service role can misuse its recovery procedures until credentials are rotated or the
+  service is isolated; database scope limits but cannot remove that trust.
 
 ### VR-ABUSE-PUBLIC-SCRAPE — Profiling work habits from public data
 
@@ -343,9 +369,10 @@ material availability cost.
   synchronize many devices concurrently.
 - **Impact:** Increased cost, degraded service, job delay, or unavailable deletion and security
   actions.
-- **Controls:** Body and collection bounds, edge and account rate limits, 32-passkey and
-  32-active-session database ceilings, deadlines, concurrency and connection limits, backpressure,
-  quotas, cache, jittered retries, table cleanup, and independent kill switches.
+- **Controls:** Body and collection bounds, edge and account rate limits, 8-to-16 recovery-code
+  batches, one active recovery authority, 32-passkey and 32-active-session database ceilings,
+  deadlines, concurrency and connection limits, backpressure, quotas, cache, jittered retries, table
+  cleanup, and independent kill switches.
 - **Detection:** Latency, saturation, queue age, rejection, source growth, state-table size, and
   cost alerts.
 - **Recovery:** Load shed, disable the narrow feature, drain queues, expire bounded state, and

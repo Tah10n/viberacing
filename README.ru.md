@@ -79,20 +79,23 @@ Dev-сервер слушает только loopback. В интерфейсе �
 будущего sync-протокола. Это пока только проверяемая граница данных: работающего API, connector и
 приёма реальной статистики ещё нет.
 
-Также добавлены пять SQL migrations: 13 приватных
-identity/passkey/source/device/pairing/audit/deletion tables, deny-by-default runtime roles, forced
-RLS и интеграционный тест на одноразовом PostgreSQL. Узкая procedure boundary уже покрывает выдачу
-invite, атомарное enrollment, привязанный к сессии initial-passkey challenge, вход с сессией,
-привязанной к точному passkey, управление несколькими passkeys, rotate/revoke сессии, немедленную
-блокировку при запросе удаления и одноразовую привязку устройства к новому или существующему opaque
-source. Также реализованы приватный inventory источников и устройств, pause/reactivation/unlink
-источника и немедленный revoke устройства. Для критических действий база сохраняет точный passkey
-step-up, но проверяющего WebAuthn приложения пока нет. Несколько объявленных источников одного
-профиля позже будут суммироваться под единым лимитом score; email и идентификатор Codex-аккаунта не
-читаются и не сохраняются. Но HTTP-auth routes, OAuth callback, WebAuthn/Ed25519 verifier,
-ограниченный recovery flow, edge rate limits для анонимных challenges, connector ingest, purge
-worker и deployed database ещё не реализованы, поэтому готовой пользовательской авторизации пока
-нет.
+Также добавлены шесть SQL migrations: 14 приватных
+identity/passkey/recovery/source/device/pairing/audit/deletion tables, deny-by-default runtime
+roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая procedure boundary уже
+покрывает выдачу invite, атомарное enrollment, привязанный к сессии initial-passkey challenge, вход
+с сессией, привязанной к точному passkey, управление несколькими passkeys, rotate/revoke сессии,
+немедленную блокировку при запросе удаления и одноразовую привязку устройства к новому или
+существующему opaque source. Также реализованы приватный inventory источников и устройств,
+pause/reactivation/unlink источника и немедленный revoke устройства. Для критических действий база
+сохраняет точный passkey step-up. Реализованы также защищённая passkey-проверкой замена
+recovery-кодов и отдельное краткоживущее право только на регистрацию нового passkey: обычная сессия
+создаётся лишь после успешной замены, а использованный PHC сразу удаляется. Проверяющего
+Argon2id/WebAuthn приложения пока нет. Несколько объявленных источников одного профиля позже будут
+суммироваться под единым лимитом score; email и идентификатор Codex-аккаунта не читаются и не
+сохраняются. Но HTTP auth/recovery routes, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier,
+generic response и edge rate limits для анонимных challenges и recovery lookup, connector ingest,
+purge worker и deployed database ещё не реализованы, поэтому готовой пользовательской авторизации
+пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

@@ -287,6 +287,20 @@ event.
   browser sessions per profile; edge limits and expiry cleanup remain independently required.
 - Recovery uses a short-lived restricted authority and cannot become a normal browser session until
   a replacement passkey is safely established.
+- Recovery-code regeneration requires an exact active-session passkey step-up and atomically
+  replaces a batch of 8 to 16 opaque-selector/secret codes. Plaintext is shown once; only Argon2id
+  PHCs are persisted, and used verifier material is immediately scrubbed.
+- After bounded application Argon2id verification, one code creates at most one ten-minute
+  registration authority bound to the exact replacement WebAuthn challenge and context. It cannot
+  call session, profile, source, device, invite, ingest, job, deletion, or admin capabilities.
+- Successful registration atomically installs the replacement passkey, revokes old passkeys and
+  browser sessions, cancels pending device approval, removes remaining codes/challenges, and only
+  then creates a passkey-bound session. Activated source-bound devices remain visible and explicitly
+  revocable because they have no profile-admin scope.
+- Recovery lookup and verification require generic responses and timing, body/attempt bounds,
+  edge/service rate controls, protected deployment pepper, cleanup, and monitoring. Recovery
+  completion fails closed at the 32-lifetime-passkey provenance ceiling until bounded cleanup is
+  implemented.
 
 ### Device authorization
 

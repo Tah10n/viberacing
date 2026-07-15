@@ -47,7 +47,8 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Session verifier and metadata                                       | Security                        | Web/Auth; maintain an authenticated browser session                | Web/Auth only                                                         | Keyed verifier, expiry, state, and authenticating-passkey provenance    | Short expiry and bounded revocation window; delete/revoke on profile deletion                            |
 | WebAuthn credential public key and credential ID                    | Security                        | User authenticator; login and fresh step-up                        | Web/Auth; user can list only bounded friendly metadata                | `passkeys`; no attestation fingerprint store                            | Active until removal; revoked reference until bounded cleanup/profile deletion; launch decision required |
 | WebAuthn challenge, context, and verifying-passkey reference        | Security                        | Server; bind one ceremony to one action and exact credential       | Web/Auth only                                                         | Short-lived challenge with exact session/profile/action/passkey binding | One-time, at most minutes; bounded expiry cleanup required before launch                                 |
-| Recovery-code verifier                                              | Security                        | Server-generated; recover profile access                           | Web/Auth; plaintext shown once to the user                            | Slow/keyed hash only                                                    | Until used, regenerated, or profile deletion                                                             |
+| Recovery-code selector and verifier                                 | Security                        | Web/Auth-generated; recover profile access                         | Web/Auth only; plaintext secret shown once to the user                | Opaque selector and Argon2id PHC; protected pepper stays outside DB     | PHC scrubbed on use; batch removed on regeneration, completion, or deletion; cleanup before launch       |
+| Restricted recovery authority and registration binding              | Security                        | Server; permit only exact replacement-passkey registration         | Web/Auth recovery procedure only                                      | Keyed verifier plus challenge/context digests and terminal lifecycle    | One-time, at most 10 minutes; terminal-row retention and cleanup are a launch decision required          |
 | Source ID, state, and source count                                  | Account; count is Public        | User-declared opaque CodexSource; isolate and explain aggregation  | User sees sources; public sees only contributing count for a season   | `codex_sources`, season snapshot                                        | Source lifecycle plus historical public count until profile deletion                                     |
 | Device public key and public device ID                              | Security                        | Connector; authenticate one source-bound device                    | Ingest verification; user device inventory                            | `device_keys`                                                           | Until revoke/unlink/delete; revoked identifier retained only for bounded security need                   |
 | Device label                                                        | Account                         | User or safe generated default; distinguish devices                | User profile only                                                     | `device_keys` metadata                                                  | Until edited/revoked/deleted; bounded plain text with warning not to enter personal data                 |
@@ -74,6 +75,13 @@ Lifecycle procedures retain the existing source/device rows, append only closed 
 and never accept or expose account email, upstream account identity, exact usage, public keys, or
 internal key IDs.
 
+Revision 0006 adds no email, support identity, recovery plaintext, IP address, or arbitrary
+metadata. Its lookup returns only one supplied opaque selector and the matching unused PHC, never a
+profile ID. Successful start immediately scrubs that PHC. Recovery completion deletes the remaining
+batch; regeneration and profile deletion revoke active recovery authority. The terminal authority
+row stores only opaque IDs, keyed/challenge/context digests, state, and timestamps. A bounded public
+retention and cleanup rule is required before a real endpoint is enabled.
+
 ## Prohibited data
 
 The connector, schemas, services, logs, analytics, support process, fixtures, and release artifacts
@@ -95,8 +103,9 @@ schemas fail closed.
 
 The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). The access model is:
 
-- Web/Auth owns profile identity, sessions, passkeys, preferences, device approval, and deletion
-  initiation; it cannot use a device credential as a user session.
+- Web/Auth owns profile identity, sessions, passkeys, restricted recovery, preferences, device
+  approval, and deletion initiation; it cannot use a device credential or recovery authority as a
+  user session.
 - Ingest accepts only source-bound signed sync through a narrow procedure; it cannot read or change
   passkeys, sessions, invites, admin roles, schema, or finalized seasons.
 - Jobs receive only the maintenance capabilities needed for scoring, finalization, retention, and
@@ -137,8 +146,9 @@ model and requires an ADR, consent/notice analysis, data-map update, and public 
   or documented correction.
 - **Export:** any future export is authenticated, bounded, generated on demand, and contains only
   the requesting profile's data. No export endpoint is implied by this design document.
-- **Delete:** GitHub session, fresh passkey, and typed handle trigger immediate hide, session/device
-  revoke, ingest rejection, idempotent primary purge, cache purge, and backup/tombstone handling.
+- **Delete:** GitHub session, fresh passkey, and typed handle trigger immediate hide,
+  session/passkey/device/recovery-authority revoke, recovery-code removal, ingest rejection,
+  idempotent primary purge, cache purge, and backup/tombstone handling.
 
 Restore procedures replay deletion markers before restored data is made available. The UI reports
 progress without exposing internal record IDs. Legal retention exceptions, if any, require launch
@@ -148,7 +158,7 @@ legal review and explicit public disclosure; they are not assumed here.
 
 Operational logs use stable event names, request IDs, coarse outcomes, and bounded numeric metrics.
 They omit request bodies, raw token values, handles when not needed, OAuth/passkey material, device
-signatures, local paths, and prohibited data.
+signatures, recovery selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
 
 Connector telemetry is off by default. A future diagnostic export is local, explicit, redacted,
 previewed before sharing, and generated from an allowlist. Public issue forms do not request raw

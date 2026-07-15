@@ -19,10 +19,10 @@ Read these files before changing the project:
     state.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync
-contracts, and procedure-only identity, pairing, and source/device lifecycle database slices. Do not
-claim that HTTP authentication, OAuth/WebAuthn verification, real ingestion, a connector,
-deployment, or a hosted security control exists until its implementation and verification are
-present in the working tree.
+contracts, and procedure-only identity, passkey, restricted-recovery, pairing, and source/device
+lifecycle database slices. Do not claim that HTTP authentication, OAuth/Argon2id/WebAuthn
+verification, real ingestion, a connector, deployment, or a hosted security control exists until its
+implementation and verification are present in the working tree.
 
 ## Repository map
 

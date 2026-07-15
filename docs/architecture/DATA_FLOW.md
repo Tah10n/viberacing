@@ -2,14 +2,15 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revisions 0001 through 0005 provide private
+These sequences remain planned application contracts. Revisions 0001 through 0006 provide private
 identity/source/device/pairing/audit/deletion tables, deny-by-default roles, and a narrow database
 slice for invite issuance, enrollment, exact-session challenges, initial-passkey activation, passkey
-login and management, session rotation/revocation, immediate deletion lock-down, source-bound
-pairing, and source/device lifecycle controls. No endpoint, OAuth callback, WebAuthn or Ed25519
-verifier, ingest procedure, purge worker, or deployed service executes the complete sequences. Data
-labels refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md):
-Public, Account, Security, Usage, Operational, and Prohibited.
+login and management, restricted recovery, session rotation/revocation, immediate deletion
+lock-down, source-bound pairing, and source/device lifecycle controls. No endpoint, OAuth callback,
+Argon2id/WebAuthn/Ed25519 verifier, ingest procedure, purge worker, or deployed service executes the
+complete sequences. Data labels refer to the classifications in the
+[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
+and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -80,7 +81,54 @@ The database exposes no profile identifier during credential lookup, stores no a
 fingerprint, preserves a monotonic maximum sign counter, and makes revoke terminal. It cannot check
 WebAuthn cryptography or protect an Internet endpoint from anonymous challenge floods; edge/service
 limits and bounded expiry cleanup are mandatory before this flow is reachable. Recovery is a
-separate future flow with restricted authority, not a normal login shortcut.
+separate restricted-authority flow, not a normal login shortcut.
+
+## Recovery-code rotation and passkey replacement
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant Browser
+  participant Web as Web/Auth
+  participant Authenticator as Passkey authenticator
+  participant DB as Profile/Auth database role
+
+  alt User still has a passkey
+    User->>Browser: Regenerate recovery-code batch
+    Web->>Authenticator: Fresh recovery-change step-up
+    Authenticator-->>Web: Exact user-verified assertion
+    Web->>DB: Record exact passkey and atomically replace 8-16 PHCs
+    DB->>DB: Revoke authority derived from every old code
+    Web-->>Browser: Show plaintext batch once; never log or persist it
+  else User has no available passkey
+    User->>Browser: Present opaque code selector and secret
+    Web->>DB: Read only selected unused PHC verification material
+    Web->>Web: Apply body/rate limits and verify Argon2id plus protected pepper
+    Web->>DB: Consume and scrub code; create <=10-minute restricted authority
+    Web->>Authenticator: Exact replacement-passkey registration ceremony
+    Authenticator-->>Web: Registration response
+    Web->>Web: Verify RP ID, origin, challenge, context, signature, and UV
+    Web->>DB: Atomically register replacement and revoke old browser authority
+    DB-->>Web: Create normal session only after replacement passkey exists
+    Web-->>Browser: Show retained activated connectors for explicit review
+  end
+```
+
+Revision 0006 implements only this database boundary. Lookup returns an opaque selector and PHC,
+never a profile identifier. Starting recovery consumes one code, immediately removes its verifier,
+and creates no session. Completion requires the exact authority verifier, challenge, and context; it
+registers one replacement passkey, revokes previous passkeys and browser sessions, cancels
+approved-but-not-activated pairings, removes remaining recovery codes and profile challenges, and
+then creates the replacement-key session in the same transaction. Activated source-bound connector
+keys remain separately visible and revocable because they have no profile-administration scope.
+
+Code rotation and completion serialize on the profile row and take terminal timestamps after lock
+acquisition. Observed cross-connection tests prove rotation dominates a concurrent start with an old
+code and completion dominates a concurrent login with an old passkey. Completion fails closed at the
+32-lifetime-passkey provenance ceiling until bounded cleanup exists. The repository still lacks
+application Argon2id and pepper handling, WebAuthn verification, cookies/CSRF, generic HTTP timing
+and response shaping, rate limits, cleanup, notifications, inventory UI, and deployment evidence;
+therefore no recovery endpoint is launch-ready.
 
 ## Device pairing and source choice
 
@@ -254,8 +302,9 @@ Hide and authority revocation are synchronous security actions; bulk purge is re
 the asynchronous job does not make the profile public or the device valid again.
 
 Revision 0002 implements the database transaction behind the immediate hide/revoke/enqueue step and
-proves its rollback behavior with synthetic PostgreSQL scenarios. Cache purge, job execution,
-tombstone policy, backup replay, and the authenticated application endpoint are still planned.
+proves its rollback behavior with synthetic PostgreSQL scenarios. Revision 0006 also revokes active
+restricted recovery authority as the profile enters deletion. Cache purge, job execution, tombstone
+policy, backup replay, and the authenticated application endpoint are still planned.
 
 ## Trusted release
 

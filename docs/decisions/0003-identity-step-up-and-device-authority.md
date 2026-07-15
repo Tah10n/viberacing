@@ -1,6 +1,6 @@
 # ADR 0003: GitHub identity, passkey step-up, and source-bound device authority
 
-- Status: Accepted (identity, passkey, pairing, and source/device database slices implemented)
+- Status: Accepted (identity, passkey, recovery, pairing, and source/device DB slices implemented)
 - Date: 2026-07-14
 - Decision owners: Web/Auth, Pairing, Ingest, and Database
 - Supersedes: None
@@ -54,7 +54,7 @@ social engineering.
 Removing a passkey is terminal and cannot remove the profile's last active credential. It revokes
 browser sessions authenticated by that key and cancels its unused ceremonies and approved but not
 activated device authority. Activated connectors remain independent credentials that the user can
-inspect and revoke explicitly. Recovery will use a separate restricted authority and must not mint a
+inspect and revoke explicitly. Recovery uses a separate restricted authority and does not mint a
 normal session before a replacement passkey is established.
 
 Attestation is not required in MVP, avoiding a device fingerprint database. WebAuthn sign counters
@@ -113,12 +113,20 @@ authority for the removed credential under concurrent login. The database return
 verification material and still relies on Web/Auth for exact RP ID, origin, challenge, context,
 signature, and user-verification checks.
 
+Revision 0006 adds passkey-protected recovery-code regeneration, immediate used-PHC scrub, a single
+ten-minute recovery-only registration authority, deletion revoke, and atomic replacement-passkey
+completion. Three observed blocker-chain races prove one-code/one-authority use, fresh rotation
+dominates old-code start, and completion leaves only the replacement passkey/session active under a
+concurrent old-passkey login. [ADR 0007](0007-restricted-recovery-authority.md) defines the narrow
+authority and remaining application boundary.
+
 Remaining application and protocol evidence includes:
 
 - OAuth state, PKCE, exact callback, code replay, token disposal, user-ID uniqueness, and session
   fixation tests.
 - Application WebAuthn RP/origin, transaction rendering, signature, user-verification, cookie/CSRF,
-  anonymous ceremony rate-limit/cleanup, and restricted recovery tests.
+  recovery Argon2id/pepper and generic-response behavior, and anonymous ceremony/recovery-lookup
+  rate-limit and cleanup tests.
 - Application-level pairing code attempt/rate limits, displayed-transaction rendering, external
   Ed25519 proof verification, device-revoke UI/route, key rotation, bounded cleanup, and plaintext
   token log rejection.
@@ -130,4 +138,5 @@ Remaining application and protocol evidence includes:
 
 - [Data flow](../architecture/DATA_FLOW.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
+- [Restricted recovery authority](0007-restricted-recovery-authority.md)
 - [Auth and device abuse cases](../security/ABUSE_CASES.md#pairing-device-and-connector-abuse)

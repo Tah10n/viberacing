@@ -30,6 +30,12 @@
       "name": "passkey_login_and_management",
       "path": "database/migrations/0005_passkey_login_and_management.sql",
       "sha256": "9b1514ad2fccc5ad41ec34f331bff77ac4ba6d95a372a0bba290bedf0dc28f34"
+    },
+    {
+      "revision": 6,
+      "name": "restricted_recovery_authority",
+      "path": "database/migrations/0006_restricted_recovery_authority.sql",
+      "sha256": "6ade38383b7cce40f32ecea11aee56523d0fd63ddef1c37eeb26938cdbca7424"
     }
   ]
 }

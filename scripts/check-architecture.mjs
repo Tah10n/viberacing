@@ -36,6 +36,7 @@ const requiredFiles = [
   "docs/decisions/0004-edge-service-and-database-isolation.md",
   "docs/decisions/0005-enum-only-car-recipe.md",
   "docs/decisions/0006-public-repository-boundary.md",
+  "docs/decisions/0007-restricted-recovery-authority.md",
   "docs/decisions/README.md",
   "docs/reference/codex-compatibility.md",
   "docs/security/ABUSE_CASES.md",

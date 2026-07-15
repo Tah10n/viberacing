@@ -35,8 +35,8 @@ remain safe to publish verbatim.
   [privacy data map](security/PRIVACY_DATA_MAP.md) — repository-wide attackers, assets, severity,
   misuse/recovery scenarios, field classification, retention, and deletion gates.
 - [System context](architecture/SYSTEM_CONTEXT.md) and [data flows](architecture/DATA_FLOW.md) —
-  planned containers, trust boundaries, capabilities, enrollment, pairing, sync, read, deletion, and
-  release sequences.
+  planned containers, trust boundaries, capabilities, enrollment, login/recovery, pairing, sync,
+  read, deletion, and release sequences.
 - [Compatibility policy](architecture/COMPATIBILITY_POLICY.md) and
   [empty Codex support matrix](reference/codex-compatibility.md) — independently versioned contracts
   and fail-closed upstream admission.
