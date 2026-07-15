@@ -350,6 +350,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/identity_capabilities.sql"), "utf8"),
     },
     {
+      label: "passkey login and management scenarios",
+      sql: readFileSync(resolve(root, "database/tests/passkey_capabilities.sql"), "utf8"),
+    },
+    {
       label: "source-bound pairing scenarios",
       sql: readFileSync(resolve(root, "database/tests/pairing_capabilities.sql"), "utf8"),
     },
@@ -364,6 +368,10 @@ try {
     {
       label: "source lifecycle concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/lifecycle_concurrency_setup.sql"), "utf8"),
+    },
+    {
+      label: "passkey concurrency setup",
+      sql: readFileSync(resolve(root, "database/tests/passkey_concurrency_setup.sql"), "utf8"),
     },
   ];
   for (const { sql, label } of databaseInputs) {
@@ -544,6 +552,92 @@ SELECT viberacing_api.activate_pairing(
     "source lifecycle concurrency assertions",
   );
 
+  await expectOneConcurrentWinner(
+    "single passkey login challenge race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000006101'
+FOR UPDATE;
+\\echo passkey-login-lock-ready`,
+    "passkey-login-lock-ready",
+    [
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.complete_passkey_login(
+  '00000000-0000-4000-8000-000000006601',
+  pg_catalog.decode(pg_catalog.repeat('d1', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('e1', 32), 'hex'),
+  '00000000-0000-4000-8000-000000006301',
+  pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
+  1,
+  false,
+  '00000000-0000-4000-8000-000000006211',
+  pg_catalog.decode(pg_catalog.repeat('f1', 32), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+  '00000000-0000-4000-8000-000000006901',
+  'req_' || pg_catalog.repeat('P', 22)
+);`,
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.complete_passkey_login(
+  '00000000-0000-4000-8000-000000006601',
+  pg_catalog.decode(pg_catalog.repeat('d1', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('e1', 32), 'hex'),
+  '00000000-0000-4000-8000-000000006301',
+  pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
+  1,
+  false,
+  '00000000-0000-4000-8000-000000006212',
+  pg_catalog.decode(pg_catalog.repeat('f2', 32), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+  '00000000-0000-4000-8000-000000006902',
+  'req_' || pg_catalog.repeat('Q', 22)
+);`,
+    ],
+  );
+
+  await expectProtectiveActionDominates(
+    "passkey revoke versus login race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000006102'
+FOR UPDATE;
+\\echo passkey-revoke-lock-ready`,
+    "passkey-revoke-lock-ready",
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.revoke_passkey(
+  '00000000-0000-4000-8000-000000006201',
+  pg_catalog.decode(pg_catalog.repeat('c1', 32), 'hex'),
+  '00000000-0000-4000-8000-000000006302',
+  '00000000-0000-4000-8000-000000006603',
+  pg_catalog.decode(pg_catalog.repeat('e3', 32), 'hex'),
+  '00000000-0000-4000-8000-000000006903',
+  'req_' || pg_catalog.repeat('R', 22)
+);`,
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.complete_passkey_login(
+  '00000000-0000-4000-8000-000000006602',
+  pg_catalog.decode(pg_catalog.repeat('d2', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('e2', 32), 'hex'),
+  '00000000-0000-4000-8000-000000006302',
+  pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
+  1,
+  false,
+  '00000000-0000-4000-8000-000000006213',
+  pg_catalog.decode(pg_catalog.repeat('f3', 32), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+  '00000000-0000-4000-8000-000000006904',
+  'req_' || pg_catalog.repeat('S', 22)
+);`,
+  );
+
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database/tests/passkey_concurrency_assertions.sql"), "utf8")),
+    "passkey concurrency assertions",
+  );
+
   for (const role of [
     "viberacing_web",
     "viberacing_ingest",
@@ -642,7 +736,7 @@ SELECT viberacing_api.activate_pairing(
   );
 
   console.log(
-    "Database integration passed (13 schema tables, 5 observed lock-wait races, 4 relation-denial and 6 cross-capability checks).",
+    "Database integration passed (13 schema tables, 7 observed lock-wait races, 4 relation-denial and 6 cross-capability checks).",
   );
 } finally {
   if (started) {

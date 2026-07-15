@@ -79,16 +79,18 @@ Dev-сервер слушает только loopback. В интерфейсе �
 будущего sync-протокола. Это пока только проверяемая граница данных: работающего API, connector и
 приёма реальной статистики ещё нет.
 
-Также добавлены четыре SQL migrations: 13 приватных identity/source/device/pairing/audit/deletion
-tables, deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL.
-Узкая procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
-initial-passkey challenge, rotate/revoke сессии, немедленную блокировку при запросе удаления и
-одноразовую привязку устройства к новому или существующему opaque source. Также реализованы
-приватный inventory источников и устройств, pause/reactivation/unlink источника и немедленный revoke
-устройства. Для reactivation/unlink база требует свежий одноразовый source-bound step-up, но
-проверяющего WebAuthn приложения пока нет. Несколько объявленных источников одного профиля позже
-будут суммироваться под единым лимитом score; email и идентификатор Codex-аккаунта не читаются и не
-сохраняются. Но HTTP-auth routes, OAuth callback, WebAuthn/Ed25519 verifier, connector ingest, purge
+Также добавлены пять SQL migrations: 13 приватных
+identity/passkey/source/device/pairing/audit/deletion tables, deny-by-default runtime roles, forced
+RLS и интеграционный тест на одноразовом PostgreSQL. Узкая procedure boundary уже покрывает выдачу
+invite, атомарное enrollment, привязанный к сессии initial-passkey challenge, вход с сессией,
+привязанной к точному passkey, управление несколькими passkeys, rotate/revoke сессии, немедленную
+блокировку при запросе удаления и одноразовую привязку устройства к новому или существующему opaque
+source. Также реализованы приватный inventory источников и устройств, pause/reactivation/unlink
+источника и немедленный revoke устройства. Для критических действий база сохраняет точный passkey
+step-up, но проверяющего WebAuthn приложения пока нет. Несколько объявленных источников одного
+профиля позже будут суммироваться под единым лимитом score; email и идентификатор Codex-аккаунта не
+читаются и не сохраняются. Но HTTP-auth routes, OAuth callback, WebAuthn/Ed25519 verifier,
+ограниченный recovery flow, edge rate limits для анонимных challenges, connector ingest, purge
 worker и deployed database ещё не реализованы, поэтому готовой пользовательской авторизации пока
 нет.
 

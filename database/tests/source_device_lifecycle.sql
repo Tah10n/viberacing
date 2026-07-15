@@ -269,6 +269,8 @@ INSERT INTO viberacing_private.pairing_transactions (
   approved_profile_id,
   source_choice,
   approved_source_id,
+  approved_by_session_id,
+  approved_by_passkey_id,
   expires_at,
   approved_at
 )
@@ -287,6 +289,8 @@ VALUES
     '00000000-0000-4000-8000-000000004101',
     'existing',
     'src_' || pg_catalog.repeat('P', 22),
+    '00000000-0000-4000-8000-000000004201',
+    '00000000-0000-4000-8000-000000004301',
     pg_catalog.statement_timestamp() + INTERVAL '8 minutes',
     pg_catalog.statement_timestamp()
   ),
@@ -304,6 +308,8 @@ VALUES
     '00000000-0000-4000-8000-000000004101',
     'existing',
     'src_' || pg_catalog.repeat('U', 22),
+    '00000000-0000-4000-8000-000000004201',
+    '00000000-0000-4000-8000-000000004301',
     pg_catalog.statement_timestamp() + INTERVAL '8 minutes',
     pg_catalog.statement_timestamp()
   ),
@@ -321,6 +327,8 @@ VALUES
     '00000000-0000-4000-8000-000000004101',
     'existing',
     'src_' || pg_catalog.repeat('B', 22),
+    '00000000-0000-4000-8000-000000004201',
+    '00000000-0000-4000-8000-000000004301',
     pg_catalog.statement_timestamp() + INTERVAL '8 minutes',
     pg_catalog.statement_timestamp()
   );
@@ -515,25 +523,31 @@ SELECT viberacing_api.create_source_action_challenge(
 );
 
 SELECT pg_temp.assert_true(
-  NOT viberacing_api.consume_auth_challenge(
+  NOT viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000004201',
     pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
     '00000000-0000-4000-8000-000000004603',
     'source_reactivation',
     pg_catalog.decode(pg_catalog.repeat('93', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('ff', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('ff', 32), 'hex'),
+    '00000000-0000-4000-8000-000000004301',
+    0,
+    false
   ),
   'wrong source action context reveals no challenge state'
 );
 
 SELECT pg_temp.assert_true(
-  viberacing_api.consume_auth_challenge(
+  viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000004201',
     pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
     '00000000-0000-4000-8000-000000004603',
     'source_reactivation',
     pg_catalog.decode(pg_catalog.repeat('93', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('a3', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('a3', 32), 'hex'),
+    '00000000-0000-4000-8000-000000004301',
+    0,
+    false
   ),
   'fresh source reactivation step-up is consumed once'
 );
@@ -632,13 +646,16 @@ SELECT viberacing_api.create_source_action_challenge(
 );
 
 SELECT pg_temp.assert_true(
-  viberacing_api.consume_auth_challenge(
+  viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000004201',
     pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
     '00000000-0000-4000-8000-000000004605',
     'source_unlink',
     pg_catalog.decode(pg_catalog.repeat('95', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('a5', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('a5', 32), 'hex'),
+    '00000000-0000-4000-8000-000000004301',
+    0,
+    false
   ),
   'fresh source unlink step-up is consumed once'
 );
@@ -766,13 +783,16 @@ SELECT viberacing_api.create_source_action_challenge(
 );
 
 SELECT pg_temp.assert_true(
-  viberacing_api.consume_auth_challenge(
+  viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000004201',
     pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
     '00000000-0000-4000-8000-000000004606',
     'source_unlink',
     pg_catalog.decode(pg_catalog.repeat('96', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('a6', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('a6', 32), 'hex'),
+    '00000000-0000-4000-8000-000000004301',
+    0,
+    false
   ),
   'rollback scenario consumes its exact source unlink step-up'
 );

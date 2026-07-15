@@ -312,37 +312,46 @@ SELECT viberacing_api.create_pairing_approval_challenge(
 );
 
 SELECT pg_temp.assert_true(
-  NOT viberacing_api.consume_auth_challenge(
+  NOT viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000000202',
     pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
     '00000000-0000-4000-8000-000000001201',
     'pairing_approval',
     pg_catalog.decode(pg_catalog.repeat('21', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('22', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('22', 32), 'hex'),
+    '00000000-0000-4000-8000-000000000302',
+    0,
+    false
   ),
   'another profile session cannot consume the bound approval challenge'
 );
 
 SELECT pg_temp.assert_true(
-  viberacing_api.consume_auth_challenge(
+  viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000000201',
     pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
     '00000000-0000-4000-8000-000000001201',
     'pairing_approval',
     pg_catalog.decode(pg_catalog.repeat('21', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('22', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('22', 32), 'hex'),
+    '00000000-0000-4000-8000-000000000301',
+    0,
+    false
   ),
   'the exact session consumes its pairing step-up once'
 );
 
 SELECT pg_temp.assert_true(
-  NOT viberacing_api.consume_auth_challenge(
+  NOT viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000000201',
     pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
     '00000000-0000-4000-8000-000000001201',
     'pairing_approval',
     pg_catalog.decode(pg_catalog.repeat('21', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('22', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('22', 32), 'hex'),
+    '00000000-0000-4000-8000-000000000301',
+    0,
+    false
   ),
   'pairing step-up replay is rejected'
 );
@@ -564,13 +573,16 @@ SELECT viberacing_api.create_pairing_approval_challenge(
 );
 
 SELECT pg_temp.assert_true(
-  viberacing_api.consume_auth_challenge(
+  viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000000201',
     pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
     '00000000-0000-4000-8000-000000001202',
     'pairing_approval',
     pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('42', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('42', 32), 'hex'),
+    '00000000-0000-4000-8000-000000000301',
+    0,
+    false
   ),
   'existing-source approval challenge is consumed'
 );
@@ -673,21 +685,27 @@ SELECT viberacing_api.create_pairing_approval_challenge(
 );
 
 SELECT pg_temp.assert_true(
-  viberacing_api.consume_auth_challenge(
+  viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000000201',
     pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
     '00000000-0000-4000-8000-000000001203',
     'pairing_approval',
     pg_catalog.decode(pg_catalog.repeat('61', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('62', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('62', 32), 'hex'),
+    '00000000-0000-4000-8000-000000000301',
+    0,
+    false
   )
-  AND viberacing_api.consume_auth_challenge(
+  AND viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000000202',
     pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
     '00000000-0000-4000-8000-000000001204',
     'pairing_approval',
     pg_catalog.decode(pg_catalog.repeat('63', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('64', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('64', 32), 'hex'),
+    '00000000-0000-4000-8000-000000000302',
+    0,
+    false
   ),
   'competing profiles can each verify only their own step-up'
 );

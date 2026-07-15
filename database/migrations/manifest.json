@@ -24,6 +24,12 @@
       "name": "source_device_lifecycle",
       "path": "database/migrations/0004_source_device_lifecycle.sql",
       "sha256": "5a80bdf80559437e056d5ec67bce09a893ea23fcbe30594a5c1420fd7201de22"
+    },
+    {
+      "revision": 5,
+      "name": "passkey_login_and_management",
+      "path": "database/migrations/0005_passkey_login_and_management.sql",
+      "sha256": "9b1514ad2fccc5ad41ec34f331bff77ac4ba6d95a372a0bba290bedf0dc28f34"
     }
   ]
 }

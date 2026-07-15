@@ -171,6 +171,8 @@ INSERT INTO viberacing_private.pairing_transactions (
   approved_profile_id,
   source_choice,
   approved_source_id,
+  approved_by_session_id,
+  approved_by_passkey_id,
   expires_at,
   approved_at
 )
@@ -188,6 +190,8 @@ VALUES (
   '00000000-0000-4000-8000-000000007102',
   'existing',
   'src_' || pg_catalog.repeat('N', 22),
+  '00000000-0000-4000-8000-000000007202',
+  '00000000-0000-4000-8000-000000007302',
   pg_catalog.statement_timestamp() + INTERVAL '8 minutes',
   pg_catalog.statement_timestamp()
 );
@@ -219,22 +223,28 @@ SELECT viberacing_api.create_source_action_challenge(
   pg_catalog.statement_timestamp() + INTERVAL '4 minutes'
 );
 
-SELECT viberacing_api.consume_auth_challenge(
+SELECT viberacing_api.consume_passkey_challenge(
   '00000000-0000-4000-8000-000000007201',
   pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
   '00000000-0000-4000-8000-000000007701',
   'pairing_approval',
   pg_catalog.decode(pg_catalog.repeat('e1', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('e2', 32), 'hex')
+  pg_catalog.decode(pg_catalog.repeat('e2', 32), 'hex'),
+  '00000000-0000-4000-8000-000000007301',
+  0,
+  false
 );
 
-SELECT viberacing_api.consume_auth_challenge(
+SELECT viberacing_api.consume_passkey_challenge(
   '00000000-0000-4000-8000-000000007202',
   pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
   '00000000-0000-4000-8000-000000007702',
   'source_unlink',
   pg_catalog.decode(pg_catalog.repeat('e3', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('e4', 32), 'hex')
+  pg_catalog.decode(pg_catalog.repeat('e4', 32), 'hex'),
+  '00000000-0000-4000-8000-000000007302',
+  0,
+  false
 );
 
 RESET ROLE;

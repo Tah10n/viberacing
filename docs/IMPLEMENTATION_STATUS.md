@@ -6,11 +6,11 @@ This page records only evidence that exists in the public working tree. The
 ## Current phase
 
 Phase 1 product code is locally complete, with the manual release-evidence items below still open.
-The Phase 2 language-neutral contract and SQL persistence foundations plus a Phase 3 database-only
-source/device lifecycle slice have started. Phase 0 hosted-publication controls remain blocked on
-real maintainer identities and GitHub configuration. No authentication HTTP route, OAuth/WebAuthn
-application flow, production deployment, released connector, real-user ingestion, or verified
-ranking exists.
+The Phase 2 language-neutral contract and SQL persistence foundations now include database-only
+passkey login and multi-passkey management; a Phase 3 database-only source/device lifecycle slice
+has also started. Phase 0 hosted-publication controls remain blocked on real maintainer identities
+and GitHub configuration. No authentication HTTP route, OAuth/WebAuthn application flow, production
+deployment, released connector, real-user ingestion, or verified ranking exists.
 
 ## Implemented and locally verified
 
@@ -89,7 +89,7 @@ ranking exists.
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- Four checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and 13
+- Five checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and 13
   forced-RLS private tables for profiles, invites, sessions, passkeys, recovery, session-bound
   challenges, opaque sources, pending/active/revoked device keys, pairing, bounded audit references,
   deletion work/tombstones, and schema revisions. There is intentionally no GitHub token, account
@@ -117,6 +117,12 @@ ranking exists.
   quarantine. Ingest and Jobs have no identity/pairing/lifecycle function. Profile-scoped functions
   derive identity from an active session ID plus keyed verifier and do not accept a caller-selected
   profile ID.
+- The same boundary can create a five-minute profile-free login challenge, expose only minimal
+  active-passkey verification material, atomically mint a passkey-bound session after application
+  verification, privately list owned passkeys, and add or revoke an exact passkey after a fresh
+  target-bound step-up. Stored sign counters never decrease; the last active key cannot be removed;
+  revocation closes the key's sessions, unused challenges, and pending pairing authority while
+  preserving unrelated keys and already activated devices.
 - PostgreSQL scenarios prove invalid invite rollback, absolute invite/session/challenge lifetimes,
   wrong-verifier denial, cross-profile challenge denial, one-time challenge/action use, old-session
   invalidation after rotation, typed-handle deletion binding, full rollback after failed deletion,
@@ -126,14 +132,20 @@ ranking exists.
   binding, inventory isolation, lifecycle IDOR/replay denial, quarantine separation, stale challenge
   invalidation, approved-pairing cancellation, recursive device revoke, audit-failure rollback, and
   the public ceilings of 32 lifetime sources and 64 active/unexpired-approved device authorities per
-  profile. The procedures do not perform OAuth, WebAuthn, or Ed25519 cryptographic verification;
-  those application boundaries remain absent.
-- Five deterministic cross-connection races hold the relevant pairing or profile row, tag every
+  profile. Passkey scenarios additionally prove exact credential/profile binding, unknown/revoked
+  lookup equivalence, one-time login, atomic audit rollback, monotonic usage state, inventory
+  isolation, add/revoke replay denial, last-key protection, and the public ceilings of 32 lifetime
+  passkeys and 32 active sessions. The procedures do not perform OAuth, WebAuthn, or Ed25519
+  cryptographic verification; those application boundaries remain absent.
+- Seven deterministic cross-connection races hold the relevant pairing or profile row, tag every
   session, and observe every contender in the holder's transitive PostgreSQL blocker chain before
   releasing it. PostgreSQL proves exactly one winner for a shared pairing, concurrent creation at
   the 32-source ceiling, concurrent approval at the 64-live-authority ceiling, pause dominating
-  concurrent pairing approval, and unlink dominating concurrent device activation. No lifecycle race
-  leaves approved pairing or active device authority on a protected source.
+  concurrent pairing approval, unlink dominating concurrent device activation, one winner for a
+  shared passkey-login challenge, and passkey revoke dominating concurrent login. No protective race
+  leaves browser or pending device authority attached to a revoked credential or protected source,
+  and missing expected challenge, passkey, session, or pairing rows now fail the passkey race
+  assertions rather than passing through SQL `NULL` semantics.
 - A strict Next.js 16 and React 19 web workspace with a synthetic EN/RU race, accessible
   leaderboard, demo profile, three repository-owned CSS/canvas themes, reduced-motion controls, and
   a deterministic 16-by-8 pixel-car renderer.
@@ -170,10 +182,10 @@ ranking exists.
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0004 from the checksum manifest,
-passed 13-table state/ownership/RLS assertions, five observed lock-wait races, four relation-denial
-matrices, six cross-capability denials, and the identity, pairing, and source/device lifecycle
-scenarios, then removed its portless container, network, and ephemeral storage.
+reached `healthy`, validated and applied revisions 0001 through 0005 from the checksum manifest,
+passed 13-table state/ownership/RLS assertions, seven observed lock-wait races, four relation-denial
+matrices, six cross-capability denials, and the identity, passkey, pairing, and source/device
+lifecycle scenarios, then removed its portless container, network, and ephemeral storage.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -203,11 +215,11 @@ defect found and corrected during review. The report names its local-only limita
 ## Not implemented yet
 
 Authentication application flows, OAuth/cookie/CSRF handling, WebAuthn and Ed25519 cryptographic
-verification, login/multi-passkey/recovery procedures, pairing edge rate limits and cleanup,
+verification, restricted recovery procedures, anonymous login/pairing edge rate limits and cleanup,
 remaining identity/ingest concurrent-connection evidence, purge workers, ingest API, scoring jobs,
 Codex connector, release signing, deployment, and public beta operations remain proposed. The
 current scoring and ranking code operates only on clearly synthetic in-process fixtures; the
-application does not connect to revisions 0001 through 0004.
+application does not connect to revisions 0001 through 0005.
 
 ## Evidence commands
 

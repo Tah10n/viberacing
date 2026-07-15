@@ -1,6 +1,6 @@
 # ADR 0003: GitHub identity, passkey step-up, and source-bound device authority
 
-- Status: Accepted (identity, pairing, and source/device lifecycle database slices implemented)
+- Status: Accepted (identity, passkey, pairing, and source/device database slices implemented)
 - Date: 2026-07-14
 - Decision owners: Web/Auth, Pairing, Ingest, and Database
 - Supersedes: None
@@ -27,6 +27,13 @@ approval, passkey/recovery changes, source unlink/reactivation, and profile dele
 and origins are environment-specific. Challenges are high-entropy, one-time, short-lived, and bound
 to the displayed transaction.
 
+Login is discoverable-credential compatible: its short-lived challenge has no profile authority, and
+the database derives the profile only from an active exact credential after application
+verification. Sessions record the authenticating passkey and preserve that provenance across
+rotation. Critical step-up challenges separately record the exact verifying passkey. A profile may
+retain at most 32 passkey records and 32 active unexpired browser sessions as public database safety
+ceilings; deployment controls may be lower.
+
 Give each connector an Ed25519 device key stored in the operating-system credential store and bound
 to exactly one source. Device requests are canonical signed messages, not long-lived bearer tokens.
 Device authority can submit Community sync for its source and nothing else.
@@ -43,6 +50,12 @@ This separates profile identity, human step-up, and unattended device authority.
 cannot manage security state; a stolen session cannot silently complete critical actions without a
 fresh passkey. Recovery remains a high-risk path and must not downgrade into email or support-based
 social engineering.
+
+Removing a passkey is terminal and cannot remove the profile's last active credential. It revokes
+browser sessions authenticated by that key and cancels its unused ceremonies and approved but not
+activated device authority. Activated connectors remain independent credentials that the user can
+inspect and revoke explicitly. Recovery will use a separate restricted authority and must not mint a
+normal session before a replacement passkey is established.
 
 Attestation is not required in MVP, avoiding a device fingerprint database. WebAuthn sign counters
 are risk signals, not universal clone proof. Friendly device labels are private bounded text and
@@ -92,12 +105,20 @@ failure rollback, recursive revoke on unlink, and protective outcomes under conc
 activation. It still relies on a future application service to verify the WebAuthn ceremony before
 challenge consumption.
 
+Revision 0005 adds credential-derived passkey login, session and step-up provenance, private
+multi-passkey inventory, bounded add/revoke, terminal revoke, last-key protection, monotonic stored
+sign state, and atomic rollback on audit/session conflicts. Two observed blocker-chain races prove a
+single login challenge has one winner and revocation leaves no active browser or pending pairing
+authority for the removed credential under concurrent login. The database returns only minimal
+verification material and still relies on Web/Auth for exact RP ID, origin, challenge, context,
+signature, and user-verification checks.
+
 Remaining application and protocol evidence includes:
 
 - OAuth state, PKCE, exact callback, code replay, token disposal, user-ID uniqueness, and session
   fixation tests.
-- WebAuthn RP/origin, challenge replay/expiry, transaction binding, user verification, multiple
-  passkey, recovery, and fresh-step-up tests.
+- Application WebAuthn RP/origin, transaction rendering, signature, user-verification, cookie/CSRF,
+  anonymous ceremony rate-limit/cleanup, and restricted recovery tests.
 - Application-level pairing code attempt/rate limits, displayed-transaction rendering, external
   Ed25519 proof verification, device-revoke UI/route, key rotation, bounded cleanup, and plaintext
   token log rejection.

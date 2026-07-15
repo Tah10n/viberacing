@@ -160,11 +160,13 @@ material availability cost.
   verification for a critical action.
 - **Impact:** Profile takeover, device binding, source unlink, privacy change, or deletion.
 - **Controls:** State, PKCE, exact redirect, one-time code handling, secure session rotation, exact
-  RP ID/origin, transaction-bound challenges, user verification, and fresh step-up.
-- **Detection:** Failed and replayed ceremony events, identity-binding changes, recovery use, and
-  sensitive-action audit.
-- **Recovery:** Revoke sessions/devices, restore control through documented recovery, rotate
-  recovery material, and inspect destructive actions.
+  RP ID/origin, transaction-bound challenges, user verification, exact session/passkey provenance,
+  fresh step-up, last-passkey protection, and terminal credential revoke that closes stale browser
+  and pending device authority.
+- **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
+  changes, recovery use, and sensitive-action audit without credential material.
+- **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a
+  restricted recovery flow; rotate recovery material; and inspect destructive actions.
 - **Residual risk:** Compromise of all registered passkeys and recovery material may require a
   manually governed recovery path with strong anti-social-engineering controls.
 
@@ -335,14 +337,15 @@ material availability cost.
 
 - **Attacker:** Anonymous automation, enrolled clients, compromised devices, or accidental retry
   storms.
-- **Preconditions:** Public reads, pairing, ingest, nonce/idempotency records, jobs, or database
-  pools are available.
+- **Preconditions:** Public reads, anonymous login/pairing ceremonies, ingest, nonce/idempotency
+  records, jobs, or database pools are available.
 - **Abuse:** Send oversized/slow input, create unbounded state, force expensive ranking, or
   synchronize many devices concurrently.
 - **Impact:** Increased cost, degraded service, job delay, or unavailable deletion and security
   actions.
-- **Controls:** Body and collection bounds, deadlines, concurrency and connection limits,
-  backpressure, quotas, cache, jittered retries, table cleanup, and independent kill switches.
+- **Controls:** Body and collection bounds, edge and account rate limits, 32-passkey and
+  32-active-session database ceilings, deadlines, concurrency and connection limits, backpressure,
+  quotas, cache, jittered retries, table cleanup, and independent kill switches.
 - **Detection:** Latency, saturation, queue age, rejection, source growth, state-table size, and
   cost alerts.
 - **Recovery:** Load shed, disable the narrow feature, drain queues, expire bounded state, and

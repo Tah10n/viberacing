@@ -275,6 +275,21 @@ SELECT pg_temp.expect_integrity_failure(
   'revoked sessions require a server timestamp'
 );
 
+INSERT INTO viberacing_private.sessions (
+  session_id,
+  profile_id,
+  verifier_digest,
+  created_at,
+  expires_at
+)
+VALUES (
+  '00000000-0000-4000-8000-000000000203',
+  '00000000-0000-4000-8000-000000000002',
+  pg_catalog.decode(pg_catalog.repeat('22', 32), 'hex'),
+  '2020-01-01T00:00:00.000Z',
+  '2020-01-01T01:00:00.000Z'
+);
+
 INSERT INTO viberacing_private.passkeys (
   passkey_id,
   profile_id,
@@ -289,6 +304,23 @@ VALUES (
   pg_catalog.decode(pg_catalog.repeat('30', 32), 'hex'),
   pg_catalog.decode(pg_catalog.repeat('31', 64), 'hex'),
   'Primary passkey',
+  '2020-01-01T00:00:00.000Z'
+);
+
+INSERT INTO viberacing_private.passkeys (
+  passkey_id,
+  profile_id,
+  credential_id,
+  cose_public_key,
+  label,
+  created_at
+)
+VALUES (
+  '00000000-0000-4000-8000-000000000302',
+  '00000000-0000-4000-8000-000000000002',
+  pg_catalog.decode(pg_catalog.repeat('32', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('33', 64), 'hex'),
+  'Second profile passkey',
   '2020-01-01T00:00:00.000Z'
 );
 
@@ -520,6 +552,8 @@ SELECT pg_temp.expect_integrity_failure(
       approved_profile_id,
       source_choice,
       approved_source_id,
+      approved_by_session_id,
+      approved_by_passkey_id,
       created_at,
       expires_at,
       approved_at
@@ -537,6 +571,8 @@ SELECT pg_temp.expect_integrity_failure(
       '00000000-0000-4000-8000-000000000002',
       'existing',
       'src_' || pg_catalog.repeat('A', 22),
+      '00000000-0000-4000-8000-000000000203',
+      '00000000-0000-4000-8000-000000000302',
       '2020-01-01T00:00:00.000Z',
       '2020-01-01T00:05:00.000Z',
       '2020-01-01T00:01:00.000Z'
@@ -551,6 +587,8 @@ SET
   approved_profile_id = '00000000-0000-4000-8000-000000000001',
   source_choice = 'existing',
   approved_source_id = 'src_' || pg_catalog.repeat('A', 22),
+  approved_by_session_id = '00000000-0000-4000-8000-000000000201',
+  approved_by_passkey_id = '00000000-0000-4000-8000-000000000301',
   approved_at = '2020-01-01T00:01:00.000Z'
 WHERE pairing_id = '00000000-0000-4000-8000-000000000601';
 

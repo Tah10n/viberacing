@@ -2,14 +2,14 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revisions 0001 through 0004 provide private
+These sequences remain planned application contracts. Revisions 0001 through 0005 provide private
 identity/source/device/pairing/audit/deletion tables, deny-by-default roles, and a narrow database
-slice for invite issuance, enrollment, exact-session challenges, initial-passkey activation, session
-rotation/revocation, immediate deletion lock-down, source-bound pairing, and source/device lifecycle
-controls. No endpoint, OAuth callback, WebAuthn or Ed25519 verifier, ingest procedure, purge worker,
-or deployed service executes the complete sequences. Data labels refer to the classifications in the
-[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
-and Prohibited.
+slice for invite issuance, enrollment, exact-session challenges, initial-passkey activation, passkey
+login and management, session rotation/revocation, immediate deletion lock-down, source-bound
+pairing, and source/device lifecycle controls. No endpoint, OAuth callback, WebAuthn or Ed25519
+verifier, ingest procedure, purge worker, or deployed service executes the complete sequences. Data
+labels refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md):
+Public, Account, Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -41,11 +41,46 @@ Only the numeric GitHub user ID crosses into persistent Account data. GitHub acc
 callback-memory data and are discarded. The public handle and optional GitHub link require a later
 explicit preview/choice; neither is inferred from local or OAuth-private data.
 
-Revision 0002 enforces the database steps shown here only after Web/Auth supplies a resolved numeric
-GitHub ID and, for the passkey step, a cryptographically verified WebAuthn result. It creates a
-fresh session during enrollment, binds each stored challenge to that exact session/profile pair, and
-makes the initial activation one-time. It does not implement the browser, edge, OAuth, cookie, CSRF,
-RP ID, origin, signature, or user-verification checks.
+Revisions 0002 and 0005 enforce the database steps shown here only after Web/Auth supplies a
+resolved numeric GitHub ID and, for the passkey step, a cryptographically verified WebAuthn result.
+They create a fresh session during enrollment, bind each stored challenge to that exact
+session/profile pair, make initial activation one-time, and bind the activated session to the new
+credential. They do not implement the browser, edge, OAuth, cookie, CSRF, RP ID, origin, signature,
+or user-verification checks.
+
+## Passkey login and credential management
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant Browser
+  participant Web as Web/Auth
+  participant Authenticator as Passkey authenticator
+  participant DB as Profile/Auth database role
+
+  Browser->>Web: Start anonymous login ceremony
+  Web->>DB: Store profile-free challenge for at most five minutes
+  Web->>Authenticator: Request discoverable credential assertion
+  Authenticator-->>Web: Credential ID, signature, UV, and counter flags
+  Web->>DB: Read minimal active verification material by credential ID
+  Web->>Web: Verify RP ID, origin, challenge, context, signature, and UV
+  Web->>DB: Atomically consume challenge and mint passkey-bound session
+  DB-->>Web: Credential-derived internal profile binding
+  Web-->>Browser: Private no-store authenticated response
+
+  User->>Browser: Add or revoke a passkey
+  Web->>DB: Create exact action/target-bound step-up challenge
+  Web->>Authenticator: Request fresh assertion
+  Web->>Web: Verify exact ceremony
+  Web->>DB: Record verifying passkey, then claim action once
+  DB-->>Web: Revoke target sessions and pending authority when removing
+```
+
+The database exposes no profile identifier during credential lookup, stores no attestation
+fingerprint, preserves a monotonic maximum sign counter, and makes revoke terminal. It cannot check
+WebAuthn cryptography or protect an Internet endpoint from anonymous challenge floods; edge/service
+limits and bounded expiry cleanup are mandatory before this flow is reachable. Recovery is a
+separate future flow with restricted authority, not a normal login shortcut.
 
 ## Device pairing and source choice
 

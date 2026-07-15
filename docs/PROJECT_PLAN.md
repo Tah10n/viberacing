@@ -272,10 +272,21 @@ event.
 - User verification is required for registration and critical actions.
 - RP ID and allowed origins are exact per environment.
 - Challenges are high-entropy, one-time, short-lived, and transaction-bound.
+- Login challenges carry no profile authority; a session is bound only after an active exact
+  credential derives the profile and the application verifies the assertion.
+- Sessions retain their authenticating-passkey provenance across rotation, and critical step-up
+  challenges retain the exact verifying passkey separately.
 - Attestation is not required in the MVP; the service does not build a device fingerprint database.
 - Sign counters are treated as a risk signal, not a universal clone detector.
 - Adding a device, unlinking a source, changing recovery, and deleting a profile require fresh
   step-up.
+- Passkey removal is terminal, cannot remove the last active credential, and closes the removed
+  key's sessions, unused ceremonies, and approved-but-not-activated pairing authority. Activated
+  devices remain explicit separately revocable credentials.
+- Public database safety ceilings allow at most 32 retained passkey records and 32 active unexpired
+  browser sessions per profile; edge limits and expiry cleanup remain independently required.
+- Recovery uses a short-lived restricted authority and cannot become a normal browser session until
+  a replacement passkey is safely established.
 
 ### Device authorization
 

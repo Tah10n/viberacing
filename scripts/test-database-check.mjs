@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { validateBootstrapSql, validateManifest, validateMigrationSql } from "./check-database.mjs";
+import {
+  validateAssertionSql,
+  validateBootstrapSql,
+  validateManifest,
+  validateMigrationSql,
+} from "./check-database.mjs";
 
 const goodMigration = String.raw`\set ON_ERROR_STOP on
 BEGIN;
@@ -143,4 +148,69 @@ assert.match(
   /runtime role/,
 );
 
-console.log("Database checker tests passed (16 cases).");
+const goodAssertion = String.raw`DO $assertion$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.sessions
+    WHERE session_id = '00000000-0000-4000-8000-000000000001'
+      AND state = 'active'
+  ) THEN
+    RAISE EXCEPTION 'expected active session is missing';
+  END IF;
+END
+$assertion$;
+`;
+const assertionPath = "database/tests/example_concurrency_assertions.sql";
+
+assert.deepEqual(validateAssertionSql(assertionPath, goodAssertion), []);
+assert.match(
+  validateAssertionSql(
+    assertionPath,
+    goodAssertion.replace("IF NOT EXISTS (\n    SELECT 1", "IF NOT (\n    SELECT state = 'active'"),
+  ).join("\n"),
+  /missing-row unsafe/,
+);
+assert.match(
+  validateAssertionSql(
+    assertionPath,
+    goodAssertion.replace(
+      "IF NOT EXISTS (\n    SELECT 1",
+      "IF /* misleading guard */ NOT (\n    SELECT state = 'active'",
+    ),
+  ).join("\n"),
+  /missing-row unsafe/,
+);
+assert.match(
+  validateAssertionSql(
+    assertionPath,
+    goodAssertion.replace(
+      "IF NOT EXISTS (\n    SELECT 1",
+      "IF NOT (\n    -- the row must exist\n    SELECT state = 'active'",
+    ),
+  ).join("\n"),
+  /missing-row unsafe/,
+);
+assert.deepEqual(
+  validateAssertionSql(
+    assertionPath,
+    goodAssertion.replace(
+      "BEGIN",
+      "BEGIN\n  -- Example of forbidden text only: IF NOT (SELECT state = 'active')",
+    ),
+  ),
+  [],
+);
+assert.deepEqual(
+  validateAssertionSql(
+    assertionPath,
+    goodAssertion.replace("BEGIN", "BEGIN\n  RAISE NOTICE 'IF NOT (SELECT is quoted text';"),
+  ),
+  [],
+);
+assert.match(
+  validateAssertionSql(assertionPath, `${goodAssertion}${"x".repeat(512 * 1024)}`).join("\n"),
+  /512 KiB/,
+);
+
+console.log("Database checker tests passed (23 cases).");

@@ -2,11 +2,11 @@
 
 ## Status
 
-This directory contains four SQL-first revisions for identity, source, device, pairing, audit, and
-deletion state. The migrations, narrow identity procedures, and PostgreSQL integration tests are
-implemented. No application route, OAuth callback, WebAuthn verifier, production credential, or
-deployed database consumes them yet. Recovery, login, ingest, scoring, purge, and cleanup procedures
-are not implemented.
+This directory contains five SQL-first revisions for identity, passkey login and management, source,
+device, pairing, audit, and deletion state. The migrations, narrow database procedures, and
+PostgreSQL integration tests are implemented. No application route, OAuth callback, WebAuthn
+verifier, production credential, or deployed database consumes them yet. Recovery, ingest, scoring,
+purge, and cleanup procedures are not implemented.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -28,6 +28,9 @@ procedure; the current repository has no such application code.
 - `migrations/0004_source_device_lifecycle.sql` adds private inventory, immediate source pause and
   device revoke, fresh-step-up source reactivation/unlink, stale-authority invalidation, and bounded
   lifecycle audit events.
+- `migrations/0005_passkey_login_and_management.sql` adds minimal passkey verification lookup,
+  anonymous login ceremonies, passkey-bound sessions, exact step-up provenance, bounded
+  multi-passkey add/revoke, and recursive stale-authority invalidation.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -37,14 +40,21 @@ procedure; the current repository has no such application code.
 - `tests/source_device_lifecycle.sql` exercises inventory isolation, source/device IDOR denial,
   step-up binding, replay, quarantine separation, stale challenge/pairing cancellation, recursive
   device revoke, and audit-failure rollback.
+- `tests/passkey_capabilities.sql` exercises credential-derived login, replay and rollback,
+  monotonic usage state, session provenance, private inventory, multi-passkey add/revoke, last-key
+  protection, cross-profile denial, and public safety ceilings.
 - `tests/pairing_concurrency_setup.sql` and `tests/pairing_concurrency_assertions.sql` create only
   ephemeral synthetic state and prove cross-connection first-winner, source-ceiling, and live
   device-authority-ceiling serialization.
 - `tests/lifecycle_concurrency_setup.sql` and `tests/lifecycle_concurrency_assertions.sql` prove
   pause dominates concurrent approval and unlink dominates concurrent activation without leaving
   approved pairing or active device authority live.
+- `tests/passkey_concurrency_setup.sql` and `tests/passkey_concurrency_assertions.sql` prove one
+  login challenge has one winner and passkey revoke dominates concurrent login without leaving its
+  browser or pending device authority live.
 - `scripts/check-database.mjs` and its black-box tests enforce migration shape, checksums, paths,
-  transactions, bounded execution, owner context, and forbidden grants or SQL capabilities.
+  transactions, bounded execution, owner context, forbidden grants or SQL capabilities, and reject
+  scalar-subquery `IF NOT` assertions whose missing row would otherwise pass as SQL `NULL`.
 - `scripts/test-database-integration.mjs` owns an isolated Compose project, executes PostgreSQL
   assertions and lock-contention races, waits until every tagged contender is observed in the
   holder's transitive blocker chain, proves runtime denials, and removes the container, network, and
@@ -52,14 +62,14 @@ procedure; the current repository has no such application code.
 
 ## Capability model
 
-| Role                | Login | Private schema | API schema | Current executable capability                                     |
-| ------------------- | ----- | -------------- | ---------- | ----------------------------------------------------------------- |
-| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                            |
-| `viberacing_web`    | No    | None           | Usage      | Identity, pairing, private inventory, and source/device lifecycle |
-| `viberacing_ingest` | No    | None           | Usage      | None                                                              |
-| `viberacing_jobs`   | No    | None           | Usage      | None                                                              |
-| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                      |
-| `PUBLIC`            | N/A   | None           | None       | None                                                              |
+| Role                | Login | Private schema | API schema | Current executable capability                                      |
+| ------------------- | ----- | -------------- | ---------- | ------------------------------------------------------------------ |
+| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                             |
+| `viberacing_web`    | No    | None           | Usage      | Identity, passkey, pairing, inventory, and source/device lifecycle |
+| `viberacing_ingest` | No    | None           | Usage      | None                                                               |
+| `viberacing_jobs`   | No    | None           | Usage      | None                                                               |
+| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                       |
+| `PUBLIC`            | N/A   | None           | None       | None                                                               |
 
 Deployment login principals are environment-owned secrets and are not declared here. Each service
 will receive one group role through protected infrastructure. Runtime roles are not members of the
@@ -80,14 +90,28 @@ Runtime access must remain procedure-only and must have positive and negative in
   fresh bounded session, redeems the invite, and appends an audit reference. A failed redemption
   leaves none of those rows behind.
 - `create_auth_challenge` creates initial-passkey and profile-deletion challenges;
-  `create_pairing_approval_challenge` creates the more tightly bound pairing variant.
-  `consume_auth_challenge` accepts those three purposes. Each challenge is bound by a composite
-  foreign key to the exact active session and profile, expires within its purpose-specific maximum,
-  and can be consumed once.
+  `create_pairing_approval_challenge`, `create_source_action_challenge`, and
+  `create_passkey_change_challenge` create tighter transaction-bound variants. Initial registration
+  uses `consume_auth_challenge`; every critical action uses `consume_passkey_challenge`, which
+  records the exact active owned passkey after the application verifies its assertion. Each
+  authenticated challenge is bound by a composite foreign key to the exact session and profile,
+  expires within its purpose-specific maximum, and can be consumed and claimed once.
 - `register_initial_passkey` requires the same possessed enrolling session and its consumed, unused
-  registration challenge before activating the profile.
+  registration challenge before activating the profile and binding that session to the new key.
+- `create_passkey_login_challenge` creates a profile-free ceremony for at most five minutes.
+  `read_passkey_verification_material` returns only the active credential's opaque key ID, COSE
+  public key, counter, and backup flags. `complete_passkey_login` derives the profile from that
+  exact credential, atomically consumes the challenge, advances monotonic usage state, and creates a
+  passkey-bound session. Known revoked and unknown credentials both return no material.
+- `read_passkey_inventory` returns only the authenticated profile's opaque passkey IDs, bounded
+  labels, lifecycle times, backup flags, and current-authenticator marker. `add_passkey` and
+  `revoke_passkey` require a consumed action- and target-bound step-up. Revocation cannot remove the
+  last active passkey; it revokes sessions derived from the target and cancels its unused challenges
+  and approved-but-not-activated pairing authority. Already activated devices remain separately
+  visible and explicitly revocable.
 - `rotate_session` and `revoke_session` require the exact keyed verifier. Rotation serializes on the
-  current session/profile and creates a fresh bounded record before ending the old one.
+  current session/profile, preserves its authentication provenance, and creates a fresh bounded
+  record before ending the old one.
 - `request_profile_deletion` derives the target from the possessed session, requires the exact typed
   handle and a consumed, unused deletion challenge, then atomically hides the profile, revokes
   active browser/passkey/device authority, removes recovery/challenge state, unlinks sources,
@@ -95,10 +119,10 @@ Runtime access must remain procedure-only and must have positive and negative in
 - `start_pairing` stores only keyed poll/code verifiers, a bounded challenge, immutable pending
   public key, and bounded display metadata for at most ten minutes.
 - `read_pairing_for_approval`, `create_pairing_approval_challenge`, and `approve_pairing` require
-  the exact active session. Approval also requires an active passkey record and a fresh, consumed,
-  transaction-bound WebAuthn challenge. The user can select a new opaque source or an existing
-  active source owned by the same profile. The first valid approval wins; after that, another
-  profile cannot take over or rebind the transaction.
+  the exact active session. Approval also requires a fresh, consumed, transaction-bound WebAuthn
+  challenge and persists the exact verifying passkey plus approving session. The user can select a
+  new opaque source or an existing active source owned by the same profile. The first valid approval
+  wins; after that, another profile cannot take over or rebind the transaction.
 - `read_pairing_verification_material`, `activate_pairing`, and `poll_pairing_status` expose only
   the minimum material needed for external Ed25519 proof verification and poll possession.
   Activation atomically binds the exact pending key to the approved source and one public device ID.
@@ -114,34 +138,37 @@ Runtime access must remain procedure-only and must have positive and negative in
   revokes every active device, cancels approved pairings, and invalidates unused source actions in
   the same transaction.
 
-The public schema safety ceilings are 32 lifetime source records and 64 active plus unexpired
-approved device authorities per profile. They bound worst-case database growth and authority
-fan-out, are enforced at both challenge creation and approval, and are not substitutes for lower
-deployment-specific fair-use limits, edge rate limits, or bounded cleanup.
+The public schema safety ceilings are 32 lifetime passkey records, 32 active unexpired browser
+sessions, 32 lifetime source records, and 64 active plus unexpired approved device authorities per
+profile. They bound retained credential growth and authority fan-out and are not substitutes for
+lower deployment-specific fair-use limits, edge rate limits, or bounded cleanup.
 
-The application must call challenge consumption only after it has verified the exact WebAuthn RP ID,
-origin, transaction context, signature, and user-verification result. It must verify the connector's
-Ed25519 possession proof over the exact returned pairing material before calling activation. These
-SQL procedures implement neither cryptographic verifier nor network rate limiting. They use one
-generic failure message for closed authorization and constraint failures; HTTP status mapping and
-response shaping remain application work. The deletion procedure implements immediate lock-down
-only. Primary purge, cache purge, tombstones, backup replay, and user-visible progress remain
-unimplemented.
+The application must call `complete_passkey_login` or `consume_passkey_challenge` only after it has
+verified the exact WebAuthn RP ID, origin, challenge, transaction context, signature, and
+user-verification result against the returned credential material. It must verify the connector's
+Ed25519 possession proof over the exact returned pairing material before activation. These SQL
+procedures implement neither cryptographic verification nor network rate limiting. In particular,
+the anonymous login-challenge endpoint is not launch-ready without edge/service limits and bounded
+expiry cleanup. Procedures use one generic failure message for closed authorization and constraint
+failures; HTTP status mapping and response shaping remain application work. Recovery needs its own
+short-lived restricted authority and is intentionally not represented as an ordinary session. The
+deletion procedure implements immediate lock-down only; primary purge, cache purge, tombstones,
+backup replay, and user-visible progress remain unimplemented.
 
 ## Data and privacy map
 
 All current columns map to the canonical [privacy data map](../docs/security/PRIVACY_DATA_MAP.md):
 
-| Tables                                   | Classes                       | Stored boundary                                                                  |
-| ---------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------- |
-| `profiles`                               | Account; handle is Public     | Numeric GitHub binding, normalized handle, explicit preferences, lifecycle time  |
-| `invites`, `sessions`, `auth_challenges` | Security                      | Keyed 32-byte verifiers/digests, exact session binding, expiry, and one-time use |
-| `passkeys`, `recovery_codes`             | Security; label is Account    | Public credential material and Argon2id PHC verifiers; never plaintext secrets   |
-| `codex_sources`                          | Account                       | Opaque source ID, owning profile, and constrained lifecycle state                |
-| `device_keys`, `pairing_transactions`    | Security; metadata is Account | Ed25519 public key, exact source/device binding, keyed poll/code verifiers       |
-| `deletion_jobs`, `deletion_tombstones`   | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry          |
-| `audit_events`                           | Security; Operational         | Closed event/actor enums, request reference, reason code, and server time        |
-| `schema_migrations`                      | Operational                   | Revision name and server application time only                                   |
+| Tables                                   | Classes                       | Stored boundary                                                                 |
+| ---------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------- |
+| `profiles`                               | Account; handle is Public     | Numeric GitHub binding, normalized handle, explicit preferences, lifecycle time |
+| `invites`, `sessions`, `auth_challenges` | Security                      | Keyed verifiers, exact session/passkey provenance, expiry, and one-time use     |
+| `passkeys`, `recovery_codes`             | Security; label is Account    | Public credential material and Argon2id PHC verifiers; never plaintext secrets  |
+| `codex_sources`                          | Account                       | Opaque source ID, owning profile, and constrained lifecycle state               |
+| `device_keys`, `pairing_transactions`    | Security; metadata is Account | Ed25519 public key, exact source/device binding, keyed poll/code verifiers      |
+| `deletion_jobs`, `deletion_tombstones`   | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry         |
+| `audit_events`                           | Security; Operational         | Closed event/actor enums, request reference, reason code, and server time       |
+| `schema_migrations`                      | Operational                   | Revision name and server application time only                                  |
 
 The schema has no column for GitHub access tokens, account email, prompts, conversations, repository
 data, Codex credentials, API keys, local paths, arbitrary payloads, or raw support evidence.
@@ -156,6 +183,12 @@ Pending device key records have no source, public device ID, or authority. Activ
 sets all three lifecycle fields, and a composite foreign key proves that the activated device is the
 exact key record shown during pairing. A key record then moves only `active → revoked` and cannot be
 rebound to another source.
+
+Revision 0005 deliberately invalidates every pre-revision ceremony and approved-but-not-activated
+pairing because they lack exact verifying-passkey provenance. It also revokes legacy active browser
+sessions for profiles that already have passkeys, requiring one fresh login after upgrade. This is a
+security migration, not a user-data purge: profiles, passkeys, sources, and activated devices
+remain.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
@@ -201,16 +234,18 @@ hard failure, not something the script silently broadens or repairs.
 
 ## Remaining security work
 
-- Implement OAuth/cookie/CSRF and WebAuthn application flows without weakening the session-bound
-  database contract.
-- Add procedure-only recovery, passkey-change, login, ingest, scoring, purge, and cleanup
-  capabilities.
+- Implement OAuth/cookie/CSRF and WebAuthn application flows without weakening the
+  session/passkey-bound database contract.
+- Add a separate short-lived recovery-only authority plus procedure-only ingest, scoring, purge, and
+  cleanup capabilities. Recovery must not mint a normal session before a new passkey is safely
+  established.
 - Add edge/service rate limiting and bounded cleanup for unauthenticated pairing starts and
-  authenticated short-code lookups; do not encode deployable private thresholds in this repository.
+  passkey-login challenges plus authenticated short-code lookups; do not encode deployable private
+  thresholds in this repository.
 - Add adversarial concurrent-connection coverage for session rotation, challenge consumption,
   enrollment, deletion, and future ingest procedures. Pairing approval, both public pairing
-  ceilings, pause-versus-approval, and unlink-versus-activation already have observed blocker-chain
-  cross-connection coverage.
+  ceilings, pause-versus-approval, unlink-versus-activation, single-challenge login, and
+  revoke-versus-login already have observed blocker-chain cross-connection coverage.
 - Implement bounded cleanup for expired ceremonies, sessions, pairings, jobs, and tombstones.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback

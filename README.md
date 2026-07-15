@@ -73,18 +73,20 @@ private reporting channels; those hosted controls cannot be safely invented from
 
 Phase 2/3 contract and persistence foundations are also present: three closed, bounded JSON Schemas
 plus generated TypeScript validators and OpenAPI components. They are pre-implementation contracts,
-not a live API or evidence that real Codex data can be submitted. Four SQL migrations now add 13
-private identity, source, device, pairing, audit, and deletion tables with deny-by-default runtime
-roles, forced RLS, state-machine constraints, checksum drift detection, and an isolated PostgreSQL
-capability test. A narrow procedure boundary implements invite issuance, atomic enrollment,
-session-bound initial-passkey challenges, session rotation/revocation, the immediate lock-down
-portion of profile deletion, one-time new/existing-source device pairing, private source/device
-inventory, source pause/reactivation/unlink, and immediate device revoke. Pairing creates only
-opaque user-declared sources: it never reads or stores Codex account email or claims account
-uniqueness. The source unlink/reactivation procedures require a fresh consumed source-bound step-up
-record, but the application that cryptographically verifies WebAuthn is still absent. There is still
-no HTTP authentication route, OAuth callback, WebAuthn/Ed25519 verifier, connector ingest,
-asynchronous purge worker, or deployed database.
+not a live API or evidence that real Codex data can be submitted. Five SQL migrations now add 13
+private identity, passkey, source, device, pairing, audit, and deletion tables with deny-by-default
+runtime roles, forced RLS, state-machine constraints, checksum drift detection, and an isolated
+PostgreSQL capability test. A narrow procedure boundary implements invite issuance, atomic
+enrollment, session-bound initial-passkey challenges, credential-derived login, bounded
+multi-passkey management, session rotation/revocation, the immediate lock-down portion of profile
+deletion, one-time new/existing-source device pairing, private source/device inventory, source
+pause/reactivation/unlink, and immediate device revoke. Pairing creates only opaque user-declared
+sources: it never reads or stores Codex account email or claims account uniqueness. The source
+unlink/reactivation procedures require a fresh consumed source-bound step-up record, but the
+application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
+also require edge rate limits and bounded cleanup before exposure. There is still no HTTP
+authentication route, OAuth callback, WebAuthn/Ed25519 verifier, restricted recovery flow, connector
+ingest, asynchronous purge worker, or deployed database.
 
 ## Run and verify the synthetic prototype
 

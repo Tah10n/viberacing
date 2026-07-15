@@ -48,6 +48,8 @@ Versioning where its guarantees are applicable.
   public 32-source/64-authority safety ceilings.
 - Procedure-only private source/device inventory, immediate source pause and device revoke, plus
   fresh-step-up source reactivation/unlink with terminal unlink and recursive authority revoke.
+- Procedure-only passkey login and multi-passkey management with minimal verification lookup,
+  credential-derived sessions, private inventory, bounded add/revoke, and exact step-up provenance.
 
 ### Security
 
@@ -86,7 +88,15 @@ Versioning where its guarantees are applicable.
 - Added lifecycle IDOR, replay, quarantine, stale-challenge, audit-rollback, and role-denial
   scenarios plus cross-connection races proving pause dominates concurrent approval and unlink
   dominates concurrent activation without leaving protected authority live.
-- Made all five race gates observe every tagged contender in the holder's PostgreSQL blocker chain
+- Made all seven race gates observe every tagged contender in the holder's PostgreSQL blocker chain
   before releasing the holder, removing timer-only concurrency evidence.
+- Made passkey race preservation assertions fail when an expected row is missing and added a static
+  regression check that rejects missing-row-unsafe scalar-subquery `IF NOT` assertions.
+- Made passkey revoke terminal, protected the last active key, preserved monotonic sign state, and
+  atomically removed the credential's browser, unused ceremony, and pending pairing authority;
+  observed races prove one login-challenge winner and revoke-dominant final state under contention.
+- Documented revision 0005 as a security upgrade: it invalidates pre-revision authentication
+  challenges, cancels approved-but-not-activated pairings, and revokes legacy active sessions for
+  profiles that already have passkeys so they must sign in again under attributable provenance.
 
 No version has been released.

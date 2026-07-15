@@ -200,6 +200,8 @@ INSERT INTO viberacing_private.pairing_transactions (
   approved_profile_id,
   source_choice,
   approved_source_id,
+  approved_by_session_id,
+  approved_by_passkey_id,
   created_at,
   expires_at,
   approved_at
@@ -218,6 +220,8 @@ VALUES (
   '00000000-0000-4000-8000-000000008104',
   'existing',
   'src_' || pg_catalog.repeat('V', 22),
+  '00000000-0000-4000-8000-000000008205',
+  '00000000-0000-4000-8000-000000008304',
   pg_catalog.statement_timestamp() - INTERVAL '10 minutes',
   pg_catalog.statement_timestamp() - INTERVAL '5 minutes',
   pg_catalog.statement_timestamp() - INTERVAL '9 minutes'
@@ -374,58 +378,76 @@ SELECT viberacing_api.create_pairing_approval_challenge(
   pg_catalog.statement_timestamp() + INTERVAL '4 minutes'
 );
 
-SELECT viberacing_api.consume_auth_challenge(
+SELECT viberacing_api.consume_passkey_challenge(
   '00000000-0000-4000-8000-000000008201',
   pg_catalog.decode(pg_catalog.repeat('81', 32), 'hex'),
   '00000000-0000-4000-8000-000000008701',
   'pairing_approval',
   pg_catalog.decode(pg_catalog.repeat('21', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('22', 32), 'hex')
+  pg_catalog.decode(pg_catalog.repeat('22', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008301',
+  0,
+  false
 );
 
-SELECT viberacing_api.consume_auth_challenge(
+SELECT viberacing_api.consume_passkey_challenge(
   '00000000-0000-4000-8000-000000008202',
   pg_catalog.decode(pg_catalog.repeat('82', 32), 'hex'),
   '00000000-0000-4000-8000-000000008702',
   'pairing_approval',
   pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('24', 32), 'hex')
+  pg_catalog.decode(pg_catalog.repeat('24', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008302',
+  0,
+  false
 );
 
-SELECT viberacing_api.consume_auth_challenge(
+SELECT viberacing_api.consume_passkey_challenge(
   '00000000-0000-4000-8000-000000008203',
   pg_catalog.decode(pg_catalog.repeat('83', 32), 'hex'),
   '00000000-0000-4000-8000-000000008703',
   'pairing_approval',
   pg_catalog.decode(pg_catalog.repeat('25', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('26', 32), 'hex')
+  pg_catalog.decode(pg_catalog.repeat('26', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008303',
+  0,
+  false
 );
 
-SELECT viberacing_api.consume_auth_challenge(
+SELECT viberacing_api.consume_passkey_challenge(
   '00000000-0000-4000-8000-000000008204',
   pg_catalog.decode(pg_catalog.repeat('84', 32), 'hex'),
   '00000000-0000-4000-8000-000000008704',
   'pairing_approval',
   pg_catalog.decode(pg_catalog.repeat('27', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('28', 32), 'hex')
+  pg_catalog.decode(pg_catalog.repeat('28', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008303',
+  0,
+  false
 );
 
-SELECT viberacing_api.consume_auth_challenge(
+SELECT viberacing_api.consume_passkey_challenge(
   '00000000-0000-4000-8000-000000008205',
   pg_catalog.decode(pg_catalog.repeat('85', 32), 'hex'),
   '00000000-0000-4000-8000-000000008705',
   'pairing_approval',
   pg_catalog.decode(pg_catalog.repeat('29', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('2a', 32), 'hex')
+  pg_catalog.decode(pg_catalog.repeat('2a', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008304',
+  0,
+  false
 );
 
-SELECT viberacing_api.consume_auth_challenge(
+SELECT viberacing_api.consume_passkey_challenge(
   '00000000-0000-4000-8000-000000008206',
   pg_catalog.decode(pg_catalog.repeat('86', 32), 'hex'),
   '00000000-0000-4000-8000-000000008706',
   'pairing_approval',
   pg_catalog.decode(pg_catalog.repeat('2b', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('2c', 32), 'hex')
+  pg_catalog.decode(pg_catalog.repeat('2c', 32), 'hex'),
+  '00000000-0000-4000-8000-000000008304',
+  0,
+  false
 );
 
 RESET ROLE;

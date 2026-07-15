@@ -33,13 +33,13 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 21
+    SELECT pg_catalog.count(*) = 29
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.prokind = 'f'
   ),
-  'the API surface contains only the reviewed identity and source lifecycle functions'
+  'the API surface contains only the reviewed identity, passkey, and source lifecycle functions'
 );
 
 SELECT pg_temp.assert_true(
@@ -555,6 +555,8 @@ SET
   approved_profile_id = '00000000-0000-4000-8000-000000000101',
   source_choice = 'existing',
   approved_source_id = 'src_' || pg_catalog.repeat('D', 22),
+  approved_by_session_id = '00000000-0000-4000-8000-000000000203',
+  approved_by_passkey_id = '00000000-0000-4000-8000-000000000401',
   approved_at = pg_catalog.statement_timestamp()
 WHERE pairing_id = '00000000-0000-4000-8000-000000000701';
 
@@ -572,13 +574,16 @@ SELECT viberacing_api.create_auth_challenge(
 );
 
 SELECT pg_temp.assert_true(
-  viberacing_api.consume_auth_challenge(
+  viberacing_api.consume_passkey_challenge(
     '00000000-0000-4000-8000-000000000203',
     pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex'),
     '00000000-0000-4000-8000-000000000303',
     'profile_deletion',
     pg_catalog.decode(pg_catalog.repeat('35', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('36', 32), 'hex')
+    pg_catalog.decode(pg_catalog.repeat('36', 32), 'hex'),
+    '00000000-0000-4000-8000-000000000401',
+    0,
+    false
   ),
   'fresh deletion step-up is consumed'
 );

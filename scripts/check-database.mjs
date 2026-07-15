@@ -8,7 +8,9 @@ const root = resolve(import.meta.dirname, "..");
 const manifestPath = "database/migrations/manifest.json";
 const bootstrapPath = "database/roles/bootstrap.sql";
 const migrationPathPattern = /^database\/migrations\/(\d{4})_([a-z][a-z0-9_]{2,62})\.sql$/;
+const assertionPathPattern = /^database\/tests\/[a-z][a-z0-9_]*_assertions\.sql$/;
 const runtimeRolePattern = /\bviberacing_(?:web|ingest|jobs|admin)\b/i;
+const missingRowUnsafeAssertionPattern = /\bIF\s+NOT\s*\(\s*SELECT\b/i;
 
 function exactKeys(value, expected) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -19,6 +21,84 @@ function exactKeys(value, expected) {
 
 function digest(text) {
   return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+function maskSqlCommentsAndQuotedText(sql) {
+  let masked = "";
+  let index = 0;
+  const appendMasked = (value) => {
+    masked += value === "\r" || value === "\n" ? value : " ";
+  };
+
+  while (index < sql.length) {
+    const current = sql[index];
+    const next = sql[index + 1];
+
+    if (current === "'" || current === '"') {
+      const quote = current;
+      appendMasked(current);
+      index += 1;
+      while (index < sql.length) {
+        const quoted = sql[index];
+        appendMasked(quoted);
+        index += 1;
+        if (quoted !== quote) {
+          continue;
+        }
+        if (sql[index] === quote) {
+          appendMasked(sql[index]);
+          index += 1;
+          continue;
+        }
+        break;
+      }
+      continue;
+    }
+
+    if (current === "-" && next === "-") {
+      appendMasked(current);
+      appendMasked(next);
+      index += 2;
+      while (index < sql.length && sql[index] !== "\r" && sql[index] !== "\n") {
+        appendMasked(sql[index]);
+        index += 1;
+      }
+      continue;
+    }
+
+    if (current === "/" && next === "*") {
+      let depth = 1;
+      appendMasked(current);
+      appendMasked(next);
+      index += 2;
+      while (index < sql.length && depth > 0) {
+        const commentCurrent = sql[index];
+        const commentNext = sql[index + 1];
+        if (commentCurrent === "/" && commentNext === "*") {
+          depth += 1;
+          appendMasked(commentCurrent);
+          appendMasked(commentNext);
+          index += 2;
+          continue;
+        }
+        if (commentCurrent === "*" && commentNext === "/") {
+          depth -= 1;
+          appendMasked(commentCurrent);
+          appendMasked(commentNext);
+          index += 2;
+          continue;
+        }
+        appendMasked(commentCurrent);
+        index += 1;
+      }
+      continue;
+    }
+
+    masked += current;
+    index += 1;
+  }
+
+  return masked;
 }
 
 export function validateMigrationSql(path, sql) {
@@ -174,6 +254,24 @@ export function validateBootstrapSql(sql) {
   return [...new Set(findings)];
 }
 
+export function validateAssertionSql(path, sql) {
+  if (!assertionPathPattern.test(path)) {
+    return ["assertion path must use database/tests/*_assertions.sql"];
+  }
+  if (typeof sql !== "string" || sql.length === 0) {
+    return ["assertion file must be non-empty UTF-8 text"];
+  }
+  if (Buffer.byteLength(sql, "utf8") > 512 * 1024) {
+    return ["assertion file exceeds the reviewed 512 KiB source limit"];
+  }
+  if (missingRowUnsafeAssertionPattern.test(maskSqlCommentsAndQuotedText(sql))) {
+    return [
+      "scalar-subquery IF NOT assertions are missing-row unsafe; use IF NOT EXISTS with the expected state in its predicate",
+    ];
+  }
+  return [];
+}
+
 export function validateManifest(manifest, filesByPath) {
   const findings = [];
   if (!exactKeys(manifest, ["schemaVersion", "migrations"])) {
@@ -300,6 +398,22 @@ function main() {
   }
   for (const finding of validateBootstrapSql(bootstrapText)) {
     failures.push(`${bootstrapPath} — ${finding}`);
+  }
+
+  const testsDirectory = resolve(root, "database", "tests");
+  for (const entry of readdirSync(testsDirectory, { withFileTypes: true })) {
+    if (!entry.name.endsWith("_assertions.sql")) {
+      continue;
+    }
+    const path = `database/tests/${entry.name}`;
+    if (entry.isSymbolicLink() || !entry.isFile()) {
+      failures.push(`${path} — assertion entries must be regular files`);
+      continue;
+    }
+    const sql = readFileSync(resolve(testsDirectory, entry.name), "utf8");
+    for (const finding of validateAssertionSql(path, sql)) {
+      failures.push(`${path} — ${finding}`);
+    }
   }
 
   report(failures, manifest.migrations?.length ?? 0);
