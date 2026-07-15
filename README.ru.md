@@ -41,6 +41,7 @@ Verified-лига останется выключенной до появлен�
 - [Политика данных публичного репозитория (EN)](docs/security/PUBLIC_REPOSITORY_POLICY.md)
 - [Локальная разработка (EN)](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Веб-прототип и его границы (EN)](apps/web/README.md)
+- [Локальное Ingest verification kernel (EN)](apps/ingest/README.md)
 - [Dependency policy (EN)](docs/security/DEPENDENCY_POLICY.md)
 - [Dependency inventory (EN)](docs/reference/dependency-inventory.json)
 - [Происхождение визуальных assets (EN)](docs/reference/ASSET_PROVENANCE.md)
@@ -88,7 +89,12 @@ request IDs и закрытые contract-validated no-store error responses. Thi
 точный query, GET-only method/`Accept`, no-queue admission на четыре запроса, adapter deadlines,
 store-error translation и финальный response contract. Это локальная реализация, а не deployment:
 cache, deployment login/TLS integration, edge rate policy, connector и приём реальной статистики ещё
-отсутствуют.
+отсутствуют. Отдельное чистое Ingest kernel теперь копирует и ограничивает точные raw body/headers
+Community sync, до JSON и device lookup проверяет body-bound origin HMAC с одноразовым nonce,
+отклоняет дубликаты headers/decoded JSON keys и превышение parser budgets, валидирует sync contract
+и строго проверяет source-bound Ed25519 request. Оно возвращает только frozen database-ready
+allowlist и не содержит HTTP listener, origin-key configuration, persistent replay store, PostgreSQL
+adapter, public response, rate/deadline/backpressure controls, connector или deployment.
 
 Также добавлены одиннадцать SQL migrations: 23 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
@@ -120,10 +126,11 @@ batches истёкших nonces и raw snapshots, сохраняя current sourc
 runner теперь вызывает только cleanup, scoring refresh или finalization через отдельный
 least-privileged config, single-client pool, проверку role/login/search path, fixed deadlines,
 prepared parameters, closed result validation и стабильный non-reflective CLI output. Сама база не
-проверяет wire signature. HTTP ingest route, приложение с Ed25519-проверкой, connector,
-cleanup/scoring scheduler, live Jobs login/TLS integration, monitoring backend, deployed public
-score read, audited correction flow, purge worker и deployed database ещё не реализованы, поэтому
-готовой пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
+проверяет wire signature, а локальное kernel ещё не соединено с этой procedure. HTTP ingest route,
+pairing-possession verifier, connector, cleanup/scoring scheduler, live Ingest/Jobs login/TLS
+integration, monitoring backend, deployed public score read, audited correction flow, purge worker и
+deployed database ещё не реализованы, поэтому готовой пользовательской авторизации, публичного
+рейтинга и приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

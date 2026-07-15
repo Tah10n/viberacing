@@ -66,8 +66,10 @@ material availability cost.
   decrease or quarantined-source snapshot, and prevents current source/day state from decreasing.
   Revision 0009 excludes quarantined sources and derives open-season score only after one profile
   cap across eligible distinct sources. Revision 0010 also quarantines the whole late snapshot so it
-  cannot change accepted historical state. Suspicious-jump policy, service execution, and correction
-  authority remain unimplemented.
+  cannot change accepted historical state. The local Ingest kernel now validates the bounded exact
+  request and source-bound device signature, but intentionally makes no usage-honesty claim.
+  Suspicious-jump policy, HTTP/database service execution, and correction authority remain
+  unimplemented.
 - **Residual risk:** A plausible forged value inside public bounds may be indistinguishable from an
   honest local reading.
 
@@ -132,8 +134,11 @@ material availability cost.
 - **Recovery:** Immediate device revoke, optional source key rotation, quarantine affected
   open-season records, and audited investigation.
 - **Current evidence:** PostgreSQL verifies exact device/source binding, nonce/idempotency replay,
-  revoke rejection, and revoke-versus-submit ordering. OS key storage, request-signature
-  verification, rotation, metrics, and HTTP controls remain unimplemented.
+  revoke rejection, and revoke-versus-submit ordering. The local Ingest kernel verifies the exact
+  body-bound request under strict Ed25519 semantics, takes unknown devices through a valid dummy-key
+  path, compares the lookup source, and rejects the observed zero-key/zero-signature bypass. OS key
+  storage, rotation, metrics, HTTP controls, and application-to-PostgreSQL integration remain
+  unimplemented.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity.
 
@@ -151,7 +156,9 @@ material availability cost.
   the user/admin audited path.
 - **Current evidence:** The Ingest role can execute only device verification lookup and Community
   submission, has no direct table access, and is denied every current identity/lifecycle sample; the
-  role matrix is exercised in real PostgreSQL.
+  role matrix is exercised in real PostgreSQL. The pure verifier exposes only request verification
+  and an allowlisted submission result; it owns no profile, pairing, recovery, passkey, admin, or
+  database capability. A future HTTP route still needs a tested route-level scope matrix.
 - **Residual risk:** A future endpoint can accidentally reuse the wrong middleware; a scope matrix
   is required in CI.
 
@@ -307,6 +314,13 @@ material availability cost.
   events.
 - **Recovery:** Deny the origin route, rotate proof keys, invalidate the replay window, and
   quarantine affected writes.
+- **Current evidence:** The local Ingest kernel accepts one or two exact proof keys, verifies a
+  method/path/exact-body/time/nonce-bound HMAC before parsing or device lookup, permits only a
+  strictly younger-than-60-second age and inclusive five-second future skew, and requires one
+  injected nonce-consumption result. Tests cover unknown keys, rotation, stale/future proof, replay,
+  body/header mutation, and failing nonce dependencies. Cloudflare signing, protected key
+  configuration, a persistent replay store, Railway direct-origin denial, trusted forwarding, and
+  HTTP integration remain unimplemented.
 - **Residual risk:** Infrastructure metadata exposure can increase probing but must not be the only
   protection.
 
@@ -372,10 +386,12 @@ material availability cost.
   hosted secret scanning.
 - **Recovery:** Close the contribution, rotate any exposed credential, remove the dependency,
   invalidate affected artifacts, and audit protected history.
-- **Current evidence:** The exact `pg` and type-package versions, complete transitive graph,
-  declared licenses, registry integrity metadata, direct notices, absence of install scripts, and
-  optional native peer were reviewed; deterministic inventory/license gates pass, and the registry
-  advisory audit reported no known vulnerability at review time.
+- **Current evidence:** The exact `pg`, type-package, and `@noble/ed25519` versions, complete
+  transitive graph, declared licenses, registry integrity metadata, direct notices, absence of
+  install lifecycle scripts, and optional native peer were reviewed; deterministic inventory/license
+  gates pass. The Ed25519 package is confined to one strict verification call, has no dependencies,
+  and is regression-tested against the native zero-key/zero-signature gap. The registry advisory
+  audit reported no known vulnerability at review time.
 - **Residual risk:** A malicious change can modify its own tests; test success never authorizes
   merge or release by itself.
 
@@ -432,24 +448,28 @@ material availability cost.
 - **Recovery:** Load shed, disable the narrow feature, drain queues, expire bounded state, and
   restore service without weakening authentication or signature checks.
 - **Current evidence:** Connector input is limited to 31 entries and safe integers; nonce and raw
-  snapshot rows carry bounded expiry markers. A Jobs-only procedure deletes expired rows in
-  1-to-1000 batches, preserves live/current state, and serializes two workers in observed PostgreSQL
-  evidence. Scoring refresh/finalization use one private mutex, per-season locks, a five-second
-  database lock bound, numeric overflow protection, a 30-second statement deadline, bounded no-data
-  terminal state, and one atomic global-rank rebuild. The public score projection returns at most
-  100 rows and has a five-second statement deadline; the response-only contract narrows one future
-  page to 32 rows, and the mapper rejects row 33 before traversing projected rows. The Web adapter
-  adds a four-connection ceiling, two-second checkout/connect wait, one/five/six-second lock/server/
-  client-query deadlines, idle/lifetime recycling, and a fixed limit 32. Ranking still evaluates all
-  currently visible season entries. The generated query validator now rejects malformed,
-  out-of-range, and non-Monday seasons before the route may call the store. The local route rejects
-  bodies and oversized/malformed URL or `Accept` work, admits at most four active reads with no
-  queue, holds each lease through adapter settlement, and returns 503 on exhaustion. The operation
-  reserves a 429 response without claiming a client-rate limiter exists. The local Jobs runner adds
-  a one-client ceiling, 2/31/32-second connect/server/client deadlines, one fixed 1000-row cleanup
-  command, canonical season validation, closed one-row results, and destructive release on failure.
-  Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and production load
-  evidence remain unimplemented.
+  snapshot rows carry bounded expiry markers. Before contract traversal, the local Ingest kernel
+  limits the exact body to 8192 bytes, raw header pairs to 64, and JSON to depth 8, 128 values, 64
+  object members or array items, 64 number characters, and 256 decoded string code units. Origin
+  proof verification precedes parser and device dependency work. A Jobs-only procedure deletes
+  expired rows in 1-to-1000 batches, preserves live/current state, and serializes two workers in
+  observed PostgreSQL evidence. Scoring refresh/finalization use one private mutex, per-season
+  locks, a five-second database lock bound, numeric overflow protection, a 30-second statement
+  deadline, bounded no-data terminal state, and one atomic global-rank rebuild. The public score
+  projection returns at most 100 rows and has a five-second statement deadline; the response-only
+  contract narrows one future page to 32 rows, and the mapper rejects row 33 before traversing
+  projected rows. The Web adapter adds a four-connection ceiling, two-second checkout/connect wait,
+  one/five/six-second lock/server/ client-query deadlines, idle/lifetime recycling, and a fixed
+  limit 32. Ranking still evaluates all currently visible season entries. The generated query
+  validator now rejects malformed, out-of-range, and non-Monday seasons before the route may call
+  the store. The local route rejects bodies and oversized/malformed URL or `Accept` work, admits at
+  most four active reads with no queue, holds each lease through adapter settlement, and returns 503
+  on exhaustion. The operation reserves a 429 response without claiming a client-rate limiter
+  exists. The local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client
+  deadlines, one fixed 1000-row cleanup command, canonical season validation, closed one-row
+  results, and destructive release on failure. The kernel has no socket/stream timeout, admission
+  ceiling, database pool, or backpressure. Scheduling, cache, scoring/read capacity evidence,
+  quotas, edge shaping, and production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

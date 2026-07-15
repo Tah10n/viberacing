@@ -723,6 +723,12 @@
       "integrity": "sha512-0JXq3b85Jk9Jg4ntLUbXSPvoDw3gpZou7twuKdoFG2jOw635v7+IiXfTaa0TxVMyx78pUjnrVYwLgjKfX4e6/A=="
     },
     {
+      "name": "@noble/ed25519",
+      "version": "3.1.0",
+      "license": "MIT",
+      "integrity": "sha512-pfcObRY3CtvwfaG9Mt5XqZdKmAQppl37tHUeuBhDUbiwJBCVY4/A4lbMvb1xKhMDx96AqAqZpMWuBX1HulhX4g=="
+    },
+    {
       "name": "@nodelib/fs.scandir",
       "version": "2.1.5",
       "license": "MIT",

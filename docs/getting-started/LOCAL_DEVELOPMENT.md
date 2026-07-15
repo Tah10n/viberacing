@@ -7,8 +7,10 @@ and eleven Phase 2/3 database-foundation migrations. Everything runnable uses sy
 It has procedure-only identity, passkey login/management, restricted recovery, pairing, and
 source/device lifecycle database capabilities plus Community ingest, retention cleanup, scoring, and
 terminal finalization and public score-projection procedures, but no authentication or recovery
-application code, OAuth/Argon2id/WebAuthn/Ed25519 verifier, Jobs scheduler, real-user ingestion,
-audited correction, or connector. A bounded local one-shot Jobs process now wraps only
+application code, OAuth/Argon2id/WebAuthn or pairing-possession verifier, Jobs scheduler, real-user
+ingestion, audited correction, or connector. A pure local Ingest kernel bounds and authenticates a
+synthetic exact-body sync request, but has no HTTP listener, live replay store, database adapter,
+edge path, or deployment. A bounded local one-shot Jobs process now wraps only
 cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A bounded
 server-only Web PostgreSQL adapter and local public-score GET are implemented and unit/build-tested,
 but this repository supplies no working deployment login or TLS certificate. A successful setup
@@ -41,12 +43,12 @@ untrusted registry redirects, and exotic transitive sources.
 
 `pnpm run verify` is deterministic and offline after installation. It includes a complete reachable
 Git-history scan, external-host policy, English spelling, dependency-license inventory, contract and
-Jobs lint/types/coverage, Jobs production compilation, contract generation/drift checks and
-coverage, web component coverage, and a production web build. It also runs the offline migration
-manifest/capability checker; the real PostgreSQL integration is a separate Docker command and a
-secretless CI job. The optional `pnpm run check:external-links:online` performs bounded network
-validation and may fail closed behind a private DNS/proxy; do not weaken its address or redirect
-rules to accommodate a workstation.
+Ingest/Jobs lint/types/coverage, Ingest/Jobs production compilation, contract generation/drift
+checks and coverage, web component coverage, and a production web build. It also runs the offline
+migration manifest/capability checker; the real PostgreSQL integration is a separate Docker command
+and a secretless CI job. The optional `pnpm run check:external-links:online` performs bounded
+network validation and may fail closed behind a private DNS/proxy; do not weaken its address or
+redirect rules to accommodate a workstation.
 
 After an intentionally reviewed dependency change, regenerate the machine inventory with
 `node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
@@ -90,6 +92,20 @@ operation under `contracts/v1/`; review both generated diffs and their source di
 OpenAPI document contains one path marked `implemented-local`. The corresponding dynamic Next.js
 route has request/response and build evidence, but no working database login is tracked and no
 deployment exists merely because the local route is documented.
+
+Ingest-focused commands use only synthetic key material and injected in-memory capabilities:
+
+```text
+pnpm run lint:ingest
+pnpm run typecheck:ingest
+pnpm run test:ingest:coverage
+pnpm run build:ingest
+```
+
+They verify a pure raw-envelope/origin/parser/contract/device kernel, not an HTTP endpoint or
+database flow. Do not supply a real edge key, public key, signature, nonce, usage payload, database
+credential, or captured request. See [`apps/ingest/README.md`](../../apps/ingest/README.md) for the
+exact boundary and remaining integration work.
 
 Jobs-focused commands use injected synthetic results and never need a database credential:
 

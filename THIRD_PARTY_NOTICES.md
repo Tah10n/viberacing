@@ -7,12 +7,13 @@ dependency.
 
 ## Direct runtime packages
 
-| Component                                      | Purpose                    | Declared license |
-| ---------------------------------------------- | -------------------------- | ---------------- |
-| [next](https://github.com/vercel/next.js)      | Web application framework  | MIT              |
-| [pg](https://github.com/brianc/node-postgres)  | PostgreSQL client and pool | MIT              |
-| [React](https://github.com/facebook/react)     | User-interface runtime     | MIT              |
-| [react-dom](https://github.com/facebook/react) | Browser rendering runtime  | MIT              |
+| Component                                                    | Purpose                     | Declared license |
+| ------------------------------------------------------------ | --------------------------- | ---------------- |
+| [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) | Strict Ed25519 verification | MIT              |
+| [next](https://github.com/vercel/next.js)                    | Web application framework   | MIT              |
+| [pg](https://github.com/brianc/node-postgres)                | PostgreSQL client and pool  | MIT              |
+| [React](https://github.com/facebook/react)                   | User-interface runtime      | MIT              |
+| [react-dom](https://github.com/facebook/react)               | Browser rendering runtime   | MIT              |
 
 ## Direct development tools
 

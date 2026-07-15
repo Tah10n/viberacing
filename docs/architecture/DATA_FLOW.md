@@ -11,11 +11,13 @@ ingest, bounded ingest-retention cleanup, open-season scoring refresh, late-inge
 season finalization, and a Web-only public score projection. One local public-score GET constructs
 the bounded adapter lazily after closed request admission. One local one-shot Jobs runner can invoke
 only cleanup, refresh, or finalization, but no authentication/ingest endpoint, OAuth callback,
-Argon2id/WebAuthn/Ed25519 application verifier, connector, purge worker, Jobs scheduler/monitor,
-audited correction, or deployed service executes the complete sequences. No deployment login,
-certificate, edge policy, or live route/Jobs evidence is supplied. Data labels refer to the
-classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account,
-Security, Usage, Operational, and Prohibited.
+Argon2id/WebAuthn or pairing-possession application verifier, connector, purge worker, Jobs
+scheduler/monitor, audited correction, or deployed service executes the complete sequences. A pure
+local Ingest kernel now verifies the bounded exact-body origin/device request, but has no HTTP,
+persistent replay, database, or deployment integration. No deployment login, certificate, edge
+policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
+and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -175,8 +177,9 @@ minimal public-key material for an external Ed25519 verifier, and activates the 
 that verifier succeeds. PostgreSQL scenarios cover competing profiles, wrong poll possession,
 replay, immutable binding, 32 lifetime sources, and 64 active/unexpired-approved device authorities
 per profile. The browser, HTTP, WebAuthn, Ed25519, edge-rate-limit, and cleanup layers remain
-planned. The ceiling and first-winner assertions use separate PostgreSQL connections held behind a
-real row lock before simultaneous release.
+planned for pairing possession. ADR 0015's later device-request verifier does not consume or
+activate this pairing transaction. The ceiling and first-winner assertions use separate PostgreSQL
+connections held behind a real row lock before simultaneous release.
 
 ## Source and device lifecycle
 
@@ -252,8 +255,8 @@ are Prohibited and have no field in the connector egress schema. `observedAt` su
 checks; server `receivedAt` controls deadlines and season finalization. A valid signature proves
 only which registered device sent the self-reported payload.
 
-Revision 0007 implements only the PostgreSQL portion of this flow. Ingest can look up the minimal
-active device/source/public-key tuple, then call one procedure after application verification. The
+Revision 0007 implements the PostgreSQL portion of this flow. Ingest can look up the minimal active
+device/source/public-key tuple, then call one procedure after application verification. The
 procedure independently enforces the exact activated binding, identifier/version/date/token and
 31-entry bounds, millisecond timestamp precision, a server-time freshness window, per-device nonce
 replay, per-device/sync idempotency, and one monotonic current value per source/date. It retains a
@@ -261,12 +264,22 @@ whole decrease or quarantined-source snapshot as `quarantined`; paused/unlinked 
 devices, and deletion-pending profiles fail closed. Observed races cover exact retry, same-source
 devices, pause, and revoke.
 
-The connector, edge, Ingest HTTP service, raw-body canonicalization, Ed25519 verification, origin
-proof, and rate controls are still absent. Revision 0008 gives Jobs only a server-time, 1-to-1000
-batch procedure for expired nonces and raw snapshots. It serializes callers, cascades raw entries,
-preserves current source/day values, and clears only their deleted raw reference. The expiry columns
-still do not delete rows by themselves. The local one-shot Jobs command can invoke one fixed
-1000-row batch, but no scheduler, monitor, live login, or deployment invokes it automatically.
+ADR 0015 implements a pure local part of the Ingest application step. A closed raw envelope copies
+the exact body and required headers, enforces transport and JSON budgets, rejects duplicate required
+headers and decoded JSON keys, and verifies a fresh HMAC-SHA-256 origin proof before body parsing or
+device lookup. The parser then validates `ConnectorSyncV1`; timestamp and idempotency headers must
+equal their body fields; and a minimal injected device tuple verifies the exact-body request with
+strict Ed25519 semantics before a frozen database-ready allowlist is returned. The injected origin
+nonce consumer is only a seam: there is no live replay store.
+
+The connector, edge, Ingest HTTP service, origin-key configuration, persistent origin replay,
+PostgreSQL adapter/login, public acknowledgement, rate controls, socket deadlines, admission,
+backpressure, and load evidence are still absent. Revision 0008 gives Jobs only a server-time,
+1-to-1000 batch procedure for expired nonces and raw snapshots. It serializes callers, cascades raw
+entries, preserves current source/day values, and clears only their deleted raw reference. The
+expiry columns still do not delete rows by themselves. The local one-shot Jobs command can invoke
+one fixed 1000-row batch, but no scheduler, monitor, live login, or deployment invokes it
+automatically.
 
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct

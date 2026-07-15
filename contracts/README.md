@@ -3,7 +3,8 @@
 This directory is the language-neutral source of truth for Vibe Racing wire shapes. The current
 files establish request and response boundaries plus one locally implemented public score operation;
 revision 0007 maps the bounded Community sync into a database-only procedure and revision 0011
-provides a database-only score projection. No connector, application signature verifier, deployed
+provides a database-only score projection. A local pure Ingest kernel now authenticates and parses
+the exact bounded sync request, but no connector, HTTP ingest listener, live replay store, deployed
 endpoint, or live database credential exists.
 
 ## Canonical version 1 schemas
@@ -19,6 +20,12 @@ endpoint, or live database credential exists.
 - [`ConnectorSyncV1`](v1/connector-sync.schema.json) accepts one bounded, self-reported Community
   snapshot from a source-bound device. It contains no trust tier, profile ID, rank, score, season,
   moderation state, account email, prompt, repository, credential, or server receipt time.
+- [`connector-sync-authentication.json`](v1/connector-sync-authentication.json) fixes the exact
+  method, target, media type, raw body/header/JSON budgets, required headers, canonical base64url
+  and timestamp encodings, and LF-separated origin/device proof messages. The local Ingest verifier
+  binds both proofs to SHA-256 of the exact received body, rejects duplicate headers and decoded
+  JSON keys, consumes a fresh origin nonce before body parsing or device lookup, validates
+  `ConnectorSyncV1`, and verifies the source-bound signature under strict RFC 8032/FIPS semantics.
 - [`ConnectorSyncResultV1`](v1/connector-sync-result.schema.json) acknowledges accepted, duplicate,
   or quarantined input without returning a private anomaly reason.
 - [`ProblemDetailsV1`](v1/problem-details.schema.json) returns a stable error code and request ID,
@@ -67,8 +74,10 @@ generated file to make a check pass.
    consumers reject unknown response fields, so do not silently expand or reinterpret an existing
    shape.
 
-Runtime validation is defense in depth after a service has already enforced content type and a small
-raw-body limit. A future ingest parser must also reject duplicate object keys and excessive nesting
-before ordinary object validation, and request signatures must bind the exact received body bytes.
-Runtime traversal budgets do not replace edge limits, deadlines, backpressure, or database
+The local Ingest kernel enforces the content type, raw envelope/parser budgets, duplicate object-key
+rejection, exact-body proofs, generated contract, and strict device signature before returning a
+frozen allowlist. A future HTTP wrapper must preserve the exact raw bytes and duplicate raw headers
+when constructing that envelope and must add socket/stream limits, trusted-proxy handling, a durable
+origin replay store, deadlines, backpressure, generic responses, rate controls, and the narrow
+database adapter. Runtime parsing budgets do not replace those transport, edge, or database
 constraints.

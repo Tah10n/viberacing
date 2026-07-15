@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "viberacing-community-sync-auth-v1",
+  "method": "POST",
+  "requestTarget": "/v1/community/sync",
+  "mediaType": "application/json",
+  "maximumBodyBytes": 8192,
+  "maximumRawHeaderPairs": 64,
+  "maximumHeaderNameCharacters": 64,
+  "maximumHeaderValueCharacters": 256,
+  "maximumJsonDepth": 8,
+  "maximumJsonNodes": 128,
+  "maximumJsonObjectMembers": 64,
+  "maximumJsonArrayItems": 64,
+  "maximumJsonNumberCharacters": 64,
+  "maximumDecodedJsonStringCodeUnits": 256,
+  "canonicalMessageEncoding": "UTF-8",
+  "canonicalMessageSeparator": "LF",
+  "canonicalMessageTrailingSeparator": false,
+  "binaryEncoding": "base64url-unpadded",
+  "digestEncoding": "base64url-unpadded",
+  "originProof": {
+    "messagePrefix": "viberacing-origin-proof-v1",
+    "algorithm": "HMAC-SHA-256",
+    "keyBytes": 32,
+    "proofBytes": 32,
+    "nonceBytes": 16,
+    "maximumAgeMilliseconds": 60000,
+    "maximumAgeBoundary": "exclusive",
+    "maximumFutureSkewMilliseconds": 5000,
+    "maximumFutureSkewBoundary": "inclusive",
+    "keyIdPattern": "^edge_[A-Za-z0-9_-]{1,22}$",
+    "headers": {
+      "keyId": "x-viberacing-origin-key-id",
+      "timestamp": "x-viberacing-origin-timestamp",
+      "nonce": "x-viberacing-origin-nonce",
+      "proof": "x-viberacing-origin-proof"
+    },
+    "canonicalFields": [
+      "messagePrefix",
+      "keyId",
+      "method",
+      "requestTarget",
+      "bodyDigestBase64Url",
+      "timestamp",
+      "nonce"
+    ]
+  },
+  "deviceSignature": {
+    "messagePrefix": "viberacing-device-request-v1",
+    "algorithm": "Ed25519",
+    "publicKeyBytes": 32,
+    "signatureBytes": 64,
+    "nonceBytes": 16,
+    "deviceIdPattern": "^dev_[A-Za-z0-9_-]{22}$",
+    "idempotencyKeyPattern": "^syn_[A-Za-z0-9_-]{22}$",
+    "headers": {
+      "deviceId": "x-viberacing-device-id",
+      "timestamp": "x-viberacing-device-timestamp",
+      "nonce": "x-viberacing-device-nonce",
+      "signature": "x-viberacing-device-signature",
+      "idempotencyKey": "idempotency-key"
+    },
+    "canonicalFields": [
+      "messagePrefix",
+      "method",
+      "requestTarget",
+      "bodyDigestBase64Url",
+      "deviceId",
+      "nonce",
+      "timestamp",
+      "idempotencyKey"
+    ]
+  }
+}

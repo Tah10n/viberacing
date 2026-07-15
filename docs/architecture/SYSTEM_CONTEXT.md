@@ -3,10 +3,11 @@
 ## Status
 
 This is the planned runtime architecture. The current repository contains a tested SQL persistence
-foundation, one local public-score route, and one local one-shot Jobs runner, but no complete
-application service, connector, Cloudflare/Railway deployment, or production database. Component
-status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
-required runtime boundaries, not deployed evidence.
+foundation, one local public-score route, one local one-shot Jobs runner, and a pure local Ingest
+request-verification kernel, but no complete application service, connector, Cloudflare/Railway
+deployment, or production database. Component status is tracked in
+[implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
+not deployed evidence.
 
 ## System context
 
@@ -92,9 +93,13 @@ production TLS, fixed deadlines/query, and per-checkout effective-role and least
 verification. ADR 0013 adds a locally implemented request/admission/response route around it. These
 capabilities have role, contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a
 local one-shot Jobs adapter/CLI for only cleanup, refresh, and finalization, with its own role/login
-probe, one-client pool, and fixed deadlines. The deployment logins/certificates and live
-connections, Ingest service, Jobs scheduler/monitoring, edge/origin proof, request signature
-verification, public cache, and audited correction authority shown in the design remain planned.
+probe, one-client pool, and fixed deadlines. ADR 0015 adds a pure local Ingest kernel that bounds
+the raw envelope and JSON parser, verifies a replay-consumed body-bound origin proof before parsing,
+validates the sync contract, and verifies the exact source-bound device request under strict Ed25519
+semantics. The HTTP listener, live origin/replay store, PostgreSQL adapter and deployment login,
+socket deadlines/admission/backpressure, Cloudflare/Railway path, connector, Jobs
+scheduler/monitoring, public cache, and audited correction authority shown in the design remain
+planned.
 
 ## Component responsibilities
 

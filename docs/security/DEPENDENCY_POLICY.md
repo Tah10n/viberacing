@@ -7,10 +7,11 @@ input. Convenience is not enough reason to add one. Prefer platform APIs and sma
 checks when they are clear and maintainable.
 
 Mature frameworks and analysis tools are used only where their maintained behavior materially
-reduces project risk. The current deliberate set includes Next.js and React for the web runtime and
-CSpell, TypeScript, ESLint, Vitest, jsdom, and axe-core for offline verification. Every direct
-package is exact-pinned, installs without lifecycle scripts, and is represented with its complete
-transitive graph in the dependency inventory. Pull-request CI is secretless.
+reduces project risk. The current deliberate set includes Next.js and React for the web runtime,
+`@noble/ed25519` for one strict server-side device-signature check, and CSpell, TypeScript, ESLint,
+Vitest, jsdom, and axe-core for offline verification. Every direct package is exact-pinned, installs
+without lifecycle scripts, and is represented with its complete transitive graph in the dependency
+inventory. Pull-request CI is secretless.
 
 The project does not auto-merge dependency updates. A green dependency pull request still requires
 human review of purpose, provenance, release history, permissions, transitive changes, and license.
@@ -36,6 +37,16 @@ The offline gate rejects missing, extra, stale, malformed, unapproved, or invent
 metadata, including an installed package absent from the lockfile. `pnpm run audit:dependencies` is
 a separate online check pinned to the official npm registry and fails on moderate, high, or critical
 advisories.
+
+`@noble/ed25519@3.1.0` is the only current application cryptography dependency. A local probe showed
+that Node's native OpenSSL-backed verifier accepted an all-zero Ed25519 public key and signature, so
+platform verification alone did not provide the strict point policy required by VR-DEVICE-001. The
+package is confined to the private Ingest workspace and one `verifyAsync` call with `zip215: false`;
+it has no dependency, optional dependency, native build, install lifecycle script, browser
+inclusion, network capability, or public API exposure. Its exact registry integrity, MIT license,
+canonical repository/release, maintenance and security-review history, and adversarial zero-key
+regression were reviewed under ADR 0015. Replacing or updating it requires the same review and proof
+of strict behavior on every supported runtime; permissive native fallback is prohibited.
 
 `config/license-policy.json` is a reviewed allowlist of the license expressions currently present;
 it is not a general statement that a license is suitable for every future distribution. The checker

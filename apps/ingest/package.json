@@ -1,0 +1,31 @@
+{
+  "name": "@viberacing/ingest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bounded Vibe Racing Community sync request verification kernel.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24.14.0 <25"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/ed25519": "3.1.0",
+    "@viberacing/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "24.13.3",
+    "@vitest/coverage-v8": "4.1.10",
+    "eslint": "9.39.5",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.63.0",
+    "vitest": "4.1.10"
+  }
+}

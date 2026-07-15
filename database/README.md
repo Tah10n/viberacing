@@ -5,8 +5,10 @@
 This directory contains eleven SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
-implemented. No authentication/ingest route, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier,
-production credential, or deployed database consumes the protected identity/ingest capabilities. One
+implemented. No authentication/HTTP Ingest route, OAuth callback, Argon2id/WebAuthn or
+pairing-possession verifier, production credential, or deployed database consumes the protected
+identity/ingest capabilities. A pure local Ingest kernel now verifies a bounded exact-body
+origin/device request, but it has no PostgreSQL adapter and does not call these procedures. One
 local public-score route and one local one-shot Jobs runner wrap narrow capabilities without a
 working database login. The database-only ingest and Jobs-only ingest-retention, open-season
 scoring, and terminal finalization procedures plus one Web-only public score projection are
@@ -248,13 +250,16 @@ The application must call `complete_passkey_login` or `consume_passkey_challenge
 verified the exact WebAuthn RP ID, origin, challenge, transaction context, signature, and
 user-verification result against the returned credential material. It must verify the connector's
 Ed25519 possession proof over the exact returned pairing material before activation. These SQL
-procedures implement neither cryptographic verification nor network rate limiting. The future Ingest
-service must validate the exact `ConnectorSyncV1` body and canonical request signature against
-`read_device_verification_material` before it calls `submit_community_sync`; the database treats
-that call as an assertion by the isolated Ingest role while independently enforcing binding, replay,
-time, and monotonic state. In particular, the anonymous login-challenge endpoint is not launch-ready
-without edge/service limits and bounded expiry cleanup. Procedures use one generic failure message
-for closed authorization and constraint failures; HTTP status mapping and response shaping remain
+procedures implement neither cryptographic verification nor network rate limiting. ADR 0015's pure
+local Ingest kernel now validates the exact bounded `ConnectorSyncV1` body, body-bound origin proof,
+and canonical strict Ed25519 request against an injected minimal lookup. A future HTTP service must
+preserve the exact raw envelope while wrapping that kernel, provide a persistent origin replay
+capability, and map only its frozen output through a least-privileged adapter to
+`read_device_verification_material` and `submit_community_sync`; the database treats that call as an
+assertion by the isolated Ingest role while independently enforcing binding, replay, time, and
+monotonic state. In particular, the anonymous login-challenge endpoint is not launch-ready without
+edge/service limits and bounded expiry cleanup. Procedures use one generic failure message for
+closed authorization and constraint failures; HTTP status mapping and response shaping remain
 application work. Recovery SQL now uses a short-lived restricted authority and never represents it
 as an ordinary session, but application Argon2id/pepper and WebAuthn verification, timing
 normalization, rate limits, cleanup, notifications, and UI remain absent. The deletion procedure
@@ -411,8 +416,10 @@ hard failure, not something the script silently broadens or repairs.
 - Add edge/service rate limiting and bounded cleanup for unauthenticated pairing starts,
   passkey-login challenges, and recovery-code lookups; do not encode deployable private thresholds
   in this repository.
-- Implement the HTTP Ingest boundary with exact raw-body canonicalization, strict contract parsing,
-  Ed25519 verification, origin proof, generic errors, rate limits, deadlines, and backpressure.
+- Wrap the local Ingest verification kernel with an exact-byte HTTP boundary, protected origin-key
+  configuration, persistent replay store, generic public errors, least-privileged PostgreSQL
+  lookup/submission adapter, rate limits, deadlines, admission, backpressure, and integration/load
+  evidence.
 - Implement a scheduler, monitoring, retry/overlap policy, live login/TLS integration, and capacity
   evidence around the local one-shot Jobs cleanup/refresh/finalization runner, plus audited
   corrections and freshness/streak projection.

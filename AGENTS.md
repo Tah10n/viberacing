@@ -25,12 +25,14 @@ route, and procedure-only identity, passkey, restricted-recovery, pairing, sourc
 Community usage-ingest, Jobs-only ingest-retention, and open-season Community scoring plus terminal
 finalization and bounded public score-projection database slices. A local one-shot Jobs runner now
 invokes only those three reviewed maintenance functions through a probed least-privileged login
-contract. The public score route is locally verified but has no live database login, deployment,
-edge controls, or visible-component consumer. Do not claim that HTTP authentication,
-OAuth/Argon2id/WebAuthn/Ed25519 application verification, real-user ingestion, a connector, a Jobs
-scheduler or deployed public-race read, season correction, scheduled or broader cleanup, deployment,
-or a hosted security control exists until its implementation and verification are present in the
-working tree.
+contract. A pure local Ingest kernel bounds the raw sync envelope and parser, verifies an injected
+replay-consumed origin proof, validates the sync contract, and strictly verifies the source-bound
+device request. The public score route and Ingest kernel are locally verified but have no live
+database login, HTTP Ingest listener, edge deployment, persistent origin replay store, or
+visible-component/connector consumer. Do not claim that HTTP authentication, OAuth/Argon2id/WebAuthn
+application verification, real-user ingestion, a connector, a Jobs scheduler or deployed public-race
+read, season correction, scheduled or broader cleanup, deployment, or a hosted security control
+exists until its implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -45,6 +47,8 @@ working tree.
   agent guidance. Read `apps/web/AGENTS.md` before editing it.
 - `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
   least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
+- `apps/ingest/` contains the pure bounded Community sync request-verification kernel and nested
+  security guidance. Read `apps/ingest/AGENTS.md` before editing it.
 - `contracts/v1/` contains canonical public JSON Schemas; `contracts/generated/` contains
   drift-checked derivatives.
 - `packages/contracts/` contains generated TypeScript types plus the bounded runtime validator and
@@ -53,14 +57,14 @@ working tree.
   persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
-- Ingest, authentication application code, and connector workspaces are not present yet; follow
+- HTTP Ingest, authentication application code, and connector workspaces are not present yet; follow
   `docs/PROJECT_PLAN.md` when they are introduced.
 
 ## Verified commands
 
 - `pnpm run verify` runs public-data/history, checker regression, documentation/link, spelling,
-  license inventory, formatting, Markdown, configuration, workflow-policy, contract/Jobs/frontend
-  lint/type/coverage/production-build, and Rust workspace gates.
+  license inventory, formatting, Markdown, configuration, workflow-policy,
+  contract/Ingest/Jobs/frontend lint/type/coverage/production-build, and Rust workspace gates.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
 - `pnpm run check:public:staged` scans the exact staged blobs before a commit.
 - `pnpm run check:community` validates governance and community-health files and forms.
@@ -87,6 +91,10 @@ working tree.
 - `pnpm run lint:jobs`, `pnpm run typecheck:jobs`, `pnpm run test:jobs:coverage`, and
   `pnpm run build:jobs` verify the local one-shot Jobs boundary. They use injected fakes and do not
   prove a live Jobs login, scheduler, production TLS, monitoring, capacity, or deployment.
+- `pnpm run lint:ingest`, `pnpm run typecheck:ingest`, `pnpm run test:ingest:coverage`, and
+  `pnpm run build:ingest` verify the pure sync kernel. They use synthetic keys and injected
+  capabilities and do not prove HTTP framing, a live replay store, edge delivery, PostgreSQL
+  integration, a connector, rate/backpressure policy, capacity, or deployment.
 - `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS, and
   private reporting controls are configured.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability
@@ -98,10 +106,10 @@ working tree.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 
-These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`. The web and Jobs
-tests use synthetic/injected data and do not prove authentication, real-user ingestion, connector,
-scheduler, live database login, deployment, or production behavior; the database integration proves
-only its isolated SQL boundary. Install dependencies with
+These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`. The Web, Ingest,
+and Jobs tests use synthetic/injected data and do not prove authentication, real-user ingestion,
+connector, scheduler, live edge/replay/database integration, deployment, or production behavior; the
+database integration proves only its isolated SQL boundary. Install dependencies with
 `pnpm install --frozen-lockfile --ignore-scripts`.
 
 ## Public repository boundary

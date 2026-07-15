@@ -7,6 +7,8 @@ const root = resolve(import.meta.dirname, "..");
 const require = createRequire(import.meta.url);
 const contractsRoot = resolve(root, "packages", "contracts");
 const contractsRequire = createRequire(resolve(contractsRoot, "package.json"));
+const ingestRoot = resolve(root, "apps", "ingest");
+const ingestRequire = createRequire(resolve(ingestRoot, "package.json"));
 const jobsRoot = resolve(root, "apps", "jobs");
 const jobsRequire = createRequire(resolve(jobsRoot, "package.json"));
 const webRoot = resolve(root, "apps", "web");
@@ -19,6 +21,9 @@ const contractsEslintBin = resolve(
 );
 const contractsTscBin = contractsRequire.resolve("typescript/bin/tsc");
 const contractsVitestBin = resolve(dirname(contractsRequire.resolve("vitest")), "vitest.mjs");
+const ingestEslintBin = resolve(dirname(ingestRequire.resolve("eslint")), "..", "bin", "eslint.js");
+const ingestTscBin = ingestRequire.resolve("typescript/bin/tsc");
+const ingestVitestBin = resolve(dirname(ingestRequire.resolve("vitest")), "vitest.mjs");
 const jobsEslintBin = resolve(dirname(jobsRequire.resolve("eslint")), "..", "bin", "eslint.js");
 const jobsTscBin = jobsRequire.resolve("typescript/bin/tsc");
 const jobsVitestBin = resolve(dirname(jobsRequire.resolve("vitest")), "vitest.mjs");
@@ -127,6 +132,20 @@ const checks = [
     process.execPath,
     [contractsVitestBin, "run", "--coverage"],
     contractsRoot,
+  ],
+  ["Ingest lint", process.execPath, [ingestEslintBin, "."], ingestRoot],
+  ["Ingest types", process.execPath, [ingestTscBin, "--noEmit"], ingestRoot],
+  [
+    "Ingest tests and coverage",
+    process.execPath,
+    [ingestVitestBin, "run", "--coverage"],
+    ingestRoot,
+  ],
+  [
+    "Ingest production build",
+    process.execPath,
+    [ingestTscBin, "--project", "tsconfig.build.json"],
+    ingestRoot,
   ],
   ["Jobs lint", process.execPath, [jobsEslintBin, "."], jobsRoot],
   ["Jobs types", process.execPath, [jobsTscBin, "--noEmit"], jobsRoot],

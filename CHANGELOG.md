@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fourteen accepted ADRs.
+  fail-closed compatibility policy and matrix, and fifteen accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -58,6 +58,14 @@ Versioning where its guarantees are applicable.
   failures. It claims no client-rate policy, working database credential, or deployment.
 - Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
   drift gates and black-box regression coverage.
+- A private pure Ingest workspace plus canonical language-neutral authentication policy for one
+  exact `POST /v1/community/sync` raw envelope. It bounds copied body/header/JSON work, rejects
+  duplicate security headers and decoded object keys, verifies a replay-consumed exact-body origin
+  HMAC before parsing or device lookup, validates `ConnectorSyncV1`, strictly verifies the
+  source-bound exact-body Ed25519 request, and returns only a frozen database-ready allowlist. Its
+  117 adversarial tests reach 100% statement/branch/function/line coverage; no HTTP listener, live
+  replay store, PostgreSQL adapter, public response, connector, rate/deadline/backpressure control,
+  or deployment is implied.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,
@@ -125,8 +133,8 @@ Versioning where its guarantees are applicable.
   PostgreSQL scenarios using synthetic data only.
 - Prevented short-code-only activation, post-approval competing-profile takeover, poll replay,
   source-choice swaps, key rebinding, and authority fan-out beyond the public database ceilings;
-  external WebAuthn and Ed25519 verification remain mandatory before the matching procedures are
-  called.
+  external WebAuthn and pairing-possession Ed25519 verification remain mandatory before the matching
+  procedures are called.
 - Added deterministic cross-connection lock races proving first-winner pairing approval and atomic
   enforcement of the 32-source and 64-live-authority ceilings, including exclusion of expired
   approvals from live authority.
@@ -154,6 +162,11 @@ Versioning where its guarantees are applicable.
 - Added response-contract regression coverage for Community trust constants, the ten public score
   fields, empty/top-32 pages, duplicate display positions, bounds, private-field rejection, and
   privacy-safe validation issues without advertising an HTTP route.
+- Rejected the native all-zero Ed25519 public-key/signature acceptance path discovered during local
+  review by exact-pinning dependency-free `@noble/ed25519@3.1.0`, using strict RFC 8032/FIPS
+  verification, and retaining the bypass as an explicit regression case. The dependency is confined
+  to one private server-side verifier and adds no browser, connector, network, or install-script
+  capability.
 - Added query-contract and generator regression coverage for inclusive season bounds, malformed and
   non-Monday dates, unknown/accessor fields, date-extension fail-closure, exact OpenAPI response and
   header semantics, unsafe paths/schema references, duplicate operations, problem-vocabulary drift,
