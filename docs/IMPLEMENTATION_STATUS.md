@@ -150,18 +150,20 @@ ingestion, or verified ranking exists.
   oversized/replay/role denial, atomic rollback, and fail-closed behavior at the lifetime-passkey
   provenance ceiling. The procedures do not perform OAuth, Argon2id, WebAuthn, or Ed25519
   cryptographic verification; those application boundaries remain absent.
-- Ten deterministic cross-connection races hold the relevant pairing or profile row, tag every
-  session, and observe every contender in the holder's transitive PostgreSQL blocker chain before
-  releasing it. PostgreSQL proves exactly one winner for a shared pairing, concurrent creation at
-  the 32-source ceiling, concurrent approval at the 64-live-authority ceiling, pause dominating
-  concurrent pairing approval, unlink dominating concurrent device activation, one winner for a
-  shared passkey-login challenge, passkey revoke dominating concurrent login, one recovery code
-  creating one authority, recovery-code rotation dominating concurrent old-code start, and recovery
-  completion dominating concurrent old-passkey login. No protective race leaves browser, recovery,
-  or pending device authority attached to a revoked credential, old code, or protected source. The
-  recovery races also prove terminal timestamps are captured after lock acquisition, and missing
-  expected challenge, credential, authority, session, code, or pairing rows fail closed rather than
-  passing through SQL `NULL` semantics.
+- Fourteen deterministic cross-connection races hold the relevant invite, challenge, session,
+  pairing, or profile row, tag every session, and observe every contender in the holder's transitive
+  PostgreSQL blocker chain before releasing it. PostgreSQL proves exactly one winner for a shared
+  invite, initial-passkey registration challenge, active-session rotation, pairing, concurrent
+  creation at the 32-source ceiling, concurrent approval at the 64-live-authority ceiling,
+  passkey-login challenge, and recovery code. Protective races prove profile deletion dominates
+  concurrent session rotation, source pause dominates concurrent pairing approval, source unlink
+  dominates concurrent device activation, passkey revoke dominates concurrent login, recovery-code
+  rotation dominates concurrent old-code start, and recovery completion dominates concurrent
+  old-passkey login. No losing enrollment or rotation artifact survives, and no protective race
+  leaves browser, recovery, or pending device authority attached to a deleted profile, revoked
+  credential, old code, or protected source. The recovery races also prove terminal timestamps are
+  captured after lock acquisition, and missing expected challenge, credential, authority, session,
+  code, or pairing rows fail closed rather than passing through SQL `NULL` semantics.
 - A strict Next.js 16 and React 19 web workspace with a synthetic EN/RU race, accessible
   leaderboard, demo profile, three repository-owned CSS/canvas themes, reduced-motion controls, and
   a deterministic 16-by-8 pixel-car renderer.
@@ -199,10 +201,10 @@ The local Compose smoke test pulled the pinned index, reached `healthy`, exposed
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
 reached `healthy`, validated and applied revisions 0001 through 0006 from the checksum manifest,
-passed 14-table state/ownership/RLS assertions, ten observed lock-wait races, four relation-denial
-matrices, seven cross-capability denials, and the identity, passkey, recovery, pairing, and
-source/device lifecycle scenarios, then removed its portless container, network, and ephemeral
-storage.
+passed 14-table state/ownership/RLS assertions, fourteen observed lock-wait races, four
+relation-denial matrices, seven cross-capability denials, and the identity, passkey, recovery,
+pairing, and source/device lifecycle scenarios, then removed its portless container, network, and
+ephemeral storage.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -233,11 +235,10 @@ defect found and corrected during review. The report names its local-only limita
 
 Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/pepper and generic
 HTTP response handling, WebAuthn and Ed25519 cryptographic verification, anonymous
-login/pairing/recovery edge rate limits and cleanup, remaining identity/ingest concurrent-connection
-evidence, purge workers, ingest API, scoring jobs, Codex connector, release signing, deployment, and
-public beta operations remain proposed. The current scoring and ranking code operates only on
-clearly synthetic in-process fixtures; the application does not connect to revisions 0001
-through 0006.
+login/pairing/recovery edge rate limits and cleanup, future ingest concurrent-connection evidence,
+purge workers, ingest API, scoring jobs, Codex connector, release signing, deployment, and public
+beta operations remain proposed. The current scoring and ranking code operates only on clearly
+synthetic in-process fixtures; the application does not connect to revisions 0001 through 0006.
 
 ## Evidence commands
 

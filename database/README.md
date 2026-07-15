@@ -49,6 +49,9 @@ procedure; the current repository has no such application code.
 - `tests/recovery_capabilities.sql` exercises exact-passkey code rotation, bounded PHC batches,
   profile-free lookup, one-time scrub and authority, exact completion binding, deletion revoke,
   retained activated devices, role denial, rollback, and the lifetime-passkey fail-closed edge.
+- `tests/identity_concurrency_setup.sql` and `tests/identity_concurrency_assertions.sql` prove one
+  invite enrollment, one initial-passkey challenge consumption, one active-session rotation, and
+  deletion dominance over concurrent session rotation without leaving stale authority.
 - `tests/pairing_concurrency_setup.sql` and `tests/pairing_concurrency_assertions.sql` create only
   ephemeral synthetic state and prove cross-connection first-winner, source-ceiling, and live
   device-authority-ceiling serialization.
@@ -274,11 +277,11 @@ hard failure, not something the script silently broadens or repairs.
 - Add edge/service rate limiting and bounded cleanup for unauthenticated pairing starts,
   passkey-login challenges, and recovery-code lookups; do not encode deployable private thresholds
   in this repository.
-- Add adversarial concurrent-connection coverage for session rotation, challenge consumption,
-  enrollment, deletion, and future ingest procedures. Pairing approval, both public pairing
-  ceilings, pause-versus-approval, unlink-versus-activation, single-challenge login, and
-  revoke-versus-login, one-code recovery, rotation-versus-start, and completion-versus-login already
-  have observed blocker-chain cross-connection coverage.
+- Add adversarial concurrent-connection coverage for future ingest procedures. Invite enrollment,
+  initial-passkey challenge consumption, session rotation, deletion-versus-rotation, pairing
+  approval, both public pairing ceilings, pause-versus-approval, unlink-versus-activation,
+  single-challenge login, revoke-versus-login, one-code recovery, rotation-versus-start, and
+  completion-versus-login already have observed blocker-chain cross-connection coverage.
 - Implement bounded cleanup for expired ceremonies, sessions, pairings, jobs, and tombstones.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback

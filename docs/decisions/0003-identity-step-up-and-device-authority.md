@@ -93,6 +93,13 @@ binding, post-approval competing-profile denial, poll possession, single activat
 device binding. This evidence does not prove OAuth, cookies, CSRF, WebAuthn cryptographic
 verification, or Ed25519 proof verification in an application service.
 
+An additional identity concurrency suite holds each authoritative row until both tagged contenders
+are visible in its transitive blocker chain. It proves one winner for shared invite enrollment,
+initial-passkey challenge consumption, and session rotation, plus deletion dominance over a
+concurrent rotation without a losing profile, session, or browser authority surviving. This adds
+evidence for the existing procedure boundary; it introduces no new database capability or
+application claim.
+
 Revision 0003 also has deterministic cross-connection evidence: two valid profile approvals wait
 behind one locked pairing and produce exactly one winner; separate same-profile races prove the
 source and live-device ceilings cannot be crossed by concurrent approvals. The runner tags every

@@ -372,6 +372,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/source_device_lifecycle.sql"), "utf8"),
     },
     {
+      label: "identity concurrency setup",
+      sql: readFileSync(resolve(root, "database/tests/identity_concurrency_setup.sql"), "utf8"),
+    },
+    {
       label: "pairing concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/pairing_concurrency_setup.sql"), "utf8"),
     },
@@ -391,6 +395,170 @@ try {
   for (const { sql, label } of databaseInputs) {
     requireSuccess(psql(sql), label);
   }
+
+  await expectOneConcurrentWinner(
+    "single invite enrollment race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT invite_id
+FROM viberacing_private.invites
+WHERE invite_id = '00000000-0000-4000-8000-000000004701'
+FOR UPDATE;
+\\echo enrollment-race-lock-ready`,
+    "enrollment-race-lock-ready",
+    [
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.enroll_profile(
+  '00000000-0000-4000-8000-000000004701',
+  pg_catalog.decode(pg_catalog.lpad('4701', 64, '0'), 'hex'),
+  '00000000-0000-4000-8000-000000004111',
+  900000000000004111,
+  'race-enroll-a',
+  'en',
+  'neon-night',
+  'system',
+  true,
+  '00000000-0000-4000-8000-000000004211',
+  pg_catalog.decode(pg_catalog.lpad('4211', 64, '0'), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+  '00000000-0000-4000-8000-000000004901',
+  'req_' || pg_catalog.repeat('A', 22)
+);`,
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.enroll_profile(
+  '00000000-0000-4000-8000-000000004701',
+  pg_catalog.decode(pg_catalog.lpad('4701', 64, '0'), 'hex'),
+  '00000000-0000-4000-8000-000000004112',
+  900000000000004112,
+  'race-enroll-b',
+  'ru',
+  'classic-grand-prix',
+  'off',
+  false,
+  '00000000-0000-4000-8000-000000004212',
+  pg_catalog.decode(pg_catalog.lpad('4212', 64, '0'), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+  '00000000-0000-4000-8000-000000004902',
+  'req_' || pg_catalog.repeat('B', 22)
+);`,
+    ],
+  );
+
+  await expectOneConcurrentWinner(
+    "single initial-passkey challenge consumption race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT challenge_id
+FROM viberacing_private.auth_challenges
+WHERE challenge_id = '00000000-0000-4000-8000-000000004603'
+FOR UPDATE;
+\\echo challenge-race-lock-ready`,
+    "challenge-race-lock-ready",
+    [
+      `SET ROLE viberacing_web;
+DO $race$
+BEGIN
+  IF NOT viberacing_api.consume_auth_challenge(
+    '00000000-0000-4000-8000-000000004203',
+    pg_catalog.decode(pg_catalog.lpad('4203', 64, '0'), 'hex'),
+    '00000000-0000-4000-8000-000000004603',
+    'passkey_registration',
+    pg_catalog.decode(pg_catalog.lpad('4603', 64, '0'), 'hex'),
+    pg_catalog.decode(pg_catalog.lpad('8603', 64, '0'), 'hex')
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'operation cannot be completed';
+  END IF;
+END
+$race$;`,
+      `SET ROLE viberacing_web;
+DO $race$
+BEGIN
+  IF NOT viberacing_api.consume_auth_challenge(
+    '00000000-0000-4000-8000-000000004203',
+    pg_catalog.decode(pg_catalog.lpad('4203', 64, '0'), 'hex'),
+    '00000000-0000-4000-8000-000000004603',
+    'passkey_registration',
+    pg_catalog.decode(pg_catalog.lpad('4603', 64, '0'), 'hex'),
+    pg_catalog.decode(pg_catalog.lpad('8603', 64, '0'), 'hex')
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'operation cannot be completed';
+  END IF;
+END
+$race$;`,
+    ],
+  );
+
+  await expectOneConcurrentWinner(
+    "single session rotation race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT session_id
+FROM viberacing_private.sessions
+WHERE session_id = '00000000-0000-4000-8000-000000004204'
+FOR UPDATE;
+\\echo session-rotation-lock-ready`,
+    "session-rotation-lock-ready",
+    [
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.rotate_session(
+  '00000000-0000-4000-8000-000000004204',
+  pg_catalog.decode(pg_catalog.lpad('4204', 64, '0'), 'hex'),
+  '00000000-0000-4000-8000-000000004221',
+  pg_catalog.decode(pg_catalog.lpad('4221', 64, '0'), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+  '00000000-0000-4000-8000-000000004911',
+  'req_' || pg_catalog.repeat('C', 22)
+);`,
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.rotate_session(
+  '00000000-0000-4000-8000-000000004204',
+  pg_catalog.decode(pg_catalog.lpad('4204', 64, '0'), 'hex'),
+  '00000000-0000-4000-8000-000000004222',
+  pg_catalog.decode(pg_catalog.lpad('4222', 64, '0'), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+  '00000000-0000-4000-8000-000000004912',
+  'req_' || pg_catalog.repeat('D', 22)
+);`,
+    ],
+  );
+
+  await expectProtectiveActionDominates(
+    "profile deletion versus session rotation race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000004105'
+FOR UPDATE;
+\\echo deletion-race-lock-ready`,
+    "deletion-race-lock-ready",
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.request_profile_deletion(
+  '00000000-0000-4000-8000-000000004205',
+  pg_catalog.decode(pg_catalog.lpad('4205', 64, '0'), 'hex'),
+  'race-delete',
+  '00000000-0000-4000-8000-000000004605',
+  '00000000-0000-4000-8000-000000004505',
+  pg_catalog.decode(pg_catalog.lpad('4505', 64, '0'), 'hex'),
+  '00000000-0000-4000-8000-000000004915',
+  'req_' || pg_catalog.repeat('E', 22)
+);`,
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.rotate_session(
+  '00000000-0000-4000-8000-000000004205',
+  pg_catalog.decode(pg_catalog.lpad('4205', 64, '0'), 'hex'),
+  '00000000-0000-4000-8000-000000004225',
+  pg_catalog.decode(pg_catalog.lpad('4225', 64, '0'), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+  '00000000-0000-4000-8000-000000004925',
+  'req_' || pg_catalog.repeat('F', 22)
+);`,
+  );
+
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database/tests/identity_concurrency_assertions.sql"), "utf8")),
+    "identity concurrency assertions",
+  );
 
   await expectOneConcurrentWinner(
     "single pairing approval race",
@@ -911,7 +1079,7 @@ SELECT viberacing_api.complete_passkey_login(
   );
 
   console.log(
-    "Database integration passed (14 schema tables, 10 observed lock-wait races, 4 relation-denial and 7 cross-capability checks).",
+    "Database integration passed (14 schema tables, 14 observed lock-wait races, 4 relation-denial and 7 cross-capability checks).",
   );
 } finally {
   if (started) {

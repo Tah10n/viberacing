@@ -91,8 +91,11 @@ Versioning where its guarantees are applicable.
 - Added lifecycle IDOR, replay, quarantine, stale-challenge, audit-rollback, and role-denial
   scenarios plus cross-connection races proving pause dominates concurrent approval and unlink
   dominates concurrent activation without leaving protected authority live.
-- Made all ten race gates observe every tagged contender in the holder's PostgreSQL blocker chain
-  before releasing the holder, removing timer-only concurrency evidence.
+- Added observed identity races proving one-winner invite enrollment, initial-passkey challenge
+  consumption, and session rotation plus deletion dominance over concurrent rotation without stale
+  authority or losing transaction artifacts.
+- Made all fourteen race gates observe every tagged contender in the holder's PostgreSQL blocker
+  chain before releasing the holder, removing timer-only concurrency evidence.
 - Made passkey race preservation assertions fail when an expected row is missing and added a static
   regression check that rejects missing-row-unsafe scalar-subquery `IF NOT` assertions.
 - Made passkey revoke terminal, protected the last active key, preserved monotonic sign state, and
