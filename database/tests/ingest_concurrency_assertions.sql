@@ -3,6 +3,14 @@
 -- Read-only assertions over committed synthetic ingest race fixtures. The enclosing integration
 -- project is ephemeral and is destroyed immediately after the complete test run.
 
+CREATE FUNCTION pg_temp.ingest_race_date()
+RETURNS date
+LANGUAGE sql
+STABLE
+AS $function$
+  SELECT pg_catalog.current_setting('viberacing.test_week_start')::date
+$function$;
+
 SET ROLE viberacing_owner;
 
 DO $assertion$
@@ -23,7 +31,7 @@ BEGIN
       SELECT tokens
       FROM viberacing_private.source_day_values
       WHERE source_id = 'src_' || pg_catalog.repeat('S', 22)
-        AND codex_reported_date = '2026-07-15'
+        AND codex_reported_date = pg_temp.ingest_race_date()
     ) <> 321 THEN
     RAISE EXCEPTION 'concurrent exact retry created duplicate or inconsistent ingest state';
   END IF;
@@ -50,7 +58,7 @@ BEGIN
         AND accepted_device_id = 'dev_' || pg_catalog.repeat('T', 22)
       FROM viberacing_private.source_day_values
       WHERE source_id = 'src_' || pg_catalog.repeat('T', 22)
-        AND codex_reported_date = '2026-07-15'
+        AND codex_reported_date = pg_temp.ingest_race_date()
     ) IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'concurrent same-source devices did not converge on the monotonic maximum';
   END IF;

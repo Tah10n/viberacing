@@ -21,10 +21,11 @@ Read these files before changing the project:
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync
 contracts, and procedure-only identity, passkey, restricted-recovery, pairing, source/device
 lifecycle, Community usage-ingest, Jobs-only ingest-retention, and open-season Community scoring
-database slices. Do not claim that HTTP authentication, OAuth/Argon2id/WebAuthn/Ed25519 application
-verification, real-user ingestion, a connector, a scoring service or public read, season
-finalization, scheduled or broader cleanup, deployment, or a hosted security control exists until
-its implementation and verification are present in the working tree.
+plus terminal finalization database slices. Do not claim that HTTP authentication,
+OAuth/Argon2id/WebAuthn/Ed25519 application verification, real-user ingestion, a connector, a
+scoring service or public read, season correction, a finalization scheduler, scheduled or broader
+cleanup, deployment, or a hosted security control exists until its implementation and verification
+are present in the working tree.
 
 ## Repository map
 
@@ -82,8 +83,8 @@ its implementation and verification are present in the working tree.
   policy. `pnpm run test:database:integration` separately uses an isolated, portless, ephemeral
   PostgreSQL Compose project to apply the reviewed manifest in order and exercise state constraints,
   session-bound identity, source/device lifecycle, Community ingest, ingest-retention, and
-  open-season scoring procedures, observed identity/pairing/lifecycle/ingest/cleanup/scoring
-  lock-wait races, rollback, and every current runtime deny matrix.
+  scoring/finalization procedures, observed identity/pairing/lifecycle/ingest/cleanup/scoring/
+  finalization lock-wait races, rollback, and every current runtime deny matrix.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 

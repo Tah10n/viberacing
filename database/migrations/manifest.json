@@ -54,6 +54,12 @@
       "name": "community_scoring_foundation",
       "path": "database/migrations/0009_community_scoring_foundation.sql",
       "sha256": "fa48370e7f3f4488e51c2c8829e1c9426ed522168b8623847c38135fea0ddda3"
+    },
+    {
+      "revision": 10,
+      "name": "community_season_finalization",
+      "path": "database/migrations/0010_community_season_finalization.sql",
+      "sha256": "091abdd0c32d3c6408432fa8449fb2f37cdc4ac1097bdc5631ae8c991fad3bef"
     }
   ]
 }

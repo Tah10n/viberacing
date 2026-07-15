@@ -86,8 +86,9 @@ automatically from inferred personal data.
   value rather than sum.
 - Revision 0009 sums current eligible distinct sources into one profile/day total, applies the daily
   cap once, exposes only the contributing count in private derived season state, excludes
-  quarantined sources, and proves idempotent serialized refreshes. The Jobs service, public
-  projection, finalization, and capacity evidence remain pending.
+  quarantined sources, and proves idempotent serialized refreshes. Revision 0010 finalizes that
+  already profile-capped result and quarantines late whole snapshots without adding a new source
+  multiplier. The Jobs service, public projection, correction, and capacity evidence remain pending.
 - UI/API assertions for opaque wording and public source count without identifiers.
 - Privacy tests proving account email has no connector egress, schema, log, fixture, or support
   path.

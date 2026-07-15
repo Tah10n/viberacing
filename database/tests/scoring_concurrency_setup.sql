@@ -60,7 +60,12 @@ FROM viberacing_api.submit_community_sync(
   pg_catalog.decode(pg_catalog.lpad('15501', 64, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('25501', 128, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('35501', 64, '0'), 'hex'),
-  ARRAY['2026-07-06'],
+  ARRAY[
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date,
+      'YYYY-MM-DD'
+    )
+  ],
   ARRAY[100000]::bigint[]
 );
 

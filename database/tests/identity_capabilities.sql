@@ -33,13 +33,13 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 38
+    SELECT pg_catalog.count(*) = 39
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.prokind = 'f'
   ),
-  'the API surface contains only the reviewed identity, source, ingest, and cleanup functions'
+  'the API surface contains only the reviewed identity, source, ingest, and Jobs functions'
 );
 
 SELECT pg_temp.assert_true(
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 2
+    SELECT pg_catalog.count(*) = 4
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -68,21 +68,30 @@ SELECT pg_temp.assert_true(
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.proname IN (
         'cleanup_expired_ingest_state',
-        'refresh_community_season'
+        'refresh_community_season',
+        'finalize_community_season',
+        'submit_community_sync'
       )
   ),
-  'Jobs maintenance functions have database-enforced lock-wait bounds'
+  'Ingest and Jobs mutation functions have database-enforced lock-wait bounds'
 );
 
 SELECT pg_temp.assert_true(
   (
-    SELECT procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
+    SELECT pg_catalog.count(*) = 3
+      AND pg_catalog.bool_and(
+        procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
+      )
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
-      AND procedure.proname = 'refresh_community_season'
+      AND procedure.proname IN (
+        'submit_community_sync',
+        'refresh_community_season',
+        'finalize_community_season'
+      )
   ),
-  'the global scoring rebuild has a database-enforced statement deadline'
+  'bounded ingest and scoring mutations have database-enforced statement deadlines'
 );
 
 SELECT pg_temp.assert_true(
@@ -123,7 +132,8 @@ SELECT pg_temp.assert_true(
           'read_device_verification_material',
           'submit_community_sync',
           'cleanup_expired_ingest_state',
-          'refresh_community_season'
+          'refresh_community_season',
+          'finalize_community_season'
         )
       )
     )
@@ -155,7 +165,8 @@ SELECT pg_temp.assert_true(
       = (
         procedure.proname IN (
           'cleanup_expired_ingest_state',
-          'refresh_community_season'
+          'refresh_community_season',
+          'finalize_community_season'
         )
       )
     )

@@ -5,6 +5,7 @@ import process from "node:process";
 
 import { validateManifest } from "./check-database.mjs";
 
+// cspell:ignore PGOPTIONS
 const root = resolve(import.meta.dirname, "..");
 const projectName = `vr-dbtest-${process.pid}`;
 const composePrefix = [
@@ -16,6 +17,16 @@ const composePrefix = [
   "--profile",
   "test",
 ];
+// Every connection in one run shares this test-only ISO-week anchor, including a run that crosses
+// UTC Monday midnight between fixture setup and a lock-race assertion.
+const now = new Date();
+const testWeekStartDate = new Date(
+  Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+);
+testWeekStartDate.setUTCDate(
+  testWeekStartDate.getUTCDate() - ((testWeekStartDate.getUTCDay() + 6) % 7),
+);
+const testWeekStart = testWeekStartDate.toISOString().slice(0, 10);
 let raceSequence = 0;
 
 function docker(args, options = {}) {
@@ -45,6 +56,8 @@ function psqlArguments() {
     ...composePrefix,
     "exec",
     "-T",
+    "--env",
+    `PGOPTIONS=-c viberacing.test_week_start=${testWeekStart}`,
     "postgres-test",
     "psql",
     "--no-psqlrc",
@@ -415,6 +428,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/season_scoring.sql"), "utf8"),
     },
     {
+      label: "Community season finalization scenarios",
+      sql: readFileSync(resolve(root, "database/tests/season_finalization.sql"), "utf8"),
+    },
+    {
       label: "identity concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/identity_concurrency_setup.sql"), "utf8"),
     },
@@ -429,6 +446,10 @@ try {
     {
       label: "Community scoring concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/scoring_concurrency_setup.sql"), "utf8"),
+    },
+    {
+      label: "Community finalization concurrency setup",
+      sql: readFileSync(resolve(root, "database/tests/finalization_concurrency_setup.sql"), "utf8"),
     },
     {
       label: "pairing concurrency setup",
@@ -641,7 +662,12 @@ SELECT * FROM viberacing_api.submit_community_sync(
   pg_catalog.decode(pg_catalog.lpad('11500', 64, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('21500', 128, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('31500', 64, '0'), 'hex'),
-  ARRAY['2026-07-15'],
+  ARRAY[
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date,
+      'YYYY-MM-DD'
+    )
+  ],
   ARRAY[321]::bigint[]
 );`,
       `SET ROLE viberacing_ingest;
@@ -657,7 +683,12 @@ SELECT * FROM viberacing_api.submit_community_sync(
   pg_catalog.decode(pg_catalog.lpad('11500', 64, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('21500', 128, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('31500', 64, '0'), 'hex'),
-  ARRAY['2026-07-15'],
+  ARRAY[
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date,
+      'YYYY-MM-DD'
+    )
+  ],
   ARRAY[321]::bigint[]
 );`,
     ],
@@ -687,7 +718,12 @@ SELECT * FROM viberacing_api.submit_community_sync(
   pg_catalog.decode(pg_catalog.lpad('11501', 64, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('21501', 128, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('31501', 64, '0'), 'hex'),
-  ARRAY['2026-07-15'],
+  ARRAY[
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date,
+      'YYYY-MM-DD'
+    )
+  ],
   ARRAY[700]::bigint[]
 );`,
       `SET ROLE viberacing_ingest;
@@ -703,7 +739,12 @@ SELECT * FROM viberacing_api.submit_community_sync(
   pg_catalog.decode(pg_catalog.lpad('11502', 64, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('21502', 128, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('31502', 64, '0'), 'hex'),
-  ARRAY['2026-07-15'],
+  ARRAY[
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date,
+      'YYYY-MM-DD'
+    )
+  ],
   ARRAY[600]::bigint[]
 );`,
     ],
@@ -740,7 +781,12 @@ SELECT * FROM viberacing_api.submit_community_sync(
   pg_catalog.decode(pg_catalog.lpad('11503', 64, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('21503', 128, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('31503', 64, '0'), 'hex'),
-  ARRAY['2026-07-15'],
+  ARRAY[
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date,
+      'YYYY-MM-DD'
+    )
+  ],
   ARRAY[123]::bigint[]
 );`,
     `SET ROLE viberacing_owner;
@@ -779,7 +825,12 @@ SELECT * FROM viberacing_api.submit_community_sync(
   pg_catalog.decode(pg_catalog.lpad('11504', 64, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('21504', 128, '0'), 'hex'),
   pg_catalog.decode(pg_catalog.lpad('31504', 64, '0'), 'hex'),
-  ARRAY['2026-07-15'],
+  ARRAY[
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date,
+      'YYYY-MM-DD'
+    )
+  ],
   ARRAY[456]::bigint[]
 );`,
     `SET ROLE viberacing_owner;
@@ -790,6 +841,78 @@ WHERE device_key_id = '00000000-0000-4000-8000-000000011405';`,
   requireSuccess(
     psql(readFileSync(resolve(root, "database/tests/ingest_concurrency_assertions.sql"), "utf8")),
     "Community ingest concurrency assertions",
+  );
+
+  await expectConcurrentSuccesses(
+    "opposing-order multi-season Ingest lock race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT pg_catalog.pg_advisory_xact_lock(
+  824762002,
+  (
+    pg_catalog.current_setting('viberacing.test_week_start')::date
+      - DATE '2000-01-03'
+  )::integer
+);
+\\echo ingest-season-order-lock-ready`,
+    "ingest-season-order-lock-ready",
+    [
+      `SET ROLE viberacing_ingest;
+SELECT * FROM viberacing_api.submit_community_sync(
+  '00000000-0000-4000-8000-000000011401',
+  'dev_' || pg_catalog.repeat('S', 22),
+  'src_' || pg_catalog.repeat('S', 22),
+  '00000000-0000-4000-8000-000000011505',
+  'syn_' || pg_catalog.repeat('3', 22),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+  '1.2.3',
+  '4.5.6',
+  pg_catalog.decode(pg_catalog.lpad('11505', 64, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('21505', 128, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('31505', 64, '0'), 'hex'),
+  ARRAY[
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date,
+      'YYYY-MM-DD'
+    ),
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date + 7,
+      'YYYY-MM-DD'
+    )
+  ],
+  ARRAY[400, 100]::bigint[]
+);`,
+      `SET ROLE viberacing_ingest;
+SELECT * FROM viberacing_api.submit_community_sync(
+  '00000000-0000-4000-8000-000000011402',
+  'dev_' || pg_catalog.repeat('T', 22),
+  'src_' || pg_catalog.repeat('T', 22),
+  '00000000-0000-4000-8000-000000011506',
+  'syn_' || pg_catalog.repeat('7', 22),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+  '1.2.3',
+  '4.5.6',
+  pg_catalog.decode(pg_catalog.lpad('11506', 64, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('21506', 128, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('31506', 64, '0'), 'hex'),
+  ARRAY[
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date + 7,
+      'YYYY-MM-DD'
+    ),
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date,
+      'YYYY-MM-DD'
+    )
+  ],
+  ARRAY[100, 800]::bigint[]
+);`,
+    ],
+  );
+
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database/tests/ingest_season_lock_assertions.sql"), "utf8")),
+    "Community multi-season lock assertions",
   );
 
   await expectConcurrentSuccesses(
@@ -814,18 +937,71 @@ SELECT * FROM viberacing_api.cleanup_expired_ingest_state(1);`,
     "idempotent Community scoring refresh race",
     `BEGIN;
 SET LOCAL ROLE viberacing_jobs;
-SELECT * FROM viberacing_api.refresh_community_season('2026-07-06');
+SELECT * FROM viberacing_api.refresh_community_season(
+  pg_catalog.current_setting('viberacing.test_week_start')::date
+);
 \\echo scoring-refresh-lock-ready`,
     "scoring-refresh-lock-ready",
     [
       `SET ROLE viberacing_jobs;
-SELECT * FROM viberacing_api.refresh_community_season('2026-07-06');`,
+SELECT * FROM viberacing_api.refresh_community_season(
+  pg_catalog.current_setting('viberacing.test_week_start')::date
+);`,
     ],
   );
 
   requireSuccess(
     psql(readFileSync(resolve(root, "database/tests/scoring_concurrency_assertions.sql"), "utf8")),
     "Community scoring concurrency assertions",
+  );
+
+  await expectConcurrentSuccesses(
+    "Community finalization versus late ingest race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT pg_catalog.pg_advisory_xact_lock(
+  824762002,
+  (
+    pg_catalog.current_setting('viberacing.test_week_start')::date
+      - 14 - DATE '2000-01-03'
+  )::integer
+);
+\\echo season-finalization-lock-ready`,
+    "season-finalization-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.finalize_community_season(
+  pg_catalog.current_setting('viberacing.test_week_start')::date - 14
+);`,
+      `SET ROLE viberacing_ingest;
+SELECT * FROM viberacing_api.submit_community_sync(
+  '00000000-0000-4000-8000-000000017401',
+  'dev_' || pg_catalog.repeat('M', 22),
+  'src_' || pg_catalog.repeat('M', 22),
+  '00000000-0000-4000-8000-000000017502',
+  'syn_' || pg_catalog.repeat('N', 22),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+  '1.2.3',
+  '4.5.6',
+  pg_catalog.decode(pg_catalog.lpad('17502', 64, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('27502', 128, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('37502', 64, '0'), 'hex'),
+  ARRAY[
+    pg_catalog.to_char(
+      pg_catalog.current_setting('viberacing.test_week_start')::date - 14,
+      'YYYY-MM-DD'
+    )
+  ],
+  ARRAY[9007199254740991]::bigint[]
+);`,
+    ],
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(resolve(root, "database/tests/finalization_concurrency_assertions.sql"), "utf8"),
+    ),
+    "Community finalization concurrency assertions",
   );
 
   await expectOneConcurrentWinner(
@@ -1391,10 +1567,15 @@ SELECT viberacing_api.complete_passkey_login(
       "SELECT * FROM viberacing_api.refresh_community_season('2026-07-06');",
       `${role} Community season refresh`,
     );
+    expectDenied(
+      role,
+      "SELECT * FROM viberacing_api.finalize_community_season('2026-07-06');",
+      `${role} Community season finalization`,
+    );
   }
 
   console.log(
-    "Database integration passed (23 schema tables, 20 observed lock-wait races, 8 relation-denial and 19 cross-capability checks).",
+    "Database integration passed (23 schema tables, 22 observed lock-wait races, 8 relation-denial and 22 cross-capability checks).",
   );
 } finally {
   if (started) {

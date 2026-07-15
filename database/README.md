@@ -2,13 +2,13 @@
 
 ## Status
 
-This directory contains nine SQL-first revisions for identity, passkey login and management,
-restricted recovery, source, device, pairing, audit, deletion, Community usage, and open-season
-scoring state. The migrations, narrow database procedures, and PostgreSQL integration tests are
+This directory contains ten SQL-first revisions for identity, passkey login and management,
+restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
+finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
 implemented. No application route, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier, production
 credential, or deployed database consumes them yet. The database-only ingest and Jobs-only
-ingest-retention and open-season scoring procedures are implemented; HTTP ingest, scheduled
-execution, public score reads, season grace/finalization/correction, and purge are not.
+ingest-retention, open-season scoring, and terminal finalization procedures are implemented; HTTP
+ingest, scheduled execution, public score reads, audited corrections, and purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -44,6 +44,9 @@ procedure; the current repository has no such application code.
 - `migrations/0009_community_scoring_foundation.sql` adds immutable Community v1 score parameters
   and season binding, private derived daily/weekly score tables, and one Jobs-only atomic refresh
   that aggregates eligible distinct sources under a single profile cap.
+- `migrations/0010_community_season_finalization.sql` adds the public 48-hour server-time grace
+  deadline, late-snapshot quarantine, shared season locks, terminal projection triggers, and one
+  Jobs-only idempotent finalization capability.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -82,6 +85,9 @@ procedure; the current repository has no such application code.
 - `tests/ingest_concurrency_setup.sql` and `tests/ingest_concurrency_assertions.sql` prove
   concurrent exact retries create one snapshot, same-source devices converge on one monotonic
   current value, and source pause/device revoke serialize ahead of later submission.
+- `tests/ingest_season_lock_assertions.sql` plus the integration runner prove two payloads listing
+  the same seasons in opposite order acquire the lower season first and both complete without a
+  deadlock.
 - `tests/cleanup_concurrency_setup.sql` and `tests/cleanup_concurrency_assertions.sql` prove two
   Jobs cleanup calls serialize and each expired raw row is removed once without deleting live state.
 - `tests/season_scoring.sql` proves ISO-week grouping, exact logarithmic rounding and caps,
@@ -90,6 +96,12 @@ procedure; the current repository has no such application code.
   rollback.
 - `tests/scoring_concurrency_setup.sql` and `tests/scoring_concurrency_assertions.sql` prove two
   Jobs refreshes serialize and converge on one semantically identical open-season materialization.
+- `tests/season_finalization.sql` proves the exact grace boundary, early and no-data behavior, late
+  whole-snapshot quarantine, terminal idempotency and mutation denial, role isolation, and
+  profile-purge compatibility.
+- `tests/finalization_concurrency_setup.sql` and `tests/finalization_concurrency_assertions.sql`
+  prove finalization and late Ingest share a deadlock-free canonical lock order and converge on one
+  terminal projection.
 - `scripts/check-database.mjs` and its black-box tests enforce migration shape, checksums, paths,
   transactions, bounded execution, owner context, forbidden grants or SQL capabilities, and reject
   scalar-subquery `IF NOT` assertions whose missing row would otherwise pass as SQL `NULL`.
@@ -105,7 +117,7 @@ procedure; the current repository has no such application code.
 | `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                         |
 | `viberacing_web`    | No    | None           | Usage      | Identity, passkey, restricted recovery, pairing, and lifecycle |
 | `viberacing_ingest` | No    | None           | Usage      | Device verification lookup and Community sync submission only  |
-| `viberacing_jobs`   | No    | None           | Usage      | Bounded ingest cleanup and open-season scoring refresh only    |
+| `viberacing_jobs`   | No    | None           | Usage      | Ingest cleanup plus Community refresh and finalization         |
 | `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                   |
 | `PUBLIC`            | N/A   | None           | None       | None                                                           |
 
@@ -196,13 +208,21 @@ Runtime access must remain procedure-only and must have positive and negative in
 - `submit_community_sync` revalidates the exact activated device/source binding, schema-level
   identifier/version/date/token/digest bounds, millisecond timestamp precision, and a server-time
   replay window. It records one nonce per device and one snapshot per device/sync ID, returns an
-  exact retry as `duplicate`, quarantines a whole decrease or a quarantined source, and advances one
-  monotonic current value per source/date without summing devices. Paused/unlinked sources, revoked
-  devices, and deletion-pending profiles fail closed.
+  exact retry as `duplicate`, quarantines a whole decrease, quarantined source, or payload touching
+  a server-closed season, and advances one monotonic current value per source/date without summing
+  devices. Server `receivedAt` is captured after the affected season locks so waiting cannot
+  backdate acceptance. Paused/unlinked sources, revoked devices, and deletion-pending profiles fail
+  closed.
 - `cleanup_expired_ingest_state` accepts only a batch size from 1 through 1000, derives both cutoffs
   from server time, and serializes Jobs callers. Each call deletes at most one batch of expired
   device nonces and one batch of expired raw snapshots. Snapshot entries cascade; current source/day
   values remain and only their expired raw-snapshot reference is cleared.
+- `refresh_community_season` accepts only a bounded ISO Monday before its exact grace deadline,
+  serializes Jobs and Ingest at that season, and atomically replaces the private Community score
+  projection. An open no-data week remains a state-free no-op.
+- `finalize_community_season` accepts the same bounded ISO calendar only at or after grace,
+  rematerializes once, and records an immutable terminal timestamp. Exact retries return the stored
+  result; a closed no-data week records one terminal definition, and no runtime correction exists.
 
 The public schema safety ceilings are 8 to 16 codes per replacement recovery batch, one active
 recovery authority per profile for at most ten minutes, 32 lifetime passkey records, 32 active
@@ -245,7 +265,7 @@ All current columns map to the canonical [privacy data map](../docs/security/PRI
 | `device_nonces`                             | Security                      | Device-bound replay digest and 15-minute expiry marker                             |
 | `usage_snapshots`, `usage_snapshot_entries` | Usage; Security               | Bounded signed snapshot metadata, exact private daily values, 30-day expiry marker |
 | `source_day_values`                         | Usage                         | One monotonic current token value and accepted provenance per source/date          |
-| `score_versions`, `seasons`                 | Operational; Public           | Immutable Community formula parameters and ISO-week version binding                |
+| `score_versions`, `seasons`                 | Operational; Public           | Immutable formula, ISO-week binding, grace, and terminal state                     |
 | `season_entries`, `season_daily_scores`     | Public                        | Private pre-projection scores, active days, source count, rank, and display order  |
 | `schema_migrations`                         | Operational                   | Revision name and server application time only                                     |
 
@@ -296,8 +316,19 @@ atomically. Hidden/deleting profiles and quarantined sources are excluded; pause
 history remains eligible. The score tables copy neither raw token totals nor source IDs. A private
 mutex, five-second lock timeout, and 30-second statement deadline bound Jobs callers; a week without
 stored source/day state creates no empty season. Repeated or concurrent refreshes converge on the
-same semantic state. No grace deadline, finalized state, correction record, public projection/read
-capability, Jobs service, scheduler, or production capacity claim is implemented.
+same semantic state.
+
+Revision 0010 closes each season at Wednesday 00:00 UTC after its ISO week, using only server
+`receivedAt`. A payload touching any closed season is retained atomically as `season_closed` but
+cannot update accepted source/day state. Ingest and Jobs acquire per-season locks before
+profile/source/device locks; the observed finalization-versus-late-Ingest race proves this order is
+deadlock-free. Jobs may refresh only before grace and may finalize only at or after grace. The
+terminal transition rematerializes once, records its immutable timestamp, supports an exact
+idempotent retry, and rejects direct metadata or projection mutation. Profile purge can still
+cascade personal score rows without reopening the non-personal season record. A closed no-data week
+stores one terminal season, bounded to the ISO weeks reachable from the contract's `20xx` dates. No
+correction record, public projection/read capability, Jobs service, scheduler, or production
+capacity claim is implemented.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
@@ -353,9 +384,9 @@ hard failure, not something the script silently broadens or repairs.
   in this repository.
 - Implement the HTTP Ingest boundary with exact raw-body canonicalization, strict contract parsing,
   Ed25519 verification, origin proof, generic errors, rate limits, deadlines, and backpressure.
-- Implement the Jobs service and scheduler around the database scoring refresh, plus server-time
-  grace deadlines, finalized-season immutability, audited corrections, freshness/streak projection,
-  and a public read boundary without widening Ingest.
+- Implement the Jobs service and scheduler around the database scoring refresh and finalization,
+  plus audited corrections, freshness/streak projection, and a public read boundary without widening
+  Ingest.
 - Schedule and monitor the implemented ingest-retention procedure, and implement bounded cleanup for
   ceremonies, sessions, pairings, jobs, recovery authority, and tombstones. Expiry columns outside
   the revision 0008 boundary are not cleanup.

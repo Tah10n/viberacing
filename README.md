@@ -73,9 +73,9 @@ private reporting channels; those hosted controls cannot be safely invented from
 
 Phase 2/3 contract and persistence foundations are also present: three closed, bounded JSON Schemas
 plus generated TypeScript validators and OpenAPI components. They are pre-implementation contracts,
-not a live API or evidence that real Codex data can be submitted. Nine SQL migrations now add 23
+not a live API or evidence that real Codex data can be submitted. Ten SQL migrations now add 23
 private identity, passkey, restricted-recovery, source, device, pairing, audit, deletion, replay,
-usage, and open-season scoring tables with deny-by-default runtime roles, forced RLS, state-machine
+usage, and Community scoring tables with deny-by-default runtime roles, forced RLS, state-machine
 constraints, checksum drift detection, and an isolated PostgreSQL capability test. A narrow
 procedure boundary implements invite issuance, atomic enrollment, session-bound initial-passkey
 challenges, credential-derived login, bounded multi-passkey management, session rotation/revocation,
@@ -93,10 +93,13 @@ batches of expired nonces and raw snapshots while preserving current source/day 
 invokes it. The database does not verify a wire signature. A second Jobs-only procedure serializes
 an atomic refresh of one open ISO-week Community season: it sums distinct eligible sources before
 one profile daily cap, stores an immutable formula and season binding, shares rank on equal score
-and active days, and persists no raw token or source identifier in the score tables. There is still
-no HTTP authentication, recovery, ingest, or public-score route, OAuth callback,
-Argon2id/WebAuthn/Ed25519 application verifier, connector, cleanup/scoring scheduler or service,
-season grace/finalization/correction flow, asynchronous purge worker, or deployed database.
+and active days, and persists no raw token or source identifier in the score tables. Revision 0010
+adds a public 48-hour server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent
+finalization procedure whose terminal metadata and score projection reject silent rewrites while
+profile purge can still remove personal rows. There is still no HTTP authentication, recovery,
+ingest, or public-score route, OAuth callback, Argon2id/WebAuthn/Ed25519 application verifier,
+connector, cleanup/scoring scheduler or service, audited correction flow, asynchronous purge worker,
+or deployed database.
 
 ## Run and verify the synthetic prototype
 

@@ -1,6 +1,6 @@
 # ADR 0001: Community-only launch and disabled Verified tier
 
-- Status: Accepted (ingest/scoring DB; services/finalization pending)
+- Status: Accepted (ingest/scoring/finalization DB; services pending)
 - Date: 2026-07-14
 - Decision owners: Product, Web, Ingest, and Scoring
 - Supersedes: None
@@ -69,6 +69,8 @@ trust columns, public copy, and migration. Existing Community seasons remain Com
 - Revision 0009 derives only Community scores in a Jobs-only procedure, stores no client-supplied
   score/rank/season field, shares rank for equal score and active days, and uses profile ID only as
   the deterministic noncompetitive order inside a complete tie.
+- Revision 0010 accepts no new trust field: it uses server time to close Community seasons and makes
+  the private Community projection terminal without enabling Verified input or score-backed benefit.
 - Feature/config tests prove Verified ingestion is unreachable by default and in production.
 - Architecture tests prove no reward, authorization, or privilege reads Community score.
 - Security review repeats before any incentive or upstream verification change.

@@ -6,16 +6,17 @@ what it costs, how it is verified, and how it can be replaced.
 
 ## Index
 
-| ADR                                                   | Decision                                                            | Status                                              |
-| ----------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
-| [0000](0000-template.md)                              | Template                                                            | Template                                            |
-| [0001](0001-community-trust-tier.md)                  | Community-only launch and disabled Verified tier                    | Accepted; contract/Community ingest DB implemented  |
-| [0002](0002-opaque-multi-source-aggregation.md)       | Opaque multi-source profiles with one profile cap                   | Accepted; source-day DB slice, aggregation pending  |
-| [0003](0003-identity-step-up-and-device-authority.md) | GitHub identity, passkey step-up, and source-bound device authority | Accepted; identity/passkey/recovery/device DB       |
-| [0004](0004-edge-service-and-database-isolation.md)   | Cloudflare ingress plus service and database capability isolation   | Accepted; roles/ingest procedure implemented        |
-| [0005](0005-enum-only-car-recipe.md)                  | Enum-only deterministic car customization                           | Accepted design; implementation pending             |
-| [0006](0006-public-repository-boundary.md)            | Every tracked artifact is immediately public-safe                   | Accepted; repository controls partially implemented |
-| [0007](0007-restricted-recovery-authority.md)         | Recovery codes grant only short-lived passkey-replacement authority | Accepted; recovery DB capability implemented        |
+| ADR                                                     | Decision                                                            | Status                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| [0000](0000-template.md)                                | Template                                                            | Template                                            |
+| [0001](0001-community-trust-tier.md)                    | Community-only launch and disabled Verified tier                    | Accepted; Community DB lifecycle implemented        |
+| [0002](0002-opaque-multi-source-aggregation.md)         | Opaque multi-source profiles with one profile cap                   | Accepted; aggregation/finalization DB implemented   |
+| [0003](0003-identity-step-up-and-device-authority.md)   | GitHub identity, passkey step-up, and source-bound device authority | Accepted; identity/passkey/recovery/device DB       |
+| [0004](0004-edge-service-and-database-isolation.md)     | Cloudflare ingress plus service and database capability isolation   | Accepted; isolated runtime-role DB implemented      |
+| [0005](0005-enum-only-car-recipe.md)                    | Enum-only deterministic car customization                           | Accepted design; implementation pending             |
+| [0006](0006-public-repository-boundary.md)              | Every tracked artifact is immediately public-safe                   | Accepted; repository controls partially implemented |
+| [0007](0007-restricted-recovery-authority.md)           | Recovery codes grant only short-lived passkey-replacement authority | Accepted; recovery DB capability implemented        |
+| [0008](0008-community-season-grace-and-finalization.md) | Server-time Community grace and immutable finalization              | Accepted; finalization DB capability implemented    |
 
 ## Lifecycle
 

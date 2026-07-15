@@ -424,7 +424,10 @@ Rules:
 - The scoring version is stored with each season and cannot change mid-season.
 - A public simulator and synthetic-distribution tests show the effect of the formula before beta.
 - A season begins on Monday according to codexReportedDate grouping.
-- Server receive time closes the grace window and finalizes the season.
+- [ADR 0008](decisions/0008-community-season-grace-and-finalization.md) fixes the Community grace
+  deadline at Wednesday 00:00 UTC after that ISO week, 48 hours after the next Monday begins.
+- Server receive time closes the Ingest window; a Jobs decision time at or after the same boundary
+  finalizes the season. Client time cannot extend either decision.
 
 The ranking page always states that it ranks participating Vibe Racing Community profiles rather
 than all Codex users.

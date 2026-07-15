@@ -9,17 +9,18 @@ policy, records whether any exact Codex and connector combination is currently s
 
 ## Version axes
 
-| Axis                    | Version owner                                 | Compatibility rule                                                                                        | Breaking-change path                                                               |
-| ----------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Codex App Server schema | Installed Codex release                       | Exact pinned entries in the [Codex matrix](../reference/codex-compatibility.md)                           | Add generated schema/fixtures and connector adapter; unknown versions stop locally |
-| Connector CLI/binary    | Vibe Racing connector release                 | Semantic version plus published supported service/API range                                               | Signed release, migration notes, minimum-version policy, rollback/revoke plan      |
-| Connector sync schema   | `schemaVersion` in `contracts/v1`             | Server validates one documented version at a time with bounded overlap                                    | New schema version; explicit deprecation window; no silent reinterpretation        |
-| Public HTTP API         | Path such as `/v1`                            | Additive compatible fields only when old clients ignore them by contract; unknown request fields rejected | New path version or documented migration                                           |
-| CarRecipe               | Recipe version and enum set                   | Renderer and server share exact versioned enums/assets                                                    | New recipe version, deterministic migration or safe fallback                       |
-| Scoring                 | Season `scoreVersion`                         | Fixed for an entire season; finalized scores are not rewritten                                            | New version begins only with a new season and public simulator/update              |
-| Database schema         | Migration revision                            | Expand-and-contract across deployed application overlap                                                   | Reviewed migration, backup/restore evidence, rollback or forward-fix               |
-| Edge origin proof       | Proof version/key epoch                       | Edge and origin accept only reviewed bounded overlap                                                      | Coordinated key/version rotation; fail closed outside overlap                      |
-| Release metadata        | SBOM, provenance, checksum, signature formats | Artifact and verification instructions identify exact formats                                             | Dual-publish during migration, then revoke old trust root explicitly               |
+| Axis                    | Version owner                                                            | Compatibility rule                                                                                        | Breaking-change path                                                               |
+| ----------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Codex App Server schema | Installed Codex release                                                  | Exact pinned entries in the [Codex matrix](../reference/codex-compatibility.md)                           | Add generated schema/fixtures and connector adapter; unknown versions stop locally |
+| Connector CLI/binary    | Vibe Racing connector release                                            | Semantic version plus published supported service/API range                                               | Signed release, migration notes, minimum-version policy, rollback/revoke plan      |
+| Connector sync schema   | `schemaVersion` in `contracts/v1`                                        | Server validates one documented version at a time with bounded overlap                                    | New schema version; explicit deprecation window; no silent reinterpretation        |
+| Public HTTP API         | Path such as `/v1`                                                       | Additive compatible fields only when old clients ignore them by contract; unknown request fields rejected | New path version or documented migration                                           |
+| CarRecipe               | Recipe version and enum set                                              | Renderer and server share exact versioned enums/assets                                                    | New recipe version, deterministic migration or safe fallback                       |
+| Scoring                 | Season `scoreVersion`                                                    | Fixed for an entire season; finalized scores are not rewritten                                            | New version begins only with a new season and public simulator/update              |
+| Season closure          | [ADR 0008](../decisions/0008-community-season-grace-and-finalization.md) | Community grace ends Wednesday 00:00 UTC after the ISO week; existing definitions are immutable           | Superseding ADR and future-season compatibility plan; never extend existing grace  |
+| Database schema         | Migration revision                                                       | Expand-and-contract across deployed application overlap                                                   | Reviewed migration, backup/restore evidence, rollback or forward-fix               |
+| Edge origin proof       | Proof version/key epoch                                                  | Edge and origin accept only reviewed bounded overlap                                                      | Coordinated key/version rotation; fail closed outside overlap                      |
+| Release metadata        | SBOM, provenance, checksum, signature formats                            | Artifact and verification instructions identify exact formats                                             | Dual-publish during migration, then revoke old trust root explicitly               |
 
 These axes are independently versioned. A connector version does not imply a database migration or
 scoring change, and a web deployment does not silently change a finalized season.
@@ -74,6 +75,8 @@ through local timezone conversion.
 - Season grouping uses the reported calendar label with ISO Monday boundaries.
 - Server `receivedAt`, never connector time, controls replay windows, grace deadlines, and
   finalization.
+- Community grace is 48 hours after the next Monday begins and closes inclusively at Wednesday 00:00
+  UTC under [ADR 0008](../decisions/0008-community-season-grace-and-finalization.md).
 - Clock-skew policy is bounded and deployment-configured; client time cannot reopen a season.
 - An upstream timezone clarification requires an ADR, compatibility update, migration analysis, and
   tests against existing season labels.

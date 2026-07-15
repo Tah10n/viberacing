@@ -84,6 +84,17 @@ AS $function$
   )
 $function$;
 
+CREATE FUNCTION pg_temp.current_week_date(p_day_offset integer)
+RETURNS text
+LANGUAGE sql
+STABLE
+AS $function$
+  SELECT pg_catalog.to_char(
+    pg_catalog.current_setting('viberacing.test_week_start')::date + p_day_offset,
+    'YYYY-MM-DD'
+  )
+$function$;
+
 SET LOCAL ROLE viberacing_owner;
 
 INSERT INTO viberacing_private.profiles (
@@ -334,7 +345,7 @@ SELECT pg_temp.assert_true(
       '10501',
       '11501',
       '12501',
-      ARRAY['2026-07-13', '2026-07-14'],
+      ARRAY[pg_temp.current_week_date(0), pg_temp.current_week_date(1)],
       ARRAY[100, 200]::bigint[]
     )
   ),
@@ -391,7 +402,7 @@ SELECT pg_temp.assert_true(
       '10501',
       '11501',
       '12501',
-      ARRAY['2026-07-13', '2026-07-14'],
+      ARRAY[pg_temp.current_week_date(0), pg_temp.current_week_date(1)],
       ARRAY[100, 200]::bigint[]
     )
   ),
@@ -408,7 +419,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('A', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '20501', '11501', '12501',
-      ARRAY['2026-07-13'], ARRAY[100]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[100]::bigint[]
     )
   $sql$,
   'mutated idempotency replay fails closed'
@@ -424,7 +435,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('B', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10502', '11502', '12501',
-      ARRAY['2026-07-13'], ARRAY[100]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[100]::bigint[]
     )
   $sql$,
   'nonce replay under a new sync identifier fails closed'
@@ -440,7 +451,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('C', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10503', '11503', '12503',
-      ARRAY['2026-07-13'], ARRAY[100]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[100]::bigint[]
     )
   $sql$,
   'device key and public device identifier must be the same binding'
@@ -456,7 +467,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('D', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10504', '11504', '12504',
-      ARRAY['2026-07-13'], ARRAY[100]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[100]::bigint[]
     )
   $sql$,
   'a device cannot submit for another source'
@@ -472,7 +483,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('E', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10505', '11505', '12505',
-      ARRAY['2026-07-13'], ARRAY[100, 200]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[100, 200]::bigint[]
     )
   $sql$,
   'date and token arrays must have equal length'
@@ -488,7 +499,8 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('F', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10506', '11506', '12506',
-      ARRAY['2026-07-13', '2026-07-13'], ARRAY[100, 100]::bigint[]
+      ARRAY[pg_temp.current_week_date(0), pg_temp.current_week_date(0)],
+      ARRAY[100, 100]::bigint[]
     )
   $sql$,
   'duplicate dates in one snapshot fail closed'
@@ -520,7 +532,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('H', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10508', '11508', '12508',
-      ARRAY['2026-07-13'], ARRAY[-1]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[-1]::bigint[]
     )
   $sql$,
   'negative token value fails closed'
@@ -536,7 +548,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('I', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10509', '11509', '12509',
-      ARRAY['2026-07-13'], ARRAY[9007199254740992]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[9007199254740992]::bigint[]
     )
   $sql$,
   'token serialization overflow fails closed'
@@ -591,7 +603,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('L', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()) - INTERVAL '15 minutes 1 millisecond',
       '10512', '11512', '12512',
-      ARRAY['2026-07-13'], ARRAY[100]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[100]::bigint[]
     )
   $sql$,
   'stale observedAt cannot reopen the replay window'
@@ -607,7 +619,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('M', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()) + INTERVAL '2 minutes 1 second',
       '10513', '11513', '12513',
-      ARRAY['2026-07-13'], ARRAY[100]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[100]::bigint[]
     )
   $sql$,
   'future observedAt outside clock skew fails closed'
@@ -623,7 +635,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('N', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()) + INTERVAL '1 microsecond',
       '10514', '11514', '12514',
-      ARRAY['2026-07-13'], ARRAY[100]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[100]::bigint[]
     )
   $sql$,
   'observedAt must retain canonical millisecond precision'
@@ -642,7 +654,7 @@ SELECT pg_temp.expect_operation_failure(
       pg_catalog.decode(pg_catalog.lpad('10515', 64, '0'), 'hex'),
       pg_catalog.decode(pg_catalog.lpad('11515', 128, '0'), 'hex'),
       pg_catalog.decode(pg_catalog.lpad('12515', 64, '0'), 'hex'),
-      ARRAY['2026-07-13'], ARRAY[100]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[100]::bigint[]
     )
   $sql$,
   'invalid connector version fails closed'
@@ -661,7 +673,7 @@ SELECT pg_temp.expect_operation_failure(
       pg_catalog.decode('00', 'hex'),
       pg_catalog.decode(pg_catalog.lpad('11516', 128, '0'), 'hex'),
       pg_catalog.decode(pg_catalog.lpad('12516', 64, '0'), 'hex'),
-      ARRAY['2026-07-13'], ARRAY[100]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[100]::bigint[]
     )
   $sql$,
   'invalid digest length fails closed'
@@ -678,7 +690,8 @@ SELECT pg_temp.assert_true(
       'syn_' || pg_catalog.repeat('S', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10517', '11517', '12517',
-      ARRAY['2026-07-13', '2026-07-14'], ARRAY[99, 250]::bigint[]
+      ARRAY[pg_temp.current_week_date(0), pg_temp.current_week_date(1)],
+      ARRAY[99, 250]::bigint[]
     )
   ),
   'one decreasing value quarantines the complete snapshot'
@@ -695,7 +708,8 @@ SELECT pg_temp.assert_true(
       'syn_' || pg_catalog.repeat('T', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10518', '11518', '12518',
-      ARRAY['2026-07-13', '2026-07-14'], ARRAY[100, 250]::bigint[]
+      ARRAY[pg_temp.current_week_date(0), pg_temp.current_week_date(1)],
+      ARRAY[100, 250]::bigint[]
     )
   ),
   'second device advances but never sums same-source current values'
@@ -712,7 +726,7 @@ SELECT pg_temp.assert_true(
       'syn_' || pg_catalog.repeat('U', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10519', '11519', '12519',
-      ARRAY['2026-07-13'], ARRAY[700]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[700]::bigint[]
     )
   ),
   'quarantined source snapshot is retained but excluded from current values'
@@ -729,7 +743,7 @@ SELECT pg_temp.assert_true(
       'syn_' || pg_catalog.repeat('V', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10520', '11520', '12520',
-      ARRAY['2026-07-13'], ARRAY[800]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[800]::bigint[]
     )
   ),
   'hidden profile can continue private collection until deletion is requested'
@@ -745,7 +759,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('W', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10521', '11521', '12521',
-      ARRAY['2026-07-13'], ARRAY[900]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[900]::bigint[]
     )
   $sql$,
   'paused source cannot submit'
@@ -761,7 +775,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('X', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10522', '11522', '12522',
-      ARRAY['2026-07-13'], ARRAY[900]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[900]::bigint[]
     )
   $sql$,
   'revoked device cannot submit'
@@ -777,7 +791,7 @@ SELECT pg_temp.expect_operation_failure(
       'syn_' || pg_catalog.repeat('Y', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
       '10523', '11523', '12523',
-      ARRAY['2026-07-13'], ARRAY[900]::bigint[]
+      ARRAY[pg_temp.current_week_date(0)], ARRAY[900]::bigint[]
     )
   $sql$,
   'deletion-pending profile cannot submit'
@@ -824,7 +838,7 @@ SELECT pg_temp.assert_true(
     SELECT tokens = 800
     FROM viberacing_private.source_day_values
     WHERE source_id = 'src_' || pg_catalog.repeat('H', 22)
-      AND codex_reported_date = '2026-07-13'
+      AND codex_reported_date = pg_temp.current_week_date(0)::date
   ),
   'source quarantine excludes current values while hidden profile state stays private and live'
 );
@@ -834,7 +848,7 @@ SELECT pg_temp.expect_integrity_failure(
     UPDATE viberacing_private.source_day_values
     SET tokens = tokens - 1
     WHERE source_id = 'src_' || pg_catalog.repeat('A', 22)
-      AND codex_reported_date = '2026-07-14'
+      AND codex_reported_date = pg_temp.current_week_date(1)::date
   $sql$,
   'current source-day tokens cannot decrease through direct owner mutation'
 );
@@ -844,7 +858,7 @@ SELECT pg_temp.expect_integrity_failure(
     UPDATE viberacing_private.source_day_values
     SET first_accepted_at = first_accepted_at + INTERVAL '1 second'
     WHERE source_id = 'src_' || pg_catalog.repeat('A', 22)
-      AND codex_reported_date = '2026-07-14'
+      AND codex_reported_date = pg_temp.current_week_date(1)::date
   $sql$,
   'first accepted timestamp is immutable'
 );
@@ -854,7 +868,7 @@ SELECT pg_temp.expect_integrity_failure(
     UPDATE viberacing_private.source_day_values
     SET accepted_sync_id = 'syn_' || pg_catalog.repeat('Z', 22)
     WHERE source_id = 'src_' || pg_catalog.repeat('A', 22)
-      AND codex_reported_date = '2026-07-14'
+      AND codex_reported_date = pg_temp.current_week_date(1)::date
   $sql$,
   'current source-day provenance must match its accepted snapshot and entry'
 );

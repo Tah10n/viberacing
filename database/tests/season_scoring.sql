@@ -81,6 +81,14 @@ BEGIN
 END
 $function$;
 
+CREATE FUNCTION pg_temp.scoring_date(p_day_offset integer)
+RETURNS date
+LANGUAGE sql
+STABLE
+AS $function$
+  SELECT pg_catalog.current_setting('viberacing.test_week_start')::date + p_day_offset
+$function$;
+
 SET LOCAL ROLE viberacing_owner;
 
 INSERT INTO viberacing_private.profiles (profile_id, github_user_id, handle, state)
@@ -250,7 +258,7 @@ SELECT pg_temp.submit_score_fixture(
   'A',
   '00000000-0000-4000-8000-000000014501',
   14501,
-  ARRAY['2026-07-06'],
+  ARRAY[pg_temp.scoring_date(0)::text],
   ARRAY[10000]::bigint[]
 );
 SELECT pg_temp.submit_score_fixture(
@@ -258,7 +266,7 @@ SELECT pg_temp.submit_score_fixture(
   'B',
   '00000000-0000-4000-8000-000000014502',
   14502,
-  ARRAY['2026-07-06'],
+  ARRAY[pg_temp.scoring_date(0)::text],
   ARRAY[10000]::bigint[]
 );
 SELECT pg_temp.submit_score_fixture(
@@ -266,7 +274,7 @@ SELECT pg_temp.submit_score_fixture(
   'C',
   '00000000-0000-4000-8000-000000014503',
   14503,
-  ARRAY['2026-07-06'],
+  ARRAY[pg_temp.scoring_date(0)::text],
   ARRAY[20001]::bigint[]
 );
 SELECT pg_temp.submit_score_fixture(
@@ -274,7 +282,7 @@ SELECT pg_temp.submit_score_fixture(
   'D',
   '00000000-0000-4000-8000-000000014504',
   14504,
-  ARRAY['2026-07-06', '2026-07-07'],
+  ARRAY[pg_temp.scoring_date(0)::text, pg_temp.scoring_date(1)::text],
   ARRAY[10000, 1]::bigint[]
 );
 SELECT pg_temp.submit_score_fixture(
@@ -282,7 +290,7 @@ SELECT pg_temp.submit_score_fixture(
   'E',
   '00000000-0000-4000-8000-000000014505',
   14505,
-  ARRAY['2026-07-06'],
+  ARRAY[pg_temp.scoring_date(0)::text],
   ARRAY[10000]::bigint[]
 );
 SELECT pg_temp.submit_score_fixture(
@@ -290,7 +298,7 @@ SELECT pg_temp.submit_score_fixture(
   'Q',
   '00000000-0000-4000-8000-000000014506',
   14506,
-  ARRAY['2026-07-06'],
+  ARRAY[pg_temp.scoring_date(0)::text],
   ARRAY[9007199254740991]::bigint[]
 );
 SELECT pg_temp.submit_score_fixture(
@@ -299,13 +307,13 @@ SELECT pg_temp.submit_score_fixture(
   '00000000-0000-4000-8000-000000014507',
   14507,
   ARRAY[
-    '2026-07-06',
-    '2026-07-07',
-    '2026-07-08',
-    '2026-07-09',
-    '2026-07-10',
-    '2026-07-11',
-    '2026-07-12'
+    pg_temp.scoring_date(0)::text,
+    pg_temp.scoring_date(1)::text,
+    pg_temp.scoring_date(2)::text,
+    pg_temp.scoring_date(3)::text,
+    pg_temp.scoring_date(4)::text,
+    pg_temp.scoring_date(5)::text,
+    pg_temp.scoring_date(6)::text
   ],
   ARRAY[
     9007199254740991,
@@ -322,7 +330,7 @@ SELECT pg_temp.submit_score_fixture(
   'H',
   '00000000-0000-4000-8000-000000014508',
   14508,
-  ARRAY['2026-07-06'],
+  ARRAY[pg_temp.scoring_date(0)::text],
   ARRAY[9007199254740991]::bigint[]
 );
 
@@ -389,7 +397,7 @@ SET LOCAL ROLE viberacing_jobs;
 SELECT pg_temp.assert_true(
   (
     SELECT profile_count = 5
-    FROM viberacing_api.refresh_community_season('2026-07-06')
+    FROM viberacing_api.refresh_community_season(pg_temp.scoring_date(0))
   ),
   'Jobs refresh materializes exactly the five visible Community profiles'
 );
@@ -413,11 +421,11 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT season_end = '2026-07-12'
+    SELECT season_end = pg_temp.scoring_date(6)
       AND score_version = 'community_v1'
       AND refreshed_at IS NOT NULL
     FROM viberacing_private.seasons
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
   ),
   'season grouping uses one ISO Monday-through-Sunday range'
 );
@@ -426,7 +434,7 @@ SELECT pg_temp.expect_integrity_failure(
   $sql$
     UPDATE viberacing_private.seasons
     SET score_version = 'community_v2'
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
   $sql$,
   'an existing season cannot be rebound to another score version'
 );
@@ -434,7 +442,7 @@ SELECT pg_temp.expect_integrity_failure(
   $sql$
     UPDATE viberacing_private.seasons
     SET created_at = created_at - INTERVAL '1 second'
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
   $sql$,
   'an existing season cannot rewrite its server-managed creation time'
 );
@@ -443,12 +451,12 @@ SELECT pg_temp.assert_true(
   (
     SELECT pg_catalog.count(*) = 5
     FROM viberacing_private.season_entries
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
   )
   AND (
     SELECT pg_catalog.count(*) = 35
     FROM viberacing_private.season_daily_scores
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
   ),
   'every participating profile receives one entry and exactly seven daily scores'
 );
@@ -461,7 +469,7 @@ SELECT pg_temp.assert_true(
       AND rank_position = 1
       AND display_order = 1
     FROM viberacing_private.season_entries
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
       AND profile_id = '00000000-0000-4000-8000-000000014105'
   ),
   'daily and weekly caps apply after safe-integer input'
@@ -475,7 +483,7 @@ SELECT pg_temp.assert_true(
       AND rank_position = 2
       AND display_order = 2
     FROM viberacing_private.season_entries
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
       AND profile_id = '00000000-0000-4000-8000-000000014101'
   )
   AND (
@@ -485,7 +493,7 @@ SELECT pg_temp.assert_true(
       AND rank_position = 2
       AND display_order = 3
     FROM viberacing_private.season_entries
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
       AND profile_id = '00000000-0000-4000-8000-000000014102'
   ),
   'distinct active and paused sources sum once before one cap and raw totals do not break a tie'
@@ -498,7 +506,7 @@ SELECT pg_temp.assert_true(
       AND rank_position = 4
       AND display_order = 4
     FROM viberacing_private.season_entries
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
       AND profile_id = '00000000-0000-4000-8000-000000014103'
   )
   AND (
@@ -508,7 +516,7 @@ SELECT pg_temp.assert_true(
       AND rank_position = 5
       AND display_order = 5
     FROM viberacing_private.season_entries
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
       AND profile_id = '00000000-0000-4000-8000-000000014104'
   ),
   'active days break score ties while unlinked history remains and quarantined sources do not'
@@ -518,21 +526,21 @@ SELECT pg_temp.assert_true(
   (
     SELECT daily_score = 275
     FROM viberacing_private.season_daily_scores
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
       AND profile_id = '00000000-0000-4000-8000-000000014101'
-      AND score_date = '2026-07-06'
+      AND score_date = pg_temp.scoring_date(0)
   )
   AND (
     SELECT daily_score = 0
     FROM viberacing_private.season_daily_scores
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
       AND profile_id = '00000000-0000-4000-8000-000000014103'
-      AND score_date = '2026-07-07'
+      AND score_date = pg_temp.scoring_date(1)
   )
   AND (
     SELECT pg_catalog.count(*) = 7
     FROM viberacing_private.season_daily_scores
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
       AND profile_id = '00000000-0000-4000-8000-000000014105'
       AND daily_score = 1000
   ),
@@ -573,19 +581,19 @@ SELECT
   rank_position,
   display_order
 FROM viberacing_private.season_entries
-WHERE season_start = '2026-07-06';
+WHERE season_start = pg_temp.scoring_date(0);
 
 CREATE TEMP TABLE daily_snapshot ON COMMIT DROP AS
 SELECT season_start, profile_id, score_date, daily_score
 FROM viberacing_private.season_daily_scores
-WHERE season_start = '2026-07-06';
+WHERE season_start = pg_temp.scoring_date(0);
 
 SET LOCAL ROLE viberacing_jobs;
 
 SELECT pg_temp.assert_true(
   (
     SELECT profile_count = 5
-    FROM viberacing_api.refresh_community_season('2026-07-06')
+    FROM viberacing_api.refresh_community_season(pg_temp.scoring_date(0))
   ),
   'an exact Jobs rerun succeeds without double-counting'
 );
@@ -603,7 +611,7 @@ SELECT pg_temp.assert_true(
       rank_position,
       display_order
     FROM viberacing_private.season_entries
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
     EXCEPT
     SELECT * FROM entry_snapshot)
     UNION ALL
@@ -618,12 +626,12 @@ SELECT pg_temp.assert_true(
       rank_position,
       display_order
     FROM viberacing_private.season_entries
-    WHERE season_start = '2026-07-06')
+    WHERE season_start = pg_temp.scoring_date(0))
   )
   AND NOT EXISTS (
     (SELECT season_start, profile_id, score_date, daily_score
     FROM viberacing_private.season_daily_scores
-    WHERE season_start = '2026-07-06'
+    WHERE season_start = pg_temp.scoring_date(0)
     EXCEPT
     SELECT * FROM daily_snapshot)
     UNION ALL
@@ -631,7 +639,7 @@ SELECT pg_temp.assert_true(
     EXCEPT
     SELECT season_start, profile_id, score_date, daily_score
     FROM viberacing_private.season_daily_scores
-    WHERE season_start = '2026-07-06')
+    WHERE season_start = pg_temp.scoring_date(0))
   ),
   'Jobs rerun leaves the complete score projection unchanged'
 );
@@ -643,14 +651,14 @@ SELECT pg_temp.expect_operation_failure(
   'a null season start fails closed'
 );
 SELECT pg_temp.expect_operation_failure(
-  $sql$SELECT * FROM viberacing_api.refresh_community_season('2026-07-07')$sql$,
+  $sql$SELECT * FROM viberacing_api.refresh_community_season(pg_temp.scoring_date(1))$sql$,
   'a non-Monday season start fails closed'
 );
 
 SELECT pg_temp.assert_true(
   (
     SELECT profile_count = 0
-    FROM viberacing_api.refresh_community_season('2026-06-29')
+    FROM viberacing_api.refresh_community_season(pg_temp.scoring_date(7))
   ),
   'a week without stored source state is a bounded no-op'
 );
@@ -660,7 +668,7 @@ SELECT pg_temp.assert_true(
   NOT EXISTS (
     SELECT 1
     FROM viberacing_private.seasons
-    WHERE season_start = '2026-06-29'
+    WHERE season_start = pg_temp.scoring_date(7)
   ),
   'a no-data refresh cannot grow empty season state'
 );
@@ -670,7 +678,7 @@ WHERE capability = 'community_scoring_refresh';
 SET LOCAL ROLE viberacing_jobs;
 
 SELECT pg_temp.expect_operation_failure(
-  $sql$SELECT * FROM viberacing_api.refresh_community_season('2026-07-06')$sql$,
+  $sql$SELECT * FROM viberacing_api.refresh_community_season(pg_temp.scoring_date(0))$sql$,
   'a missing private scoring mutex fails closed'
 );
 

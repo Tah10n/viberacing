@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and seven accepted ADRs.
+  fail-closed compatibility policy and matrix, and eight accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -62,7 +62,10 @@ Versioning where its guarantees are applicable.
 - Jobs-only atomic open-season Community scoring refresh with immutable formula/season binding,
   distinct-source aggregation under one profile cap, shared-rank semantics, private derived score
   tables, bounded lock/statement waits, no empty-season growth, and observed concurrent idempotent
-  reruns; no scheduler, public read, or season finalization is implied.
+  reruns; no scheduler or public read is implied.
+- Jobs-only immutable Community season finalization after an exact 48-hour server-time grace period,
+  with whole-payload late quarantine, terminal no-data seasons, idempotent retry, bounded calendar
+  support, and no implied scheduler, correction capability, or public read surface.
 
 ### Security
 
@@ -104,7 +107,7 @@ Versioning where its guarantees are applicable.
 - Added observed identity races proving one-winner invite enrollment, initial-passkey challenge
   consumption, and session rotation plus deletion dominance over concurrent rotation without stale
   authority or losing transaction artifacts.
-- Made all nineteen race gates observe every tagged contender in the holder's PostgreSQL blocker
+- Made all twenty-two race gates observe every tagged contender in the holder's PostgreSQL blocker
   chain before releasing the holder, and made protective races prove first-contender queue order
   before launching the competing action, removing timer-only and scheduler-order evidence.
 - Added Community ingest rejection, replay, binding, role, and lifecycle scenarios plus observed
@@ -112,6 +115,10 @@ Versioning where its guarantees are applicable.
   value, and pause/revoke serialize ahead of later submissions.
 - Added cleanup boundary, idempotency, role-denial, live-row preservation, raw-provenance cascade,
   and observed two-worker serialization scenarios using only synthetic ephemeral PostgreSQL state.
+- Added finalization boundary, idempotency, immutability, no-data, role-denial, and late-quarantine
+  scenarios plus observed races proving finalization and late ingest converge on one terminal state,
+  post-lock server time decides deadline behavior, and opposing multi-season payload order cannot
+  create advisory-lock cycles.
 - Made passkey race preservation assertions fail when an expected row is missing and added a static
   regression check that rejects missing-row-unsafe scalar-subquery `IF NOT` assertions.
 - Made passkey revoke terminal, protected the last active key, preserved monotonic sign state, and

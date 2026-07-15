@@ -65,7 +65,8 @@ material availability cost.
 - **Current evidence:** Revision 0007 rejects malformed or out-of-range input, quarantines a whole
   decrease or quarantined-source snapshot, and prevents current source/day state from decreasing.
   Revision 0009 excludes quarantined sources and derives open-season score only after one profile
-  cap across eligible distinct sources. Suspicious-jump policy, service execution, and correction
+  cap across eligible distinct sources. Revision 0010 also quarantines the whole late snapshot so it
+  cannot change accepted historical state. Suspicious-jump policy, service execution, and correction
   authority remain unimplemented.
 - **Residual risk:** A plausible forged value inside public bounds may be indistinguishable from an
   honest local reading.
@@ -87,8 +88,11 @@ material availability cost.
   value, server-time freshness, and observed exact-retry/same-source device races. Revision 0009
   adds immutable formula/season definitions, atomic replacement of one open-season materialization,
   and an observed two-Jobs serialization race whose reruns converge on identical semantic state.
-  Grace deadlines, finalized immutability, correction authority, and the Jobs service remain
-  unimplemented.
+  Revision 0010 enforces the exact 48-hour server grace, terminal metadata/projection triggers,
+  refresh denial after finalization, and an observed finalization-versus-late-Ingest race. That race
+  exposed and then verified the canonical deadlock-free `season → profile → source → device` lock
+  order; a second observed race proves opposing multi-season payload orders both lock seasons in
+  ascending order. Correction authority and the Jobs service/scheduler remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -309,9 +313,9 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 19 cross-capability denials.
-  Ingest has exactly two reviewed functions; Jobs has exactly two reviewed functions: bounded
-  ingest-retention cleanup and open-season scoring refresh.
+  and usage/scoring-table reads or API-schema mutation, and proves 22 cross-capability denials.
+  Ingest has exactly two reviewed functions; Jobs has exactly three reviewed functions: bounded
+  ingest-retention cleanup, open-season scoring refresh, and terminal season finalization.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow.
 
@@ -401,11 +405,11 @@ material availability cost.
 - **Current evidence:** Connector input is limited to 31 entries and safe integers; nonce and raw
   snapshot rows carry bounded expiry markers. A Jobs-only procedure deletes expired rows in
   1-to-1000 batches, preserves live/current state, and serializes two workers in observed PostgreSQL
-  evidence. The scoring refresh uses one private mutex, a five-second database lock bound, numeric
-  overflow protection, a 30-second statement deadline, no empty-season growth, and one atomic
-  global-rank rebuild. Scheduling, request/body limits, service concurrency, scoring
-  capacity/batching policy, quotas, load shedding, and production capacity evidence remain
-  unimplemented.
+  evidence. Scoring refresh/finalization use one private mutex, per-season locks, a five-second
+  database lock bound, numeric overflow protection, a 30-second statement deadline, bounded no-data
+  terminal state, and one atomic global-rank rebuild. Scheduling, request/body limits, service
+  concurrency, scoring capacity/batching policy, quotas, load shedding, and production capacity
+  evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 
