@@ -3,9 +3,9 @@
 This workspace is the Phase 1 product shell: a responsive pixel-art race, Community leaderboard, and
 demo profile built entirely from committed synthetic fixtures. It is suitable for local design,
 accessibility, localization, and scoring review. It is not an authenticated product and does not
-read Codex or user accounts. Server-only score database modules now exist for the next application
-slice, but no route or visible component constructs them; the prototype still does not query a
-database.
+read Codex or user accounts. Server-only score database and public problem-response modules now
+exist for the next application slices, but no route or visible component constructs them; the
+prototype still does not query a database or expose an API.
 
 ## Run it
 
@@ -31,6 +31,7 @@ for a hosted deployment; it is public configuration, not a secret. Focused check
 | `lib/race-data.ts`                     | Clearly synthetic raw activity fixtures and payload projection | Marked `server-only`; never replace with exports or real account data           |
 | `lib/public-community-score-mapper.ts` | Validates and maps the exact SQL score projection              | Server-only, exact allowlist, top-32, and fail-closed                           |
 | `lib/public-community-score-store.ts`  | Executes the fixed public-score procedure and mapper           | Canonical Monday only; verifies every checkout; no route constructs it yet      |
+| `lib/public-http-problem.ts`           | Generates opaque request IDs and closed public error responses | Server-only; validates the contract; no inbound ID, CORS, detail, or cause      |
 | `lib/public-score-database-config.ts`  | Parses the dedicated Web login and TLS/pool contract           | Owner settings are separate; production is verify-full; errors reflect no value |
 | `lib/public-score-database-pool.ts`    | Wraps `pg` with narrow connect/query/release/close authority   | Four connections; bounded waits; stable idle-error signal only                  |
 | `lib/scoring.ts`                       | Bounded daily/weekly score and deterministic rank calculation  | Treat all future device input as untrusted and validate before calling          |
@@ -41,6 +42,19 @@ for a hosted deployment; it is public configuration, not a secret. Focused check
 | `components/race-experience.tsx`       | EN/RU interaction, table, profile, theme, and motion controls  | Local storage is restricted to non-personal preferences                         |
 | `proxy.ts`                             | Per-response nonce CSP                                         | Keep production CSP fail-closed and free of remote origins                      |
 | `next.config.ts`                       | Static security headers and build isolation                    | Turbopack must remain pinned to this repository root                            |
+
+## Public HTTP problem boundary
+
+The common server-only factory requests 16 cryptographic random bytes and returns a frozen opaque
+token whose `req_` value cannot be replaced with an inbound correlation string through the typed
+API. It owns all nine `ProblemDetailsV1` status/title/retry mappings, validates the complete body,
+and emits `application/problem+json`, `Cache-Control: no-store`, and the matching `x-request-id`. It
+emits no CORS header, cookie, detail, exception cause, hostname, SQL, or submitted value.
+
+This is pre-route infrastructure. It does not implement a `/v1` path, request parsing, method or
+content negotiation, auth/retry headers, admission control, deadline, logging sink, store-error
+translation, or success/cache policy. Those remain mandatory route-level decisions; an endpoint must
+generate one token at entry and never replace it with an inbound header.
 
 ## Score database adapter configuration
 
@@ -101,13 +115,15 @@ replace the Phase 2 authentication, ingestion, retention, deletion, and abuse-co
 
 ## Test strategy
 
-Vitest runs business-logic, data-boundary, database-config/pool/store, component, interaction,
-CSP/header, localization, and axe-core accessibility tests. Adapter tests cover TLS/environment
-bounds, non-reflective failures, pool lifecycle, every-checkout role/login/search-path/read-only
-probes, fixed SQL parameters, release/destruction behavior, and mapper integration without requiring
-or claiming a live deployment login. Canvas tests execute real render loops against a typed context
-stub, including animated and no-context paths. Preference tests cover valid settings, reduced
-motion, pausing, invalid/blocked storage, and cleanup.
+Vitest runs business-logic, data-boundary, HTTP-problem, database-config/pool/store, component,
+interaction, CSP/header, localization, and axe-core accessibility tests. HTTP-boundary cases cover
+entropy, opaque tokens, every problem mapping, headers, contract validation, hostile reflective
+inputs, and non-reflection. Adapter tests cover TLS/environment bounds, non-reflective failures,
+pool lifecycle, every-checkout role/login/search-path/read-only probes, fixed SQL parameters,
+release/destruction behavior, and mapper integration without requiring or claiming a live deployment
+login. Canvas tests execute real render loops against a typed context stub, including animated and
+no-context paths. Preference tests cover valid settings, reduced motion, pausing, invalid/blocked
+storage, and cleanup.
 
 Coverage thresholds apply to product components and libraries. Small framework entrypoints are
 excluded from unit coverage and exercised by `next build`; counting imports as unit coverage would

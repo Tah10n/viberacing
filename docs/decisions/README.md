@@ -20,6 +20,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0009](0009-public-community-score-projection.md)       | Bounded active-only public Community score projection               | Accepted; score-read DB capability implemented      |
 | [0010](0010-community-score-response-contract.md)       | Closed Community score response with explicit trust metadata        | Accepted; response schema/validators implemented    |
 | [0011](0011-bounded-web-postgresql-score-adapter.md)    | Bounded least-privileged Web PostgreSQL score adapter               | Accepted; server-only adapter implemented           |
+| [0012](0012-bounded-public-http-problem-boundary.md)    | Bounded request IDs and public HTTP problem responses               | Accepted; server-only factory implemented           |
 
 ## Lifecycle
 

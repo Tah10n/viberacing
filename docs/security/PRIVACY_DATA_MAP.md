@@ -63,7 +63,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Streak                                                              | Public when enabled             | Server-derived informational field                                     | Public only under profile visibility setting                              | Season/profile projection                                               | Recomputed or deleted with profile; never increases score                                                   |
 | CarRecipe and proposal state                                        | Public recipe; Account proposal | User/agent enum proposal and explicit browser approval                 | Proposal private until approval; active car public                        | Versioned recipe/proposal tables                                        | Rejected proposals short-lived; approved recipe until change/delete; launch decision required               |
 | IP-derived request signal and user-agent family                     | Operational                     | Edge/service; security, rate shaping, and reliability                  | Restricted operations; never leaderboard or behavioral advertising        | Prefer aggregate/ephemeral edge controls; minimal event when necessary  | Shortest operational window; exact scope and duration require launch privacy review                         |
-| Request ID, outcome, latency, and bounded error code                | Operational                     | Edge/services/jobs; debugging and SLO evidence                         | Restricted operations; safe aggregate metrics                             | Structured logs/metrics                                                 | Bounded by operational need; no raw token value, credential, body, or profile export                        |
+| Request ID, outcome, latency, and bounded error code                | Operational                     | Server-generated correlation; debugging and SLO evidence               | Response recipient and restricted operations; aggregate metrics           | Not retained today; future structured logs/metrics                      | Future bounded logs exclude usage, credentials, bodies, and profiles                                        |
 | Security/admin audit event and reason                               | Security; Operational           | Auth/admin/jobs/release; accountability                                | Restricted responders/auditors; user-visible subset where appropriate     | Bounded `audit_events` reference; external append-only sink planned     | Publicly documented bounded policy; profile link redacted on purge; delete unrelated personal data          |
 | Deletion state and security tombstone                               | Security                        | Deletion workflow; prevent ingestion and restore resurrection          | Deletion/jobs/auth and limited audit                                      | Deletion job plus minimal tombstone                                     | Primary data purged in service window; tombstone expires after disclosed minimum security period            |
 | Maintenance capability mutex                                        | Operational                     | Database; serialize bounded cleanup and scoring capabilities           | Owner-defined Jobs procedures only                                        | Two fixed `maintenance_locks` enum rows; no user or request data        | Retained while each capability exists; removed only by a reviewed migration                                 |
@@ -221,9 +221,12 @@ legal review and explicit public disclosure; they are not assumed here.
 
 ## Logs, diagnostics, and support
 
-Operational logs use stable event names, request IDs, coarse outcomes, and bounded numeric metrics.
-They omit request bodies, raw token values, handles when not needed, OAuth/passkey material, device
-signatures, recovery selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
+The server-only problem factory now creates a new 128-bit opaque request ID and returns it in the
+bounded body/header without accepting an inbound correlation value or retaining a copy. Future
+operational logs may use stable event names, those request IDs, coarse outcomes, and bounded numeric
+metrics. They omit request bodies, raw token values, handles when not needed, OAuth/passkey
+material, device signatures, recovery selectors/secrets/PHCs/authority verifiers, local paths, and
+prohibited data.
 
 Connector telemetry is off by default. A future diagnostic export is local, explicit, redacted,
 previewed before sharing, and generated from an allowlist. Public issue forms do not request raw

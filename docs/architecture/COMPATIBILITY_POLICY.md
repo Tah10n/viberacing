@@ -97,7 +97,9 @@ through local timezone conversion.
 - Client-writable schemas exclude profile identity, accepted source binding, trust tier, score,
   rank, streak, season, server receipt time, moderation, and deletion state.
 - Errors use a versioned bounded problem-details shape and request ID without stack, SQL, hostname,
-  secret, or record disclosure.
+  secret, or record disclosure. The common server-only factory now enforces the closed mapping,
+  generated opaque ID, runtime validation, and no-store response baseline; route-specific
+  translation and every `/v1` path remain unimplemented.
 - Generated OpenAPI, TypeScript, Rust fixtures, and documentation identify their canonical schema
   source; CI rejects drift.
 

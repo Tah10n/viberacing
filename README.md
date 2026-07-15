@@ -78,37 +78,39 @@ metadata. A server-only fail-closed mapper now converts only the exact ten-colum
 into that response and rejects malformed, inconsistent, oversized, or contract-invalid results. A
 bounded server-only PostgreSQL adapter now uses a separate least-privileged Web login contract,
 certificate-verified production transport, a four-connection pool, per-checkout role/read-only
-verification, fixed deadlines, and one parameterized top-32 procedure call. There is still no HTTP
-path, cache, deployment login/TLS integration, or live API, and this is not evidence that real Codex
-data can be submitted. Eleven SQL migrations now add 23 private identity, passkey,
-restricted-recovery, source, device, pairing, audit, deletion, replay, usage, and Community scoring
-tables with deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift
-detection, and an isolated PostgreSQL capability test. A narrow procedure boundary implements invite
-issuance, atomic enrollment, session-bound initial-passkey challenges, credential-derived login,
-bounded multi-passkey management, session rotation/revocation, the immediate lock-down portion of
-profile deletion, one-time new/existing-source device pairing, private source/device inventory,
-source pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation,
-and short-lived recovery-only replacement-passkey authority. Pairing creates only opaque
-user-declared sources: it never reads or stores Codex account email or claims account uniqueness.
-The source unlink/reactivation procedures require a fresh consumed source-bound step-up record, but
-the application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
-also require edge rate limits and bounded cleanup before exposure. A database-only Community ingest
-capability now exposes minimal active-device verification material and accepts bounded source-bound
-snapshots with exact retry, nonce replay, monotonic source/date, quarantine, and lifecycle-race
-enforcement. A Jobs-only procedure deletes bounded batches of expired nonces and raw snapshots while
-preserving current source/day values; no scheduler invokes it. The database does not verify a wire
-signature. A second Jobs-only procedure serializes an atomic refresh of one open ISO-week Community
-season: it sums distinct eligible sources before one profile daily cap, stores an immutable formula
-and season binding, shares rank on equal score and active days, and persists no raw token or source
-identifier in the score tables. Revision 0010 adds a public 48-hour server-time grace rule,
-late-snapshot quarantine, and a Jobs-only idempotent finalization procedure whose terminal metadata
-and score projection reject silent rewrites while profile purge can still remove personal rows.
-Revision 0011 gives only the Web database role a bounded active-profile score projection containing
-no raw values, private identifiers, or exact timestamps. The score response component and Web
-PostgreSQL adapter preserve only that public allowlist and advertise no path; the visible site still
-uses synthetic fixtures. There is still no HTTP authentication, recovery, ingest, or public-score
-route, OAuth callback, Argon2id/WebAuthn/Ed25519 application verifier, connector, cleanup/scoring
-scheduler or service, audited correction flow, asynchronous purge worker, or deployed database.
+verification, fixed deadlines, and one parameterized top-32 procedure call. A server-only HTTP
+problem factory now generates opaque 128-bit request IDs and closed, contract-validated, no-store
+error responses. There is still no HTTP path, cache, deployment login/TLS integration, or live API,
+and this is not evidence that real Codex data can be submitted. Eleven SQL migrations now add 23
+private identity, passkey, restricted-recovery, source, device, pairing, audit, deletion, replay,
+usage, and Community scoring tables with deny-by-default runtime roles, forced RLS, state-machine
+constraints, checksum drift detection, and an isolated PostgreSQL capability test. A narrow
+procedure boundary implements invite issuance, atomic enrollment, session-bound initial-passkey
+challenges, credential-derived login, bounded multi-passkey management, session rotation/revocation,
+the immediate lock-down portion of profile deletion, one-time new/existing-source device pairing,
+private source/device inventory, source pause/reactivation/unlink, immediate device revoke,
+passkey-protected recovery-code rotation, and short-lived recovery-only replacement-passkey
+authority. Pairing creates only opaque user-declared sources: it never reads or stores Codex account
+email or claims account uniqueness. The source unlink/reactivation procedures require a fresh
+consumed source-bound step-up record, but the application that cryptographically verifies WebAuthn
+is still absent. Anonymous login challenges also require edge rate limits and bounded cleanup before
+exposure. A database-only Community ingest capability now exposes minimal active-device verification
+material and accepts bounded source-bound snapshots with exact retry, nonce replay, monotonic
+source/date, quarantine, and lifecycle-race enforcement. A Jobs-only procedure deletes bounded
+batches of expired nonces and raw snapshots while preserving current source/day values; no scheduler
+invokes it. The database does not verify a wire signature. A second Jobs-only procedure serializes
+an atomic refresh of one open ISO-week Community season: it sums distinct eligible sources before
+one profile daily cap, stores an immutable formula and season binding, shares rank on equal score
+and active days, and persists no raw token or source identifier in the score tables. Revision 0010
+adds a public 48-hour server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent
+finalization procedure whose terminal metadata and score projection reject silent rewrites while
+profile purge can still remove personal rows. Revision 0011 gives only the Web database role a
+bounded active-profile score projection containing no raw values, private identifiers, or exact
+timestamps. The score response component and Web PostgreSQL adapter preserve only that public
+allowlist and advertise no path; the visible site still uses synthetic fixtures. There is still no
+HTTP authentication, recovery, ingest, or public-score route, OAuth callback,
+Argon2id/WebAuthn/Ed25519 application verifier, connector, cleanup/scoring scheduler or service,
+audited correction flow, asynchronous purge worker, or deployed database.
 
 ## Run and verify the synthetic prototype
 

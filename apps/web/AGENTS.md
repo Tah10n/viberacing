@@ -21,6 +21,9 @@ apply.
   `VIBERACING_WEB_DATABASE_*`, strict TLS/config parsing, a dedicated bounded pool, and an effective
   Web-role/login-capability probe before every query. Do not bypass the store with generic SQL or
   wire it to a route without the separate HTTP/cache/load review.
+- Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
+  correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
+  CORS/auth/retry semantics to the common problem-response boundary.
 
 ## Commands
 

@@ -82,8 +82,9 @@ sync request/result, bounded problem details и response-only top-32 Community s
 oversized или contract-invalid результаты. Bounded server-only PostgreSQL adapter использует
 отдельный least-privileged Web login contract, certificate-verified production transport,
 four-connection pool, проверку role/read-only state при каждом checkout, фиксированные deadlines и
-один parameterized top-32 procedure call. Advertised API path, cache, deployment login/TLS
-integration, connector и приём реальной статистики ещё отсутствуют.
+один parameterized top-32 procedure call. Server-only HTTP problem factory генерирует opaque 128-bit
+request IDs и закрытые contract-validated no-store error responses. Advertised API path, cache,
+deployment login/TLS integration, connector и приём реальной статистики ещё отсутствуют.
 
 Также добавлены одиннадцать SQL migrations: 23 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,

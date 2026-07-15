@@ -10,11 +10,11 @@ The Phase 2 language-neutral contract and SQL persistence foundations now includ
 passkey login, multi-passkey management, restricted recovery, Community usage ingest, bounded
 ingest-retention cleanup, open-season scoring, terminal season finalization, and a public score-only
 database projection plus its server-only projection-to-contract mapper; a Phase 3 database-only
-source/device lifecycle and same-source deduplication slice has also started. Phase 0
-hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
-No authentication HTTP route, OAuth/Argon2id/WebAuthn application flow, production deployment,
-released connector, real-user ingestion, end-to-end public ranking, or finalization scheduler
-exists.
+source/device lifecycle and same-source deduplication slice has also started. A server-only public
+problem-response factory now exists before any HTTP route. Phase 0 hosted-publication controls
+remain blocked on real maintainer identities and GitHub configuration. No authentication HTTP route,
+OAuth/Argon2id/WebAuthn application flow, production deployment, released connector, real-user
+ingestion, end-to-end public ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -70,10 +70,10 @@ exists.
   trusted-release Mermaid views.
 - A fail-closed Codex compatibility policy and empty support matrix; no upstream or connector
   version is claimed supported without pinned schema/fixture/platform evidence.
-- An ADR lifecycle/template and eleven accepted design decisions covering Community trust,
+- An ADR lifecycle/template and twelve accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
-  projection/response/adapter boundaries.
+  projection/response/adapter plus common HTTP problem boundaries.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -91,6 +91,12 @@ exists.
   calendar/UTC timestamp and safe-integer checks; depth, node, key, item, and issue budgets; and
   privacy-safe issue output that never echoes unknown property names or submitted values. Eighteen
   unit/security cases cover 100% of statements, lines, and functions plus 97.14% of branches.
+- A server-only public HTTP problem boundary that requests exactly 16 cryptographic random bytes,
+  returns a frozen opaque request token, owns all nine status/title/retry mappings, validates the
+  complete `ProblemDetailsV1`, and emits only `application/problem+json`, `no-store`, and matching
+  `x-request-id` headers. It accepts no inbound ID string, CORS setting, cookie, title, status,
+  detail, or cause; malformed/accessor-backed/revoked inputs, inherited `toJSON`, and internal
+  failures are non-reflective. No route or log sink consumes it yet.
 - An idempotent cluster-role bootstrap for separate `NOLOGIN`, non-owner Web, Ingest, Jobs, Admin,
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
@@ -239,11 +245,11 @@ exists.
   has no accounts, analytics, trackers, remote fonts, or runtime secrets. Its only environment
   setting is a strictly parsed, server-only public origin for absolute social metadata; hosted
   deployment without a real HTTPS DNS value remains forbidden.
-- One hundred thirty-five unit, component, interaction, security-header, localization, scoring,
-  database-adapter configuration/pool/store, and accessibility tests. The coverage gate currently
-  reports 99.18% statements, 95.52% branches, 100% functions, and 99.16% lines over product
-  components and libraries; framework entrypoints are verified by the production build instead of
-  artificial unit coverage.
+- One hundred fifty unit, component, interaction, security-header, localization, scoring,
+  HTTP-boundary, database-adapter configuration/pool/store, and accessibility tests. The coverage
+  gate currently reports 99.07% statements, 95.71% branches, 100% functions, and 99.04% lines over
+  product components and libraries; framework entrypoints are verified by the production build
+  instead of artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift, lint, strict type
   checking and coverage, plus web lint, strict type checking, coverage, and a production Next.js
   build on every deterministic CI run.
@@ -295,14 +301,14 @@ defect found and corrected during review. The report names its local-only limita
 
 ## Not implemented yet
 
-Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/pepper and generic
-HTTP response handling, WebAuthn and Ed25519 cryptographic verification, anonymous
-login/pairing/recovery edge rate limits and cleanup, raw-body/signature/origin validation in an
-ingest API, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring
-state, the scoring Jobs service/scheduler, audited corrections, HTTP public-score delivery, purge
-workers, Codex connector, release signing, deployment, and public beta operations remain proposed. A
-bounded database score projection, versioned response-only schema, and fail-closed server mapper now
-exist together with a bounded server-only PostgreSQL adapter, but the HTTP route,
+Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/pepper and
+route-level generic HTTP response translation, WebAuthn and Ed25519 cryptographic verification,
+anonymous login/pairing/recovery edge rate limits and cleanup, raw-body/signature/origin validation
+in an ingest API, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other
+expiring state, the scoring Jobs service/scheduler, audited corrections, HTTP public-score delivery,
+purge workers, Codex connector, release signing, deployment, and public beta operations remain
+proposed. A bounded database score projection, versioned response-only schema, and fail-closed
+server mapper now exist together with a bounded server-only PostgreSQL adapter, but the HTTP route,
 cache/invalidation, CarRecipe, streak/freshness, profile detail, rate/capacity controls, monitoring
 backend, deployment login, certificate, and live adapter integration do not. The visible web scoring
 and ranking experience still operates only on clearly synthetic in-process fixtures; no route or

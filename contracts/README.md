@@ -19,7 +19,9 @@ projection, but no API endpoint, connector, application signature verifier, or d
   or quarantined input without returning a private anomaly reason.
 - [`ProblemDetailsV1`](v1/problem-details.schema.json) returns a stable error code and request ID,
   plus one fixed generic title, never a stack trace, SQL detail, secret, request body, or internal
-  hostname.
+  hostname. A server-only Web factory now generates an opaque 128-bit request ID, fixes each
+  status/title/retry mapping, validates the complete body, and emits `no-store`
+  `application/problem+json`; no route is thereby advertised.
 - [`manifest.json`](v1/manifest.json) defines the reviewed generation order and public type/export
   names.
 

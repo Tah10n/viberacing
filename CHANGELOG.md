@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and eleven accepted ADRs.
+  fail-closed compatibility policy and matrix, and twelve accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -44,6 +44,10 @@ Versioning where its guarantees are applicable.
   per-checkout role/login-membership/capability/search-path/read-only probe, canonical Monday input,
   and one parameterized top-32 projection call with date-to-text preservation. It exposes no HTTP
   path and is not connected to the synthetic page.
+- A server-only public HTTP problem factory that generates an opaque 128-bit request token, fixes
+  every status/title/retry mapping, validates `ProblemDetailsV1`, and emits matching `x-request-id`,
+  `application/problem+json`, and `no-store` headers without CORS, cookies, reflected causes, or an
+  advertised route.
 - Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
   drift gates and black-box regression coverage.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
@@ -144,6 +148,10 @@ Versioning where its guarantees are applicable.
   fixed SQL parameters/date casts, malformed/accessor/revoked results, healthy versus destructive
   release, and non-reflective connection/query/release/projection failures. A configuration checker
   now locks tracked Web placeholders apart from the compose owner.
+- Added 15 public HTTP boundary cases for exact entropy and base64url shape, production request-ID
+  generation, all nine problem mappings, contract-valid bodies, no-store/content-type headers,
+  absent CORS, opaque token enforcement, and non-reflective short, throwing, accessor-backed,
+  revoked, unknown, or prototype-polluted inputs.
 - Made passkey race preservation assertions fail when an expected row is missing and added a static
   regression check that rejects missing-row-unsafe scalar-subquery `IF NOT` assertions.
 - Made passkey revoke terminal, protected the last active key, preserved monotonic sign state, and
