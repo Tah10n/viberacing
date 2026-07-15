@@ -304,8 +304,8 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage-table reads or API-schema mutation, and proves 13 cross-capability denials. Ingest has
-  exactly two reviewed functions; Jobs currently has none.
+  and usage-table reads or API-schema mutation, and proves 16 cross-capability denials. Ingest has
+  exactly two reviewed functions; Jobs has exactly one bounded ingest-retention cleanup function.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow.
 
@@ -393,8 +393,10 @@ material availability cost.
 - **Recovery:** Load shed, disable the narrow feature, drain queues, expire bounded state, and
   restore service without weakening authentication or signature checks.
 - **Current evidence:** Connector input is limited to 31 entries and safe integers; nonce and raw
-  snapshot rows carry bounded expiry markers. Cleanup, request/body limits, service concurrency,
-  quotas, load shedding, and capacity evidence remain unimplemented.
+  snapshot rows carry bounded expiry markers. A Jobs-only procedure deletes expired rows in
+  1-to-1000 batches, preserves live/current state, and serializes two workers in observed PostgreSQL
+  evidence. Scheduling, request/body limits, service concurrency, quotas, load shedding, and
+  capacity evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

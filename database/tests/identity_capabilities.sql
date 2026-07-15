@@ -33,13 +33,13 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 36
+    SELECT pg_catalog.count(*) = 37
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.prokind = 'f'
   ),
-  'the API surface contains only the reviewed identity, passkey, recovery, source lifecycle, and ingest functions'
+  'the API surface contains only the reviewed identity, source, ingest, and cleanup functions'
 );
 
 SELECT pg_temp.assert_true(
@@ -55,6 +55,17 @@ SELECT pg_temp.assert_true(
     WHERE namespace.nspname = 'viberacing_api'
   ),
   'every API function is owner-defined and pins a closed search path'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
+    FROM pg_catalog.pg_proc AS procedure
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'viberacing_api'
+      AND procedure.proname = 'cleanup_expired_ingest_state'
+  ),
+  'ingest cleanup has a database-enforced lock-wait bound'
 );
 
 SELECT pg_temp.assert_true(
@@ -93,7 +104,8 @@ SELECT pg_temp.assert_true(
         procedure.proname NOT IN (
           'issue_invite',
           'read_device_verification_material',
-          'submit_community_sync'
+          'submit_community_sync',
+          'cleanup_expired_ingest_state'
         )
       )
     )
@@ -119,14 +131,16 @@ SELECT pg_temp.assert_true(
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
   )
-  AND NOT EXISTS (
-    SELECT 1
+  AND (
+    SELECT pg_catalog.bool_and(
+      pg_catalog.has_function_privilege('viberacing_jobs', procedure.oid, 'EXECUTE')
+      = (procedure.proname = 'cleanup_expired_ingest_state')
+    )
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
-      AND pg_catalog.has_function_privilege('viberacing_jobs', procedure.oid, 'EXECUTE')
   ),
-  'ingest has only verification and sync capability while jobs have no API capability'
+  'ingest has only verification and sync while jobs have only bounded cleanup'
 );
 
 SELECT pg_temp.assert_true(

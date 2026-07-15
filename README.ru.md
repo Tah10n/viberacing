@@ -79,7 +79,7 @@ Dev-сервер слушает только loopback. В интерфейсе �
 будущего sync-протокола. Это пока только проверяемая граница данных: работающего API, connector и
 приёма реальной статистики ещё нет.
 
-Также добавлены семь SQL migrations: 18 приватных
+Также добавлены восемь SQL migrations: 19 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage tables, deny-by-default
 runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая procedure boundary
 уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии initial-passkey challenge,
@@ -96,10 +96,12 @@ Argon2id/WebAuthn приложения пока нет. Несколько об�
 generic response и edge rate limits для анонимных challenges и recovery lookup пока отсутствуют.
 Database-only Community ingest capability уже выдаёт минимальный материал активного устройства и
 принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic source/date,
-quarantine и lifecycle-race enforcement, но сам не проверяет wire signature. HTTP ingest route,
-приложение с Ed25519-проверкой, connector, replay/retention cleanup, scoring/finalization jobs,
-purge worker и deployed database ещё не реализованы, поэтому готовой пользовательской авторизации и
-приёма реальных данных пока нет.
+quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure удаляет bounded batches
+истёкших nonces и raw snapshots, сохраняя current source/day values, но scheduler для неё
+отсутствует. Сама база не проверяет wire signature. HTTP ingest route, приложение с
+Ed25519-проверкой, connector, scheduled cleanup worker, scoring/finalization jobs, purge worker и
+deployed database ещё не реализованы, поэтому готовой пользовательской авторизации и приёма реальных
+данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

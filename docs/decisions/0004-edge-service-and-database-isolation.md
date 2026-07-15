@@ -1,6 +1,6 @@
 # ADR 0004: Cloudflare ingress plus service and database capability isolation
 
-- Status: Accepted (database roles and ingest procedure implemented; edge and services pending)
+- Status: Accepted (ingest and cleanup SQL implemented; services pending)
 - Date: 2026-07-14
 - Decision owners: Edge, Web/Auth, Ingest, Jobs, Database, and Operations
 - Supersedes: None
@@ -69,9 +69,10 @@ or granting broader database rights.
 - SQL injection, procedure ownership/search path, transaction, concurrency, and finalized-season
   tests.
 - Current PostgreSQL evidence gives Ingest exactly device-verification lookup and Community
-  submission, denies it direct/private and interactive capabilities, and denies Web/Jobs/Admin the
-  ingest functions. The network service, origin proof, signature verification, and finalized-season
-  state remain pending.
+  submission, gives Jobs exactly bounded expired ingest-state cleanup, denies both direct/private
+  and interactive capabilities, and proves cross-role procedure denials. The network services,
+  cleanup scheduler, origin proof, signature verification, and finalized-season state remain
+  pending.
 - Staging key rotation, service rollback, database migration overlap, restore, and kill-switch
   drills.
 - Admin user-to-role separation, step-up, reason, audit completeness, and conflict tests.

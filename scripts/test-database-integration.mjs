@@ -407,12 +407,20 @@ try {
       sql: readFileSync(resolve(root, "database/tests/usage_ingest.sql"), "utf8"),
     },
     {
+      label: "Community ingest retention cleanup scenarios",
+      sql: readFileSync(resolve(root, "database/tests/ingest_cleanup.sql"), "utf8"),
+    },
+    {
       label: "identity concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/identity_concurrency_setup.sql"), "utf8"),
     },
     {
       label: "Community ingest concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/ingest_concurrency_setup.sql"), "utf8"),
+    },
+    {
+      label: "Community ingest cleanup concurrency setup",
+      sql: readFileSync(resolve(root, "database/tests/cleanup_concurrency_setup.sql"), "utf8"),
     },
     {
       label: "pairing concurrency setup",
@@ -774,6 +782,24 @@ WHERE device_key_id = '00000000-0000-4000-8000-000000011405';`,
   requireSuccess(
     psql(readFileSync(resolve(root, "database/tests/ingest_concurrency_assertions.sql"), "utf8")),
     "Community ingest concurrency assertions",
+  );
+
+  await expectConcurrentSuccesses(
+    "bounded ingest cleanup worker race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_expired_ingest_state(1);
+\\echo cleanup-worker-lock-ready`,
+    "cleanup-worker-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_expired_ingest_state(1);`,
+    ],
+  );
+
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database/tests/cleanup_concurrency_assertions.sql"), "utf8")),
+    "Community ingest cleanup concurrency assertions",
   );
 
   await expectOneConcurrentWinner(
@@ -1328,8 +1354,16 @@ SELECT viberacing_api.complete_passkey_login(
     );
   }
 
+  for (const role of ["viberacing_web", "viberacing_ingest", "viberacing_admin"]) {
+    expectDenied(
+      role,
+      "SELECT * FROM viberacing_api.cleanup_expired_ingest_state(1);",
+      `${role} Community ingest cleanup`,
+    );
+  }
+
   console.log(
-    "Database integration passed (18 schema tables, 18 observed lock-wait races, 8 relation-denial and 13 cross-capability checks).",
+    "Database integration passed (19 schema tables, 19 observed lock-wait races, 8 relation-denial and 16 cross-capability checks).",
   );
 } finally {
   if (started) {

@@ -80,9 +80,10 @@ database servers. Runtime roles never own schema objects. The ingest role execut
 submission procedure and cannot edit profile, passkey, invite, admin, migration, or finalized-season
 state.
 
-Revision 0007 implements that database-only Usage procedure capability and its role/concurrency
-evidence. The Ingest service, edge/origin proof, request signature verification, Jobs capabilities,
-and finalized-season state shown in the design remain planned.
+Revision 0007 implements the database-only Usage submission capability; revision 0008 gives Jobs
+only bounded expired ingest-state cleanup. Both have role/concurrency evidence. The Ingest and Jobs
+services, cleanup scheduler, edge/origin proof, request signature verification, scoring, and
+finalized-season state shown in the design remain planned.
 
 ## Component responsibilities
 

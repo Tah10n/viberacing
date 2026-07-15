@@ -73,7 +73,7 @@ private reporting channels; those hosted controls cannot be safely invented from
 
 Phase 2/3 contract and persistence foundations are also present: three closed, bounded JSON Schemas
 plus generated TypeScript validators and OpenAPI components. They are pre-implementation contracts,
-not a live API or evidence that real Codex data can be submitted. Seven SQL migrations now add 18
+not a live API or evidence that real Codex data can be submitted. Eight SQL migrations now add 19
 private identity, passkey, restricted-recovery, source, device, pairing, audit, deletion, replay,
 and usage tables with deny-by-default runtime roles, forced RLS, state-machine constraints, checksum
 drift detection, and an isolated PostgreSQL capability test. A narrow procedure boundary implements
@@ -88,10 +88,11 @@ record, but the application that cryptographically verifies WebAuthn is still ab
 login challenges also require edge rate limits and bounded cleanup before exposure. A database-only
 Community ingest capability now exposes minimal active-device verification material and accepts
 bounded source-bound snapshots with exact retry, nonce replay, monotonic source/date, quarantine,
-and lifecycle-race enforcement. It does not verify a wire signature. There is still no HTTP
-authentication, recovery, or ingest route, OAuth callback, Argon2id/WebAuthn/Ed25519 application
-verifier, connector, replay or retention cleanup worker, scoring/finalization job, asynchronous
-purge worker, or deployed database.
+and lifecycle-race enforcement. A Jobs-only procedure deletes bounded batches of expired nonces and
+raw snapshots while preserving current source/day values; no scheduler invokes it. The database does
+not verify a wire signature. There is still no HTTP authentication, recovery, or ingest route, OAuth
+callback, Argon2id/WebAuthn/Ed25519 application verifier, connector, scheduled cleanup worker,
+scoring/finalization job, asynchronous purge worker, or deployed database.
 
 ## Run and verify the synthetic prototype
 

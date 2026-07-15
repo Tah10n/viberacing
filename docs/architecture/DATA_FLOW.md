@@ -2,15 +2,16 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revisions 0001 through 0007 provide private
+These sequences remain planned application contracts. Revisions 0001 through 0008 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
 immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
-ingest. No endpoint, OAuth callback, Argon2id/WebAuthn/Ed25519 application verifier, connector,
-purge/cleanup worker, scoring/finalization job, or deployed service executes the complete sequences.
-Data labels refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md):
-Public, Account, Security, Usage, Operational, and Prohibited.
+ingest and bounded ingest-retention cleanup. No endpoint, OAuth callback, Argon2id/WebAuthn/Ed25519
+application verifier, connector, purge/scheduled-cleanup worker, scoring/finalization job, or
+deployed service executes the complete sequences. Data labels refer to the classifications in the
+[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
+and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -238,6 +239,7 @@ sequenceDiagram
   Ingest->>Ingest: Validate proof, signature, source, schema, replay, and bounds
   Ingest->>DB: Execute narrow idempotent submission procedure
   DB-->>Ingest: Accepted, quarantined, duplicate, or rejected outcome
+  Jobs->>DB: Delete a bounded expired nonce/raw-snapshot batch
   Jobs->>DB: Aggregate sources then apply one profile daily cap
 ```
 
@@ -256,8 +258,11 @@ devices, and deletion-pending profiles fail closed. Observed races cover exact r
 devices, pause, and revoke.
 
 The connector, edge, Ingest HTTP service, raw-body canonicalization, Ed25519 verification, origin
-proof, scoring/finalization, rate controls, and cleanup are still absent. Nonce and raw-snapshot
-expiry columns do not delete rows by themselves.
+proof, scoring/finalization, and rate controls are still absent. Revision 0008 gives Jobs only a
+server-time, 1-to-1000 batch procedure for expired nonces and raw snapshots. It serializes callers,
+cascades raw entries, preserves current source/day values, and clears only their deleted raw
+reference. The expiry columns still do not delete rows by themselves: no Jobs service, scheduler,
+monitor, or deployment invokes the procedure.
 
 ## Public race read
 

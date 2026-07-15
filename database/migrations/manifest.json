@@ -42,6 +42,12 @@
       "name": "community_usage_ingest",
       "path": "database/migrations/0007_community_usage_ingest.sql",
       "sha256": "daa0c425e3ad749619acd748b54624807a1d7f7e3631027868cc26787f47c3c4"
+    },
+    {
+      "revision": 8,
+      "name": "ingest_retention_cleanup",
+      "path": "database/migrations/0008_ingest_retention_cleanup.sql",
+      "sha256": "12ab472412700a6ff7bfaef06f6867ba5cf6a1a0c3fae432bf8366709011be1d"
     }
   ]
 }

@@ -57,13 +57,13 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 18
+    SELECT pg_catalog.count(*) = 19
     FROM pg_catalog.pg_class AS relation
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
     WHERE namespace.nspname = 'viberacing_private'
       AND relation.relkind = 'r'
   ),
-  'all identity and audit tables exist'
+  'all reviewed private and migration-ledger tables exist'
 );
 
 SELECT pg_temp.assert_true(

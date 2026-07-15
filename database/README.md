@@ -2,12 +2,12 @@
 
 ## Status
 
-This directory contains seven SQL-first revisions for identity, passkey login and management,
+This directory contains eight SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, and Community usage state. The
 migrations, narrow database procedures, and PostgreSQL integration tests are implemented. No
 application route, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier, production credential, or
-deployed database consumes them yet. The database-only ingest procedure is implemented; HTTP ingest,
-scoring/finalization, purge, replay cleanup, and retention cleanup are not.
+deployed database consumes them yet. The database-only ingest and Jobs-only ingest-retention
+procedures are implemented; HTTP ingest, scheduled cleanup, scoring/finalization, and purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -38,6 +38,8 @@ procedure; the current repository has no such application code.
 - `migrations/0007_community_usage_ingest.sql` adds bounded raw Community snapshots, nonce replay
   state, monotonic current source/day values, minimal active-device verification lookup, and an
   Ingest-only submission procedure with duplicate and quarantine outcomes.
+- `migrations/0008_ingest_retention_cleanup.sql` adds one Jobs-only, server-time procedure for
+  serialized bounded deletion of expired nonce and raw-snapshot rows plus its private mutex row.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -56,6 +58,8 @@ procedure; the current repository has no such application code.
 - `tests/usage_ingest.sql` exercises exact device/source binding, strict bounds, canonical time,
   replay/idempotency, same-source device deduplication, monotonic state, quarantine, lifecycle
   rejection, retention markers, direct-transition constraints, and the exact role boundary.
+- `tests/ingest_cleanup.sql` exercises batch bounds, deterministic expiry order, idempotency,
+  live-row preservation, entry cascade, retained current values, and detached raw provenance.
 - `tests/identity_concurrency_setup.sql` and `tests/identity_concurrency_assertions.sql` prove one
   invite enrollment, one initial-passkey challenge consumption, one active-session rotation, and
   deletion dominance over concurrent session rotation without leaving stale authority.
@@ -74,6 +78,8 @@ procedure; the current repository has no such application code.
 - `tests/ingest_concurrency_setup.sql` and `tests/ingest_concurrency_assertions.sql` prove
   concurrent exact retries create one snapshot, same-source devices converge on one monotonic
   current value, and source pause/device revoke serialize ahead of later submission.
+- `tests/cleanup_concurrency_setup.sql` and `tests/cleanup_concurrency_assertions.sql` prove two
+  Jobs cleanup calls serialize and each expired raw row is removed once without deleting live state.
 - `scripts/check-database.mjs` and its black-box tests enforce migration shape, checksums, paths,
   transactions, bounded execution, owner context, forbidden grants or SQL capabilities, and reject
   scalar-subquery `IF NOT` assertions whose missing row would otherwise pass as SQL `NULL`.
@@ -89,7 +95,7 @@ procedure; the current repository has no such application code.
 | `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                         |
 | `viberacing_web`    | No    | None           | Usage      | Identity, passkey, restricted recovery, pairing, and lifecycle |
 | `viberacing_ingest` | No    | None           | Usage      | Device verification lookup and Community sync submission only  |
-| `viberacing_jobs`   | No    | None           | Usage      | None                                                           |
+| `viberacing_jobs`   | No    | None           | Usage      | Bounded expired ingest-state cleanup only                      |
 | `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                   |
 | `PUBLIC`            | N/A   | None           | None       | None                                                           |
 
@@ -183,6 +189,10 @@ Runtime access must remain procedure-only and must have positive and negative in
   exact retry as `duplicate`, quarantines a whole decrease or a quarantined source, and advances one
   monotonic current value per source/date without summing devices. Paused/unlinked sources, revoked
   devices, and deletion-pending profiles fail closed.
+- `cleanup_expired_ingest_state` accepts only a batch size from 1 through 1000, derives both cutoffs
+  from server time, and serializes Jobs callers. Each call deletes at most one batch of expired
+  device nonces and one batch of expired raw snapshots. Snapshot entries cascade; current source/day
+  values remain and only their expired raw-snapshot reference is cleared.
 
 The public schema safety ceilings are 8 to 16 codes per replacement recovery batch, one active
 recovery authority per profile for at most ten minutes, 32 lifetime passkey records, 32 active
@@ -221,6 +231,7 @@ All current columns map to the canonical [privacy data map](../docs/security/PRI
 | `device_keys`, `pairing_transactions`       | Security; metadata is Account | Ed25519 public key, exact source/device binding, keyed poll/code verifiers         |
 | `deletion_jobs`, `deletion_tombstones`      | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry            |
 | `audit_events`                              | Security; Operational         | Closed event/actor enums, request reference, reason code, and server time          |
+| `maintenance_locks`                         | Operational                   | Fixed owner-only capability mutex; no user or request data                         |
 | `device_nonces`                             | Security                      | Device-bound replay digest and 15-minute expiry marker                             |
 | `usage_snapshots`, `usage_snapshot_entries` | Usage; Security               | Bounded signed snapshot metadata, exact private daily values, 30-day expiry marker |
 | `source_day_values`                         | Usage                         | One monotonic current token value and accepted provenance per source/date          |
@@ -254,11 +265,16 @@ old-passkey login can never remain active after successful recovery completion.
 Revision 0007 stores only fields already mapped for the Community sync boundary: opaque
 device/source/sync IDs, connector/Codex versions, a body digest, submitted signature, nonce digest,
 exact private `codexReportedDate` values, tokens, server receipt time, and closed outcome/reason
-state. Nonce and snapshot rows carry 15-minute and 30-day expiry markers respectively, but no
-cleanup job exists yet; those markers are not evidence of deletion. Raw values remain private
-owner-only tables, and runtime access is procedure-only. Current source/day provenance must match
-one exact accepted snapshot entry; deleting that raw snapshot clears only its reference and
-preserves the current value.
+state. Nonce and snapshot rows carry 15-minute and 30-day expiry markers respectively. Raw values
+remain private owner-only tables, and runtime access is procedure-only. Current source/day
+provenance must match one exact accepted snapshot entry; deleting that raw snapshot clears only its
+reference and preserves the current value.
+
+Revision 0008 turns those two expiry markers into one callable Jobs-only deletion boundary. It uses
+server time, rejects null, zero, negative, or over-1000 batch sizes, serializes workers with a
+private owner-only mutex row plus a five-second lock timeout, and leaves live rows untouched. The
+procedure and observed two-worker race are deletion evidence for the isolated SQL boundary only: no
+Jobs service, scheduler, production retention policy, or real-user purge evidence exists.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
@@ -316,8 +332,9 @@ hard failure, not something the script silently broadens or repairs.
   Ed25519 verification, origin proof, generic errors, rate limits, deadlines, and backpressure.
 - Implement server-derived scoring, distinct-source aggregation under one profile cap, season
   deadlines/finalization, corrections, and Jobs-only capabilities without widening Ingest.
-- Implement bounded cleanup for expired nonces, raw usage snapshots, ceremonies, sessions, pairings,
-  jobs, recovery authority, and tombstones. Expiry columns alone are not cleanup.
+- Schedule and monitor the implemented ingest-retention procedure, and implement bounded cleanup for
+  ceremonies, sessions, pairings, jobs, recovery authority, and tombstones. Expiry columns outside
+  the revision 0008 boundary are not cleanup.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
   in isolated staging before real-user ingestion.
