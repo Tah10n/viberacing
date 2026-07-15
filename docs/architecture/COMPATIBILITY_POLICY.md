@@ -26,9 +26,9 @@ These axes are independently versioned. A connector version does not imply a dat
 scoring change, and a web deployment does not silently change a finalized season.
 
 Revision 0011's internal PostgreSQL score projection is not itself a public HTTP contract. ADR 0010
-now defines a closed response-only v1 component and generated derivatives. A future route still
-requires request/path validation, exact mapping, response headers, cache semantics, and the HTTP
-compatibility evidence described here; no path is advertised yet.
+defines a closed response-only v1 component and generated derivatives, while ADR 0013 now adds the
+local path, request validation, exact mapping, response headers, no-store policy, and compatibility
+evidence. Deployment, edge behavior, and any future cache remain separate compatibility surfaces.
 
 ## Codex App Server contract
 
@@ -102,9 +102,10 @@ through local timezone conversion.
   rank, streak, season, server receipt time, moderation, and deletion state.
 - Errors use a versioned bounded problem-details shape and request ID without stack, SQL, hostname,
   secret, or record disclosure. The common server-only factory now enforces the closed mapping,
-  generated opaque ID, runtime validation, and no-store response baseline. One manifest-generated
-  public score operation is explicitly contract-only; route-specific translation and every `/v1`
-  implementation remain absent.
+  generated opaque ID, runtime validation, and no-store response baseline. The manifest-generated
+  public score operation and local Web route enforce the same query, response, status, cache,
+  same-origin, and implementation-status contract. This does not claim deployment or make future
+  `/v1` operations implicitly compatible.
 - Generated OpenAPI, TypeScript, Rust fixtures, and documentation identify their canonical schema
   source; CI rejects drift.
 

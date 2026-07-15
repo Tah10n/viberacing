@@ -76,16 +76,19 @@ Dev-сервер слушает только loopback. В интерфейсе �
 заменяйте синтетические fixtures приватными экспортами.
 
 В репозитории уже есть пять закрытых JSON Schemas, генерируемые TypeScript validators и один
-contract-only OpenAPI GET: sync request/result, bounded problem details, запрос одного Community
-season и response-only top-32 Community score page с неизменяемыми `community`/`selfReported` trust
-fields. Server-only fail-closed mapper преобразует в этот response только точную десятиколоночную
-SQL projection и отклоняет malformed, inconsistent, oversized или contract-invalid результаты.
-Bounded server-only PostgreSQL adapter использует отдельный least-privileged Web login contract,
-certificate-verified production transport, four-connection pool, проверку role/read-only state при
-каждом checkout, фиксированные deadlines и один parameterized top-32 procedure call. Server-only
-HTTP problem factory генерирует opaque 128-bit request IDs и закрытые contract-validated no-store
-error responses. OpenAPI path явно помечен как contract-only: реализованный HTTP route, cache,
-deployment login/TLS integration, connector и приём реальной статистики ещё отсутствуют.
+локально реализованный OpenAPI GET: sync request/result, bounded problem details, запрос одного
+Community season и response-only top-32 Community score page с неизменяемыми
+`community`/`selfReported` trust fields. Server-only fail-closed mapper преобразует в этот response
+только точную десятиколоночную SQL projection и отклоняет malformed, inconsistent, oversized или
+contract-invalid результаты. Bounded server-only PostgreSQL adapter использует отдельный
+least-privileged Web login contract, certificate-verified production transport, four-connection
+pool, проверку role/read-only state при каждом checkout, фиксированные deadlines и один
+parameterized top-32 procedure call. Server-only HTTP problem factory генерирует opaque 128-bit
+request IDs и закрытые contract-validated no-store error responses. Thin server-only route проверяет
+точный query, GET-only method/`Accept`, no-queue admission на четыре запроса, adapter deadlines,
+store-error translation и финальный response contract. Это локальная реализация, а не deployment:
+cache, deployment login/TLS integration, edge rate policy, connector и приём реальной статистики ещё
+отсутствуют.
 
 Также добавлены одиннадцать SQL migrations: 23 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
@@ -106,8 +109,8 @@ tokens и source IDs. Database-only finalization закрывает grace window
 неизменяемым, сохраняя profile-purge. Отдельная Web-only database projection возвращает только
 bounded active-profile score rows без raw values, private IDs и exact timestamps. Email и
 идентификатор Codex-аккаунта не читаются и не сохраняются. Response schema фиксирует тот же public
-allowlist, а server-only mapper и bounded Web PostgreSQL adapter проверяют форму, season/rank
-invariants, database role и contract до сериализации, но не реализуют HTTP route и не подключены к
+allowlist, а server-only mapper, bounded Web PostgreSQL adapter и локальный score route проверяют
+форму, season/rank invariants, database role и contract до сериализации, но route не подключён к
 видимой synthetic странице. HTTP auth/recovery routes, OAuth callback, Argon2id/WebAuthn/Ed25519
 verifier, generic response и edge rate limits для анонимных challenges и recovery lookup пока
 отсутствуют. Database-only Community ingest capability уже выдаёт минимальный материал активного
@@ -115,9 +118,9 @@ verifier, generic response и edge rate limits для анонимных challen
 source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure удаляет bounded
 batches истёкших nonces и raw snapshots, сохраняя current source/day values, но scheduler для неё
 отсутствует. Сама база не проверяет wire signature. HTTP ingest route, приложение с
-Ed25519-проверкой, connector, cleanup/scoring scheduler или service, HTTP public score read, audited
-correction flow, purge worker и deployed database login/TLS ещё не реализованы, поэтому готовой
-пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
+Ed25519-проверкой, connector, cleanup/scoring scheduler или service, deployed public score read,
+audited correction flow, purge worker и deployed database login/TLS ещё не реализованы, поэтому
+готовой пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

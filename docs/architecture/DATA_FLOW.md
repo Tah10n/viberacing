@@ -8,14 +8,13 @@ database slice for invite issuance, enrollment, exact-session challenges, initia
 activation, passkey login and management, restricted recovery, session rotation/revocation,
 immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
 ingest, bounded ingest-retention cleanup, open-season scoring refresh, late-ingest closure, terminal
-season finalization, and a Web-only public score projection. No endpoint, OAuth callback,
-Argon2id/WebAuthn/Ed25519 application verifier, connector, purge/maintenance/scoring service or
-scheduler, HTTP public-score delivery, audited correction, or deployed service executes the complete
-sequences. A bounded server-only Web PostgreSQL adapter now verifies one deployment login/session
-boundary and can call the score projection, but no route constructs it and no deployment login or
-certificate is supplied. Data labels refer to the classifications in the
-[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
-and Prohibited.
+season finalization, and a Web-only public score projection. One local public-score GET constructs
+the bounded adapter lazily after closed request admission, but no authentication/ingest endpoint,
+OAuth callback, Argon2id/WebAuthn/Ed25519 application verifier, connector, purge/maintenance/scoring
+service or scheduler, audited correction, or deployed service executes the complete sequences. No
+deployment login, certificate, edge policy, or live route evidence is supplied. Data labels refer to
+the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account,
+Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -315,11 +314,13 @@ and self-reported metadata. A server-only Web mapper now accepts unknown adapter
 the exact SQL columns and coherent season/order/rank semantics, validates and freezes that response,
 and advertises no path. ADR 0011 adds a dedicated four-connection `pg` pool, strict TLS/config
 parser, every-checkout effective-role/login-membership/search-path/read-only probe, bounded waits,
-and one fixed parameterized score query that casts calendar dates to text before mapping. There is
-still no HTTP route, route-wide request policy, cache, car, streak, freshness, daily detail, profile
-read, deployment login/certificate, or live adapter integration. ADR 0013 now reserves a closed
-Monday query and one `contract-only` OpenAPI GET with `no-store`/same-origin semantics; it does not
-connect the adapter. The synthetic page does not construct this adapter.
+and one fixed parameterized score query that casts calendar dates to text before mapping. ADR 0013
+now adds a local GET route around that adapter: it closes the URL/body and `Accept` grammar, admits
+at most four active reads without a queue, translates only generic errors, validates the mapped page
+again, and emits `no-store`/same-origin responses. Its deadline policy is the adapter's bounded
+connect/query/statement work, and the lease remains held until that work settles. There is still no
+cache, car, streak, freshness, daily detail, profile read, deployment login/certificate, edge rate
+policy, load evidence, or live adapter integration. The synthetic page does not call the route.
 
 ## Hide and deletion
 

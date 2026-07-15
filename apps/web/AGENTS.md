@@ -20,11 +20,11 @@ apply.
 - Keep compose `DATABASE_*` owner credentials out of Web code. The public-score adapter uses only
   `VIBERACING_WEB_DATABASE_*`, strict TLS/config parsing, a dedicated bounded pool, and an effective
   Web-role/login-capability probe before every query. Do not bypass the store with generic SQL or
-  wire it outside the exact contract-only `/v1/community/scores` boundary.
+  wire it outside the exact `/v1/community/scores` boundary.
 - Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
   correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
   CORS/auth/retry semantics to the common problem-response boundary.
-- A future score route must reject duplicate/unknown query parameters, validate
+- The score route must continue to reject duplicate/unknown query parameters, validate
   `CommunityScoreQueryV1`, negotiate `Accept`, acquire bounded admission before database work, keep
   it until that work settles, and preserve ADR 0013's no-store/same-origin response matrix.
 

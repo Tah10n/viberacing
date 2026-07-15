@@ -121,6 +121,14 @@ const publicProblemTitles = [
   "Unauthorized",
   "Validation failed",
 ];
+const implementedLocalEvidencePaths = [
+  "apps/web/app/v1/community/scores/route.test.ts",
+  "apps/web/app/v1/community/scores/route.ts",
+  "apps/web/lib/public-community-score-route.test.ts",
+  "apps/web/lib/public-community-score-route.ts",
+  "apps/web/lib/public-score-admission.test.ts",
+  "apps/web/lib/public-score-admission.ts",
+];
 
 function report(scope, message) {
   findings.push(`${scope} — ${message}`);
@@ -528,6 +536,7 @@ if (sources !== undefined) {
     publicScoreOperation?.entry.method !== "get" ||
     publicScoreOperation.entry.path !== "/v1/community/scores" ||
     publicScoreOperation.entry.operationId !== "getCommunityScoresV1" ||
+    publicScoreOperation.entry.implementationStatus !== "implemented-local" ||
     publicScoreOperation.entry.summary !== "Read one bounded Community score page" ||
     publicScoreOperation.entry.querySchema !== "CommunityScoreQueryV1" ||
     publicScoreOperation.entry.responseSchema !== "CommunityScorePageV1" ||
@@ -541,6 +550,19 @@ if (sources !== undefined) {
       "contracts/v1/manifest.json",
       "public Community score operation differs from the reviewed HTTP contract",
     );
+  }
+  if (publicScoreOperation?.entry.implementationStatus === "implemented-local") {
+    for (const relativePath of implementedLocalEvidencePaths) {
+      const absolutePath = resolve(root, relativePath);
+      if (!existsSync(absolutePath)) {
+        report(relativePath, "implemented-local contract evidence is missing");
+      } else {
+        const stats = lstatSync(absolutePath);
+        if (stats.isSymbolicLink() || !stats.isFile()) {
+          report(relativePath, "implemented-local contract evidence must be a regular file");
+        }
+      }
+    }
   }
 
   const schemaDirectory = resolve(root, "contracts", "v1");

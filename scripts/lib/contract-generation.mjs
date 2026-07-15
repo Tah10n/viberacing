@@ -6,7 +6,7 @@ import { format } from "prettier";
 const manifestRelativePath = "contracts/v1/manifest.json";
 const schemaFilePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*\.schema\.json$/;
 const operationKeys =
-  "cacheControl,corsPolicy,method,operationId,path,problemSchema,problemStatuses,queryPolicy,querySchema,responseSchema,summary";
+  "cacheControl,corsPolicy,implementationStatus,method,operationId,path,problemSchema,problemStatuses,queryPolicy,querySchema,responseSchema,summary";
 const problemResponseDescriptions = new Map([
   [400, "Invalid request."],
   [401, "Unauthorized."],
@@ -111,6 +111,7 @@ export function readContractSources(root) {
       entry.summary.length === 0 ||
       entry.summary.length > 120 ||
       /[\u0000-\u001f]/.test(entry.summary) ||
+      !["contract-only", "implemented-local"].includes(entry.implementationStatus) ||
       !schemaReferencePattern.test(entry.querySchema ?? "") ||
       !schemaReferencePattern.test(entry.responseSchema ?? "") ||
       !schemaReferencePattern.test(entry.problemSchema ?? "") ||
@@ -323,7 +324,9 @@ function openApiOperation(operation) {
     operationId: entry.operationId,
     summary: entry.summary,
     description:
-      "Contract-only operation. Its presence here does not prove that a route is implemented or deployed.",
+      entry.implementationStatus === "implemented-local"
+        ? "Implemented and verified in this repository. Its presence here does not prove deployment."
+        : "Contract-only operation. Its presence here does not prove that a route is implemented or deployed.",
     parameters,
     responses: {
       200: {
@@ -337,7 +340,7 @@ function openApiOperation(operation) {
     "x-viberacing-cors-policy": entry.corsPolicy,
     "x-viberacing-query-contract": schemaReference(entry.querySchema),
     "x-viberacing-query-policy": entry.queryPolicy,
-    "x-viberacing-status": "contract-only",
+    "x-viberacing-status": entry.implementationStatus,
   };
 }
 
@@ -351,19 +354,24 @@ async function generateOpenApi(sources) {
       { [operation.entry.method]: openApiOperation(operation) },
     ]),
   );
+  const implementationStatuses = new Set(
+    sources.operations.map(({ entry }) => entry.implementationStatus),
+  );
+  const documentStatus =
+    implementationStatuses.size === 1 ? [...implementationStatuses][0] : "mixed-local";
   const document = {
     openapi: "3.1.1",
     info: {
       title: "Vibe Racing public API contract",
       version: "1.0.0",
       description:
-        "Generated schemas and contract-only operations. A documented path is not implemented or deployed until separately verified in the working tree.",
+        "Generated schemas and repository implementation status. A documented path does not prove deployment.",
     },
     jsonSchemaDialect: "https://json-schema.org/draft/2020-12/schema",
     paths,
     components: { schemas: components },
     "x-viberacing-contract-source": sources.digest,
-    "x-viberacing-status": "contract-only",
+    "x-viberacing-status": documentStatus,
   };
   return format(`${JSON.stringify(document)}\n`, {
     endOfLine: "lf",

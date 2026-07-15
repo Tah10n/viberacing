@@ -370,8 +370,11 @@ All public endpoints:
 The first reserved read contract is `GET /v1/community/scores?seasonStart=YYYY-MM-DD`. It accepts
 exactly one supported Monday season, returns a bounded Community score page or the documented
 problem shape, and starts with `Cache-Control: no-store`, `Vary: Accept`, and same-origin/no-CORS
-semantics. ADR 0013 and the generated OpenAPI operation are contract-only until an HTTP route,
-admission/deadline policy, store-error translation, and end-to-end tests exist.
+semantics. ADR 0013, the generated OpenAPI operation, and a local Next.js route now implement the
+closed query, GET-only method/`Accept` policy, exact problem translation, final response validation,
+and four-request no-queue admission. The lease remains held through the adapter's enforced
+connect/query/statement deadlines. This local evidence is not a deployment, live database login,
+edge rate policy, shared cache, capacity result, or public-beta claim.
 
 ### ConnectorSyncV1
 

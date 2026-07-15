@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 import { writeGeneratedArtifacts } from "./lib/contract-generation.mjs";
@@ -10,6 +10,14 @@ const repositoryRoot = resolve(import.meta.dirname, "..");
 const checker = resolve(import.meta.dirname, "check-contracts.mjs");
 const temporaryRoot = mkdtempSync(join(tmpdir(), "viberacing-contract-check-"));
 let caseCount = 0;
+const implementedLocalEvidencePaths = [
+  "apps/web/app/v1/community/scores/route.test.ts",
+  "apps/web/app/v1/community/scores/route.ts",
+  "apps/web/lib/public-community-score-route.test.ts",
+  "apps/web/lib/public-community-score-route.ts",
+  "apps/web/lib/public-score-admission.test.ts",
+  "apps/web/lib/public-score-admission.ts",
+];
 
 function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -22,6 +30,11 @@ async function makeFixture(name) {
   });
   mkdirSync(resolve(root, "contracts", "generated"), { recursive: true });
   mkdirSync(resolve(root, "packages", "contracts", "src"), { recursive: true });
+  for (const relativePath of implementedLocalEvidencePaths) {
+    const destination = resolve(root, relativePath);
+    mkdirSync(dirname(destination), { recursive: true });
+    cpSync(resolve(repositoryRoot, relativePath), destination);
+  }
   await writeGeneratedArtifacts(root);
   return root;
 }
@@ -55,12 +68,13 @@ async function expectGeneratedPublicScoreOperation(name) {
   const document = JSON.parse(
     readFileSync(resolve(root, "contracts", "generated", "openapi.v1.json"), "utf8"),
   );
-  assert.equal(document["x-viberacing-status"], "contract-only");
+  assert.equal(document["x-viberacing-status"], "implemented-local");
   assert.equal(Object.hasOwn(document, "servers"), false);
   assert.deepEqual(Object.keys(document.paths), ["/v1/community/scores"]);
 
   const operation = document.paths["/v1/community/scores"].get;
   assert.equal(operation.operationId, "getCommunityScoresV1");
+  assert.equal(operation["x-viberacing-status"], "implemented-local");
   assert.equal(operation["x-viberacing-cache-policy"], "no-store");
   assert.equal(operation["x-viberacing-cors-policy"], "same-origin");
   assert.deepEqual(operation["x-viberacing-query-contract"], {
@@ -320,6 +334,23 @@ try {
       writeJson(path, manifest);
     },
     /contract operation 1 has unsafe names or shape/,
+  );
+  await expectFailure(
+    "unsafe-implementation-status",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.operations[0].implementationStatus = "deployed";
+      writeJson(path, manifest);
+    },
+    /contract operation 1 has unsafe names or shape/,
+  );
+  await expectFailure(
+    "missing-local-implementation-evidence",
+    (root) => {
+      rmSync(resolve(root, "apps", "web", "app", "v1", "community", "scores", "route.ts"));
+    },
+    /implemented-local contract evidence is missing/,
   );
   await expectFailure(
     "get-problem-status-drift",

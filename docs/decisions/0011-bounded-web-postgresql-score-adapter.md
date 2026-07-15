@@ -1,6 +1,6 @@
 # ADR 0011: Bounded Web PostgreSQL score adapter
 
-- Status: Accepted (adapter implemented; route/cache/deployment pending)
+- Status: Accepted (adapter and local route implemented; cache/deployment pending)
 - Date: 2026-07-15
 - Decision owners: Web, Database, Security, Privacy, and Operations
 - Supersedes: None

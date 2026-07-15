@@ -11,11 +11,11 @@ passkey login, multi-passkey management, restricted recovery, Community usage in
 ingest-retention cleanup, open-season scoring, terminal season finalization, and a public score-only
 database projection plus its server-only projection-to-contract mapper; a Phase 3 database-only
 source/device lifecycle and same-source deduplication slice has also started. A server-only public
-problem-response factory plus the closed query and contract-only OpenAPI operation for one public
-score read now exist before any HTTP route. Phase 0 hosted-publication controls remain blocked on
-real maintainer identities and GitHub configuration. No authentication or score HTTP route,
-OAuth/Argon2id/WebAuthn application flow, production deployment, released connector, real-user
-ingestion, end-to-end public ranking, or finalization scheduler exists.
+problem-response factory, closed query/OpenAPI operation, and locally implemented public-score GET
+now exist. Phase 0 hosted-publication controls remain blocked on real maintainer identities and
+GitHub configuration. No authentication route, OAuth/Argon2id/WebAuthn application flow, production
+deployment, live score-database login/TLS integration, released connector, real-user ingestion,
+end-to-end public ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -74,8 +74,8 @@ ingestion, end-to-end public ranking, or finalization scheduler exists.
 - An ADR lifecycle/template and thirteen accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
-  projection/response/adapter, common HTTP problem boundaries, and the contract-only public score
-  operation.
+  projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
+  score operation.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -86,14 +86,14 @@ ingestion, end-to-end public ranking, or finalization scheduler exists.
   the score calendar executable; connector input has an executable writable-field allowlist that
   excludes identity, trust, rank, score, season, moderation, credentials, and prohibited data.
 - Deterministically generated readonly TypeScript types, embedded validator wrappers, source digest,
-  and an OpenAPI 3.1 document with one explicitly contract-only
+  and an OpenAPI 3.1 document with one explicitly `implemented-local`
   `GET /v1/community/scores?seasonStart=...` operation. Its exact query/response/problem schemas,
   200/400/406/429/500/503 matrix, `no-store`, `Vary: Accept`, generated request ID, and same-origin
-  CORS posture are manifest-driven without claiming a route. A manifest/schema/drift checker has 27
-  black-box cases covering generated operation semantics, unsafe/duplicate/drifted operations,
-  unknown fields, missing bounds, client-derived score aliases, Community trust/problem/date drift,
-  private response fields, unlisted/path-traversing schemas, unsupported keywords, missing date
-  deduplication, and stale generated output.
+  CORS posture are manifest-driven without claiming deployment. A manifest/schema/drift checker has
+  29 black-box cases covering generated operation/status/evidence semantics,
+  unsafe/duplicate/drifted operations, unknown fields, missing bounds, client-derived score aliases,
+  Community trust/problem/date drift, private response fields, unlisted/path-traversing schemas,
+  unsupported keywords, missing date deduplication, and stale generated output.
 - A dependency-free runtime contract validator with fail-closed reflection handling; strict
   calendar/range/ISO-weekday/UTC timestamp and safe-integer checks; depth, node, key, item, and
   issue budgets; and privacy-safe issue output that never echoes unknown property names or submitted
@@ -106,7 +106,18 @@ ingestion, end-to-end public ranking, or finalization scheduler exists.
   `application/problem+json`, `no-store`, and matching `x-request-id` headers. It accepts no inbound
   ID string, CORS setting, cookie, title, status, detail, or cause;
   malformed/accessor-backed/revoked inputs, inherited `toJSON`, and internal failures are
-  non-reflective. No route or log sink consumes it yet.
+  non-reflective. The local score route consumes the factory; no log sink retains the token.
+- A dynamic Node.js `GET /v1/community/scores` route that creates one request token at entry,
+  rejects bodies and every missing/duplicate/unknown/non-canonical query, validates the one-field
+  contract, performs bounded JSON `Accept` negotiation, and dispatches every other supported method
+  through a closed 405 plus `Allow: GET`. It acquires one of four no-queue leases before lazily
+  constructing the store, holds the lease until adapter work and serialization settle, revalidates
+  the final page, and emits only `no-store`, `Vary: Accept`, request-ID, and content-type headers
+  without CORS. Adapter/configuration availability and admission exhaustion map to 503;
+  projection/invariant or unknown failures map to a non-reflective 500. The deadline policy uses the
+  existing two-second connect, six-second client-query, and five-second PostgreSQL statement
+  ceilings rather than returning early from an outer promise race. The reserved 429 does not claim a
+  client-rate limiter.
 - An idempotent cluster-role bootstrap for separate `NOLOGIN`, non-owner Web, Ingest, Jobs, Admin,
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
@@ -214,8 +225,8 @@ ingestion, end-to-end public ranking, or finalization scheduler exists.
   with only Web membership, database capability, search path, and read-only state before every
   query; destroys a failed client; releases a healthy client before mapping; and returns only stable
   non-reflective error/signal codes. Config, pool, and store tests cover positive and negative
-  boundaries without a live deployment credential. No HTTP score route/cache, audited correction
-  flow, scoring service, or scheduler exists.
+  boundaries without a live deployment credential. The local route is wired to this adapter, but no
+  cache, live login/certificate, audited correction flow, scoring service, or scheduler exists.
 - Twenty-two deterministic cross-connection races hold a relevant invite, challenge, session,
   source, device, pairing, or profile row, or a season advisory lock; tag every session; and observe
   every contender in the holder's transitive PostgreSQL blocker chain before releasing it.
@@ -255,11 +266,11 @@ ingestion, end-to-end public ranking, or finalization scheduler exists.
   has no accounts, analytics, trackers, remote fonts, or runtime secrets. Its only environment
   setting is a strictly parsed, server-only public origin for absolute social metadata; hosted
   deployment without a real HTTPS DNS value remains forbidden.
-- One hundred fifty-three unit, component, interaction, security-header, localization, scoring,
-  HTTP-boundary, database-adapter configuration/pool/store, and accessibility tests. The coverage
-  gate currently reports 99.07% statements, 95.71% branches, 100% functions, and 99.04% lines over
-  product components and libraries; framework entrypoints are verified by the production build
-  instead of artificial unit coverage.
+- Two hundred twenty-four unit, component, interaction, security-header, localization, scoring,
+  HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
+  coverage gate currently reports 99.01% statements, 95.98% branches, 100% functions, and 98.98%
+  lines over product components and libraries; framework entrypoints are verified by the production
+  build instead of artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift, lint, strict type
   checking and coverage, plus web lint, strict type checking, coverage, and a production Next.js
   build on every deterministic CI run.
@@ -312,19 +323,20 @@ defect found and corrected during review. The report names its local-only limita
 ## Not implemented yet
 
 Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/pepper and
-route-level generic HTTP response translation, WebAuthn and Ed25519 cryptographic verification,
-anonymous login/pairing/recovery edge rate limits and cleanup, raw-body/signature/origin validation
-in an ingest API, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other
-expiring state, the scoring Jobs service/scheduler, audited corrections, HTTP public-score delivery,
-purge workers, Codex connector, release signing, deployment, and public beta operations remain
-proposed. A bounded database score projection, versioned response-only schema, and fail-closed
-server mapper now exist together with a bounded server-only PostgreSQL adapter and contract-only
-HTTP operation, but the URL parser, method/content negotiation, route admission/deadline, store
-translation, implemented HTTP route, cache/invalidation, CarRecipe, streak/freshness, profile
-detail, rate/capacity controls, monitoring backend, deployment login, certificate, and live adapter
-integration do not. The visible web scoring and ranking experience still operates only on clearly
-synthetic in-process fixtures; no route or component constructs the adapter or connects that page to
-the database-only scoring/finalization/read state in revisions 0001 through 0011.
+authentication-route generic HTTP response translation, WebAuthn and Ed25519 cryptographic
+verification, anonymous login/pairing/recovery edge rate limits and cleanup,
+raw-body/signature/origin validation in an ingest API, scheduled execution/monitoring of
+ingest-retention cleanup, cleanup for other expiring state, the scoring Jobs service/scheduler,
+audited corrections, deployed public-score delivery, purge workers, Codex connector, release
+signing, deployment, and public beta operations remain proposed. A bounded database score
+projection, versioned response-only schema, fail-closed server mapper, bounded PostgreSQL adapter,
+and local HTTP route now exist, including URL/media parsing, admission/deadline policy, store
+translation, and final serialization. Cache/invalidation, CarRecipe, streak/freshness, profile
+detail, client-rate and production-capacity controls, monitoring backend, deployment login,
+certificate, edge policy, and live adapter integration do not. The visible web scoring and ranking
+experience still operates only on clearly synthetic in-process fixtures; no component calls the
+route or connects that page to the database-only scoring/finalization/read state in revisions 0001
+through 0011.
 
 ## Evidence commands
 

@@ -1,6 +1,6 @@
 # ADR 0012: Bounded public HTTP problem boundary
 
-- Status: Accepted (server-only factory implemented; route integration pending)
+- Status: Accepted (factory and first local route integration implemented)
 - Date: 2026-07-15
 - Decision owners: Web, API, Security, Privacy, and Operations
 - Supersedes: None
@@ -49,15 +49,16 @@ and sets `Cache-Control: no-store`. It adds no CORS header, cookie, reflected ca
 field, or route-selected detail. Entropy, token, kind, or contract failure throws one generic
 internal exception with a bounded code and no source value.
 
-This module is a common baseline, not an endpoint. A future route must still implement its exact
+This module remains a common baseline, not an endpoint. Each route must still implement its exact
 path/request contract, content negotiation, method handling, `Allow`, `WWW-Authenticate`, and
 `Retry-After` semantics where applicable, CORS decision, admission/backpressure, route-wide
 deadline, store-error translation, safe operational event, and success/cache policy. It must
 generate one token at request entry and must not replace it with an inbound header.
 
-ADR 0013 later reserved the first contract-only public score operation and added the 405/406
-vocabulary needed for explicit method and representation handling. The factory remains generic and
-no route exists merely because these mappings or the generated operation exist.
+ADR 0013 later reserved and locally implemented the first public score operation and added the
+405/406 vocabulary needed for explicit method and representation handling. That route now supplies
+its own `Allow`, `Vary`, admission/deadline, store translation, and success policy while the factory
+remains generic; these mappings alone still do not prove deployment.
 
 ## Security and privacy consequences
 
@@ -93,10 +94,10 @@ VR-ABUSE-AUTH-TAKEOVER, and VR-ABUSE-RECOVERY-ORACLE.
 
 ## Migration and rollback
 
-There is no route, persistent state, cache, or database migration. Rollback removes the helper,
-tests, and this ADR together. Once a route consumes the helper, rollback must either preserve the
-same public contract through an equivalent implementation or disable the route; it must not fall
-back to a framework error or accept inbound request IDs.
+This decision added no persistent state, cache, route, or database migration. ADR 0013's local route
+now consumes the helper, so rollback must either preserve the same public contract through an
+equivalent implementation or disable the route; it must not fall back to a framework error or accept
+inbound request IDs.
 
 ## Verification
 

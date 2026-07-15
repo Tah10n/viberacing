@@ -85,28 +85,29 @@ bounded expired ingest-state cleanup; revision 0009 gives Jobs an isolated open-
 refresh; and revision 0010 adds server-time late-ingest quarantine plus immutable Jobs-only
 finalization. Revision 0011 gives Web only a bounded, active-profile score projection, and ADR 0010
 adds its response-only top-32 contract. A server-only Web mapper now enforces the exact projection
-shape and its cross-row invariants before returning a validated frozen contract, without advertising
-a path. ADR 0011 adds a bounded server-only PostgreSQL pool/config/store boundary around that read,
-including strict production TLS, fixed deadlines/query, and per-checkout effective-role and
-least-privileged-login verification. These capabilities have role, contract, adapter, mapping, and
-concurrency evidence. The Web route, deployment login/certificate and live connection, Ingest and
-Jobs services, cleanup/scoring schedulers, edge/origin proof, request signature verification, HTTP
-public-race delivery/cache, and audited correction authority shown in the design remain planned.
+shape and its cross-row invariants before returning a validated frozen contract. ADR 0011 adds a
+bounded server-only PostgreSQL pool/config/store boundary around that read, including strict
+production TLS, fixed deadlines/query, and per-checkout effective-role and least-privileged-login
+verification. ADR 0013 adds a locally implemented request/admission/response route around it. These
+capabilities have role, contract, route, adapter, mapping, and concurrency evidence. The deployment
+login/certificate and live connection, Ingest and Jobs services, cleanup/scoring schedulers,
+edge/origin proof, request signature verification, public cache, and audited correction authority
+shown in the design remain planned.
 
 ## Component responsibilities
 
-| Component        | Owns                                                                                                       | Must not own                                                                                      | Primary trust boundary |
-| ---------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------- |
-| Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                        | Raw device key, connector execution, admin authority, private cache mixing                        | TB-01 and TB-02        |
-| Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                    | Profile authorization, score derivation, database credentials                                     | TB-01 and TB-06        |
-| Web/Auth         | OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion initiation | Device private key, direct usage submission, schema ownership                                     | TB-02, TB-07, TB-08    |
-| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure               | OAuth, admin, invites, passkey/recovery, migrations, final score authority                        | TB-05, TB-06, TB-07    |
-| Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                               | Interactive auth, public request handling, schema ownership                                       | TB-07 and TB-11        |
-| PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                   | Public routing, connector trust, release credentials                                              | TB-07                  |
-| Rust connector   | Local App Server lifecycle, compatibility adapter, local key, canonical signing, safe scheduling           | Website commands, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
-| Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                   | Normal user session reuse, shared identities, routine exact-usage access                          | TB-08                  |
-| CI               | Evaluate untrusted source without secrets; produce read-only evidence                                      | Deployment, signing, package publication from pull requests                                       | TB-09                  |
-| Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                     | Unreviewed pull-request execution, long-lived broad credentials                                   | TB-10                  |
+| Component        | Owns                                                                                                                          | Must not own                                                                                      | Primary trust boundary |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------- |
+| Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                                           | Raw device key, connector execution, admin authority, private cache mixing                        | TB-01 and TB-02        |
+| Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                       | Profile authorization, score derivation, database credentials                                     | TB-01 and TB-06        |
+| Web/Auth         | Public score read, OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion initiation | Device private key, direct usage submission, schema ownership                                     | TB-02, TB-07, TB-08    |
+| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure                                  | OAuth, admin, invites, passkey/recovery, migrations, final score authority                        | TB-05, TB-06, TB-07    |
+| Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                  | Interactive auth, public request handling, schema ownership                                       | TB-07 and TB-11        |
+| PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                      | Public routing, connector trust, release credentials                                              | TB-07                  |
+| Rust connector   | Local App Server lifecycle, compatibility adapter, local key, canonical signing, safe scheduling                              | Website commands, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
+| Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                      | Normal user session reuse, shared identities, routine exact-usage access                          | TB-08                  |
+| CI               | Evaluate untrusted source without secrets; produce read-only evidence                                                         | Deployment, signing, package publication from pull requests                                       | TB-09                  |
+| Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                        | Unreviewed pull-request execution, long-lived broad credentials                                   | TB-10                  |
 
 Trust-boundary IDs are defined in the [threat model](../security/THREAT_MODEL.md).
 

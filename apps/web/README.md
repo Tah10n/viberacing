@@ -3,9 +3,9 @@
 This workspace is the Phase 1 product shell: a responsive pixel-art race, Community leaderboard, and
 demo profile built entirely from committed synthetic fixtures. It is suitable for local design,
 accessibility, localization, and scoring review. It is not an authenticated product and does not
-read Codex or user accounts. Server-only score database and public problem-response modules now
-exist for the next application slices, but no route or visible component constructs them; the
-prototype still does not query a database or expose an API.
+read Codex or user accounts. Server-only score database, public problem-response, and local score
+route modules now exist, but no visible component calls that route and no working database login or
+deployment is supplied; the synthetic prototype still does not query a database.
 
 ## Run it
 
@@ -30,7 +30,9 @@ for a hosted deployment; it is public configuration, not a secret. Focused check
 | `app/page.tsx`                         | Builds the synthetic public payload on the server              | Must pass only public presentation data into the client tree                    |
 | `lib/race-data.ts`                     | Clearly synthetic raw activity fixtures and payload projection | Marked `server-only`; never replace with exports or real account data           |
 | `lib/public-community-score-mapper.ts` | Validates and maps the exact SQL score projection              | Server-only, exact allowlist, top-32, and fail-closed                           |
-| `lib/public-community-score-store.ts`  | Executes the fixed public-score procedure and mapper           | Canonical Monday only; verifies every checkout; no route constructs it yet      |
+| `lib/public-community-score-store.ts`  | Executes the fixed public-score procedure and mapper           | Canonical Monday only; verifies every checkout; route constructs it lazily      |
+| `lib/public-community-score-route.ts`  | Parses and serializes the public score HTTP boundary           | Closed query/Accept, exact errors, admission, deadlines, and no CORS            |
+| `lib/public-score-admission.ts`        | Enforces the no-queue public-read concurrency ceiling          | Four active reads; lease held until adapter settlement                          |
 | `lib/public-http-problem.ts`           | Generates opaque request IDs and closed public error responses | Server-only; validates the contract; no inbound ID, CORS, detail, or cause      |
 | `lib/public-score-database-config.ts`  | Parses the dedicated Web login and TLS/pool contract           | Owner settings are separate; production is verify-full; errors reflect no value |
 | `lib/public-score-database-pool.ts`    | Wraps `pg` with narrow connect/query/release/close authority   | Four connections; bounded waits; stable idle-error signal only                  |
@@ -51,15 +53,25 @@ API. It owns all eleven `ProblemDetailsV1` status/title/retry mappings, validate
 and emits `application/problem+json`, `Cache-Control: no-store`, and the matching `x-request-id`. It
 emits no CORS header, cookie, detail, exception cause, hostname, SQL, or submitted value.
 
-This is pre-route infrastructure. It does not implement the contract-only `/v1/community/scores`
-path, request parsing, method or content negotiation, auth/retry headers, admission control,
-deadline, logging sink, store-error translation, or success serialization. Those remain mandatory
-route-level decisions; an endpoint must generate one token at entry and never replace it with an
-inbound header.
+The local `GET /v1/community/scores` route generates one token at entry, rejects a body and every
+missing/duplicate/unknown/non-canonical query, validates `CommunityScoreQueryV1`, performs bounded
+`Accept` negotiation, and acquires one of four no-queue admission leases before constructing the
+store. It holds the lease until the adapter promise settles, validates the final page again before
+JSON serialization, and adds `Vary: Accept` without CORS. Every other Next.js route method receives
+the closed 405 response and `Allow: GET`.
 
-The generated contract reserves `GET /v1/community/scores` with one bounded Monday `seasonStart`,
+The route has no outer `Promise.race` that could return while database work continued. Its deadline
+policy is the adapter's enforced two-second connection timeout, six-second query timeout, and
+five-second PostgreSQL statement timeout; failed clients are destroyed before admission is released.
+Exhausted admission and transient/configuration failures map to 503, while projection or internal
+invariant failure maps to a generic 500. The documented 429 remains reserved: no client-rate policy
+is claimed. No raw URL/header, SQL, driver error, configuration value, or row value is logged or
+reflected.
+
+The generated contract marks the route `implemented-local` with one bounded Monday `seasonStart`,
 `no-store`, `Vary: Accept`, same-origin/no-CORS semantics, and closed 200/400/406/429/500/503
-responses. This is an implementation target, not a reachable route or deployment claim.
+responses. There is no deployment, live login/certificate evidence, shared cache, edge rate policy,
+or visible-page consumer.
 
 ## Score database adapter configuration
 
@@ -120,15 +132,16 @@ replace the Phase 2 authentication, ingestion, retention, deletion, and abuse-co
 
 ## Test strategy
 
-Vitest runs business-logic, data-boundary, HTTP-problem, database-config/pool/store, component,
-interaction, CSP/header, localization, and axe-core accessibility tests. HTTP-boundary cases cover
-entropy, opaque tokens, every problem mapping, headers, contract validation, hostile reflective
-inputs, and non-reflection. Adapter tests cover TLS/environment bounds, non-reflective failures,
-pool lifecycle, every-checkout role/login/search-path/read-only probes, fixed SQL parameters,
-release/destruction behavior, and mapper integration without requiring or claiming a live deployment
-login. Canvas tests execute real render loops against a typed context stub, including animated and
-no-context paths. Preference tests cover valid settings, reduced motion, pausing, invalid/blocked
-storage, and cleanup.
+Vitest runs business-logic, data-boundary, HTTP-route/problem, admission,
+database-config/pool/store, component, interaction, CSP/header, localization, and axe-core
+accessibility tests. HTTP-boundary cases cover entropy, opaque tokens, every problem mapping, closed
+URL parsing, bounded media negotiation, overload settlement, headers, contract validation, hostile
+reflective inputs, and non-reflection. Adapter tests cover TLS/environment bounds, non-reflective
+failures, pool lifecycle, every-checkout role/login/search-path/read-only probes, fixed SQL
+parameters, release/destruction behavior, and mapper integration without requiring or claiming a
+live deployment login. Canvas tests execute real render loops against a typed context stub,
+including animated and no-context paths. Preference tests cover valid settings, reduced motion,
+pausing, invalid/blocked storage, and cleanup.
 
 Coverage thresholds apply to product components and libraries. Small framework entrypoints are
 excluded from unit coverage and exercised by `next build`; counting imports as unit coverage would

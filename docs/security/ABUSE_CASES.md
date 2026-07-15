@@ -235,9 +235,10 @@ material availability cost.
   self-reported trust metadata, and rejects unknown/private fields. Its server-only mapper requires
   the exact SQL column set and never reflects projected values in mapping errors. The server-only
   adapter selects only those columns with a fixed top-32 parameterized call and reflects no input,
-  row, SQL, configuration, or driver error. A contract-only GET fixes one public Monday season
-  query, no-store/same-origin semantics, and a closed response matrix. HTTP delivery, enumeration
-  controls, rounded freshness, cache purge, and monitoring are still unimplemented.
+  row, SQL, configuration, or driver error. The local GET closes one public Monday season query,
+  body/method/media handling, no-store/same-origin semantics, admission, generic errors, and final
+  response validation. Deployment, enumeration controls, rounded freshness, cache purge, edge rate
+  policy, and monitoring are still unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 
@@ -435,10 +436,12 @@ material availability cost.
   adds a four-connection ceiling, two-second checkout/connect wait, one/five/six-second lock/server/
   client-query deadlines, idle/lifetime recycling, and a fixed limit 32. Ranking still evaluates all
   currently visible season entries. The generated query validator now rejects malformed,
-  out-of-range, and non-Monday seasons before the future route may call the store, while the
-  contract-only operation reserves a 429 response without claiming a client-rate limiter exists.
-  HTTP delivery, scheduling, request/body limits, cache, route-level concurrency, scoring/read
-  capacity policy, quotas, load shedding, and production capacity evidence remain unimplemented.
+  out-of-range, and non-Monday seasons before the route may call the store. The local route rejects
+  bodies and oversized/malformed URL or `Accept` work, admits at most four active reads with no
+  queue, holds each lease through adapter settlement, and returns 503 on exhaustion. The operation
+  reserves a 429 response without claiming a client-rate limiter exists. Scheduling, cache,
+  scoring/read capacity evidence, quotas, edge shaping, and production load evidence remain
+  unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

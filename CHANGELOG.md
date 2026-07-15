@@ -36,23 +36,26 @@ Versioning where its guarantees are applicable.
 - Canonical closed JSON Schema contracts for connector sync, bounded acknowledgement, public problem
   details, one public Community season query, and a response-only top-32 score page with constant
   self-reported trust metadata. Generated readonly TypeScript validators enforce calendar range and
-  ISO weekday, while a manifest-generated OpenAPI GET remains explicitly contract-only.
+  ISO weekday, while a manifest-generated OpenAPI GET records local implementation without claiming
+  deployment.
 - A server-only public-score mapper that accepts unknown adapter output, enforces the exact SQL
   column allowlist plus season/order/rank invariants, validates the canonical response, and emits no
-  reflected projection values on failure; no route is implied.
+  reflected projection values on failure.
 - A bounded server-only PostgreSQL public-score adapter with a dedicated Web-login config namespace,
   production certificate verification, a four-connection pool, fixed timeouts/lifetime, an exact
   per-checkout role/login-membership/capability/search-path/read-only probe, canonical Monday input,
-  and one parameterized top-32 projection call with date-to-text preservation. It exposes no HTTP
-  path and is not connected to the synthetic page.
+  and one parameterized top-32 projection call with date-to-text preservation. It is constructed
+  lazily only by the local score route and is not connected to the synthetic page.
 - A server-only public HTTP problem factory that generates an opaque 128-bit request token, fixes
   every status/title/retry mapping, validates `ProblemDetailsV1`, and emits matching `x-request-id`,
   `application/problem+json`, and `no-store` headers without CORS, cookies, reflected causes, or an
-  implemented route.
-- A closed contract-only `GET /v1/community/scores` operation with one required Monday
+  operational log sink.
+- A closed locally implemented `GET /v1/community/scores` operation with one required Monday
   `seasonStart`, exact 200/400/406/429/500/503 schemas, no-store/`Vary: Accept` headers, and
-  same-origin CORS posture without claiming a parser, route, limiter, database connection, or
-  deployment.
+  same-origin CORS posture. Its Node route rejects bodies and ambiguous URL/media input, dispatches
+  non-GET methods through an exact 405, admits four active reads without a queue, holds admission
+  through adapter deadlines and settlement, revalidates success output, and translates only generic
+  failures. It claims no client-rate policy, working database credential, or deployment.
 - Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
   drift gates and black-box regression coverage.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,

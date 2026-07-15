@@ -144,9 +144,9 @@ Current PostgreSQL evidence covers:
   season locks rather than forming an `A → B` / `B → A` advisory-lock cycle.
 
 The repository still lacks the Ingest and Jobs services, Ed25519 verification, edge/origin proof,
-rate limits, schedulers, HTTP score delivery, corrections, monitoring, capacity evidence, purge, and
-deployment. Revision 0011 later adds a bounded database score projection, but database finalization
-and projection alone are not launch evidence.
+rate limits, schedulers, corrections, monitoring, capacity evidence, purge, and deployment. Revision
+0011 later adds a bounded database score projection and ADR 0013 adds local HTTP delivery, but
+database finalization, projection, and a route that is not deployed are not launch evidence.
 
 ## References
 

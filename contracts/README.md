@@ -1,10 +1,10 @@
 # Public protocol contracts
 
 This directory is the language-neutral source of truth for Vibe Racing wire shapes. The current
-files establish request and response boundaries plus one explicitly contract-only public score
-operation; revision 0007 maps the bounded Community sync into a database-only procedure and revision
-0011 provides a database-only score projection, but no API endpoint, connector, application
-signature verifier, or deployment exists.
+files establish request and response boundaries plus one locally implemented public score operation;
+revision 0007 maps the bounded Community sync into a database-only procedure and revision 0011
+provides a database-only score projection. No connector, application signature verifier, deployed
+endpoint, or live database credential exists.
 
 ## Canonical version 1 schemas
 
@@ -14,8 +14,8 @@ signature verifier, or deployment exists.
   contains no profile/source/device ID, raw or daily usage, exact timestamp, car, streak, freshness,
   profile detail, cursor, or caller-controlled sorting/filtering.
 - [`CommunityScoreQueryV1`](v1/community-score-query.schema.json) accepts exactly one inclusive
-  Monday `seasonStart` from `1999-12-27` through `2099-12-28`. A future URL parser must reject
-  duplicate parameters before applying the generated value validator.
+  Monday `seasonStart` from `1999-12-27` through `2099-12-28`. The Web URL parser rejects duplicate,
+  missing, encoded-name, and unknown parameters before applying the generated value validator.
 - [`ConnectorSyncV1`](v1/connector-sync.schema.json) accepts one bounded, self-reported Community
   snapshot from a source-bound device. It contains no trust tier, profile ID, rank, score, season,
   moderation state, account email, prompt, repository, credential, or server receipt time.
@@ -27,8 +27,8 @@ signature verifier, or deployment exists.
   status/title/retry mapping, validates the complete body, and emits `no-store`
   `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
 - [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
-  type/export names, and the contract-only `GET /v1/community/scores` operation with exact query,
-  response, problem, cache, and same-origin CORS policies.
+  type/export names, and the locally implemented `GET /v1/community/scores` operation with exact
+  query, response, problem, cache, same-origin CORS, and repository-status policies.
 
 Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
 timestamp is bounded. Reviewed date-range and ISO-weekday extensions make the score season boundary
@@ -46,8 +46,8 @@ trust fields exist only in the response component and never become writable conn
 
 `node scripts/generate-contracts.mjs` deterministically creates:
 
-- [`openapi.v1.json`](generated/openapi.v1.json), which exposes one contract-only score path and
-  explicitly states that this does not prove an implemented or deployed endpoint;
+- [`openapi.v1.json`](generated/openapi.v1.json), which exposes one locally implemented score path
+  and explicitly states that repository implementation does not prove deployment;
 - [`packages/contracts/src/generated.ts`](../packages/contracts/src/generated.ts), containing
   readonly TypeScript shapes, embedded schemas, source digest, and validator wrappers.
 

@@ -1,6 +1,6 @@
 # ADR 0010: Bounded Community score response contract
 
-- Status: Accepted (schema, validators, mapper, and DB adapter implemented; route/cache pending)
+- Status: Accepted (schema, validators, mapper, DB adapter, and route implemented; cache pending)
 - Date: 2026-07-15
 - Decision owners: Product, Web, Contracts, Security, and Privacy
 - Supersedes: None
@@ -45,9 +45,10 @@ contiguous display positions and SQL shared-rank/order semantics, rejects duplic
 returns a frozen response. A valid empty projection maps to an empty `participants` array.
 
 ADR 0011 implements the database adapter by casting PostgreSQL `date` columns to canonical text and
-calling the projection with the exported constant limit 32. A future route must translate any stable
-store or mapper failure to bounded problem details rather than serialize a partial or invalid
-result; neither error contains a projected value, unexpected field name, or internal exception text.
+calling the projection with the exported constant limit 32. ADR 0013's local route translates every
+stable store or mapper failure to bounded problem details rather than serializing a partial or
+invalid result; neither error contains a projected value, unexpected field name, or internal
+exception text.
 
 The response contains no profile/GitHub/source/device identifier, raw token value, daily score,
 exact timestamp, preference, authentication/recovery state, audit field, CarRecipe, streak,
@@ -57,8 +58,8 @@ self-reported wording from the two constant trust fields.
 This strict component rejects unknown response fields. Adding car, streak, freshness, profile links,
 pagination, or other fields therefore requires a separately reviewed schema/version rather than
 silently expanding this shape. At the time of this decision, the generated OpenAPI document
-contained no paths. ADR 0013 later reserved one explicitly contract-only operation; an implemented
-route, cache/CORS policy, request parser, edge controls, and deployment remain separate work.
+contained no paths. ADR 0013 later reserved and locally implemented one operation; cache
+invalidation, edge controls, deployment, and any expanded response remain separate work.
 
 ## Security and privacy consequences
 
@@ -104,7 +105,7 @@ or deployment state.
 Before any route is published, the component can be removed only together with its manifest entry,
 generated derivatives, tests, and documentation. After a consumer ships, incompatible changes use a
 new reviewed contract version or component and a documented migration; generated drift must never be
-accepted as rollback. Disabling a future route must not broaden the response or fall back to the
+accepted as rollback. Disabling the local route must not broaden the response or fall back to the
 synthetic payload.
 
 ## Verification
@@ -126,10 +127,10 @@ Current repository evidence covers:
   windows, contiguous display order, unique handles, score ordering, shared ranks, and post-tie rank
   gaps.
 
-There is still no HTTP route, request/path schema, response header policy, cache,
-CarRecipe/streak/freshness contract, load evidence, deployment login/TLS integration, or real-user
-data. A generated response component, mapper, and server-only database adapter are not endpoint or
-launch evidence.
+ADR 0013 now supplies a local route, request schema/parser, response headers, admission, and generic
+error translation. There is still no cache, CarRecipe/streak/freshness contract, load evidence,
+deployment login/TLS integration, edge policy, or real-user data. A generated response component,
+mapper, adapter, and local endpoint are not deployment or launch evidence.
 
 ## References
 

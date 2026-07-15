@@ -1,6 +1,6 @@
 # ADR 0013: Public Community score HTTP contract
 
-- Status: Accepted (schema and contract-only OpenAPI operation implemented; route pending)
+- Status: Accepted (implemented locally; deployment pending)
 - Date: 2026-07-15
 - Decision owners: Web, API, Security, Privacy, and Operations
 - Supersedes: None
@@ -30,10 +30,10 @@ GET /v1/community/scores?seasonStart=YYYY-MM-DD
 `seasonStart` is the only query field. The manifest's `closed-single-value` policy means every
 declared field appears exactly once and every undeclared field is rejected. `seasonStart` is
 required, uses a canonical calendar date, falls inside the inclusive database range, and has ISO
-weekday 1. The future URL parser must also reject an unknown parameter, a missing value, more than
-one `seasonStart`, empty encoding, or malformed URL before storage access. An unknown but valid
-season returns HTTP 200 with an empty `participants` array; it does not reveal whether a private or
-hidden profile exists.
+weekday 1. The route URL parser also rejects an unknown parameter, a missing value, more than one
+`seasonStart`, an encoded field name, empty encoding, or malformed URL before storage access. An
+unknown but valid season returns HTTP 200 with an empty `participants` array; it does not reveal
+whether a private or hidden profile exists.
 
 `CommunityScoreQueryV1` is a closed one-field schema. Three reviewed schema extensions express the
 semantic date boundary:
@@ -65,15 +65,16 @@ Every documented response carries `Cache-Control: no-store`, `Vary: Accept`, and
 header. The initial success response is deliberately not cacheable: profile hide and deletion must
 be immediately observable, and no reviewed cache invalidation mechanism exists yet.
 
-`ProblemDetailsV1` and the common factory add `method_not_allowed`/405 and `not_acceptable`/406
-before the first endpoint exists. The 405 code is reserved for explicit route method handling and
-therefore is not listed as a response to the GET operation itself. Adding the two closed enum
-members is safe without a new wire version only because no deployed endpoint or released consumer
-exists; after deployment, the normal compatibility/versioning rules apply.
+`ProblemDetailsV1` and the common factory add `method_not_allowed`/405 and `not_acceptable`/406. The
+route permits only GET; DELETE, HEAD, OPTIONS, PATCH, POST, and PUT receive the exact 405 body plus
+`Allow: GET`. The 405 code is therefore not listed as a response to the GET operation itself. Adding
+the two closed enum members is safe without a new wire version only because no deployed endpoint or
+released consumer exists; after deployment, the normal compatibility/versioning rules apply.
 
-The generated document and operation are marked `contract-only`. Their presence does not claim a
-Next.js route, parser, rate limiter, admission controller, deadline, log sink, database connection,
-deployment, DNS name, or live API.
+The generated document and operation are marked `implemented-local`. The thin Next.js entrypoint is
+dynamic on the Node runtime and constructs the configured store only after request validation and
+admission. This repository status does not claim a rate limiter, log sink, working database login,
+deployment, DNS name, edge policy, or live API.
 
 ## Security and privacy consequences
 
@@ -86,9 +87,11 @@ URL, headers, database configuration, driver error, SQL, handle, or row value.
 Rejecting non-Monday and out-of-range values before storage removes an avoidable database work and
 error surface. `no-store` avoids stale visibility after hide/delete. Same-origin-without-CORS is a
 deliberate baseline, not CSRF protection and not proof that edge origin controls exist. A documented
-429 response does not prove a client-rate policy. The route must separately acquire bounded
-admission before starting database work, translate an exhausted admission budget to 503, and not
-release it while work continues in the background.
+429 response does not prove a client-rate policy. The local route acquires one of four no-queue
+admission leases before constructing the store, translates exhaustion to 503, and releases only in
+`finally` after storage and serialization settle. Its deadline policy uses the adapter's two-second
+connect, six-second query, and five-second PostgreSQL statement ceilings. It deliberately has no
+outer `Promise.race` that could return while database work continued.
 
 Affected invariants are VR-PUBLIC-001, VR-TRUST-001, VR-INGEST-001, and VR-DELETE-001. Primary
 attacker stories are VR-ABUSE-PUBLIC-SCRAPE, VR-ABUSE-RESOURCE-EXHAUSTION, VR-ABUSE-DATABASE-ROLE,
@@ -112,11 +115,10 @@ and VR-ABUSE-DIRECT-ORIGIN.
 
 ## Migration and rollback
 
-There is no route, database migration, cache, retained request, or deployment change. Rollback
-removes the query component and manifest operation, restores the pre-operation generated artifacts,
-and removes the two unused problem codes together with their factory mappings. Once a route or
-released client consumes this contract, rollback must disable the route or preserve a compatible
-version rather than silently changing path, query, response, or error semantics.
+There is no database migration, cache, retained request, or deployment change. Rollback disables the
+local route, changes the manifest status back to `contract-only`, and preserves the existing wire
+contract for any released client. Removing the query component, operation, or problem codes is safe
+only before a released or deployed consumer exists; afterward a compatible version must remain.
 
 ## Verification
 
@@ -131,11 +133,16 @@ Current repository evidence covers:
   path/header/media matrix;
 - exact 405 and 406 problem mappings in the common server-only response factory; and
 - separation of scalar weekday contract failures from valid-date cross-field season-window drift in
-  the mapper.
+  the mapper;
+- a strict raw URL/body parser, bounded media-range parser, GET-only dispatcher and `Allow` header;
+- exact success/problem serialization with no-store, `Vary: Accept`, request ID, and no CORS;
+- four-request no-queue admission held through success and failure settlement; and
+- lazy store construction, exact transient/invariant error translation, direct entrypoint tests, and
+  a production build that exposes the dynamic local route.
 
-No HTTP route, duplicate-URL-parameter parser, `Accept` parser, method dispatcher, `Allow` header,
-admission controller, route deadline, store translation, safe log event, live database login, edge
-policy, or end-to-end response evidence exists yet.
+No safe operational log event, live database login/certificate, cache, client-rate limiter, edge
+policy, load evidence, deployment, or live end-to-end response evidence exists yet. The visible
+synthetic page does not consume the route.
 
 ## References
 

@@ -3,7 +3,7 @@
   "info": {
     "title": "Vibe Racing public API contract",
     "version": "1.0.0",
-    "description": "Generated schemas and contract-only operations. A documented path is not implemented or deployed until separately verified in the working tree."
+    "description": "Generated schemas and repository implementation status. A documented path does not prove deployment."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "paths": {
@@ -11,7 +11,7 @@
       "get": {
         "operationId": "getCommunityScoresV1",
         "summary": "Read one bounded Community score page",
-        "description": "Contract-only operation. Its presence here does not prove that a route is implemented or deployed.",
+        "description": "Implemented and verified in this repository. Its presence here does not prove deployment.",
         "parameters": [
           {
             "name": "seasonStart",
@@ -199,7 +199,7 @@
         "x-viberacing-cors-policy": "same-origin",
         "x-viberacing-query-contract": { "$ref": "#/components/schemas/CommunityScoreQueryV1" },
         "x-viberacing-query-policy": "closed-single-value",
-        "x-viberacing-status": "contract-only"
+        "x-viberacing-status": "implemented-local"
       }
     }
   },
@@ -454,6 +454,6 @@
       }
     }
   },
-  "x-viberacing-contract-source": "sha256:06dc7231ee2c9c2ad9c5a761c757d9e11f08c4da0ba5ee579764b9f0e05f70be",
-  "x-viberacing-status": "contract-only"
+  "x-viberacing-contract-source": "sha256:de18d155ed8e6876b9a50726fb6dd9f5726312f0fa432b914973d645dae21ea3",
+  "x-viberacing-status": "implemented-local"
 }

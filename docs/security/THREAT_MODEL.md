@@ -8,12 +8,12 @@ Codex App Server and submit bounded daily values. The public product will rank p
 Racing profiles in a self-reported Community league.
 
 This is a repository-scoped design threat model. The current tree contains public repository policy,
-toolchain, CI, documentation, and local PostgreSQL identity/passkey/recovery foundations; it does
-not yet contain a runtime web service, ingest service, Jobs service, connector, deployment, or
-production data. Its database-only Community ingest and bounded ingest-retention boundaries have
-synthetic executable evidence, and one public score HTTP operation is documented as contract-only,
-but there is no network route, scheduler, or cryptographic application caller. Controls below are
-marked **implemented** only when executable evidence exists in
+toolchain, CI, documentation, local PostgreSQL identity/passkey/recovery foundations, and one local
+Next.js public-score route; it does not yet contain an ingest service, Jobs service, connector,
+deployment, or production data. Its database-only Community ingest and bounded ingest-retention
+boundaries have synthetic executable evidence, while the public score route has request/response,
+admission, and production-build evidence but no live database login, edge, or network deployment.
+Controls below are marked **implemented** only when executable evidence exists in
 [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
 security claims about the current tree.
 
@@ -120,7 +120,7 @@ and migration or rollback where applicable.
 
 | Surface                             | Realistic attacker story                                                                                   | Required mitigations                                                                                                             | Current status                                                                                   |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Public race and profiles            | A visitor injects markup through a handle, enumerates profiles, or infers exact work hours                 | Plain-text bounded names, CSP, public-field allowlist, rounded freshness, rate and cache policy                                  | DB/schema/mapper/adapter/query contract tested; route, cache, car, freshness, rate planned       |
+| Public race and profiles            | A visitor injects markup through a handle, enumerates profiles, or infers exact work hours                 | Plain-text bounded names, CSP, public-field allowlist, rounded freshness, rate and cache policy                                  | DB/schema/mapper/adapter/local route tested; cache, car, freshness, rate, deployment planned     |
 | OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up     | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke | Passkey/recovery DB tested; app crypto, routes, rate and cleanup planned                         |
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration           | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, revoke and rotate                        | Pairing/lifecycle DB tested; app crypto, routes, and rate planned                                |
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Planned                                                                                          |
@@ -167,10 +167,11 @@ and migration or rollback where applicable.
    mapper rejects unexpected columns, malformed values, and incoherent season/rank ordering before
    that contract can be serialized. A bounded server-only database adapter now verifies one
    least-privileged Web login/session on every checkout and issues only the fixed parameterized
-   top-32 call. A closed Monday query and generated operation now fix the future GET's path,
-   no-store/same-origin posture, and bounded response matrix without implementing it. Live
-   deployment login/TLS evidence, a Jobs service/scheduler, audited correction authority, capacity
-   evidence, and the HTTP delivery boundary are still required before publishing durable results.
+   top-32 call. A closed Monday query and local GET now enforce the path/body/media grammar,
+   no-store/same-origin posture, four-request no-queue admission, adapter deadline policy, generic
+   error translation, and bounded response matrix. Live deployment login/TLS and edge evidence, a
+   Jobs service/scheduler, audited correction authority, client-rate policy, and capacity evidence
+   are still required before publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes.

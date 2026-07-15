@@ -37,6 +37,6 @@ pnpm run test:contracts:coverage
 ```
 
 Generated code is committed so TypeScript and future Rust consumers can review an immutable source
-digest. The generated OpenAPI operation remains contract-only: no current web route imports the
-Community query/response components, no service imports the connector contract, and no real usage
-data is accepted.
+digest. The generated OpenAPI operation is marked `implemented-local`: the Web route imports and
+validates the Community query/response components, but no deployment consumes a live database
+credential, no service imports the connector contract, and no real usage data is accepted.

@@ -74,9 +74,9 @@ or granting broader database rights.
   projection, denies all runtime roles direct private-table access, and proves cross-role procedure
   denials. ADR 0011 adds a dedicated bounded Web pool and verifies the effective role, distinct
   narrow login, exact membership, database capability, search path, and read-only state before each
-  fixed score query. A deployment login/TLS connection, the network services, cleanup/scoring
-  schedulers, origin proof, signature verification, HTTP score delivery, and correction authority
-  remain pending.
+  fixed score query. ADR 0013 later adds local HTTP score delivery around that adapter. A deployment
+  login/TLS connection, edge/network service evidence, cleanup/scoring schedulers, origin proof,
+  signature verification, and correction authority remain pending.
 - Staging key rotation, service rollback, database migration overlap, restore, and kill-switch
   drills.
 - Admin user-to-role separation, step-up, reason, audit completeness, and conflict tests.

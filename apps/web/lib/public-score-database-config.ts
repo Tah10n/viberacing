@@ -17,6 +17,11 @@ const portPattern = /^[1-9][0-9]{0,4}$/;
 const minimumPasswordLength = 16;
 const maximumPasswordLength = 1_024;
 
+export const publicScoreDatabaseConcurrencyLimit = 4;
+export const publicScoreDatabaseConnectionTimeoutMs = 2_000;
+export const publicScoreDatabaseQueryTimeoutMs = 6_000;
+export const publicScoreDatabaseStatementTimeoutMs = 5_000;
+
 export type PublicScoreDatabaseConfigurationErrorCode =
   | "database_invalid"
   | "environment_unreadable"
@@ -41,7 +46,7 @@ export interface PublicScoreDatabaseConfig {
   readonly allowExitOnIdle: true;
   readonly application_name: "viberacing-web-public-score";
   readonly client_encoding: "UTF8";
-  readonly connectionTimeoutMillis: 2_000;
+  readonly connectionTimeoutMillis: typeof publicScoreDatabaseConnectionTimeoutMs;
   readonly database: string;
   readonly host: string;
   readonly idle_in_transaction_session_timeout: 5_000;
@@ -49,21 +54,21 @@ export interface PublicScoreDatabaseConfig {
   readonly keepAlive: true;
   readonly keepAliveInitialDelayMillis: 5_000;
   readonly lock_timeout: 1_000;
-  readonly max: 4;
+  readonly max: typeof publicScoreDatabaseConcurrencyLimit;
   readonly maxLifetimeSeconds: 300;
   readonly maxUses: 1_000;
   readonly min: 0;
   readonly options: "-c role=viberacing_web -c search_path=pg_catalog,pg_temp -c default_transaction_read_only=on";
   readonly password: string;
   readonly port: number;
-  readonly query_timeout: 6_000;
+  readonly query_timeout: typeof publicScoreDatabaseQueryTimeoutMs;
   readonly ssl:
     | false
     | Readonly<{
         minVersion: "TLSv1.2";
         rejectUnauthorized: true;
       }>;
-  readonly statement_timeout: 5_000;
+  readonly statement_timeout: typeof publicScoreDatabaseStatementTimeoutMs;
   readonly user: string;
 }
 
@@ -152,7 +157,7 @@ function buildConfig(environment: Environment): PublicScoreDatabaseConfig {
     allowExitOnIdle: true,
     application_name: "viberacing-web-public-score",
     client_encoding: "UTF8",
-    connectionTimeoutMillis: 2_000,
+    connectionTimeoutMillis: publicScoreDatabaseConnectionTimeoutMs,
     database,
     host,
     idle_in_transaction_session_timeout: 5_000,
@@ -160,7 +165,7 @@ function buildConfig(environment: Environment): PublicScoreDatabaseConfig {
     keepAlive: true,
     keepAliveInitialDelayMillis: 5_000,
     lock_timeout: 1_000,
-    max: 4,
+    max: publicScoreDatabaseConcurrencyLimit,
     maxLifetimeSeconds: 300,
     maxUses: 1_000,
     min: 0,
@@ -168,9 +173,9 @@ function buildConfig(environment: Environment): PublicScoreDatabaseConfig {
       "-c role=viberacing_web -c search_path=pg_catalog,pg_temp -c default_transaction_read_only=on",
     password,
     port,
-    query_timeout: 6_000,
+    query_timeout: publicScoreDatabaseQueryTimeoutMs,
     ssl,
-    statement_timeout: 5_000,
+    statement_timeout: publicScoreDatabaseStatementTimeoutMs,
     user,
   };
   Object.defineProperty(config, "password", {

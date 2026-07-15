@@ -7,13 +7,13 @@ and eleven Phase 2/3 database-foundation migrations. Everything runnable uses sy
 It has procedure-only identity, passkey login/management, restricted recovery, pairing, and
 source/device lifecycle database capabilities plus Community ingest, retention cleanup, scoring, and
 terminal finalization and public score-projection procedures, but no authentication or recovery
-application code, HTTP API, OAuth/Argon2id/WebAuthn/Ed25519 verifier, Jobs process or scheduler,
-real-user ingestion, public HTTP score read, audited correction, or connector. A bounded server-only
-Web PostgreSQL adapter is implemented and unit-tested, but no route constructs it and this
-repository supplies no deployment login or TLS certificate. A successful setup proves repository
-gates, synthetic frontend behavior, adapter boundaries, SQL constraints, session-bound procedure
-behavior, lifecycle/scoring concurrency, and database role isolation; it does not prove a live
-adapter or production flow.
+application code, OAuth/Argon2id/WebAuthn/Ed25519 verifier, Jobs process or scheduler, real-user
+ingestion, audited correction, or connector. A bounded server-only Web PostgreSQL adapter and local
+public-score GET are implemented and unit/build-tested, but this repository supplies no working
+deployment login or TLS certificate. A successful setup proves repository gates, synthetic frontend
+behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
+lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
+deployed API, or production flow.
 
 ## Prerequisites
 
@@ -86,8 +86,9 @@ pnpm run test:contracts:coverage
 
 Run `pnpm run generate:contracts` only after intentionally changing a canonical file or manifest
 operation under `contracts/v1/`; review both generated diffs and their source digest. The generated
-OpenAPI document contains one path marked `contract-only`; no API route exists merely because that
-planned operation is documented.
+OpenAPI document contains one path marked `implemented-local`. The corresponding dynamic Next.js
+route has request/response and build evidence, but no working database login is tracked and no
+deployment exists merely because the local route is documented.
 
 The product components and libraries must meet the committed coverage thresholds. Small Next.js
 entrypoints are covered by the production build. See

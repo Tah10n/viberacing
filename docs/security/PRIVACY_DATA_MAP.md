@@ -42,7 +42,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | GitHub access token                                                 | Prohibited after callback       | GitHub OAuth; resolve the numeric ID once                              | Callback memory only                                                      | Never persisted                                                         | Discard immediately after identity resolution                                                               |
 | Public handle                                                       | Public                          | User; identify the race profile                                        | Public after preview; moderation/admin through audited capability         | `profiles`                                                              | Until changed, hidden, or deleted; public caches purged on hide/delete                                      |
 | Community trust tier and self-reported flag                         | Public                          | Server constants; prevent Community results from implying verification | Public score response and localized UI                                    | Not stored; literal response metadata                                   | Generated per response; no retention                                                                        |
-| Public score `seasonStart` query label                              | Public                          | Visitor; select one public Community season                            | Contract-only URL query; future Web score route                           | Not stored; passed only to the bounded score adapter                    | Per request only; do not retain or log the raw URL                                                          |
+| Public score `seasonStart` query label                              | Public                          | Visitor; select one public Community season                            | Local Web score route                                                     | Not stored; passed only to the bounded score adapter                    | Per request only; do not retain or log the raw URL                                                          |
 | Optional GitHub profile link                                        | Public                          | User opt-in; distinguish an upstream public identity                   | Public only after explicit opt-in                                         | `profiles` preference                                                   | Until opt-out or deletion; purge public cache                                                               |
 | Locale, theme, reduced-motion, privacy preferences                  | Account                         | User; product experience and visibility controls                       | User profile; only public effects are visible                             | `profiles` or preference store                                          | Until reset or deletion                                                                                     |
 | Invite verifier and state                                           | Security                        | Operator-issued invite; gate beta enrollment                           | Invite procedure and limited admin role                                   | Slow/keyed hash, status, expiry, non-sensitive audit                    | Expiry/redemption plus bounded abuse/audit window; launch decision required                                 |
@@ -132,8 +132,8 @@ closed response schema rejects private/unknown fields, daily detail, exact times
 freshness, and profile detail. A server-only mapper reads only the exact ten projection columns,
 emits the constant trust wrapper, and returns only a validated frozen response; its stable failure
 does not include a row value or unexpected field name. Generated TypeScript/runtime validators and a
-later contract-only OpenAPI operation exist, but no HTTP route, cache, request metadata, log field,
-or retention obligation is thereby created.
+later OpenAPI operation exist; the local route revalidates the response, but it adds no cache, log
+field, analytics field, or retention obligation.
 
 ADR 0011 adds a server-only database adapter but no collected or retained field. It sends one
 canonical season label and constant limit to the existing projection, casts the two public calendar
@@ -142,14 +142,15 @@ password are Security configuration supplied outside the repository: the tracked
 non-working placeholders, the password is non-enumerable and JSON-redacted in the pool config, and
 neither it nor the host, login, SQL, driver error, season input, or row value is included in adapter
 errors or monitoring signals. The adapter adds no log, cache, analytics, browser, export, or
-retention sink. No HTTP request metadata exists because no route constructs it.
+retention sink. The local route passes only the validated public season label and retains no request
+metadata.
 
 ADR 0013 adds no store or retained field. `CommunityScoreQueryV1` carries only the public Monday
 season label already accepted by the adapter, while the manifest-generated operation fixes
-same-origin and `no-store` behavior. The operation is contract-only: it creates no request, URL log,
-cache entry, analytics event, network destination, or database connection. A future parser must
-reject duplicate/unknown query parameters and must not record the raw URL merely to diagnose an
-invalid date.
+same-origin and `no-store` behavior. The local parser rejects duplicate/unknown query parameters,
+encoded field names, bodies, and unsupported media ranges before store work. The route creates one
+opaque request ID but no URL/header log, cache entry, analytics event, new network destination, or
+retained record; it must not record the raw URL merely to diagnose an invalid date.
 
 ## Prohibited data
 
@@ -182,10 +183,10 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   migrations and tests; migrations use a different non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
-  not response data, and the adapter verifies that it has only Web membership before reading. One
-  query/response operation is documented as contract-only; the HTTP route and cache remain planned.
-  Authenticated responses are private and `no-store`; public cache keys cannot include or mix
-  session state.
+  not response data, and the adapter verifies that it has only Web membership before reading. The
+  local query/response route adds no cache or retention sink and is not deployed. Authenticated
+  responses are private and `no-store`; future public cache keys cannot include or mix session
+  state.
 - Admin access is separate, reasoned, passkey-stepped-up, and audited. Routine support has no need
   to read exact usage.
 
@@ -230,12 +231,12 @@ legal review and explicit public disclosure; they are not assumed here.
 
 ## Logs, diagnostics, and support
 
-The server-only problem factory now creates a new 128-bit opaque request ID and returns it in the
-bounded body/header without accepting an inbound correlation value or retaining a copy. Future
-operational logs may use stable event names, those request IDs, coarse outcomes, and bounded numeric
-metrics. They omit request bodies, raw token values, handles when not needed, OAuth/passkey
-material, device signatures, recovery selectors/secrets/PHCs/authority verifiers, local paths, and
-prohibited data.
+The server-only problem factory and local score route create a new 128-bit opaque request ID and
+return it in the bounded body/header without accepting an inbound correlation value or retaining a
+copy. Future operational logs may use stable event names, those request IDs, coarse outcomes, and
+bounded numeric metrics. They omit request bodies, raw token values, handles when not needed,
+OAuth/passkey material, device signatures, recovery selectors/secrets/PHCs/authority verifiers,
+local paths, and prohibited data.
 
 Connector telemetry is off by default. A future diagnostic export is local, explicit, redacted,
 previewed before sharing, and generated from an allowlist. Public issue forms do not request raw

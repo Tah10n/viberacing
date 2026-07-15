@@ -33,6 +33,7 @@
       "method": "get",
       "path": "/v1/community/scores",
       "operationId": "getCommunityScoresV1",
+      "implementationStatus": "implemented-local",
       "summary": "Read one bounded Community score page",
       "querySchema": "CommunityScoreQueryV1",
       "responseSchema": "CommunityScorePageV1",
