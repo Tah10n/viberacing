@@ -17,6 +17,10 @@ apply.
   fingerprinting, or account state to local storage.
 - Preserve per-navigation nonce CSP and repository-root build isolation. Do not add a CSP origin,
   remote asset, or capability merely to silence a failure.
+- Keep compose `DATABASE_*` owner credentials out of Web code. The public-score adapter uses only
+  `VIBERACING_WEB_DATABASE_*`, strict TLS/config parsing, a dedicated bounded pool, and an effective
+  Web-role/login-capability probe before every query. Do not bypass the store with generic SQL or
+  wire it to a route without the separate HTTP/cache/load review.
 
 ## Commands
 

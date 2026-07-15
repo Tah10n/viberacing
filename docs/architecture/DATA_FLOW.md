@@ -11,7 +11,9 @@ ingest, bounded ingest-retention cleanup, open-season scoring refresh, late-inge
 season finalization, and a Web-only public score projection. No endpoint, OAuth callback,
 Argon2id/WebAuthn/Ed25519 application verifier, connector, purge/maintenance/scoring service or
 scheduler, HTTP public-score delivery, audited correction, or deployed service executes the complete
-sequences. Data labels refer to the classifications in the
+sequences. A bounded server-only Web PostgreSQL adapter now verifies one deployment login/session
+boundary and can call the score projection, but no route constructs it and no deployment login or
+certificate is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -311,8 +313,12 @@ subset: season metadata, handle, weekly score, active days, source count, shared
 position. ADR 0010 wraps at most 32 such rows in a closed response component with constant Community
 and self-reported metadata. A server-only Web mapper now accepts unknown adapter output, requires
 the exact SQL columns and coherent season/order/rank semantics, validates and freezes that response,
-and advertises no path. There is still no database client, HTTP route, cache, car, streak,
-freshness, daily detail, or profile read.
+and advertises no path. ADR 0011 adds a dedicated four-connection `pg` pool, strict TLS/config
+parser, every-checkout effective-role/login-membership/search-path/read-only probe, bounded waits,
+and one fixed parameterized score query that casts calendar dates to text before mapping. There is
+still no HTTP route, route-wide request policy, cache, car, streak, freshness, daily detail, profile
+read, deployment login/certificate, or live adapter integration. The synthetic page does not
+construct this adapter.
 
 ## Hide and deletion
 

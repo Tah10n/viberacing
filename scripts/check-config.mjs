@@ -11,6 +11,19 @@ const exactPackageSelector = /^(?:@[^/\s]+\/[^@\s]+|[^@\s]+)@\d+\.\d+\.\d+(?:-[0
 const exactOverrideSelector =
   /^(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?>(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)$/;
 const hostedRunners = new Set(["ubuntu-24.04", "windows-2025", "macos-15"]);
+const requiredEnvExampleValues = new Map([
+  ["DATABASE_HOST", "127.0.0.1"],
+  ["DATABASE_NAME", "viberacing_local"],
+  ["DATABASE_PASSWORD", "local-development-only"],
+  ["DATABASE_PORT", "54329"],
+  ["DATABASE_USER", "viberacing_local"],
+  ["VIBERACING_WEB_DATABASE_HOST", "127.0.0.1"],
+  ["VIBERACING_WEB_DATABASE_NAME", "viberacing_local"],
+  ["VIBERACING_WEB_DATABASE_PASSWORD", "replace-with-local-web-password"],
+  ["VIBERACING_WEB_DATABASE_PORT", "54329"],
+  ["VIBERACING_WEB_DATABASE_TLS_MODE", "disable"],
+  ["VIBERACING_WEB_DATABASE_USER", "replace_with_local_web_login"],
+]);
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -511,6 +524,36 @@ function parseYaml(path, failures) {
   return document.errors.length === 0 ? document.toJS() : null;
 }
 
+export function validateEnvExampleText(text) {
+  const findings = [];
+  const seen = new Set();
+  const values = new Map();
+  for (const [index, line] of text.split("\n").entries()) {
+    if (line === "" || line.startsWith("#")) {
+      continue;
+    }
+    const match = /^([A-Z][A-Z0-9_]*)=(.+)$/.exec(line);
+    if (!match) {
+      findings.push(`line ${index + 1} must use UPPER_SNAKE_CASE=value`);
+      continue;
+    }
+    if (seen.has(match[1])) {
+      findings.push(`line ${index + 1} duplicates ${match[1]}`);
+    }
+    seen.add(match[1]);
+    values.set(match[1], match[2]);
+  }
+  for (const [key, expected] of requiredEnvExampleValues) {
+    if (values.get(key) !== expected) {
+      findings.push(`${key} must retain the reviewed public-safe example value ${expected}`);
+    }
+  }
+  if (values.get("VIBERACING_WEB_DATABASE_USER") === values.get("DATABASE_USER")) {
+    findings.push("Web database example credentials must not reuse the bootstrap owner");
+  }
+  return findings;
+}
+
 function validateEnvExample(failures) {
   const path = resolve(root, ".env.example");
   if (lstatSync(path).isSymbolicLink()) {
@@ -518,20 +561,8 @@ function validateEnvExample(failures) {
     return;
   }
   const text = readFileSync(path, "utf8");
-  const seen = new Set();
-  for (const [index, line] of text.split("\n").entries()) {
-    if (line === "" || line.startsWith("#")) {
-      continue;
-    }
-    const match = /^([A-Z][A-Z0-9_]*)=(.+)$/.exec(line);
-    if (!match) {
-      failures.push(`.env.example:${index + 1} — expected UPPER_SNAKE_CASE=value`);
-      continue;
-    }
-    if (seen.has(match[1])) {
-      failures.push(`.env.example:${index + 1} — duplicate key ${match[1]}`);
-    }
-    seen.add(match[1]);
+  for (const finding of validateEnvExampleText(text)) {
+    failures.push(`.env.example — ${finding}`);
   }
 }
 

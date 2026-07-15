@@ -116,11 +116,12 @@ Current PostgreSQL evidence proves:
 - Web-only execution, no runtime direct-table access, a five-second statement deadline, and explicit
   Ingest/Jobs/Admin denial.
 
-ADR 0010 now adds a response-only schema, validators, and a server-only projection mapper. The
-repository still lacks a database client, HTTP route, CarRecipe storage, streak/freshness
-derivation, authenticated profile detail, public cache and invalidation, rate limits,
-query-plan/load evidence, monitoring, deployment, and real-user data. The database projection,
-generated response component, and isolated mapper are not a public API or launch evidence.
+ADR 0010 adds a response-only schema, validators, and a server-only projection mapper; ADR 0011 adds
+a bounded least-privileged PostgreSQL adapter around them. The repository still lacks an HTTP route,
+CarRecipe storage, streak/freshness derivation, authenticated profile detail, public cache and
+invalidation, rate limits, query-plan/load evidence, monitoring backend, deployment login/TLS
+integration, and real-user data. These database and server-only components are not a public API or
+launch evidence.
 
 ## References
 
@@ -129,6 +130,7 @@ generated response component, and isolated mapper are not a public API or launch
 - [Service and database isolation](0004-edge-service-and-database-isolation.md)
 - [Community grace and finalization](0008-community-season-grace-and-finalization.md)
 - [Community score response contract](0010-community-score-response-contract.md)
+- [Bounded Web PostgreSQL score adapter](0011-bounded-web-postgresql-score-adapter.md)
 - [Project plan](../PROJECT_PLAN.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
 - [Data flow](../architecture/DATA_FLOW.md)

@@ -39,10 +39,10 @@ exists.
 - An offline external-link gate with 12 reviewed hosts, HTTPS/credential/port/query/address rules,
   no dormant host permissions, and eight black-box cases. A separate online mode pins public DNS
   results, sends no credentials, follows no redirects, and is excluded from deterministic PR CI.
-- A deterministic dependency inventory covering 441 locked npm packages, zero Cargo dependencies,
+- A deterministic dependency inventory covering 456 locked npm packages, zero Cargo dependencies,
   two pinned GitHub Actions, and one pinned local-development container. License expressions,
   installed manifests, every root/workspace importer, dependency scopes, direct notices, and
-  external-artifact usage are checked with seven black-box cases.
+  external-artifact usage are checked with ten black-box cases.
 - Positive and negative workflow-policy tests for action pins, permissions, secrets, shell
   interpolation, timeouts, complete-history checkout, checkout credentials, and forbidden triggers.
 - A secretless, read-only GitHub Actions CI definition and bounded weekly Dependabot configuration.
@@ -70,10 +70,10 @@ exists.
   trusted-release Mermaid views.
 - A fail-closed Codex compatibility policy and empty support matrix; no upstream or connector
   version is claimed supported without pinned schema/fixture/platform evidence.
-- An ADR lifecycle/template and ten accepted design decisions covering Community trust, multi-source
-  aggregation, identity/device authority, restricted recovery, edge/service/database isolation,
-  CarRecipe, public repository safety, season finalization, and the public score projection/response
-  boundaries.
+- An ADR lifecycle/template and eleven accepted design decisions covering Community trust,
+  multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
+  isolation, CarRecipe, public repository safety, season finalization, and the public score
+  projection/response/adapter boundaries.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -191,8 +191,15 @@ exists.
   columns, more than 32 rows before row traversal, contract drift, inconsistent season metadata,
   non-contiguous display positions, duplicate handles, and invalid SQL rank/order semantics. It
   returns a frozen canonical response or throws one generic non-reflective message with a bounded
-  cause code. No database client, HTTP score route/cache, audited correction flow, scoring service,
-  or scheduler exists.
+  cause code. A server-only `pg` adapter now adds namespaced Web-login settings, loopback-only
+  development cleartext, certificate-verified production TLS, a four-connection pool, fixed
+  connect/query/statement/lock/idle/lifetime ceilings, and one parameterized top-32 query with
+  explicit date-to-text casts. It verifies the effective Web role, distinct non-privileged login
+  with only Web membership, database capability, search path, and read-only state before every
+  query; destroys a failed client; releases a healthy client before mapping; and returns only stable
+  non-reflective error/signal codes. Config, pool, and store tests cover positive and negative
+  boundaries without a live deployment credential. No HTTP score route/cache, audited correction
+  flow, scoring service, or scheduler exists.
 - Twenty-two deterministic cross-connection races hold a relevant invite, challenge, session,
   source, device, pairing, or profile row, or a season advisory lock; tag every session; and observe
   every contender in the holder's transitive PostgreSQL blocker chain before releasing it.
@@ -232,10 +239,11 @@ exists.
   has no accounts, analytics, trackers, remote fonts, or runtime secrets. Its only environment
   setting is a strictly parsed, server-only public origin for absolute social metadata; hosted
   deployment without a real HTTPS DNS value remains forbidden.
-- Seventy-three unit, component, interaction, security-header, localization, scoring, configuration,
-  and accessibility tests. The coverage gate currently reports 98.87% statements, 93.61% branches,
-  100% functions, and 98.83% lines over product components and libraries; framework entrypoints are
-  verified by the production build instead of artificial unit coverage.
+- One hundred thirty-five unit, component, interaction, security-header, localization, scoring,
+  database-adapter configuration/pool/store, and accessibility tests. The coverage gate currently
+  reports 99.18% statements, 95.52% branches, 100% functions, and 99.16% lines over product
+  components and libraries; framework entrypoints are verified by the production build instead of
+  artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift, lint, strict type
   checking and coverage, plus web lint, strict type checking, coverage, and a production Next.js
   build on every deterministic CI run.
@@ -294,10 +302,12 @@ ingest API, scheduled execution/monitoring of ingest-retention cleanup, cleanup 
 state, the scoring Jobs service/scheduler, audited corrections, HTTP public-score delivery, purge
 workers, Codex connector, release signing, deployment, and public beta operations remain proposed. A
 bounded database score projection, versioned response-only schema, and fail-closed server mapper now
-exist, but their database client, HTTP route, cache/invalidation, CarRecipe, streak/freshness,
-profile detail, rate/capacity controls, and monitoring do not. The visible web scoring and ranking
-experience still operates only on clearly synthetic in-process fixtures; its application does not
-connect to the database-only scoring/finalization/read state in revisions 0001 through 0011.
+exist together with a bounded server-only PostgreSQL adapter, but the HTTP route,
+cache/invalidation, CarRecipe, streak/freshness, profile detail, rate/capacity controls, monitoring
+backend, deployment login, certificate, and live adapter integration do not. The visible web scoring
+and ranking experience still operates only on clearly synthetic in-process fixtures; no route or
+component constructs the adapter or connects that page to the database-only scoring/finalization/
+read state in revisions 0001 through 0011.
 
 ## Evidence commands
 

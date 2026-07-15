@@ -19,14 +19,15 @@ Read these files before changing the project:
     state.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync and
-Community score-response contracts, a server-only score-projection mapper, and procedure-only
-identity, passkey, restricted-recovery, pairing, source/device lifecycle, Community usage-ingest,
-Jobs-only ingest-retention, and open-season Community scoring plus terminal finalization and bounded
-public score-projection database slices. Do not claim that HTTP authentication,
-OAuth/Argon2id/WebAuthn/Ed25519 application verification, real-user ingestion, a connector, a
-scoring service or HTTP public-race read, season correction, a finalization scheduler, scheduled or
-broader cleanup, deployment, or a hosted security control exists until its implementation and
-verification are present in the working tree.
+Community score-response contracts, a bounded server-only PostgreSQL score adapter/mapper, and
+procedure-only identity, passkey, restricted-recovery, pairing, source/device lifecycle, Community
+usage-ingest, Jobs-only ingest-retention, and open-season Community scoring plus terminal
+finalization and bounded public score-projection database slices. The adapter is not wired to a
+route or visible component. Do not claim that HTTP authentication, OAuth/Argon2id/WebAuthn/Ed25519
+application verification, real-user ingestion, a connector, a scoring service or HTTP public-race
+read, season correction, a finalization scheduler, scheduled or broader cleanup, deployment, or a
+hosted security control exists until its implementation and verification are present in the working
+tree.
 
 ## Repository map
 
@@ -37,8 +38,8 @@ verification are present in the working tree.
 - `scripts/` contains repository verification and black-box policy tests.
 - `config/` contains reviewed external-host and dependency-license policy; do not widen either
   allowlist as a workaround for a failing check.
-- `apps/web/` contains the synthetic Next.js frontend and nested agent guidance. Read
-  `apps/web/AGENTS.md` before editing it.
+- `apps/web/` contains the synthetic Next.js frontend, dormant score adapter, and nested agent
+  guidance. Read `apps/web/AGENTS.md` before editing it.
 - `contracts/v1/` contains canonical public JSON Schemas; `contracts/generated/` contains
   drift-checked derivatives.
 - `packages/contracts/` contains generated TypeScript types plus the bounded runtime validator and

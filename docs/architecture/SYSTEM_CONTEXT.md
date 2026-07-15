@@ -86,10 +86,12 @@ refresh; and revision 0010 adds server-time late-ingest quarantine plus immutabl
 finalization. Revision 0011 gives Web only a bounded, active-profile score projection, and ADR 0010
 adds its response-only top-32 contract. A server-only Web mapper now enforces the exact projection
 shape and its cross-row invariants before returning a validated frozen contract, without advertising
-a path. These capabilities have role, contract, mapping, and concurrency evidence. The database
-client, Ingest and Jobs services, cleanup/scoring schedulers, edge/origin proof, request signature
-verification, HTTP public-race delivery/cache, and audited correction authority shown in the design
-remain planned.
+a path. ADR 0011 adds a bounded server-only PostgreSQL pool/config/store boundary around that read,
+including strict production TLS, fixed deadlines/query, and per-checkout effective-role and
+least-privileged-login verification. These capabilities have role, contract, adapter, mapping, and
+concurrency evidence. The Web route, deployment login/certificate and live connection, Ingest and
+Jobs services, cleanup/scoring schedulers, edge/origin proof, request signature verification, HTTP
+public-race delivery/cache, and audited correction authority shown in the design remain planned.
 
 ## Component responsibilities
 

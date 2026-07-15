@@ -1,6 +1,6 @@
 # ADR 0004: Cloudflare ingress plus service and database capability isolation
 
-- Status: Accepted (ingest/maintenance/finalization/public-score SQL; services pending)
+- Status: Accepted (database roles and server-only score adapter; network services pending)
 - Date: 2026-07-14
 - Decision owners: Edge, Web/Auth, Ingest, Jobs, Database, and Operations
 - Supersedes: None
@@ -72,8 +72,11 @@ or granting broader database rights.
   submission, gives Jobs exactly bounded expired ingest-state cleanup plus scoring refresh and
   finalization, gives Web only identity procedures plus the bounded active-only public score
   projection, denies all runtime roles direct private-table access, and proves cross-role procedure
-  denials. The network services, cleanup/scoring schedulers, origin proof, signature verification,
-  HTTP score delivery, and correction authority remain pending.
+  denials. ADR 0011 adds a dedicated bounded Web pool and verifies the effective role, distinct
+  narrow login, exact membership, database capability, search path, and read-only state before each
+  fixed score query. A deployment login/TLS connection, the network services, cleanup/scoring
+  schedulers, origin proof, signature verification, HTTP score delivery, and correction authority
+  remain pending.
 - Staging key rotation, service rollback, database migration overlap, restore, and kill-switch
   drills.
 - Admin user-to-role separation, step-up, reason, audit completeness, and conflict tests.
@@ -81,5 +84,6 @@ or granting broader database rights.
 ## References
 
 - [System context](../architecture/SYSTEM_CONTEXT.md)
+- [Bounded Web PostgreSQL score adapter](0011-bounded-web-postgresql-score-adapter.md)
 - [Threat model](../security/THREAT_MODEL.md)
 - [Origin and database abuse cases](../security/ABUSE_CASES.md#infrastructure-administration-and-supply-chain-abuse)

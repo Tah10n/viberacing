@@ -1,6 +1,6 @@
 # ADR 0010: Bounded Community score response contract
 
-- Status: Accepted (schema, validators, and server-only mapper implemented; route and cache pending)
+- Status: Accepted (schema, validators, mapper, and DB adapter implemented; route/cache pending)
 - Date: 2026-07-15
 - Decision owners: Product, Web, Contracts, Security, and Privacy
 - Supersedes: None
@@ -44,10 +44,10 @@ projection, validates the complete response, verifies one Monday-through-Sunday 
 contiguous display positions and SQL shared-rank/order semantics, rejects duplicate handles, and
 returns a frozen response. A valid empty projection maps to an empty `participants` array.
 
-A future database adapter must preserve PostgreSQL `date` columns as canonical date strings and call
-the database projection with the exported constant limit 32. A future route must translate any
-stable mapper failure to bounded problem details rather than serialize a partial or invalid result;
-the mapping error contains no projected value, unexpected field name, or internal exception text.
+ADR 0011 implements the database adapter by casting PostgreSQL `date` columns to canonical text and
+calling the projection with the exported constant limit 32. A future route must translate any stable
+store or mapper failure to bounded problem details rather than serialize a partial or invalid
+result; neither error contains a projected value, unexpected field name, or internal exception text.
 
 The response contains no profile/GitHub/source/device identifier, raw token value, daily score,
 exact timestamp, preference, authentication/recovery state, audit field, CarRecipe, streak,
@@ -126,13 +126,15 @@ Current repository evidence covers:
   windows, contiguous display order, unique handles, score ordering, shared ranks, and post-tie rank
   gaps.
 
-There is still no database client/adapter, HTTP route, request/path schema, response header policy,
-cache, CarRecipe/streak/freshness contract, load evidence, deployment, or real-user data. A
-generated response component and isolated mapper are not endpoint or launch evidence.
+There is still no HTTP route, request/path schema, response header policy, cache,
+CarRecipe/streak/freshness contract, load evidence, deployment login/TLS integration, or real-user
+data. A generated response component, mapper, and server-only database adapter are not endpoint or
+launch evidence.
 
 ## References
 
 - [Public Community score projection](0009-public-community-score-projection.md)
+- [Bounded Web PostgreSQL score adapter](0011-bounded-web-postgresql-score-adapter.md)
 - [Community trust tier](0001-community-trust-tier.md)
 - [Canonical public contracts](../../contracts/README.md)
 - [Project plan](../PROJECT_PLAN.md)

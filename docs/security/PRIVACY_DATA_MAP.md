@@ -46,6 +46,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Locale, theme, reduced-motion, privacy preferences                  | Account                         | User; product experience and visibility controls                       | User profile; only public effects are visible                             | `profiles` or preference store                                          | Until reset or deletion                                                                                     |
 | Invite verifier and state                                           | Security                        | Operator-issued invite; gate beta enrollment                           | Invite procedure and limited admin role                                   | Slow/keyed hash, status, expiry, non-sensitive audit                    | Expiry/redemption plus bounded abuse/audit window; launch decision required                                 |
 | Session verifier and metadata                                       | Security                        | Web/Auth; maintain an authenticated browser session                    | Web/Auth only                                                             | Keyed verifier, expiry, state, and authenticating-passkey provenance    | Short expiry and bounded revocation window; delete/revoke on profile deletion                               |
+| Web PostgreSQL deployment login and password                        | Security                        | Deployment; authorize only the Web score adapter                       | Adapter and PostgreSQL driver process memory only                         | Protected environment/secret manager; never tracked or logged           | Rotate on exposure/role change and remove when the adapter is disabled                                      |
 | WebAuthn credential public key and credential ID                    | Security                        | User authenticator; login and fresh step-up                            | Web/Auth; user can list only bounded friendly metadata                    | `passkeys`; no attestation fingerprint store                            | Active until removal; revoked reference until bounded cleanup/profile deletion; launch decision required    |
 | WebAuthn challenge, context, and verifying-passkey reference        | Security                        | Server; bind one ceremony to one action and exact credential           | Web/Auth only                                                             | Short-lived challenge with exact session/profile/action/passkey binding | One-time, at most minutes; bounded expiry cleanup required before launch                                    |
 | Recovery-code selector and verifier                                 | Security                        | Web/Auth-generated; recover profile access                             | Web/Auth only; plaintext secret shown once to the user                    | Opaque selector and Argon2id PHC; protected pepper stays outside DB     | PHC scrubbed on use; batch removed on regeneration, completion, or deletion; cleanup before launch          |
@@ -130,8 +131,17 @@ closed response schema rejects private/unknown fields, daily detail, exact times
 freshness, and profile detail. A server-only mapper reads only the exact ten projection columns,
 emits the constant trust wrapper, and returns only a validated frozen response; its stable failure
 does not include a row value or unexpected field name. Generated TypeScript/OpenAPI components and
-runtime validators exist, but no database client, HTTP route, cache, request metadata, log field, or
-retention obligation is thereby created.
+runtime validators exist, but no HTTP route, cache, request metadata, log field, or retention
+obligation is thereby created.
+
+ADR 0011 adds a server-only database adapter but no collected or retained field. It sends one
+canonical season label and constant limit to the existing projection, casts the two public calendar
+labels to text, and passes only those ten Public columns to the mapper. The deployment login and
+password are Security configuration supplied outside the repository: the tracked values are
+non-working placeholders, the password is non-enumerable and JSON-redacted in the pool config, and
+neither it nor the host, login, SQL, driver error, season input, or row value is included in adapter
+errors or monitoring signals. The adapter adds no log, cache, analytics, browser, export, or
+retention sink. No HTTP request metadata exists because no route constructs it.
 
 ## Prohibited data
 
@@ -162,10 +172,11 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
 - Jobs currently receive only bounded expired ingest-state cleanup, open-season Community scoring
   refresh, and terminal finalization. Correction and deletion capabilities require separate
   migrations and tests; migrations use a different non-runtime owner.
-- The database public score model, response-only contract, and server-only mapper contain only
-  fields explicitly classified Public. The database client, HTTP route, and cache remain planned.
-  Authenticated responses are private and `no-store`; public cache keys cannot include or mix
-  session state.
+- The database public score model, response-only contract, mapper, and bounded server-only adapter
+  contain only fields explicitly classified Public. A deployment login is Security configuration,
+  not response data, and the adapter verifies that it has only Web membership before reading. The
+  HTTP route and cache remain planned. Authenticated responses are private and `no-store`; public
+  cache keys cannot include or mix session state.
 - Admin access is separate, reasoned, passkey-stepped-up, and audited. Routine support has no need
   to read exact usage.
 

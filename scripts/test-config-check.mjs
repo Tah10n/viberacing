@@ -6,7 +6,44 @@ import {
   validateRootPackage,
   validateWorkspacePackage,
   validateWorkflow,
+  validateEnvExampleText,
 } from "./check-config.mjs";
+
+const goodEnvExample = `DATABASE_HOST=127.0.0.1
+DATABASE_PORT=54329
+DATABASE_NAME=viberacing_local
+DATABASE_USER=viberacing_local
+DATABASE_PASSWORD=local-development-only
+VIBERACING_WEB_DATABASE_HOST=127.0.0.1
+VIBERACING_WEB_DATABASE_PORT=54329
+VIBERACING_WEB_DATABASE_NAME=viberacing_local
+VIBERACING_WEB_DATABASE_USER=replace_with_local_web_login
+VIBERACING_WEB_DATABASE_PASSWORD=replace-with-local-web-password
+VIBERACING_WEB_DATABASE_TLS_MODE=disable`;
+
+assert.deepEqual(validateEnvExampleText(goodEnvExample), []);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_WEB_DATABASE_USER=replace_with_local_web_login",
+      "VIBERACING_WEB_DATABASE_USER=viberacing_local",
+    ),
+  ).join("\n"),
+  /must not reuse the bootstrap owner/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_WEB_DATABASE_PASSWORD=replace-with-local-web-password",
+      "VIBERACING_WEB_DATABASE_PASSWORD=private-value",
+    ),
+  ).join("\n"),
+  /must retain the reviewed public-safe example value/,
+);
+assert.match(
+  validateEnvExampleText(`${goodEnvExample}\nDATABASE_HOST=127.0.0.1`).join("\n"),
+  /duplicates DATABASE_HOST/,
+);
 
 const pinnedCheckout = `actions/checkout@${"a".repeat(40)}`;
 const goodWorkflow = {
@@ -347,4 +384,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (30 cases).");
+console.log("Configuration checker tests passed (35 cases).");

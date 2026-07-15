@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and ten accepted ADRs.
+  fail-closed compatibility policy and matrix, and eleven accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -38,7 +38,12 @@ Versioning where its guarantees are applicable.
   metadata, generated readonly TypeScript validators, and pre-endpoint OpenAPI components.
 - A server-only public-score mapper that accepts unknown adapter output, enforces the exact SQL
   column allowlist plus season/order/rank invariants, validates the canonical response, and emits no
-  reflected projection values on failure; no database client or route is implied.
+  reflected projection values on failure; no route is implied.
+- A bounded server-only PostgreSQL public-score adapter with a dedicated Web-login config namespace,
+  production certificate verification, a four-connection pool, fixed timeouts/lifetime, an exact
+  per-checkout role/login-membership/capability/search-path/read-only probe, canonical Monday input,
+  and one parameterized top-32 projection call with date-to-text preservation. It exposes no HTTP
+  path and is not connected to the synthetic page.
 - Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
   drift gates and black-box regression coverage.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
@@ -134,6 +139,11 @@ Versioning where its guarantees are applicable.
 - Added projection-mapper regression coverage for malformed arrays/rows, accessors, private or
   missing columns, calendar boundaries, contract bounds, shared-rank gaps, page limits, and
   non-reflective runtime failures without connecting to PostgreSQL.
+- Added 62 adapter regression cases for environment/TLS/password bounds, safe config serialization,
+  pool lifecycle and stable idle errors, canonical seasons, every-checkout database boundary probes,
+  fixed SQL parameters/date casts, malformed/accessor/revoked results, healthy versus destructive
+  release, and non-reflective connection/query/release/projection failures. A configuration checker
+  now locks tracked Web placeholders apart from the compose owner.
 - Made passkey race preservation assertions fail when an expected row is missing and added a static
   regression check that rejects missing-row-unsafe scalar-subquery `IF NOT` assertions.
 - Made passkey revoke terminal, protected the last active key, preserved monotonic sign state, and

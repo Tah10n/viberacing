@@ -3,7 +3,9 @@
 This workspace is the Phase 1 product shell: a responsive pixel-art race, Community leaderboard, and
 demo profile built entirely from committed synthetic fixtures. It is suitable for local design,
 accessibility, localization, and scoring review. It is not an authenticated product and does not
-read Codex, a database, or user accounts.
+read Codex or user accounts. Server-only score database modules now exist for the next application
+slice, but no route or visible component constructs them; the prototype still does not query a
+database.
 
 ## Run it
 
@@ -23,19 +25,36 @@ for a hosted deployment; it is public configuration, not a secret. Focused check
 
 ## Module map
 
-| Path                                   | Responsibility                                                 | Trust boundary                                                         |
-| -------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `app/page.tsx`                         | Builds the synthetic public payload on the server              | Must pass only public presentation data into the client tree           |
-| `lib/race-data.ts`                     | Clearly synthetic raw activity fixtures and payload projection | Marked `server-only`; never replace with exports or real account data  |
-| `lib/public-community-score-mapper.ts` | Validates and maps the exact SQL score projection              | Server-only and fail-closed; no route or database client exists yet    |
-| `lib/scoring.ts`                       | Bounded daily/weekly score and deterministic rank calculation  | Treat all future device input as untrusted and validate before calling |
-| `lib/race-types.ts`                    | Client-safe participant and demo-profile shape                 | Must not gain raw tokens or source/account identifiers                 |
-| `lib/public-origin.ts`                 | Strict parser for the canonical social-metadata origin         | Server-only; hosted origins require HTTPS DNS and no extra URL parts   |
-| `lib/car-recipe.ts`                    | Closed-enum car customization and fixed sprites                | No arbitrary colors, markup, text, files, SVG, or URLs                 |
-| `components/pixel-race-canvas.tsx`     | Deterministic code-native renderer                             | Draws fixed primitives only; semantic DOM description is mandatory     |
-| `components/race-experience.tsx`       | EN/RU interaction, table, profile, theme, and motion controls  | Local storage is restricted to non-personal preferences                |
-| `proxy.ts`                             | Per-response nonce CSP                                         | Keep production CSP fail-closed and free of remote origins             |
-| `next.config.ts`                       | Static security headers and build isolation                    | Turbopack must remain pinned to this repository root                   |
+| Path                                   | Responsibility                                                 | Trust boundary                                                                  |
+| -------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `app/page.tsx`                         | Builds the synthetic public payload on the server              | Must pass only public presentation data into the client tree                    |
+| `lib/race-data.ts`                     | Clearly synthetic raw activity fixtures and payload projection | Marked `server-only`; never replace with exports or real account data           |
+| `lib/public-community-score-mapper.ts` | Validates and maps the exact SQL score projection              | Server-only, exact allowlist, top-32, and fail-closed                           |
+| `lib/public-community-score-store.ts`  | Executes the fixed public-score procedure and mapper           | Canonical Monday only; verifies every checkout; no route constructs it yet      |
+| `lib/public-score-database-config.ts`  | Parses the dedicated Web login and TLS/pool contract           | Owner settings are separate; production is verify-full; errors reflect no value |
+| `lib/public-score-database-pool.ts`    | Wraps `pg` with narrow connect/query/release/close authority   | Four connections; bounded waits; stable idle-error signal only                  |
+| `lib/scoring.ts`                       | Bounded daily/weekly score and deterministic rank calculation  | Treat all future device input as untrusted and validate before calling          |
+| `lib/race-types.ts`                    | Client-safe participant and demo-profile shape                 | Must not gain raw tokens or source/account identifiers                          |
+| `lib/public-origin.ts`                 | Strict parser for the canonical social-metadata origin         | Server-only; hosted origins require HTTPS DNS and no extra URL parts            |
+| `lib/car-recipe.ts`                    | Closed-enum car customization and fixed sprites                | No arbitrary colors, markup, text, files, SVG, or URLs                          |
+| `components/pixel-race-canvas.tsx`     | Deterministic code-native renderer                             | Draws fixed primitives only; semantic DOM description is mandatory              |
+| `components/race-experience.tsx`       | EN/RU interaction, table, profile, theme, and motion controls  | Local storage is restricted to non-personal preferences                         |
+| `proxy.ts`                             | Per-response nonce CSP                                         | Keep production CSP fail-closed and free of remote origins                      |
+| `next.config.ts`                       | Static security headers and build isolation                    | Turbopack must remain pinned to this repository root                            |
+
+## Score database adapter configuration
+
+The adapter is constructed explicitly; importing or running the synthetic page does not connect. It
+uses only the `VIBERACING_WEB_DATABASE_*` settings documented in `.env.example`. The separate
+`DATABASE_*` values belong to the disposable compose bootstrap owner and are forbidden for Web
+reads. The repository intentionally creates no working login.
+
+Local adapter work requires an infrastructure-provisioned login whose only group membership is
+`viberacing_web`. Cleartext requires explicit `NODE_ENV=development` or `test` plus loopback. Every
+other environment requires `verify-full`, a certificate-valid multi-label DNS name, and TLS 1.2 or
+later. The pool checks the effective Web role, narrow login membership/attributes, database
+capability, search path, and read-only state before every fixed parameterized score query. No
+setting, driver error, SQL, or row value belongs in logs or client responses.
 
 ## Public client data contract
 
@@ -69,8 +88,9 @@ aggregate source count; it does not pair or verify accounts.
 - Locale, theme, and motion are the only persistent browser keys. Rendering still works when storage
   is blocked.
 - There are no trackers, analytics calls, remote fonts, remote images, cookies, accounts, or runtime
-  secrets in this phase. The only consumed environment setting is an optional public metadata
-  origin; a malformed value fails the build.
+  secrets in the visible prototype. Its only consumed environment setting is an optional public
+  metadata origin; a malformed value fails the build. The dormant score adapter reads its dedicated
+  server settings only when explicitly constructed.
 - Product rendering uses local HTML/CSS/canvas code. The social preview is a documented,
   metadata-sanitized project-generated PNG; no remote visual source is loaded. The optional Next.js
   `sharp` graph is removed while image optimization is unused. A `never`-typed declaration covers
@@ -81,10 +101,13 @@ replace the Phase 2 authentication, ingestion, retention, deletion, and abuse-co
 
 ## Test strategy
 
-Vitest runs business-logic, data-boundary, component, interaction, CSP/header, localization, and
-axe-core accessibility tests. Canvas tests execute real render loops against a typed context stub,
-including animated and no-context paths. Preference tests cover valid settings, reduced motion,
-pausing, invalid/blocked storage, and cleanup.
+Vitest runs business-logic, data-boundary, database-config/pool/store, component, interaction,
+CSP/header, localization, and axe-core accessibility tests. Adapter tests cover TLS/environment
+bounds, non-reflective failures, pool lifecycle, every-checkout role/login/search-path/read-only
+probes, fixed SQL parameters, release/destruction behavior, and mapper integration without requiring
+or claiming a live deployment login. Canvas tests execute real render loops against a typed context
+stub, including animated and no-context paths. Preference tests cover valid settings, reduced
+motion, pausing, invalid/blocked storage, and cleanup.
 
 Coverage thresholds apply to product components and libraries. Small framework entrypoints are
 excluded from unit coverage and exercised by `next build`; counting imports as unit coverage would

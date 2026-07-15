@@ -7,11 +7,12 @@ dependency.
 
 ## Direct runtime packages
 
-| Component                                      | Purpose                   | Declared license |
-| ---------------------------------------------- | ------------------------- | ---------------- |
-| [next](https://github.com/vercel/next.js)      | Web application framework | MIT              |
-| [React](https://github.com/facebook/react)     | User-interface runtime    | MIT              |
-| [react-dom](https://github.com/facebook/react) | Browser rendering runtime | MIT              |
+| Component                                      | Purpose                    | Declared license |
+| ---------------------------------------------- | -------------------------- | ---------------- |
+| [next](https://github.com/vercel/next.js)      | Web application framework  | MIT              |
+| [pg](https://github.com/brianc/node-postgres)  | PostgreSQL client and pool | MIT              |
+| [React](https://github.com/facebook/react)     | User-interface runtime     | MIT              |
+| [react-dom](https://github.com/facebook/react) | Browser rendering runtime  | MIT              |
 
 ## Direct development tools
 
@@ -20,6 +21,7 @@ dependency.
 | [@eslint/js](https://github.com/eslint/eslint)                              | Core JavaScript lint rules               | MIT              |
 | [@next/eslint-plugin-next](https://github.com/vercel/next.js)               | Next.js correctness and Web Vitals rules | MIT              |
 | [@types/node](https://github.com/DefinitelyTyped/DefinitelyTyped)           | Node.js type declarations                | MIT              |
+| [@types/pg](https://github.com/DefinitelyTyped/DefinitelyTyped)             | PostgreSQL client type declarations      | MIT              |
 | [@types/react](https://github.com/DefinitelyTyped/DefinitelyTyped)          | React type declarations                  | MIT              |
 | [@types/react-dom](https://github.com/DefinitelyTyped/DefinitelyTyped)      | React DOM type declarations              | MIT              |
 | [@vitest/coverage-v8](https://github.com/vitest-dev/vitest)                 | V8-backed test coverage                  | MIT              |

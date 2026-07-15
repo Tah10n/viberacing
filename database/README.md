@@ -132,7 +132,9 @@ will receive one group role through protected infrastructure. Runtime roles are 
 owner or one another; they cannot create schema objects, use temporary database storage, read a
 private table, or rely on `public` in `search_path`. The database default and group-role defaults
 both use only `pg_catalog, pg_temp`; service startup must still verify the effective role and
-setting after connecting.
+setting after connecting. The server-only public-score adapter now performs that verification before
+every pooled score read and additionally rejects a privileged or multiply-grouped deployment login;
+other future service adapters must implement equivalent capability-specific startup evidence.
 
 Every private table has forced row-level security with an owner-only policy. This is defense in
 depth against an accidental future table grant; it does not justify adding a direct runtime grant.
@@ -346,9 +348,11 @@ no public gap. Its exact ten fields omit private IDs, raw/daily values, and exac
 Ingest, Jobs, Admin, and `PUBLIC` are denied. Ranking still evaluates the visible season before the
 100-row result cap, so the five-second database deadline is defense in depth rather than capacity
 evidence. A separate server-only Web mapper now narrows an unknown adapter result to the canonical
-top-32 response and fails closed on projection drift. No database client, HTTP route,
-cache/invalidation, car, streak, rounded freshness, profile detail, rate limit, or deployment is
-implemented.
+top-32 response and fails closed on projection drift. ADR 0011 adds a bounded `pg` adapter that
+verifies its Web-only deployment login/session before each fixed parameterized call, casts calendar
+dates to text, and applies that mapper. No HTTP route, cache/invalidation, car, streak, rounded
+freshness, profile detail, rate limit, deployment login/TLS integration, or live adapter connection
+is implemented.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
@@ -406,9 +410,10 @@ hard failure, not something the script silently broadens or repairs.
   Ed25519 verification, origin proof, generic errors, rate limits, deadlines, and backpressure.
 - Implement the Jobs service and scheduler around the database scoring refresh and finalization,
   plus audited corrections and freshness/streak projection.
-- Implement the bounded database adapter and versioned HTTP score route around the existing
-  `CommunityScorePageV1` mapper, including cache/invalidation, request shaping, query-plan/load
-  evidence, and monitoring.
+- Integrate the bounded database adapter with a deployment-provisioned Web-only login and verified
+  TLS, then implement the versioned HTTP score route around `CommunityScorePageV1`, including
+  cache/invalidation, request shaping, query-plan/load evidence, route-level deadlines/backpressure,
+  and monitoring.
 - Define a separate complete race/profile contract when CarRecipe, streak, freshness, and profile
   detail have real persistence and lifecycle evidence.
 - Schedule and monitor the implemented ingest-retention procedure, and implement bounded cleanup for

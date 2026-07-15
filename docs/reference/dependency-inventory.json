@@ -290,6 +290,12 @@
       ]
     },
     {
+      "name": "@types/pg",
+      "version": "8.20.0",
+      "license": "MIT",
+      "direct": [{ "workspace": "apps/web", "scope": "development" }]
+    },
+    {
       "name": "@types/react",
       "version": "19.2.17",
       "license": "MIT",
@@ -704,10 +710,27 @@
     { "name": "path-exists", "version": "4.0.0", "license": "MIT", "direct": [] },
     { "name": "path-key", "version": "3.1.1", "license": "MIT", "direct": [] },
     { "name": "pathe", "version": "2.0.3", "license": "MIT", "direct": [] },
+    {
+      "name": "pg",
+      "version": "8.22.0",
+      "license": "MIT",
+      "direct": [{ "workspace": "apps/web", "scope": "runtime" }]
+    },
+    { "name": "pg-cloudflare", "version": "1.4.0", "license": "MIT", "direct": [] },
+    { "name": "pg-connection-string", "version": "2.14.0", "license": "MIT", "direct": [] },
+    { "name": "pg-int8", "version": "1.0.1", "license": "ISC", "direct": [] },
+    { "name": "pg-pool", "version": "3.14.0", "license": "MIT", "direct": [] },
+    { "name": "pg-protocol", "version": "1.15.0", "license": "MIT", "direct": [] },
+    { "name": "pg-types", "version": "2.2.0", "license": "MIT", "direct": [] },
+    { "name": "pgpass", "version": "1.0.5", "license": "MIT", "direct": [] },
     { "name": "picocolors", "version": "1.1.1", "license": "ISC", "direct": [] },
     { "name": "picomatch", "version": "2.3.2", "license": "MIT", "direct": [] },
     { "name": "picomatch", "version": "4.0.5", "license": "MIT", "direct": [] },
     { "name": "postcss", "version": "8.5.19", "license": "MIT", "direct": [] },
+    { "name": "postgres-array", "version": "2.0.0", "license": "MIT", "direct": [] },
+    { "name": "postgres-bytea", "version": "1.0.1", "license": "MIT", "direct": [] },
+    { "name": "postgres-date", "version": "1.0.7", "license": "MIT", "direct": [] },
+    { "name": "postgres-interval", "version": "1.2.0", "license": "MIT", "direct": [] },
     { "name": "prelude-ls", "version": "1.2.1", "license": "MIT", "direct": [] },
     {
       "name": "prettier",
@@ -745,6 +768,7 @@
     { "name": "slash", "version": "5.1.0", "license": "MIT", "direct": [] },
     { "name": "smol-toml", "version": "1.7.0", "license": "BSD-3-Clause", "direct": [] },
     { "name": "source-map-js", "version": "1.2.1", "license": "BSD-3-Clause", "direct": [] },
+    { "name": "split2", "version": "4.2.0", "license": "ISC", "direct": [] },
     { "name": "stackback", "version": "0.0.2", "license": "MIT", "direct": [] },
     { "name": "std-env", "version": "4.2.0", "license": "MIT", "direct": [] },
     { "name": "string-width", "version": "8.2.1", "license": "MIT", "direct": [] },
@@ -815,6 +839,7 @@
     { "name": "xdg-basedir", "version": "5.1.0", "license": "MIT", "direct": [] },
     { "name": "xml-name-validator", "version": "5.0.0", "license": "Apache-2.0", "direct": [] },
     { "name": "xmlchars", "version": "2.2.0", "license": "MIT", "direct": [] },
+    { "name": "xtend", "version": "4.0.2", "license": "MIT", "direct": [] },
     {
       "name": "yaml",
       "version": "2.8.3",

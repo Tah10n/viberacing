@@ -8,10 +8,12 @@ It has procedure-only identity, passkey login/management, restricted recovery, p
 source/device lifecycle database capabilities plus Community ingest, retention cleanup, scoring, and
 terminal finalization and public score-projection procedures, but no authentication or recovery
 application code, HTTP API, OAuth/Argon2id/WebAuthn/Ed25519 verifier, Jobs process or scheduler,
-real-user ingestion, public HTTP score read, audited correction, or connector. A successful setup
-proves repository gates, synthetic frontend behavior, SQL constraints, session-bound procedure
-behavior, lifecycle/scoring concurrency, and database role isolation; it does not prove a production
-flow.
+real-user ingestion, public HTTP score read, audited correction, or connector. A bounded server-only
+Web PostgreSQL adapter is implemented and unit-tested, but no route constructs it and this
+repository supplies no deployment login or TLS certificate. A successful setup proves repository
+gates, synthetic frontend behavior, adapter boundaries, SQL constraints, session-bound procedure
+behavior, lifecycle/scoring concurrency, and database role isolation; it does not prove a live
+adapter or production flow.
 
 ## Prerequisites
 
@@ -106,15 +108,26 @@ storage after the test. It does not touch the normal local database volume. See
 
 ## Local configuration
 
-`.env.example` is a public schema containing placeholders and a known local-only database password.
-The current web prototype optionally reads `VIBERACING_PUBLIC_ORIGIN` for absolute social metadata.
-Without it, development uses loopback and production builds use a reserved `.example` origin that is
-not suitable for deployment. A real hosted build must receive its public HTTPS DNS origin through
-the deployment environment. If local work needs the public schema, copy `.env.example` to `.env`;
-`.env` is ignored and must never be committed.
+`.env.example` is a public schema containing placeholders and a known local-only compose bootstrap
+password. The current web prototype optionally reads `VIBERACING_PUBLIC_ORIGIN` for absolute social
+metadata. Without it, development uses loopback and production builds use a reserved `.example`
+origin that is not suitable for deployment. A real hosted build must receive its public HTTPS DNS
+origin through the deployment environment.
+
+The server-only score adapter uses only `VIBERACING_WEB_DATABASE_*`. Its tracked user/password are
+deliberately non-working placeholders and are checked against accidental reuse of the `DATABASE_*`
+compose owner. Local integration requires a separately provisioned login whose only membership is
+`viberacing_web`; login creation remains environment-owned and is not automated here. `disable`
+requires explicit `NODE_ENV=development` or `test` plus loopback. Every other environment requires
+`verify-full`, a certificate-valid multi-label DNS hostname, and TLS 1.2 or later. The synthetic
+page and build never construct the adapter, so they need none of these settings.
+
+If local work needs the public schema, copy `.env.example` to `.env`; `.env` is ignored and must
+never be committed.
 
 Do not put production or staging values on a development workstation. Do not use the example
-database password anywhere except the loopback-only Compose service.
+database password anywhere except the loopback-only Compose service, and never pass that owner to
+the Web adapter.
 
 ## Start PostgreSQL
 
