@@ -218,6 +218,8 @@ describe("public Community score mapper", () => {
     { active_days: 8 },
     { source_count: 33 },
     { season_start: "2026-02-30" },
+    { season_start: "2026-07-14", season_end: "2026-07-20" },
+    { season_end: "2026-07-20" },
     { score_version: "v" },
     { rank_position: 0 },
   ])("fails closed when a projected scalar violates the public contract: %o", (override) => {
@@ -225,8 +227,7 @@ describe("public Community score mapper", () => {
   });
 
   it.each([
-    { rows: [row({ season_start: "2026-07-14", season_end: "2026-07-20" })] },
-    { rows: [row({ season_end: "2026-07-20" })] },
+    { rows: [row({ season_end: "2026-07-26" })] },
     {
       rows: [row(), secondRow({ season_start: "2026-07-20", season_end: "2026-07-26" })],
     },

@@ -34,6 +34,8 @@ The factory owns this complete mapping:
 | `unauthorized`            | 401         | Unauthorized            | false     |
 | `forbidden`               | 403         | Forbidden               | false     |
 | `not_found`               | 404         | Not found               | false     |
+| `method_not_allowed`      | 405         | Method not allowed      | false     |
+| `not_acceptable`          | 406         | Not acceptable          | false     |
 | `conflict`                | 409         | Conflict                | false     |
 | `validation_failed`       | 422         | Validation failed       | false     |
 | `rate_limited`            | 429         | Rate limited            | true      |
@@ -52,6 +54,10 @@ path/request contract, content negotiation, method handling, `Allow`, `WWW-Authe
 `Retry-After` semantics where applicable, CORS decision, admission/backpressure, route-wide
 deadline, store-error translation, safe operational event, and success/cache policy. It must
 generate one token at request entry and must not replace it with an inbound header.
+
+ADR 0013 later reserved the first contract-only public score operation and added the 405/406
+vocabulary needed for explicit method and representation handling. The factory remains generic and
+no route exists merely because these mappings or the generated operation exist.
 
 ## Security and privacy consequences
 
@@ -98,7 +104,7 @@ Current repository evidence covers:
 
 - exact 16-byte entropy requests, production cryptographic generation, unpadded base64url shape,
   frozen opaque tokens, and distinct generated values;
-- all nine status/title/retry mappings and exact `ProblemDetailsV1` bodies;
+- all eleven status/title/retry mappings and exact `ProblemDetailsV1` bodies;
 - `application/problem+json`, `no-store`, matching `x-request-id`, and absent CORS;
 - unavailable, short, accessor-backed, and revoked entropy/token inputs; unknown kinds; and no
   reflected private failure value; and
@@ -117,3 +123,4 @@ rate limit, cache, deployment, or end-to-end HTTP evidence exists yet.
 - [Threat model](../security/THREAT_MODEL.md)
 - [Abuse cases](../security/ABUSE_CASES.md)
 - [Web workspace](../../apps/web/README.md)
+- [Public Community score HTTP contract](0013-public-community-score-http-contract.md)

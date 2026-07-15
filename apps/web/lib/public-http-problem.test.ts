@@ -83,6 +83,8 @@ describe("public HTTP problem boundary", () => {
     ["unauthorized", 401, "Unauthorized", false],
     ["forbidden", 403, "Forbidden", false],
     ["not_found", 404, "Not found", false],
+    ["method_not_allowed", 405, "Method not allowed", false],
+    ["not_acceptable", 406, "Not acceptable", false],
     ["conflict", 409, "Conflict", false],
     ["validation_failed", 422, "Validation failed", false],
     ["rate_limited", 429, "Rate limited", true],

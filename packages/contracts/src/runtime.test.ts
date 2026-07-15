@@ -79,6 +79,50 @@ describe("bounded primitive validation", () => {
     expect(codes(dateSchema, "2101-01-01")).toContain("format");
     expect(codes(dateTimeSchema, "not-a-time")).toContain("format");
   });
+
+  it("enforces bounded ISO-weekday date extensions and rejects malformed extension sets", () => {
+    const mondaySchema = {
+      type: "string",
+      minLength: 10,
+      maxLength: 10,
+      format: "date",
+      "x-viberacing-dateMinimum": "1999-12-27",
+      "x-viberacing-dateMaximum": "2099-12-28",
+      "x-viberacing-isoWeekday": 1,
+    } as const satisfies ContractSchema;
+
+    expect(validateContract(mondaySchema, "1999-12-27").ok).toBe(true);
+    expect(validateContract(mondaySchema, "2099-12-28").ok).toBe(true);
+    expect(codes(mondaySchema, "1999-12-20")).toContain("date_minimum");
+    expect(codes(mondaySchema, "2100-01-04")).toContain("date_maximum");
+    expect(codes(mondaySchema, "2026-07-14")).toContain("iso_weekday");
+    expect(codes(mondaySchema, "2026-02-30")).toEqual(["format"]);
+
+    const incompleteSchema = {
+      type: "string",
+      minLength: 10,
+      maxLength: 10,
+      format: "date",
+      "x-viberacing-dateMinimum": "2099-12-28",
+    } as const satisfies ContractSchema;
+    expect(codes(incompleteSchema, "2026-07-13")).toContain("invalid_structure");
+
+    const reversedSchema = {
+      ...mondaySchema,
+      "x-viberacing-dateMinimum": "2099-12-28",
+      "x-viberacing-dateMaximum": "1999-12-27",
+      "x-viberacing-isoWeekday": 0,
+    } as const satisfies ContractSchema;
+    expect(codes(reversedSchema, "2026-07-13")).toContain("invalid_structure");
+
+    const misplacedExtensionSchema = {
+      type: "integer",
+      minimum: 0,
+      maximum: 10,
+      "x-viberacing-dateMinimum": "1999-12-27",
+    } as const satisfies ContractSchema;
+    expect(codes(misplacedExtensionSchema, 1)).toContain("invalid_structure");
+  });
 });
 
 describe("bounded object and array validation", () => {

@@ -3,6 +3,9 @@ export type ContractSchemaType = "array" | "boolean" | "integer" | "object" | "s
 export interface ContractSchema {
   readonly $id?: string;
   readonly $schema?: string;
+  readonly "x-viberacing-dateMaximum"?: string;
+  readonly "x-viberacing-dateMinimum"?: string;
+  readonly "x-viberacing-isoWeekday"?: number;
   readonly "x-viberacing-uniqueBy"?: string;
   readonly additionalProperties?: false;
   readonly const?: boolean | number | string;
@@ -27,10 +30,13 @@ export type ValidationIssueCode =
   | "budget_exceeded"
   | "const"
   | "cycle"
+  | "date_maximum"
+  | "date_minimum"
   | "duplicate_item_key"
   | "enum"
   | "format"
   | "invalid_structure"
+  | "iso_weekday"
   | "max_items"
   | "max_length"
   | "maximum"
@@ -135,18 +141,20 @@ function codePointLength(value: string, maximum: number | undefined): number {
   return length;
 }
 
-function isCalendarDate(value: string): boolean {
+function calendarDate(value: string): Date | undefined {
   const match = /^((?:1999|20[0-9]{2}|2100))-([0-9]{2})-([0-9]{2})$/.exec(value);
   if (match === null) {
-    return false;
+    return undefined;
   }
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
   const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-  );
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+    ? date
+    : undefined;
 }
 
 function isCanonicalUtcDateTime(value: string): boolean {
@@ -187,7 +195,7 @@ function isCanonicalUtcDateTime(value: string): boolean {
 }
 
 function matchesFormat(value: string, format: ContractSchema["format"]): boolean {
-  return format === "date" ? isCalendarDate(value) : isCanonicalUtcDateTime(value);
+  return format === "date" ? calendarDate(value) !== undefined : isCanonicalUtcDateTime(value);
 }
 
 function matchesPattern(value: string, pattern: string): boolean {
@@ -237,8 +245,42 @@ function validateString(
   if (schema.pattern !== undefined && !matchesPattern(value, schema.pattern)) {
     addIssue(state, path, "pattern");
   }
-  if (schema.format !== undefined && !matchesFormat(value, schema.format)) {
+  const formatMatches = schema.format === undefined || matchesFormat(value, schema.format);
+  if (!formatMatches) {
     addIssue(state, path, "format");
+  }
+  const dateMaximum = schema["x-viberacing-dateMaximum"];
+  const dateMinimum = schema["x-viberacing-dateMinimum"];
+  const isoWeekday = schema["x-viberacing-isoWeekday"];
+  if (dateMaximum !== undefined || dateMinimum !== undefined || isoWeekday !== undefined) {
+    const parsedDate = schema.format === "date" && formatMatches ? calendarDate(value) : undefined;
+    const parsedMaximum = dateMaximum === undefined ? undefined : calendarDate(dateMaximum);
+    const parsedMinimum = dateMinimum === undefined ? undefined : calendarDate(dateMinimum);
+    if (
+      parsedDate === undefined ||
+      parsedMaximum === undefined ||
+      parsedMinimum === undefined ||
+      isoWeekday === undefined ||
+      !Number.isSafeInteger(isoWeekday) ||
+      isoWeekday < 1 ||
+      isoWeekday > 7 ||
+      parsedMinimum.valueOf() > parsedMaximum.valueOf()
+    ) {
+      if (formatMatches) {
+        addIssue(state, path, "invalid_structure");
+      }
+      return;
+    }
+    if (parsedDate.valueOf() < parsedMinimum.valueOf()) {
+      addIssue(state, path, "date_minimum");
+    }
+    if (parsedDate.valueOf() > parsedMaximum.valueOf()) {
+      addIssue(state, path, "date_maximum");
+    }
+    const actualIsoWeekday = parsedDate.getUTCDay() === 0 ? 7 : parsedDate.getUTCDay();
+    if (actualIsoWeekday !== isoWeekday) {
+      addIssue(state, path, "iso_weekday");
+    }
   }
 }
 
@@ -433,6 +475,15 @@ function validateNode(
   }
   if (schema.enum !== undefined && !schema.enum.some((entry) => Object.is(entry, value))) {
     addIssue(state, path, "enum");
+  }
+  if (
+    schema.type !== "string" &&
+    (schema["x-viberacing-dateMaximum"] !== undefined ||
+      schema["x-viberacing-dateMinimum"] !== undefined ||
+      schema["x-viberacing-isoWeekday"] !== undefined)
+  ) {
+    addIssue(state, path, "invalid_structure");
+    return;
   }
 
   switch (schema.type) {

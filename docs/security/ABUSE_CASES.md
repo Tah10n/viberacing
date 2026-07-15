@@ -235,8 +235,9 @@ material availability cost.
   self-reported trust metadata, and rejects unknown/private fields. Its server-only mapper requires
   the exact SQL column set and never reflects projected values in mapping errors. The server-only
   adapter selects only those columns with a fixed top-32 parameterized call and reflects no input,
-  row, SQL, configuration, or driver error. HTTP delivery, enumeration controls, rounded freshness,
-  cache purge, and monitoring are still unimplemented.
+  row, SQL, configuration, or driver error. A contract-only GET fixes one public Monday season
+  query, no-store/same-origin semantics, and a closed response matrix. HTTP delivery, enumeration
+  controls, rounded freshness, cache purge, and monitoring are still unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 
@@ -433,9 +434,11 @@ material availability cost.
   page to 32 rows, and the mapper rejects row 33 before traversing projected rows. The Web adapter
   adds a four-connection ceiling, two-second checkout/connect wait, one/five/six-second lock/server/
   client-query deadlines, idle/lifetime recycling, and a fixed limit 32. Ranking still evaluates all
-  currently visible season entries. HTTP delivery, scheduling, request/body limits, cache,
-  route-level concurrency, scoring/read capacity policy, quotas, load shedding, and production
-  capacity evidence remain unimplemented.
+  currently visible season entries. The generated query validator now rejects malformed,
+  out-of-range, and non-Monday seasons before the future route may call the store, while the
+  contract-only operation reserves a 429 response without claiming a client-rate limiter exists.
+  HTTP delivery, scheduling, request/body limits, cache, route-level concurrency, scoring/read
+  capacity policy, quotas, load shedding, and production capacity evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

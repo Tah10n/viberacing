@@ -5,6 +5,21 @@ import { format } from "prettier";
 
 const manifestRelativePath = "contracts/v1/manifest.json";
 const schemaFilePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*\.schema\.json$/;
+const operationKeys =
+  "cacheControl,corsPolicy,method,operationId,path,problemSchema,problemStatuses,queryPolicy,querySchema,responseSchema,summary";
+const problemResponseDescriptions = new Map([
+  [400, "Invalid request."],
+  [401, "Unauthorized."],
+  [403, "Forbidden."],
+  [404, "Not found."],
+  [405, "Method not allowed."],
+  [406, "Not acceptable."],
+  [409, "Conflict."],
+  [422, "Validation failed."],
+  [429, "Rate limited."],
+  [500, "Internal server error."],
+  [503, "Temporarily unavailable."],
+]);
 
 function normalizedText(path) {
   return readFileSync(path, "utf8").replaceAll("\r\n", "\n");
@@ -34,10 +49,15 @@ export function readContractSources(root) {
     manifest === null ||
     typeof manifest !== "object" ||
     Array.isArray(manifest) ||
-    Object.keys(manifest).sort().join(",") !== "contractVersion,schemaVersion,schemas" ||
+    Object.keys(manifest).sort().join(",") !== "contractVersion,operations,schemaVersion,schemas" ||
     manifest.schemaVersion !== 1 ||
     manifest.contractVersion !== "v1" ||
-    !Array.isArray(manifest.schemas)
+    !Array.isArray(manifest.schemas) ||
+    manifest.schemas.length === 0 ||
+    manifest.schemas.length > 32 ||
+    !Array.isArray(manifest.operations) ||
+    manifest.operations.length === 0 ||
+    manifest.operations.length > 32
   ) {
     throw new Error(`${manifestRelativePath} has an invalid shape or version`);
   }
@@ -61,6 +81,90 @@ export function readContractSources(root) {
     return { entry, relativePath, schema: parseJson(absolutePath, relativePath), text };
   });
 
+  const schemaByTypeName = new Map();
+  const exportNames = new Set();
+  for (const record of records) {
+    if (schemaByTypeName.has(record.entry.typeName) || exportNames.has(record.entry.exportName)) {
+      throw new Error(`${manifestRelativePath} contains duplicate public schema names`);
+    }
+    schemaByTypeName.set(record.entry.typeName, record);
+    exportNames.add(record.entry.exportName);
+  }
+
+  let previousOperationKey = "";
+  const operationIds = new Set();
+  const operations = manifest.operations.map((entry, index) => {
+    const schemaReferencePattern = /^[A-Z][A-Za-z0-9]*V1$/;
+    if (
+      entry === null ||
+      typeof entry !== "object" ||
+      Array.isArray(entry) ||
+      Object.keys(entry).sort().join(",") !== operationKeys ||
+      entry.method !== "get" ||
+      typeof entry.path !== "string" ||
+      entry.path.length > 128 ||
+      !/^\/v1\/[a-z0-9]+(?:\/[a-z0-9]+)*$/.test(entry.path) ||
+      typeof entry.operationId !== "string" ||
+      entry.operationId.length > 64 ||
+      !/^[a-z][A-Za-z0-9]*V1$/.test(entry.operationId) ||
+      typeof entry.summary !== "string" ||
+      entry.summary.length === 0 ||
+      entry.summary.length > 120 ||
+      /[\u0000-\u001f]/.test(entry.summary) ||
+      !schemaReferencePattern.test(entry.querySchema ?? "") ||
+      !schemaReferencePattern.test(entry.responseSchema ?? "") ||
+      !schemaReferencePattern.test(entry.problemSchema ?? "") ||
+      !Array.isArray(entry.problemStatuses) ||
+      entry.problemStatuses.length === 0 ||
+      entry.problemStatuses.length > 16 ||
+      entry.queryPolicy !== "closed-single-value" ||
+      entry.cacheControl !== "no-store" ||
+      entry.corsPolicy !== "same-origin"
+    ) {
+      throw new Error(`contract operation ${String(index + 1)} has unsafe names or shape`);
+    }
+
+    let previousStatus = 0;
+    for (const status of entry.problemStatuses) {
+      if (
+        !Number.isSafeInteger(status) ||
+        status <= previousStatus ||
+        !problemResponseDescriptions.has(status)
+      ) {
+        throw new Error(`contract operation ${String(index + 1)} has invalid problem statuses`);
+      }
+      previousStatus = status;
+    }
+
+    const operationKey = `${entry.path}\0${entry.method}`;
+    if (previousOperationKey !== "" && previousOperationKey.localeCompare(operationKey) >= 0) {
+      throw new Error(
+        `${manifestRelativePath} operations must be uniquely sorted by path and method`,
+      );
+    }
+    if (operationIds.has(entry.operationId)) {
+      throw new Error(`${manifestRelativePath} contains a duplicate operation ID`);
+    }
+    previousOperationKey = operationKey;
+    operationIds.add(entry.operationId);
+
+    const queryRecord = schemaByTypeName.get(entry.querySchema);
+    const responseRecord = schemaByTypeName.get(entry.responseSchema);
+    const problemRecord = schemaByTypeName.get(entry.problemSchema);
+    if (
+      queryRecord?.schema?.type !== "object" ||
+      queryRecord.schema.properties === null ||
+      typeof queryRecord.schema.properties !== "object" ||
+      Array.isArray(queryRecord.schema.properties) ||
+      responseRecord?.schema?.type !== "object" ||
+      problemRecord?.schema?.type !== "object" ||
+      problemRecord.schema.properties?.requestId?.type !== "string"
+    ) {
+      throw new Error(`contract operation ${String(index + 1)} references invalid schemas`);
+    }
+    return { entry, problemRecord, queryRecord };
+  });
+
   const digest = createHash("sha256");
   digest.update(`${manifestRelativePath}\0${manifestText}\0`, "utf8");
   for (const record of records) {
@@ -70,6 +174,7 @@ export function readContractSources(root) {
   return {
     digest: `sha256:${digest.digest("hex")}`,
     manifest,
+    operations,
     records,
   };
 }
@@ -171,23 +276,94 @@ function openApiSchema(schema) {
   return rest;
 }
 
+function schemaReference(typeName) {
+  return { $ref: `#/components/schemas/${typeName}` };
+}
+
+function responseHeaders(cacheControl, requestIdSchema) {
+  return {
+    "Cache-Control": {
+      description: "The response is not stored by browsers or shared caches.",
+      schema: { type: "string", const: cacheControl },
+    },
+    Vary: {
+      description: "Representation negotiation varies on the Accept request header.",
+      schema: { type: "string", const: "Accept" },
+    },
+    "x-request-id": {
+      description: "Server-generated opaque request correlation identifier.",
+      schema: openApiSchema(requestIdSchema),
+    },
+  };
+}
+
+function openApiOperation(operation) {
+  const { entry, problemRecord, queryRecord } = operation;
+  const requestIdSchema = problemRecord.schema.properties.requestId;
+  const parameters = Object.entries(queryRecord.schema.properties).map(([name, schema]) => ({
+    name,
+    in: "query",
+    required: true,
+    description: schema.description,
+    schema: openApiSchema(schema),
+  }));
+  const problemResponses = Object.fromEntries(
+    entry.problemStatuses.map((status) => [
+      String(status),
+      {
+        description: problemResponseDescriptions.get(status),
+        headers: responseHeaders(entry.cacheControl, requestIdSchema),
+        content: {
+          "application/problem+json": { schema: schemaReference(entry.problemSchema) },
+        },
+      },
+    ]),
+  );
+  return {
+    operationId: entry.operationId,
+    summary: entry.summary,
+    description:
+      "Contract-only operation. Its presence here does not prove that a route is implemented or deployed.",
+    parameters,
+    responses: {
+      200: {
+        description: "Successful bounded response.",
+        headers: responseHeaders(entry.cacheControl, requestIdSchema),
+        content: { "application/json": { schema: schemaReference(entry.responseSchema) } },
+      },
+      ...problemResponses,
+    },
+    "x-viberacing-cache-policy": entry.cacheControl,
+    "x-viberacing-cors-policy": entry.corsPolicy,
+    "x-viberacing-query-contract": schemaReference(entry.querySchema),
+    "x-viberacing-query-policy": entry.queryPolicy,
+    "x-viberacing-status": "contract-only",
+  };
+}
+
 async function generateOpenApi(sources) {
   const components = Object.fromEntries(
     sources.records.map(({ entry, schema }) => [entry.typeName, openApiSchema(schema)]),
   );
+  const paths = Object.fromEntries(
+    sources.operations.map((operation) => [
+      operation.entry.path,
+      { [operation.entry.method]: openApiOperation(operation) },
+    ]),
+  );
   const document = {
     openapi: "3.1.1",
     info: {
-      title: "Vibe Racing contract components",
+      title: "Vibe Racing public API contract",
       version: "1.0.0",
       description:
-        "Generated schema components only. No endpoint is implemented or deployed merely because it appears here.",
+        "Generated schemas and contract-only operations. A documented path is not implemented or deployed until separately verified in the working tree.",
     },
     jsonSchemaDialect: "https://json-schema.org/draft/2020-12/schema",
-    paths: {},
+    paths,
     components: { schemas: components },
     "x-viberacing-contract-source": sources.digest,
-    "x-viberacing-status": "pre-implementation",
+    "x-viberacing-status": "contract-only",
   };
   return format(`${JSON.stringify(document)}\n`, {
     endOfLine: "lf",

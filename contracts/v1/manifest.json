@@ -8,6 +8,11 @@
       "typeName": "CommunityScorePageV1"
     },
     {
+      "file": "community-score-query.schema.json",
+      "exportName": "communityScoreQueryV1",
+      "typeName": "CommunityScoreQueryV1"
+    },
+    {
       "file": "connector-sync-result.schema.json",
       "exportName": "connectorSyncResultV1",
       "typeName": "ConnectorSyncResultV1"
@@ -21,6 +26,21 @@
       "file": "problem-details.schema.json",
       "exportName": "problemDetailsV1",
       "typeName": "ProblemDetailsV1"
+    }
+  ],
+  "operations": [
+    {
+      "method": "get",
+      "path": "/v1/community/scores",
+      "operationId": "getCommunityScoresV1",
+      "summary": "Read one bounded Community score page",
+      "querySchema": "CommunityScoreQueryV1",
+      "responseSchema": "CommunityScorePageV1",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 406, 429, 500, 503],
+      "queryPolicy": "closed-single-value",
+      "cacheControl": "no-store",
+      "corsPolicy": "same-origin"
     }
   ]
 }

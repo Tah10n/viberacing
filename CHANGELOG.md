@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and twelve accepted ADRs.
+  fail-closed compatibility policy and matrix, and thirteen accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -34,8 +34,9 @@ Versioning where its guarantees are applicable.
 - Strict server-only public-origin validation for absolute social metadata, with HTTPS-only hosted
   origins, loopback-only development HTTP, safe reserved defaults, and negative tests.
 - Canonical closed JSON Schema contracts for connector sync, bounded acknowledgement, public problem
-  details, and a response-only top-32 Community score page with constant self-reported trust
-  metadata, generated readonly TypeScript validators, and pre-endpoint OpenAPI components.
+  details, one public Community season query, and a response-only top-32 score page with constant
+  self-reported trust metadata. Generated readonly TypeScript validators enforce calendar range and
+  ISO weekday, while a manifest-generated OpenAPI GET remains explicitly contract-only.
 - A server-only public-score mapper that accepts unknown adapter output, enforces the exact SQL
   column allowlist plus season/order/rank invariants, validates the canonical response, and emits no
   reflected projection values on failure; no route is implied.
@@ -47,7 +48,11 @@ Versioning where its guarantees are applicable.
 - A server-only public HTTP problem factory that generates an opaque 128-bit request token, fixes
   every status/title/retry mapping, validates `ProblemDetailsV1`, and emits matching `x-request-id`,
   `application/problem+json`, and `no-store` headers without CORS, cookies, reflected causes, or an
-  advertised route.
+  implemented route.
+- A closed contract-only `GET /v1/community/scores` operation with one required Monday
+  `seasonStart`, exact 200/400/406/429/500/503 schemas, no-store/`Vary: Accept` headers, and
+  same-origin CORS posture without claiming a parser, route, limiter, database connection, or
+  deployment.
 - Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
   drift gates and black-box regression coverage.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
@@ -140,6 +145,10 @@ Versioning where its guarantees are applicable.
 - Added response-contract regression coverage for Community trust constants, the ten public score
   fields, empty/top-32 pages, duplicate display positions, bounds, private-field rejection, and
   privacy-safe validation issues without advertising an HTTP route.
+- Added query-contract and generator regression coverage for inclusive season bounds, malformed and
+  non-Monday dates, unknown/accessor fields, date-extension fail-closure, exact OpenAPI response and
+  header semantics, unsafe paths/schema references, duplicate operations, problem-vocabulary drift,
+  and stale generated output.
 - Added projection-mapper regression coverage for malformed arrays/rows, accessors, private or
   missing columns, calendar boundaries, contract bounds, shared-rank gaps, page limits, and
   non-reflective runtime failures without connecting to PostgreSQL.
@@ -148,8 +157,8 @@ Versioning where its guarantees are applicable.
   fixed SQL parameters/date casts, malformed/accessor/revoked results, healthy versus destructive
   release, and non-reflective connection/query/release/projection failures. A configuration checker
   now locks tracked Web placeholders apart from the compose owner.
-- Added 15 public HTTP boundary cases for exact entropy and base64url shape, production request-ID
-  generation, all nine problem mappings, contract-valid bodies, no-store/content-type headers,
+- Added 17 public HTTP boundary cases for exact entropy and base64url shape, production request-ID
+  generation, all eleven problem mappings, contract-valid bodies, no-store/content-type headers,
   absent CORS, opaque token enforcement, and non-reflective short, throwing, accessor-backed,
   revoked, unknown, or prototype-polluted inputs.
 - Made passkey race preservation assertions fail when an expected row is missing and added a static

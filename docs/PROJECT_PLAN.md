@@ -367,6 +367,12 @@ All public endpoints:
 - have explicit cache and CORS policy;
 - never expose stack traces, SQL errors, secrets, or internal hostnames.
 
+The first reserved read contract is `GET /v1/community/scores?seasonStart=YYYY-MM-DD`. It accepts
+exactly one supported Monday season, returns a bounded Community score page or the documented
+problem shape, and starts with `Cache-Control: no-store`, `Vary: Accept`, and same-origin/no-CORS
+semantics. ADR 0013 and the generated OpenAPI operation are contract-only until an HTTP route,
+admission/deadline policy, store-error translation, and end-to-end tests exist.
+
 ### ConnectorSyncV1
 
 The minimum payload contains:

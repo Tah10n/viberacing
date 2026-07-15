@@ -15,6 +15,9 @@ const findings = [];
 const schemaKeys = new Set([
   "$id",
   "$schema",
+  "x-viberacing-dateMaximum",
+  "x-viberacing-dateMinimum",
+  "x-viberacing-isoWeekday",
   "additionalProperties",
   "const",
   "description",
@@ -70,6 +73,7 @@ const expectedFields = new Map([
     "community-score-page.schema.json",
     ["schemaVersion", "trustTier", "selfReported", "participants"],
   ],
+  ["community-score-query.schema.json", ["seasonStart"]],
   [
     "connector-sync.schema.json",
     [
@@ -91,6 +95,32 @@ const expectedFields = new Map([
     ["schemaVersion", "requestId", "status", "errorCode", "title", "retryable"],
   ],
 ]);
+const publicProblemCodes = [
+  "conflict",
+  "forbidden",
+  "internal_error",
+  "invalid_request",
+  "method_not_allowed",
+  "not_acceptable",
+  "not_found",
+  "rate_limited",
+  "temporarily_unavailable",
+  "unauthorized",
+  "validation_failed",
+];
+const publicProblemTitles = [
+  "Conflict",
+  "Forbidden",
+  "Internal server error",
+  "Invalid request",
+  "Method not allowed",
+  "Not acceptable",
+  "Not found",
+  "Rate limited",
+  "Temporarily unavailable",
+  "Unauthorized",
+  "Validation failed",
+];
 
 function report(scope, message) {
   findings.push(`${scope} — ${message}`);
@@ -132,6 +162,25 @@ function validatePrimitiveConstraints(schema, scope) {
   }
 }
 
+function calendarDate(value) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const match = /^((?:1999|20[0-9]{2}|2100))-([0-9]{2})-([0-9]{2})$/.exec(value);
+  if (match === null) {
+    return undefined;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+    ? date
+    : undefined;
+}
+
 function validateSchemaNode(schema, scope, depth, state) {
   state.nodes += 1;
   if (depth > 8 || state.nodes > 200) {
@@ -161,6 +210,13 @@ function validateSchemaNode(schema, scope, depth, state) {
     report(scope, "description must be bounded printable text");
   }
   validatePrimitiveConstraints(schema, scope);
+  const hasDateExtension =
+    schema["x-viberacing-dateMaximum"] !== undefined ||
+    schema["x-viberacing-dateMinimum"] !== undefined ||
+    schema["x-viberacing-isoWeekday"] !== undefined;
+  if (hasDateExtension && schema.type !== "string") {
+    report(scope, "date extensions are supported only on date strings");
+  }
 
   if (schema.type === "object") {
     if (schema.additionalProperties !== false) {
@@ -235,6 +291,24 @@ function validateSchemaNode(schema, scope, depth, state) {
     if (schema.format !== undefined && !["date", "date-time"].includes(schema.format)) {
       report(scope, "only date and date-time formats are supported");
     }
+    const dateMaximum = schema["x-viberacing-dateMaximum"];
+    const dateMinimum = schema["x-viberacing-dateMinimum"];
+    const isoWeekday = schema["x-viberacing-isoWeekday"];
+    if (dateMaximum !== undefined || dateMinimum !== undefined || isoWeekday !== undefined) {
+      const parsedMaximum = calendarDate(dateMaximum);
+      const parsedMinimum = calendarDate(dateMinimum);
+      if (
+        schema.format !== "date" ||
+        parsedMaximum === undefined ||
+        parsedMinimum === undefined ||
+        !Number.isSafeInteger(isoWeekday) ||
+        isoWeekday < 1 ||
+        isoWeekday > 7 ||
+        parsedMinimum.valueOf() > parsedMaximum.valueOf()
+      ) {
+        report(scope, "date extensions must define one valid ordered range and ISO weekday");
+      }
+    }
   } else if (schema.type === "integer") {
     if (
       !Number.isSafeInteger(schema.minimum) ||
@@ -254,17 +328,18 @@ try {
 }
 
 if (sources !== undefined) {
-  const { manifest, records } = sources;
+  const { manifest, operations, records } = sources;
   const manifestStats = lstatSync(resolve(root, "contracts", "v1", "manifest.json"));
   if (manifestStats.isSymbolicLink() || !manifestStats.isFile()) {
     report("contracts/v1/manifest.json", "manifest must be a regular non-symbolic-link file");
   }
   if (
     !isObject(manifest) ||
-    Object.keys(manifest).sort().join(",") !== "contractVersion,schemaVersion,schemas" ||
+    Object.keys(manifest).sort().join(",") !== "contractVersion,operations,schemaVersion,schemas" ||
     manifest.schemaVersion !== 1 ||
     manifest.contractVersion !== "v1" ||
-    !Array.isArray(manifest.schemas)
+    !Array.isArray(manifest.schemas) ||
+    !Array.isArray(manifest.operations)
   ) {
     report("contracts/v1/manifest.json", "manifest shape or version is invalid");
   }
@@ -391,12 +466,81 @@ if (sources !== undefined) {
         participantProperties.seasonStart?.format !== "date" ||
         participantProperties.seasonStart?.pattern !==
           "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$" ||
+        participantProperties.seasonStart?.["x-viberacing-dateMinimum"] !== "1999-12-27" ||
+        participantProperties.seasonStart?.["x-viberacing-dateMaximum"] !== "2099-12-28" ||
+        participantProperties.seasonStart?.["x-viberacing-isoWeekday"] !== 1 ||
         participantProperties.seasonEnd?.format !== "date" ||
-        participantProperties.seasonEnd?.pattern !== "^(?:20[0-9]{2}-[0-9]{2}-[0-9]{2}|2100-01-03)$"
+        participantProperties.seasonEnd?.pattern !==
+          "^(?:20[0-9]{2}-[0-9]{2}-[0-9]{2}|2100-01-03)$" ||
+        participantProperties.seasonEnd?.["x-viberacing-dateMinimum"] !== "2000-01-02" ||
+        participantProperties.seasonEnd?.["x-viberacing-dateMaximum"] !== "2100-01-03" ||
+        participantProperties.seasonEnd?.["x-viberacing-isoWeekday"] !== 7
       ) {
         report(scope, "Community score participant bounds differ from the reviewed projection");
       }
     }
+    if (entry.file === "community-score-query.schema.json") {
+      const seasonStart = schema?.properties?.seasonStart;
+      if (
+        seasonStart?.minLength !== 10 ||
+        seasonStart?.maxLength !== 10 ||
+        seasonStart?.pattern !== "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$" ||
+        seasonStart?.format !== "date" ||
+        seasonStart?.["x-viberacing-dateMinimum"] !== "1999-12-27" ||
+        seasonStart?.["x-viberacing-dateMaximum"] !== "2099-12-28" ||
+        seasonStart?.["x-viberacing-isoWeekday"] !== 1
+      ) {
+        report(scope, "Community score query differs from the reviewed season boundary");
+      }
+    }
+    if (entry.file === "problem-details.schema.json") {
+      const errorCode = schema?.properties?.errorCode;
+      const requestId = schema?.properties?.requestId;
+      const retryable = schema?.properties?.retryable;
+      const schemaVersion = schema?.properties?.schemaVersion;
+      const status = schema?.properties?.status;
+      const title = schema?.properties?.title;
+      if (
+        schemaVersion?.const !== 1 ||
+        schemaVersion?.minimum !== 1 ||
+        schemaVersion?.maximum !== 1 ||
+        requestId?.minLength !== 26 ||
+        requestId?.maxLength !== 26 ||
+        requestId?.pattern !== "^req_[A-Za-z0-9_-]{22}$" ||
+        status?.minimum !== 400 ||
+        status?.maximum !== 599 ||
+        !sameEntries(errorCode?.enum ?? [], publicProblemCodes) ||
+        errorCode?.minLength !== 8 ||
+        errorCode?.maxLength !== 23 ||
+        !sameEntries(title?.enum ?? [], publicProblemTitles) ||
+        title?.minLength !== 1 ||
+        title?.maxLength !== 23 ||
+        retryable?.type !== "boolean"
+      ) {
+        report(scope, "public problem contract differs from the reviewed HTTP boundary");
+      }
+    }
+  }
+
+  const publicScoreOperation = operations[0];
+  if (
+    operations.length !== 1 ||
+    publicScoreOperation?.entry.method !== "get" ||
+    publicScoreOperation.entry.path !== "/v1/community/scores" ||
+    publicScoreOperation.entry.operationId !== "getCommunityScoresV1" ||
+    publicScoreOperation.entry.summary !== "Read one bounded Community score page" ||
+    publicScoreOperation.entry.querySchema !== "CommunityScoreQueryV1" ||
+    publicScoreOperation.entry.responseSchema !== "CommunityScorePageV1" ||
+    publicScoreOperation.entry.problemSchema !== "ProblemDetailsV1" ||
+    !sameEntries(publicScoreOperation.entry.problemStatuses, [400, 406, 429, 500, 503]) ||
+    publicScoreOperation.entry.queryPolicy !== "closed-single-value" ||
+    publicScoreOperation.entry.cacheControl !== "no-store" ||
+    publicScoreOperation.entry.corsPolicy !== "same-origin"
+  ) {
+    report(
+      "contracts/v1/manifest.json",
+      "public Community score operation differs from the reviewed HTTP contract",
+    );
   }
 
   const schemaDirectory = resolve(root, "contracts", "v1");
@@ -435,5 +579,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Contract check passed (${String(sources.records.length)} schemas, 2 generated artifacts).`,
+  `Contract check passed (${String(sources.records.length)} schemas, ${String(sources.operations.length)} operation, 2 generated artifacts).`,
 );

@@ -317,8 +317,9 @@ and advertises no path. ADR 0011 adds a dedicated four-connection `pg` pool, str
 parser, every-checkout effective-role/login-membership/search-path/read-only probe, bounded waits,
 and one fixed parameterized score query that casts calendar dates to text before mapping. There is
 still no HTTP route, route-wide request policy, cache, car, streak, freshness, daily detail, profile
-read, deployment login/certificate, or live adapter integration. The synthetic page does not
-construct this adapter.
+read, deployment login/certificate, or live adapter integration. ADR 0013 now reserves a closed
+Monday query and one `contract-only` OpenAPI GET with `no-store`/same-origin semantics; it does not
+connect the adapter. The synthetic page does not construct this adapter.
 
 ## Hide and deletion
 

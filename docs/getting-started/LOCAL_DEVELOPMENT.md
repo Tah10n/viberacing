@@ -84,9 +84,10 @@ pnpm run typecheck:contracts
 pnpm run test:contracts:coverage
 ```
 
-Run `pnpm run generate:contracts` only after intentionally changing a canonical file under
-`contracts/v1/`; review both generated diffs and their source digest. The generated OpenAPI document
-currently has no paths because no API endpoint exists.
+Run `pnpm run generate:contracts` only after intentionally changing a canonical file or manifest
+operation under `contracts/v1/`; review both generated diffs and their source digest. The generated
+OpenAPI document contains one path marked `contract-only`; no API route exists merely because that
+planned operation is documented.
 
 The product components and libraries must meet the committed coverage thresholds. Small Next.js
 entrypoints are covered by the production build. See

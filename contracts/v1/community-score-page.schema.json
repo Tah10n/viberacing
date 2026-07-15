@@ -49,14 +49,20 @@
             "minLength": 10,
             "maxLength": 10,
             "pattern": "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$",
-            "format": "date"
+            "format": "date",
+            "x-viberacing-dateMinimum": "1999-12-27",
+            "x-viberacing-dateMaximum": "2099-12-28",
+            "x-viberacing-isoWeekday": 1
           },
           "seasonEnd": {
             "type": "string",
             "minLength": 10,
             "maxLength": 10,
             "pattern": "^(?:20[0-9]{2}-[0-9]{2}-[0-9]{2}|2100-01-03)$",
-            "format": "date"
+            "format": "date",
+            "x-viberacing-dateMinimum": "2000-01-02",
+            "x-viberacing-dateMaximum": "2100-01-03",
+            "x-viberacing-isoWeekday": 7
           },
           "scoreVersion": {
             "type": "string",

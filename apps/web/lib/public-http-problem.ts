@@ -49,6 +49,12 @@ const problemDefinitions = Object.freeze({
     title: "Internal server error",
   },
   invalid_request: { retryable: false, status: 400, title: "Invalid request" },
+  method_not_allowed: {
+    retryable: false,
+    status: 405,
+    title: "Method not allowed",
+  },
+  not_acceptable: { retryable: false, status: 406, title: "Not acceptable" },
   not_found: { retryable: false, status: 404, title: "Not found" },
   rate_limited: { retryable: true, status: 429, title: "Rate limited" },
   temporarily_unavailable: {

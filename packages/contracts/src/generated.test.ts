@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import * as publicApi from "./index";
 import {
   communityScorePageV1Schema,
+  communityScoreQueryV1Schema,
   connectorSyncV1Schema,
   validateCommunityScorePageV1,
+  validateCommunityScoreQueryV1,
   validateConnectorSyncResultV1,
   validateConnectorSyncV1,
   validateProblemDetailsV1,
@@ -54,6 +56,11 @@ function issueCodes(value: unknown): string[] {
 
 function scoreIssueCodes(value: unknown): string[] {
   const result = validateCommunityScorePageV1(value);
+  return result.ok ? [] : result.issues.map((issue) => issue.code);
+}
+
+function queryIssueCodes(value: unknown): string[] {
+  const result = validateCommunityScoreQueryV1(value);
   return result.ok ? [] : result.issues.map((issue) => issue.code);
 }
 
@@ -180,6 +187,26 @@ describe("generated response contracts", () => {
         retryable: true,
       }).ok,
     ).toBe(true);
+    expect(
+      validateProblemDetailsV1({
+        schemaVersion: 1,
+        requestId: "req_0123456789ABCDEFGHIJKL",
+        status: 405,
+        errorCode: "method_not_allowed",
+        title: "Method not allowed",
+        retryable: false,
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateProblemDetailsV1({
+        schemaVersion: 1,
+        requestId: "req_0123456789ABCDEFGHIJKL",
+        status: 406,
+        errorCode: "not_acceptable",
+        title: "Not acceptable",
+        retryable: false,
+      }).ok,
+    ).toBe(true);
   });
 
   it("rejects internal reasons, invalid outcomes, status values, and oversized titles", () => {
@@ -211,6 +238,61 @@ describe("generated response contracts", () => {
         retryable: false,
       }).ok,
     ).toBe(false);
+  });
+});
+
+describe("generated Community score query contract", () => {
+  it("accepts only supported inclusive Monday season boundaries", () => {
+    const input = { seasonStart: "2026-07-13" };
+    const result = validateCommunityScoreQueryV1(input);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toBe(input);
+      expect(result.value.seasonStart).toBe("2026-07-13");
+    }
+    expect(validateCommunityScoreQueryV1({ seasonStart: "1999-12-27" }).ok).toBe(true);
+    expect(validateCommunityScoreQueryV1({ seasonStart: "2099-12-28" }).ok).toBe(true);
+    expect(Object.isFrozen(communityScoreQueryV1Schema)).toBe(true);
+    expect(Object.isFrozen(communityScoreQueryV1Schema.properties.seasonStart)).toBe(true);
+  });
+
+  it("rejects malformed, out-of-range, non-Monday, missing, and accessor-backed values", () => {
+    expect(queryIssueCodes({ seasonStart: "2026-02-30" })).toContain("format");
+    expect(queryIssueCodes({ seasonStart: "1999-12-20" })).toContain("date_minimum");
+    expect(queryIssueCodes({ seasonStart: "2100-01-04" })).toContain("date_maximum");
+    expect(queryIssueCodes({ seasonStart: "2026-07-14" })).toContain("iso_weekday");
+    expect(queryIssueCodes({})).toContain("required");
+
+    let reads = 0;
+    const accessor = {} as { seasonStart?: string };
+    Object.defineProperty(accessor, "seasonStart", {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return "2026-07-13";
+      },
+    });
+    expect(queryIssueCodes(accessor)).toEqual(
+      expect.arrayContaining(["invalid_structure", "required"]),
+    );
+    expect(reads).toBe(0);
+  });
+
+  it("rejects unknown query fields without reflecting their names or values", () => {
+    const result = validateCommunityScoreQueryV1({
+      seasonStart: "2026-07-13",
+      privateFilter: "private-value-that-must-not-be-reflected",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues).toContainEqual({ code: "unknown_field", path: "$" });
+      expect(JSON.stringify(result.issues)).not.toContain("privateFilter");
+      expect(JSON.stringify(result.issues)).not.toContain(
+        "private-value-that-must-not-be-reflected",
+      );
+    }
   });
 });
 
@@ -316,6 +398,18 @@ describe("generated Community score response contract", () => {
         participants: [{ ...participant, seasonStart: "2026-02-30" }],
       }),
     ).toContain("format");
+    expect(
+      scoreIssueCodes({
+        ...input,
+        participants: [{ ...participant, seasonStart: "2026-07-14" }],
+      }),
+    ).toContain("iso_weekday");
+    expect(
+      scoreIssueCodes({
+        ...input,
+        participants: [{ ...participant, seasonEnd: "2026-07-20" }],
+      }),
+    ).toContain("iso_weekday");
     expect(
       scoreIssueCodes({
         ...input,

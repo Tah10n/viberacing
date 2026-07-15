@@ -5,8 +5,9 @@ this workspace's `README.md` before changing a public contract or validator.
 
 ## Non-negotiable boundaries
 
-- JSON Schemas under `contracts/v1/` are canonical. `src/generated.ts` and the OpenAPI document are
-  generated derivatives; never patch them as the source of a change.
+- JSON Schemas and the closed manifest operations under `contracts/v1/` are canonical.
+  `src/generated.ts` and the OpenAPI document are generated derivatives; never patch them as the
+  source of a change.
 - Connector-writable schemas must not gain profile identity, trust tier, score, rank, streak,
   season, moderation, server receipt time, account email, prompt, conversation, repository,
   credential, arbitrary URL, or arbitrary content fields.

@@ -47,14 +47,19 @@ for a hosted deployment; it is public configuration, not a secret. Focused check
 
 The common server-only factory requests 16 cryptographic random bytes and returns a frozen opaque
 token whose `req_` value cannot be replaced with an inbound correlation string through the typed
-API. It owns all nine `ProblemDetailsV1` status/title/retry mappings, validates the complete body,
+API. It owns all eleven `ProblemDetailsV1` status/title/retry mappings, validates the complete body,
 and emits `application/problem+json`, `Cache-Control: no-store`, and the matching `x-request-id`. It
 emits no CORS header, cookie, detail, exception cause, hostname, SQL, or submitted value.
 
-This is pre-route infrastructure. It does not implement a `/v1` path, request parsing, method or
-content negotiation, auth/retry headers, admission control, deadline, logging sink, store-error
-translation, or success/cache policy. Those remain mandatory route-level decisions; an endpoint must
-generate one token at entry and never replace it with an inbound header.
+This is pre-route infrastructure. It does not implement the contract-only `/v1/community/scores`
+path, request parsing, method or content negotiation, auth/retry headers, admission control,
+deadline, logging sink, store-error translation, or success serialization. Those remain mandatory
+route-level decisions; an endpoint must generate one token at entry and never replace it with an
+inbound header.
+
+The generated contract reserves `GET /v1/community/scores` with one bounded Monday `seasonStart`,
+`no-store`, `Vary: Accept`, same-origin/no-CORS semantics, and closed 200/400/406/429/500/503
+responses. This is an implementation target, not a reachable route or deployment claim.
 
 ## Score database adapter configuration
 

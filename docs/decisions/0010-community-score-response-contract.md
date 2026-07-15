@@ -56,9 +56,9 @@ self-reported wording from the two constant trust fields.
 
 This strict component rejects unknown response fields. Adding car, streak, freshness, profile links,
 pagination, or other fields therefore requires a separately reviewed schema/version rather than
-silently expanding this shape. The generated OpenAPI document continues to contain no paths; an
-implemented route, cache/CORS policy, request parser, edge controls, and deployment remain separate
-work.
+silently expanding this shape. At the time of this decision, the generated OpenAPI document
+contained no paths. ADR 0013 later reserved one explicitly contract-only operation; an implemented
+route, cache/CORS policy, request parser, edge controls, and deployment remain separate work.
 
 ## Security and privacy consequences
 

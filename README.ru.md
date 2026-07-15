@@ -75,15 +75,16 @@ pnpm run dev:web
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.
 
-В репозитории уже есть четыре закрытые JSON Schemas и генерируемые TypeScript/OpenAPI artifacts:
-sync request/result, bounded problem details и response-only top-32 Community score page с
-неизменяемыми `community`/`selfReported` trust fields. Server-only fail-closed mapper преобразует в
-этот response только точную десятиколоночную SQL projection и отклоняет malformed, inconsistent,
-oversized или contract-invalid результаты. Bounded server-only PostgreSQL adapter использует
-отдельный least-privileged Web login contract, certificate-verified production transport,
-four-connection pool, проверку role/read-only state при каждом checkout, фиксированные deadlines и
-один parameterized top-32 procedure call. Server-only HTTP problem factory генерирует opaque 128-bit
-request IDs и закрытые contract-validated no-store error responses. Advertised API path, cache,
+В репозитории уже есть пять закрытых JSON Schemas, генерируемые TypeScript validators и один
+contract-only OpenAPI GET: sync request/result, bounded problem details, запрос одного Community
+season и response-only top-32 Community score page с неизменяемыми `community`/`selfReported` trust
+fields. Server-only fail-closed mapper преобразует в этот response только точную десятиколоночную
+SQL projection и отклоняет malformed, inconsistent, oversized или contract-invalid результаты.
+Bounded server-only PostgreSQL adapter использует отдельный least-privileged Web login contract,
+certificate-verified production transport, four-connection pool, проверку role/read-only state при
+каждом checkout, фиксированные deadlines и один parameterized top-32 procedure call. Server-only
+HTTP problem factory генерирует opaque 128-bit request IDs и закрытые contract-validated no-store
+error responses. OpenAPI path явно помечен как contract-only: реализованный HTTP route, cache,
 deployment login/TLS integration, connector и приём реальной статистики ещё отсутствуют.
 
 Также добавлены одиннадцать SQL migrations: 23 приватные

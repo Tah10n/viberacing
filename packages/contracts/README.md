@@ -11,7 +11,8 @@ evidence, so the runtime cannot reconstruct or police that ambiguity afterward.
 The validator is designed for already parsed, raw-body-bounded JSON. It:
 
 - rejects unknown fields, accessors, non-plain objects, sparse/extended arrays, cycles, unsafe
-  integers, malformed calendar dates, and non-canonical timestamps;
+  integers, malformed calendar dates, out-of-range/incorrect-weekday dates, and non-canonical
+  timestamps;
 - caps depth, nodes, object keys, array items, and returned issue count;
 - returns only stable issue codes and paths made from schema-owned names or array indexes;
 - never includes an unknown property name, submitted value, request body, or schema description in a
@@ -36,5 +37,6 @@ pnpm run test:contracts:coverage
 ```
 
 Generated code is committed so TypeScript and future Rust consumers can review an immutable source
-digest. It is still pre-endpoint: no current web route imports the Community response component, no
-service imports the connector contract, and no real usage data is accepted.
+digest. The generated OpenAPI operation remains contract-only: no current web route imports the
+Community query/response components, no service imports the connector contract, and no real usage
+data is accepted.

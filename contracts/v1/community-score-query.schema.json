@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/community-score-query.schema.json",
+  "title": "CommunityScoreQueryV1",
+  "description": "Closed value contract for one bounded public Community score season. A future URL parser must reject duplicate parameters before applying this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["seasonStart"],
+  "properties": {
+    "seasonStart": {
+      "description": "Inclusive Monday season start from 1999-12-27 through 2099-12-28.",
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 10,
+      "pattern": "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$",
+      "format": "date",
+      "x-viberacing-dateMinimum": "1999-12-27",
+      "x-viberacing-dateMaximum": "2099-12-28",
+      "x-viberacing-isoWeekday": 1
+    }
+  }
+}

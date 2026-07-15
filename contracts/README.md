@@ -1,9 +1,10 @@
 # Public protocol contracts
 
 This directory is the language-neutral source of truth for Vibe Racing wire shapes. The current
-files establish pre-endpoint request and response boundaries; revision 0007 maps the bounded
-Community sync into a database-only procedure and revision 0011 provides a database-only score
-projection, but no API endpoint, connector, application signature verifier, or deployment exists.
+files establish request and response boundaries plus one explicitly contract-only public score
+operation; revision 0007 maps the bounded Community sync into a database-only procedure and revision
+0011 provides a database-only score projection, but no API endpoint, connector, application
+signature verifier, or deployment exists.
 
 ## Canonical version 1 schemas
 
@@ -12,6 +13,9 @@ projection, but no API endpoint, connector, application signature verifier, or d
   reviewed revision 0011 fields, and permits an empty result without private-state disclosure. It
   contains no profile/source/device ID, raw or daily usage, exact timestamp, car, streak, freshness,
   profile detail, cursor, or caller-controlled sorting/filtering.
+- [`CommunityScoreQueryV1`](v1/community-score-query.schema.json) accepts exactly one inclusive
+  Monday `seasonStart` from `1999-12-27` through `2099-12-28`. A future URL parser must reject
+  duplicate parameters before applying the generated value validator.
 - [`ConnectorSyncV1`](v1/connector-sync.schema.json) accepts one bounded, self-reported Community
   snapshot from a source-bound device. It contains no trust tier, profile ID, rank, score, season,
   moderation state, account email, prompt, repository, credential, or server receipt time.
@@ -21,15 +25,17 @@ projection, but no API endpoint, connector, application signature verifier, or d
   plus one fixed generic title, never a stack trace, SQL detail, secret, request body, or internal
   hostname. A server-only Web factory now generates an opaque 128-bit request ID, fixes each
   status/title/retry mapping, validates the complete body, and emits `no-store`
-  `application/problem+json`; no route is thereby advertised.
-- [`manifest.json`](v1/manifest.json) defines the reviewed generation order and public type/export
-  names.
+  `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
+- [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
+  type/export names, and the contract-only `GET /v1/community/scores` operation with exact query,
+  response, problem, cache, and same-origin CORS policies.
 
 Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
-timestamp is bounded. Dates use the upstream-neutral `codexReportedDate` name for connector input;
-only `observedAt` uses a canonical UTC timestamp, and server receipt time remains authoritative for
-replay and season deadlines. Duplicate sync dates and duplicate public display positions are
-rejected by the documented `x-viberacing-uniqueBy` extension.
+timestamp is bounded. Reviewed date-range and ISO-weekday extensions make the score season boundary
+executable instead of relying on prose. Dates use the upstream-neutral `codexReportedDate` name for
+connector input; only `observedAt` uses a canonical UTC timestamp, and server receipt time remains
+authoritative for replay and season deadlines. Duplicate sync dates and duplicate public display
+positions are rejected by the documented `x-viberacing-uniqueBy` extension.
 
 The token maximum is a numeric serialization safety bound, not an honesty claim. A valid signature
 identifies the registered device, not the truth of self-reported usage. Server-side anomaly and
@@ -40,8 +46,8 @@ trust fields exist only in the response component and never become writable conn
 
 `node scripts/generate-contracts.mjs` deterministically creates:
 
-- [`openapi.v1.json`](generated/openapi.v1.json), which currently exposes components with no paths
-  and explicitly states that no endpoint is implemented;
+- [`openapi.v1.json`](generated/openapi.v1.json), which exposes one contract-only score path and
+  explicitly states that this does not prove an implemented or deployed endpoint;
 - [`packages/contracts/src/generated.ts`](../packages/contracts/src/generated.ts), containing
   readonly TypeScript shapes, embedded schemas, source digest, and validator wrappers.
 
@@ -50,7 +56,7 @@ generated file to make a check pass.
 
 ## Change rules
 
-1. Update the canonical schema and manifest, never the derived artifact first.
+1. Update the canonical schema and manifest operation, never the derived artifact first.
 2. Preserve `additionalProperties: false` and explicit size/value bounds at every nested level.
 3. Map each new field to the privacy data map and identify whether the client is allowed to write
    it. Server-derived trust, score, identity, moderation, and season fields stay absent from

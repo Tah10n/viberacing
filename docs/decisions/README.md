@@ -21,6 +21,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0010](0010-community-score-response-contract.md)       | Closed Community score response with explicit trust metadata        | Accepted; response schema/validators implemented    |
 | [0011](0011-bounded-web-postgresql-score-adapter.md)    | Bounded least-privileged Web PostgreSQL score adapter               | Accepted; server-only adapter implemented           |
 | [0012](0012-bounded-public-http-problem-boundary.md)    | Bounded request IDs and public HTTP problem responses               | Accepted; server-only factory implemented           |
+| [0013](0013-public-community-score-http-contract.md)    | Closed query and contract-only Community score GET                  | Accepted; schema/OpenAPI implemented; route pending |
 
 ## Lifecycle
 

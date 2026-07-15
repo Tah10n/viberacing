@@ -1,12 +1,208 @@
 {
   "openapi": "3.1.1",
   "info": {
-    "title": "Vibe Racing contract components",
+    "title": "Vibe Racing public API contract",
     "version": "1.0.0",
-    "description": "Generated schema components only. No endpoint is implemented or deployed merely because it appears here."
+    "description": "Generated schemas and contract-only operations. A documented path is not implemented or deployed until separately verified in the working tree."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
-  "paths": {},
+  "paths": {
+    "/v1/community/scores": {
+      "get": {
+        "operationId": "getCommunityScoresV1",
+        "summary": "Read one bounded Community score page",
+        "description": "Contract-only operation. Its presence here does not prove that a route is implemented or deployed.",
+        "parameters": [
+          {
+            "name": "seasonStart",
+            "in": "query",
+            "required": true,
+            "description": "Inclusive Monday season start from 1999-12-27 through 2099-12-28.",
+            "schema": {
+              "description": "Inclusive Monday season start from 1999-12-27 through 2099-12-28.",
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 10,
+              "pattern": "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$",
+              "format": "date",
+              "x-viberacing-dateMinimum": "1999-12-27",
+              "x-viberacing-dateMaximum": "2099-12-28",
+              "x-viberacing-isoWeekday": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful bounded response.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CommunityScorePageV1" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "406": {
+            "description": "Not acceptable.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          }
+        },
+        "x-viberacing-cache-policy": "no-store",
+        "x-viberacing-cors-policy": "same-origin",
+        "x-viberacing-query-contract": { "$ref": "#/components/schemas/CommunityScoreQueryV1" },
+        "x-viberacing-query-policy": "closed-single-value",
+        "x-viberacing-status": "contract-only"
+      }
+    }
+  },
   "components": {
     "schemas": {
       "CommunityScorePageV1": {
@@ -45,14 +241,20 @@
                   "minLength": 10,
                   "maxLength": 10,
                   "pattern": "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$",
-                  "format": "date"
+                  "format": "date",
+                  "x-viberacing-dateMinimum": "1999-12-27",
+                  "x-viberacing-dateMaximum": "2099-12-28",
+                  "x-viberacing-isoWeekday": 1
                 },
                 "seasonEnd": {
                   "type": "string",
                   "minLength": 10,
                   "maxLength": 10,
                   "pattern": "^(?:20[0-9]{2}-[0-9]{2}-[0-9]{2}|2100-01-03)$",
-                  "format": "date"
+                  "format": "date",
+                  "x-viberacing-dateMinimum": "2000-01-02",
+                  "x-viberacing-dateMaximum": "2100-01-03",
+                  "x-viberacing-isoWeekday": 7
                 },
                 "scoreVersion": {
                   "type": "string",
@@ -74,6 +276,26 @@
                 "displayPosition": { "type": "integer", "minimum": 1, "maximum": 32 }
               }
             }
+          }
+        }
+      },
+      "CommunityScoreQueryV1": {
+        "title": "CommunityScoreQueryV1",
+        "description": "Closed value contract for one bounded public Community score season. A future URL parser must reject duplicate parameters before applying this schema.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["seasonStart"],
+        "properties": {
+          "seasonStart": {
+            "description": "Inclusive Monday season start from 1999-12-27 through 2099-12-28.",
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 10,
+            "pattern": "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$",
+            "format": "date",
+            "x-viberacing-dateMinimum": "1999-12-27",
+            "x-viberacing-dateMaximum": "2099-12-28",
+            "x-viberacing-isoWeekday": 1
           }
         }
       },
@@ -198,6 +420,8 @@
               "forbidden",
               "internal_error",
               "invalid_request",
+              "method_not_allowed",
+              "not_acceptable",
               "not_found",
               "rate_limited",
               "temporarily_unavailable",
@@ -214,6 +438,8 @@
               "Forbidden",
               "Internal server error",
               "Invalid request",
+              "Method not allowed",
+              "Not acceptable",
               "Not found",
               "Rate limited",
               "Temporarily unavailable",
@@ -228,6 +454,6 @@
       }
     }
   },
-  "x-viberacing-contract-source": "sha256:725f4148fe882248b510b37724a8f4df7433a8e6898b92e5c5dd0e7c51d0e491",
-  "x-viberacing-status": "pre-implementation"
+  "x-viberacing-contract-source": "sha256:06dc7231ee2c9c2ad9c5a761c757d9e11f08c4da0ba5ee579764b9f0e05f70be",
+  "x-viberacing-status": "contract-only"
 }

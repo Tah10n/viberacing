@@ -88,18 +88,23 @@ through local timezone conversion.
 
 ## API and schema rules
 
-- Requests declare a supported schema version and content type and remain under explicit body,
-  collection, string, integer, and timestamp bounds.
+- Requests with a body declare a supported schema version and content type and remain under explicit
+  byte, collection, string, integer, and timestamp bounds. URL-only reads use the versioned path and
+  a closed query contract instead of inventing a body content type.
 - Unknown request fields are rejected. Responses may gain additive fields only where clients are
   documented and tested to ignore them safely.
 - `CommunityScorePageV1` is closed and its generated consumers reject unknown fields; extend it only
   through a separately reviewed component/version, not an unannounced additive response field.
+- The reviewed `x-viberacing-dateMinimum`, `x-viberacing-dateMaximum`, and `x-viberacing-isoWeekday`
+  keywords are executable contract semantics. A consumer that treats them as inert annotations
+  cannot be the server admission validator for a score season.
 - Client-writable schemas exclude profile identity, accepted source binding, trust tier, score,
   rank, streak, season, server receipt time, moderation, and deletion state.
 - Errors use a versioned bounded problem-details shape and request ID without stack, SQL, hostname,
   secret, or record disclosure. The common server-only factory now enforces the closed mapping,
-  generated opaque ID, runtime validation, and no-store response baseline; route-specific
-  translation and every `/v1` path remain unimplemented.
+  generated opaque ID, runtime validation, and no-store response baseline. One manifest-generated
+  public score operation is explicitly contract-only; route-specific translation and every `/v1`
+  implementation remain absent.
 - Generated OpenAPI, TypeScript, Rust fixtures, and documentation identify their canonical schema
   source; CI rejects drift.
 
