@@ -60,6 +60,12 @@
       "name": "community_season_finalization",
       "path": "database/migrations/0010_community_season_finalization.sql",
       "sha256": "091abdd0c32d3c6408432fa8449fb2f37cdc4ac1097bdc5631ae8c991fad3bef"
+    },
+    {
+      "revision": 11,
+      "name": "community_public_score_read",
+      "path": "database/migrations/0011_community_public_score_read.sql",
+      "sha256": "1b3bd146acbece4d3644d4859578de99f7c55aab4d02a221df80d1aa9c53d804"
     }
   ]
 }

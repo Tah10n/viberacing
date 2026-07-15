@@ -25,6 +25,10 @@ policy, records whether any exact Codex and connector combination is currently s
 These axes are independently versioned. A connector version does not imply a database migration or
 scoring change, and a web deployment does not silently change a finalized season.
 
+Revision 0011's internal PostgreSQL score projection is not a public HTTP contract. A future route
+still requires a versioned response schema, generated derivatives, cache semantics, and the HTTP
+compatibility evidence described here.
+
 ## Codex App Server contract
 
 The official [Codex App Server documentation](https://learn.chatgpt.com/docs/app-server) describes a

@@ -2,17 +2,18 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revisions 0001 through 0010 provide private
+These sequences remain planned application contracts. Revisions 0001 through 0011 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
 immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
-ingest, bounded ingest-retention cleanup, open-season scoring refresh, late-ingest closure, and
-terminal season finalization. No endpoint, OAuth callback, Argon2id/WebAuthn/Ed25519 application
-verifier, connector, purge/maintenance/scoring service or scheduler, public score read, audited
-correction, or deployed service executes the complete sequences. Data labels refer to the
-classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account,
-Security, Usage, Operational, and Prohibited.
+ingest, bounded ingest-retention cleanup, open-season scoring refresh, late-ingest closure, terminal
+season finalization, and a Web-only public score projection. No endpoint, OAuth callback,
+Argon2id/WebAuthn/Ed25519 application verifier, connector, purge/maintenance/scoring service or
+scheduler, HTTP public-score delivery, audited correction, or deployed service executes the complete
+sequences. Data labels refer to the classifications in the
+[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
+and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -275,8 +276,10 @@ using server `receivedAt`; any submission touching a closed week is retained as 
 snapshot and cannot update accepted source/day state. Jobs may atomically finalize at or after that
 deadline, and terminal triggers reject silent metadata or score rewrites while allowing profile
 purge to remove personal rows. Ingest and Jobs share the canonical
-`season → profile → source → device` lock order. No Jobs process invokes these procedures, and no
-audited correction, freshness/streak projection, or public read boundary exists.
+`season → profile → source → device` lock order. Revision 0011 gives only Web a bounded score-only
+read that filters current profile visibility before re-ranking and omits private identifiers, raw
+values, daily detail, and exact timestamps. No Jobs process invokes the maintenance procedures, and
+no audited correction, freshness/streak/car projection, HTTP route, or public cache exists.
 
 ## Public race read
 
@@ -303,8 +306,9 @@ sequenceDiagram
 
 Exact token values, exact sync time, GitHub binding, passkeys, devices, source details, and audit
 data are absent. Authenticated responses use private `no-store` policy and never populate this
-cache. This read flow remains planned; revisions 0009 and 0010 grant no runtime public-read
-capability.
+cache. This complete read flow remains planned. Revision 0011 implements only the database score
+subset: season metadata, handle, weekly score, active days, source count, shared rank, and display
+position. It grants no HTTP route, cache, car, streak, freshness, daily detail, or profile read.
 
 ## Hide and deletion
 

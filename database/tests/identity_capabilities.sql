@@ -33,13 +33,13 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 39
+    SELECT pg_catalog.count(*) = 40
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.prokind = 'f'
   ),
-  'the API surface contains only the reviewed identity, source, ingest, and Jobs functions'
+  'the API surface contains only the reviewed identity, source, ingest, Jobs, and public functions'
 );
 
 SELECT pg_temp.assert_true(
@@ -95,6 +95,20 @@ SELECT pg_temp.assert_true(
 );
 
 SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.bool_and(
+        procedure.proconfig @> ARRAY['statement_timeout=5s']::text[]
+      )
+    FROM pg_catalog.pg_proc AS procedure
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'viberacing_api'
+      AND procedure.proname = 'list_public_community_scores'
+  ),
+  'the bounded public score projection has a database-enforced statement deadline'
+);
+
+SELECT pg_temp.assert_true(
   NOT EXISTS (
     SELECT 1
     FROM pg_catalog.pg_proc AS procedure
@@ -141,7 +155,7 @@ SELECT pg_temp.assert_true(
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
   ),
-  'web can execute only the reviewed user identity flows'
+  'web can execute only the reviewed identity and public score flows'
 );
 
 SELECT pg_temp.assert_true(

@@ -16,8 +16,8 @@ rewrite a result that has already become durable.
 
 The connector's `observedAt` and each `codexReportedDate` are untrusted input. Only a timestamp
 captured by the server-side database procedure can decide whether a season still accepts score
-state. The database-only foundation has no correction authority, public score read, scheduler, or
-service from which a hidden operational exception could be inferred.
+state. At revision 0010, the database-only foundation had no correction authority, public score
+read, scheduler, or service from which a hidden operational exception could be inferred.
 
 ## Decision
 
@@ -144,14 +144,16 @@ Current PostgreSQL evidence covers:
   season locks rather than forming an `A → B` / `B → A` advisory-lock cycle.
 
 The repository still lacks the Ingest and Jobs services, Ed25519 verification, edge/origin proof,
-rate limits, schedulers, public score reads, corrections, monitoring, capacity evidence, purge, and
-deployment. Database finalization alone is not launch evidence.
+rate limits, schedulers, HTTP score delivery, corrections, monitoring, capacity evidence, purge, and
+deployment. Revision 0011 later adds a bounded database score projection, but database finalization
+and projection alone are not launch evidence.
 
 ## References
 
 - [Community trust tier](0001-community-trust-tier.md)
 - [Opaque multi-source aggregation](0002-opaque-multi-source-aggregation.md)
 - [Service and database isolation](0004-edge-service-and-database-isolation.md)
+- [Public Community score projection](0009-public-community-score-projection.md)
 - [Project plan](../PROJECT_PLAN.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
 - [Data flow](../architecture/DATA_FLOW.md)

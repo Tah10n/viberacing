@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and eight accepted ADRs.
+  fail-closed compatibility policy and matrix, and nine accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -66,6 +66,9 @@ Versioning where its guarantees are applicable.
 - Jobs-only immutable Community season finalization after an exact 48-hour server-time grace period,
   with whole-payload late quarantine, terminal no-data seasons, idempotent retry, bounded calendar
   support, and no implied scheduler, correction capability, or public read surface.
+- Web-only bounded Community score projection for open or finalized seasons, with an exact public
+  field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
+  HTTP route, cache, profile detail, or complete race DTO.
 
 ### Security
 
@@ -119,6 +122,9 @@ Versioning where its guarantees are applicable.
   scenarios plus observed races proving finalization and late ingest converge on one terminal state,
   post-lock server time decides deadline behavior, and opposing multi-season payload order cannot
   create advisory-lock cycles.
+- Added public score field-allowlist, visibility, shared-rank, result-ceiling, statement-deadline,
+  and role-denial scenarios; hiding a profile removes it and closes public rank/display gaps without
+  granting Web direct table access.
 - Made passkey race preservation assertions fail when an expected row is missing and added a static
   regression check that rejects missing-row-unsafe scalar-subquery `IF NOT` assertions.
 - Made passkey revoke terminal, protected the last active key, preserved monotonic sign state, and

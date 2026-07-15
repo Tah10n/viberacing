@@ -8,12 +8,12 @@ This page records only evidence that exists in the public working tree. The
 Phase 1 product code is locally complete, with the manual release-evidence items below still open.
 The Phase 2 language-neutral contract and SQL persistence foundations now include database-only
 passkey login, multi-passkey management, restricted recovery, Community usage ingest, bounded
-ingest-retention cleanup, open-season scoring, and terminal season finalization; a Phase 3
-database-only source/device lifecycle and same-source deduplication slice has also started. Phase 0
-hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
-No authentication HTTP route, OAuth/Argon2id/WebAuthn application flow, production deployment,
-released connector, real-user ingestion, end-to-end public ranking, or finalization scheduler
-exists.
+ingest-retention cleanup, open-season scoring, terminal season finalization, and a public score-only
+database projection; a Phase 3 database-only source/device lifecycle and same-source deduplication
+slice has also started. Phase 0 hosted-publication controls remain blocked on real maintainer
+identities and GitHub configuration. No authentication HTTP route, OAuth/Argon2id/WebAuthn
+application flow, production deployment, released connector, real-user ingestion, end-to-end public
+ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -69,9 +69,10 @@ exists.
   trusted-release Mermaid views.
 - A fail-closed Codex compatibility policy and empty support matrix; no upstream or connector
   version is claimed supported without pinned schema/fixture/platform evidence.
-- An ADR lifecycle/template and seven accepted design decisions covering Community trust,
+- An ADR lifecycle/template and nine accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
-  isolation, CarRecipe, and public repository safety.
+  isolation, CarRecipe, public repository safety, season finalization, and the public score
+  projection boundary.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -92,14 +93,14 @@ exists.
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- Ten checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and 23
-  forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and restricted
-  authorities, session-bound challenges, opaque sources, pending/active/revoked device keys,
-  pairing, bounded audit references, deletion work/tombstones, two fixed maintenance mutex rows,
-  device nonces, bounded raw Community snapshots, monotonic current source/day values, immutable
-  score versions and season definitions, derived season entries/daily scores, and schema revisions.
-  There is intentionally no GitHub token, account email, prompt, repository, credential, arbitrary
-  JSON, or free-form diagnostic column.
+- Eleven checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and
+  23 forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and
+  restricted authorities, session-bound challenges, opaque sources, pending/active/revoked device
+  keys, pairing, bounded audit references, deletion work/tombstones, two fixed maintenance mutex
+  rows, device nonces, bounded raw Community snapshots, monotonic current source/day values,
+  immutable score versions and season definitions, derived season entries/daily scores, and schema
+  revisions. There is intentionally no GitHub token, account email, prompt, repository, credential,
+  arbitrary JSON, or free-form diagnostic column.
 - Database constraints and triggers enforce unique GitHub bindings, normalized handles, keyed
   verifier lengths, Argon2id recovery-verifier shape, exact device-key/source/pairing binding,
   terminal unlink/deletion states, state-dependent timestamps, and bounded lifecycle values. The
@@ -120,11 +121,12 @@ exists.
   source or revoke an owned device, and reactivate/unlink one exact source only after a fresh,
   consumed, source-bound step-up. Unlink atomically revokes all active source devices, cancels
   approved pairings, and invalidates unused source actions; normal user authority cannot lift
-  quarantine. Ingest has only minimal active-device verification lookup and bounded Community sync
-  submission; Jobs have only bounded expired ingest-state cleanup plus Community scoring refresh and
-  finalization. Ingest has no identity, passkey, recovery, pairing, lifecycle, admin, or
-  direct-table capability. Profile-scoped functions derive identity from an active session ID plus
-  keyed verifier and do not accept a caller-selected profile ID.
+  quarantine. Web additionally has one bounded public Community score projection. Ingest has only
+  minimal active-device verification lookup and bounded Community sync submission; Jobs have only
+  bounded expired ingest-state cleanup plus Community scoring refresh and finalization. Ingest has
+  no identity, passkey, recovery, pairing, lifecycle, admin, or direct-table capability.
+  Profile-scoped functions derive identity from an active session ID plus keyed verifier and do not
+  accept a caller-selected profile ID.
 - The same boundary can create a five-minute profile-free login challenge, expose only minimal
   active-passkey verification material, atomically mint a passkey-bound session after application
   verification, privately list owned passkeys, and add or revoke an exact passkey after a fresh
@@ -177,8 +179,11 @@ exists.
   materialization stores no raw token total or source ID. Finalization scenarios additionally prove
   the exact Wednesday 00:00 UTC boundary after a 48-hour grace period, early-finalization rollback,
   bounded no-data closure, terminal idempotency, refresh denial, direct metadata/score mutation
-  denial, late-snapshot quarantine, and profile-purge compatibility. No public read, audited
-  correction flow, scoring service, or scheduler exists.
+  denial, late-snapshot quarantine, and profile-purge compatibility. Public-read scenarios prove an
+  exact ten-field allowlist, active-only filtering, post-hide shared-rank/display re-numbering, a
+  100-row result ceiling, open/finalized metadata, a five-second statement deadline, generic input
+  failure, Web-only authority, and Ingest/Jobs/Admin denial. No HTTP score route/schema/cache,
+  audited correction flow, scoring service, or scheduler exists.
 - Twenty-two deterministic cross-connection races hold a relevant invite, challenge, session,
   source, device, pairing, or profile row, or a season advisory lock; tag every session; and observe
   every contender in the holder's transitive PostgreSQL blocker chain before releasing it.
@@ -240,11 +245,11 @@ exists.
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0010 from the checksum manifest,
+reached `healthy`, validated and applied revisions 0001 through 0011 from the checksum manifest,
 passed 23-table state/ownership/RLS assertions, twenty-two observed lock-wait races, eight
-relation-denial checks, twenty-two cross-capability denials, and the identity, passkey, recovery,
-pairing, source/device lifecycle, Community ingest, ingest-retention, scoring, and finalization
-scenarios, then removed its portless container, network, and ephemeral storage.
+relation-denial checks, twenty-five cross-capability denials, and the identity, passkey, recovery,
+pairing, source/device lifecycle, Community ingest, ingest-retention, scoring, finalization, and
+public score scenarios, then removed its portless container, network, and ephemeral storage.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -277,11 +282,13 @@ Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/
 HTTP response handling, WebAuthn and Ed25519 cryptographic verification, anonymous
 login/pairing/recovery edge rate limits and cleanup, raw-body/signature/origin validation in an
 ingest API, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring
-state, the scoring Jobs service/scheduler, audited corrections, public score reads, purge workers,
-Codex connector, release signing, deployment, and public beta operations remain proposed. The web
-scoring and ranking code still operates only on clearly synthetic in-process fixtures; its
-application does not connect to the database-only scoring/finalization state in revisions 0001
-through 0010.
+state, the scoring Jobs service/scheduler, audited corrections, HTTP public-score delivery, purge
+workers, Codex connector, release signing, deployment, and public beta operations remain proposed. A
+bounded database score projection now exists, but its versioned HTTP route/schema,
+cache/invalidation, CarRecipe, streak/freshness, profile detail, rate/capacity controls, and
+monitoring do not. The web scoring and ranking code still operates only on clearly synthetic
+in-process fixtures; its application does not connect to the database-only scoring/finalization/read
+state in revisions 0001 through 0011.
 
 ## Evidence commands
 

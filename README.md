@@ -73,7 +73,7 @@ private reporting channels; those hosted controls cannot be safely invented from
 
 Phase 2/3 contract and persistence foundations are also present: three closed, bounded JSON Schemas
 plus generated TypeScript validators and OpenAPI components. They are pre-implementation contracts,
-not a live API or evidence that real Codex data can be submitted. Ten SQL migrations now add 23
+not a live API or evidence that real Codex data can be submitted. Eleven SQL migrations now add 23
 private identity, passkey, restricted-recovery, source, device, pairing, audit, deletion, replay,
 usage, and Community scoring tables with deny-by-default runtime roles, forced RLS, state-machine
 constraints, checksum drift detection, and an isolated PostgreSQL capability test. A narrow
@@ -96,10 +96,11 @@ one profile daily cap, stores an immutable formula and season binding, shares ra
 and active days, and persists no raw token or source identifier in the score tables. Revision 0010
 adds a public 48-hour server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent
 finalization procedure whose terminal metadata and score projection reject silent rewrites while
-profile purge can still remove personal rows. There is still no HTTP authentication, recovery,
-ingest, or public-score route, OAuth callback, Argon2id/WebAuthn/Ed25519 application verifier,
-connector, cleanup/scoring scheduler or service, audited correction flow, asynchronous purge worker,
-or deployed database.
+profile purge can still remove personal rows. Revision 0011 gives only the Web database role a
+bounded active-profile score projection containing no raw values, private identifiers, or exact
+timestamps. There is still no HTTP authentication, recovery, ingest, or public-score route, OAuth
+callback, Argon2id/WebAuthn/Ed25519 application verifier, connector, cleanup/scoring scheduler or
+service, audited correction flow, asynchronous purge worker, or deployed database.
 
 ## Run and verify the synthetic prototype
 

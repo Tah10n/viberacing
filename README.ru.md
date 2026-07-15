@@ -79,7 +79,7 @@ Dev-сервер слушает только loopback. В интерфейсе �
 будущего sync-протокола. Это пока только проверяемая граница данных: работающего API, connector и
 приёма реальной статистики ещё нет.
 
-Также добавлены десять SQL migrations: 23 приватные
+Также добавлены одиннадцать SQL migrations: 23 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
 deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая
 procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
@@ -95,16 +95,17 @@ distinct eligible sources одного профиля перед единым д
 формулы за ISO-week season и сохраняет только derived score/rank/active-days/source-count без raw
 tokens и source IDs. Database-only finalization закрывает grace window через 48 часов после ISO-week
 по server time, сохраняет late snapshot только как quarantined evidence и делает terminal season
-неизменяемым, сохраняя profile-purge. Email и идентификатор Codex-аккаунта не читаются и не
-сохраняются. Но HTTP auth/recovery routes, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier,
-generic response и edge rate limits для анонимных challenges и recovery lookup пока отсутствуют.
-Database-only Community ingest capability уже выдаёт минимальный материал активного устройства и
-принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic source/date,
-quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure удаляет bounded batches
-истёкших nonces и raw snapshots, сохраняя current source/day values, но scheduler для неё
-отсутствует. Сама база не проверяет wire signature. HTTP ingest route, приложение с
-Ed25519-проверкой, connector, cleanup/scoring scheduler или service, public score read, audited
-correction flow, purge worker и deployed database ещё не реализованы, поэтому готовой
+неизменяемым, сохраняя profile-purge. Отдельная Web-only database projection возвращает только
+bounded active-profile score rows без raw values, private IDs и exact timestamps. Email и
+идентификатор Codex-аккаунта не читаются и не сохраняются. Но HTTP auth/recovery routes, OAuth
+callback, Argon2id/WebAuthn/Ed25519 verifier, generic response и edge rate limits для анонимных
+challenges и recovery lookup пока отсутствуют. Database-only Community ingest capability уже выдаёт
+минимальный материал активного устройства и принимает bounded source-bound snapshots с exact retry,
+nonce replay, monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only
+procedure удаляет bounded batches истёкших nonces и raw snapshots, сохраняя current source/day
+values, но scheduler для неё отсутствует. Сама база не проверяет wire signature. HTTP ingest route,
+приложение с Ed25519-проверкой, connector, cleanup/scoring scheduler или service, HTTP public score
+read, audited correction flow, purge worker и deployed database ещё не реализованы, поэтому готовой
 пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует

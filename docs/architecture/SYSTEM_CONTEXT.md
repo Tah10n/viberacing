@@ -83,9 +83,10 @@ state.
 Revision 0007 implements the database-only Usage submission capability; revision 0008 gives Jobs
 bounded expired ingest-state cleanup; revision 0009 gives Jobs an isolated open-season scoring
 refresh; and revision 0010 adds server-time late-ingest quarantine plus immutable Jobs-only
-finalization. These capabilities have role and concurrency evidence. The Ingest and Jobs services,
-cleanup/scoring schedulers, edge/origin proof, request signature verification, public score read,
-and audited correction authority shown in the design remain planned.
+finalization. Revision 0011 gives Web only a bounded, active-profile score projection. These
+capabilities have role and concurrency evidence. The Ingest and Jobs services, cleanup/scoring
+schedulers, edge/origin proof, request signature verification, HTTP public-race delivery/cache, and
+audited correction authority shown in the design remain planned.
 
 ## Component responsibilities
 

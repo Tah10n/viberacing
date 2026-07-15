@@ -229,6 +229,10 @@ material availability cost.
 - **Detection:** Scrape and enumeration patterns at the edge without invasive behavioral analytics.
 - **Recovery:** Hide the profile immediately, purge public caches, delete on request, and
   investigate bypass of non-public fields.
+- **Current evidence:** Revision 0011 returns only ten reviewed score fields, excludes private IDs,
+  raw/daily values, and exact timestamps, filters current profile state to `active`, and re-ranks
+  after that filter. HTTP enumeration controls, rounded freshness, cache purge, and monitoring are
+  still unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 
@@ -313,9 +317,10 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 22 cross-capability denials.
+  and usage/scoring-table reads or API-schema mutation, and proves 25 cross-capability denials.
   Ingest has exactly two reviewed functions; Jobs has exactly three reviewed functions: bounded
-  ingest-retention cleanup, open-season scoring refresh, and terminal season finalization.
+  ingest-retention cleanup, open-season scoring refresh, and terminal season finalization. Web alone
+  receives the bounded public score function; Ingest, Jobs, and Admin are explicitly denied.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow.
 
@@ -382,6 +387,9 @@ material availability cost.
   and restore drills.
 - **Recovery:** Re-hide and revoke synchronously, rerun purge, replay markers, purge caches, and
   report honest progress without record identifiers.
+- **Current evidence:** Revision 0011 filters `active` profile state on every score read and
+  re-ranks the surviving public rows after a committed hide. The HTTP/cache invalidation and primary
+  purge/restore paths remain unimplemented.
 - **Residual risk:** Immutable backup media may retain encrypted data until documented expiry.
 
 ### VR-ABUSE-RESOURCE-EXHAUSTION — Expensive endpoint or state-table growth
@@ -407,9 +415,10 @@ material availability cost.
   1-to-1000 batches, preserves live/current state, and serializes two workers in observed PostgreSQL
   evidence. Scoring refresh/finalization use one private mutex, per-season locks, a five-second
   database lock bound, numeric overflow protection, a 30-second statement deadline, bounded no-data
-  terminal state, and one atomic global-rank rebuild. Scheduling, request/body limits, service
-  concurrency, scoring capacity/batching policy, quotas, load shedding, and production capacity
-  evidence remain unimplemented.
+  terminal state, and one atomic global-rank rebuild. The public score projection returns at most
+  100 rows and has a five-second statement deadline, but ranking still evaluates all currently
+  visible season entries. Scheduling, request/body limits, cache, service concurrency, scoring/read
+  capacity policy, quotas, load shedding, and production capacity evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

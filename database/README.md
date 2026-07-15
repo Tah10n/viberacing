@@ -2,13 +2,14 @@
 
 ## Status
 
-This directory contains ten SQL-first revisions for identity, passkey login and management,
+This directory contains eleven SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
 implemented. No application route, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier, production
 credential, or deployed database consumes them yet. The database-only ingest and Jobs-only
-ingest-retention, open-season scoring, and terminal finalization procedures are implemented; HTTP
-ingest, scheduled execution, public score reads, audited corrections, and purge are not.
+ingest-retention, open-season scoring, and terminal finalization procedures plus one Web-only public
+score projection are implemented; HTTP ingest/read routes, scheduled execution, audited corrections,
+and purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -47,6 +48,8 @@ procedure; the current repository has no such application code.
 - `migrations/0010_community_season_finalization.sql` adds the public 48-hour server-time grace
   deadline, late-snapshot quarantine, shared season locks, terminal projection triggers, and one
   Jobs-only idempotent finalization capability.
+- `migrations/0011_community_public_score_read.sql` adds one Web-only, active-profile, bounded score
+  projection with a fixed public field allowlist and post-visibility rank/display positions.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -102,6 +105,9 @@ procedure; the current repository has no such application code.
 - `tests/finalization_concurrency_setup.sql` and `tests/finalization_concurrency_assertions.sql`
   prove finalization and late Ingest share a deadlock-free canonical lock order and converge on one
   terminal projection.
+- `tests/public_score_read.sql` proves the exact public field allowlist, active-only visibility,
+  post-hide re-ranking, open/finalized metadata, fixed result ceiling, generic failure, and role
+  isolation.
 - `scripts/check-database.mjs` and its black-box tests enforce migration shape, checksums, paths,
   transactions, bounded execution, owner context, forbidden grants or SQL capabilities, and reject
   scalar-subquery `IF NOT` assertions whose missing row would otherwise pass as SQL `NULL`.
@@ -112,14 +118,14 @@ procedure; the current repository has no such application code.
 
 ## Capability model
 
-| Role                | Login | Private schema | API schema | Current executable capability                                  |
-| ------------------- | ----- | -------------- | ---------- | -------------------------------------------------------------- |
-| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                         |
-| `viberacing_web`    | No    | None           | Usage      | Identity, passkey, restricted recovery, pairing, and lifecycle |
-| `viberacing_ingest` | No    | None           | Usage      | Device verification lookup and Community sync submission only  |
-| `viberacing_jobs`   | No    | None           | Usage      | Ingest cleanup plus Community refresh and finalization         |
-| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                   |
-| `PUBLIC`            | N/A   | None           | None       | None                                                           |
+| Role                | Login | Private schema | API schema | Current executable capability                                      |
+| ------------------- | ----- | -------------- | ---------- | ------------------------------------------------------------------ |
+| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                             |
+| `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus public score read |
+| `viberacing_ingest` | No    | None           | Usage      | Device verification lookup and Community sync submission only      |
+| `viberacing_jobs`   | No    | None           | Usage      | Ingest cleanup plus Community refresh and finalization             |
+| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                       |
+| `PUBLIC`            | N/A   | None           | None       | None                                                               |
 
 Deployment login principals are environment-owned secrets and are not declared here. Each service
 will receive one group role through protected infrastructure. Runtime roles are not members of the
@@ -223,12 +229,17 @@ Runtime access must remain procedure-only and must have positive and negative in
 - `finalize_community_season` accepts the same bounded ISO calendar only at or after grace,
   rematerializes once, and records an immutable terminal timestamp. Exact retries return the stored
   result; a closed no-data week records one terminal definition, and no runtime correction exists.
+- `list_public_community_scores` is Web-only and returns at most 100 active-profile rows for one
+  bounded ISO season. It exposes only dates, score version/finalized state, handle, score, active
+  days, source count, shared rank, and deterministic display position. Visibility filtering happens
+  before public re-ranking; no identifier, raw value, daily detail, or exact timestamp is returned.
 
 The public schema safety ceilings are 8 to 16 codes per replacement recovery batch, one active
 recovery authority per profile for at most ten minutes, 32 lifetime passkey records, 32 active
-unexpired browser sessions, 32 lifetime source records, and 64 active plus unexpired approved device
-authorities per profile. They bound retained credential growth and authority fan-out and are not
-substitutes for lower deployment-specific fair-use limits, edge rate limits, or bounded cleanup.
+unexpired browser sessions, 32 lifetime source records, 64 active plus unexpired approved device
+authorities per profile, and 100 rows per public score read. They bound retained credential growth,
+authority fan-out, and one response; they are not substitutes for lower deployment-specific fair-use
+limits, edge rate limits, cache design, capacity evidence, or bounded cleanup.
 
 The application must call `complete_passkey_login` or `consume_passkey_challenge` only after it has
 verified the exact WebAuthn RP ID, origin, challenge, transaction context, signature, and
@@ -327,8 +338,15 @@ terminal transition rematerializes once, records its immutable timestamp, suppor
 idempotent retry, and rejects direct metadata or projection mutation. Profile purge can still
 cascade personal score rows without reopening the non-personal season record. A closed no-data week
 stores one terminal season, bounded to the ISO weeks reachable from the contract's `20xx` dates. No
-correction record, public projection/read capability, Jobs service, scheduler, or production
-capacity claim is implemented.
+correction record, Jobs service, scheduler, or production capacity claim is implemented.
+
+Revision 0011 exposes only a bounded score projection to the Web role. It filters current profile
+state to `active`, then recomputes shared rank and contiguous display position so hide/purge leaves
+no public gap. Its exact ten fields omit private IDs, raw/daily values, and exact timestamps;
+Ingest, Jobs, Admin, and `PUBLIC` are denied. Ranking still evaluates the visible season before the
+100-row result cap, so the five-second database deadline is defense in depth rather than capacity
+evidence. No HTTP route/schema, cache/invalidation, car, streak, rounded freshness, profile detail,
+rate limit, or deployment is implemented.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
@@ -385,8 +403,10 @@ hard failure, not something the script silently broadens or repairs.
 - Implement the HTTP Ingest boundary with exact raw-body canonicalization, strict contract parsing,
   Ed25519 verification, origin proof, generic errors, rate limits, deadlines, and backpressure.
 - Implement the Jobs service and scheduler around the database scoring refresh and finalization,
-  plus audited corrections, freshness/streak projection, and a public read boundary without widening
-  Ingest.
+  plus audited corrections and freshness/streak projection.
+- Implement the versioned HTTP public-race schema/route, CarRecipe/profile detail,
+  cache/invalidation, request shaping, query-plan/load evidence, and monitoring around the bounded
+  database score read.
 - Schedule and monitor the implemented ingest-retention procedure, and implement bounded cleanup for
   ceremonies, sessions, pairings, jobs, recovery authority, and tombstones. Expiry columns outside
   the revision 0008 boundary are not cleanup.

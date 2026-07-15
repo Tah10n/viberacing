@@ -1,6 +1,6 @@
 # ADR 0002: Opaque multi-source profiles with one profile cap
 
-- Status: Accepted (database aggregation implemented; services/public projection pending)
+- Status: Accepted (database aggregation/projection implemented; services and HTTP pending)
 - Date: 2026-07-14
 - Decision owners: Product, Pairing, Ingest, Scoring, and Database
 - Supersedes: None
@@ -88,7 +88,9 @@ automatically from inferred personal data.
   cap once, exposes only the contributing count in private derived season state, excludes
   quarantined sources, and proves idempotent serialized refreshes. Revision 0010 finalizes that
   already profile-capped result and quarantines late whole snapshots without adding a new source
-  multiplier. The Jobs service, public projection, correction, and capacity evidence remain pending.
+  multiplier. Revision 0011 exposes only the active profile's contributing count through the bounded
+  score projection, without identifiers. The Jobs service, complete HTTP race DTO, correction, and
+  capacity evidence remain pending.
 - UI/API assertions for opaque wording and public source count without identifiers.
 - Privacy tests proving account email has no connector egress, schema, log, fixture, or support
   path.

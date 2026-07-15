@@ -17,6 +17,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0006](0006-public-repository-boundary.md)              | Every tracked artifact is immediately public-safe                   | Accepted; repository controls partially implemented |
 | [0007](0007-restricted-recovery-authority.md)           | Recovery codes grant only short-lived passkey-replacement authority | Accepted; recovery DB capability implemented        |
 | [0008](0008-community-season-grace-and-finalization.md) | Server-time Community grace and immutable finalization              | Accepted; finalization DB capability implemented    |
+| [0009](0009-public-community-score-projection.md)       | Bounded active-only public Community score projection               | Accepted; score-read DB capability implemented      |
 
 ## Lifecycle
 

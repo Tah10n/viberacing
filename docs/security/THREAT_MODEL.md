@@ -119,7 +119,7 @@ and migration or rollback where applicable.
 
 | Surface                             | Realistic attacker story                                                                                   | Required mitigations                                                                                                             | Current status                                                                                   |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Public race and profiles            | A visitor injects markup through a handle, enumerates profiles, or infers exact work hours                 | Plain-text bounded names, CSP, public-field allowlist, rounded freshness, rate and cache policy                                  | Planned                                                                                          |
+| Public race and profiles            | A visitor injects markup through a handle, enumerates profiles, or infers exact work hours                 | Plain-text bounded names, CSP, public-field allowlist, rounded freshness, rate and cache policy                                  | DB score allowlist/visibility/limit tested; HTTP, cache, car, freshness, rate planned            |
 | OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up     | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke | Passkey/recovery DB tested; app crypto, routes, rate and cleanup planned                         |
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration           | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, revoke and rotate                        | Pairing/lifecycle DB tested; app crypto, routes, and rate planned                                |
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Planned                                                                                          |
@@ -161,8 +161,9 @@ and migration or rollback where applicable.
    profile cap, or mutate a finalized season. Current SQL proves unique source/day state, one
    transactional profile cap, immutable formula/season binding, serialized idempotent open-season
    refresh, server-receipt closure, terminal triggers, and a finalization-versus-late-Ingest race. A
-   Jobs service/scheduler, audited correction authority, capacity evidence, and public read boundary
-   are still required before publishing durable results.
+   bounded Web-only SQL projection filters active profiles and returns only public score fields. A
+   Jobs service/scheduler, audited correction authority, capacity evidence, and HTTP/cache delivery
+   boundary are still required before publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes.

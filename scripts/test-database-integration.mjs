@@ -432,6 +432,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/season_finalization.sql"), "utf8"),
     },
     {
+      label: "Community public score projection scenarios",
+      sql: readFileSync(resolve(root, "database/tests/public_score_read.sql"), "utf8"),
+    },
+    {
       label: "identity concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/identity_concurrency_setup.sql"), "utf8"),
     },
@@ -1574,8 +1578,16 @@ SELECT viberacing_api.complete_passkey_login(
     );
   }
 
+  for (const role of ["viberacing_ingest", "viberacing_jobs", "viberacing_admin"]) {
+    expectDenied(
+      role,
+      "SELECT * FROM viberacing_api.list_public_community_scores('2026-07-06', 10);",
+      `${role} public Community score projection`,
+    );
+  }
+
   console.log(
-    "Database integration passed (23 schema tables, 22 observed lock-wait races, 8 relation-denial and 22 cross-capability checks).",
+    "Database integration passed (23 schema tables, 22 observed lock-wait races, 8 relation-denial and 25 cross-capability checks).",
   );
 } finally {
   if (started) {
