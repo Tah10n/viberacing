@@ -79,12 +79,12 @@ Dev-сервер слушает только loopback. В интерфейсе �
 будущего sync-протокола. Это пока только проверяемая граница данных: работающего API, connector и
 приёма реальной статистики ещё нет.
 
-Также добавлены шесть SQL migrations: 14 приватных
-identity/passkey/recovery/source/device/pairing/audit/deletion tables, deny-by-default runtime
-roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая procedure boundary уже
-покрывает выдачу invite, атомарное enrollment, привязанный к сессии initial-passkey challenge, вход
-с сессией, привязанной к точному passkey, управление несколькими passkeys, rotate/revoke сессии,
-немедленную блокировку при запросе удаления и одноразовую привязку устройства к новому или
+Также добавлены семь SQL migrations: 18 приватных
+identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage tables, deny-by-default
+runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая procedure boundary
+уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии initial-passkey challenge,
+вход с сессией, привязанной к точному passkey, управление несколькими passkeys, rotate/revoke
+сессии, немедленную блокировку при запросе удаления и одноразовую привязку устройства к новому или
 существующему opaque source. Также реализованы приватный inventory источников и устройств,
 pause/reactivation/unlink источника и немедленный revoke устройства. Для критических действий база
 сохраняет точный passkey step-up. Реализованы также защищённая passkey-проверкой замена
@@ -93,9 +93,13 @@ recovery-кодов и отдельное краткоживущее право 
 Argon2id/WebAuthn приложения пока нет. Несколько объявленных источников одного профиля позже будут
 суммироваться под единым лимитом score; email и идентификатор Codex-аккаунта не читаются и не
 сохраняются. Но HTTP auth/recovery routes, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier,
-generic response и edge rate limits для анонимных challenges и recovery lookup, connector ingest,
-purge worker и deployed database ещё не реализованы, поэтому готовой пользовательской авторизации
-пока нет.
+generic response и edge rate limits для анонимных challenges и recovery lookup пока отсутствуют.
+Database-only Community ingest capability уже выдаёт минимальный материал активного устройства и
+принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic source/date,
+quarantine и lifecycle-race enforcement, но сам не проверяет wire signature. HTTP ingest route,
+приложение с Ed25519-проверкой, connector, replay/retention cleanup, scoring/finalization jobs,
+purge worker и deployed database ещё не реализованы, поэтому готовой пользовательской авторизации и
+приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

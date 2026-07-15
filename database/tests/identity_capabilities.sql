@@ -33,13 +33,13 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 34
+    SELECT pg_catalog.count(*) = 36
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.prokind = 'f'
   ),
-  'the API surface contains only the reviewed identity, passkey, recovery, and source lifecycle functions'
+  'the API surface contains only the reviewed identity, passkey, recovery, source lifecycle, and ingest functions'
 );
 
 SELECT pg_temp.assert_true(
@@ -89,7 +89,13 @@ SELECT pg_temp.assert_true(
   (
     SELECT pg_catalog.bool_and(
       pg_catalog.has_function_privilege('viberacing_web', procedure.oid, 'EXECUTE')
-      = (procedure.proname <> 'issue_invite')
+      = (
+        procedure.proname NOT IN (
+          'issue_invite',
+          'read_device_verification_material',
+          'submit_community_sync'
+        )
+      )
     )
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
@@ -99,16 +105,28 @@ SELECT pg_temp.assert_true(
 );
 
 SELECT pg_temp.assert_true(
-  NOT EXISTS (
-    SELECT 1
-    FROM pg_catalog.pg_roles AS runtime_role
-    CROSS JOIN pg_catalog.pg_proc AS procedure
+  (
+    SELECT pg_catalog.bool_and(
+      pg_catalog.has_function_privilege('viberacing_ingest', procedure.oid, 'EXECUTE')
+      = (
+        procedure.proname IN (
+          'read_device_verification_material',
+          'submit_community_sync'
+        )
+      )
+    )
+    FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
-    WHERE runtime_role.rolname IN ('viberacing_ingest', 'viberacing_jobs')
-      AND namespace.nspname = 'viberacing_api'
-      AND pg_catalog.has_function_privilege(runtime_role.rolname, procedure.oid, 'EXECUTE')
+    WHERE namespace.nspname = 'viberacing_api'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_proc AS procedure
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'viberacing_api'
+      AND pg_catalog.has_function_privilege('viberacing_jobs', procedure.oid, 'EXECUTE')
   ),
-  'ingest and jobs have no interactive identity capability'
+  'ingest has only verification and sync capability while jobs have no API capability'
 );
 
 SELECT pg_temp.assert_true(

@@ -1,8 +1,9 @@
 # Public protocol contracts
 
 This directory is the language-neutral source of truth for Vibe Racing wire shapes. The current
-files establish a pre-implementation boundary; they do not claim that an API endpoint, connector,
-database, or deployment exists.
+files establish a pre-HTTP boundary; revision 0007 maps the bounded Community sync into a
+database-only procedure, but no API endpoint, connector, application signature verifier, or
+deployment exists.
 
 ## Canonical version 1 schemas
 

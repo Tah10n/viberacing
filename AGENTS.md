@@ -19,9 +19,10 @@ Read these files before changing the project:
     state.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync
-contracts, and procedure-only identity, passkey, restricted-recovery, pairing, and source/device
-lifecycle database slices. Do not claim that HTTP authentication, OAuth/Argon2id/WebAuthn
-verification, real ingestion, a connector, deployment, or a hosted security control exists until its
+contracts, and procedure-only identity, passkey, restricted-recovery, pairing, source/device
+lifecycle, and Community usage-ingest database slices. Do not claim that HTTP authentication,
+OAuth/Argon2id/WebAuthn/Ed25519 application verification, real-user ingestion, a connector,
+scoring/finalization, cleanup, deployment, or a hosted security control exists until its
 implementation and verification are present in the working tree.
 
 ## Repository map
@@ -79,15 +80,16 @@ implementation and verification are present in the working tree.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability
   policy. `pnpm run test:database:integration` separately uses an isolated, portless, ephemeral
   PostgreSQL Compose project to apply the reviewed manifest in order and exercise state constraints,
-  session-bound identity and source/device lifecycle procedures, observed pairing/lifecycle
-  lock-wait races, rollback, and every current runtime deny matrix.
+  session-bound identity, source/device lifecycle, and Community ingest procedures, observed
+  identity/pairing/lifecycle/ingest lock-wait races, rollback, and every current runtime deny
+  matrix.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 
 These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`. The web tests use
-synthetic data and do not prove authentication, ingestion, connector, deployment, or production
-behavior; the database integration proves only its isolated SQL boundary. Install dependencies with
-`pnpm install --frozen-lockfile --ignore-scripts`.
+synthetic data and do not prove authentication, real-user ingestion, connector, deployment, or
+production behavior; the database integration proves only its isolated SQL boundary. Install
+dependencies with `pnpm install --frozen-lockfile --ignore-scripts`.
 
 ## Public repository boundary
 

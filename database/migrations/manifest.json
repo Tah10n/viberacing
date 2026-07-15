@@ -36,6 +36,12 @@
       "name": "restricted_recovery_authority",
       "path": "database/migrations/0006_restricted_recovery_authority.sql",
       "sha256": "6ade38383b7cce40f32ecea11aee56523d0fd63ddef1c37eeb26938cdbca7424"
+    },
+    {
+      "revision": 7,
+      "name": "community_usage_ingest",
+      "path": "database/migrations/0007_community_usage_ingest.sql",
+      "sha256": "daa0c425e3ad749619acd748b54624807a1d7f7e3631027868cc26787f47c3c4"
     }
   ]
 }

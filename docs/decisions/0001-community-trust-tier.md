@@ -1,6 +1,6 @@
 # ADR 0001: Community-only launch and disabled Verified tier
 
-- Status: Accepted (design; implementation pending)
+- Status: Accepted (Community ingest DB implemented; service and scoring pending)
 - Date: 2026-07-14
 - Decision owners: Product, Web, Ingest, and Scoring
 - Supersedes: None
@@ -64,6 +64,8 @@ trust columns, public copy, and migration. Existing Community seasons remain Com
 
 - Copy assertions across EN/RU race, profile, onboarding, API reference, and metadata.
 - Contract tests reject client-set trust, score, rank, and season fields.
+- Revision 0007 stores only source-bound Community input and server outcomes; no client field or
+  runtime role can populate Verified trust, score, rank, season, or moderation state.
 - Feature/config tests prove Verified ingestion is unreachable by default and in production.
 - Architecture tests prove no reward, authorization, or privilege reads Community score.
 - Security review repeats before any incentive or upstream verification change.

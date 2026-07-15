@@ -2,15 +2,15 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revisions 0001 through 0006 provide private
-identity/source/device/pairing/audit/deletion tables, deny-by-default roles, and a narrow database
-slice for invite issuance, enrollment, exact-session challenges, initial-passkey activation, passkey
-login and management, restricted recovery, session rotation/revocation, immediate deletion
-lock-down, source-bound pairing, and source/device lifecycle controls. No endpoint, OAuth callback,
-Argon2id/WebAuthn/Ed25519 verifier, ingest procedure, purge worker, or deployed service executes the
-complete sequences. Data labels refer to the classifications in the
-[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
-and Prohibited.
+These sequences remain planned application contracts. Revisions 0001 through 0007 provide private
+identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
+database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
+activation, passkey login and management, restricted recovery, session rotation/revocation,
+immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
+ingest. No endpoint, OAuth callback, Argon2id/WebAuthn/Ed25519 application verifier, connector,
+purge/cleanup worker, scoring/finalization job, or deployed service executes the complete sequences.
+Data labels refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md):
+Public, Account, Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -209,8 +209,8 @@ cancels approved pairings, and invalidates unused source challenges atomically.
 The PostgreSQL runner releases pause against pairing approval and unlink against device activation
 on separate connections. Either ordering ends without approved authority on a paused source or an
 active device on an unlinked source. HTTP authorization, CSRF protection, WebAuthn verification,
-private no-store response handling, user notifications, and ingest enforcement remain application
-work.
+private no-store response handling, and user notifications remain application work. Revision 0007
+adds the database-side submission enforcement described below.
 
 ## Local collection and signed synchronization
 
@@ -245,6 +245,19 @@ Prompts, conversations, repositories, account email, Codex credentials, API keys
 are Prohibited and have no field in the connector egress schema. `observedAt` supports replay
 checks; server `receivedAt` controls deadlines and season finalization. A valid signature proves
 only which registered device sent the self-reported payload.
+
+Revision 0007 implements only the PostgreSQL portion of this flow. Ingest can look up the minimal
+active device/source/public-key tuple, then call one procedure after application verification. The
+procedure independently enforces the exact activated binding, identifier/version/date/token and
+31-entry bounds, millisecond timestamp precision, a server-time freshness window, per-device nonce
+replay, per-device/sync idempotency, and one monotonic current value per source/date. It retains a
+whole decrease or quarantined-source snapshot as `quarantined`; paused/unlinked sources, revoked
+devices, and deletion-pending profiles fail closed. Observed races cover exact retry, same-source
+devices, pause, and revoke.
+
+The connector, edge, Ingest HTTP service, raw-body canonicalization, Ed25519 verification, origin
+proof, scoring/finalization, rate controls, and cleanup are still absent. Nonce and raw-snapshot
+expiry columns do not delete rows by themselves.
 
 ## Public race read
 
@@ -303,8 +316,9 @@ the asynchronous job does not make the profile public or the device valid again.
 
 Revision 0002 implements the database transaction behind the immediate hide/revoke/enqueue step and
 proves its rollback behavior with synthetic PostgreSQL scenarios. Revision 0006 also revokes active
-restricted recovery authority as the profile enters deletion. Cache purge, job execution, tombstone
-policy, backup replay, and the authenticated application endpoint are still planned.
+restricted recovery authority as the profile enters deletion, and revision 0007 rejects every
+deletion-pending profile at the usage procedure. Cache purge, job execution, tombstone policy,
+backup replay, and the authenticated application endpoint are still planned.
 
 ## Trusted release
 

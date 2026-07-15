@@ -207,7 +207,13 @@ WHERE holder.application_name = ${sqlStringLiteral(holderName)};`;
   );
 }
 
-async function runObservedRace(label, lockSql, readyMarker, contenderSql) {
+async function runObservedRace(
+  label,
+  lockSql,
+  readyMarker,
+  contenderSql,
+  { orderedContenders = false } = {},
+) {
   raceSequence += 1;
   const racePrefix = `vr-race-${process.pid}-${raceSequence}`;
   const holderName = `${racePrefix}-holder`;
@@ -222,8 +228,17 @@ async function runObservedRace(label, lockSql, readyMarker, contenderSql) {
     await lockHolder.ready;
     for (const [index, sql] of contenderSql.entries()) {
       contenders.push(startPsql(withApplicationName(contenderNames[index], sql)));
+      if (orderedContenders) {
+        await waitForBlockedContenders(
+          `${label} ordered contender ${index + 1}`,
+          holderName,
+          contenderNames.slice(0, index + 1),
+        );
+      }
     }
-    await waitForBlockedContenders(label, holderName, contenderNames);
+    if (!orderedContenders) {
+      await waitForBlockedContenders(label, holderName, contenderNames);
+    }
     holderReleased = true;
     lockHolder.closeInput("\nCOMMIT;\n");
 
@@ -263,6 +278,19 @@ async function expectOneConcurrentWinner(label, lockSql, readyMarker, contenderS
   }
 }
 
+async function expectConcurrentSuccesses(label, lockSql, readyMarker, contenderSql) {
+  const contenderResults = await runObservedRace(label, lockSql, readyMarker, contenderSql);
+  if (contenderResults.some((result) => result.status !== 0)) {
+    const evidence = contenderResults
+      .map(
+        (result, index) =>
+          `contender ${index + 1} status=${result.status}\n${result.stdout}\n${result.stderr}`,
+      )
+      .join("\n");
+    throw new Error(`${label} did not produce only successful serialized outcomes:\n${evidence}`);
+  }
+}
+
 async function expectProtectiveActionDominates(
   label,
   lockSql,
@@ -271,15 +299,18 @@ async function expectProtectiveActionDominates(
   competingSql,
   diagnosticSql,
 ) {
-  const [protectiveResult, competingResult] = await runObservedRace(label, lockSql, readyMarker, [
-    protectiveSql,
-    competingSql,
-  ]);
+  const [protectiveResult, competingResult] = await runObservedRace(
+    label,
+    lockSql,
+    readyMarker,
+    [protectiveSql, competingSql],
+    { orderedContenders: true },
+  );
 
   const competingClosed =
     competingResult.status !== 0 &&
     /operation cannot be completed/i.test(`${competingResult.stdout}\n${competingResult.stderr}`);
-  if (protectiveResult.status !== 0 || (competingResult.status !== 0 && !competingClosed)) {
+  if (protectiveResult.status !== 0 || !competingClosed) {
     const diagnosticResult = diagnosticSql ? psql(diagnosticSql) : null;
     const diagnostics = diagnosticResult
       ? `\ndiagnostics status=${diagnosticResult.status}\n${diagnosticResult.stdout}\n${diagnosticResult.stderr}`
@@ -372,8 +403,16 @@ try {
       sql: readFileSync(resolve(root, "database/tests/source_device_lifecycle.sql"), "utf8"),
     },
     {
+      label: "Community usage ingest scenarios",
+      sql: readFileSync(resolve(root, "database/tests/usage_ingest.sql"), "utf8"),
+    },
+    {
       label: "identity concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/identity_concurrency_setup.sql"), "utf8"),
+    },
+    {
+      label: "Community ingest concurrency setup",
+      sql: readFileSync(resolve(root, "database/tests/ingest_concurrency_setup.sql"), "utf8"),
     },
     {
       label: "pairing concurrency setup",
@@ -558,6 +597,183 @@ SELECT viberacing_api.rotate_session(
   requireSuccess(
     psql(readFileSync(resolve(root, "database/tests/identity_concurrency_assertions.sql"), "utf8")),
     "identity concurrency assertions",
+  );
+
+  const ingestRetryObservedAt = new Date().toISOString();
+
+  await expectConcurrentSuccesses(
+    "exact Community sync retry race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT source_id
+FROM viberacing_private.codex_sources
+WHERE source_id = 'src_' || pg_catalog.repeat('S', 22)
+FOR UPDATE;
+\\echo ingest-retry-lock-ready`,
+    "ingest-retry-lock-ready",
+    [
+      `SET ROLE viberacing_ingest;
+SELECT * FROM viberacing_api.submit_community_sync(
+  '00000000-0000-4000-8000-000000011401',
+  'dev_' || pg_catalog.repeat('S', 22),
+  'src_' || pg_catalog.repeat('S', 22),
+  '00000000-0000-4000-8000-000000011500',
+  'syn_' || pg_catalog.repeat('S', 22),
+  ${sqlStringLiteral(ingestRetryObservedAt)},
+  '1.2.3',
+  '4.5.6',
+  pg_catalog.decode(pg_catalog.lpad('11500', 64, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('21500', 128, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('31500', 64, '0'), 'hex'),
+  ARRAY['2026-07-15'],
+  ARRAY[321]::bigint[]
+);`,
+      `SET ROLE viberacing_ingest;
+SELECT * FROM viberacing_api.submit_community_sync(
+  '00000000-0000-4000-8000-000000011401',
+  'dev_' || pg_catalog.repeat('S', 22),
+  'src_' || pg_catalog.repeat('S', 22),
+  '00000000-0000-4000-8000-000000011500',
+  'syn_' || pg_catalog.repeat('S', 22),
+  ${sqlStringLiteral(ingestRetryObservedAt)},
+  '1.2.3',
+  '4.5.6',
+  pg_catalog.decode(pg_catalog.lpad('11500', 64, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('21500', 128, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('31500', 64, '0'), 'hex'),
+  ARRAY['2026-07-15'],
+  ARRAY[321]::bigint[]
+);`,
+    ],
+  );
+
+  await expectConcurrentSuccesses(
+    "same-source multi-device monotonic race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT source_id
+FROM viberacing_private.codex_sources
+WHERE source_id = 'src_' || pg_catalog.repeat('T', 22)
+FOR UPDATE;
+\\echo ingest-devices-lock-ready`,
+    "ingest-devices-lock-ready",
+    [
+      `SET ROLE viberacing_ingest;
+SELECT * FROM viberacing_api.submit_community_sync(
+  '00000000-0000-4000-8000-000000011402',
+  'dev_' || pg_catalog.repeat('T', 22),
+  'src_' || pg_catalog.repeat('T', 22),
+  '00000000-0000-4000-8000-000000011501',
+  'syn_' || pg_catalog.repeat('T', 22),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+  '1.2.3',
+  '4.5.6',
+  pg_catalog.decode(pg_catalog.lpad('11501', 64, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('21501', 128, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('31501', 64, '0'), 'hex'),
+  ARRAY['2026-07-15'],
+  ARRAY[700]::bigint[]
+);`,
+      `SET ROLE viberacing_ingest;
+SELECT * FROM viberacing_api.submit_community_sync(
+  '00000000-0000-4000-8000-000000011403',
+  'dev_' || pg_catalog.repeat('U', 22),
+  'src_' || pg_catalog.repeat('T', 22),
+  '00000000-0000-4000-8000-000000011502',
+  'syn_' || pg_catalog.repeat('U', 22),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+  '1.2.3',
+  '4.5.6',
+  pg_catalog.decode(pg_catalog.lpad('11502', 64, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('21502', 128, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('31502', 64, '0'), 'hex'),
+  ARRAY['2026-07-15'],
+  ARRAY[600]::bigint[]
+);`,
+    ],
+  );
+
+  await expectProtectiveActionDominates(
+    "source pause versus Community sync race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000011103'
+FOR UPDATE;
+\\echo ingest-pause-lock-ready`,
+    "ingest-pause-lock-ready",
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.pause_source(
+  '00000000-0000-4000-8000-000000011201',
+  pg_catalog.decode(pg_catalog.lpad('11201', 64, '0'), 'hex'),
+  'src_' || pg_catalog.repeat('W', 22),
+  '00000000-0000-4000-8000-000000011801',
+  'req_' || pg_catalog.repeat('1', 22)
+);`,
+    `SET ROLE viberacing_ingest;
+SELECT * FROM viberacing_api.submit_community_sync(
+  '00000000-0000-4000-8000-000000011404',
+  'dev_' || pg_catalog.repeat('W', 22),
+  'src_' || pg_catalog.repeat('W', 22),
+  '00000000-0000-4000-8000-000000011503',
+  'syn_' || pg_catalog.repeat('W', 22),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+  '1.2.3',
+  '4.5.6',
+  pg_catalog.decode(pg_catalog.lpad('11503', 64, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('21503', 128, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('31503', 64, '0'), 'hex'),
+  ARRAY['2026-07-15'],
+  ARRAY[123]::bigint[]
+);`,
+    `SET ROLE viberacing_owner;
+SELECT state FROM viberacing_private.codex_sources
+WHERE source_id = 'src_' || pg_catalog.repeat('W', 22);`,
+  );
+
+  await expectProtectiveActionDominates(
+    "device revoke versus Community sync race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000011104'
+FOR UPDATE;
+\\echo ingest-revoke-lock-ready`,
+    "ingest-revoke-lock-ready",
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.revoke_device(
+  '00000000-0000-4000-8000-000000011202',
+  pg_catalog.decode(pg_catalog.lpad('11202', 64, '0'), 'hex'),
+  'dev_' || pg_catalog.repeat('Z', 22),
+  '00000000-0000-4000-8000-000000011802',
+  'req_' || pg_catalog.repeat('2', 22)
+);`,
+    `SET ROLE viberacing_ingest;
+SELECT * FROM viberacing_api.submit_community_sync(
+  '00000000-0000-4000-8000-000000011405',
+  'dev_' || pg_catalog.repeat('Z', 22),
+  'src_' || pg_catalog.repeat('Z', 22),
+  '00000000-0000-4000-8000-000000011504',
+  'syn_' || pg_catalog.repeat('Z', 22),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+  '1.2.3',
+  '4.5.6',
+  pg_catalog.decode(pg_catalog.lpad('11504', 64, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('21504', 128, '0'), 'hex'),
+  pg_catalog.decode(pg_catalog.lpad('31504', 64, '0'), 'hex'),
+  ARRAY['2026-07-15'],
+  ARRAY[456]::bigint[]
+);`,
+    `SET ROLE viberacing_owner;
+SELECT state FROM viberacing_private.device_keys
+WHERE device_key_id = '00000000-0000-4000-8000-000000011405';`,
+  );
+
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database/tests/ingest_concurrency_assertions.sql"), "utf8")),
+    "Community ingest concurrency assertions",
   );
 
   await expectOneConcurrentWinner(
@@ -976,6 +1192,11 @@ SELECT viberacing_api.complete_passkey_login(
     expectDenied(role, "SELECT count(*) FROM viberacing_private.profiles;", `${role} private read`);
     expectDenied(
       role,
+      "SELECT count(*) FROM viberacing_private.source_day_values;",
+      `${role} private usage read`,
+    );
+    expectDenied(
+      role,
       "CREATE TABLE viberacing_api.forbidden (value integer);",
       `${role} API schema mutation`,
     );
@@ -1078,8 +1299,37 @@ SELECT viberacing_api.complete_passkey_login(
     "jobs recovery start",
   );
 
+  for (const role of ["viberacing_web", "viberacing_jobs", "viberacing_admin"]) {
+    expectDenied(
+      role,
+      `SELECT * FROM viberacing_api.read_device_verification_material(
+        'dev_' || pg_catalog.repeat('A', 22)
+      );`,
+      `${role} device verification material read`,
+    );
+    expectDenied(
+      role,
+      `SELECT * FROM viberacing_api.submit_community_sync(
+        '00000000-0000-4000-8000-000000019401',
+        'dev_' || pg_catalog.repeat('A', 22),
+        'src_' || pg_catalog.repeat('A', 22),
+        '00000000-0000-4000-8000-000000019501',
+        'syn_' || pg_catalog.repeat('A', 22),
+        pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+        '1.2.3',
+        '4.5.6',
+        pg_catalog.decode(pg_catalog.lpad('19501', 64, '0'), 'hex'),
+        pg_catalog.decode(pg_catalog.lpad('29501', 128, '0'), 'hex'),
+        pg_catalog.decode(pg_catalog.lpad('39501', 64, '0'), 'hex'),
+        ARRAY['2026-07-15'],
+        ARRAY[1]::bigint[]
+      );`,
+      `${role} Community sync submission`,
+    );
+  }
+
   console.log(
-    "Database integration passed (14 schema tables, 14 observed lock-wait races, 4 relation-denial and 7 cross-capability checks).",
+    "Database integration passed (18 schema tables, 18 observed lock-wait races, 8 relation-denial and 13 cross-capability checks).",
   );
 } finally {
   if (started) {

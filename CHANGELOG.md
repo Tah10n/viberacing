@@ -53,6 +53,9 @@ Versioning where its guarantees are applicable.
 - Procedure-only restricted recovery with passkey-protected 8-to-16-code batch rotation, used-PHC
   scrubbing, minimal selector lookup, a one-time ten-minute replacement authority, and atomic
   replacement-passkey/session completion.
+- Procedure-only Community usage persistence with minimal active-device verification lookup, bounded
+  raw snapshot/replay state, exact idempotent retry, monotonic source/day values, and quarantine for
+  decreases or quarantined sources.
 
 ### Security
 
@@ -94,8 +97,12 @@ Versioning where its guarantees are applicable.
 - Added observed identity races proving one-winner invite enrollment, initial-passkey challenge
   consumption, and session rotation plus deletion dominance over concurrent rotation without stale
   authority or losing transaction artifacts.
-- Made all fourteen race gates observe every tagged contender in the holder's PostgreSQL blocker
-  chain before releasing the holder, removing timer-only concurrency evidence.
+- Made all eighteen race gates observe every tagged contender in the holder's PostgreSQL blocker
+  chain before releasing the holder, and made protective races prove first-contender queue order
+  before launching the competing action, removing timer-only and scheduler-order evidence.
+- Added Community ingest rejection, replay, binding, role, and lifecycle scenarios plus observed
+  races proving one exact retry creates one snapshot, same-source devices converge on one monotonic
+  value, and pause/revoke serialize ahead of later submissions.
 - Made passkey race preservation assertions fail when an expected row is missing and added a static
   regression check that rejects missing-row-unsafe scalar-subquery `IF NOT` assertions.
 - Made passkey revoke terminal, protected the last active key, preserved monotonic sign state, and

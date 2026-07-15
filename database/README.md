@@ -1,12 +1,13 @@
-# Database identity foundation and capabilities
+# Database persistence foundation and capabilities
 
 ## Status
 
-This directory contains six SQL-first revisions for identity, passkey login and management,
-restricted recovery, source, device, pairing, audit, and deletion state. The migrations, narrow
-database procedures, and PostgreSQL integration tests are implemented. No application route, OAuth
-callback, Argon2id/WebAuthn verifier, production credential, or deployed database consumes them yet.
-Ingest, scoring, purge, and cleanup procedures are not implemented.
+This directory contains seven SQL-first revisions for identity, passkey login and management,
+restricted recovery, source, device, pairing, audit, deletion, and Community usage state. The
+migrations, narrow database procedures, and PostgreSQL integration tests are implemented. No
+application route, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier, production credential, or
+deployed database consumes them yet. The database-only ingest procedure is implemented; HTTP ingest,
+scoring/finalization, purge, replay cleanup, and retention cleanup are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -34,6 +35,9 @@ procedure; the current repository has no such application code.
 - `migrations/0006_restricted_recovery_authority.sql` adds passkey-protected recovery-code batch
   replacement, used-PHC scrubbing, one short-lived recovery-only authority, atomic replacement-key
   completion, deletion revoke, and post-lock protective race semantics.
+- `migrations/0007_community_usage_ingest.sql` adds bounded raw Community snapshots, nonce replay
+  state, monotonic current source/day values, minimal active-device verification lookup, and an
+  Ingest-only submission procedure with duplicate and quarantine outcomes.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -49,6 +53,9 @@ procedure; the current repository has no such application code.
 - `tests/recovery_capabilities.sql` exercises exact-passkey code rotation, bounded PHC batches,
   profile-free lookup, one-time scrub and authority, exact completion binding, deletion revoke,
   retained activated devices, role denial, rollback, and the lifetime-passkey fail-closed edge.
+- `tests/usage_ingest.sql` exercises exact device/source binding, strict bounds, canonical time,
+  replay/idempotency, same-source device deduplication, monotonic state, quarantine, lifecycle
+  rejection, retention markers, direct-transition constraints, and the exact role boundary.
 - `tests/identity_concurrency_setup.sql` and `tests/identity_concurrency_assertions.sql` prove one
   invite enrollment, one initial-passkey challenge consumption, one active-session rotation, and
   deletion dominance over concurrent session rotation without leaving stale authority.
@@ -64,13 +71,16 @@ procedure; the current repository has no such application code.
 - `tests/recovery_concurrency_setup.sql` and `tests/recovery_concurrency_assertions.sql` prove one
   code creates one authority, fresh code rotation dominates concurrent old-code start, and recovery
   completion dominates concurrent old-passkey login in the committed final state.
+- `tests/ingest_concurrency_setup.sql` and `tests/ingest_concurrency_assertions.sql` prove
+  concurrent exact retries create one snapshot, same-source devices converge on one monotonic
+  current value, and source pause/device revoke serialize ahead of later submission.
 - `scripts/check-database.mjs` and its black-box tests enforce migration shape, checksums, paths,
   transactions, bounded execution, owner context, forbidden grants or SQL capabilities, and reject
   scalar-subquery `IF NOT` assertions whose missing row would otherwise pass as SQL `NULL`.
 - `scripts/test-database-integration.mjs` owns an isolated Compose project, executes PostgreSQL
   assertions and lock-contention races, waits until every tagged contender is observed in the
-  holder's transitive blocker chain, proves runtime denials, and removes the container, network, and
-  ephemeral storage.
+  holder's transitive blocker chain, proves protective contender order before releasing the holder,
+  proves runtime denials, and removes the container, network, and ephemeral storage.
 
 ## Capability model
 
@@ -78,7 +88,7 @@ procedure; the current repository has no such application code.
 | ------------------- | ----- | -------------- | ---------- | -------------------------------------------------------------- |
 | `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                         |
 | `viberacing_web`    | No    | None           | Usage      | Identity, passkey, restricted recovery, pairing, and lifecycle |
-| `viberacing_ingest` | No    | None           | Usage      | None                                                           |
+| `viberacing_ingest` | No    | None           | Usage      | Device verification lookup and Community sync submission only  |
 | `viberacing_jobs`   | No    | None           | Usage      | None                                                           |
 | `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                   |
 | `PUBLIC`            | N/A   | None           | None       | None                                                           |
@@ -163,6 +173,16 @@ Runtime access must remain procedure-only and must have positive and negative in
   limited to paused sources; normal user authority cannot lift quarantine. Unlink is terminal,
   revokes every active device, cancels approved pairings, and invalidates unused source actions in
   the same transaction.
+- `read_device_verification_material` returns only the exact active device key ID, opaque bound
+  source ID, and Ed25519 public key. Paused/unlinked sources, revoked devices, and deletion-pending
+  profiles return no material; quarantined sources remain verifiable so their submissions can be
+  retained as quarantined evidence.
+- `submit_community_sync` revalidates the exact activated device/source binding, schema-level
+  identifier/version/date/token/digest bounds, millisecond timestamp precision, and a server-time
+  replay window. It records one nonce per device and one snapshot per device/sync ID, returns an
+  exact retry as `duplicate`, quarantines a whole decrease or a quarantined source, and advances one
+  monotonic current value per source/date without summing devices. Paused/unlinked sources, revoked
+  devices, and deletion-pending profiles fail closed.
 
 The public schema safety ceilings are 8 to 16 codes per replacement recovery batch, one active
 recovery authority per profile for at most ten minutes, 32 lifetime passkey records, 32 active
@@ -174,31 +194,37 @@ The application must call `complete_passkey_login` or `consume_passkey_challenge
 verified the exact WebAuthn RP ID, origin, challenge, transaction context, signature, and
 user-verification result against the returned credential material. It must verify the connector's
 Ed25519 possession proof over the exact returned pairing material before activation. These SQL
-procedures implement neither cryptographic verification nor network rate limiting. In particular,
-the anonymous login-challenge endpoint is not launch-ready without edge/service limits and bounded
-expiry cleanup. Procedures use one generic failure message for closed authorization and constraint
-failures; HTTP status mapping and response shaping remain application work. Recovery SQL now uses a
-short-lived restricted authority and never represents it as an ordinary session, but application
-Argon2id/pepper and WebAuthn verification, timing normalization, rate limits, cleanup,
-notifications, and UI remain absent. The deletion procedure implements immediate lock-down only;
-primary purge, cache purge, tombstones, backup replay, and user-visible progress remain
-unimplemented.
+procedures implement neither cryptographic verification nor network rate limiting. The future Ingest
+service must validate the exact `ConnectorSyncV1` body and canonical request signature against
+`read_device_verification_material` before it calls `submit_community_sync`; the database treats
+that call as an assertion by the isolated Ingest role while independently enforcing binding, replay,
+time, and monotonic state. In particular, the anonymous login-challenge endpoint is not launch-ready
+without edge/service limits and bounded expiry cleanup. Procedures use one generic failure message
+for closed authorization and constraint failures; HTTP status mapping and response shaping remain
+application work. Recovery SQL now uses a short-lived restricted authority and never represents it
+as an ordinary session, but application Argon2id/pepper and WebAuthn verification, timing
+normalization, rate limits, cleanup, notifications, and UI remain absent. The deletion procedure
+implements immediate lock-down only; primary purge, cache purge, tombstones, backup replay, and
+user-visible progress remain unimplemented.
 
 ## Data and privacy map
 
 All current columns map to the canonical [privacy data map](../docs/security/PRIVACY_DATA_MAP.md):
 
-| Tables                                   | Classes                       | Stored boundary                                                                 |
-| ---------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------- |
-| `profiles`                               | Account; handle is Public     | Numeric GitHub binding, normalized handle, explicit preferences, lifecycle time |
-| `invites`, `sessions`, `auth_challenges` | Security                      | Keyed verifiers, exact session/passkey provenance, expiry, and one-time use     |
-| `passkeys`, `recovery_codes`             | Security; label is Account    | Public credential material, opaque selectors, and unused PHCs; no plaintext     |
-| `recovery_authorities`                   | Security                      | Keyed/challenge/context digests, terminal state, expiry, and opaque provenance  |
-| `codex_sources`                          | Account                       | Opaque source ID, owning profile, and constrained lifecycle state               |
-| `device_keys`, `pairing_transactions`    | Security; metadata is Account | Ed25519 public key, exact source/device binding, keyed poll/code verifiers      |
-| `deletion_jobs`, `deletion_tombstones`   | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry         |
-| `audit_events`                           | Security; Operational         | Closed event/actor enums, request reference, reason code, and server time       |
-| `schema_migrations`                      | Operational                   | Revision name and server application time only                                  |
+| Tables                                      | Classes                       | Stored boundary                                                                    |
+| ------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------- |
+| `profiles`                                  | Account; handle is Public     | Numeric GitHub binding, normalized handle, explicit preferences, lifecycle time    |
+| `invites`, `sessions`, `auth_challenges`    | Security                      | Keyed verifiers, exact session/passkey provenance, expiry, and one-time use        |
+| `passkeys`, `recovery_codes`                | Security; label is Account    | Public credential material, opaque selectors, and unused PHCs; no plaintext        |
+| `recovery_authorities`                      | Security                      | Keyed/challenge/context digests, terminal state, expiry, and opaque provenance     |
+| `codex_sources`                             | Account                       | Opaque source ID, owning profile, and constrained lifecycle state                  |
+| `device_keys`, `pairing_transactions`       | Security; metadata is Account | Ed25519 public key, exact source/device binding, keyed poll/code verifiers         |
+| `deletion_jobs`, `deletion_tombstones`      | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry            |
+| `audit_events`                              | Security; Operational         | Closed event/actor enums, request reference, reason code, and server time          |
+| `device_nonces`                             | Security                      | Device-bound replay digest and 15-minute expiry marker                             |
+| `usage_snapshots`, `usage_snapshot_entries` | Usage; Security               | Bounded signed snapshot metadata, exact private daily values, 30-day expiry marker |
+| `source_day_values`                         | Usage                         | One monotonic current token value and accepted provenance per source/date          |
+| `schema_migrations`                         | Operational                   | Revision name and server application time only                                     |
 
 The schema has no column for GitHub access tokens, account email, prompts, conversations, repository
 data, Codex credentials, API keys, local paths, arbitrary payloads, or raw support evidence.
@@ -224,6 +250,15 @@ Revision 0006 preserves existing unused recovery-code rows, makes used verifier 
 scrubbed, and adds no HTTP endpoint. Protective operations serialize on the profile and use time
 captured after lock acquisition: an old-code start can never survive fresh rotation, and an
 old-passkey login can never remain active after successful recovery completion.
+
+Revision 0007 stores only fields already mapped for the Community sync boundary: opaque
+device/source/sync IDs, connector/Codex versions, a body digest, submitted signature, nonce digest,
+exact private `codexReportedDate` values, tokens, server receipt time, and closed outcome/reason
+state. Nonce and snapshot rows carry 15-minute and 30-day expiry markers respectively, but no
+cleanup job exists yet; those markers are not evidence of deletion. Raw values remain private
+owner-only tables, and runtime access is procedure-only. Current source/day provenance must match
+one exact accepted snapshot entry; deleting that raw snapshot clears only its reference and
+preserves the current value.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
@@ -277,12 +312,12 @@ hard failure, not something the script silently broadens or repairs.
 - Add edge/service rate limiting and bounded cleanup for unauthenticated pairing starts,
   passkey-login challenges, and recovery-code lookups; do not encode deployable private thresholds
   in this repository.
-- Add adversarial concurrent-connection coverage for future ingest procedures. Invite enrollment,
-  initial-passkey challenge consumption, session rotation, deletion-versus-rotation, pairing
-  approval, both public pairing ceilings, pause-versus-approval, unlink-versus-activation,
-  single-challenge login, revoke-versus-login, one-code recovery, rotation-versus-start, and
-  completion-versus-login already have observed blocker-chain cross-connection coverage.
-- Implement bounded cleanup for expired ceremonies, sessions, pairings, jobs, and tombstones.
+- Implement the HTTP Ingest boundary with exact raw-body canonicalization, strict contract parsing,
+  Ed25519 verification, origin proof, generic errors, rate limits, deadlines, and backpressure.
+- Implement server-derived scoring, distinct-source aggregation under one profile cap, season
+  deadlines/finalization, corrections, and Jobs-only capabilities without widening Ingest.
+- Implement bounded cleanup for expired nonces, raw usage snapshots, ceremonies, sessions, pairings,
+  jobs, recovery authority, and tombstones. Expiry columns alone are not cleanup.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
   in isolated staging before real-user ingestion.

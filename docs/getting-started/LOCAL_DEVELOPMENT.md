@@ -127,7 +127,7 @@ docker compose ps
 The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
 index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
 stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
-this persistent service automatically; revisions 0001 through 0006 are currently exercised by the
+this persistent service automatically; revisions 0001 through 0007 are currently exercised by the
 isolated integration runner only.
 
 Stop the service without deleting its volume:

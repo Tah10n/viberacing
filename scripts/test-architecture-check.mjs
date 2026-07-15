@@ -75,10 +75,7 @@ const cases = [
     name: "rejects an invalid ADR status",
     mutate(directory) {
       mutate(directory, "docs/decisions/0001-community-trust-tier.md", (text) =>
-        text.replace(
-          "Status: Accepted (design; implementation pending)",
-          "Status: Implemented someday",
-        ),
+        text.replace(/^- Status:.*$/m, "- Status: Implemented someday"),
       );
     },
     expectedStatus: 1,

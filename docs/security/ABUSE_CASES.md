@@ -62,6 +62,9 @@ material availability cost.
 - **Detection:** Rejection and quarantine metrics, bounded anomaly signals, and source-level audit.
 - **Recovery:** Exclude quarantined values, allow a reasoned open-season correction, and keep
   finalized corrections separately authorized and audited.
+- **Current evidence:** Revision 0007 rejects malformed or out-of-range input, quarantines a whole
+  decrease or quarantined-source snapshot, and prevents current source/day state from decreasing.
+  Suspicious-jump policy, profile scoring, and correction authority remain unimplemented.
 - **Residual risk:** A plausible forged value inside public bounds may be indistinguishable from an
   honest local reading.
 
@@ -78,6 +81,9 @@ material availability cost.
   finalization reconciliation.
 - **Recovery:** Idempotent rerun before finalization or a separately authorized correction record
   after finalization.
+- **Current evidence:** Revision 0007 enforces one device/sync snapshot, one source/date current
+  value, server-time freshness, and observed exact-retry/same-source device races. Season tables,
+  grace deadlines, Jobs idempotency, and finalized immutability remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -113,6 +119,9 @@ material availability cost.
   user-visible device inventory.
 - **Recovery:** Immediate device revoke, optional source key rotation, quarantine affected
   open-season records, and audited investigation.
+- **Current evidence:** PostgreSQL verifies exact device/source binding, nonce/idempotency replay,
+  revoke rejection, and revoke-versus-submit ordering. OS key storage, request-signature
+  verification, rotation, metrics, and HTTP controls remain unimplemented.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity.
 
@@ -128,6 +137,9 @@ material availability cost.
 - **Detection:** Authorization-denial metrics and audit for every sensitive attempted transition.
 - **Recovery:** Revoke device authority, inspect affected profile state, and correct only through
   the user/admin audited path.
+- **Current evidence:** The Ingest role can execute only device verification lookup and Community
+  submission, has no direct table access, and is denied every current identity/lifecycle sample; the
+  role matrix is exercised in real PostgreSQL.
 - **Residual risk:** A future endpoint can accidentally reuse the wrong middleware; a scope matrix
   is required in CI.
 
@@ -291,6 +303,9 @@ material availability cost.
   inventory.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
+- **Current evidence:** The integration runner proves all four runtime roles lack direct identity
+  and usage-table reads or API-schema mutation, and proves 13 cross-capability denials. Ingest has
+  exactly two reviewed functions; Jobs currently has none.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow.
 
@@ -377,6 +392,9 @@ material availability cost.
   cost alerts.
 - **Recovery:** Load shed, disable the narrow feature, drain queues, expire bounded state, and
   restore service without weakening authentication or signature checks.
+- **Current evidence:** Connector input is limited to 31 entries and safe integers; nonce and raw
+  snapshot rows carry bounded expiry markers. Cleanup, request/body limits, service concurrency,
+  quotas, load shedding, and capacity evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 
