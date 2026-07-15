@@ -81,8 +81,9 @@ submission procedure and cannot edit profile, passkey, invite, admin, migration,
 state.
 
 Revision 0007 implements the database-only Usage submission capability; revision 0008 gives Jobs
-only bounded expired ingest-state cleanup. Both have role/concurrency evidence. The Ingest and Jobs
-services, cleanup scheduler, edge/origin proof, request signature verification, scoring, and
+bounded expired ingest-state cleanup, and revision 0009 gives Jobs an isolated open-season scoring
+refresh. All three have role/concurrency evidence. The Ingest and Jobs services, cleanup/scoring
+schedulers, edge/origin proof, request signature verification, public score read, grace policy, and
 finalized-season state shown in the design remain planned.
 
 ## Component responsibilities

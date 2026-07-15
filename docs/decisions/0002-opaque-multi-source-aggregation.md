@@ -1,6 +1,6 @@
 # ADR 0002: Opaque multi-source profiles with one profile cap
 
-- Status: Accepted (pairing/lifecycle/source-day database slices implemented; aggregation pending)
+- Status: Accepted (database aggregation implemented; services/public projection pending)
 - Date: 2026-07-14
 - Decision owners: Product, Pairing, Ingest, Scoring, and Database
 - Supersedes: None
@@ -83,8 +83,11 @@ automatically from inferred personal data.
 - Revision 0007 enforces exact device/source binding, one monotonic current value per source/date,
   whole-snapshot decrease quarantine, paused/revoked/deleting rejection, and exact retry. Observed
   races prove concurrent retries create one snapshot and two same-source devices converge on one
-  value rather than sum. Distinct-source profile aggregation and the single profile cap remain
-  pending.
+  value rather than sum.
+- Revision 0009 sums current eligible distinct sources into one profile/day total, applies the daily
+  cap once, exposes only the contributing count in private derived season state, excludes
+  quarantined sources, and proves idempotent serialized refreshes. The Jobs service, public
+  projection, finalization, and capacity evidence remain pending.
 - UI/API assertions for opaque wording and public source count without identifiers.
 - Privacy tests proving account email has no connector egress, schema, log, fixture, or support
   path.

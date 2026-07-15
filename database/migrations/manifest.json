@@ -48,6 +48,12 @@
       "name": "ingest_retention_cleanup",
       "path": "database/migrations/0008_ingest_retention_cleanup.sql",
       "sha256": "12ab472412700a6ff7bfaef06f6867ba5cf6a1a0c3fae432bf8366709011be1d"
+    },
+    {
+      "revision": 9,
+      "name": "community_scoring_foundation",
+      "path": "database/migrations/0009_community_scoring_foundation.sql",
+      "sha256": "fa48370e7f3f4488e51c2c8829e1c9426ed522168b8623847c38135fea0ddda3"
     }
   ]
 }

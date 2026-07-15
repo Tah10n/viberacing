@@ -79,29 +79,31 @@ Dev-сервер слушает только loopback. В интерфейсе �
 будущего sync-протокола. Это пока только проверяемая граница данных: работающего API, connector и
 приёма реальной статистики ещё нет.
 
-Также добавлены восемь SQL migrations: 19 приватных
-identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage tables, deny-by-default
-runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая procedure boundary
-уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии initial-passkey challenge,
-вход с сессией, привязанной к точному passkey, управление несколькими passkeys, rotate/revoke
-сессии, немедленную блокировку при запросе удаления и одноразовую привязку устройства к новому или
-существующему opaque source. Также реализованы приватный inventory источников и устройств,
-pause/reactivation/unlink источника и немедленный revoke устройства. Для критических действий база
-сохраняет точный passkey step-up. Реализованы также защищённая passkey-проверкой замена
-recovery-кодов и отдельное краткоживущее право только на регистрацию нового passkey: обычная сессия
-создаётся лишь после успешной замены, а использованный PHC сразу удаляется. Проверяющего
-Argon2id/WebAuthn приложения пока нет. Несколько объявленных источников одного профиля позже будут
-суммироваться под единым лимитом score; email и идентификатор Codex-аккаунта не читаются и не
-сохраняются. Но HTTP auth/recovery routes, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier,
-generic response и edge rate limits для анонимных challenges и recovery lookup пока отсутствуют.
-Database-only Community ingest capability уже выдаёт минимальный материал активного устройства и
-принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic source/date,
-quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure удаляет bounded batches
-истёкших nonces и raw snapshots, сохраняя current source/day values, но scheduler для неё
-отсутствует. Сама база не проверяет wire signature. HTTP ingest route, приложение с
-Ed25519-проверкой, connector, scheduled cleanup worker, scoring/finalization jobs, purge worker и
-deployed database ещё не реализованы, поэтому готовой пользовательской авторизации и приёма реальных
-данных пока нет.
+Также добавлены девять SQL migrations: 23 приватные
+identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
+deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая
+procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
+initial-passkey challenge, вход с сессией, привязанной к точному passkey, управление несколькими
+passkeys, rotate/revoke сессии, немедленную блокировку при запросе удаления и одноразовую привязку
+устройства к новому или существующему opaque source. Также реализованы приватный inventory
+источников и устройств, pause/reactivation/unlink источника и немедленный revoke устройства. Для
+критических действий база сохраняет точный passkey step-up. Реализованы также защищённая
+passkey-проверкой замена recovery-кодов и отдельное краткоживущее право только на регистрацию нового
+passkey: обычная сессия создаётся лишь после успешной замены, а использованный PHC сразу удаляется.
+Проверяющего Argon2id/WebAuthn приложения пока нет. Database-only scoring refresh уже суммирует
+distinct eligible sources одного профиля перед единым дневным лимитом, закрепляет immutable версию
+формулы за ISO-week season и сохраняет только derived score/rank/active-days/source-count без raw
+tokens и source IDs. Email и идентификатор Codex-аккаунта не читаются и не сохраняются. Но HTTP
+auth/recovery routes, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier, generic response и edge
+rate limits для анонимных challenges и recovery lookup пока отсутствуют. Database-only Community
+ingest capability уже выдаёт минимальный материал активного устройства и принимает bounded
+source-bound snapshots с exact retry, nonce replay, monotonic source/date, quarantine и
+lifecycle-race enforcement. Отдельная Jobs-only procedure удаляет bounded batches истёкших nonces и
+raw snapshots, сохраняя current source/day values, но scheduler для неё отсутствует. Сама база не
+проверяет wire signature. HTTP ingest route, приложение с Ed25519-проверкой, connector,
+cleanup/scoring scheduler или service, public score read, grace/finalization/correction flow, purge
+worker и deployed database ещё не реализованы, поэтому готовой пользовательской авторизации,
+публичного рейтинга и приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

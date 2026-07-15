@@ -8,11 +8,11 @@ This page records only evidence that exists in the public working tree. The
 Phase 1 product code is locally complete, with the manual release-evidence items below still open.
 The Phase 2 language-neutral contract and SQL persistence foundations now include database-only
 passkey login, multi-passkey management, restricted recovery, Community usage ingest, and bounded
-ingest-retention cleanup; a Phase 3 database-only source/device lifecycle and same-source
-deduplication slice has also started. Phase 0 hosted-publication controls remain blocked on real
-maintainer identities and GitHub configuration. No authentication HTTP route,
-OAuth/Argon2id/WebAuthn application flow, production deployment, released connector, real-user
-ingestion, or verified ranking exists.
+ingest-retention cleanup plus open-season Community scoring materialization; a Phase 3 database-only
+source/device lifecycle and same-source deduplication slice has also started. Phase 0
+hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
+No authentication HTTP route, OAuth/Argon2id/WebAuthn application flow, production deployment,
+released connector, real-user ingestion, end-to-end public ranking, or season finalization exists.
 
 ## Implemented and locally verified
 
@@ -91,13 +91,14 @@ ingestion, or verified ranking exists.
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- Eight checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and 19
+- Nine checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and 23
   forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and restricted
   authorities, session-bound challenges, opaque sources, pending/active/revoked device keys,
-  pairing, bounded audit references, deletion work/tombstones, one fixed maintenance mutex, device
-  nonces, bounded raw Community snapshots, monotonic current source/day values, and schema
-  revisions. There is intentionally no GitHub token, account email, prompt, repository, credential,
-  arbitrary JSON, or free-form diagnostic column.
+  pairing, bounded audit references, deletion work/tombstones, two fixed maintenance mutex rows,
+  device nonces, bounded raw Community snapshots, monotonic current source/day values, immutable
+  score versions and season definitions, derived season entries/daily scores, and schema revisions.
+  There is intentionally no GitHub token, account email, prompt, repository, credential, arbitrary
+  JSON, or free-form diagnostic column.
 - Database constraints and triggers enforce unique GitHub bindings, normalized handles, keyed
   verifier lengths, Argon2id recovery-verifier shape, exact device-key/source/pairing binding,
   terminal unlink/deletion states, state-dependent timestamps, and bounded lifecycle values. The
@@ -119,10 +120,10 @@ ingestion, or verified ranking exists.
   consumed, source-bound step-up. Unlink atomically revokes all active source devices, cancels
   approved pairings, and invalidates unused source actions; normal user authority cannot lift
   quarantine. Ingest has only minimal active-device verification lookup and bounded Community sync
-  submission; Jobs have only bounded expired ingest-state cleanup. Ingest has no identity, passkey,
-  recovery, pairing, lifecycle, admin, or direct-table capability. Profile-scoped functions derive
-  identity from an active session ID plus keyed verifier and do not accept a caller-selected profile
-  ID.
+  submission; Jobs have only bounded expired ingest-state cleanup and open-season Community scoring
+  refresh. Ingest has no identity, passkey, recovery, pairing, lifecycle, admin, or direct-table
+  capability. Profile-scoped functions derive identity from an active session ID plus keyed verifier
+  and do not accept a caller-selected profile ID.
 - The same boundary can create a five-minute profile-free login challenge, expose only minimal
   active-passkey verification material, atomically mint a passkey-bound session after application
   verification, privately list owned passkeys, and add or revoke an exact passkey after a fresh
@@ -163,26 +164,36 @@ ingestion, or verified ranking exists.
   30-day raw-snapshot expiry markers, and a Jobs-only server-time cleanup procedure with strict
   1-to-1000 batches, idempotent reruns, live-row preservation, entry cascade, and raw-reference
   clearing that preserves current values. No Jobs service or scheduler exists.
-- Nineteen deterministic cross-connection races hold the relevant invite, challenge, session,
-  source, device, pairing, or profile row, tag every session, and observe every contender in the
-  holder's transitive PostgreSQL blocker chain before releasing it. Protective races additionally
-  prove the first contender is blocked before the competitor starts. PostgreSQL proves exactly one
-  winner for a shared invite, initial-passkey registration challenge, active-session rotation,
-  pairing, concurrent creation at the 32-source ceiling, concurrent approval at the
-  64-live-authority ceiling, passkey-login challenge, and recovery code. Protective races prove
-  profile deletion dominates concurrent session rotation, source pause dominates concurrent pairing
-  approval, source unlink dominates concurrent device activation, passkey revoke dominates
-  concurrent login, recovery-code rotation dominates concurrent old-code start, and recovery
-  completion dominates concurrent old-passkey login. Ingest races prove concurrent exact retries
-  create one snapshot, two devices for one source/date converge on the monotonic maximum rather than
-  sum, source pause precedes a later submission, and device revoke precedes a later submission. A
-  cleanup race proves one Jobs call retains its transaction lock while a second call waits, after
-  which both bounded batches complete without removing live state. No losing enrollment or rotation
-  artifact survives, and no protective race leaves browser, recovery, or pending device authority
-  attached to a deleted profile, revoked credential, old code, or protected source. The recovery
-  races also prove terminal timestamps are captured after lock acquisition, and missing expected
-  challenge, credential, authority, session, code, or pairing rows fail closed rather than passing
-  through SQL `NULL` semantics.
+- Community scoring PostgreSQL scenarios prove immutable `community_v1` formula parameters and
+  season binding, ISO Monday-to-Sunday grouping, exact logarithmic rounding, numeric overflow
+  protection, one profile cap after distinct-source aggregation, weekly caps, active-day and
+  contributing-source counts, shared rank without a raw-token tie breaker, deterministic
+  noncompetitive display order, hidden-profile and quarantined-source exclusion, seven daily rows
+  per participant, a state-free no-op for weeks without source data, semantic idempotency, generic
+  failure, rollback, a 30-second statement deadline, and Jobs-only authority. The private
+  materialization stores no raw token total or source ID. No public read, grace deadline,
+  finalization, correction flow, scoring service, or scheduler exists.
+- Twenty deterministic cross-connection races hold the relevant invite, challenge, session, source,
+  device, pairing, or profile row, tag every session, and observe every contender in the holder's
+  transitive PostgreSQL blocker chain before releasing it. Protective races additionally prove the
+  first contender is blocked before the competitor starts. PostgreSQL proves exactly one winner for
+  a shared invite, initial-passkey registration challenge, active-session rotation, pairing,
+  concurrent creation at the 32-source ceiling, concurrent approval at the 64-live-authority
+  ceiling, passkey-login challenge, and recovery code. Protective races prove profile deletion
+  dominates concurrent session rotation, source pause dominates concurrent pairing approval, source
+  unlink dominates concurrent device activation, passkey revoke dominates concurrent login,
+  recovery-code rotation dominates concurrent old-code start, and recovery completion dominates
+  concurrent old-passkey login. Ingest races prove concurrent exact retries create one snapshot, two
+  devices for one source/date converge on the monotonic maximum rather than sum, source pause
+  precedes a later submission, and device revoke precedes a later submission. A cleanup race proves
+  one Jobs call retains its transaction lock while a second call waits, after which both bounded
+  batches complete without removing live state. A scoring race proves two Jobs refreshes serialize
+  on a private mutex and converge on one semantic open-season state. No losing enrollment or
+  rotation artifact survives, and no protective race leaves browser, recovery, or pending device
+  authority attached to a deleted profile, revoked credential, old code, or protected source. The
+  recovery races also prove terminal timestamps are captured after lock acquisition, and missing
+  expected challenge, credential, authority, session, code, or pairing rows fail closed rather than
+  passing through SQL `NULL` semantics.
 - A strict Next.js 16 and React 19 web workspace with a synthetic EN/RU race, accessible
   leaderboard, demo profile, three repository-owned CSS/canvas themes, reduced-motion controls, and
   a deterministic 16-by-8 pixel-car renderer.
@@ -219,11 +230,11 @@ ingestion, or verified ranking exists.
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0008 from the checksum manifest,
-passed 19-table state/ownership/RLS assertions, nineteen observed lock-wait races, eight
-relation-denial checks, sixteen cross-capability denials, and the identity, passkey, recovery,
-pairing, source/device lifecycle, Community ingest, and ingest-retention scenarios, then removed its
-portless container, network, and ephemeral storage.
+reached `healthy`, validated and applied revisions 0001 through 0009 from the checksum manifest,
+passed 23-table state/ownership/RLS assertions, twenty observed lock-wait races, eight
+relation-denial checks, nineteen cross-capability denials, and the identity, passkey, recovery,
+pairing, source/device lifecycle, Community ingest, ingest-retention, and open-season scoring
+scenarios, then removed its portless container, network, and ephemeral storage.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -256,10 +267,11 @@ Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/
 HTTP response handling, WebAuthn and Ed25519 cryptographic verification, anonymous
 login/pairing/recovery edge rate limits and cleanup, raw-body/signature/origin validation in an
 ingest API, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring
-state, scoring/finalization jobs, purge workers, Codex connector, release signing, deployment, and
-public beta operations remain proposed. The current scoring and ranking code operates only on
-clearly synthetic in-process fixtures; the application does not connect to revisions 0001
-through 0008.
+state, the scoring Jobs service/scheduler, season grace/finalization/corrections, public score
+reads, purge workers, Codex connector, release signing, deployment, and public beta operations
+remain proposed. The web scoring and ranking code still operates only on clearly synthetic
+in-process fixtures; its application does not connect to the database-only open-season
+materialization in revisions 0001 through 0009.
 
 ## Evidence commands
 

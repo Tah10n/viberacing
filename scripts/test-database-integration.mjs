@@ -411,6 +411,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/ingest_cleanup.sql"), "utf8"),
     },
     {
+      label: "Community open-season scoring scenarios",
+      sql: readFileSync(resolve(root, "database/tests/season_scoring.sql"), "utf8"),
+    },
+    {
       label: "identity concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/identity_concurrency_setup.sql"), "utf8"),
     },
@@ -421,6 +425,10 @@ try {
     {
       label: "Community ingest cleanup concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/cleanup_concurrency_setup.sql"), "utf8"),
+    },
+    {
+      label: "Community scoring concurrency setup",
+      sql: readFileSync(resolve(root, "database/tests/scoring_concurrency_setup.sql"), "utf8"),
     },
     {
       label: "pairing concurrency setup",
@@ -800,6 +808,24 @@ SELECT * FROM viberacing_api.cleanup_expired_ingest_state(1);`,
   requireSuccess(
     psql(readFileSync(resolve(root, "database/tests/cleanup_concurrency_assertions.sql"), "utf8")),
     "Community ingest cleanup concurrency assertions",
+  );
+
+  await expectConcurrentSuccesses(
+    "idempotent Community scoring refresh race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.refresh_community_season('2026-07-06');
+\\echo scoring-refresh-lock-ready`,
+    "scoring-refresh-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.refresh_community_season('2026-07-06');`,
+    ],
+  );
+
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database/tests/scoring_concurrency_assertions.sql"), "utf8")),
+    "Community scoring concurrency assertions",
   );
 
   await expectOneConcurrentWinner(
@@ -1360,10 +1386,15 @@ SELECT viberacing_api.complete_passkey_login(
       "SELECT * FROM viberacing_api.cleanup_expired_ingest_state(1);",
       `${role} Community ingest cleanup`,
     );
+    expectDenied(
+      role,
+      "SELECT * FROM viberacing_api.refresh_community_season('2026-07-06');",
+      `${role} Community season refresh`,
+    );
   }
 
   console.log(
-    "Database integration passed (19 schema tables, 19 observed lock-wait races, 8 relation-denial and 16 cross-capability checks).",
+    "Database integration passed (23 schema tables, 20 observed lock-wait races, 8 relation-denial and 19 cross-capability checks).",
   );
 } finally {
   if (started) {

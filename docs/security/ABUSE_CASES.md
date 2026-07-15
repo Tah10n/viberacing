@@ -64,7 +64,9 @@ material availability cost.
   finalized corrections separately authorized and audited.
 - **Current evidence:** Revision 0007 rejects malformed or out-of-range input, quarantines a whole
   decrease or quarantined-source snapshot, and prevents current source/day state from decreasing.
-  Suspicious-jump policy, profile scoring, and correction authority remain unimplemented.
+  Revision 0009 excludes quarantined sources and derives open-season score only after one profile
+  cap across eligible distinct sources. Suspicious-jump policy, service execution, and correction
+  authority remain unimplemented.
 - **Residual risk:** A plausible forged value inside public bounds may be indistinguishable from an
   honest local reading.
 
@@ -82,8 +84,11 @@ material availability cost.
 - **Recovery:** Idempotent rerun before finalization or a separately authorized correction record
   after finalization.
 - **Current evidence:** Revision 0007 enforces one device/sync snapshot, one source/date current
-  value, server-time freshness, and observed exact-retry/same-source device races. Season tables,
-  grace deadlines, Jobs idempotency, and finalized immutability remain unimplemented.
+  value, server-time freshness, and observed exact-retry/same-source device races. Revision 0009
+  adds immutable formula/season definitions, atomic replacement of one open-season materialization,
+  and an observed two-Jobs serialization race whose reruns converge on identical semantic state.
+  Grace deadlines, finalized immutability, correction authority, and the Jobs service remain
+  unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -304,8 +309,9 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage-table reads or API-schema mutation, and proves 16 cross-capability denials. Ingest has
-  exactly two reviewed functions; Jobs has exactly one bounded ingest-retention cleanup function.
+  and usage/scoring-table reads or API-schema mutation, and proves 19 cross-capability denials.
+  Ingest has exactly two reviewed functions; Jobs has exactly two reviewed functions: bounded
+  ingest-retention cleanup and open-season scoring refresh.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow.
 
@@ -395,8 +401,11 @@ material availability cost.
 - **Current evidence:** Connector input is limited to 31 entries and safe integers; nonce and raw
   snapshot rows carry bounded expiry markers. A Jobs-only procedure deletes expired rows in
   1-to-1000 batches, preserves live/current state, and serializes two workers in observed PostgreSQL
-  evidence. Scheduling, request/body limits, service concurrency, quotas, load shedding, and
-  capacity evidence remain unimplemented.
+  evidence. The scoring refresh uses one private mutex, a five-second database lock bound, numeric
+  overflow protection, a 30-second statement deadline, no empty-season growth, and one atomic
+  global-rank rebuild. Scheduling, request/body limits, service concurrency, scoring
+  capacity/batching policy, quotas, load shedding, and production capacity evidence remain
+  unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

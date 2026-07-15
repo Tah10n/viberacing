@@ -2,12 +2,13 @@
 
 ## Status
 
-This directory contains eight SQL-first revisions for identity, passkey login and management,
-restricted recovery, source, device, pairing, audit, deletion, and Community usage state. The
-migrations, narrow database procedures, and PostgreSQL integration tests are implemented. No
-application route, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier, production credential, or
-deployed database consumes them yet. The database-only ingest and Jobs-only ingest-retention
-procedures are implemented; HTTP ingest, scheduled cleanup, scoring/finalization, and purge are not.
+This directory contains nine SQL-first revisions for identity, passkey login and management,
+restricted recovery, source, device, pairing, audit, deletion, Community usage, and open-season
+scoring state. The migrations, narrow database procedures, and PostgreSQL integration tests are
+implemented. No application route, OAuth callback, Argon2id/WebAuthn/Ed25519 verifier, production
+credential, or deployed database consumes them yet. The database-only ingest and Jobs-only
+ingest-retention and open-season scoring procedures are implemented; HTTP ingest, scheduled
+execution, public score reads, season grace/finalization/correction, and purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -40,6 +41,9 @@ procedure; the current repository has no such application code.
   Ingest-only submission procedure with duplicate and quarantine outcomes.
 - `migrations/0008_ingest_retention_cleanup.sql` adds one Jobs-only, server-time procedure for
   serialized bounded deletion of expired nonce and raw-snapshot rows plus its private mutex row.
+- `migrations/0009_community_scoring_foundation.sql` adds immutable Community v1 score parameters
+  and season binding, private derived daily/weekly score tables, and one Jobs-only atomic refresh
+  that aggregates eligible distinct sources under a single profile cap.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -80,6 +84,12 @@ procedure; the current repository has no such application code.
   current value, and source pause/device revoke serialize ahead of later submission.
 - `tests/cleanup_concurrency_setup.sql` and `tests/cleanup_concurrency_assertions.sql` prove two
   Jobs cleanup calls serialize and each expired raw row is removed once without deleting live state.
+- `tests/season_scoring.sql` proves ISO-week grouping, exact logarithmic rounding and caps,
+  distinct-source aggregation, same-rank semantics without a raw-token tie breaker, hidden and
+  quarantined exclusion, immutable version/season definitions, idempotent refresh, role denial, and
+  rollback.
+- `tests/scoring_concurrency_setup.sql` and `tests/scoring_concurrency_assertions.sql` prove two
+  Jobs refreshes serialize and converge on one semantically identical open-season materialization.
 - `scripts/check-database.mjs` and its black-box tests enforce migration shape, checksums, paths,
   transactions, bounded execution, owner context, forbidden grants or SQL capabilities, and reject
   scalar-subquery `IF NOT` assertions whose missing row would otherwise pass as SQL `NULL`.
@@ -95,7 +105,7 @@ procedure; the current repository has no such application code.
 | `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                         |
 | `viberacing_web`    | No    | None           | Usage      | Identity, passkey, restricted recovery, pairing, and lifecycle |
 | `viberacing_ingest` | No    | None           | Usage      | Device verification lookup and Community sync submission only  |
-| `viberacing_jobs`   | No    | None           | Usage      | Bounded expired ingest-state cleanup only                      |
+| `viberacing_jobs`   | No    | None           | Usage      | Bounded ingest cleanup and open-season scoring refresh only    |
 | `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                   |
 | `PUBLIC`            | N/A   | None           | None       | None                                                           |
 
@@ -231,10 +241,12 @@ All current columns map to the canonical [privacy data map](../docs/security/PRI
 | `device_keys`, `pairing_transactions`       | Security; metadata is Account | Ed25519 public key, exact source/device binding, keyed poll/code verifiers         |
 | `deletion_jobs`, `deletion_tombstones`      | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry            |
 | `audit_events`                              | Security; Operational         | Closed event/actor enums, request reference, reason code, and server time          |
-| `maintenance_locks`                         | Operational                   | Fixed owner-only capability mutex; no user or request data                         |
+| `maintenance_locks`                         | Operational                   | Fixed owner-only cleanup/scoring mutex rows; no user or request data               |
 | `device_nonces`                             | Security                      | Device-bound replay digest and 15-minute expiry marker                             |
 | `usage_snapshots`, `usage_snapshot_entries` | Usage; Security               | Bounded signed snapshot metadata, exact private daily values, 30-day expiry marker |
 | `source_day_values`                         | Usage                         | One monotonic current token value and accepted provenance per source/date          |
+| `score_versions`, `seasons`                 | Operational; Public           | Immutable Community formula parameters and ISO-week version binding                |
+| `season_entries`, `season_daily_scores`     | Public                        | Private pre-projection scores, active days, source count, rank, and display order  |
 | `schema_migrations`                         | Operational                   | Revision name and server application time only                                     |
 
 The schema has no column for GitHub access tokens, account email, prompts, conversations, repository
@@ -275,6 +287,17 @@ server time, rejects null, zero, negative, or over-1000 batch sizes, serializes 
 private owner-only mutex row plus a five-second lock timeout, and leaves live rows untouched. The
 procedure and observed two-worker race are deletion evidence for the isolated SQL boundary only: no
 Jobs service, scheduler, production retention policy, or real-user purge evidence exists.
+
+Revision 0009 materializes only an open Community season. It binds each ISO Monday-through-Sunday
+season to immutable `community_v1` parameters, sums current eligible source/day values with numeric
+overflow protection, applies one daily profile cap after distinct-source aggregation, and computes
+weekly score, active days, contributing-source count, shared rank, and deterministic display order
+atomically. Hidden/deleting profiles and quarantined sources are excluded; paused or unlinked source
+history remains eligible. The score tables copy neither raw token totals nor source IDs. A private
+mutex, five-second lock timeout, and 30-second statement deadline bound Jobs callers; a week without
+stored source/day state creates no empty season. Repeated or concurrent refreshes converge on the
+same semantic state. No grace deadline, finalized state, correction record, public projection/read
+capability, Jobs service, scheduler, or production capacity claim is implemented.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
@@ -330,8 +353,9 @@ hard failure, not something the script silently broadens or repairs.
   in this repository.
 - Implement the HTTP Ingest boundary with exact raw-body canonicalization, strict contract parsing,
   Ed25519 verification, origin proof, generic errors, rate limits, deadlines, and backpressure.
-- Implement server-derived scoring, distinct-source aggregation under one profile cap, season
-  deadlines/finalization, corrections, and Jobs-only capabilities without widening Ingest.
+- Implement the Jobs service and scheduler around the database scoring refresh, plus server-time
+  grace deadlines, finalized-season immutability, audited corrections, freshness/streak projection,
+  and a public read boundary without widening Ingest.
 - Schedule and monitor the implemented ingest-retention procedure, and implement bounded cleanup for
   ceremonies, sessions, pairings, jobs, recovery authority, and tombstones. Expiry columns outside
   the revision 0008 boundary are not cleanup.

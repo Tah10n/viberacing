@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 37
+    SELECT pg_catalog.count(*) = 38
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,13 +59,30 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
+    SELECT pg_catalog.count(*) = 2
+      AND pg_catalog.bool_and(
+        procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
+      )
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
-      AND procedure.proname = 'cleanup_expired_ingest_state'
+      AND procedure.proname IN (
+        'cleanup_expired_ingest_state',
+        'refresh_community_season'
+      )
   ),
-  'ingest cleanup has a database-enforced lock-wait bound'
+  'Jobs maintenance functions have database-enforced lock-wait bounds'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
+    FROM pg_catalog.pg_proc AS procedure
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'viberacing_api'
+      AND procedure.proname = 'refresh_community_season'
+  ),
+  'the global scoring rebuild has a database-enforced statement deadline'
 );
 
 SELECT pg_temp.assert_true(
@@ -105,7 +122,8 @@ SELECT pg_temp.assert_true(
           'issue_invite',
           'read_device_verification_material',
           'submit_community_sync',
-          'cleanup_expired_ingest_state'
+          'cleanup_expired_ingest_state',
+          'refresh_community_season'
         )
       )
     )
@@ -134,13 +152,18 @@ SELECT pg_temp.assert_true(
   AND (
     SELECT pg_catalog.bool_and(
       pg_catalog.has_function_privilege('viberacing_jobs', procedure.oid, 'EXECUTE')
-      = (procedure.proname = 'cleanup_expired_ingest_state')
+      = (
+        procedure.proname IN (
+          'cleanup_expired_ingest_state',
+          'refresh_community_season'
+        )
+      )
     )
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
   ),
-  'ingest has only verification and sync while jobs have only bounded cleanup'
+  'ingest has only verification and sync while jobs have only reviewed maintenance procedures'
 );
 
 SELECT pg_temp.assert_true(

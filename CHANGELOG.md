@@ -59,6 +59,10 @@ Versioning where its guarantees are applicable.
 - Jobs-only bounded cleanup for expired device nonces and raw Community snapshots, with server-time
   cutoffs, an owner-only mutex row, bounded lock wait, preserved current source/day values, strict
   batch limits, and no implied scheduler.
+- Jobs-only atomic open-season Community scoring refresh with immutable formula/season binding,
+  distinct-source aggregation under one profile cap, shared-rank semantics, private derived score
+  tables, bounded lock/statement waits, no empty-season growth, and observed concurrent idempotent
+  reruns; no scheduler, public read, or season finalization is implied.
 
 ### Security
 
