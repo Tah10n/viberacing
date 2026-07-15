@@ -1,6 +1,6 @@
 # ADR 0009: Public Community score projection boundary
 
-- Status: Accepted (database projection implemented; response contract in ADR 0010)
+- Status: Accepted (database projection implemented; response contract and mapper in ADR 0010)
 - Date: 2026-07-15
 - Decision owners: Product, Web, Database, Security, and Privacy
 - Supersedes: None
@@ -116,11 +116,11 @@ Current PostgreSQL evidence proves:
 - Web-only execution, no runtime direct-table access, a five-second statement deadline, and explicit
   Ingest/Jobs/Admin denial.
 
-ADR 0010 now adds a response-only schema and validators. The repository still lacks an HTTP route,
-database mapper, CarRecipe storage, streak/freshness derivation, authenticated profile detail,
-public cache and invalidation, rate limits, query-plan/load evidence, monitoring, deployment, and
-real-user data. The database projection and generated response component are not a public API or
-launch evidence.
+ADR 0010 now adds a response-only schema, validators, and a server-only projection mapper. The
+repository still lacks a database client, HTTP route, CarRecipe storage, streak/freshness
+derivation, authenticated profile detail, public cache and invalidation, rate limits,
+query-plan/load evidence, monitoring, deployment, and real-user data. The database projection,
+generated response component, and isolated mapper are not a public API or launch evidence.
 
 ## References
 

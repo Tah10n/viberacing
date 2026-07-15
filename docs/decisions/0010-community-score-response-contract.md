@@ -1,6 +1,6 @@
 # ADR 0010: Bounded Community score response contract
 
-- Status: Accepted (schema and validators implemented; route and cache pending)
+- Status: Accepted (schema, validators, and server-only mapper implemented; route and cache pending)
 - Date: 2026-07-15
 - Decision owners: Product, Web, Contracts, Security, and Privacy
 - Supersedes: None
@@ -36,10 +36,18 @@ the database contract; score, count, handle, rank, and collection bounds match o
 database constraints.
 
 The initial response is one fixed top-32 page. It has no caller-selected limit, cursor, offset,
-sort, filter, or continuation token. A future service must call the database projection with the
-constant limit 32, preserve its order, validate the mapped response with the generated validator,
-and fail with bounded problem details rather than serialize a contract mismatch. A valid empty
-projection maps to an empty `participants` array.
+sort, filter, or continuation token. The implemented server-only mapper derives the page-size
+constant from the canonical schema, accepts unknown adapter output, and rejects row 33 before
+traversing rows. It requires an ordinary dense array and exactly the ten enumerable snake-case SQL
+columns on each plain row without invoking accessors. It maps rather than sorts or repairs the
+projection, validates the complete response, verifies one Monday-through-Sunday season plus
+contiguous display positions and SQL shared-rank/order semantics, rejects duplicate handles, and
+returns a frozen response. A valid empty projection maps to an empty `participants` array.
+
+A future database adapter must preserve PostgreSQL `date` columns as canonical date strings and call
+the database projection with the exported constant limit 32. A future route must translate any
+stable mapper failure to bounded problem details rather than serialize a partial or invalid result;
+the mapping error contains no projected value, unexpected field name, or internal exception text.
 
 The response contains no profile/GitHub/source/device identifier, raw token value, daily score,
 exact timestamp, preference, authentication/recovery state, audit field, CarRecipe, streak,
@@ -111,11 +119,16 @@ Current repository evidence covers:
   drift, and unknown/private-field rejection;
 - privacy-safe validation issues that contain only schema paths and stable codes; and
 - black-box checker mutations for connector score-field aliases and extra daily fields, trust drift,
-  a private participant identifier, and score-bound widening.
+  a private participant identifier, and score-bound widening;
+- exact snake-case projection allowlisting, accessor-free reads, row-limit enforcement before
+  traversal, and non-reflective unexpected-runtime failure handling; and
+- empty/full pages, both database calendar bounds, common season metadata, Monday-through-Sunday
+  windows, contiguous display order, unique handles, score ordering, shared ranks, and post-tie rank
+  gaps.
 
-There is still no HTTP route, request/path schema, database mapper, response header policy, cache,
-CarRecipe/streak/freshness contract, load evidence, deployment, or real-user data. A generated
-response component is not endpoint or launch evidence.
+There is still no database client/adapter, HTTP route, request/path schema, response header policy,
+cache, CarRecipe/streak/freshness contract, load evidence, deployment, or real-user data. A
+generated response component and isolated mapper are not endpoint or launch evidence.
 
 ## References
 

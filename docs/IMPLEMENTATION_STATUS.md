@@ -9,11 +9,12 @@ Phase 1 product code is locally complete, with the manual release-evidence items
 The Phase 2 language-neutral contract and SQL persistence foundations now include database-only
 passkey login, multi-passkey management, restricted recovery, Community usage ingest, bounded
 ingest-retention cleanup, open-season scoring, terminal season finalization, and a public score-only
-database projection; a Phase 3 database-only source/device lifecycle and same-source deduplication
-slice has also started. Phase 0 hosted-publication controls remain blocked on real maintainer
-identities and GitHub configuration. No authentication HTTP route, OAuth/Argon2id/WebAuthn
-application flow, production deployment, released connector, real-user ingestion, end-to-end public
-ranking, or finalization scheduler exists.
+database projection plus its server-only projection-to-contract mapper; a Phase 3 database-only
+source/device lifecycle and same-source deduplication slice has also started. Phase 0
+hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
+No authentication HTTP route, OAuth/Argon2id/WebAuthn application flow, production deployment,
+released connector, real-user ingestion, end-to-end public ranking, or finalization scheduler
+exists.
 
 ## Implemented and locally verified
 
@@ -185,8 +186,13 @@ ranking, or finalization scheduler exists.
   100-row result ceiling, open/finalized metadata, a five-second statement deadline, generic input
   failure, Web-only authority, and Ingest/Jobs/Admin denial. The response-only contract separately
   proves constant Community/self-reported metadata, the same ten-field allowlist, a top-32 ceiling,
-  empty results, bounds, unique display positions, private-field rejection, and generated drift. No
-  HTTP score route/mapper/cache, audited correction flow, scoring service, or scheduler exists.
+  empty results, bounds, unique display positions, private-field rejection, and generated drift. A
+  server-only Web mapper additionally rejects malformed or accessor-backed adapter output, unknown
+  columns, more than 32 rows before row traversal, contract drift, inconsistent season metadata,
+  non-contiguous display positions, duplicate handles, and invalid SQL rank/order semantics. It
+  returns a frozen canonical response or throws one generic non-reflective message with a bounded
+  cause code. No database client, HTTP score route/cache, audited correction flow, scoring service,
+  or scheduler exists.
 - Twenty-two deterministic cross-connection races hold a relevant invite, challenge, session,
   source, device, pairing, or profile row, or a season advisory lock; tag every session; and observe
   every contender in the holder's transitive PostgreSQL blocker chain before releasing it.
@@ -226,9 +232,9 @@ ranking, or finalization scheduler exists.
   has no accounts, analytics, trackers, remote fonts, or runtime secrets. Its only environment
   setting is a strictly parsed, server-only public origin for absolute social metadata; hosted
   deployment without a real HTTPS DNS value remains forbidden.
-- Forty-six unit, component, interaction, security-header, localization, scoring, configuration, and
-  accessibility tests. The coverage gate currently reports 98.57% statements, 91.01% branches, 100%
-  functions, and 98.51% lines over product components and libraries; framework entrypoints are
+- Seventy-three unit, component, interaction, security-header, localization, scoring, configuration,
+  and accessibility tests. The coverage gate currently reports 98.87% statements, 93.61% branches,
+  100% functions, and 98.83% lines over product components and libraries; framework entrypoints are
   verified by the production build instead of artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift, lint, strict type
   checking and coverage, plus web lint, strict type checking, coverage, and a production Next.js
@@ -287,11 +293,11 @@ login/pairing/recovery edge rate limits and cleanup, raw-body/signature/origin v
 ingest API, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring
 state, the scoring Jobs service/scheduler, audited corrections, HTTP public-score delivery, purge
 workers, Codex connector, release signing, deployment, and public beta operations remain proposed. A
-bounded database score projection and versioned response-only schema now exist, but their HTTP
-route/mapper, cache/invalidation, CarRecipe, streak/freshness, profile detail, rate/capacity
-controls, and monitoring do not. The web scoring and ranking code still operates only on clearly
-synthetic in-process fixtures; its application does not connect to the database-only
-scoring/finalization/read state in revisions 0001 through 0011.
+bounded database score projection, versioned response-only schema, and fail-closed server mapper now
+exist, but their database client, HTTP route, cache/invalidation, CarRecipe, streak/freshness,
+profile detail, rate/capacity controls, and monitoring do not. The visible web scoring and ranking
+experience still operates only on clearly synthetic in-process fixtures; its application does not
+connect to the database-only scoring/finalization/read state in revisions 0001 through 0011.
 
 ## Evidence commands
 

@@ -74,19 +74,21 @@ private reporting channels; those hosted controls cannot be safely invented from
 Phase 2/3 contract and persistence foundations are also present: four closed, bounded JSON Schemas
 plus generated TypeScript validators and OpenAPI components. They cover connector sync/result,
 problem details, and a response-only top-32 Community score page with fixed self-reported trust
-metadata. They are pre-endpoint contracts, not a live API or evidence that real Codex data can be
-submitted. Eleven SQL migrations now add 23 private identity, passkey, restricted-recovery, source,
-device, pairing, audit, deletion, replay, usage, and Community scoring tables with deny-by-default
-runtime roles, forced RLS, state-machine constraints, checksum drift detection, and an isolated
-PostgreSQL capability test. A narrow procedure boundary implements invite issuance, atomic
-enrollment, session-bound initial-passkey challenges, credential-derived login, bounded
-multi-passkey management, session rotation/revocation, the immediate lock-down portion of profile
-deletion, one-time new/existing-source device pairing, private source/device inventory, source
-pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation, and
-short-lived recovery-only replacement-passkey authority. Pairing creates only opaque user-declared
-sources: it never reads or stores Codex account email or claims account uniqueness. The source
-unlink/reactivation procedures require a fresh consumed source-bound step-up record, but the
-application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
+metadata. A server-only fail-closed mapper now converts only the exact ten-column SQL projection
+into that response and rejects malformed, inconsistent, oversized, or contract-invalid results.
+There is still no database client, HTTP path, cache, or live API, and this is not evidence that real
+Codex data can be submitted. Eleven SQL migrations now add 23 private identity, passkey,
+restricted-recovery, source, device, pairing, audit, deletion, replay, usage, and Community scoring
+tables with deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift
+detection, and an isolated PostgreSQL capability test. A narrow procedure boundary implements invite
+issuance, atomic enrollment, session-bound initial-passkey challenges, credential-derived login,
+bounded multi-passkey management, session rotation/revocation, the immediate lock-down portion of
+profile deletion, one-time new/existing-source device pairing, private source/device inventory,
+source pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation,
+and short-lived recovery-only replacement-passkey authority. Pairing creates only opaque
+user-declared sources: it never reads or stores Codex account email or claims account uniqueness.
+The source unlink/reactivation procedures require a fresh consumed source-bound step-up record, but
+the application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
 also require edge rate limits and bounded cleanup before exposure. A database-only Community ingest
 capability now exposes minimal active-device verification material and accepts bounded source-bound
 snapshots with exact retry, nonce replay, monotonic source/date, quarantine, and lifecycle-race

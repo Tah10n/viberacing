@@ -127,8 +127,11 @@ implied.
 ADR 0010 also stores no data. `CommunityScorePageV1` adds only literal `community` and
 `selfReported: true` trust metadata around zero to 32 rows of the same public score fields. The
 closed response schema rejects private/unknown fields, daily detail, exact timestamps, car, streak,
-freshness, and profile detail. Generated TypeScript/OpenAPI components and runtime validators exist,
-but no HTTP route, cache, request metadata, log field, or retention obligation is thereby created.
+freshness, and profile detail. A server-only mapper reads only the exact ten projection columns,
+emits the constant trust wrapper, and returns only a validated frozen response; its stable failure
+does not include a row value or unexpected field name. Generated TypeScript/OpenAPI components and
+runtime validators exist, but no database client, HTTP route, cache, request metadata, log field, or
+retention obligation is thereby created.
 
 ## Prohibited data
 
@@ -159,9 +162,10 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
 - Jobs currently receive only bounded expired ingest-state cleanup, open-season Community scoring
   refresh, and terminal finalization. Correction and deletion capabilities require separate
   migrations and tests; migrations use a different non-runtime owner.
-- The database public score model and response-only contract contain only fields explicitly
-  classified Public. The HTTP route and cache remain planned. Authenticated responses are private
-  and `no-store`; public cache keys cannot include or mix session state.
+- The database public score model, response-only contract, and server-only mapper contain only
+  fields explicitly classified Public. The database client, HTTP route, and cache remain planned.
+  Authenticated responses are private and `no-store`; public cache keys cannot include or mix
+  session state.
 - Admin access is separate, reasoned, passkey-stepped-up, and audited. Routine support has no need
   to read exact usage.
 

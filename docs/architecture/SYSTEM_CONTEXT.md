@@ -84,10 +84,12 @@ Revision 0007 implements the database-only Usage submission capability; revision
 bounded expired ingest-state cleanup; revision 0009 gives Jobs an isolated open-season scoring
 refresh; and revision 0010 adds server-time late-ingest quarantine plus immutable Jobs-only
 finalization. Revision 0011 gives Web only a bounded, active-profile score projection, and ADR 0010
-adds its response-only top-32 contract without advertising a path. These capabilities have role,
-contract, and concurrency evidence. The Ingest and Jobs services, cleanup/scoring schedulers,
-edge/origin proof, request signature verification, HTTP public-race delivery/cache, and audited
-correction authority shown in the design remain planned.
+adds its response-only top-32 contract. A server-only Web mapper now enforces the exact projection
+shape and its cross-row invariants before returning a validated frozen contract, without advertising
+a path. These capabilities have role, contract, mapping, and concurrency evidence. The database
+client, Ingest and Jobs services, cleanup/scoring schedulers, edge/origin proof, request signature
+verification, HTTP public-race delivery/cache, and audited correction authority shown in the design
+remain planned.
 
 ## Component responsibilities
 

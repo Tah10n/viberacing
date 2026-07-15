@@ -162,9 +162,11 @@ and migration or rollback where applicable.
    transactional profile cap, immutable formula/season binding, serialized idempotent open-season
    refresh, server-receipt closure, terminal triggers, and a finalization-versus-late-Ingest race. A
    bounded Web-only SQL projection filters active profiles and returns only public score fields; a
-   response-only schema fixes the Community trust label and caps one page at 32. A Jobs
-   service/scheduler, audited correction authority, capacity evidence, and HTTP/cache delivery
-   boundary are still required before publishing durable results.
+   response-only schema fixes the Community trust label and caps one page at 32. A server-only
+   mapper rejects unexpected columns, malformed values, and incoherent season/rank ordering before
+   that contract can be serialized. A database client, Jobs service/scheduler, audited correction
+   authority, capacity evidence, and HTTP/cache delivery boundary are still required before
+   publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes.

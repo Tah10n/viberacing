@@ -309,8 +309,10 @@ data are absent. Authenticated responses use private `no-store` policy and never
 cache. This complete read flow remains planned. Revision 0011 implements only the database score
 subset: season metadata, handle, weekly score, active days, source count, shared rank, and display
 position. ADR 0010 wraps at most 32 such rows in a closed response component with constant Community
-and self-reported metadata, but advertises no path. There is still no HTTP route/mapper, cache, car,
-streak, freshness, daily detail, or profile read.
+and self-reported metadata. A server-only Web mapper now accepts unknown adapter output, requires
+the exact SQL columns and coherent season/order/rank semantics, validates and freezes that response,
+and advertises no path. There is still no database client, HTTP route, cache, car, streak,
+freshness, daily detail, or profile read.
 
 ## Hide and deletion
 

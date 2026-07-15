@@ -19,13 +19,14 @@ Read these files before changing the project:
     state.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync and
-Community score-response contracts, and procedure-only identity, passkey, restricted-recovery,
-pairing, source/device lifecycle, Community usage-ingest, Jobs-only ingest-retention, and
-open-season Community scoring plus terminal finalization and bounded public score-projection
-database slices. Do not claim that HTTP authentication, OAuth/Argon2id/WebAuthn/Ed25519 application
-verification, real-user ingestion, a connector, a scoring service or HTTP public-race read, season
-correction, a finalization scheduler, scheduled or broader cleanup, deployment, or a hosted security
-control exists until its implementation and verification are present in the working tree.
+Community score-response contracts, a server-only score-projection mapper, and procedure-only
+identity, passkey, restricted-recovery, pairing, source/device lifecycle, Community usage-ingest,
+Jobs-only ingest-retention, and open-season Community scoring plus terminal finalization and bounded
+public score-projection database slices. Do not claim that HTTP authentication,
+OAuth/Argon2id/WebAuthn/Ed25519 application verification, real-user ingestion, a connector, a
+scoring service or HTTP public-race read, season correction, a finalization scheduler, scheduled or
+broader cleanup, deployment, or a hosted security control exists until its implementation and
+verification are present in the working tree.
 
 ## Repository map
 

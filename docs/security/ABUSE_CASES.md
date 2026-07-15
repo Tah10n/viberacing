@@ -232,8 +232,10 @@ material availability cost.
 - **Current evidence:** Revision 0011 returns only ten reviewed score fields, excludes private IDs,
   raw/daily values, and exact timestamps, filters current profile state to `active`, and re-ranks
   after that filter. `CommunityScorePageV1` preserves the same allowlist, fixes Community and
-  self-reported trust metadata, and rejects unknown/private fields. HTTP enumeration controls,
-  rounded freshness, cache purge, and monitoring are still unimplemented.
+  self-reported trust metadata, and rejects unknown/private fields. Its server-only mapper requires
+  the exact SQL column set and never reflects projected values in mapping errors. Database/HTTP
+  delivery, enumeration controls, rounded freshness, cache purge, and monitoring are still
+  unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 
@@ -418,9 +420,10 @@ material availability cost.
   database lock bound, numeric overflow protection, a 30-second statement deadline, bounded no-data
   terminal state, and one atomic global-rank rebuild. The public score projection returns at most
   100 rows and has a five-second statement deadline; the response-only contract narrows one future
-  page to 32 rows. Ranking still evaluates all currently visible season entries. Scheduling,
-  request/body limits, cache, service concurrency, scoring/read capacity policy, quotas, load
-  shedding, and production capacity evidence remain unimplemented.
+  page to 32 rows, and the mapper rejects row 33 before traversing projected rows. Ranking still
+  evaluates all currently visible season entries. Database/HTTP delivery, scheduling, request/body
+  limits, cache, service concurrency, scoring/read capacity policy, quotas, load shedding, and
+  production capacity evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

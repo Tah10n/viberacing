@@ -77,8 +77,10 @@ Dev-сервер слушает только loopback. В интерфейсе �
 
 В репозитории уже есть четыре закрытые JSON Schemas и генерируемые TypeScript/OpenAPI artifacts:
 sync request/result, bounded problem details и response-only top-32 Community score page с
-неизменяемыми `community`/`selfReported` trust fields. Это пока только проверяемая граница данных:
-ни одного advertised API path, connector или приёма реальной статистики ещё нет.
+неизменяемыми `community`/`selfReported` trust fields. Server-only fail-closed mapper преобразует в
+этот response только точную десятиколоночную SQL projection и отклоняет malformed, inconsistent,
+oversized или contract-invalid результаты. Database client, advertised API path, cache, connector и
+приём реальной статистики ещё отсутствуют.
 
 Также добавлены одиннадцать SQL migrations: 23 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
@@ -99,16 +101,18 @@ tokens и source IDs. Database-only finalization закрывает grace window
 неизменяемым, сохраняя profile-purge. Отдельная Web-only database projection возвращает только
 bounded active-profile score rows без raw values, private IDs и exact timestamps. Email и
 идентификатор Codex-аккаунта не читаются и не сохраняются. Response schema фиксирует тот же public
-allowlist, но не реализует HTTP route. HTTP auth/recovery routes, OAuth callback,
+allowlist, а server-only mapper проверяет форму, season/rank invariants и contract до сериализации,
+но не реализует database access или HTTP route. HTTP auth/recovery routes, OAuth callback,
 Argon2id/WebAuthn/Ed25519 verifier, generic response и edge rate limits для анонимных challenges и
 recovery lookup пока отсутствуют. Database-only Community ingest capability уже выдаёт минимальный
 материал активного устройства и принимает bounded source-bound snapshots с exact retry, nonce
 replay, monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only
 procedure удаляет bounded batches истёкших nonces и raw snapshots, сохраняя current source/day
 values, но scheduler для неё отсутствует. Сама база не проверяет wire signature. HTTP ingest route,
-приложение с Ed25519-проверкой, connector, cleanup/scoring scheduler или service, HTTP public score
-read, audited correction flow, purge worker и deployed database ещё не реализованы, поэтому готовой
-пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
+приложение с Ed25519-проверкой, connector, cleanup/scoring scheduler или service, database adapter,
+HTTP public score read, audited correction flow, purge worker и deployed database ещё не
+реализованы, поэтому готовой пользовательской авторизации, публичного рейтинга и приёма реальных
+данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

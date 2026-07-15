@@ -23,18 +23,19 @@ for a hosted deployment; it is public configuration, not a secret. Focused check
 
 ## Module map
 
-| Path                               | Responsibility                                                 | Trust boundary                                                         |
-| ---------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `app/page.tsx`                     | Builds the synthetic public payload on the server              | Must pass only public presentation data into the client tree           |
-| `lib/race-data.ts`                 | Clearly synthetic raw activity fixtures and payload projection | Marked `server-only`; never replace with exports or real account data  |
-| `lib/scoring.ts`                   | Bounded daily/weekly score and deterministic rank calculation  | Treat all future device input as untrusted and validate before calling |
-| `lib/race-types.ts`                | Client-safe participant and demo-profile shape                 | Must not gain raw tokens or source/account identifiers                 |
-| `lib/public-origin.ts`             | Strict parser for the canonical social-metadata origin         | Server-only; hosted origins require HTTPS DNS and no extra URL parts   |
-| `lib/car-recipe.ts`                | Closed-enum car customization and fixed sprites                | No arbitrary colors, markup, text, files, SVG, or URLs                 |
-| `components/pixel-race-canvas.tsx` | Deterministic code-native renderer                             | Draws fixed primitives only; semantic DOM description is mandatory     |
-| `components/race-experience.tsx`   | EN/RU interaction, table, profile, theme, and motion controls  | Local storage is restricted to non-personal preferences                |
-| `proxy.ts`                         | Per-response nonce CSP                                         | Keep production CSP fail-closed and free of remote origins             |
-| `next.config.ts`                   | Static security headers and build isolation                    | Turbopack must remain pinned to this repository root                   |
+| Path                                   | Responsibility                                                 | Trust boundary                                                         |
+| -------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `app/page.tsx`                         | Builds the synthetic public payload on the server              | Must pass only public presentation data into the client tree           |
+| `lib/race-data.ts`                     | Clearly synthetic raw activity fixtures and payload projection | Marked `server-only`; never replace with exports or real account data  |
+| `lib/public-community-score-mapper.ts` | Validates and maps the exact SQL score projection              | Server-only and fail-closed; no route or database client exists yet    |
+| `lib/scoring.ts`                       | Bounded daily/weekly score and deterministic rank calculation  | Treat all future device input as untrusted and validate before calling |
+| `lib/race-types.ts`                    | Client-safe participant and demo-profile shape                 | Must not gain raw tokens or source/account identifiers                 |
+| `lib/public-origin.ts`                 | Strict parser for the canonical social-metadata origin         | Server-only; hosted origins require HTTPS DNS and no extra URL parts   |
+| `lib/car-recipe.ts`                    | Closed-enum car customization and fixed sprites                | No arbitrary colors, markup, text, files, SVG, or URLs                 |
+| `components/pixel-race-canvas.tsx`     | Deterministic code-native renderer                             | Draws fixed primitives only; semantic DOM description is mandatory     |
+| `components/race-experience.tsx`       | EN/RU interaction, table, profile, theme, and motion controls  | Local storage is restricted to non-personal preferences                |
+| `proxy.ts`                             | Per-response nonce CSP                                         | Keep production CSP fail-closed and free of remote origins             |
+| `next.config.ts`                       | Static security headers and build isolation                    | Turbopack must remain pinned to this repository root                   |
 
 ## Public client data contract
 

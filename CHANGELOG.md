@@ -36,6 +36,9 @@ Versioning where its guarantees are applicable.
 - Canonical closed JSON Schema contracts for connector sync, bounded acknowledgement, public problem
   details, and a response-only top-32 Community score page with constant self-reported trust
   metadata, generated readonly TypeScript validators, and pre-endpoint OpenAPI components.
+- A server-only public-score mapper that accepts unknown adapter output, enforces the exact SQL
+  column allowlist plus season/order/rank invariants, validates the canonical response, and emits no
+  reflected projection values on failure; no database client or route is implied.
 - Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
   drift gates and black-box regression coverage.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
@@ -128,6 +131,9 @@ Versioning where its guarantees are applicable.
 - Added response-contract regression coverage for Community trust constants, the ten public score
   fields, empty/top-32 pages, duplicate display positions, bounds, private-field rejection, and
   privacy-safe validation issues without advertising an HTTP route.
+- Added projection-mapper regression coverage for malformed arrays/rows, accessors, private or
+  missing columns, calendar boundaries, contract bounds, shared-rank gaps, page limits, and
+  non-reflective runtime failures without connecting to PostgreSQL.
 - Made passkey race preservation assertions fail when an expected row is missing and added a static
   regression check that rejects missing-row-unsafe scalar-subquery `IF NOT` assertions.
 - Made passkey revoke terminal, protected the last active key, preserved monotonic sign state, and
