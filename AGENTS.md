@@ -31,7 +31,9 @@ device request. A protected local reader supplies one mandatory and one optional
 from exact namespaced configuration without returning a reusable key container. A separate bounded
 Ingest PostgreSQL adapter wraps only reviewed origin replay, device lookup, and submission
 procedures through a probed least-privileged login contract. A forced-RLS origin replay tuple and
-Jobs cleanup extension have isolated PostgreSQL evidence. The public score route and Ingest
+Jobs cleanup extension have isolated PostgreSQL evidence. A transport-free Ingest application
+boundary now composes those exact capabilities, generates one server request ID, and returns only a
+validated sync acknowledgement or generic problem decision. The public score route and Ingest
 boundaries are locally verified but have no real proof key, secret-manager binding, live database
 login, HTTP Ingest listener, edge deployment, or visible-component/connector consumer. Do not claim
 that HTTP authentication, OAuth/Argon2id/WebAuthn application verification, real-user ingestion, a
@@ -53,7 +55,8 @@ are present in the working tree.
 - `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
   least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL
-  adapter, and nested security guidance. Read `apps/ingest/AGENTS.md` before editing it.
+  adapter, transport-free application composition, and nested security guidance. Read
+  `apps/ingest/AGENTS.md` before editing it.
 - `contracts/v1/` contains canonical public JSON Schemas; `contracts/generated/` contains
   drift-checked derivatives.
 - `packages/contracts/` contains generated TypeScript types plus the bounded runtime validator and

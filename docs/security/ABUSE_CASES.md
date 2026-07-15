@@ -138,8 +138,9 @@ material availability cost.
   body-bound request under strict Ed25519 semantics, takes unknown devices through a valid dummy-key
   path, compares the lookup source, and rejects the observed zero-key/zero-signature bypass. The
   local adapter proves the fixed lookup/submission mapping and relies on the procedure to close a
-  revoke race. OS key storage, rotation, metrics, HTTP controls, live login, and the composed
-  verifier-to-PostgreSQL path remain unimplemented.
+  revoke race. A signed synthetic request now proves the transport-free verifier-to-adapter order,
+  settlement, and generic acknowledgement through a mock pool. OS key storage, rotation, metrics,
+  HTTP controls, live login, and the live verifier-to-PostgreSQL path remain unimplemented.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity.
 
@@ -325,7 +326,9 @@ material availability cost.
   and expiry; one Ingest-only function atomically consumes or replaces an expired tuple, an ordered
   race yields one fresh result, and Jobs can delete bounded expired tuples. Cloudflare signing,
   secret-manager/edge key injection, Railway direct-origin denial, trusted forwarding, HTTP
-  composition, and production cleanup scheduling remain unimplemented.
+  transport composition, and production cleanup scheduling remain unimplemented. The local
+  transport-free composer already binds the same replay/device/submission adapter and maps origin
+  rejection to one generic unauthorized decision.
 - **Residual risk:** Infrastructure metadata exposure can increase probing but must not be the only
   protection.
 
@@ -481,9 +484,11 @@ material availability cost.
   timeout, admission ceiling, or backpressure. The separate Ingest adapter adds a four-client
   ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime recycling, exact
   one-row origin consume, zero-or-one device lookup, and one-row submission results, with
-  destructive release on failure. There is no live login, HTTP no-queue admission, or combined
-  capacity evidence. Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and
-  production load evidence remain unimplemented.
+  destructive release on failure. The transport-free application generates request correlation
+  before verification, submits only after verification, waits for settlement, and contains
+  dependency failures without a retry loop. There is no live login, HTTP no-queue admission, or
+  combined capacity evidence. Scheduling, cache, scoring/read capacity evidence, quotas, edge
+  shaping, and production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

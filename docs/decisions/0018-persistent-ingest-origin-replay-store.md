@@ -1,6 +1,6 @@
 # ADR 0018: Persistent Ingest origin replay store
 
-- Status: Accepted (database and local adapter implemented; HTTP composition pending)
+- Status: Accepted (database, adapter, and ADR 0019 local composition implemented; HTTP pending)
 - Date: 2026-07-15
 - Decision owners: Ingest, Database, Jobs, Security, Privacy, and Operations
 - Supersedes: None
@@ -56,8 +56,8 @@ The local Ingest database adapter adds exactly one fixed three-parameter call. I
 an exact plain input with a safe millisecond timestamp, closed key ID, and lowercase 32-byte digest;
 copies the digest; converts the expiry to canonical UTC; accepts only one exact boolean row; probes
 the existing least-privileged runtime boundary first; and destroys the client on any invalid result
-or dependency failure. The same adapter object can now supply both origin-nonce consumption and
-minimal device lookup to a future verifier composition. It still exposes no general query.
+or dependency failure. ADR 0019 now supplies both origin-nonce consumption and minimal device lookup
+from this same adapter object to one verifier composition. It still exposes no general query.
 
 This decision does not add an HTTP listener, Cloudflare signer, secret-manager binding, trusted
 forwarding policy, direct-origin denial, public response, request log, scheduler, live credential,

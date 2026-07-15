@@ -1,7 +1,7 @@
 # Ingest workspace guidance
 
 Read the root `AGENTS.md`, `contracts/README.md`, `contracts/v1/connector-sync-authentication.json`,
-the security invariants, threat model, abuse cases, privacy data map, and ADRs 0015–0018 before
+the security invariants, threat model, abuse cases, privacy data map, and ADRs 0015–0019 before
 changing this workspace.
 
 ## Non-negotiable boundaries
@@ -26,11 +26,15 @@ changing this workspace.
   distinct secondary rotation pair. Keys are canonical 32-byte base64url values from protected
   configuration only. Never add defaults, literals, files, commands, general keyrings, or
   key-returning APIs.
+- The application composer must generate one server-owned 128-bit request ID before verification,
+  then run verifier before submission and wait for database settlement. Return only a validated
+  `ConnectorSyncResultV1` or the closed generic `ProblemDetailsV1` subset. Never accept an inbound
+  request ID, expose an anomaly reason, or acknowledge a failed submission.
 - This workspace owns no HTTP listener, OAuth, passkey, admin, signing, deployment, logging,
   analytics, monitoring backend, or scheduler. It contains no real origin key or secret-manager
   integration.
 - Never log or serialize bodies, signatures, nonces, proof keys, public keys, callback errors, or
-  internal failure stacks. Future public response mapping must remain generic.
+  internal failure stacks. Future HTTP serialization must preserve the existing generic decisions.
 
 ## Required checks
 

@@ -104,8 +104,9 @@ and the two digests to the narrow ADR 0016 adapter. It returns no raw body, orig
 secret/proof/nonce, device public key, callback error, or parser detail and has no log, cache,
 analytics, export, network, or persistence sink. Revision 0012 now implements the injected callback
 with exactly the key ID, domain-separated digest, and exact expiry through a strict local adapter.
-Application tests still use mock pools; the separate PostgreSQL suite proves access and bounded
-deletion without claiming a live connection or production schedule.
+The transport-free ADR 0019 application composes that verifier and adapter with synthetic/mock-pool
+evidence; the separate PostgreSQL suite proves access and bounded deletion without claiming a live
+connection or production schedule.
 
 ADR 0017 implements only the process-side reader for the already mapped origin key/key-ID class. It
 requires one primary and at most one complete secondary pair, passes decoded copies directly into
@@ -123,6 +124,14 @@ memory only, never a tracked value, log field, metric, response, or error cause.
 the password non-enumerable and JSON-redacted, and monitoring receives only `idle_client_error`.
 Real secret delivery, rotation, access review, and live TLS/login evidence remain deployment work.
 Existing 15-minute device-nonce and 30-day raw-snapshot retention are unchanged.
+
+ADR 0019 adds no user field or retention sink. The application transiently passes the already mapped
+Security and Usage allowlist from verifier to adapter and creates one Operational 128-bit request ID
+plus a coarse accepted/duplicate/quarantined or generic error decision. It returns the ID only in
+the validated application body, accepts no inbound correlation value, and retains no copy. It has no
+log, metric, cache, analytics, export, HTTP header, or database field for the ID or decision. A
+future transport or monitoring sink must map its exact access and bounded retention before
+collection.
 
 Revision 0008 adds deletion evidence for only those raw nonce and snapshot rows: a Jobs-only
 procedure derives cutoff time on the server, deletes bounded expired batches, cascades raw entries,
@@ -290,12 +299,13 @@ legal review and explicit public disclosure; they are not assumed here.
 
 The server-only problem factory and local score route create a new 128-bit opaque request ID and
 return it in the bounded body/header without accepting an inbound correlation value or retaining a
-copy. The local Ingest configuration reader, kernel, and database adapter have no request-ID or log
-sink. Future operational logs may use stable event names, those request IDs, coarse outcomes, and
-bounded numeric metrics. They omit raw URLs, request bodies, raw token values, handles when not
-needed, OAuth/passkey material, device public keys/signatures/nonces, origin keys/proofs/nonces,
-idempotency keys, recovery selectors/secrets/PHCs/authority verifiers, local paths, and prohibited
-data.
+copy. The transport-free Ingest application independently creates the same contract shape and
+returns it only in its validated body decision; its configuration reader, kernel, database adapter,
+and composer have no request-ID or log sink. Future operational logs may use stable event names,
+those request IDs, coarse outcomes, and bounded numeric metrics. They omit raw URLs, request bodies,
+raw token values, handles when not needed, OAuth/passkey material, device public
+keys/signatures/nonces, origin keys/proofs/nonces, idempotency keys, recovery
+selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
 
 Connector telemetry is off by default. A future diagnostic export is local, explicit, redacted,
 previewed before sharing, and generated from an allowlist. Public issue forms do not request raw

@@ -10,6 +10,17 @@ export {
   type VerifiedCommunitySync,
 } from "./community-sync-verifier.js";
 export {
+  CommunitySyncApplicationError,
+  createCommunitySyncApplication,
+  createConfiguredCommunitySyncApplication,
+  type CommunitySyncApplication,
+  type CommunitySyncApplicationDecision,
+  type CommunitySyncApplicationDependencies,
+  type CommunitySyncApplicationErrorCode,
+  type CommunitySyncApplicationProblemKind,
+  type ConfiguredCommunitySyncApplication,
+} from "./community-sync-application.js";
+export {
   CommunitySyncDatabaseError,
   createCloseableCommunitySyncDatabase,
   createCommunitySyncDatabase,

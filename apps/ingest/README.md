@@ -6,7 +6,9 @@ edge proof, parses JSON without losing duplicate-key evidence, validates `Connec
 minimal device verification material through an injected capability, and verifies the canonical
 Ed25519 device signature. The database adapter can atomically consume that origin nonce, provide the
 device lookup, and submit only the verified allowlist through least-privileged PostgreSQL
-procedures.
+procedures. A transport-free application boundary composes those exact capabilities, creates one
+server-owned request ID before verification, waits for submission settlement, and returns only a
+validated `ConnectorSyncResultV1` or generic `ProblemDetailsV1` decision.
 
 The language-neutral wire policy is
 [`contracts/v1/connector-sync-authentication.json`](../../contracts/v1/connector-sync-authentication.json).
@@ -31,12 +33,20 @@ path. Its config permits cleartext only for explicit loopback development/test a
 requires certificate-verified TLS. Pool, statement, lock, and driver waits are bounded; failed
 clients are destroyed; driver/configuration details are never attached to adapter errors.
 
-The current application tests use synthetic keys and mock pools; the isolated PostgreSQL suite
-separately proves persistent atomic consume and cleanup races. This workspace has no HTTP listener,
-live protected key injection, public acknowledgement, socket deadline, no-queue admission,
-backpressure, monitoring backend, working database login/certificate, live PostgreSQL connection,
-connector, edge path, or deployment. It therefore does not prove real-user synchronization or
-production capacity.
+The configured application factory creates one database boundary, injects its origin-consume and
+device-lookup methods into the protected-key verifier, binds its submit method, and closes the pool
+if verifier construction fails. Origin or device rejection becomes the same generic unauthorized
+decision; dependency outages become retryable unavailable decisions; internal drift becomes a
+non-reflective internal problem. Accepted, duplicate, and quarantined acknowledgements contain only
+the request ID, sync ID, coarse outcome, and accepted count. The application creates no `Response`,
+HTTP header, socket, log, cache, or retained request-ID copy.
+
+The current application tests use synthetic keys and mock pools; one signed request exercises the
+actual verifier and database adapter together, while the isolated PostgreSQL suite separately proves
+persistent atomic consume and cleanup races. This workspace has no HTTP listener, live protected key
+injection, HTTP acknowledgement serialization, socket deadline, no-queue admission, backpressure,
+monitoring backend, working database login/certificate, live PostgreSQL connection, connector, edge
+path, or deployment. It therefore does not prove real-user synchronization or production capacity.
 
 Run from the repository root:
 

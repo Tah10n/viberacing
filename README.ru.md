@@ -102,9 +102,12 @@ protected factory теперь требует точную primary origin-HMAC �
 distinct rotation-пару из namespaced configuration; наружу она возвращает только verifier, а
 реальных key и secret-manager binding в репозитории нет. Forced-RLS PostgreSQL table хранит только
 origin key ID, domain-separated nonce digest и millisecond expiry; Ingest-only function атомарно
-consume-ит tuple, а observed race доказывает одного победителя. HTTP listener, live protected key
-injection, public response, no-queue admission, socket/backpressure controls, connector, live
-database connection и deployment всё ещё отсутствуют.
+consume-ит tuple, а observed race доказывает одного победителя. Transport-free application boundary
+теперь генерирует server-owned request ID, связывает этот replay/device/submission adapter с точным
+verifier, дожидается settlement базы и возвращает только валидированный acknowledgement либо generic
+problem decision. HTTP listener, live protected key injection, HTTP serialization/header policy,
+no-queue admission, socket/backpressure controls, connector, live database connection и deployment
+всё ещё отсутствуют.
 
 Также добавлены двенадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,

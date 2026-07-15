@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and eighteen accepted ADRs.
+  fail-closed compatibility policy and matrix, and nineteen accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -77,13 +77,19 @@ Versioning where its guarantees are applicable.
   exact namespaced values encode one mandatory primary and one optional complete secondary rotation
   pair; canonical 32-byte keys and IDs must be distinct, no fallback or key container is exposed,
   and temporary decoded buffers are overwritten after verifier construction. Twenty-eight new
-  adversarial cases remain in the 263-test Ingest suite at 100% statement/branch/function/line
+  adversarial cases remain in the 317-test Ingest suite at 100% statement/branch/function/line
   coverage; no real key, secret-manager binding, edge signer, HTTP route, or deployment is implied.
 - A forced-RLS origin replay table and Ingest-only atomic consume function storing only the closed
   key ID, domain-separated 32-byte digest, and millisecond expiry. Exact replay returns `false`, an
   expired tuple may be reused, expiry is rechecked after contention, and an ordered observed race
   proves exactly one fresh consume. The bounded Jobs cleanup now independently deletes origin
   nonces, device nonces, and snapshots; the local Ingest adapter maps only one fixed boolean call.
+- A transport-free Community sync application boundary that generates one server-owned 128-bit
+  request ID, composes the protected-key verifier with the same bounded replay/device/submission
+  database adapter, waits for settlement, and returns only a contract-validated acknowledgement or
+  generic problem decision. Fifty-four new adversarial and production-path composition cases bring
+  the Ingest suite to 317 tests at 100% statement/branch/function/line coverage; no HTTP listener,
+  working database login, edge deployment, log sink, rate control, or real-user sync is implied.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

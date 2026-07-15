@@ -99,11 +99,13 @@ validates the sync contract, and verifies the exact source-bound device request 
 semantics. ADR 0016 adds a fixed-query four-client PostgreSQL adapter with strict TLS/config,
 per-checkout Ingest role/login/search-path verification, closed device/submission mappers, copied
 parameters, and destructive failure release. ADR 0017 adds an exact primary/secondary origin-key
-reader and config-backed verifier factory without exposing a reusable key container. The HTTP
-listener, live secret-manager/edge key injection and replay store, working deployment
-login/certificate, composed end-to-end flow, socket deadlines/admission/backpressure,
-Cloudflare/Railway path, connector, Jobs scheduler/monitoring, public cache, and audited correction
-authority shown in the design remain planned.
+reader and config-backed verifier factory without exposing a reusable key container. ADR 0018 adds
+persistent atomic origin replay, and ADR 0019 composes the same replay/device/submission adapter
+behind one transport-free validated application decision. The HTTP listener, live
+secret-manager/edge key injection, working deployment login/certificate, composed live end-to-end
+flow, socket deadlines/admission/backpressure, Cloudflare/Railway path, connector, Jobs
+scheduler/monitoring, public cache, and audited correction authority shown in the design remain
+planned.
 
 ## Component responsibilities
 
@@ -112,7 +114,7 @@ authority shown in the design remain planned.
 | Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                                           | Raw device key, connector execution, admin authority, private cache mixing                        | TB-01 and TB-02        |
 | Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                       | Profile authorization, score derivation, database credentials                                     | TB-01 and TB-06        |
 | Web/Auth         | Public score read, OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion initiation | Device private key, direct usage submission, schema ownership                                     | TB-02, TB-07, TB-08    |
-| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure                                  | OAuth, admin, invites, passkey/recovery, migrations, final score authority                        | TB-05, TB-06, TB-07    |
+| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision           | OAuth, admin, invites, passkey/recovery, migrations, final score authority                        | TB-05, TB-06, TB-07    |
 | Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                  | Interactive auth, public request handling, schema ownership                                       | TB-07 and TB-11        |
 | PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                      | Public routing, connector trust, release credentials                                              | TB-07                  |
 | Rust connector   | Local App Server lifecycle, compatibility adapter, local key, canonical signing, safe scheduling                              | Website commands, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |

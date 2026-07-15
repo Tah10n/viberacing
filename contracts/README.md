@@ -4,9 +4,10 @@ This directory is the language-neutral source of truth for Vibe Racing wire shap
 files establish request and response boundaries plus one locally implemented public score operation;
 revision 0007 maps the bounded Community sync into a database-only procedure and revision 0011
 provides a database-only score projection. A local pure Ingest kernel now authenticates and parses
-the exact bounded sync request, and a separate local adapter constrains its PostgreSQL mapping. No
-connector, HTTP ingest listener, live replay store, deployed endpoint, working database credential,
-or composed live flow exists.
+the exact bounded sync request, a separate local adapter constrains its PostgreSQL mapping, and a
+transport-free application boundary composes them into validated result/problem decisions. No
+connector, HTTP ingest listener, deployed endpoint, working database credential, or composed live
+flow exists.
 
 ## Canonical version 1 schemas
 
@@ -28,7 +29,8 @@ or composed live flow exists.
   JSON keys, consumes a fresh origin nonce before body parsing or device lookup, validates
   `ConnectorSyncV1`, and verifies the source-bound signature under strict RFC 8032/FIPS semantics.
 - [`ConnectorSyncResultV1`](v1/connector-sync-result.schema.json) acknowledges accepted, duplicate,
-  or quarantined input without returning a private anomaly reason.
+  or quarantined input without returning a private anomaly reason. The local Ingest application now
+  reconstructs and validates this body only after verification and database settlement.
 - [`ProblemDetailsV1`](v1/problem-details.schema.json) returns a stable error code and request ID,
   plus one fixed generic title, never a stack trace, SQL detail, secret, request body, or internal
   hostname. A server-only Web factory now generates an opaque 128-bit request ID, fixes each
@@ -77,10 +79,12 @@ generated file to make a check pass.
 
 The local Ingest kernel enforces the content type, raw envelope/parser budgets, duplicate object-key
 rejection, exact-body proofs, generated contract, and strict device signature before returning a
-frozen allowlist. A protected local factory now supplies only one exact primary and optional
-secondary origin-key pair to that verifier; no real key or deployment binding is present. A future
-HTTP wrapper must preserve the exact raw bytes and duplicate raw headers when constructing that
-envelope and must add socket/stream limits, trusted-proxy handling, a durable origin replay store,
-deadlines, backpressure, generic responses, and rate controls. It may compose only the existing
-fixed-query adapter through a deployment-provisioned Ingest login and verified TLS. Runtime parsing
-budgets do not replace those transport, edge, or database constraints.
+frozen allowlist. A protected local factory supplies only one exact primary and optional secondary
+origin-key pair to that verifier; no real key or deployment binding is present. The local
+application composer binds the persistent replay/device/submission adapter, generates one request
+ID, and validates the closed success/problem decision. A future HTTP wrapper must preserve the exact
+raw bytes and duplicate raw headers when constructing that envelope and must add socket/stream
+limits, trusted-proxy handling, deadlines, no-queue admission, backpressure, serialization/header
+policy, and rate controls. It may use only the existing application composition through a
+deployment-provisioned Ingest login and verified TLS. Runtime parsing budgets do not replace those
+transport, edge, or database constraints.

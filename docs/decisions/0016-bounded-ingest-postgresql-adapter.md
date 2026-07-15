@@ -1,6 +1,6 @@
 # ADR 0016: Bounded Ingest PostgreSQL adapter
 
-- Status: Accepted (local adapter implemented; live login and HTTP integration pending)
+- Status: Accepted (local adapter and ADR 0019 composition implemented; live login/HTTP pending)
 - Date: 2026-07-15
 - Decision owners: Ingest, Database, Security, Privacy, Dependencies, and Operations
 - Supersedes: None
@@ -167,9 +167,10 @@ Current local evidence includes:
 
 Tests use synthetic inputs and mock pools. They do not authenticate through a deployment login,
 negotiate TLS, or execute these calls against PostgreSQL. The existing isolated PostgreSQL suite
-separately proves both functions, grants, constraints, deadlines, role denials, and concurrency.
-HTTP framing, origin secret/replay storage, full verifier-to-procedure execution, admission/load,
-monitoring backend, connector, Cloudflare/Railway, and deployment evidence remain open.
+separately proves both functions, grants, constraints, deadlines, role denials, and concurrency. ADR
+0019 later adds one signed synthetic verifier-to-adapter execution through a mock pool. HTTP
+framing, live origin secret/replay integration, working login/TLS, admission/load, monitoring
+backend, connector, Cloudflare/Railway, and deployment evidence remain open.
 
 ## References
 

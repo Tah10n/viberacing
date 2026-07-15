@@ -20,11 +20,14 @@ PostgreSQL adapter revalidates that output and exposes only atomic origin-nonce 
 lookup, and submission through a probed least-privileged pool. A protected local reader supplies one
 mandatory and one optional rotation origin key directly to the verifier without returning raw
 configuration. A forced-RLS replay tuple, Ingest-only atomic consume, and Jobs cleanup path now have
-real isolated PostgreSQL evidence. Phase 0 hosted-publication controls remain blocked on real
-maintainer identities and GitHub configuration. No authentication route, HTTP Ingest listener,
-OAuth/Argon2id/WebAuthn application flow, production secret-manager/edge key injection, production
-deployment, live Web/Jobs/Ingest database login/TLS integration, released connector, real-user
-ingestion, end-to-end public ranking, or finalization scheduler exists.
+real isolated PostgreSQL evidence. A transport-free Ingest application now composes those exact
+verifier and database capabilities, generates a server-owned request ID, waits for submission, and
+returns only a validated acknowledgement or generic problem decision. Phase 0 hosted-publication
+controls remain blocked on real maintainer identities and GitHub configuration. No authentication
+route, HTTP Ingest listener, OAuth/Argon2id/WebAuthn application flow, production
+secret-manager/edge key injection, production deployment, live Web/Jobs/Ingest database login/TLS
+integration, released connector, real-user ingestion, end-to-end public ranking, or finalization
+scheduler exists.
 
 ## Implemented and locally verified
 
@@ -80,13 +83,13 @@ ingestion, end-to-end public ranking, or finalization scheduler exists.
   trusted-release Mermaid views.
 - A fail-closed Codex compatibility policy and empty support matrix; no upstream or connector
   version is claimed supported without pinned schema/fixture/platform evidence.
-- An ADR lifecycle/template and eighteen accepted design decisions covering Community trust,
+- An ADR lifecycle/template and nineteen accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
   score operation, bounded maintenance runner, bounded Community sync verification kernel,
-  least-privileged Ingest PostgreSQL adapter, protected origin-proof key configuration, and
-  persistent atomic origin replay.
+  least-privileged Ingest PostgreSQL adapter, protected origin-proof key configuration, persistent
+  atomic origin replay, and transport-free Community sync application composition.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -131,7 +134,7 @@ ingestion, end-to-end public ranking, or finalization scheduler exists.
   both IDs and key material must differ. The config-backed factory accepts only exact nonce, clock,
   and device-lookup dependencies, constructs the verifier internally, exposes no reusable key
   container, overwrites temporary decoded buffers, and emits only generic bounded configuration
-  errors. Twenty-eight adversarial config/dependency/proof-path cases remain in the 263-test Ingest
+  errors. Twenty-eight adversarial config/dependency/proof-path cases remain in the 317-test Ingest
   suite at 100% statement/branch/function/line coverage. Synthetic environment values prove no
   secret-manager binding, edge signer, real rotation, or deployment.
 - A bounded local Ingest PostgreSQL configuration/pool/adapter boundary. It accepts only six
@@ -145,9 +148,9 @@ ingestion, end-to-end public ranking, or finalization scheduler exists.
   allowlist to the fixed 13-parameter submission procedure. It copies bytes/arrays, generates a
   server UUID, validates coherent accepted/duplicate/quarantined output, destroys failed clients,
   and emits only bounded internal errors. One hundred eighteen
-  configuration/pool/mapper/import-isolation cases remain in the current 263-test Ingest suite at
+  configuration/pool/mapper/import-isolation cases remain in the current 317-test Ingest suite at
   100% statement/branch/function/line coverage. Mock pools prove the application contract; no
-  working login, certificate, live connection, or verifier-to-procedure flow is claimed.
+  working login, certificate, or live connection is claimed.
 - A persistent origin replay database boundary. Revision 0012 stores only the closed key ID,
   domain-separated 32-byte digest, and millisecond expiry behind forced RLS. The Ingest-only
   function atomically inserts or replaces an expired tuple, returns `false` for an unexpired replay,
@@ -156,6 +159,20 @@ ingestion, end-to-end public ranking, or finalization scheduler exists.
   observed PostgreSQL races prove exact one-time consumption, live-row preservation, cleanup
   serialization, role isolation, and database deadlines. Expiry does not schedule physical purge;
   production scheduling, monitoring, backup handling, and capacity remain open.
+- A transport-free Community sync application boundary. Its configured factory creates one bounded
+  Ingest database object, injects that same object's atomic origin consume and minimal device lookup
+  into the protected-key verifier, binds its submission capability, closes the pool after startup
+  failure, and exposes only `execute` plus `close`. Each execution creates one server-owned 128-bit
+  request ID before verification, requires the frozen verifier allowlist, waits for database
+  settlement, reconstructs coherent accepted/duplicate/quarantined output, and validates either a
+  frozen null-prototype `ConnectorSyncResultV1` or the closed generic `ProblemDetailsV1` subset.
+  Origin/device rejection is one unauthorized result; dependency outages are generic retryable 503;
+  internal drift and unknown failures are non-reflective 500. Fifty-four new adversarial and
+  composition cases bring the Ingest suite to 317 tests at 100% statement/branch/function/line
+  coverage. One signed synthetic request passes through the actual production verifier, replay and
+  device capabilities, adapter mapper, and submission order using a mock pool. No HTTP object,
+  serialization/header policy, listener, log sink, working login/certificate, live PostgreSQL,
+  admission/backpressure, edge path, connector, or deployment is claimed.
 - A server-only public HTTP problem boundary that requests exactly 16 cryptographic random bytes,
   returns a frozen opaque request token, owns all eleven status/title/retry mappings including
   explicit 405/406 semantics, validates the complete `ProblemDetailsV1`, and emits only
@@ -255,8 +272,8 @@ ingestion, end-to-end public ranking, or finalization scheduler exists.
   clearing that preserves current values. Ingest also applies the server grace deadline before its
   profile/source/device locks: a late whole snapshot is retained as `season_closed` but updates no
   accepted source/day state. No HTTP Ingest API, live Ingest/Jobs database integration, or scheduler
-  exists; the pure verifier described above does not call this database capability, and the local
-  runner described below is the only Jobs application boundary.
+  exists; the local application composes verifier and adapter only with synthetic/mock-pool
+  evidence, and the local runner described below is the only Jobs application boundary.
 - Community scoring PostgreSQL scenarios prove immutable `community_v1` formula parameters and
   season binding, ISO Monday-to-Sunday grouping, exact logarithmic rounding, numeric overflow
   protection, one profile cap after distinct-source aggregation, weekly caps, active-day and
@@ -406,21 +423,22 @@ defect found and corrected during review. The report names its local-only limita
 Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/pepper and
 authentication-route generic HTTP response translation, WebAuthn cryptographic verification,
 anonymous login/pairing/recovery edge rate limits and cleanup, an HTTP Ingest listener with
-transport/proxy controls, live secret-manager/edge key injection and replay storage, the Ingest live
-PostgreSQL login/TLS connection, verifier/replay/adapter composition and public result mapping,
-scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring state, the
-Jobs scheduler/live login and application-to-PostgreSQL integration, audited corrections, deployed
-public-score delivery, purge workers, Codex connector, release signing, deployment, and public beta
-operations remain proposed. The local Ingest key reader, kernel, and adapter now prove bounded
-protected configuration, raw-envelope/JSON, origin-proof, contract, strict Ed25519 device,
-least-privileged pool, fixed-query, and result-mapping behavior, but not those network, live
-persistence, composed, or operational boundaries. A bounded database score projection, versioned
-response-only schema, fail-closed server mapper, bounded PostgreSQL adapter, and local HTTP route
-now exist, including URL/media parsing, admission/deadline policy, store translation, and final
-serialization. Cache/invalidation, CarRecipe, streak/freshness, profile detail, client-rate and
-production-capacity controls, monitoring backend, deployment login, certificate, edge policy, and
-live adapter integration do not. The visible web scoring and ranking experience still operates only
-on clearly synthetic in-process fixtures; no component calls the route or connects that page to the
+transport/proxy controls, live secret-manager/edge key injection and replay integration, the Ingest
+live PostgreSQL login/TLS connection, HTTP serialization/header policy, socket deadlines,
+admission/backpressure and rate controls, scheduled execution/monitoring of ingest-retention
+cleanup, cleanup for other expiring state, the Jobs scheduler/live login and
+application-to-PostgreSQL integration, audited corrections, deployed public-score delivery, purge
+workers, Codex connector, release signing, deployment, and public beta operations remain proposed.
+The local Ingest key reader, kernel, adapter, and application composer now prove bounded protected
+configuration, raw-envelope/JSON, origin-proof, contract, strict Ed25519 device, least-privileged
+pool, fixed-query, orchestration, and result/problem mapping behavior, but not those network, live
+persistence, or operational boundaries. A bounded database score projection, versioned response-only
+schema, fail-closed server mapper, bounded PostgreSQL adapter, and local HTTP route now exist,
+including URL/media parsing, admission/deadline policy, store translation, and final serialization.
+Cache/invalidation, CarRecipe, streak/freshness, profile detail, client-rate and production-capacity
+controls, monitoring backend, deployment login, certificate, edge policy, and live adapter
+integration do not. The visible web scoring and ranking experience still operates only on clearly
+synthetic in-process fixtures; no component calls the route or connects that page to the
 database-only scoring/finalization/read state in revisions 0001 through 0012.
 
 ## Evidence commands

@@ -1,6 +1,6 @@
 # ADR 0015: Bounded Community sync verification kernel
 
-- Status: Accepted (local verification kernel implemented; HTTP and live integration pending)
+- Status: Accepted (local kernel/composition; HTTP/live pending)
 - Date: 2026-07-15
 - Decision owners: Ingest, Edge, Connector, Security, Privacy, Contracts, and Database
 - Supersedes: None
@@ -162,8 +162,9 @@ Current local evidence includes:
   verification, and staged public-data review.
 
 The tests use synthetic keys and injected in-memory capabilities. They do not exercise HTTP byte
-framing, Cloudflare or Railway, a persistent origin replay store, PostgreSQL, an Ingest deployment
-login, rate limits, deadlines, backpressure, load, a connector, or real data.
+framing, Cloudflare or Railway, a live PostgreSQL connection, an Ingest deployment login, rate
+limits, deadlines, backpressure, load, a connector, or real data. ADRs 0018 and 0019 later add
+persistent local replay and transport-free verifier/adapter composition with separate evidence.
 
 ## References
 

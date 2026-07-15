@@ -10,15 +10,17 @@ terminal finalization and public score-projection procedures, but no authenticat
 application code, OAuth/Argon2id/WebAuthn or pairing-possession verifier, Jobs scheduler, real-user
 ingestion, audited correction, or connector. A local Ingest kernel bounds and authenticates a
 synthetic exact-body sync request, and a separate adapter constrains origin replay, database lookup,
-and submission mapping with mock-pool evidence. Isolated PostgreSQL tests separately prove atomic
-replay and cleanup. They have no HTTP listener, working database login/certificate, end-to-end
-PostgreSQL flow, edge path, or deployment. A bounded local one-shot Jobs process now wraps only
-cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A bounded
-server-only Web PostgreSQL adapter and local public-score GET are implemented and unit/build-tested,
-but this repository supplies no working deployment login or TLS certificate. A successful setup
-proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
-session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
-does not prove a live adapter, deployed API, or production flow.
+and submission mapping with mock-pool evidence. A transport-free application composes those exact
+boundaries, generates a server request ID, and validates the acknowledgement/problem decision;
+isolated PostgreSQL tests separately prove atomic replay and cleanup. They have no HTTP listener,
+working database login/certificate, live end-to-end PostgreSQL flow, edge path, or deployment. A
+bounded local one-shot Jobs process now wraps only cleanup/refresh/finalization, but has no live
+login, scheduler, monitor, or deployment. A bounded server-only Web PostgreSQL adapter and local
+public-score GET are implemented and unit/build-tested, but this repository supplies no working
+deployment login or TLS certificate. A successful setup proves repository gates, synthetic frontend
+behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
+lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
+deployed API, or production flow.
 
 ## Prerequisites
 

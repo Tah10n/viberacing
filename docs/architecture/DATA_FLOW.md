@@ -15,9 +15,10 @@ Argon2id/WebAuthn or pairing-possession application verifier, connector, purge w
 scheduler/monitor, audited correction, or deployed service executes the complete sequences. A local
 Ingest kernel now verifies the bounded exact-body origin/device request, while the separate adapter
 maps origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic
-origin replay consumption and bounded cleanup. There is no HTTP, live database, composed, or
-deployment integration. No deployment login, certificate, edge policy, or live route/Jobs evidence
-is supplied. Data labels refer to the classifications in the
+origin replay consumption and bounded cleanup. A transport-free application now composes those exact
+local capabilities and validates only closed acknowledgement/problem decisions. There is no HTTP or
+live database/deployment integration. No deployment login, certificate, edge policy, or live
+route/Jobs evidence is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -248,6 +249,8 @@ sequenceDiagram
   Ingest->>Ingest: Validate proof, signature, source, schema, replay, and bounds
   Ingest->>DB: Execute narrow idempotent submission procedure
   DB-->>Ingest: Accepted, quarantined, duplicate, or rejected outcome
+  Ingest-->>Edge: Validated acknowledgement or generic problem with server request ID
+  Edge-->>Connector: Forward bounded response without a private reason
   Jobs->>DB: Delete bounded expired origin/device nonce and raw-snapshot batches
   Jobs->>DB: Aggregate sources then apply one profile daily cap
 ```
@@ -294,15 +297,21 @@ rechecks expiry after lock wait. The local adapter strictly reconstructs the thr
 accepts only one boolean row. An ordered observed race proves exactly one fresh consume when two
 callers contend for one expired tuple.
 
+ADR 0019 adds the transport-free orchestration around those existing boundaries. One configured
+factory uses the same bounded database object for origin consume, device lookup, and submission; the
+verifier must settle before submission, and submission must settle before acknowledgement. One
+server-generated request ID correlates only a validated `ConnectorSyncResultV1` or generic
+`ProblemDetailsV1` decision. A signed synthetic request exercises that production code order with a
+mock pool. No inbound ID, private anomaly reason, callback error, or submitted field is reflected.
+
 The connector, edge, Ingest HTTP service, live secret-manager/edge key injection, live PostgreSQL
-login/TLS connection, public acknowledgement, composed verifier-to-procedure path, rate controls,
-socket deadlines, no-queue admission, backpressure, and load evidence are still absent. Revisions
-0008 and 0012 give Jobs a server-time, 1-to-1000 batch procedure for expired origin nonces, device
-nonces, and raw snapshots. It serializes callers, caps each class independently, cascades raw
-entries, preserves current source/day values, and clears only their deleted raw reference. The
-expiry columns still do not delete rows by themselves. The local one-shot Jobs command can invoke
-one fixed 1000-row batch, but no scheduler, monitor, live login, or deployment invokes it
-automatically.
+login/TLS connection, HTTP acknowledgement serialization/headers, rate controls, socket deadlines,
+no-queue admission, backpressure, and load evidence are still absent. Revisions 0008 and 0012 give
+Jobs a server-time, 1-to-1000 batch procedure for expired origin nonces, device nonces, and raw
+snapshots. It serializes callers, caps each class independently, cascades raw entries, preserves
+current source/day values, and clears only their deleted raw reference. The expiry columns still do
+not delete rows by themselves. The local one-shot Jobs command can invoke one fixed 1000-row batch,
+but no scheduler, monitor, live login, or deployment invokes it automatically.
 
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct
