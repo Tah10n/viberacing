@@ -19,27 +19,29 @@ Read these files before changing the project:
     state.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync and
-Community score query/response contracts, one locally implemented OpenAPI GET, a bounded server-only
-PostgreSQL score adapter/mapper, a closed public problem-response factory and request/admission
-route, and procedure-only identity, passkey, restricted-recovery, pairing, source/device lifecycle,
-Community usage-ingest, Jobs-only ingest-retention, and open-season Community scoring plus terminal
-finalization and bounded public score-projection database slices. A local one-shot Jobs runner now
-invokes only those three reviewed maintenance functions through a probed least-privileged login
-contract. A local Ingest kernel bounds the raw sync envelope and parser, verifies an injected
-replay-consumed origin proof, validates the sync contract, and strictly verifies the source-bound
-device request. A protected local reader supplies one mandatory and one optional rotation proof key
-from exact namespaced configuration without returning a reusable key container. A separate bounded
-Ingest PostgreSQL adapter wraps only reviewed origin replay, device lookup, and submission
-procedures through a probed least-privileged login contract. A forced-RLS origin replay tuple and
-Jobs cleanup extension have isolated PostgreSQL evidence. A transport-free Ingest application
-boundary now composes those exact capabilities, generates one server request ID, and returns only a
-validated sync acknowledgement or generic problem decision. The public score route and Ingest
-boundaries are locally verified but have no real proof key, secret-manager binding, live database
-login, HTTP Ingest listener, edge deployment, or visible-component/connector consumer. Do not claim
-that HTTP authentication, OAuth/Argon2id/WebAuthn application verification, real-user ingestion, a
-connector, a Jobs scheduler or deployed public-race read, season correction, scheduled or broader
-cleanup, deployment, or a hosted security control exists until its implementation and verification
-are present in the working tree.
+Community score query/response contracts, locally implemented OpenAPI GET and POST operations, a
+bounded server-only PostgreSQL score adapter/mapper, a closed public problem-response factory and
+request/admission route, and procedure-only identity, passkey, restricted-recovery, pairing,
+source/device lifecycle, Community usage-ingest, Jobs-only ingest-retention, and open-season
+Community scoring plus terminal finalization and bounded public score-projection database slices. A
+local one-shot Jobs runner now invokes only those three reviewed maintenance functions through a
+probed least-privileged login contract. A local Ingest kernel bounds the raw sync envelope and
+parser, verifies an injected replay-consumed origin proof, validates the sync contract, and strictly
+verifies the source-bound device request. A protected local reader supplies one mandatory and one
+optional rotation proof key from exact namespaced configuration without returning a reusable key
+container. A separate bounded Ingest PostgreSQL adapter wraps only reviewed origin replay, device
+lookup, and submission procedures through a probed least-privileged login contract. A forced-RLS
+origin replay tuple and Jobs cleanup extension have isolated PostgreSQL evidence. A transport-free
+Ingest application boundary now composes those exact capabilities, generates one server request ID,
+and returns only a validated sync acknowledgement or generic problem decision. A confined Fastify
+server factory now preserves raw body/header evidence, applies no-queue/deadline policy, and
+serializes only revalidated sync contracts. The public score route and Ingest boundaries are locally
+verified but have no real proof key, secret-manager binding, live database login, host/port/TLS
+Ingest entry point, edge deployment, capacity evidence, or visible-component/connector consumer. Do
+not claim that deployed browser/session HTTP authentication, OAuth/Argon2id/WebAuthn application
+verification, real-user ingestion, a connector, a Jobs scheduler or deployed public-race read,
+season correction, scheduled or broader cleanup, deployment, or a hosted security control exists
+until its implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -55,8 +57,8 @@ are present in the working tree.
 - `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
   least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL
-  adapter, transport-free application composition, and nested security guidance. Read
-  `apps/ingest/AGENTS.md` before editing it.
+  adapter, transport-free application composition, confined HTTP server factory, and nested security
+  guidance. Read `apps/ingest/AGENTS.md` before editing it.
 - `contracts/v1/` contains canonical public JSON Schemas; `contracts/generated/` contains
   drift-checked derivatives.
 - `packages/contracts/` contains generated TypeScript types plus the bounded runtime validator and
@@ -65,8 +67,8 @@ are present in the working tree.
   persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
-- The HTTP Ingest listener, authentication application code, and connector workspaces are not
-  present yet; follow `docs/PROJECT_PLAN.md` when they are introduced.
+- The Ingest host/port/TLS deployment entry point, authentication application code, and connector
+  workspaces are not present yet; follow `docs/PROJECT_PLAN.md` when they are introduced.
 
 ## Verified commands
 

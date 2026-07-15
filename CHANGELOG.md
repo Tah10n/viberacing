@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and nineteen accepted ADRs.
+  fail-closed compatibility policy and matrix, and twenty accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -88,8 +88,19 @@ Versioning where its guarantees are applicable.
   request ID, composes the protected-key verifier with the same bounded replay/device/submission
   database adapter, waits for settlement, and returns only a contract-validated acknowledgement or
   generic problem decision. Fifty-four new adversarial and production-path composition cases bring
-  the Ingest suite to 317 tests at 100% statement/branch/function/line coverage; no HTTP listener,
-  working database login, edge deployment, log sink, rate control, or real-user sync is implied.
+  the Ingest suite to 317 tests at 100% statement/branch/function/line coverage; this layer itself
+  creates no HTTP object or socket, and no working database login, edge deployment, log sink, rate
+  control, or real-user sync is implied.
+- A bounded local Fastify 5.10.0 Community sync server factory confined to one Ingest module. It
+  preserves copied raw body/header evidence, disables proxy and inbound request-ID trust plus
+  framework logging, exposes only exact `POST /v1/community/sync` with closed 404/405/406 handling,
+  sheds load after four unsettled application calls without a queue, applies explicit body/header/
+  connection/socket-reuse and 5/33/34-second request/handler/connection limits, and emits only
+  revalidated `no-store`, no-CORS acknowledgement/problem contracts. Real loopback framing plus
+  adversarial injection cases bring the Ingest suite to 425 tests at 100% coverage. The manifest now
+  generates both public GET and POST OpenAPI operations and binds the sync authentication policy
+  into its digest. This does not add a host/port/TLS entry point, edge signer, direct-origin denial,
+  live database credential, monitoring, load evidence, connector, or deployment.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { communitySyncHttpPolicy } from "./community-sync-http-server.js";
 import {
   canonicalTimestampMilliseconds,
   communitySyncMediaType,
@@ -69,6 +70,25 @@ describe("canonical Community sync protocol", () => {
       canonicalMessageTrailingSeparator: false,
       binaryEncoding: "base64url-unpadded",
       digestEncoding: "base64url-unpadded",
+      httpTransport: {
+        framework: communitySyncHttpPolicy.framework,
+        admissionMode: communitySyncHttpPolicy.admissionMode,
+        admissionLimit: communitySyncHttpPolicy.admissionLimit,
+        maximumHeaderBytes: communitySyncHttpPolicy.maximumHeaderBytes,
+        maximumConnections: communitySyncHttpPolicy.maximumConnections,
+        maximumRequestsPerSocket: communitySyncHttpPolicy.maximumRequestsPerSocket,
+        requestTimeoutMilliseconds: communitySyncHttpPolicy.requestTimeoutMs,
+        handlerTimeoutMilliseconds: communitySyncHttpPolicy.handlerTimeoutMs,
+        connectionTimeoutMilliseconds: communitySyncHttpPolicy.connectionTimeoutMs,
+        keepAliveTimeoutMilliseconds: communitySyncHttpPolicy.keepAliveTimeoutMs,
+        trustProxy: communitySyncHttpPolicy.trustProxy,
+        forwardedHeadersTrusted: communitySyncHttpPolicy.forwardedHeadersTrusted,
+        inboundRequestIdAccepted: communitySyncHttpPolicy.inboundRequestIdAccepted,
+        requestLogging: communitySyncHttpPolicy.requestLogging,
+        acceptPolicy: communitySyncHttpPolicy.acceptPolicy,
+        cacheControl: communitySyncHttpPolicy.cacheControl,
+        corsPolicy: communitySyncHttpPolicy.corsPolicy,
+      },
       originProof: {
         messagePrefix: originProofMessagePrefix,
         algorithm: "HMAC-SHA-256",

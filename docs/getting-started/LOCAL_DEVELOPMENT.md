@@ -6,21 +6,25 @@ The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phas
 and twelve Phase 2/3 database-foundation migrations. Everything runnable uses synthetic data only.
 It has procedure-only identity, passkey login/management, restricted recovery, pairing, and
 source/device lifecycle database capabilities plus Community ingest, retention cleanup, scoring, and
-terminal finalization and public score-projection procedures, but no authentication or recovery
-application code, OAuth/Argon2id/WebAuthn or pairing-possession verifier, Jobs scheduler, real-user
-ingestion, audited correction, or connector. A local Ingest kernel bounds and authenticates a
-synthetic exact-body sync request, and a separate adapter constrains origin replay, database lookup,
-and submission mapping with mock-pool evidence. A transport-free application composes those exact
-boundaries, generates a server request ID, and validates the acknowledgement/problem decision;
-isolated PostgreSQL tests separately prove atomic replay and cleanup. They have no HTTP listener,
-working database login/certificate, live end-to-end PostgreSQL flow, edge path, or deployment. A
-bounded local one-shot Jobs process now wraps only cleanup/refresh/finalization, but has no live
-login, scheduler, monitor, or deployment. A bounded server-only Web PostgreSQL adapter and local
-public-score GET are implemented and unit/build-tested, but this repository supplies no working
-deployment login or TLS certificate. A successful setup proves repository gates, synthetic frontend
-behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
-lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
-deployed API, or production flow.
+terminal finalization and public score-projection procedures, but no browser/session authentication
+or recovery application code, OAuth/Argon2id/WebAuthn or pairing-possession verifier, Jobs
+scheduler, real-user ingestion, audited correction, or connector. A local Ingest kernel bounds and
+authenticates a synthetic exact-body sync request, and a separate adapter constrains origin replay,
+database lookup, and submission mapping with mock-pool evidence. A transport-free application
+composes those exact boundaries, generates a server request ID, and validates the
+acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic replay and
+cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies no-queue and
+deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS launch entry
+point. There is no working database login/certificate, live end-to-end PostgreSQL flow, edge path,
+connector, or deployment. A bounded local one-shot Jobs process now wraps only
+cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A bounded
+server-only Web PostgreSQL adapter and local public-score GET are implemented and unit/build-tested,
+but this repository supplies no working deployment login or TLS certificate. A successful setup
+proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
+session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
+does not prove a live adapter, deployed API, or production flow. The Ingest server tests bind only
+ephemeral loopback sockets and use synthetic requests; no development command exposes it to the LAN
+or Internet.
 
 ## Prerequisites
 
@@ -93,9 +97,9 @@ pnpm run test:contracts:coverage
 
 Run `pnpm run generate:contracts` only after intentionally changing a canonical file or manifest
 operation under `contracts/v1/`; review both generated diffs and their source digest. The generated
-OpenAPI document contains one path marked `implemented-local`. The corresponding dynamic Next.js
-route has request/response and build evidence, but no working database login is tracked and no
-deployment exists merely because the local route is documented.
+OpenAPI document contains two paths marked `implemented-local`. The corresponding dynamic Next.js
+GET and bounded Ingest POST have request/response and build evidence, but no working database login
+is tracked and no deployment exists merely because the local operations are documented.
 
 Ingest-focused commands use only synthetic key material, injected capabilities, and mock database
 pools:
@@ -109,10 +113,11 @@ pnpm run build:ingest
 
 They verify protected primary/secondary origin-key parsing, the raw-envelope/origin/parser/contract/
 device kernel, and redacted database config, fixed SQL, role/session probe, mapper, result, and
-failure boundaries. They do not open a database connection or HTTP endpoint. Do not supply a real
-edge key, public key, signature, nonce, usage payload, database credential, or captured request. See
-[`apps/ingest/README.md`](../../apps/ingest/README.md) for the exact boundary and remaining
-integration work.
+failure boundaries. They do not open a database connection or persistent/external HTTP endpoint;
+some transport tests bind an ephemeral loopback socket and close it within the case. Do not supply a
+real edge key, public key, signature, nonce, usage payload, database credential, or captured
+request. See [`apps/ingest/README.md`](../../apps/ingest/README.md) for the exact boundary and
+remaining integration work.
 
 Jobs-focused commands use injected synthetic results and never need a database credential:
 

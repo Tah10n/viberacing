@@ -11,6 +11,13 @@ const checker = resolve(import.meta.dirname, "check-contracts.mjs");
 const temporaryRoot = mkdtempSync(join(tmpdir(), "viberacing-contract-check-"));
 let caseCount = 0;
 const implementedLocalEvidencePaths = [
+  "apps/ingest/src/community-sync-admission.test.ts",
+  "apps/ingest/src/community-sync-admission.ts",
+  "apps/ingest/src/community-sync-application.test.ts",
+  "apps/ingest/src/community-sync-application.ts",
+  "apps/ingest/src/community-sync-http-server-contract-failure.test.ts",
+  "apps/ingest/src/community-sync-http-server.test.ts",
+  "apps/ingest/src/community-sync-http-server.ts",
   "apps/web/app/v1/community/scores/route.test.ts",
   "apps/web/app/v1/community/scores/route.ts",
   "apps/web/lib/public-community-score-route.test.ts",
@@ -62,7 +69,7 @@ async function expectPass(name) {
   assert.equal(result.status, 0, result.output);
 }
 
-async function expectGeneratedPublicScoreOperation(name) {
+async function expectGeneratedPublicOperations(name) {
   caseCount += 1;
   const root = await makeFixture(name);
   const document = JSON.parse(
@@ -70,17 +77,22 @@ async function expectGeneratedPublicScoreOperation(name) {
   );
   assert.equal(document["x-viberacing-status"], "implemented-local");
   assert.equal(Object.hasOwn(document, "servers"), false);
-  assert.deepEqual(Object.keys(document.paths), ["/v1/community/scores"]);
+  assert.deepEqual(Object.keys(document.paths), ["/v1/community/scores", "/v1/community/sync"]);
 
   const operation = document.paths["/v1/community/scores"].get;
   assert.equal(operation.operationId, "getCommunityScoresV1");
   assert.equal(operation["x-viberacing-status"], "implemented-local");
   assert.equal(operation["x-viberacing-cache-policy"], "no-store");
   assert.equal(operation["x-viberacing-cors-policy"], "same-origin");
+  assert.equal(operation["x-viberacing-admission-policy"], "no-queue-4");
+  assert.equal(operation["x-viberacing-authentication-contract"], "none");
   assert.deepEqual(operation["x-viberacing-query-contract"], {
     $ref: "#/components/schemas/CommunityScoreQueryV1",
   });
   assert.equal(operation["x-viberacing-query-policy"], "closed-single-value");
+  assert.equal(operation["x-viberacing-request-body-policy"], "none");
+  assert.equal(operation["x-viberacing-request-contract"], "none");
+  assert.equal(Object.hasOwn(operation, "requestBody"), false);
   assert.deepEqual(
     operation.parameters.map(({ in: location, name, required }) => ({
       location,
@@ -105,6 +117,54 @@ async function expectGeneratedPublicScoreOperation(name) {
       $ref: "#/components/schemas/ProblemDetailsV1",
     });
   }
+
+  const syncOperation = document.paths["/v1/community/sync"].post;
+  assert.equal(syncOperation.operationId, "postCommunitySyncV1");
+  assert.equal(syncOperation["x-viberacing-status"], "implemented-local");
+  assert.equal(syncOperation["x-viberacing-admission-policy"], "no-queue-4");
+  assert.equal(
+    syncOperation["x-viberacing-authentication-contract"],
+    "contracts/v1/connector-sync-authentication.json",
+  );
+  assert.equal(syncOperation["x-viberacing-cache-policy"], "no-store");
+  assert.equal(syncOperation["x-viberacing-cors-policy"], "same-origin");
+  assert.equal(syncOperation["x-viberacing-query-contract"], "none");
+  assert.equal(syncOperation["x-viberacing-query-policy"], "none");
+  assert.equal(syncOperation["x-viberacing-request-body-policy"], "exact-raw-json-8192");
+  assert.deepEqual(syncOperation["x-viberacing-request-contract"], {
+    $ref: "#/components/schemas/ConnectorSyncV1",
+  });
+  assert.equal(Object.hasOwn(syncOperation, "parameters"), false);
+  assert.equal(Object.hasOwn(syncOperation, "security"), false);
+  assert.equal(syncOperation.requestBody.required, true);
+  assert.deepEqual(syncOperation.requestBody.content["application/json"].schema, {
+    $ref: "#/components/schemas/ConnectorSyncV1",
+  });
+  assert.deepEqual(Object.keys(syncOperation.responses), [
+    "200",
+    "400",
+    "401",
+    "405",
+    "406",
+    "422",
+    "500",
+    "503",
+  ]);
+  assert.deepEqual(syncOperation.responses["200"].content["application/json"].schema, {
+    $ref: "#/components/schemas/ConnectorSyncResultV1",
+  });
+  assert.equal(syncOperation.responses["405"].headers.Allow.schema.const, "POST");
+  for (const response of Object.values(syncOperation.responses)) {
+    assert.equal(response.headers["Cache-Control"].schema.const, "no-store");
+    assert.equal(response.headers.Vary.schema.const, "Accept");
+    assert.equal(response.headers["x-request-id"].schema.pattern, "^req_[A-Za-z0-9_-]{22}$");
+    assert.equal(Object.hasOwn(response.headers, "Access-Control-Allow-Origin"), false);
+  }
+  for (const status of ["400", "401", "405", "406", "422", "500", "503"]) {
+    assert.deepEqual(syncOperation.responses[status].content["application/problem+json"].schema, {
+      $ref: "#/components/schemas/ProblemDetailsV1",
+    });
+  }
 }
 
 async function expectFailure(name, mutate, expected) {
@@ -123,7 +183,7 @@ function readSchema(root, file) {
 
 try {
   await expectPass("valid");
-  await expectGeneratedPublicScoreOperation("generated-public-score-operation");
+  await expectGeneratedPublicOperations("generated-public-operations");
   await expectFailure(
     "unknown-fields",
     (root) => {
@@ -336,6 +396,26 @@ try {
     /contract operation 1 has unsafe names or shape/,
   );
   await expectFailure(
+    "unsafe-request-body-policy",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.operations[1].requestBodyPolicy = "unbounded-json";
+      writeJson(path, manifest);
+    },
+    /contract operation 2 has unsafe names or shape/,
+  );
+  await expectFailure(
+    "unknown-request-schema",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.operations[1].requestSchema = "MissingRequestV1";
+      writeJson(path, manifest);
+    },
+    /contract operation 2 references invalid schemas/,
+  );
+  await expectFailure(
     "unsafe-implementation-status",
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
@@ -353,6 +433,13 @@ try {
     /implemented-local contract evidence is missing/,
   );
   await expectFailure(
+    "missing-sync-implementation-evidence",
+    (root) => {
+      rmSync(resolve(root, "apps", "ingest", "src", "community-sync-http-server.ts"));
+    },
+    /implemented-local contract evidence is missing/,
+  );
+  await expectFailure(
     "get-problem-status-drift",
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
@@ -361,6 +448,26 @@ try {
       writeJson(path, manifest);
     },
     /public Community score operation differs from the reviewed HTTP contract/,
+  );
+  await expectFailure(
+    "post-problem-status-drift",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.operations[1].problemStatuses = [400, 401, 405, 406, 422, 429, 500, 503];
+      writeJson(path, manifest);
+    },
+    /Community sync operation differs from the reviewed HTTP contract/,
+  );
+  await expectFailure(
+    "authentication-contract-digest-drift",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "connector-sync-authentication.json");
+      const policy = JSON.parse(readFileSync(path, "utf8"));
+      policy.maximumBodyBytes = 4096;
+      writeJson(path, policy);
+    },
+    /generated contract artifact has drifted/,
   );
   await expectFailure(
     "generated-drift",

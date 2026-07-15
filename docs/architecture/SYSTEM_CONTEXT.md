@@ -4,8 +4,9 @@
 
 This is the planned runtime architecture. The current repository contains a tested SQL persistence
 foundation, one local public-score route, one local one-shot Jobs runner, and local Ingest
-request-verification plus PostgreSQL-adapter boundaries, but no complete application service,
-connector, Cloudflare/Railway deployment, or production database. Component status is tracked in
+request-verification, PostgreSQL-adapter, application-composition, and bounded HTTP-server
+boundaries, but no deployed application service, connector, Cloudflare/Railway deployment, or
+production database. Component status is tracked in
 [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
 not deployed evidence.
 
@@ -101,11 +102,13 @@ per-checkout Ingest role/login/search-path verification, closed device/submissio
 parameters, and destructive failure release. ADR 0017 adds an exact primary/secondary origin-key
 reader and config-backed verifier factory without exposing a reusable key container. ADR 0018 adds
 persistent atomic origin replay, and ADR 0019 composes the same replay/device/submission adapter
-behind one transport-free validated application decision. The HTTP listener, live
-secret-manager/edge key injection, working deployment login/certificate, composed live end-to-end
-flow, socket deadlines/admission/backpressure, Cloudflare/Railway path, connector, Jobs
-scheduler/monitoring, public cache, and audited correction authority shown in the design remain
-planned.
+behind one transport-free validated application decision. ADR 0020 adds one confined Fastify server
+factory with exact raw-body/header preservation, closed POST/error serialization, local
+connection/deadline bounds, four-call no-queue admission, and no proxy/request-ID trust. The
+host/port/TLS deployment entry point, live secret-manager/edge key injection, working deployment
+login/certificate, composed live end-to-end flow, distributed rate/backpressure and capacity
+evidence, Cloudflare/Railway path, connector, Jobs scheduler/monitoring, public cache, and audited
+correction authority shown in the design remain planned.
 
 ## Component responsibilities
 

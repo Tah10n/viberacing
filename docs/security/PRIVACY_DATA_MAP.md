@@ -3,11 +3,11 @@
 ## Status and principles
 
 The current repository contains a private SQL schema, synthetic PostgreSQL integration test, local
-Community sync verification kernel, and mock-pool database adapter, but no deployed application
-database, user accounts, production service, connector, or real user data. This document remains the
-required inventory for implementation. A field may not be collected merely because it appears here:
-its schema, purpose, visibility, retention, deletion, and access tests must exist first. The
-implemented column-level mapping is documented in
+Community sync verification kernel, mock-pool database adapter, and bounded local HTTP server
+factory, but no deployed application database, user accounts, production service, connector, or real
+user data. This document remains the required inventory for implementation. A field may not be
+collected merely because it appears here: its schema, purpose, visibility, retention, deletion, and
+access tests must exist first. The implemented column-level mapping is documented in
 [`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
@@ -132,6 +132,19 @@ the validated application body, accepts no inbound correlation value, and retain
 log, metric, cache, analytics, export, HTTP header, or database field for the ID or decision. A
 future transport or monitoring sink must map its exact access and bounded retention before
 collection.
+
+ADR 0020 adds no retained field, record, or diagnostic sink. The local Fastify factory transiently
+copies the existing Usage body, required Security headers, and bounded Operational transport headers
+into the verifier without parsing and serializing signed content again. Unrecognized header values
+are treated as Prohibited input and discarded after bounded validation. Framework logging is
+disabled; the server does not retain or log the body, headers, URL, forwarded address, user agent,
+proof, nonce, signature, public key, sync ID, or framework error. Proxy trust and inbound request
+IDs are disabled. A transport-only failure creates the same Operational 128-bit request ID class,
+returns it only in the bounded problem body/header, and discards it. Success/problem serialization
+adds no cookie, CORS grant, cache, analytics, metric, export, database column, or new network
+destination. Loopback and injection tests use synthetic values only. A future listener entry point,
+access log, metric, trace, proxy signal, or monitoring backend requires a separate mapped purpose,
+access policy, and retention decision before collection.
 
 Revision 0008 adds deletion evidence for only those raw nonce and snapshot rows: a Jobs-only
 procedure derives cutoff time on the server, deletes bounded expired batches, cascades raw entries,
@@ -301,11 +314,13 @@ The server-only problem factory and local score route create a new 128-bit opaqu
 return it in the bounded body/header without accepting an inbound correlation value or retaining a
 copy. The transport-free Ingest application independently creates the same contract shape and
 returns it only in its validated body decision; its configuration reader, kernel, database adapter,
-and composer have no request-ID or log sink. Future operational logs may use stable event names,
-those request IDs, coarse outcomes, and bounded numeric metrics. They omit raw URLs, request bodies,
-raw token values, handles when not needed, OAuth/passkey material, device public
-keys/signatures/nonces, origin keys/proofs/nonces, idempotency keys, recovery
-selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
+and composer have no request-ID or log sink. The local Ingest HTTP boundary returns that application
+ID or a newly generated generic transport-problem ID in the bounded body/header, disables Fastify
+logging, rejects inbound correlation values, and retains no copy. Future operational logs may use
+stable event names, those request IDs, coarse outcomes, and bounded numeric metrics only after a
+retention review. They omit raw URLs, request bodies, raw token values, handles when not needed,
+OAuth/passkey material, device public keys/signatures/nonces, origin keys/proofs/nonces, idempotency
+keys, recovery selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
 
 Connector telemetry is off by default. A future diagnostic export is local, explicit, redacted,
 previewed before sharing, and generated from an allowlist. Public issue forms do not request raw

@@ -76,8 +76,8 @@ pnpm run dev:web
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.
 
-В репозитории уже есть пять закрытых JSON Schemas, генерируемые TypeScript validators и один
-локально реализованный OpenAPI GET: sync request/result, bounded problem details, запрос одного
+В репозитории уже есть пять закрытых JSON Schemas, генерируемые TypeScript validators и локально
+реализованные OpenAPI GET и POST: sync request/result, bounded problem details, запрос одного
 Community season и response-only top-32 Community score page с неизменяемыми
 `community`/`selfReported` trust fields. Server-only fail-closed mapper преобразует в этот response
 только точную десятиколоночную SQL projection и отклоняет malformed, inconsistent, oversized или
@@ -105,9 +105,14 @@ origin key ID, domain-separated nonce digest и millisecond expiry; Ingest-only 
 consume-ит tuple, а observed race доказывает одного победителя. Transport-free application boundary
 теперь генерирует server-owned request ID, связывает этот replay/device/submission adapter с точным
 verifier, дожидается settlement базы и возвращает только валидированный acknowledgement либо generic
-problem decision. HTTP listener, live protected key injection, HTTP serialization/header policy,
-no-queue admission, socket/backpressure controls, connector, live database connection и deployment
-всё ещё отсутствуют.
+problem decision. Отдельная локальная Fastify server factory сохраняет точные raw body/header
+evidence для `POST /v1/community/sync`, не доверяет proxy headers и входящему request ID, без
+очереди допускает четыре application call, ограничивает parser/headers/connections и задаёт
+5/33/34-second request/handler/connection deadlines, после чего сериализует только повторно
+проверенные `no-store` success/problem contracts. Есть loopback и injection evidence, но нет
+deployment entry point. Live protected key injection, edge signer, direct-origin denial,
+host/port/TLS configuration, distributed rate policy, monitoring, connector, live database
+connection, load evidence и deployment всё ещё отсутствуют.
 
 Также добавлены двенадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
@@ -130,21 +135,22 @@ bounded active-profile score rows без raw values, private IDs и exact timest
 идентификатор Codex-аккаунта не читаются и не сохраняются. Response schema фиксирует тот же public
 allowlist, а server-only mapper, bounded Web PostgreSQL adapter и локальный score route проверяют
 форму, season/rank invariants, database role и contract до сериализации, но route не подключён к
-видимой synthetic странице. HTTP auth/recovery routes, OAuth callback, Argon2id/WebAuthn/Ed25519
-verifier, generic response и edge rate limits для анонимных challenges и recovery lookup пока
-отсутствуют. Database-only Community ingest capability уже выдаёт минимальный материал активного
-устройства и принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic
-source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure независимо
-удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots, сохраняя current
-source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup, scoring refresh
-или finalization через отдельный least-privileged config, single-client pool, проверку
-role/login/search path, fixed deadlines, prepared parameters, closed result validation и стабильный
-non-reflective CLI output. Сама база не проверяет wire signature; kernel и adapter ещё не объединены
-за HTTP boundary и не проверены через реальный PostgreSQL login. HTTP ingest route,
-pairing-possession verifier, connector, cleanup/scoring scheduler, live Ingest/Jobs login/TLS
-integration, monitoring backend, deployed public score read, audited correction flow, purge worker и
-deployed database ещё не реализованы, поэтому готовой пользовательской авторизации, публичного
-рейтинга и приёма реальных данных пока нет.
+видимой synthetic странице. HTTP login/recovery routes, OAuth callback, Argon2id/WebAuthn и
+pairing-possession verifier, generic auth-response translation и edge rate limits для анонимных
+challenges и recovery lookup пока отсутствуют. Database-only Community ingest capability уже выдаёт
+минимальный материал активного устройства и принимает bounded source-bound snapshots с exact retry,
+nonce replay, monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only
+procedure независимо удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots,
+сохраняя current source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup,
+scoring refresh или finalization через отдельный least-privileged config, single-client pool,
+проверку role/login/search path, fixed deadlines, prepared parameters, closed result validation и
+стабильный non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel,
+adapter и application объединены на synthetic/mock-pool evidence, а Fastify boundary отдельно
+проверена через injection/loopback с mock application. Полный HTTP-to-PostgreSQL path не проверен
+через реальный login. Deployed HTTP ingest route, pairing-possession verifier, connector,
+cleanup/scoring scheduler, live Ingest/Jobs login/TLS integration, monitoring backend, deployed
+public score read, audited correction flow, purge worker и deployed database ещё не реализованы,
+поэтому готовой пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

@@ -150,9 +150,12 @@ flowchart LR
   PostgreSQL adapter, a protected exact two-key origin configuration reader, and an atomic
   PostgreSQL origin-replay capability. A transport-free application boundary now composes those
   exact capabilities, generates one server request ID, waits for database settlement, and validates
-  a closed acknowledgement or generic problem decision. The listener, secret-manager/edge key
-  injection, HTTP serialization/headers, admission/socket-deadline/backpressure controls, live
-  login/certificate, end-to-end integration, and deployment remain separate gates.
+  a closed acknowledgement or generic problem decision. A separate bounded Fastify factory now
+  preserves exact raw HTTP evidence, enforces local parser/header/connection/deadline and four-call
+  no-queue policies, rejects proxy/request-ID trust, and serializes only revalidated contracts. The
+  host/port/TLS entry point, secret-manager/edge key injection, direct-origin denial, distributed
+  rate/backpressure controls, live login/certificate, capacity evidence, end-to-end integration, and
+  deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
   The first local runner now wraps only the reviewed Community cleanup/refresh/finalization
   procedures; scheduling, deletion purge, monitoring, live credentials, and deployment remain
@@ -412,8 +415,11 @@ factory that constructs the verifier without returning raw configuration. ADR 00
 forced-RLS origin replay tuple, atomic Ingest-only consume, Jobs cleanup extension, and strict local
 adapter mapping. ADR 0019 composes one configured database boundary with that verifier, generates a
 server-owned request ID, waits for submission, and validates only the closed result/problem
-contracts. None is an HTTP endpoint, live secret-manager/edge integration, working database
-login/TLS connection, connector, edge path, or deployment.
+contracts. ADR 0020 adds the local exact Fastify POST boundary with copied raw bytes/headers,
+no-queue admission, fixed connection and deadline budgets, no proxy/request-ID trust, and closed
+contract serialization. It is not a host/port/TLS deployment entry point, live secret-manager/edge
+integration, working database login/TLS connection, connector, edge path, capacity result, or
+deployment.
 
 ### Storage
 

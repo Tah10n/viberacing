@@ -10,6 +10,7 @@ dependency.
 | Component                                                    | Purpose                     | Declared license |
 | ------------------------------------------------------------ | --------------------------- | ---------------- |
 | [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) | Strict Ed25519 verification | MIT              |
+| [Fastify](https://github.com/fastify/fastify)                | Bounded Ingest HTTP server  | MIT              |
 | [next](https://github.com/vercel/next.js)                    | Web application framework   | MIT              |
 | [pg](https://github.com/brianc/node-postgres)                | PostgreSQL client and pool  | MIT              |
 | [React](https://github.com/facebook/react)                   | User-interface runtime      | MIT              |

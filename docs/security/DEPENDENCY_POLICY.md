@@ -9,10 +9,10 @@ checks when they are clear and maintainable.
 Mature frameworks and analysis tools are used only where their maintained behavior materially
 reduces project risk. The current deliberate set includes Next.js and React for the web runtime,
 `@noble/ed25519` for one strict server-side device-signature check, `pg` for three narrow
-server-side PostgreSQL adapters, and CSpell, TypeScript, ESLint, Vitest, jsdom, and axe-core for
-offline verification. Every direct package is exact-pinned, installs without lifecycle scripts, and
-is represented with its complete transitive graph in the dependency inventory. Pull-request CI is
-secretless.
+server-side PostgreSQL adapters, Fastify for one confined Ingest HTTP server factory, and CSpell,
+TypeScript, ESLint, Vitest, jsdom, and axe-core for offline verification. Every direct package is
+exact-pinned, installs without lifecycle scripts, and is represented with its complete transitive
+graph in the dependency inventory. Pull-request CI is secretless.
 
 The project does not auto-merge dependency updates. A green dependency pull request still requires
 human review of purpose, provenance, release history, permissions, transitive changes, and license.
@@ -58,6 +58,19 @@ maintenance, and advisory state were reviewed under ADRs 0011, 0014, and 0016. A
 importer changes no package version or transitive node. An update requires renewed
 source/release/advisory/license/script/transitive review plus all role, query, result, timeout, and
 failure-isolation regressions.
+
+`fastify@5.10.0` is the only direct HTTP server framework. It is confined to the private Ingest
+workspace and one reviewed server module; effective lint policy rejects Fastify imports, re-exports,
+dynamic imports, and CommonJS access elsewhere. The server registers only the exact Community sync
+POST and its closed method/not-found handling, disables framework logging and inbound request IDs,
+does not trust proxy headers, preserves the raw body and raw header sequence, and applies bounded
+parser, request, handler, keep-alive, socket-reuse, connection, header, and no-queue admission
+policies. Its exact official-registry integrity, MIT license, supported Node runtime, release
+recency and maintenance state as reviewed on 2026-07-15, security guidance, complete 42-package
+added graph, absence of lifecycle/native build scripts, and online advisory result were reviewed
+under ADR 0020. The added declarations are MIT or BSD-3-Clause. An update requires renewed
+source/release/security/license/script/transitive review plus the raw-framing, proxy, timeout,
+overload, generic-error, response-contract, and production-build regressions.
 
 `config/license-policy.json` is a reviewed allowlist of the license expressions currently present;
 it is not a general statement that a license is suitable for every future distribution. The checker

@@ -30,18 +30,40 @@
   ],
   "operations": [
     {
-      "method": "get",
-      "path": "/v1/community/scores",
-      "operationId": "getCommunityScoresV1",
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "none",
+      "cacheControl": "no-store",
+      "corsPolicy": "same-origin",
       "implementationStatus": "implemented-local",
-      "summary": "Read one bounded Community score page",
-      "querySchema": "CommunityScoreQueryV1",
-      "responseSchema": "CommunityScorePageV1",
+      "method": "get",
+      "operationId": "getCommunityScoresV1",
+      "path": "/v1/community/scores",
       "problemSchema": "ProblemDetailsV1",
       "problemStatuses": [400, 406, 429, 500, 503],
       "queryPolicy": "closed-single-value",
+      "querySchema": "CommunityScoreQueryV1",
+      "requestBodyPolicy": "none",
+      "requestSchema": "none",
+      "responseSchema": "CommunityScorePageV1",
+      "summary": "Read one bounded Community score page"
+    },
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "connector-sync-authentication.json",
       "cacheControl": "no-store",
-      "corsPolicy": "same-origin"
+      "corsPolicy": "same-origin",
+      "implementationStatus": "implemented-local",
+      "method": "post",
+      "operationId": "postCommunitySyncV1",
+      "path": "/v1/community/sync",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 401, 405, 406, 422, 500, 503],
+      "queryPolicy": "none",
+      "querySchema": "none",
+      "requestBodyPolicy": "exact-raw-json-8192",
+      "requestSchema": "ConnectorSyncV1",
+      "responseSchema": "ConnectorSyncResultV1",
+      "summary": "Submit one bounded Community usage snapshot"
     }
   ]
 }

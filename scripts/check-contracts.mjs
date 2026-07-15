@@ -121,14 +121,31 @@ const publicProblemTitles = [
   "Unauthorized",
   "Validation failed",
 ];
-const implementedLocalEvidencePaths = [
-  "apps/web/app/v1/community/scores/route.test.ts",
-  "apps/web/app/v1/community/scores/route.ts",
-  "apps/web/lib/public-community-score-route.test.ts",
-  "apps/web/lib/public-community-score-route.ts",
-  "apps/web/lib/public-score-admission.test.ts",
-  "apps/web/lib/public-score-admission.ts",
-];
+const implementedLocalEvidencePaths = new Map([
+  [
+    "getCommunityScoresV1",
+    [
+      "apps/web/app/v1/community/scores/route.test.ts",
+      "apps/web/app/v1/community/scores/route.ts",
+      "apps/web/lib/public-community-score-route.test.ts",
+      "apps/web/lib/public-community-score-route.ts",
+      "apps/web/lib/public-score-admission.test.ts",
+      "apps/web/lib/public-score-admission.ts",
+    ],
+  ],
+  [
+    "postCommunitySyncV1",
+    [
+      "apps/ingest/src/community-sync-admission.test.ts",
+      "apps/ingest/src/community-sync-admission.ts",
+      "apps/ingest/src/community-sync-application.test.ts",
+      "apps/ingest/src/community-sync-application.ts",
+      "apps/ingest/src/community-sync-http-server-contract-failure.test.ts",
+      "apps/ingest/src/community-sync-http-server.test.ts",
+      "apps/ingest/src/community-sync-http-server.ts",
+    ],
+  ],
+]);
 
 function report(scope, message) {
   findings.push(`${scope} — ${message}`);
@@ -532,17 +549,21 @@ if (sources !== undefined) {
 
   const publicScoreOperation = operations[0];
   if (
-    operations.length !== 1 ||
+    operations.length !== 2 ||
     publicScoreOperation?.entry.method !== "get" ||
     publicScoreOperation.entry.path !== "/v1/community/scores" ||
     publicScoreOperation.entry.operationId !== "getCommunityScoresV1" ||
     publicScoreOperation.entry.implementationStatus !== "implemented-local" ||
     publicScoreOperation.entry.summary !== "Read one bounded Community score page" ||
+    publicScoreOperation.entry.admissionPolicy !== "no-queue-4" ||
+    publicScoreOperation.entry.authenticationContract !== "none" ||
     publicScoreOperation.entry.querySchema !== "CommunityScoreQueryV1" ||
+    publicScoreOperation.entry.requestSchema !== "none" ||
     publicScoreOperation.entry.responseSchema !== "CommunityScorePageV1" ||
     publicScoreOperation.entry.problemSchema !== "ProblemDetailsV1" ||
     !sameEntries(publicScoreOperation.entry.problemStatuses, [400, 406, 429, 500, 503]) ||
     publicScoreOperation.entry.queryPolicy !== "closed-single-value" ||
+    publicScoreOperation.entry.requestBodyPolicy !== "none" ||
     publicScoreOperation.entry.cacheControl !== "no-store" ||
     publicScoreOperation.entry.corsPolicy !== "same-origin"
   ) {
@@ -551,8 +572,49 @@ if (sources !== undefined) {
       "public Community score operation differs from the reviewed HTTP contract",
     );
   }
-  if (publicScoreOperation?.entry.implementationStatus === "implemented-local") {
-    for (const relativePath of implementedLocalEvidencePaths) {
+
+  const communitySyncOperation = operations[1];
+  if (
+    operations.length !== 2 ||
+    communitySyncOperation?.entry.method !== "post" ||
+    communitySyncOperation.entry.path !== "/v1/community/sync" ||
+    communitySyncOperation.entry.operationId !== "postCommunitySyncV1" ||
+    communitySyncOperation.entry.implementationStatus !== "implemented-local" ||
+    communitySyncOperation.entry.summary !== "Submit one bounded Community usage snapshot" ||
+    communitySyncOperation.entry.admissionPolicy !== "no-queue-4" ||
+    communitySyncOperation.entry.authenticationContract !== "connector-sync-authentication.json" ||
+    communitySyncOperation.entry.querySchema !== "none" ||
+    communitySyncOperation.entry.requestSchema !== "ConnectorSyncV1" ||
+    communitySyncOperation.entry.responseSchema !== "ConnectorSyncResultV1" ||
+    communitySyncOperation.entry.problemSchema !== "ProblemDetailsV1" ||
+    !sameEntries(
+      communitySyncOperation.entry.problemStatuses,
+      [400, 401, 405, 406, 422, 500, 503],
+    ) ||
+    communitySyncOperation.entry.queryPolicy !== "none" ||
+    communitySyncOperation.entry.requestBodyPolicy !== "exact-raw-json-8192" ||
+    communitySyncOperation.entry.cacheControl !== "no-store" ||
+    communitySyncOperation.entry.corsPolicy !== "same-origin"
+  ) {
+    report(
+      "contracts/v1/manifest.json",
+      "Community sync operation differs from the reviewed HTTP contract",
+    );
+  }
+
+  for (const operation of operations) {
+    if (operation.entry.implementationStatus !== "implemented-local") {
+      continue;
+    }
+    const evidencePaths = implementedLocalEvidencePaths.get(operation.entry.operationId);
+    if (evidencePaths === undefined) {
+      report(
+        "contracts/v1/manifest.json",
+        `implemented-local operation ${operation.entry.operationId} has no evidence policy`,
+      );
+      continue;
+    }
+    for (const relativePath of evidencePaths) {
       const absolutePath = resolve(root, relativePath);
       if (!existsSync(absolutePath)) {
         report(relativePath, "implemented-local contract evidence is missing");
@@ -601,5 +663,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Contract check passed (${String(sources.records.length)} schemas, ${String(sources.operations.length)} operation, 2 generated artifacts).`,
+  `Contract check passed (${String(sources.records.length)} schemas, ${String(sources.operations.length)} operations, 2 generated artifacts).`,
 );

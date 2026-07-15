@@ -21,6 +21,14 @@ export {
   type ConfiguredCommunitySyncApplication,
 } from "./community-sync-application.js";
 export {
+  CommunitySyncHttpServerError,
+  communitySyncHttpPolicy,
+  createCommunitySyncHttpServer,
+  type CommunitySyncHttpApplication,
+  type CommunitySyncHttpProblemKind,
+  type CommunitySyncHttpServerErrorCode,
+} from "./community-sync-http-server.js";
+export {
   CommunitySyncDatabaseError,
   createCloseableCommunitySyncDatabase,
   createCommunitySyncDatabase,

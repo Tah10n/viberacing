@@ -38,16 +38,79 @@ export default defineConfig([
         "error",
         {
           paths: [
-            { name: "fastify", message: "The current Ingest slice must not own an HTTP server." },
+            {
+              name: "fastify",
+              message: "Only community-sync-http-server.ts may own the Fastify boundary.",
+            },
             {
               name: "node:http",
-              message: "The current Ingest slice must not own an HTTP server.",
+              message: "Only community-sync-http-server.ts may own the HTTP server boundary.",
             },
             {
               name: "node:https",
-              message: "The current Ingest slice must not own an HTTP server.",
+              message: "TLS termination remains outside the local Ingest server factory.",
             },
           ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/community-sync-http-server.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "node:http",
+              message: "The Fastify boundary must own HTTP server construction.",
+            },
+            {
+              name: "node:https",
+              message: "TLS termination remains outside the local Ingest server factory.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportDeclaration[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ImportExpression[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ExportNamedDeclaration[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ExportAllDeclaration[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "MemberExpression[object.name='process'][property.name='env']",
+          message: "Only database-config.ts may read environment configuration.",
+        },
+        {
+          selector: "MemberExpression[object.name='process'][computed=true][property.value='env']",
+          message: "Only database-config.ts may read environment configuration.",
+        },
+        {
+          selector: "ImportExpression[source.value=/^(node:http|node:https)$/]",
+          message: "The Fastify boundary must not bypass its reviewed server construction.",
+        },
+        {
+          selector:
+            "CallExpression[callee.name='require'][arguments.0.value=/^(node:http|node:https)$/]",
+          message: "The Fastify boundary must not bypass its reviewed server construction.",
         },
       ],
     },
@@ -93,7 +156,12 @@ export default defineConfig([
         },
         {
           selector: "ImportExpression[source.value=/^(fastify|node:http|node:https)$/]",
-          message: "The current Ingest slice must not own an HTTP server.",
+          message: "Only community-sync-http-server.ts may own the HTTP server boundary.",
+        },
+        {
+          selector:
+            "CallExpression[callee.name='require'][arguments.0.value=/^(fastify|node:http|node:https)$/]",
+          message: "Only community-sync-http-server.ts may own the HTTP server boundary.",
         },
       ],
     },
@@ -113,7 +181,12 @@ export default defineConfig([
         },
         {
           selector: "ImportExpression[source.value=/^(fastify|node:http|node:https)$/]",
-          message: "The current Ingest slice must not own an HTTP server.",
+          message: "Only community-sync-http-server.ts may own the HTTP server boundary.",
+        },
+        {
+          selector:
+            "CallExpression[callee.name='require'][arguments.0.value=/^(fastify|node:http|node:https)$/]",
+          message: "Only community-sync-http-server.ts may own the HTTP server boundary.",
         },
       ],
     },
@@ -145,7 +218,12 @@ export default defineConfig([
         },
         {
           selector: "ImportExpression[source.value=/^(fastify|node:http|node:https)$/]",
-          message: "The current Ingest slice must not own an HTTP server.",
+          message: "Only community-sync-http-server.ts may own the HTTP server boundary.",
+        },
+        {
+          selector:
+            "CallExpression[callee.name='require'][arguments.0.value=/^(fastify|node:http|node:https)$/]",
+          message: "Only community-sync-http-server.ts may own the HTTP server boundary.",
         },
       ],
     },
@@ -177,7 +255,12 @@ export default defineConfig([
         },
         {
           selector: "ImportExpression[source.value=/^(fastify|node:http|node:https)$/]",
-          message: "The current Ingest slice must not own an HTTP server.",
+          message: "Only community-sync-http-server.ts may own the HTTP server boundary.",
+        },
+        {
+          selector:
+            "CallExpression[callee.name='require'][arguments.0.value=/^(fastify|node:http|node:https)$/]",
+          message: "Only community-sync-http-server.ts may own the HTTP server boundary.",
         },
       ],
     },

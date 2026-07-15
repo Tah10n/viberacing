@@ -325,10 +325,11 @@ material availability cost.
   and has no default or checked-in value. A forced-RLS table now stores only its key-bound digest
   and expiry; one Ingest-only function atomically consumes or replaces an expired tuple, an ordered
   race yields one fresh result, and Jobs can delete bounded expired tuples. Cloudflare signing,
-  secret-manager/edge key injection, Railway direct-origin denial, trusted forwarding, HTTP
-  transport composition, and production cleanup scheduling remain unimplemented. The local
-  transport-free composer already binds the same replay/device/submission adapter and maps origin
-  rejection to one generic unauthorized decision.
+  secret-manager/edge key injection, Railway direct-origin denial, trusted forwarding, and
+  production cleanup scheduling remain unimplemented. The local Fastify boundary preserves the exact
+  body/header evidence, sets proxy trust to false, ignores inbound request IDs, and returns only
+  generic contract-validated errors. The transport-free composer binds the same replay/device/
+  submission adapter and maps origin rejection to one generic unauthorized decision.
 - **Residual risk:** Infrastructure metadata exposure can increase probing but must not be the only
   protection.
 
@@ -399,12 +400,15 @@ material availability cost.
   hosted secret scanning.
 - **Recovery:** Close the contribution, rotate any exposed credential, remove the dependency,
   invalidate affected artifacts, and audit protected history.
-- **Current evidence:** The exact `pg`, type-package, and `@noble/ed25519` versions, complete
-  transitive graph, declared licenses, registry integrity metadata, direct notices, absence of
-  install lifecycle scripts, and optional native peer were reviewed; deterministic inventory/license
-  gates pass. The Ed25519 package is confined to one strict verification call, has no dependencies,
-  and is regression-tested against the native zero-key/zero-signature gap. The registry advisory
-  audit reported no known vulnerability at review time.
+- **Current evidence:** The exact `pg`, Fastify, type-package, and `@noble/ed25519` versions,
+  complete transitive graph, declared licenses, registry integrity metadata, direct notices, absence
+  of install lifecycle scripts, and optional native peer were reviewed; deterministic
+  inventory/license gates pass. The Ed25519 package is confined to one strict verification call, has
+  no dependencies, and is regression-tested against the native zero-key/zero-signature gap. The
+  registry advisory audit reported no known vulnerability at review time. Fastify 5.10.0 is confined
+  to one Ingest server file; its 42 added MIT/BSD-3-Clause package records have no lifecycle or
+  native build scripts, and import-boundary plus transport regressions prevent an unreviewed second
+  listener.
 - **Residual risk:** A malicious change can modify its own tests; test success never authorizes
   merge or release by itself.
 
@@ -480,15 +484,20 @@ material availability cost.
   and returns 503 on exhaustion. The operation reserves a 429 response without claiming a
   client-rate limiter exists. The local Jobs runner adds a one-client ceiling, 2/31/32-second
   connect/server/client deadlines, one fixed 1000-row cleanup command, canonical season validation,
-  closed one-row results, and destructive release on failure. The kernel has no socket/stream
-  timeout, admission ceiling, or backpressure. The separate Ingest adapter adds a four-client
-  ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime recycling, exact
-  one-row origin consume, zero-or-one device lookup, and one-row submission results, with
-  destructive release on failure. The transport-free application generates request correlation
-  before verification, submits only after verification, waits for settlement, and contains
-  dependency failures without a retry loop. There is no live login, HTTP no-queue admission, or
-  combined capacity evidence. Scheduling, cache, scoring/read capacity evidence, quotas, edge
-  shaping, and production load evidence remain unimplemented.
+  closed one-row results, and destructive release on failure. The kernel itself has no socket/
+  stream authority. The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
+  checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row origin consume,
+  zero-or-one device lookup, and one-row submission results, with destructive release on failure.
+  The transport-free application generates request correlation before verification, submits only
+  after verification, waits for settlement, and contains dependency failures without a retry loop.
+  The local Fastify boundary caps the raw body at 8192 bytes, parsed headers at 16384 bytes, raw
+  header pairs at 64, connections at 32, and requests per socket at 16; it sets 5/33/34-second
+  request/handler/connection deadlines and a five-second keep-alive, admits four unsettled
+  application calls without a queue, holds each lease through settlement, and returns generic 503 on
+  exhaustion. Real loopback tests close malformed and partial requests; injection tests cover
+  overload and response policy. There is no live login, distributed rate/backpressure policy,
+  monitoring, or combined capacity evidence. Scheduling, cache, scoring/read capacity evidence,
+  quotas, edge shaping, and production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

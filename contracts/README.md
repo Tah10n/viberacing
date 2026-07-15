@@ -1,13 +1,14 @@
 # Public protocol contracts
 
 This directory is the language-neutral source of truth for Vibe Racing wire shapes. The current
-files establish request and response boundaries plus one locally implemented public score operation;
-revision 0007 maps the bounded Community sync into a database-only procedure and revision 0011
-provides a database-only score projection. A local pure Ingest kernel now authenticates and parses
-the exact bounded sync request, a separate local adapter constrains its PostgreSQL mapping, and a
-transport-free application boundary composes them into validated result/problem decisions. No
-connector, HTTP ingest listener, deployed endpoint, working database credential, or composed live
-flow exists.
+files establish request and response boundaries plus locally implemented public score and sync
+operations; revision 0007 maps the bounded Community sync into a database-only procedure and
+revision 0011 provides a database-only score projection. A local pure Ingest kernel now
+authenticates and parses the exact bounded sync request, a separate local adapter constrains its
+PostgreSQL mapping, and a transport-free application boundary composes them into validated
+result/problem decisions. A separate bounded Fastify server factory now preserves the exact raw
+request and serializes only those validated decisions. No connector, deployed endpoint, working
+database credential, edge signer, host/port/TLS entry point, or composed live flow exists.
 
 ## Canonical version 1 schemas
 
@@ -24,10 +25,11 @@ flow exists.
   moderation state, account email, prompt, repository, credential, or server receipt time.
 - [`connector-sync-authentication.json`](v1/connector-sync-authentication.json) fixes the exact
   method, target, media type, raw body/header/JSON budgets, required headers, canonical base64url
-  and timestamp encodings, and LF-separated origin/device proof messages. The local Ingest verifier
-  binds both proofs to SHA-256 of the exact received body, rejects duplicate headers and decoded
-  JSON keys, consumes a fresh origin nonce before body parsing or device lookup, validates
-  `ConnectorSyncV1`, and verifies the source-bound signature under strict RFC 8032/FIPS semantics.
+  and timestamp encodings, LF-separated origin/device proof messages, and bounded local HTTP
+  transport policy. The local Ingest verifier binds both proofs to SHA-256 of the exact received
+  body, rejects duplicate headers and decoded JSON keys, consumes a fresh origin nonce before body
+  parsing or device lookup, validates `ConnectorSyncV1`, and verifies the source-bound signature
+  under strict RFC 8032/FIPS semantics.
 - [`ConnectorSyncResultV1`](v1/connector-sync-result.schema.json) acknowledges accepted, duplicate,
   or quarantined input without returning a private anomaly reason. The local Ingest application now
   reconstructs and validates this body only after verification and database settlement.
@@ -37,8 +39,9 @@ flow exists.
   status/title/retry mapping, validates the complete body, and emits `no-store`
   `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
 - [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
-  type/export names, and the locally implemented `GET /v1/community/scores` operation with exact
-  query, response, problem, cache, same-origin CORS, and repository-status policies.
+  type/export names, and the locally implemented `GET /v1/community/scores` and
+  `POST /v1/community/sync` operations with method-specific query/body, response, problem, no-queue,
+  authentication, cache, same-origin CORS, and repository-status policies.
 
 Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
 timestamp is bounded. Reviewed date-range and ISO-weekday extensions make the score season boundary
@@ -56,8 +59,8 @@ trust fields exist only in the response component and never become writable conn
 
 `node scripts/generate-contracts.mjs` deterministically creates:
 
-- [`openapi.v1.json`](generated/openapi.v1.json), which exposes one locally implemented score path
-  and explicitly states that repository implementation does not prove deployment;
+- [`openapi.v1.json`](generated/openapi.v1.json), which documents the two locally implemented HTTP
+  operations and explicitly states that repository implementation does not prove deployment;
 - [`packages/contracts/src/generated.ts`](../packages/contracts/src/generated.ts), containing
   readonly TypeScript shapes, embedded schemas, source digest, and validator wrappers.
 
@@ -77,14 +80,15 @@ generated file to make a check pass.
    consumers reject unknown response fields, so do not silently expand or reinterpret an existing
    shape.
 
-The local Ingest kernel enforces the content type, raw envelope/parser budgets, duplicate object-key
-rejection, exact-body proofs, generated contract, and strict device signature before returning a
-frozen allowlist. A protected local factory supplies only one exact primary and optional secondary
-origin-key pair to that verifier; no real key or deployment binding is present. The local
-application composer binds the persistent replay/device/submission adapter, generates one request
-ID, and validates the closed success/problem decision. A future HTTP wrapper must preserve the exact
-raw bytes and duplicate raw headers when constructing that envelope and must add socket/stream
-limits, trusted-proxy handling, deadlines, no-queue admission, backpressure, serialization/header
-policy, and rate controls. It may use only the existing application composition through a
-deployment-provisioned Ingest login and verified TLS. Runtime parsing budgets do not replace those
-transport, edge, or database constraints.
+The local Ingest server preserves the exact body bytes and duplicate raw-header evidence, enforces
+socket/parser/header/connection/time/admission bounds, rejects proxy and inbound request-ID trust,
+and serializes only revalidated `no-store` success/problem contracts. The Ingest kernel enforces the
+content type, raw envelope/parser budgets, duplicate object-key rejection, exact-body proofs,
+generated contract, and strict device signature before returning a frozen allowlist. A protected
+local factory supplies only one exact primary and optional secondary origin-key pair to that
+verifier; no real key or deployment binding is present. The local application composer binds the
+persistent replay/device/submission adapter, generates one request ID, and validates the closed
+success/problem decision. A future deployment entry point may use only this server/application
+composition through a deployment-provisioned Ingest login and verified TLS. The local transport
+bounds one process but does not replace edge rate shaping, direct-origin denial, distributed
+backpressure, capacity testing, monitoring, or database constraints.

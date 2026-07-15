@@ -10,17 +10,19 @@ immediate deletion lock-down, source-bound pairing, source/device lifecycle cont
 ingest, bounded ingest-retention cleanup, open-season scoring refresh, late-ingest closure, terminal
 season finalization, and a Web-only public score projection. One local public-score GET constructs
 the bounded adapter lazily after closed request admission. One local one-shot Jobs runner can invoke
-only cleanup, refresh, or finalization, but no authentication/ingest endpoint, OAuth callback,
-Argon2id/WebAuthn or pairing-possession application verifier, connector, purge worker, Jobs
-scheduler/monitor, audited correction, or deployed service executes the complete sequences. A local
-Ingest kernel now verifies the bounded exact-body origin/device request, while the separate adapter
-maps origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic
-origin replay consumption and bounded cleanup. A transport-free application now composes those exact
-local capabilities and validates only closed acknowledgement/problem decisions. There is no HTTP or
-live database/deployment integration. No deployment login, certificate, edge policy, or live
-route/Jobs evidence is supplied. Data labels refer to the classifications in the
-[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
-and Prohibited.
+only cleanup, refresh, or finalization, but no browser/session authentication or deployed ingest
+endpoint, OAuth callback, Argon2id/WebAuthn or pairing-possession application verifier, connector,
+purge worker, Jobs scheduler/monitor, audited correction, or deployed service executes the complete
+sequences. A local Ingest kernel now verifies the bounded exact-body origin/device request, while
+the separate adapter maps origin replay, device lookup, and submission through fixed calls.
+PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
+application now composes those exact local capabilities and validates only closed
+acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
+no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
+certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
+refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public,
+Account, Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -304,9 +306,16 @@ server-generated request ID correlates only a validated `ConnectorSyncResultV1` 
 `ProblemDetailsV1` decision. A signed synthetic request exercises that production code order with a
 mock pool. No inbound ID, private anomaly reason, callback error, or submitted field is reflected.
 
-The connector, edge, Ingest HTTP service, live secret-manager/edge key injection, live PostgreSQL
-login/TLS connection, HTTP acknowledgement serialization/headers, rate controls, socket deadlines,
-no-queue admission, backpressure, and load evidence are still absent. Revisions 0008 and 0012 give
+ADR 0020 adds the local HTTP step shown in the sequence. One confined Fastify server accepts only
+the exact sync POST, copies the raw body/header evidence into ADR 0019, disables proxy and inbound
+request-ID trust plus framework logging, bounds body/header/connection/socket/time work, and admits
+four unsettled application calls without a queue. It revalidates every application decision and
+returns only generic `no-store` acknowledgement/problem contracts. Real loopback tests exercise
+malformed framing and partial sockets; injection tests exercise route, overload, and serialization.
+
+The connector, edge signer, direct-origin denial, host/port/TLS Ingest deployment entry point, live
+secret-manager/edge key injection, live PostgreSQL login/TLS connection, distributed rate/
+backpressure controls, monitoring, and load evidence are still absent. Revisions 0008 and 0012 give
 Jobs a server-time, 1-to-1000 batch procedure for expired origin nonces, device nonces, and raw
 snapshots. It serializes callers, caps each class independently, cascades raw entries, preserves
 current source/day values, and clears only their deleted raw reference. The expiry columns still do

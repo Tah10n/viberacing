@@ -8,7 +8,9 @@ Ed25519 device signature. The database adapter can atomically consume that origi
 device lookup, and submit only the verified allowlist through least-privileged PostgreSQL
 procedures. A transport-free application boundary composes those exact capabilities, creates one
 server-owned request ID before verification, waits for submission settlement, and returns only a
-validated `ConnectorSyncResultV1` or generic `ProblemDetailsV1` decision.
+validated `ConnectorSyncResultV1` or generic `ProblemDetailsV1` decision. A separate Fastify server
+factory now exposes that application through one bounded local HTTP operation without adding a
+deployment entry point.
 
 The language-neutral wire policy is
 [`contracts/v1/connector-sync-authentication.json`](../../contracts/v1/connector-sync-authentication.json).
@@ -41,12 +43,29 @@ non-reflective internal problem. Accepted, duplicate, and quarantined acknowledg
 the request ID, sync ID, coarse outcome, and accepted count. The application creates no `Response`,
 HTTP header, socket, log, cache, or retained request-ID copy.
 
-The current application tests use synthetic keys and mock pools; one signed request exercises the
-actual verifier and database adapter together, while the isolated PostgreSQL suite separately proves
-persistent atomic consume and cleanup races. This workspace has no HTTP listener, live protected key
-injection, HTTP acknowledgement serialization, socket deadline, no-queue admission, backpressure,
-monitoring backend, working database login/certificate, live PostgreSQL connection, connector, edge
-path, or deployment. It therefore does not prove real-user synchronization or production capacity.
+The HTTP factory registers only exact `POST /v1/community/sync` plus closed 404/405 handling. It
+removes default content parsers, accepts at most 8192 raw JSON bytes, and gives the verifier a copy
+of those exact bytes and the original raw-header sequence. It does not trust forwarded headers or an
+inbound request ID, disables framework logging, admits four unsettled application calls without a
+queue, and binds 5/33/34-second request/handler/connection deadlines, 32 connections, 16 requests
+per socket, 16384 parsed header bytes, and 64 raw header pairs. A bounded JSON `Accept` grammar,
+same-origin/no-CORS posture, `no-store`, `Vary: Accept`, `nosniff`, generic errors, CSPRNG request
+IDs, and final generated-contract validation apply before serialization. Malformed HTTP framing uses
+the same generic problem shape or closes the socket if safe serialization is impossible.
+
+The canonical manifest and generated OpenAPI describe this implemented-local POST alongside the
+public score GET. They bind the exact request/result/problem schemas, problem matrix, no-queue
+policy, and `connector-sync-authentication.json`; documentation does not imply deployment.
+
+The current tests use synthetic keys and mock pools; one signed request exercises the actual
+verifier and database adapter together, while the isolated PostgreSQL suite separately proves
+persistent atomic consume and cleanup races. Loopback socket tests prove malformed framing,
+duplicate-header evidence, and partial-request closure; injection tests prove the remaining route,
+overload, timeout policy, and serialization behavior. The 425-test Ingest suite has 100% statement,
+branch, function, and line coverage. There is still no live protected key injection, edge signer,
+direct-origin denial, trusted deployment route, host/port/TLS entry point, monitoring backend,
+working database login/certificate, live PostgreSQL connection, connector, load/capacity evidence,
+or deployment. It therefore does not prove real-user synchronization or production capacity.
 
 Run from the repository root:
 

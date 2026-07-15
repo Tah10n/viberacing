@@ -1,6 +1,6 @@
 # ADR 0019: Bounded Community sync application composition
 
-- Status: Accepted (local application boundary; HTTP/live pending)
+- Status: Accepted (local application boundary; consumed by ADR 0020)
 - Date: 2026-07-15
 - Decision owners: Ingest, API, Database, Security, Privacy, Contracts, and Operations
 - Supersedes: None
@@ -148,6 +148,7 @@ capacity, connector behavior, or real-user synchronization.
 
 ## References
 
+- [Follow-on Fastify HTTP boundary](0020-bounded-community-sync-fastify-http-boundary.md)
 - [Community sync verification kernel](0015-bounded-community-sync-verification-kernel.md)
 - [Bounded Ingest PostgreSQL adapter](0016-bounded-ingest-postgresql-adapter.md)
 - [Protected origin key configuration](0017-protected-ingest-origin-key-configuration.md)

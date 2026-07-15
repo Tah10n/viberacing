@@ -28,6 +28,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0017](0017-protected-ingest-origin-key-configuration.md)      | Protected two-key Ingest origin proof configuration                 | Accepted; local reader; deployment pending          |
 | [0018](0018-persistent-ingest-origin-replay-store.md)          | Persistent atomic Ingest origin replay consumption                  | Accepted; database and local adapter implemented    |
 | [0019](0019-bounded-community-sync-application-composition.md) | Bounded Community sync application composition                      | Accepted; local application boundary implemented    |
+| [0020](0020-bounded-community-sync-fastify-http-boundary.md)   | Bounded Community sync Fastify HTTP boundary                        | Accepted; local server; deployment pending          |
 
 ## Lifecycle
 
