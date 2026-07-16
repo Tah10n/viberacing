@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 41
+    SELECT pg_catalog.count(*) = 42
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 5
+    SELECT pg_catalog.count(*) = 6
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -69,6 +69,7 @@ SELECT pg_temp.assert_true(
       AND procedure.proname IN (
         'consume_origin_nonce',
         'cleanup_expired_ingest_state',
+        'cleanup_expired_pairing_state',
         'refresh_community_season',
         'finalize_community_season',
         'submit_community_sync'
@@ -79,7 +80,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 4
+    SELECT pg_catalog.count(*) = 5
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -88,6 +89,7 @@ SELECT pg_temp.assert_true(
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.proname IN (
         'cleanup_expired_ingest_state',
+        'cleanup_expired_pairing_state',
         'submit_community_sync',
         'refresh_community_season',
         'finalize_community_season'
@@ -163,6 +165,7 @@ SELECT pg_temp.assert_true(
           'read_device_verification_material',
           'submit_community_sync',
           'cleanup_expired_ingest_state',
+          'cleanup_expired_pairing_state',
           'refresh_community_season',
           'finalize_community_season'
         )
@@ -197,6 +200,7 @@ SELECT pg_temp.assert_true(
       = (
         procedure.proname IN (
           'cleanup_expired_ingest_state',
+          'cleanup_expired_pairing_state',
           'refresh_community_season',
           'finalize_community_season'
         )

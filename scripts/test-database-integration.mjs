@@ -84,7 +84,11 @@ function psqlScalar(sql, label) {
   return result.stdout.trim();
 }
 
-function startPsql(sql, readyMarker, { keepStdinOpen = false } = {}) {
+function startPsql(
+  sql,
+  readyMarker,
+  { diagnosticName = "concurrent PostgreSQL command", keepStdinOpen = false } = {},
+) {
   let stdout = "";
   let stderr = "";
   let readySettled = false;
@@ -110,7 +114,7 @@ function startPsql(sql, readyMarker, { keepStdinOpen = false } = {}) {
       windowsHide: true,
     });
     const timeout = setTimeout(() => {
-      const error = new Error("concurrent PostgreSQL command exceeded 30 seconds");
+      const error = new Error(`${diagnosticName} exceeded 30 seconds`);
       child.kill();
       if (!readySettled) {
         readySettled = true;
@@ -232,6 +236,7 @@ async function runObservedRace(
   const holderName = `${racePrefix}-holder`;
   const contenderNames = contenderSql.map((_, index) => `${racePrefix}-contender-${index + 1}`);
   const lockHolder = startPsql(withApplicationName(holderName, lockSql), readyMarker, {
+    diagnosticName: `${label} lock holder`,
     keepStdinOpen: true,
   });
   const contenders = [];
@@ -240,7 +245,11 @@ async function runObservedRace(
   try {
     await lockHolder.ready;
     for (const [index, sql] of contenderSql.entries()) {
-      contenders.push(startPsql(withApplicationName(contenderNames[index], sql)));
+      contenders.push(
+        startPsql(withApplicationName(contenderNames[index], sql), undefined, {
+          diagnosticName: `${label} contender ${index + 1}`,
+        }),
+      );
       if (orderedContenders) {
         await waitForBlockedContenders(
           `${label} ordered contender ${index + 1}`,
@@ -272,7 +281,8 @@ async function runObservedRace(
       lockHolder.completion,
       ...contenders.map(({ completion }) => completion),
     ]);
-    throw error;
+    const detail = error instanceof Error ? error.message : "unknown observed-race failure";
+    throw new Error(`${label} failed: ${detail}`, { cause: error });
   }
 }
 
@@ -437,6 +447,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/ingest_cleanup.sql"), "utf8"),
     },
     {
+      label: "pairing retention cleanup scenarios",
+      sql: readFileSync(resolve(root, "database/tests/pairing_cleanup.sql"), "utf8"),
+    },
+    {
       label: "Community open-season scoring scenarios",
       sql: readFileSync(resolve(root, "database/tests/season_scoring.sql"), "utf8"),
     },
@@ -468,6 +482,13 @@ try {
       sql: readFileSync(resolve(root, "database/tests/cleanup_concurrency_setup.sql"), "utf8"),
     },
     {
+      label: "pairing cleanup concurrency setup",
+      sql: readFileSync(
+        resolve(root, "database/tests/pairing_cleanup_concurrency_setup.sql"),
+        "utf8",
+      ),
+    },
+    {
       label: "Community scoring concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/scoring_concurrency_setup.sql"), "utf8"),
     },
@@ -495,6 +516,29 @@ try {
   for (const { sql, label } of databaseInputs) {
     requireSuccess(psql(sql), label);
   }
+
+  await expectConcurrentSuccesses(
+    "bounded pairing cleanup worker race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_expired_pairing_state(1);
+\\echo pairing-cleanup-worker-lock-ready`,
+    "pairing-cleanup-worker-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_expired_pairing_state(1);`,
+    ],
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/pairing_cleanup_concurrency_assertions.sql"),
+        "utf8",
+      ),
+    ),
+    "pairing cleanup concurrency assertions",
+  );
 
   await expectOneConcurrentWinner(
     "single invite enrollment race",

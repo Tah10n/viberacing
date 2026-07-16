@@ -20,6 +20,10 @@ export type CommunityMaintenanceJob =
       kind: "cleanup_expired_ingest_state";
     }>
   | Readonly<{
+      batchSize: number;
+      kind: "cleanup_expired_pairing_state";
+    }>
+  | Readonly<{
       kind: "finalize_community_season";
       seasonStart: string;
     }>
@@ -34,6 +38,11 @@ export type CommunityMaintenanceResult =
       deletedOriginNonces: number;
       deletedSnapshots: number;
       kind: "cleanup_expired_ingest_state";
+    }>
+  | Readonly<{
+      deletedPairings: number;
+      deletedPendingKeys: number;
+      kind: "cleanup_expired_pairing_state";
     }>
   | Readonly<{
       kind: "finalize_community_season";
@@ -122,7 +131,7 @@ function readJob(value: unknown): CommunityMaintenanceJob {
       fail("job_invalid");
     }
     const kind = ownDataValue(value, "kind");
-    if (kind === "cleanup_expired_ingest_state") {
+    if (kind === "cleanup_expired_ingest_state" || kind === "cleanup_expired_pairing_state") {
       if (!hasExactKeys(value, new Set(["batchSize", "kind"]))) {
         fail("job_invalid");
       }
@@ -211,6 +220,20 @@ function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaint
     });
   }
 
+  if (job.kind === "cleanup_expired_pairing_state") {
+    const row = readSingleRow(value, new Set(["deleted_pairings", "deleted_pending_keys"]));
+    const deletedPairings = readCount(row, "deleted_pairings", job.batchSize);
+    const deletedPendingKeys = readCount(row, "deleted_pending_keys", job.batchSize);
+    if (deletedPairings !== deletedPendingKeys) {
+      fail("result_invalid");
+    }
+    return Object.freeze({
+      deletedPairings,
+      deletedPendingKeys,
+      kind: job.kind,
+    });
+  }
+
   const row = readSingleRow(value, new Set(["profile_count"]));
   return Object.freeze({
     kind: job.kind,
@@ -241,6 +264,9 @@ function executeCapability(
 ): Promise<unknown> {
   if (job.kind === "cleanup_expired_ingest_state") {
     return client.cleanupExpiredIngestState(job.batchSize);
+  }
+  if (job.kind === "cleanup_expired_pairing_state") {
+    return client.cleanupExpiredPairingState(job.batchSize);
   }
   if (job.kind === "refresh_community_season") {
     return client.refreshCommunitySeason(job.seasonStart);

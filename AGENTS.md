@@ -22,43 +22,43 @@ The repository currently contains a public foundation, a synthetic web prototype
 Community score query/response contracts, locally implemented OpenAPI GET and POST operations, a
 bounded server-only PostgreSQL score adapter/mapper, a closed public problem-response factory and
 request/admission route, and procedure-only identity, passkey, restricted-recovery, pairing,
-source/device lifecycle, Community usage-ingest, Jobs-only ingest-retention, and open-season
+source/device lifecycle, Community usage-ingest, Jobs-only ingest/pairing retention, and open-season
 Community scoring plus terminal finalization and bounded public score-projection database slices. A
-local one-shot Jobs runner now invokes only those three reviewed maintenance functions through a
+local one-shot Jobs runner now invokes only those four reviewed maintenance functions through a
 probed least-privileged login contract. A local Ingest kernel bounds the raw sync envelope and
 parser, verifies an injected replay-consumed origin proof, validates the sync contract, and strictly
 verifies the source-bound device request. A protected local reader supplies one mandatory and one
 optional rotation proof key from exact namespaced configuration without returning a reusable key
 container. A separate bounded Ingest PostgreSQL adapter wraps only reviewed origin replay, device
 lookup, and submission procedures through a probed least-privileged login contract. A forced-RLS
-origin replay tuple and Jobs cleanup extension have isolated PostgreSQL evidence. A transport-free
-Ingest application boundary now composes those exact capabilities, generates one server request ID,
-and returns only a validated sync acknowledgement or generic problem decision. A confined Fastify
-server factory now preserves raw body/header evidence, applies no-queue/deadline policy, and
-serializes only revalidated sync contracts. The public score route and Ingest boundaries are locally
-verified but have no real proof key, secret-manager binding, live database login, host/port/TLS
-Ingest entry point, edge deployment, capacity evidence, or visible-component consumer. A
-library-only Rust connector foundation now implements a bounded stable App Server JSONL handshake
-and a candidate-only `0.144.4` account/usage parser with checked schema/fixture evidence. A one-shot
-supervisor composes that sequence with fixed local pipes, arguments, deadlines, output budgets,
-ambient-environment clearing, and reap-before-success behavior, but its reviewed-launch capability
-has no public constructor. An exact-body composer now consumes that minimized usage behind a second
-inaccessible reviewed context and fixes the versioned JSON/digest/LF message. An isolated one-use
-signer consumes that otherwise inaccessible material with a device-bound key capability that also
-has no public constructor, returning only the same body and five exact signed header values. A
-separate inaccessible pending-key/challenge signer and pure server-only Web verifier now agree on
-one exact synthetic pairing-possession proof. A dormant transport-free Web/Auth start application
-creates nine-minute pending transactions from closed device metadata with fresh server IDs, poll
-tokens, challenges, 60-bit human codes, and separate protected poll/code verifiers through the fixed
-read-write Web pool. A second dormant application performs protected poll lookup, runs the strict
-proof, and alone invokes exact activation with server-owned IDs behind fixed admission and timing.
-There is no executable discovery/admission, live Codex launch path, supported version, source/device
-context provider, key generation/store, browser approval/HTTP route or connector client, upload,
-CLI, or release. Do not claim that deployed browser/session HTTP authentication,
-OAuth/Argon2id/WebAuthn application verification, real-user ingestion, an operational connector, a
-Jobs scheduler or deployed public-race read, season correction, scheduled or broader cleanup,
-deployment, or a hosted security control exists until its implementation and verification are
-present in the working tree.
+origin replay tuple and separate Jobs ingest/pairing cleanup capabilities have isolated PostgreSQL
+evidence. A transport-free Ingest application boundary now composes those exact capabilities,
+generates one server request ID, and returns only a validated sync acknowledgement or generic
+problem decision. A confined Fastify server factory now preserves raw body/header evidence, applies
+no-queue/deadline policy, and serializes only revalidated sync contracts. The public score route and
+Ingest boundaries are locally verified but have no real proof key, secret-manager binding, live
+database login, host/port/TLS Ingest entry point, edge deployment, capacity evidence, or
+visible-component consumer. A library-only Rust connector foundation now implements a bounded stable
+App Server JSONL handshake and a candidate-only `0.144.4` account/usage parser with checked
+schema/fixture evidence. A one-shot supervisor composes that sequence with fixed local pipes,
+arguments, deadlines, output budgets, ambient-environment clearing, and reap-before-success
+behavior, but its reviewed-launch capability has no public constructor. An exact-body composer now
+consumes that minimized usage behind a second inaccessible reviewed context and fixes the versioned
+JSON/digest/LF message. An isolated one-use signer consumes that otherwise inaccessible material
+with a device-bound key capability that also has no public constructor, returning only the same body
+and five exact signed header values. A separate inaccessible pending-key/challenge signer and pure
+server-only Web verifier now agree on one exact synthetic pairing-possession proof. A dormant
+transport-free Web/Auth start application creates nine-minute pending transactions from closed
+device metadata with fresh server IDs, poll tokens, challenges, 60-bit human codes, and separate
+protected poll/code verifiers through the fixed read-write Web pool. A second dormant application
+performs protected poll lookup, runs the strict proof, and alone invokes exact activation with
+server-owned IDs behind fixed admission and timing. There is no executable discovery/admission, live
+Codex launch path, supported version, source/device context provider, key generation/store, browser
+approval/HTTP route or connector client, upload, CLI, or release. Do not claim that deployed
+browser/session HTTP authentication, OAuth/Argon2id/WebAuthn application verification, real-user
+ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
+correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
+implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -138,7 +138,7 @@ present in the working tree.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability
   policy. `pnpm run test:database:integration` separately uses an isolated, portless, ephemeral
   PostgreSQL Compose project to apply the reviewed manifest in order and exercise state constraints,
-  session-bound identity, source/device lifecycle, Community ingest, ingest-retention, and
+  session-bound identity, source/device lifecycle, Community ingest, ingest/pairing retention, and
   scoring/finalization/public-score procedures, observed identity/pairing/lifecycle/ingest/cleanup/
   scoring/finalization lock-wait races, rollback, and every current runtime deny matrix.
 - `git diff --cached --check` checks staged whitespace and conflict markers.

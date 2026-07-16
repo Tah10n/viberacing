@@ -162,9 +162,9 @@ flowchart LR
   rate/backpressure controls, live login/certificate, capacity evidence, end-to-end integration, and
   deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
-  The first local runner now wraps only the reviewed Community cleanup/refresh/finalization
-  procedures; scheduling, deletion purge, monitoring, live credentials, and deployment remain
-  separate gates.
+  The first local runner now wraps only the reviewed ingest cleanup, pairing cleanup, Community
+  refresh, and finalization procedures; scheduling, deletion purge, monitoring, live credentials,
+  and deployment remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.
@@ -237,7 +237,9 @@ public-key/device metadata enters, fresh server IDs, a 32-byte poll token and ch
 primary poll/code HMAC verifiers, a 60-bit human code, and a nine-minute expiry reach only the fixed
 `start_pairing` procedure. Malformed admitted input performs fixed-shape local work but no database
 write. This still provides no public request/response contract, connector client, browser approval,
-anonymous route, or distributed abuse control.
+anonymous route, or distributed abuse control. Revision 0013 and ADR 0029 add only the separate
+Jobs-side physical cleanup: at most 1000 expired non-activated transactions and exact pending keys
+per call, with activated and live state preserved. No scheduler or retention cadence exists.
 
 ### Date semantics
 
@@ -553,6 +555,11 @@ The transaction:
 Primary data is purged within the published service window. Backup expiry and any short-lived
 abuse-prevention tombstone are described honestly in the Privacy Policy. Restore procedures must not
 silently resurrect a deleted profile; deletion markers are replayed after recovery.
+
+Expired pairing transactions and their authority-free pending keys now have a separate bounded
+Jobs-only deletion capability and local one-shot command. This is isolated SQL/application evidence,
+not a production retention schedule; all other expiry classes still require their own reviewed
+cleanup and public policy.
 
 ## Administration and operations
 

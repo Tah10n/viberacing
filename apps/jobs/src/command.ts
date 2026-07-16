@@ -106,6 +106,12 @@ export function parseJobsCommand(value: unknown): CommunityMaintenanceJob {
       kind: "cleanup_expired_ingest_state",
     });
   }
+  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-pairing-state") {
+    return Object.freeze({
+      batchSize: maximumCleanupBatchSize,
+      kind: "cleanup_expired_pairing_state",
+    });
+  }
   if (argumentsValue.length !== 2) {
     fail();
   }

@@ -45,6 +45,11 @@ const cleanupQuery = `SELECT
   cleanup.deleted_snapshots AS deleted_snapshots
 FROM viberacing_api.cleanup_expired_ingest_state($1::integer) AS cleanup`;
 
+const pairingCleanupQuery = `SELECT
+  cleanup.deleted_pairings AS deleted_pairings,
+  cleanup.deleted_pending_keys AS deleted_pending_keys
+FROM viberacing_api.cleanup_expired_pairing_state($1::integer) AS cleanup`;
+
 const refreshQuery = `SELECT
   refresh.profile_count AS profile_count
 FROM viberacing_api.refresh_community_season($1::date) AS refresh`;
@@ -58,6 +63,7 @@ export type JobsDatabasePoolSignalSink = (signal: JobsDatabasePoolSignal) => Pro
 
 export interface JobsDatabaseClient {
   cleanupExpiredIngestState(batchSize: number): Promise<unknown>;
+  cleanupExpiredPairingState(batchSize: number): Promise<unknown>;
   finalizeCommunitySeason(seasonStart: string): Promise<unknown>;
   release(destroy?: boolean): void;
   refreshCommunitySeason(seasonStart: string): Promise<unknown>;
@@ -109,6 +115,9 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
   return Object.freeze({
     cleanupExpiredIngestState(batchSize: number): Promise<unknown> {
       return fixedQuery(cleanupQuery, [batchSize]);
+    },
+    cleanupExpiredPairingState(batchSize: number): Promise<unknown> {
+      return fixedQuery(pairingCleanupQuery, [batchSize]);
     },
     finalizeCommunitySeason(seasonStart: string): Promise<unknown> {
       return fixedQuery(finalizationQuery, [seasonStart]);

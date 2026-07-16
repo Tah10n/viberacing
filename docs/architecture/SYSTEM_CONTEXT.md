@@ -87,42 +87,47 @@ submission procedure and cannot edit profile, passkey, invite, admin, migration,
 state.
 
 Revision 0007 implements the database-only Usage submission capability; revision 0008 gives Jobs
-bounded expired ingest-state cleanup; revision 0009 gives Jobs an isolated open-season scoring
-refresh; and revision 0010 adds server-time late-ingest quarantine plus immutable Jobs-only
-finalization. Revision 0011 gives Web only a bounded, active-profile score projection, and ADR 0010
-adds its response-only top-32 contract. A server-only Web mapper now enforces the exact projection
-shape and its cross-row invariants before returning a validated frozen contract. ADR 0011 adds a
-bounded server-only PostgreSQL pool/config/store boundary around that read, including strict
-production TLS, fixed deadlines/query, and per-checkout effective-role and least-privileged-login
-verification. ADR 0013 adds a locally implemented request/admission/response route around it. These
-capabilities have role, contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a
-local one-shot Jobs adapter/CLI for only cleanup, refresh, and finalization, with its own role/login
-probe, one-client pool, and fixed deadlines. ADR 0015 adds a pure local Ingest kernel that bounds
-the raw envelope and JSON parser, verifies a replay-consumed body-bound origin proof before parsing,
-validates the sync contract, and verifies the exact source-bound device request under strict Ed25519
-semantics. ADR 0016 adds a fixed-query four-client PostgreSQL adapter with strict TLS/config,
-per-checkout Ingest role/login/search-path verification, closed device/submission mappers, copied
-parameters, and destructive failure release. ADR 0017 adds an exact primary/secondary origin-key
-reader and config-backed verifier factory without exposing a reusable key container. ADR 0018 adds
-persistent atomic origin replay, and ADR 0019 composes the same replay/device/submission adapter
-behind one transport-free validated application decision. ADR 0020 adds one confined Fastify server
-factory with exact raw-body/header preservation, closed POST/error serialization, local
-connection/deadline bounds, four-call no-queue admission, and no proxy/request-ID trust. The
-library-only ADR 0021 Rust foundation adds one bounded stable App Server JSONL initialization state
-machine and discards all server values. ADR 0022 adds the exact-version candidate account/usage
-adapter, and ADR 0023 composes both through a fixed, deadline/output-bounded, reap-before-success
-synthetic child supervisor. ADR 0024 adds a second inaccessible reviewed context and exact
-sync-body/digest/device-message composition shared with the Ingest verifier. ADR 0025 adds an
-isolated one-use signer behind a third inaccessible device-bound key capability and returns only the
-same body plus five signed header values. ADR 0026 adds an inaccessible pending-key/challenge signer
-and pure strict Web verifier for one exact pairing-possession message. No connector capability has a
-public constructor, so executable discovery/admission, official-artifact execution, context
-creation, key generation/storage, pairing transaction/poll/approval/activation composition,
-scheduling, upload, CLI, and release responsibilities remain absent. The host/port/TLS deployment
-entry point, live secret-manager/edge key injection, working deployment login/certificate, composed
-live end-to-end flow, distributed rate/backpressure and capacity evidence, Cloudflare/Railway path,
-operational connector, Jobs scheduler/monitoring, public cache, and audited correction authority
-shown in the design remain planned.
+bounded expired ingest-state cleanup; revision 0013 separately gives Jobs bounded expired
+non-activated pairing/key cleanup; revision 0009 gives Jobs an isolated open-season scoring refresh;
+and revision 0010 adds server-time late-ingest quarantine plus immutable Jobs-only finalization.
+Revision 0011 gives Web only a bounded, active-profile score projection, and ADR 0010 adds its
+response-only top-32 contract. A server-only Web mapper now enforces the exact projection shape and
+its cross-row invariants before returning a validated frozen contract. ADR 0011 adds a bounded
+server-only PostgreSQL pool/config/store boundary around that read, including strict production TLS,
+fixed deadlines/query, and per-checkout effective-role and least-privileged-login verification. ADR
+0013 adds a locally implemented request/admission/response route around it. These capabilities have
+role, contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a local one-shot
+Jobs adapter/CLI; ADR 0029 extends it to exactly two cleanup, one refresh, and one finalization
+command with the same role/login probe, one-client pool, and fixed deadlines. ADR 0015 adds a pure
+local Ingest kernel that bounds the raw envelope and JSON parser, verifies a replay-consumed
+body-bound origin proof before parsing, validates the sync contract, and verifies the exact
+source-bound device request under strict Ed25519 semantics. ADR 0016 adds a fixed-query four-client
+PostgreSQL adapter with strict TLS/config, per-checkout Ingest role/login/search-path verification,
+closed device/submission mappers, copied parameters, and destructive failure release. ADR 0017 adds
+an exact primary/secondary origin-key reader and config-backed verifier factory without exposing a
+reusable key container. ADR 0018 adds persistent atomic origin replay, and ADR 0019 composes the
+same replay/device/submission adapter behind one transport-free validated application decision. ADR
+0020 adds one confined Fastify server factory with exact raw-body/header preservation, closed
+POST/error serialization, local connection/deadline bounds, four-call no-queue admission, and no
+proxy/request-ID trust. The library-only ADR 0021 Rust foundation adds one bounded stable App Server
+JSONL initialization state machine and discards all server values. ADR 0022 adds the exact-version
+candidate account/usage adapter, and ADR 0023 composes both through a fixed,
+deadline/output-bounded, reap-before-success synthetic child supervisor. ADR 0024 adds a second
+inaccessible reviewed context and exact sync-body/digest/device-message composition shared with the
+Ingest verifier. ADR 0025 adds an isolated one-use signer behind a third inaccessible device-bound
+key capability and returns only the same body plus five signed header values. ADR 0026 adds an
+inaccessible pending-key/challenge signer and pure strict Web verifier for one exact
+pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed atomic
+activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
+material and one fixed database call; ADR 0029 supplies bounded Jobs-only physical cleanup after
+expiry. No connector capability has a public constructor, so executable discovery/admission,
+official-artifact execution, context creation, key generation/store, connector pairing client,
+browser/WebAuthn approval, pairing HTTP transport, scheduling, upload, CLI, and release
+responsibilities remain absent. The host/port/TLS deployment entry point, live secret-manager/edge
+key injection, working deployment login/certificate, composed live end-to-end flow, distributed
+rate/backpressure and capacity evidence, Cloudflare/Railway path, operational connector, Jobs
+scheduler/monitoring, public cache, and audited correction authority shown in the design remain
+planned.
 
 ## Component responsibilities
 

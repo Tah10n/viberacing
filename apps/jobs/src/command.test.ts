@@ -43,6 +43,10 @@ describe("Jobs command", () => {
   it.each([
     [["cleanup-expired-ingest-state"], { batchSize: 1_000, kind: "cleanup_expired_ingest_state" }],
     [
+      ["cleanup-expired-pairing-state"],
+      { batchSize: 1_000, kind: "cleanup_expired_pairing_state" },
+    ],
+    [
       ["refresh-community-season", "2026-07-13"],
       { kind: "refresh_community_season", seasonStart: "2026-07-13" },
     ],
@@ -61,6 +65,7 @@ describe("Jobs command", () => {
     {},
     [],
     ["cleanup-expired-ingest-state", "unexpected"],
+    ["cleanup-expired-pairing-state", "unexpected"],
     ["refresh-community-season", "2026-07-13", "unexpected"],
     ["refresh-community-season"],
     ["refresh-community-season", "2026-07-14"],

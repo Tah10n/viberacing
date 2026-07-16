@@ -1,6 +1,6 @@
 # ADR 0014: Bounded Community maintenance job runner
 
-- Status: Accepted (local one-shot runner implemented; scheduler and deployment pending)
+- Status: Accepted (local one-shot runner implemented; extended by ADR 0029; scheduler pending)
 - Date: 2026-07-15
 - Decision owners: Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
@@ -30,6 +30,10 @@ accepts exactly these command forms:
 - `refresh-community-season YYYY-MM-DD`; and
 - `finalize-community-season YYYY-MM-DD`.
 
+[ADR 0029](0029-bounded-pairing-retention-cleanup.md) later extends the current closed set with one
+fourth fixed command, `cleanup-expired-pairing-state`; it does not change this decision's pool,
+probe, output, or generic-query prohibitions.
+
 Season input must be one canonical Monday from `1999-12-27` through `2099-12-28`. Unknown commands,
 arguments, fields, sparse or exotic arrays, accessors, prototypes, and values fail before database
 configuration or connection. Programmatic job objects are separately revalidated as closed plain
@@ -51,12 +55,13 @@ Every checkout first verifies all of the following in one fixed query:
 - it has no other group membership; and
 - the search path is exactly `pg_catalog,pg_temp`.
 
-The second and only capability query is selected in code from the three fixed parameterized SQL
-strings. There is no generic query, table access, migration, owner, Web, Ingest, Admin, interactive
-auth, correction, or deletion capability. The returned array and row must contain exactly one plain
-dense row and the allowlisted integer columns. Cleanup counts cannot exceed the requested batch;
-scoring counts must fit PostgreSQL `integer`. Accessors, extra columns, missing rows, invalid
-counts, and driver/runtime exceptions produce one stable error type without reflecting values.
+The second and only capability query is selected in code from a closed set of four fixed
+parameterized SQL strings: the original three plus ADR 0029's pairing-retention cleanup. There is no
+generic query, table access, migration, owner, Web, Ingest, Admin, interactive auth, correction, or
+deletion capability. The returned array and row must contain exactly one plain dense row and the
+allowlisted integer columns. Cleanup counts cannot exceed the requested batch; scoring counts must
+fit PostgreSQL `integer`. Accessors, extra columns, missing rows, invalid counts, and driver/runtime
+exceptions produce one stable error type without reflecting values.
 
 The CLI prints only one stable success or failure sentence. It does not print the command, season,
 counts, configuration, SQL, exception, or stack. The pool monitoring seam accepts only the closed
@@ -83,7 +88,7 @@ Residual risk remains: no live login/certificate path or application-to-PostgreS
 proves deployment membership; no scheduler enforces cadence, backoff, overlap, or alerting; cleanup
 does not cover other expiring identity state; no correction or deletion purge worker exists; and no
 capacity test proves the selected deadlines under production load. A compromised Jobs login still
-has all three database capabilities, so principal separation and revocation remain required.
+has all four database capabilities, so principal separation and revocation remain required.
 
 Affected invariants are VR-PUBLIC-001, VR-INGEST-002, VR-ABUSE-001, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-SEASON-RACE, VR-ABUSE-DATABASE-ROLE,
@@ -131,16 +136,16 @@ Current local evidence includes:
 - canonical season and batch bounds, closed object/array/result allowlists, sparse/exotic/accessor/
   proxy rejection, aggregate count bounds, and non-reflective failures;
 - effective-role/login/capability/search-path rejection before every procedure call;
-- exact prepared parameters for all three functions, healthy versus destructive release, connection
+- exact prepared parameters for all four functions, healthy versus destructive release, connection
   and query translation, and a deferred query proving release occurs only after settlement;
 - CLI rejection before configuration, pool close after success or failure, stable output, writer
   failure containment, and no reflected command/error detail;
-- 94 unit tests with 100% statement, branch, function, and line coverage, including a lint-policy
+- 107 unit tests with 100% statement, branch, function, and line coverage, including a lint-policy
   regression that keeps direct `pg` imports inside the fixed pool adapter; and
 - strict lint, type checking, production TypeScript build, dependency/license inventory, root
   deterministic verification, and staged public-data review.
 
-The SQL integration suite separately proves the three procedure bodies and concurrency behavior in
+The SQL integration suite separately proves the four procedure bodies and concurrency behavior in
 ephemeral PostgreSQL. It does not exercise the Node adapter with a real Jobs login. Such an
 application integration test, scheduler behavior, production TLS/login, capacity, monitoring, and
 deployment evidence remain required before those behaviors may be claimed.
@@ -158,3 +163,4 @@ deployment evidence remain required before those behaviors may be claimed.
 - [Database capability boundary](../../database/README.md)
 - [Edge, service, and database isolation](0004-edge-service-and-database-isolation.md)
 - [Community season grace and finalization](0008-community-season-grace-and-finalization.md)
+- [Bounded pairing retention cleanup](0029-bounded-pairing-retention-cleanup.md)

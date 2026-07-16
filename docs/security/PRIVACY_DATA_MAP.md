@@ -5,13 +5,13 @@
 The current repository contains a private SQL schema, synthetic PostgreSQL integration test, local
 Community sync verification kernel, mock-pool database adapter, and bounded local HTTP server
 factory, plus library-only connector protocol/parser boundaries, a synthetic one-shot process
-supervisor, an exact-body composer, isolated pairing/request signers, and a pure Web pairing
-verifier plus dormant activation application behind closed boundaries, but no deployed application
-database, user accounts, production service, operational connector, or real user data. This document
-remains the required inventory for implementation. A field may not be collected merely because it
-appears here: its schema, purpose, visibility, retention, deletion, and access tests must exist
-first. The implemented column-level mapping is documented in
-[`database/README.md`](../../database/README.md#data-and-privacy-map).
+supervisor, an exact-body composer, isolated pairing/request signers, a pure Web pairing verifier,
+dormant pairing applications, and bounded database/local Jobs pairing cleanup behind closed
+boundaries, but no deployed application database, user accounts, production service, operational
+connector, or real user data. This document remains the required inventory for implementation. A
+field may not be collected merely because it appears here: its schema, purpose, visibility,
+retention, deletion, and access tests must exist first. The implemented column-level mapping is
+documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
 
@@ -58,10 +58,10 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Recovery-code selector and verifier                                        | Security                        | Web/Auth-generated; recover profile access                             | Web/Auth only; plaintext secret shown once to the user                    | Opaque selector and Argon2id PHC; protected pepper stays outside DB                                            | PHC scrubbed on use; batch removed on regeneration, completion, or deletion; cleanup before launch           |
 | Restricted recovery authority and registration binding                     | Security                        | Server; permit only exact replacement-passkey registration             | Web/Auth recovery procedure only                                          | Keyed verifier plus challenge/context digests and terminal lifecycle                                           | One-time, at most 10 minutes; terminal-row retention and cleanup are a launch decision required              |
 | Source ID, state, and source count                                         | Account; count is Public        | User-declared opaque CodexSource; isolate and explain aggregation      | User sees sources; public sees only contributing count for a season       | `codex_sources`, season snapshot                                                                               | Source lifecycle plus historical public count until profile deletion                                         |
-| Device public key, private signing key, and public device ID               | Security                        | Connector; authenticate one source-bound device                        | Public key to Ingest/inventory; private key only to local signer          | Public key/ID in `device_keys`; private key in reviewed OS store only, not implemented                         | Pending key becomes unusable at pairing expiry but needs cleanup; active key follows revoke/unlink/delete    |
-| Device label                                                               | Account                         | User or safe generated default; distinguish devices                    | User profile only after activation; pairing service while pending         | `device_keys` metadata                                                                                         | Pending label becomes unusable at pairing expiry but needs cleanup; active label follows device lifecycle    |
-| Connector, Codex, and OS-family versions                                   | Security; Operational           | Connector; compatibility and incident diagnosis                        | Pairing service while pending; user inventory after activation            | Device/sync metadata                                                                                           | Pending metadata becomes unusable at pairing expiry but needs cleanup; active history needs launch policy    |
-| Pairing poll token, HMAC keys/verifiers, challenge, user code, transaction | Security                        | Server/connector; poll safely and bind browser approval to one key     | Pairing service/application, connector memory, and browser confirmation   | Plain token/code returned once; separate keyed verifiers in DB; poll/code HMAC keys in protected configuration | Token/code plaintext never logged/persisted; local start expires in nine minutes; physical cleanup pending   |
+| Device public key, private signing key, and public device ID               | Security                        | Connector; authenticate one source-bound device                        | Public key to Ingest/inventory; private key only to local signer          | Public key/ID in `device_keys`; private key in reviewed OS store only, not implemented                         | Pending key is Jobs-cleanup eligible at pairing expiry; active key follows revoke/unlink/delete              |
+| Device label                                                               | Account                         | User or safe generated default; distinguish devices                    | User profile only after activation; pairing service while pending         | `device_keys` metadata                                                                                         | Pending label is Jobs-cleanup eligible at pairing expiry; active label follows device lifecycle              |
+| Connector, Codex, and OS-family versions                                   | Security; Operational           | Connector; compatibility and incident diagnosis                        | Pairing service while pending; user inventory after activation            | Device/sync metadata                                                                                           | Pending metadata is Jobs-cleanup eligible at pairing expiry; active history needs launch policy              |
+| Pairing poll token, HMAC keys/verifiers, challenge, user code, transaction | Security                        | Server/connector; poll safely and bind browser approval to one key     | Pairing service/application, connector memory, and browser confirmation   | Plain token/code returned once; separate keyed verifiers in DB; poll/code HMAC keys in protected configuration | Plaintext is never logged/persisted; expired non-activated rows have bounded cleanup but need scheduling     |
 | Pairing possession message and signature                                   | Security                        | Connector/Web verifier; prove one pending device holds its private key | Connector signer, pure Web verifier, and closed activation application    | Transient process memory only; never persisted                                                                 | Web copies overwritten after settlement; Rust proof lives until owner drop; never logged or retained         |
 | `codexReportedDate` and exact daily token value                            | Usage                           | Local stable App Server adapter; compute Community score               | Isolated Ingest and Jobs scoring/cleanup procedures; never public raw     | `usage_snapshot_entries`, `source_day_values`                                                                  | Raw snapshot is Jobs-cleanup eligible after 30 days; current/history policy remains a launch decision        |
 | Connector `observedAt`, server `receivedAt`, device nonce, idempotency key | Security; Usage                 | Connector/server; replay, ordering, deadline, and retry safety         | Isolated Ingest and Jobs cleanup procedures; shared finalization policy   | `usage_snapshots`, `device_nonces`                                                                             | Nonce after 15 minutes and raw snapshot after 30 days; scheduler and production purge proof remain required  |
@@ -75,7 +75,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Request ID, outcome, latency, and bounded error code                       | Operational                     | Server-generated correlation; debugging and SLO evidence               | Response recipient and restricted operations; aggregate metrics           | Not retained today; future structured logs/metrics                                                             | Future bounded logs exclude usage, credentials, bodies, and profiles                                         |
 | Security/admin audit event and reason                                      | Security; Operational           | Auth/admin/jobs/release; accountability                                | Restricted responders/auditors; user-visible subset where appropriate     | Bounded `audit_events` reference; external append-only sink planned                                            | Publicly documented bounded policy; profile link redacted on purge; delete unrelated personal data           |
 | Deletion state and security tombstone                                      | Security                        | Deletion workflow; prevent ingestion and restore resurrection          | Deletion/jobs/auth and limited audit                                      | Deletion job plus minimal tombstone                                                                            | Primary data purged in service window; tombstone expires after disclosed minimum security period             |
-| Maintenance capability mutex                                               | Operational                     | Database; serialize bounded cleanup and scoring capabilities           | Owner-defined Jobs procedures only                                        | Two fixed `maintenance_locks` enum rows; no user or request data                                               | Retained while each capability exists; removed only by a reviewed migration                                  |
+| Maintenance capability mutex                                               | Operational                     | Database; serialize bounded cleanup and scoring capabilities           | Owner-defined Jobs procedures only                                        | Three fixed `maintenance_locks` enum rows; no user or request data                                             | Retained while each capability exists; removed only by a reviewed migration                                  |
 
 Opaque sources deliberately contain no Codex account email or upstream account identifier. The
 implemented pairing database caps each profile at 32 lifetime source records and 64 active plus
@@ -224,7 +224,8 @@ input or result history and perform no database write. Candidate, material, para
 configured key copies are overwritten where ownership permits, but strings, runtime copies, and
 driver internals are not an erasure guarantee. This adds no field, log, metric, cache, cookie,
 analytics event, export, or network destination. Browser approval, route/client identity, external
-diagnostics, distributed rate state, and physical expired-row cleanup remain separately reviewable.
+diagnostics, distributed rate state, and cleanup scheduling remain separately reviewable. Revision
+0013 and ADR 0029 now supply the bounded local physical pairing-row/key deletion capability.
 
 Revision 0008 adds deletion evidence for only those raw nonce and snapshot rows: a Jobs-only
 procedure derives cutoff time on the server, deletes bounded expired batches, cascades raw entries,
@@ -233,8 +234,8 @@ owner-only mutex row and five-second lock timeout prevent runtime roles from sei
 key or waiting without a database bound. The synthetic PostgreSQL suite proves idempotency, live-row
 preservation, role denial, and two-worker serialization. No scheduler, service, production retention
 monitor, backup policy, or real-user purge evidence exists, so real-user ingestion remains blocked.
-The later local one-shot runner can invoke one fixed batch, but does not make cleanup scheduled or
-prove a production retention policy.
+The later local one-shot runner can invoke one fixed ingest batch, but does not make cleanup
+scheduled or prove a production retention policy.
 
 Revision 0012 adds one short-lived Security table with no user binding: `origin_nonces` contains
 only the closed origin key ID, a versioned domain-separated 32-byte nonce digest, and millisecond
@@ -244,6 +245,14 @@ contenders. The revision extends the existing Jobs procedure so origin, device, 
 are each independently capped by the requested batch. A tuple is unusable at expiry, no later than
 the verifier's bounded proof lifetime; physical deletion still needs a deployed schedule, monitor,
 backup policy, and purge evidence.
+
+Revision 0013 deletes only already expired, non-activated pairing transactions and their exact
+still-pending key. It covers pending display metadata, keyed poll/code verifiers, challenge,
+approval provenance, and pairing-bound approval challenges without introducing a new collected
+field. A separate owner-only mutex and oldest-first 1-to-1000 batch bound each call; activated/live
+pairings, active or revoked keys, sources, profiles, credentials, and audit events remain. The local
+Jobs runner can invoke one fixed maximum pairing batch and discards the two counts. No scheduler,
+monitor, backup policy, public retention cadence, or real-user purge evidence exists.
 
 Revision 0009 reads exact current values only inside an owner-defined Jobs procedure and writes a
 strictly smaller private derived set: daily and weekly score, active days, contributing-source
@@ -262,14 +271,14 @@ non-personal terminal season definition. A no-data closed week stores only that 
 public serializer/cache, audited correction record, finalized public-history retention rule, Jobs
 deployment/scheduler, or monitoring backend exists.
 
-ADR 0014 stores no new data. Its local Jobs process transiently receives only a fixed cleanup batch
-or one Public season-start label, plus the private aggregate counts already returned by the
-procedures. It validates and discards those values within one process invocation. The CLI emits only
-one constant completion/failure sentence; it does not log the command, date, counts, identifiers,
-SQL, environment, exception, or stack. The optional pool hook receives only the closed Operational
-signal `idle_client_error` and has no built-in storage or network sink. A future scheduler, run
-history, metric, alert, retry record, or monitoring backend must map its exact fields, access,
-retention, and deletion behavior here before collection.
+ADRs 0014 and 0029 store no user data. The local Jobs process transiently receives only one of two
+fixed cleanup batches or one Public season-start label, plus the private aggregate counts already
+returned by the procedures. It validates and discards those values within one process invocation.
+The CLI emits only one constant completion/failure sentence; it does not log the command, date,
+counts, identifiers, SQL, environment, exception, or stack. The optional pool hook receives only the
+closed Operational signal `idle_client_error` and has no built-in storage or network sink. A future
+scheduler, run history, metric, alert, retry record, or monitoring backend must map its exact
+fields, access, retention, and deletion behavior here before collection.
 
 Revision 0011 stores no new data. One owner-defined function gives only the Web role a fixed
 ten-field score projection: season dates/version/finalized state, handle, weekly score, active days,

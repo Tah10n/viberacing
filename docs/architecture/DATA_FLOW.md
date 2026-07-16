@@ -2,17 +2,18 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revisions 0001 through 0012 provide private
+These sequences remain planned application contracts. Revisions 0001 through 0013 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
 immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
-ingest, bounded ingest-retention cleanup, open-season scoring refresh, late-ingest closure, terminal
-season finalization, and a Web-only public score projection. One local public-score GET constructs
-the bounded adapter lazily after closed request admission. One local one-shot Jobs runner can invoke
-only cleanup, refresh, or finalization, but no browser/session authentication or deployed ingest
-endpoint, OAuth callback, Argon2id/WebAuthn pairing approval, operational connector, purge worker,
-Jobs scheduler/monitor, audited correction, or deployed service executes the complete sequences. A
+ingest, bounded ingest- and pairing-retention cleanup, open-season scoring refresh, late-ingest
+closure, terminal season finalization, and a Web-only public score projection. One local
+public-score GET constructs the bounded adapter lazily after closed request admission. One local
+one-shot Jobs runner can invoke exactly one of four fixed functions: either cleanup function,
+refresh, or finalization, but no browser/session authentication or deployed ingest endpoint, OAuth
+callback, Argon2id/WebAuthn pairing approval, operational connector, purge worker, Jobs
+scheduler/monitor, audited correction, or deployed service executes the complete sequences. A
 library-only Rust connector foundation validates the bounded stable App Server initialization
 exchange and candidate `0.144.4` account/usage responses. A synthetic one-shot supervisor composes
 those states with fixed local process mechanics, while an exact-body composer and isolated one-use
@@ -198,11 +199,12 @@ primary/secondary HMAC candidates select at most one approved row, the strict pr
 each structurally valid lookup outcome, and only server-generated device/audit/request IDs reach
 activation behind four-call admission and a settlement floor. PostgreSQL scenarios cover competing
 profiles, wrong poll possession, replay, immutable binding, 32 lifetime sources, and 64
-active/unexpired-approved device authorities per profile. Browser/HTTP/WebAuthn approval, connector
-transport, distributed edge rate limits, live login, and cleanup remain planned. ADR 0015's later
-device-request verifier does not consume or activate this pairing transaction. The ceiling and
-first-winner assertions use separate PostgreSQL connections held behind a real row lock before
-simultaneous release.
+active/unexpired-approved device authorities per profile. Revision 0013 and ADR 0029 now add bounded
+physical cleanup for expired non-activated pairings and their pending keys. Browser/HTTP/WebAuthn
+approval, connector transport, distributed edge rate limits, live login, and cleanup scheduling
+remain planned. ADR 0015's later device-request verifier does not consume or activate this pairing
+transaction. The ceiling and first-winner assertions use separate PostgreSQL connections held behind
+a real row lock before simultaneous release.
 
 ## Source and device lifecycle
 
@@ -272,6 +274,7 @@ sequenceDiagram
   Ingest-->>Edge: Validated acknowledgement or generic problem with server request ID
   Edge-->>Connector: Forward bounded response without a private reason
   Jobs->>DB: Delete bounded expired origin/device nonce and raw-snapshot batches
+  Jobs->>DB: Delete bounded expired non-activated pairing and pending-key pairs
   Jobs->>DB: Aggregate sources then apply one profile daily cap
 ```
 
@@ -362,6 +365,13 @@ expiry columns still do not delete rows by themselves. The local one-shot Jobs c
 one fixed 1000-row batch, but no scheduler, monitor, live login, or deployment invokes it
 automatically.
 
+Revision 0013 adds a separate private mutex and oldest-first 1-to-1000 batch for expired `pending`,
+`approved`, or `cancelled` pairing transactions whose exact key is still pending and unbound. It
+deletes transaction-bound approval challenges by cascade, then the key, while contended rows wait
+for a later invocation and activated/live state remains. The local Jobs runner exposes a second
+fixed 1000-row cleanup command; no scheduler, live login, monitoring, or retention cadence invokes
+it automatically.
+
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct
 sources before one profile daily cap, applies the immutable Community v1 formula, and writes derived
@@ -374,10 +384,11 @@ deadline, and terminal triggers reject silent metadata or score rewrites while a
 purge to remove personal rows. Ingest and Jobs share the canonical
 `season → profile → source → device` lock order. Revision 0011 gives only Web a bounded score-only
 read that filters current profile visibility before re-ranking and omits private identifiers, raw
-values, daily detail, and exact timestamps. ADR 0014's local one-shot Jobs process invokes exactly
-one reviewed cleanup, refresh, or finalization function after a per-checkout least-privilege probe;
-no scheduler, live login/certificate, application database integration, audited correction,
-freshness/streak/car projection, deployed route, or public cache exists.
+values, daily detail, and exact timestamps. ADRs 0014 and 0029 make the local one-shot Jobs process
+invoke exactly one of four reviewed functions—ingest cleanup, pairing cleanup, refresh, or
+finalization—after a per-checkout least-privilege probe; no scheduler, live login/certificate,
+application database integration, audited correction, freshness/streak/car projection, deployed
+route, or public cache exists.
 
 ## Public race read
 

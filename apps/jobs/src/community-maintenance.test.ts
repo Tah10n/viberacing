@@ -23,6 +23,7 @@ interface PoolFixture {
   readonly client: JobsDatabaseClient;
   readonly close: ReturnType<typeof vi.fn>;
   readonly cleanupExpiredIngestState: ReturnType<typeof vi.fn>;
+  readonly cleanupExpiredPairingState: ReturnType<typeof vi.fn>;
   readonly connect: ReturnType<typeof vi.fn>;
   readonly finalizeCommunitySeason: ReturnType<typeof vi.fn>;
   readonly pool: JobsDatabasePool;
@@ -33,12 +34,14 @@ interface PoolFixture {
 
 function createPoolFixture(jobResult: unknown): PoolFixture {
   const cleanupExpiredIngestState = vi.fn(() => Promise.resolve(jobResult));
+  const cleanupExpiredPairingState = vi.fn(() => Promise.resolve(jobResult));
   const finalizeCommunitySeason = vi.fn(() => Promise.resolve(jobResult));
   const release = vi.fn();
   const refreshCommunitySeason = vi.fn(() => Promise.resolve(jobResult));
   const verifyRuntimeBoundary = vi.fn(() => Promise.resolve(runtimeBoundary));
   const client: JobsDatabaseClient = {
     cleanupExpiredIngestState,
+    cleanupExpiredPairingState,
     finalizeCommunitySeason,
     release,
     refreshCommunitySeason,
@@ -50,6 +53,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
     client,
     close,
     cleanupExpiredIngestState,
+    cleanupExpiredPairingState,
     connect,
     finalizeCommunitySeason,
     pool: { close, connect },
@@ -93,6 +97,17 @@ describe("Community maintenance runner", () => {
       values: [10],
     },
     {
+      expected: {
+        deletedPairings: 4,
+        deletedPendingKeys: 4,
+        kind: "cleanup_expired_pairing_state",
+      },
+      functionName: "cleanup_expired_pairing_state",
+      input: { batchSize: 8, kind: "cleanup_expired_pairing_state" },
+      rows: [{ deleted_pairings: 4, deleted_pending_keys: 4 }],
+      values: [8],
+    },
+    {
       expected: { kind: "refresh_community_season", profileCount: 12 },
       functionName: "refresh_community_season",
       input: { kind: "refresh_community_season", seasonStart: "2026-07-13" },
@@ -118,6 +133,8 @@ describe("Community maintenance runner", () => {
     expect(fixture.verifyRuntimeBoundary).toHaveBeenCalledOnce();
     if (testCase.input.kind === "cleanup_expired_ingest_state") {
       expect(fixture.cleanupExpiredIngestState).toHaveBeenCalledWith(testCase.values[0]);
+    } else if (testCase.input.kind === "cleanup_expired_pairing_state") {
+      expect(fixture.cleanupExpiredPairingState).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "refresh_community_season") {
       expect(fixture.refreshCommunitySeason).toHaveBeenCalledWith(testCase.values[0]);
     } else {
@@ -125,6 +142,7 @@ describe("Community maintenance runner", () => {
     }
     expect(
       fixture.cleanupExpiredIngestState.mock.calls.length +
+        fixture.cleanupExpiredPairingState.mock.calls.length +
         fixture.refreshCommunitySeason.mock.calls.length +
         fixture.finalizeCommunitySeason.mock.calls.length,
     ).toBe(1);
@@ -139,6 +157,9 @@ describe("Community maintenance runner", () => {
     { batchSize: 1.5, kind: "cleanup_expired_ingest_state" },
     { batchSize: "1", kind: "cleanup_expired_ingest_state" },
     { batchSize: 1, extra: true, kind: "cleanup_expired_ingest_state" },
+    { batchSize: 0, kind: "cleanup_expired_pairing_state" },
+    { batchSize: 1_001, kind: "cleanup_expired_pairing_state" },
+    { batchSize: 1, extra: true, kind: "cleanup_expired_pairing_state" },
     { kind: "refresh_community_season", seasonStart: "2026-07-14" },
     { extra: true, kind: "refresh_community_season", seasonStart: "2026-07-13" },
     { kind: "refresh_community_season", seasonStart: "2026-02-30" },
@@ -235,11 +256,15 @@ describe("Community maintenance runner", () => {
     { cleanup: false, rows: [{ profile_count: "1" }] },
     { cleanup: false, rows: [{ extra: true, profile_count: 1 }] },
     { cleanup: true, rows: [{ deleted_nonces: 2, deleted_snapshots: 0 }] },
+    { cleanup: "pairing", rows: [{ deleted_pairings: 1 }] },
   ])("rejects invalid fixed result shapes", async ({ cleanup, rows }) => {
     const fixture = createPoolFixture(rows);
-    const job: CommunityMaintenanceJob = cleanup
-      ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
-      : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
+    const job: CommunityMaintenanceJob =
+      cleanup === "pairing"
+        ? { batchSize: 1, kind: "cleanup_expired_pairing_state" }
+        : cleanup
+          ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
+          : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
 
     await expectMaintenanceError(
       createCommunityMaintenanceRunner(fixture.pool).execute(job),
@@ -288,6 +313,22 @@ describe("Community maintenance runner", () => {
       createCommunityMaintenanceRunner(fixture.pool).execute({
         batchSize: 1,
         kind: "cleanup_expired_ingest_state",
+      }),
+      "result_invalid",
+    );
+  });
+
+  it.each([
+    { batchSize: 1, row: { deleted_pairings: 2, deleted_pending_keys: 0 } },
+    { batchSize: 1, row: { deleted_pairings: 0, deleted_pending_keys: 2 } },
+    { batchSize: 2, row: { deleted_pairings: 1, deleted_pending_keys: 0 } },
+    { batchSize: 2, row: { deleted_pairings: 0, deleted_pending_keys: 1 } },
+  ])("bounds and correlates pairing cleanup result counts", async ({ batchSize, row }) => {
+    const fixture = createPoolFixture([row]);
+    await expectMaintenanceError(
+      createCommunityMaintenanceRunner(fixture.pool).execute({
+        batchSize,
+        kind: "cleanup_expired_pairing_state",
       }),
       "result_invalid",
     );

@@ -72,6 +72,12 @@
       "name": "origin_replay_store",
       "path": "database/migrations/0012_origin_replay_store.sql",
       "sha256": "bfa8e8e373bf3e7d9875f1f6c6ccd4d699987dcbbd54a37445328e2e0ea79d27"
+    },
+    {
+      "revision": 13,
+      "name": "pairing_retention_cleanup",
+      "path": "database/migrations/0013_pairing_retention_cleanup.sql",
+      "sha256": "35fe801eaf9b1c1774d37e43d613bb2661c2faf396a6cb7211c8966645f39180"
     }
   ]
 }

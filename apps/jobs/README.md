@@ -1,9 +1,10 @@
 # Vibe Racing Jobs
 
-This private workspace is the local one-shot application boundary for three existing PostgreSQL
+This private workspace is the local one-shot application boundary for four existing PostgreSQL
 maintenance capabilities:
 
 - delete one bounded batch of expired ingest nonces and raw snapshots;
+- delete one bounded batch of expired non-activated pairings and their pending keys;
 - refresh one open Community season; and
 - idempotently finalize one Community season after its server-enforced grace deadline.
 
@@ -43,6 +44,7 @@ From the repository root:
 ```text
 pnpm run build:jobs
 pnpm --filter @viberacing/jobs start -- cleanup-expired-ingest-state
+pnpm --filter @viberacing/jobs start -- cleanup-expired-pairing-state
 pnpm --filter @viberacing/jobs start -- refresh-community-season 2026-07-13
 pnpm --filter @viberacing/jobs start -- finalize-community-season 2026-07-06
 ```

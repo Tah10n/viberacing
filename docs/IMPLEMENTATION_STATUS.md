@@ -9,22 +9,23 @@ Phase 1 product code is locally complete, with the manual release-evidence items
 The Phase 2 language-neutral contract and SQL persistence foundations now include database-only
 passkey login, multi-passkey management, restricted recovery, Community usage ingest, bounded
 ingest-retention cleanup, open-season scoring, terminal season finalization, and a public score-only
-database projection plus its server-only projection-to-contract mapper; a Phase 3 database-only
-source/device lifecycle and same-source deduplication slice has also started. A server-only public
-problem-response factory, closed query/OpenAPI operation, and locally implemented public-score GET
-now exist. A local one-shot Jobs runner invokes only the three existing maintenance procedures
-through a bounded least-privileged adapter. A local Ingest kernel now bounds and authenticates the
-exact Community sync envelope, consumes an injected origin nonce, parses bounded JSON, validates the
-generated contract, and strictly verifies the source-bound device request. A separate bounded Ingest
-PostgreSQL adapter revalidates that output and exposes only atomic origin-nonce consumption, device
-lookup, and submission through a probed least-privileged pool. A protected local reader supplies one
-mandatory and one optional rotation origin key directly to the verifier without returning raw
-configuration. A forced-RLS replay tuple, Ingest-only atomic consume, and Jobs cleanup path now have
-real isolated PostgreSQL evidence. A transport-free Ingest application now composes those exact
-verifier and database capabilities, generates a server-owned request ID, waits for submission, and
-returns only a validated acknowledgement or generic problem decision. A bounded local Fastify server
-factory now preserves exact raw HTTP evidence, admits four application calls without a queue,
-applies fixed parser/header/connection/deadline policies, and serializes only revalidated sync
+database projection plus its server-only projection-to-contract mapper; Phase 3 database-only
+source/device lifecycle, same-source deduplication, and bounded pairing-retention cleanup have also
+started. A server-only public problem-response factory, closed query/OpenAPI operation, and locally
+implemented public-score GET now exist. A local one-shot Jobs runner invokes only the four existing
+maintenance procedures through a bounded least-privileged adapter. A local Ingest kernel now bounds
+and authenticates the exact Community sync envelope, consumes an injected origin nonce, parses
+bounded JSON, validates the generated contract, and strictly verifies the source-bound device
+request. A separate bounded Ingest PostgreSQL adapter revalidates that output and exposes only
+atomic origin-nonce consumption, device lookup, and submission through a probed least-privileged
+pool. A protected local reader supplies one mandatory and one optional rotation origin key directly
+to the verifier without returning raw configuration. A forced-RLS replay tuple, Ingest-only atomic
+consume, and separate Jobs ingest and pairing cleanup paths now have real isolated PostgreSQL
+evidence. A transport-free Ingest application now composes those exact verifier and database
+capabilities, generates a server-owned request ID, waits for submission, and returns only a
+validated acknowledgement or generic problem decision. A bounded local Fastify server factory now
+preserves exact raw HTTP evidence, admits four application calls without a queue, applies fixed
+parser/header/connection/deadline policies, and serializes only revalidated sync
 acknowledgement/problem contracts. A library-only Rust connector foundation now bounds the stable
 App Server handshake and a candidate `0.144.4` account/usage parser, discarding account/summary
 fields and returning only bounded normalized daily usage in caller memory. An inaccessible one-shot
@@ -238,6 +239,16 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   observed PostgreSQL races prove exact one-time consumption, live-row preservation, cleanup
   serialization, role isolation, and database deadlines. Expiry does not schedule physical purge;
   production scheduling, monitoring, backup handling, and capacity remain open.
+- A bounded pairing-retention database boundary. Revision 0013 extends the partial expiry index to
+  cancelled state and gives only Jobs a separate 1-to-1000 oldest-first deletion under a private
+  mutex, five-second lock wait, and 30-second statement deadline. It selects only expired pending,
+  approved, or cancelled transactions whose exact key remains pending and unbound, cascades
+  pairing-bound approval challenges, deletes the transaction before its key, and rolls back on any
+  changed-row mismatch. Live pending and activated rows, bound devices, sources, profiles,
+  credentials, and audit events remain. Static scenarios and an observed two-worker race prove
+  bounds, idempotency, role isolation, serialization, and live/activated preservation. No scheduler,
+  live Jobs login, production cadence, backup proof, capacity result, or broader ceremony cleanup is
+  claimed.
 - A transport-free Community sync application boundary. Its configured factory creates one bounded
   Ingest database object, injects that same object's atomic origin consume and minimal device lookup
   into the protected-key verifier, binds its submission capability, closes the pool after startup
@@ -288,10 +299,10 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- Twelve checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and
+- Thirteen checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and
   24 forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and
   restricted authorities, session-bound challenges, opaque sources, pending/active/revoked device
-  keys, pairing, bounded audit references, deletion work/tombstones, two fixed maintenance mutex
+  keys, pairing, bounded audit references, deletion work/tombstones, three fixed maintenance mutex
   rows, origin and device nonces, bounded raw Community snapshots, monotonic current source/day
   values, immutable score versions and season definitions, derived season entries/daily scores, and
   schema revisions. There is intentionally no GitHub token, account email, prompt, repository,
@@ -318,10 +329,10 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   approved pairings, and invalidates unused source actions; normal user authority cannot lift
   quarantine. Web additionally has one bounded public Community score projection. Ingest has only
   atomic origin-nonce consumption, minimal active-device verification lookup, and bounded Community
-  sync submission; Jobs have only bounded expired ingest-state cleanup plus Community scoring
-  refresh and finalization. Ingest has no identity, passkey, recovery, pairing, lifecycle, admin, or
-  direct-table capability. Profile-scoped functions derive identity from an active session ID plus
-  keyed verifier and do not accept a caller-selected profile ID.
+  sync submission; Jobs have only bounded expired ingest- and pairing-state cleanup plus Community
+  scoring refresh and finalization. Ingest has no identity, passkey, recovery, pairing, lifecycle,
+  admin, or direct-table capability. Profile-scoped functions derive identity from an active session
+  ID plus keyed verifier and do not accept a caller-selected profile ID.
 - The same boundary can create a five-minute profile-free login challenge, expose only minimal
   active-passkey verification material, atomically mint a passkey-bound session after application
   verification, privately list owned passkeys, and add or revoke an exact passkey after a fresh
@@ -365,7 +376,10 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   monotonic and exact accepted-snapshot/entry provenance triggers, 15-minute nonce expiry markers,
   30-day raw-snapshot expiry markers, and a Jobs-only server-time cleanup procedure with strict
   1-to-1000 batches, idempotent reruns, live-row preservation, entry cascade, and raw-reference
-  clearing that preserves current values. Ingest also applies the server grace deadline before its
+  clearing that preserves current values. Pairing-retention scenarios separately prove bounded
+  oldest-first removal of expired pending, approved, and cancelled transactions plus their pending
+  keys, approval-challenge cascade, idempotency, live/activated preservation, role denial, and
+  private-mutex failure. Ingest also applies the server grace deadline before its
   profile/source/device locks: a late whole snapshot is retained as `season_closed` but updates no
   accepted source/day state. No deployed/live HTTP Ingest API, live Ingest/Jobs database
   integration, or scheduler exists; the local server/application composition has only synthetic,
@@ -420,18 +434,18 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   release, and close. No pairing approval/HTTP route, client identity or distributed rate limit,
   live login/TLS connection, cleanup schedule, capacity evidence, real key, or deployment is
   claimed.
-- A private TypeScript Jobs workspace now accepts exactly one fixed 1000-row cleanup command or one
-  canonical Monday refresh/finalization command. It revalidates closed plain job data, reads only
-  redacted `VIBERACING_JOBS_DATABASE_*` configuration, permits cleartext only for explicit
-  development/test loopback, and otherwise requires certificate-verifying TLS with a DNS hostname.
-  Its pool maximum is one; client connect/statement/query deadlines are 2/31/32 seconds, outside the
-  database functions' 30-second deadline. Every checkout probes the exact `viberacing_jobs`
-  effective role, a distinct non-privileged login with only that membership, CONNECT without
-  CREATE/TEMPORARY, and `pg_catalog,pg_temp` search path. It then selects one of three fixed
-  prepared function calls, requires one exact allowlisted result row, holds the client through
-  settlement, destroys it after failure, and closes the pool on every acquired CLI path. Success and
-  failure output are stable sentences without command/date/count/config/SQL/exception reflection.
-  Ninety-four focused tests cover config, TLS, pool/signal behavior, hostile
+- A private TypeScript Jobs workspace now accepts exactly either fixed 1000-row ingest/pairing
+  cleanup command or one canonical Monday refresh/finalization command. It revalidates closed plain
+  job data, reads only redacted `VIBERACING_JOBS_DATABASE_*` configuration, permits cleartext only
+  for explicit development/test loopback, and otherwise requires certificate-verifying TLS with a
+  DNS hostname. Its pool maximum is one; client connect/statement/query deadlines are 2/31/32
+  seconds, outside the database functions' 30-second deadline. Every checkout probes the exact
+  `viberacing_jobs` effective role, a distinct non-privileged login with only that membership,
+  CONNECT without CREATE/TEMPORARY, and `pg_catalog,pg_temp` search path. It then selects one of
+  four fixed prepared function calls, requires one exact allowlisted result row, holds the client
+  through settlement, destroys it after failure, and closes the pool on every acquired CLI path.
+  Success and failure output are stable sentences without command/date/count/config/SQL/exception
+  reflection. One hundred seven focused tests cover config, TLS, pool/signal behavior, hostile
   command/object/array/result inputs, exact SQL parameters, role mismatch, settlement/release/close,
   CLI output, and failure translation at 100% statement/branch/function/line coverage. A lint-policy
   regression also prevents every production module except the fixed pool adapter from importing
@@ -456,16 +470,17 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   one locked expired tuple produce exactly one fresh consume and one replay rejection. A second
   origin race holds the row past a two-second proof expiry, returns `false`, and removes the tuple
   written after that wait. A cleanup race proves one Jobs call retains its transaction lock while a
-  second call waits, after which both bounded batches complete without removing live state. A
-  scoring race proves two Jobs refreshes serialize on a private mutex and converge on one semantic
-  open-season state. A finalization versus late Ingest race proves the shared
-  `season → profile → source → device` lock order is deadlock-free, the final projection is
-  terminal, and the late payload remains quarantined. No losing enrollment or rotation artifact
-  survives, and no protective race leaves browser, recovery, or pending device authority attached to
-  a deleted profile, revoked credential, old code, or protected source. The recovery races also
-  prove terminal timestamps are captured after lock acquisition, and missing expected challenge,
-  credential, authority, session, code, or pairing rows fail closed rather than passing through SQL
-  `NULL` semantics.
+  second call waits, after which both bounded ingest batches complete without removing live state. A
+  separate pairing-cleanup race proves two Jobs callers serialize, delete each expired
+  transaction/key pair once, and preserve live pending state. A scoring race proves two Jobs
+  refreshes serialize on a private mutex and converge on one semantic open-season state. A
+  finalization versus late Ingest race proves the shared `season → profile → source → device` lock
+  order is deadlock-free, the final projection is terminal, and the late payload remains
+  quarantined. No losing enrollment or rotation artifact survives, and no protective race leaves
+  browser, recovery, or pending device authority attached to a deleted profile, revoked credential,
+  old code, or protected source. The recovery races also prove terminal timestamps are captured
+  after lock acquisition, and missing expected challenge, credential, authority, session, code, or
+  pairing rows fail closed rather than passing through SQL `NULL` semantics.
 - A strict Next.js 16 and React 19 web workspace with a synthetic EN/RU race, accessible
   leaderboard, demo profile, three repository-owned CSS/canvas themes, reduced-motion controls, and
   a deterministic 16-by-8 pixel-car renderer.
@@ -503,12 +518,12 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0012 from the checksum manifest,
+reached `healthy`, validated and applied revisions 0001 through 0013 from the checksum manifest,
 passed 24-table state/ownership/RLS assertions, twenty-three observed lock-wait races, eight
 relation-denial checks, twenty-five cross-capability denials, and the identity, passkey, recovery,
-pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention, scoring,
-finalization, and public score scenarios, then removed its portless container, network, and
-ephemeral storage.
+pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention,
+pairing-retention, scoring, finalization, and public score scenarios, then removed its portless
+container, network, and ephemeral storage.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -543,8 +558,8 @@ browser approval and connector client, HTTP parsing/response contracts, client-i
 distributed admission/rate/deadline policy, and anonymous login/pairing/recovery edge limits and
 cleanup, an Ingest host/port/TLS deployment entry point, trusted edge routing and direct-origin
 denial, live secret-manager/edge key injection, the Ingest live PostgreSQL login/TLS connection,
-distributed rate/backpressure controls and load evidence, scheduled execution/monitoring of
-ingest-retention cleanup, cleanup for other expiring state, the Jobs scheduler/live login and
+distributed rate/backpressure controls and load evidence, scheduled execution/monitoring of ingest-
+and pairing-retention cleanup, cleanup for other expiring state, the Jobs scheduler/live login and
 application-to-PostgreSQL integration, audited corrections, deployed public-score delivery, purge
 workers, connector executable discovery/link/ownership and artifact/version admission, live Codex
 and cross-platform process evidence, supported operational account/usage integration, secure
@@ -560,7 +575,7 @@ final serialization. Cache/invalidation, CarRecipe, streak/freshness, profile de
 and production-capacity controls, monitoring backend, deployment login, certificate, edge policy,
 and live adapter integration do not. The visible web scoring and ranking experience still operates
 only on clearly synthetic in-process fixtures; no component calls the route or connects that page to
-the database-only scoring/finalization/read state in revisions 0001 through 0012.
+the database-only scoring/finalization/read state in revisions 0001 through 0013.
 
 ## Evidence commands
 

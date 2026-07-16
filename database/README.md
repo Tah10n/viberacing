@@ -2,20 +2,21 @@
 
 ## Status
 
-This directory contains twelve SQL-first revisions for identity, passkey login and management,
+This directory contains thirteen SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
 implemented. No authentication/HTTP pairing route, OAuth callback, Argon2id/WebAuthn application,
 production credential, or deployed database consumes the protected identity/ingest capabilities. A
-dormant Web/Auth boundary now composes keyed pairing lookup, strict Ed25519 possession proof, and
-exact activation through a mock-tested fixed-query pool, but it has no live login or transport. A
-local Ingest kernel verifies a bounded exact-body origin/device request, and a separate fixed-query
-adapter maps origin replay plus its output to three capabilities through a probed least-privileged
-pool. Mock tests do not call PostgreSQL or supply a working login. One local public-score route and
-one local one-shot Jobs runner wrap narrow capabilities without a working database login. The
-database-only ingest and Jobs-only ingest-retention, open-season scoring, and terminal finalization
+dormant Web/Auth boundary creates bounded pairing material through one fixed start call; a second
+composes keyed pairing lookup, strict Ed25519 possession proof, and exact activation through the
+same mock-tested fixed-query pool, but neither has a live login or transport. A local Ingest kernel
+verifies a bounded exact-body origin/device request, and a separate fixed-query adapter maps origin
+replay plus its output to three capabilities through a probed least-privileged pool. Mock tests do
+not call PostgreSQL or supply a working login. One local public-score route and one local one-shot
+Jobs runner wrap narrow capabilities without a working database login. The database-only ingest and
+Jobs-only ingest-retention, pairing-retention, open-season scoring, and terminal finalization
 procedures plus one Web-only public score projection are implemented; HTTP ingest, scheduled
-execution, audited corrections, and purge are not.
+execution, audited corrections, and broader purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -58,6 +59,8 @@ procedure; the current repository has no such application code.
   projection with a fixed public field allowlist and post-visibility rank/display positions.
 - `migrations/0012_origin_replay_store.sql` adds one forced-RLS origin replay table, atomic
   Ingest-only nonce consumption, and origin-nonce deletion to the existing Jobs cleanup procedure.
+- `migrations/0013_pairing_retention_cleanup.sql` adds Jobs-only bounded deletion of expired
+  non-activated pairing transactions and their still-pending keys through a separate private mutex.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -80,6 +83,8 @@ procedure; the current repository has no such application code.
   expired-tuple reuse, strict digest/key/time input, and bounded proof lifetime.
 - `tests/ingest_cleanup.sql` exercises batch bounds, deterministic expiry order, idempotency,
   live-row preservation, entry cascade, retained current values, and detached raw provenance.
+- `tests/pairing_cleanup.sql` exercises bounded oldest-first pending/approved/cancelled deletion,
+  challenge cascade, idempotency, activated/live preservation, mutex failure, and exact role denial.
 - `tests/identity_concurrency_setup.sql` and `tests/identity_concurrency_assertions.sql` prove one
   invite enrollment, one initial-passkey challenge consumption, one active-session rotation, and
   deletion dominance over concurrent session rotation without leaving stale authority.
@@ -106,6 +111,9 @@ procedure; the current repository has no such application code.
   deadlock.
 - `tests/cleanup_concurrency_setup.sql` and `tests/cleanup_concurrency_assertions.sql` prove two
   Jobs cleanup calls serialize and each expired raw row is removed once without deleting live state.
+- `tests/pairing_cleanup_concurrency_setup.sql` and
+  `tests/pairing_cleanup_concurrency_assertions.sql` prove two pairing-cleanup calls serialize,
+  delete each expired transaction/key pair once, and preserve live pending state.
 - `tests/season_scoring.sql` proves ISO-week grouping, exact logarithmic rounding and caps,
   distinct-source aggregation, same-rank semantics without a raw-token tie breaker, hidden and
   quarantined exclusion, immutable version/season definitions, idempotent refresh, role denial, and
@@ -136,7 +144,7 @@ procedure; the current repository has no such application code.
 | `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                             |
 | `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus public score read |
 | `viberacing_ingest` | No    | None           | Usage      | Origin replay, device verification, and Community sync only        |
-| `viberacing_jobs`   | No    | None           | Usage      | Ingest cleanup plus Community refresh and finalization             |
+| `viberacing_jobs`   | No    | None           | Usage      | Ingest/pairing cleanup plus Community refresh and finalization     |
 | `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                       |
 | `PUBLIC`            | N/A   | None           | None       | None                                                               |
 
@@ -245,6 +253,11 @@ Runtime access must remain procedure-only and must have positive and negative in
   from server time, and serializes Jobs callers. Each call independently deletes at most one batch
   of expired origin nonces, device nonces, and raw snapshots. Snapshot entries cascade; current
   source/day values remain and only their expired raw-snapshot reference is cleared.
+- `cleanup_expired_pairing_state` accepts only a batch size from 1 through 1000, derives its cutoff
+  after a separate private Jobs mutex, and deletes oldest expired `pending`, `approved`, or
+  `cancelled` transactions only with their exact still-pending, unbound key. Pairing-bound approval
+  challenges cascade; live pending rows, activated transactions/keys, sources, and audit provenance
+  remain. Contended pairing/key rows are deferred to a later invocation.
 - `refresh_community_season` accepts only a bounded ISO Monday before its exact grace deadline,
   serializes Jobs and Ingest at that season, and atomically replaces the private Community score
   projection. An open no-data week remains a state-free no-op.
@@ -393,6 +406,14 @@ rechecks expiry after contention. The existing Jobs cleanup now independently ca
 origin nonces, device nonces, and snapshots under its private mutex. Expiry ends replay acceptance;
 physical deletion still needs a production schedule, monitor, backup policy, and purge evidence.
 
+Revision 0013 physically removes only expired non-activated pairing authority and the exact
+source-free pending key it owns. It extends the expiry index to cancelled state, captures server
+time after its separate owner-only mutex, caps one invocation at 1000 pairs, skips rows involved in
+another security transition, and rolls back if the pair/key deletion is not exact. Activated binding
+provenance and explicit source lifecycle remain outside cleanup. The observed two-worker race proves
+serialization and live-row preservation only in the isolated database; no production schedule, Node
+login, backup policy, or broader ceremony cleanup exists.
+
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
 belong to private deployment configuration and require application-level tests before use.
@@ -442,9 +463,9 @@ hard failure, not something the script silently broadens or repairs.
 - Implement the application recovery boundary: bounded Argon2id with protected pepper, exact
   WebAuthn verification, generic response/timing behavior, cookies/CSRF, notifications, inventory,
   and provenance-preserving cleanup at the 32-passkey lifetime edge.
-- Add edge/service rate limiting and bounded cleanup for unauthenticated pairing starts,
-  passkey-login challenges, and recovery-code lookups; do not encode deployable private thresholds
-  in this repository.
+- Add edge/service rate limiting for unauthenticated pairing starts and bounded cleanup for
+  passkey-login challenges and recovery-code lookups; do not encode deployable private thresholds in
+  this repository.
 - Wrap the local Ingest verification kernel and protected key reader with an exact-byte HTTP
   boundary, live secret-manager/edge key injection, generic public errors, no-queue admission,
   socket deadlines, backpressure, and rate limits. Compose them with the local least-privileged
@@ -458,9 +479,9 @@ hard failure, not something the script silently broadens or repairs.
   query-plan/load evidence, monitoring, and deployment verification.
 - Define a separate complete race/profile contract when CarRecipe, streak, freshness, and profile
   detail have real persistence and lifecycle evidence.
-- Schedule and monitor the implemented ingest-retention procedure, and implement bounded cleanup for
-  ceremonies, sessions, pairings, jobs, recovery authority, and tombstones. Expiry columns outside
-  the revisions 0008/0012 boundary are not cleanup.
+- Schedule and monitor the implemented ingest- and pairing-retention procedures, and implement
+  bounded cleanup for remaining ceremonies, sessions, jobs, recovery authority, passkey provenance,
+  and tombstones. Expiry columns outside revisions 0008, 0012, and 0013 are not cleanup.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
   in isolated staging before real-user ingestion.
