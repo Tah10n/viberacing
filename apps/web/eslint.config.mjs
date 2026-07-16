@@ -74,6 +74,14 @@ export default defineConfig([
           selector: "CallExpression[callee.name='require'][arguments.0.value='@noble/ed25519']",
           message: "Web Ed25519 verification must not use CommonJS access.",
         },
+        {
+          selector: "ImportExpression[source.value='pg']",
+          message: "Web PostgreSQL access must not use dynamic imports.",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value='pg']",
+          message: "Web PostgreSQL access must not use CommonJS access.",
+        },
       ],
       "react-hooks/exhaustive-deps": "error",
       "react-hooks/rules-of-hooks": "error",
@@ -82,7 +90,49 @@ export default defineConfig([
   },
   {
     files: ["**/*.{js,jsx,mjs,cjs,ts,tsx}"],
-    ignores: ["**/*.test.{ts,tsx}", "lib/pairing-possession-verifier.ts", "tests/**/*.ts"],
+    ignores: [
+      "**/*.test.{ts,tsx}",
+      "lib/pairing-database-pool.ts",
+      "lib/pairing-possession-verifier.ts",
+      "lib/public-score-database-pool.ts",
+      "tests/**/*.ts",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@noble/ed25519",
+              message: "Only pairing-possession-verifier.ts may own Web Ed25519 verification.",
+            },
+            {
+              name: "pg",
+              message: "Only reviewed Web database pool wrappers may access node-postgres.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["lib/pairing-possession-verifier.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "pg",
+              message: "Only reviewed Web database pool wrappers may access node-postgres.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["lib/{pairing-database-pool,public-score-database-pool}.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -115,6 +165,10 @@ export default defineConfig([
             {
               name: "@noble/ed25519",
               message: "Client components must not import server-side cryptography.",
+            },
+            {
+              name: "pg",
+              message: "Client components must not import server-side PostgreSQL access.",
             },
           ],
         },

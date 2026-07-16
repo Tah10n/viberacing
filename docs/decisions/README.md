@@ -12,7 +12,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0001](0001-community-trust-tier.md)                           | Community-only launch and disabled Verified tier                    | Accepted; Community DB lifecycle implemented        |
 | [0002](0002-opaque-multi-source-aggregation.md)                | Opaque multi-source profiles with one profile cap                   | Accepted; aggregation/finalization DB implemented   |
 | [0003](0003-identity-step-up-and-device-authority.md)          | GitHub identity, passkey step-up, and source-bound device authority | Accepted; identity/passkey/recovery/device DB       |
-| [0004](0004-edge-service-and-database-isolation.md)            | Cloudflare ingress plus service and database capability isolation   | Accepted; role DB and local service adapters        |
+| [0004](0004-edge-service-and-database-isolation.md)            | Cloudflare ingress plus service and database capability isolation   | Accepted; role DB and bounded local adapters        |
 | [0005](0005-enum-only-car-recipe.md)                           | Enum-only deterministic car customization                           | Accepted design; implementation pending             |
 | [0006](0006-public-repository-boundary.md)                     | Every tracked artifact is immediately public-safe                   | Accepted; repository controls partially implemented |
 | [0007](0007-restricted-recovery-authority.md)                  | Recovery codes grant only short-lived passkey-replacement authority | Accepted; recovery DB capability implemented        |
@@ -34,7 +34,8 @@ what it costs, how it is verified, and how it can be replaced.
 | [0023](0023-bounded-candidate-app-server-supervisor.md)        | Bounded candidate App Server process supervisor                     | Accepted; synthetic only; admission pending         |
 | [0024](0024-bounded-candidate-community-sync-composer.md)      | Bounded candidate Community sync composer                           | Accepted; unsigned composition boundary             |
 | [0025](0025-bounded-candidate-device-signing-boundary.md)      | Bounded candidate device signing boundary                           | Accepted; key store and transport pending           |
-| [0026](0026-bounded-pairing-possession-proof.md)               | Bounded pairing possession proof                                    | Accepted; pure kernels; application pending         |
+| [0026](0026-bounded-pairing-possession-proof.md)               | Bounded pairing possession proof                                    | Accepted; pure kernels; composed by ADR 0027        |
+| [0027](0027-bounded-pairing-activation-composition.md)         | Bounded pairing activation composition                              | Accepted; local application; transport pending      |
 
 ## Lifecycle
 

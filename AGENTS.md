@@ -47,13 +47,16 @@ inaccessible reviewed context and fixes the versioned JSON/digest/LF message. An
 signer consumes that otherwise inaccessible material with a device-bound key capability that also
 has no public constructor, returning only the same body and five exact signed header values. A
 separate inaccessible pending-key/challenge signer and pure server-only Web verifier now agree on
-one exact synthetic pairing-possession proof. There is no executable discovery/admission, live Codex
-launch path, supported version, source/device context provider, key generation/store, pairing
-transaction/poll/approval/activation composition, upload, CLI, or release. Do not claim that
-deployed browser/session HTTP authentication, OAuth/Argon2id/WebAuthn application verification,
-real-user ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
-correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
-implementation and verification are present in the working tree.
+one exact synthetic pairing-possession proof. A dormant transport-free Web/Auth application now
+derives protected primary/secondary poll verifiers, probes a separate read-write Web pool, runs the
+strict proof, and alone invokes exact activation with server-owned IDs behind fixed admission and
+timing. There is no executable discovery/admission, live Codex launch path, supported version,
+source/device context provider, key generation/store, pairing start/browser approval/HTTP route or
+connector client, upload, CLI, or release. Do not claim that deployed browser/session HTTP
+authentication, OAuth/Argon2id/WebAuthn application verification, real-user ingestion, an
+operational connector, a Jobs scheduler or deployed public-race read, season correction, scheduled
+or broader cleanup, deployment, or a hosted security control exists until its implementation and
+verification are present in the working tree.
 
 ## Repository map
 
@@ -65,8 +68,8 @@ implementation and verification are present in the working tree.
 - `config/` contains reviewed external-host and dependency-license policy; do not widen either
   allowlist as a workaround for a failing check.
 - `apps/web/` contains the synthetic Next.js frontend, local public-score route/adapter, pure
-  pairing-possession verifier, and nested agent guidance. Read `apps/web/AGENTS.md` before editing
-  it.
+  pairing-possession verifier, dormant pairing activation application/adapter, and nested agent
+  guidance. Read `apps/web/AGENTS.md` before editing it.
 - `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
   least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL

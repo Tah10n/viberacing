@@ -18,22 +18,25 @@ local Codex installation. A second inaccessible reviewed context lets a composer
 minimized usage into the exact bounded sync JSON, SHA-256 digest, nonce encoding, and device message
 checked by Ingest. An isolated one-use signer consumes that closed value only with a third
 inaccessible device-bound key capability. A separate inaccessible pending-key/challenge signer and
-pure Web verifier agree on an exact synthetic pairing-possession proof. They cannot create a
-transaction, handle a poll token, call activation, generate/load a real key, or make an HTTP
-request; no supported version, source/device provider, key store, or upload exists. A local Ingest
-kernel bounds and authenticates a synthetic exact-body sync request, and a separate adapter
-constrains origin replay, database lookup, and submission mapping with mock-pool evidence. A
-transport-free application composes those exact boundaries, generates a server request ID, and
-validates the acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic
-replay and cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies
-no-queue and deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS
-launch entry point. There is no working database login/certificate, live end-to-end PostgreSQL flow,
-edge path, connector process, supported adapter, or deployment. A bounded local one-shot Jobs
-process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or
-deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are implemented
-and unit/build-tested, but this repository supplies no working deployment login or TLS certificate.
-A successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries,
-SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
+pure Web verifier agree on an exact synthetic pairing-possession proof. A dormant Web/Auth
+application now handles protected primary/secondary poll-verifier derivation, a fixed approved-row
+lookup through a separately probed read-write pool, that strict proof, and exact atomic activation
+with server-owned IDs behind local admission/timing. It cannot create a transaction, perform browser
+or WebAuthn approval, generate/load a real key, or make an HTTP request; no supported version,
+source/device provider, key store, connector pairing client, or upload exists. A local Ingest kernel
+bounds and authenticates a synthetic exact-body sync request, and a separate adapter constrains
+origin replay, database lookup, and submission mapping with mock-pool evidence. A transport-free
+application composes those exact boundaries, generates a server request ID, and validates the
+acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic replay and
+cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies no-queue and
+deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS launch entry
+point. There is no working database login/certificate, live end-to-end PostgreSQL flow, edge path,
+connector process, supported adapter, or deployment. A bounded local one-shot Jobs process now wraps
+only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A
+bounded server-only Web PostgreSQL adapter and local public-score GET are implemented and
+unit/build-tested, but this repository supplies no working deployment login or TLS certificate. A
+successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL
+constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
 isolation; it does not prove a live adapter, deployed API, or production flow. The Ingest server
 tests bind only ephemeral loopback sockets and use synthetic requests; no development command
 exposes it to the LAN or Internet.
@@ -190,13 +193,20 @@ metadata. Without it, development uses loopback and production builds use a rese
 origin that is not suitable for deployment. A real hosted build must receive its public HTTPS DNS
 origin through the deployment environment.
 
-The server-only score adapter uses only `VIBERACING_WEB_DATABASE_*`. Its tracked user/password are
-deliberately non-working placeholders and are checked against accidental reuse of the `DATABASE_*`
-compose owner. Local integration requires a separately provisioned login whose only membership is
-`viberacing_web`; login creation remains environment-owned and is not automated here. `disable`
-requires explicit `NODE_ENV=development` or `test` plus loopback. Every other environment requires
-`verify-full`, a certificate-valid multi-label DNS hostname, and TLS 1.2 or later. The synthetic
-page and build never construct the adapter, so they need none of these settings.
+The server-only score and dormant pairing adapters use only `VIBERACING_WEB_DATABASE_*`. Their
+tracked user/password are deliberately non-working placeholders and are checked against accidental
+reuse of the `DATABASE_*` compose owner. Local integration requires a separately provisioned login
+whose only membership is `viberacing_web`; login creation remains environment-owned and is not
+automated here. `disable` requires explicit `NODE_ENV=development` or `test` plus loopback. Every
+other environment requires `verify-full`, a certificate-valid multi-label DNS hostname, and TLS 1.2
+or later. The synthetic page and build never construct either adapter, so they need none of these
+settings.
+
+Constructing the pairing application additionally requires a fresh 32-byte canonical base64url value
+in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL`. The tracked value is intentionally invalid.
+During a bounded rotation only, the previous primary may be supplied as
+`VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL`; remove it after every transaction created
+under that key has passed the ten-minute database lifetime. Never track, print, or reuse real keys.
 
 The one-shot Jobs runner independently uses only `VIBERACING_JOBS_DATABASE_*`. Its tracked
 user/password are separate non-working placeholders, and configuration checks reject reuse of the

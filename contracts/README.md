@@ -14,9 +14,10 @@ source-bound key capability. A server-only Web kernel strictly verifies the pair
 the exact approved database material. One synthetic
 [`test vector`](v1/connector-sync-device-request.test-vector.json) proves its body, digest, nonce,
 message, public key, and signature against production Ingest code; a second vector proves the exact
-Rust/Web pairing message and signature. No operational connector, real key generation/store, pairing
-HTTP client/route, poll-token verifier, activation composition, deployed endpoint, working database
-credential, edge signer, host/port/TLS entry point, or composed live flow exists.
+Rust/Web pairing message and signature. A separate dormant Web/Auth boundary now composes protected
+keyed poll lookup, that strict proof, and atomic activation locally. No operational connector, real
+key generation/store, pairing start/approval or HTTP client/route, deployed endpoint, working
+database credential, edge signer, host/port/TLS entry point, or composed live flow exists.
 
 ## Canonical version 1 schemas
 

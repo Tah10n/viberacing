@@ -29,6 +29,10 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_WEB_DATABASE_PORT", "54329"],
   ["VIBERACING_WEB_DATABASE_TLS_MODE", "disable"],
   ["VIBERACING_WEB_DATABASE_USER", "replace_with_local_web_login"],
+  [
+    "VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL",
+    "replace-with-random-32-byte-base64url-key",
+  ],
 ]);
 
 function isObject(value) {

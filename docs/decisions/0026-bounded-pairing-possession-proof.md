@@ -1,6 +1,6 @@
 # ADR 0026: Bounded pairing possession proof
 
-- Status: Accepted (pure signer/verifier kernels; pairing application and transport pending)
+- Status: Accepted (pure signer/verifier kernels; local application added by ADR 0027)
 - Date: 2026-07-15
 - Decision owners: Web/Auth, Connector, Database, Security, Privacy, Compatibility, and Release
 - Supersedes: None
@@ -74,6 +74,11 @@ application boundary must resolve and rate-limit the poll token, obtain only the
 material, verify the proof, generate bounded server-owned identifiers/audit references, and call
 activation through one closed composition. No route may expose this kernel until that control flow,
 generic timing/error behavior, and live-role boundary are reviewed and tested.
+
+ADR 0027 later implements that transport-free local composition with a protected keyed poll
+verifier, fixed database adapter, strict proof ordering, server-owned identifiers, and bounded local
+admission/timing. Pairing start, browser/WebAuthn approval, external HTTP policy, live-role
+evidence, and distributed client-rate controls remain pending.
 
 The challenge, message, signature, public key, and pairing ID are existing Security data classes.
 They remain transient copied memory in the new kernels. There is no new cookie, log, metric, cache,

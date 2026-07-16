@@ -1,0 +1,162 @@
+import { Buffer } from "node:buffer";
+
+import { describe, expect, it, vi } from "vitest";
+
+import { resolvePairingDatabaseConfig } from "./pairing-database-config";
+import { createPairingDatabasePool, type PairingDatabasePoolSignal } from "./pairing-database-pool";
+
+const config = resolvePairingDatabaseConfig({
+  NODE_ENV: "development",
+  VIBERACING_WEB_DATABASE_HOST: "127.0.0.1",
+  VIBERACING_WEB_DATABASE_NAME: "viberacing_local",
+  VIBERACING_WEB_DATABASE_PASSWORD: "private-pairing-database-password",
+  VIBERACING_WEB_DATABASE_PORT: "54329",
+  VIBERACING_WEB_DATABASE_TLS_MODE: "disable",
+  VIBERACING_WEB_DATABASE_USER: "viberacing_web_login",
+});
+
+describe("pairing database pool", () => {
+  it("exposes only the fixed probe, two-candidate lookup, activation, release, and close", async () => {
+    const returnedRows = [[{ role_ok: true }], [], [{ activated: true }]];
+    const liveQueries: { text: string; values: unknown[] }[] = [];
+    const querySnapshots: { text: string; values: unknown[] }[] = [];
+    const releases: boolean[] = [];
+    let ended = false;
+    const driverClient = {
+      query(query: { text: string; values: unknown[] }): Promise<{ rows: unknown }> {
+        liveQueries.push(query);
+        querySnapshots.push({
+          text: query.text,
+          values: query.values.map((value) =>
+            Buffer.isBuffer(value) ? Buffer.from(value) : value,
+          ),
+        });
+        return Promise.resolve({ rows: returnedRows.shift() });
+      },
+      release(destroy = false): void {
+        releases.push(destroy);
+      },
+    };
+    const driverPool = {
+      connect() {
+        return Promise.resolve(driverClient);
+      },
+      end(): Promise<void> {
+        ended = true;
+        return Promise.resolve();
+      },
+      on() {
+        return this;
+      },
+    };
+    const pool = createPairingDatabasePool(config, undefined, (receivedConfig) => {
+      expect(receivedConfig).toBe(config);
+      return driverPool;
+    });
+    const client = await pool.connect();
+    const firstDigest = Buffer.alloc(32, 0x11);
+    const secondDigest = Buffer.alloc(32, 0x22);
+    const activationDigest = Buffer.alloc(32, 0x33);
+
+    await expect(client.verifyRuntimeBoundary()).resolves.toEqual([{ role_ok: true }]);
+    await expect(client.readVerificationMaterial([firstDigest, secondDigest])).resolves.toEqual([]);
+    await expect(
+      client.activatePairing({
+        auditEventId: "00000000-0000-4000-8000-000000000027",
+        deviceId: "dev_AAAAAAAAAAAAAAAAAAAAAA",
+        pairingId: "00000000-0000-4000-8000-000000000026",
+        pollVerifierDigest: activationDigest,
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+      }),
+    ).resolves.toEqual([{ activated: true }]);
+    client.release();
+    client.release(true);
+    await pool.close();
+
+    expect(querySnapshots).toHaveLength(3);
+    expect(querySnapshots[0]?.text).toContain("CURRENT_USER = 'viberacing_web'");
+    expect(querySnapshots[0]?.text).toContain("default_transaction_read_only') = 'off'");
+    expect(querySnapshots[0]?.values).toEqual([]);
+    expect(querySnapshots[1]?.text).toContain("VALUES");
+    expect(querySnapshots[1]?.text).toContain("read_pairing_verification_material");
+    expect(querySnapshots[1]?.values).toEqual([firstDigest, secondDigest]);
+    expect(querySnapshots[2]?.text).toContain("activate_pairing");
+    expect(querySnapshots[2]?.text).toContain("AS MATERIALIZED");
+    expect(querySnapshots[2]?.values).toEqual([
+      activationDigest,
+      "00000000-0000-4000-8000-000000000026",
+      "dev_AAAAAAAAAAAAAAAAAAAAAA",
+      "00000000-0000-4000-8000-000000000027",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
+    expect(firstDigest).toEqual(Buffer.alloc(32, 0x11));
+    expect(secondDigest).toEqual(Buffer.alloc(32, 0x22));
+    expect(activationDigest).toEqual(Buffer.alloc(32, 0x33));
+    expect(liveQueries[1]?.values).toEqual([Buffer.alloc(32), Buffer.alloc(32)]);
+    expect(liveQueries[2]?.values[0]).toEqual(Buffer.alloc(32));
+    expect(releases).toEqual([false, true]);
+    expect(ended).toBe(true);
+    expect(Object.isFrozen(client)).toBe(true);
+    expect(Object.isFrozen(pool)).toBe(true);
+  });
+
+  it("reports idle-driver failures only through the stable non-reflective signal", () => {
+    const privateValue = "private-driver-error-that-must-not-be-reflected";
+    const signals: PairingDatabasePoolSignal[] = [];
+    let listener: ((error: Error) => void) | undefined;
+    const driverPool = {
+      connect(): Promise<never> {
+        return Promise.reject(new Error("not used"));
+      },
+      end(): Promise<void> {
+        return Promise.resolve();
+      },
+      on(event: "error", received: (error: Error) => void) {
+        expect(event).toBe("error");
+        listener = received;
+        return this;
+      },
+    };
+
+    createPairingDatabasePool(
+      config,
+      (signal) => {
+        signals.push(signal);
+      },
+      () => driverPool,
+    );
+    listener?.(new Error(privateValue));
+
+    expect(signals).toEqual(["idle_client_error"]);
+    expect(JSON.stringify(signals)).not.toContain(privateValue);
+  });
+
+  it("contains synchronous and asynchronous monitoring failures", async () => {
+    const listeners: ((error: Error) => void)[] = [];
+    const driverPool = {
+      connect(): Promise<never> {
+        return Promise.reject(new Error("not used"));
+      },
+      end(): Promise<void> {
+        return Promise.resolve();
+      },
+      on(_event: "error", listener: (error: Error) => void) {
+        listeners.push(listener);
+        return this;
+      },
+    };
+    const synchronous = vi.fn(() => {
+      throw new Error("monitoring failure");
+    });
+    const asynchronous = vi.fn(() => Promise.reject(new Error("monitoring failure")));
+
+    createPairingDatabasePool(config, synchronous, () => driverPool);
+    createPairingDatabasePool(config, asynchronous, () => driverPool);
+
+    expect(() => listeners[0]?.(new Error("driver failure"))).not.toThrow();
+    listeners[1]?.(new Error("driver failure"));
+    await expect(Promise.resolve()).resolves.toBeUndefined();
+    expect(synchronous).toHaveBeenCalledWith("idle_client_error");
+    expect(asynchronous).toHaveBeenCalledWith("idle_client_error");
+  });
+});

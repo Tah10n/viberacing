@@ -21,6 +21,11 @@ apply.
   `VIBERACING_WEB_DATABASE_*`, strict TLS/config parsing, a dedicated bounded pool, and an effective
   Web-role/login-capability probe before every query. Do not bypass the store with generic SQL or
   wire it outside the exact `/v1/community/scores` boundary.
+- Pairing reuses that environment-owned Web/Auth login only through its separate read-write pool.
+  Preserve the exact role/login/search-path/read-write probe, two fixed verifier candidates,
+  protected primary/secondary HMAC capability, strict proof-before-activation sequence, server-owned
+  IDs, four-call admission, 250-millisecond settlement floor, and generic decision. Do not import
+  `pg` outside the two reviewed pool wrappers or expose a generic query/activation surface.
 - Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
   correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
   CORS/auth/retry semantics to the common problem-response boundary.
@@ -29,8 +34,9 @@ apply.
   it until that work settles, and preserve ADR 0013's no-store/same-origin response matrix.
 - Keep pairing possession in the server-only pure verifier. It may accept only the exact approved
   material tuple and versioned message, use strict Ed25519 semantics, and return no reflected
-  detail. Do not add a route, poll-token lookup, activation call, or WebAuthn claim without their
-  complete admission/rate/timing/database composition and negative tests.
+  detail. The dormant application may call activation only through the closed ADR 0027 composition.
+  Do not add pairing start, a route, browser/session approval, or a WebAuthn claim without complete
+  transport admission, distributed rate/deadline policy, contracts, and negative tests.
 
 ## Commands
 

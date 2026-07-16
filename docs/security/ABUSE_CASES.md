@@ -118,9 +118,12 @@ material availability cost.
   boundary. ADR 0026 adds one exact domain-separated transaction/challenge/public-key message, an
   inaccessible Rust signer, and a strict pure Web verifier. Their shared synthetic vector rejects
   changed IDs/challenges/keys/signatures, malformed shapes/encodings, zero material, and caller
-  mutation. No poll-token HTTP parser, keyed digest, rate limit, WebAuthn composition, database
-  adapter, generic response/timing policy, or real activation path exists, so pairing remains
-  unavailable.
+  mutation. ADR 0027 adds exact 32-byte canonical poll tokens, protected primary/secondary
+  HMAC-SHA-256 verifier derivation, a fixed two-candidate approved-material lookup through a probed
+  read-write Web pool, mandatory strict proof, server-owned activation IDs, four-call admission, a
+  250-millisecond settlement floor, and one generic local failure decision. Pairing remains
+  externally unavailable: there is no start/approval/HTTP route, WebAuthn composition, connector
+  client, distributed client-rate policy, live login, or real key.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the

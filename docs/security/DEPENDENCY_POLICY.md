@@ -8,7 +8,7 @@ checks when they are clear and maintainable.
 
 Mature frameworks and analysis tools are used only where their maintained behavior materially
 reduces project risk. The current deliberate set includes Next.js and React for the web runtime,
-`@noble/ed25519` for two strict server-side device-signature checks, `pg` for three narrow
+`@noble/ed25519` for two strict server-side device-signature checks, `pg` for four narrow
 server-side PostgreSQL adapters, Fastify for one confined Ingest HTTP server factory, and CSpell,
 TypeScript, ESLint, Vitest, jsdom, and axe-core for offline verification. Every direct package is
 exact-pinned, installs without lifecycle scripts, and is represented with its complete transitive
@@ -57,8 +57,8 @@ inside the private Web, Jobs, and Ingest workspaces; each workspace lint policy 
 dynamic, re-export, and CommonJS driver access elsewhere. The adapters expose only their reviewed
 parameterized functions and no general query or ORM surface. Its exact registry integrity, MIT
 license, transitive graph, optional unused native peer, absence of install lifecycle scripts,
-maintenance, and advisory state were reviewed under ADRs 0011, 0014, and 0016. Adding the Ingest
-importer changes no package version or transitive node. An update requires renewed
+maintenance, and advisory state were reviewed under ADRs 0011, 0014, 0016, and 0027. Adding the
+second Web pool changes no package version or transitive node. An update requires renewed
 source/release/advisory/license/script/transitive review plus all role, query, result, timeout, and
 failure-isolation regressions.
 

@@ -144,7 +144,11 @@ flowchart LR
 
 ### Runtime components
 
-- Web/Auth: Next.js App Router and strict TypeScript.
+- Web/Auth: Next.js App Router and strict TypeScript. A dormant transport-free pairing activation
+  boundary now owns protected primary/secondary poll-verifier derivation, one separate probed
+  read-write pool, strict possession proof, server-owned IDs, and fixed admission/timing. Pairing
+  start, browser/session/WebAuthn approval, anonymous HTTP policy, live login, and deployment remain
+  separate gates.
 - Ingest: a small Fastify service with no OAuth, admin, signing, or deployment credentials. Its
   first local slices are a pure raw-request verification kernel and a bounded least-privileged
   PostgreSQL adapter, a protected exact two-key origin configuration reader, and an atomic
@@ -222,8 +226,12 @@ isolated one-use signer behind an equally inaccessible device-bound key capabili
 Rust/Ingest vector proves exact body, public-key, and signature agreement. ADR 0026 adds a second
 domain-separated pairing-possession policy, inaccessible pending-key/challenge signer, and pure
 strict Web verifier with a shared synthetic vector. Context construction, key generation/storage,
-pairing transaction/poll/approval/activation composition, transport, retry, scheduling, and support
-remain absent.
+pairing transaction start/browser approval, transport, retry, scheduling, and support remain absent.
+ADR 0027 adds the dormant server-side half of the final activation step: exact 32-byte poll tokens
+become primary/secondary HMAC-SHA-256 verifier candidates, one probed read-write Web pool selects at
+most one approved transaction, the strict proof is mandatory, and only server-owned IDs reach the
+atomic procedure. Its four-call admission and 250-millisecond floor are local process safeguards,
+not an anonymous route or distributed client-rate policy.
 
 ### Date semantics
 

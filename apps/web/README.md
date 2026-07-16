@@ -4,9 +4,10 @@ This workspace is the Phase 1 product shell: a responsive pixel-art race, Commun
 demo profile built entirely from committed synthetic fixtures. It is suitable for local design,
 accessibility, localization, and scoring review. It is not an authenticated product and does not
 read Codex or user accounts. Server-only score database, public problem-response, local score route,
-and pure pairing-possession verification modules now exist, but no visible component calls those
-boundaries and no working database login, pairing route, or deployment is supplied; the synthetic
-prototype still does not query a database.
+pure pairing-possession verification, and dormant poll-verifier/database/activation composition
+modules now exist, but no visible component calls those boundaries and no working database login,
+pairing start/approval/HTTP route, or deployment is supplied; the synthetic prototype still does not
+query a database.
 
 ## Run it
 
@@ -26,26 +27,31 @@ for a hosted deployment; it is public configuration, not a secret. Focused check
 
 ## Module map
 
-| Path                                   | Responsibility                                                 | Trust boundary                                                                  |
-| -------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `app/page.tsx`                         | Builds the synthetic public payload on the server              | Must pass only public presentation data into the client tree                    |
-| `lib/race-data.ts`                     | Clearly synthetic raw activity fixtures and payload projection | Marked `server-only`; never replace with exports or real account data           |
-| `lib/public-community-score-mapper.ts` | Validates and maps the exact SQL score projection              | Server-only, exact allowlist, top-32, and fail-closed                           |
-| `lib/public-community-score-store.ts`  | Executes the fixed public-score procedure and mapper           | Canonical Monday only; verifies every checkout; route constructs it lazily      |
-| `lib/public-community-score-route.ts`  | Parses and serializes the public score HTTP boundary           | Closed query/Accept, exact errors, admission, deadlines, and no CORS            |
-| `lib/public-score-admission.ts`        | Enforces the no-queue public-read concurrency ceiling          | Four active reads; lease held until adapter settlement                          |
-| `lib/public-http-problem.ts`           | Generates opaque request IDs and closed public error responses | Server-only; validates the contract; no inbound ID, CORS, detail, or cause      |
-| `lib/pairing-possession-verifier.ts`   | Strictly verifies one approved pending-device proof            | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence |
-| `lib/public-score-database-config.ts`  | Parses the dedicated Web login and TLS/pool contract           | Owner settings are separate; production is verify-full; errors reflect no value |
-| `lib/public-score-database-pool.ts`    | Wraps `pg` with narrow connect/query/release/close authority   | Four connections; bounded waits; stable idle-error signal only                  |
-| `lib/scoring.ts`                       | Bounded daily/weekly score and deterministic rank calculation  | Treat all future device input as untrusted and validate before calling          |
-| `lib/race-types.ts`                    | Client-safe participant and demo-profile shape                 | Must not gain raw tokens or source/account identifiers                          |
-| `lib/public-origin.ts`                 | Strict parser for the canonical social-metadata origin         | Server-only; hosted origins require HTTPS DNS and no extra URL parts            |
-| `lib/car-recipe.ts`                    | Closed-enum car customization and fixed sprites                | No arbitrary colors, markup, text, files, SVG, or URLs                          |
-| `components/pixel-race-canvas.tsx`     | Deterministic code-native renderer                             | Draws fixed primitives only; semantic DOM description is mandatory              |
-| `components/race-experience.tsx`       | EN/RU interaction, table, profile, theme, and motion controls  | Local storage is restricted to non-personal preferences                         |
-| `proxy.ts`                             | Per-response nonce CSP                                         | Keep production CSP fail-closed and free of remote origins                      |
-| `next.config.ts`                       | Static security headers and build isolation                    | Turbopack must remain pinned to this repository root                            |
+| Path                                    | Responsibility                                                 | Trust boundary                                                                   |
+| --------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `app/page.tsx`                          | Builds the synthetic public payload on the server              | Must pass only public presentation data into the client tree                     |
+| `lib/race-data.ts`                      | Clearly synthetic raw activity fixtures and payload projection | Marked `server-only`; never replace with exports or real account data            |
+| `lib/public-community-score-mapper.ts`  | Validates and maps the exact SQL score projection              | Server-only, exact allowlist, top-32, and fail-closed                            |
+| `lib/public-community-score-store.ts`   | Executes the fixed public-score procedure and mapper           | Canonical Monday only; verifies every checkout; route constructs it lazily       |
+| `lib/public-community-score-route.ts`   | Parses and serializes the public score HTTP boundary           | Closed query/Accept, exact errors, admission, deadlines, and no CORS             |
+| `lib/public-score-admission.ts`         | Enforces the no-queue public-read concurrency ceiling          | Four active reads; lease held until adapter settlement                           |
+| `lib/public-http-problem.ts`            | Generates opaque request IDs and closed public error responses | Server-only; validates the contract; no inbound ID, CORS, detail, or cause       |
+| `lib/pairing-possession-verifier.ts`    | Strictly verifies one approved pending-device proof            | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence  |
+| `lib/pairing-poll-verifier.ts`          | Derives fixed poll-verifier candidates under protected keys    | Primary plus optional secondary; no raw key container; close clears key copies   |
+| `lib/pairing-activation-database.ts`    | Owns approved lookup, strict proof, and exact activation       | Fixed procedures only; server IDs only; destructive release on boundary failure  |
+| `lib/pairing-activation-application.ts` | Composes dormant transport-free activation policy              | Four admitted calls, 250 ms floor, generic failure, no HTTP or browser authority |
+| `lib/pairing-database-config.ts`        | Derives a separate read-write pool from the Web/Auth login     | Same strict TLS/deadlines; explicit role/search-path/read-write probe            |
+| `lib/pairing-database-pool.ts`          | Wraps `pg` with fixed pairing lookup/activation calls          | No generic query; copies/clears verifier parameters; stable idle-error signal    |
+| `lib/public-score-database-config.ts`   | Parses the dedicated Web login and TLS/pool contract           | Owner settings are separate; production is verify-full; errors reflect no value  |
+| `lib/public-score-database-pool.ts`     | Wraps `pg` with narrow connect/query/release/close authority   | Four connections; bounded waits; stable idle-error signal only                   |
+| `lib/scoring.ts`                        | Bounded daily/weekly score and deterministic rank calculation  | Treat all future device input as untrusted and validate before calling           |
+| `lib/race-types.ts`                     | Client-safe participant and demo-profile shape                 | Must not gain raw tokens or source/account identifiers                           |
+| `lib/public-origin.ts`                  | Strict parser for the canonical social-metadata origin         | Server-only; hosted origins require HTTPS DNS and no extra URL parts             |
+| `lib/car-recipe.ts`                     | Closed-enum car customization and fixed sprites                | No arbitrary colors, markup, text, files, SVG, or URLs                           |
+| `components/pixel-race-canvas.tsx`      | Deterministic code-native renderer                             | Draws fixed primitives only; semantic DOM description is mandatory               |
+| `components/race-experience.tsx`        | EN/RU interaction, table, profile, theme, and motion controls  | Local storage is restricted to non-personal preferences                          |
+| `proxy.ts`                              | Per-response nonce CSP                                         | Keep production CSP fail-closed and free of remote origins                       |
+| `next.config.ts`                        | Static security headers and build isolation                    | Turbopack must remain pinned to this repository root                             |
 
 ## Public HTTP problem boundary
 
@@ -89,6 +95,30 @@ later. The pool checks the effective Web role, narrow login membership/attribute
 capability, search path, and read-only state before every fixed parameterized score query. No
 setting, driver error, SQL, or row value belongs in logs or client responses.
 
+## Pairing activation boundary
+
+The dormant pairing application reuses the same environment-owned Web/Auth login settings through a
+separate `viberacing-web-pairing` pool with explicit read-write state. It additionally requires a
+fresh canonical 32-byte `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL` and accepts a distinct
+optional `VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL` only for a bounded rotation overlap.
+The tracked primary value is intentionally invalid. The application retains decoded keys only in a
+closeable HMAC capability and never returns a key container.
+
+An admitted attempt accepts exactly `pollToken` and `possessionSignature`, derives two fixed-shape
+HMAC-SHA-256 candidates, probes the effective Web role/login/search-path/read-write state, and uses
+one fixed query to select at most one approved unexpired transaction. For every structurally valid
+lookup outcome, the high-level adapter runs the strict possession verifier and alone calls exact SQL
+activation with a generated `dev_` ID, audit UUID, and common `req_` ID. The SQL procedure
+atomically rechecks expiry, approval, pending-key, profile, and source binding. Four in-flight
+leases held through a 250-millisecond floor bound steady-state local work to at most 16 minimum-path
+completions per second; short windows may still be bursty, and every non-success returns only
+`not_activated` plus the request ID.
+
+This is not an HTTP endpoint or complete abuse control. There is no pairing start, browser/session
+or WebAuthn approval, connector client, body/header parser, distributed client rate limit, live
+login/TLS connection, capacity evidence, monitoring, or deployment. The synthetic page and build do
+not construct the application.
+
 ## Public client data contract
 
 The browser may receive only:
@@ -124,10 +154,11 @@ aggregate source count; it does not pair or verify accounts.
   secrets in the visible prototype. Its only consumed environment setting is an optional public
   metadata origin; a malformed value fails the build. The dormant score adapter reads its dedicated
   server settings only when explicitly constructed.
-- The dormant pairing kernel accepts only one exact plain-object material tuple, copies the fixed
+- The pure pairing kernel accepts only one exact plain-object material tuple, copies the fixed
   challenge/public-key bytes, reconstructs the versioned message, and uses strict Ed25519 semantics.
-  It returns only a generic boolean and has no route, poll-token reader, database call, log, or
-  activation authority.
+  It returns only a generic boolean. The separate dormant application owns protected poll lookup,
+  fixed database calls, proof-before-activation ordering, local admission/timing, and generic
+  decisions; neither boundary has a route, log, client identity, or browser authority.
 - Product rendering uses local HTML/CSS/canvas code. The social preview is a documented,
   metadata-sanitized project-generated PNG; no remote visual source is loaded. The optional Next.js
   `sharp` graph is removed while image optimization is unused. A `never`-typed declaration covers
@@ -138,16 +169,20 @@ replace the Phase 2 authentication, ingestion, retention, deletion, and abuse-co
 
 ## Test strategy
 
-Vitest runs business-logic, data-boundary, HTTP-route/problem, admission, pairing cryptography,
-database-config/pool/store, component, interaction, CSP/header, localization, and axe-core
-accessibility tests. HTTP-boundary cases cover entropy, opaque tokens, every problem mapping, closed
-URL parsing, bounded media negotiation, overload settlement, headers, contract validation, hostile
-reflective inputs, and non-reflection. Adapter tests cover TLS/environment bounds, non-reflective
-failures, pool lifecycle, every-checkout role/login/search-path/read-only probes, fixed SQL
-parameters, release/destruction behavior, and mapper integration without requiring or claiming a
-live deployment login. Canvas tests execute real render loops against a typed context stub,
-including animated and no-context paths. Preference tests cover valid settings, reduced motion,
-pausing, invalid/blocked storage, and cleanup.
+Vitest runs business-logic, data-boundary, HTTP-route/problem, admission, pairing cryptography and
+activation composition, database-config/pool/store, component, interaction, CSP/header,
+localization, and axe-core accessibility tests. HTTP-boundary cases cover entropy, opaque tokens,
+every problem mapping, closed URL parsing, bounded media negotiation, overload settlement, headers,
+contract validation, hostile reflective inputs, and non-reflection. Adapter tests cover
+TLS/environment bounds, non-reflective failures, pool lifecycle, every-checkout
+role/login/search-path/read-only probes, fixed SQL parameters, release/destruction behavior, and
+mapper integration without requiring or claiming a live deployment login. Pairing cases additionally
+cover exact HMAC derivation and rotation, protected configuration, fixed two-candidate SQL,
+read-write role probes, the shared strict proof, hostile input/result/dependency shapes, server IDs,
+admission/timing, generic failures, clearing, release, and close without a real key or connection.
+Canvas tests execute real render loops against a typed context stub, including animated and
+no-context paths. Preference tests cover valid settings, reduced motion, pausing, invalid/blocked
+storage, and cleanup.
 
 Coverage thresholds apply to product components and libraries. Small framework entrypoints are
 excluded from unit coverage and exercised by `next build`; counting imports as unit coverage would

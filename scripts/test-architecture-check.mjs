@@ -117,7 +117,7 @@ const cases = [
     name: "rejects regression to a plaintext pairing secret design",
     mutate(directory) {
       mutate(directory, "docs/architecture/DATA_FLOW.md", (text) =>
-        text.replace("keyed poll verifier", "plaintext device secret"),
+        text.replaceAll("keyed poll verifier", "plaintext device secret"),
       );
     },
     expectedStatus: 1,

@@ -1,6 +1,6 @@
 # ADR 0004: Cloudflare ingress plus service and database capability isolation
 
-- Status: Accepted (database roles and server-only score adapter; network services pending)
+- Status: Accepted (database roles and bounded local service adapters; network services pending)
 - Date: 2026-07-14
 - Decision owners: Edge, Web/Auth, Ingest, Jobs, Database, and Operations
 - Supersedes: None
@@ -74,12 +74,14 @@ or granting broader database rights.
   projection, denies all runtime roles direct private-table access, and proves cross-role procedure
   denials. ADR 0011 adds a dedicated bounded Web pool and verifies the effective role, distinct
   narrow login, exact membership, database capability, search path, and read-only state before each
-  fixed score query. ADR 0013 later adds local HTTP score delivery around that adapter. ADR 0015
-  adds a pure local bounded raw-request, origin-proof, contract, and strict device-signature
-  verification kernel. ADR 0016 adds the dedicated bounded Ingest pool, per-checkout role/login/
-  search-path probe, and fixed device-lookup/submission mapping. A deployment login/TLS connection,
-  edge/network signer and direct-origin evidence, persistent origin replay store, HTTP Ingest and
-  composed live database flow, cleanup/scoring scheduler, and correction authority remain pending.
+  fixed score query. ADR 0013 later adds local HTTP score delivery around that adapter. ADR 0027
+  adds a separate read-write Web pairing pool with the same login boundary plus closed keyed
+  lookup/proof/activation composition; it has no route or live login. ADR 0015 adds a pure local
+  bounded raw-request, origin-proof, contract, and strict device-signature verification kernel. ADR
+  0016 adds the dedicated bounded Ingest pool, per-checkout role/login/search-path probe, and fixed
+  device-lookup/submission mapping. A deployment login/TLS connection, edge/network signer and
+  direct-origin evidence, persistent origin replay store, HTTP Ingest and composed live database
+  flow, cleanup/scoring scheduler, and correction authority remain pending.
 - Staging key rotation, service rollback, database migration overlap, restore, and kill-switch
   drills.
 - Admin user-to-role separation, step-up, reason, audit completeness, and conflict tests.

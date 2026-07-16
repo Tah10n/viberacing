@@ -50,4 +50,37 @@ describe("frontend lint policy", () => {
     expect(restrictedImports).toHaveLength(3);
     expect(restrictedSyntax).toHaveLength(2);
   }, 15_000);
+
+  it("confines every node-postgres access shape to the reviewed pool wrappers", async () => {
+    const eslint = new ESLint({ cwd: import.meta.dirname });
+    const source = [
+      'import { Pool } from "pg";',
+      'const lazy = import("pg");',
+      'export { Pool as DatabasePool } from "pg";',
+      'export * from "pg";',
+      'const legacy = require("pg");',
+      "void [Pool, lazy, legacy];",
+    ].join("\n");
+    const results = await Promise.all([
+      eslint.lintText(source, { filePath: resolve(import.meta.dirname, "lib", "scoring.ts") }),
+      eslint.lintText(source, {
+        filePath: resolve(import.meta.dirname, "components", "race-experience.tsx"),
+      }),
+    ]);
+
+    for (const [result] of results) {
+      const restrictedImports = result?.messages.filter(
+        ({ message, ruleId }) =>
+          ruleId === "no-restricted-imports" &&
+          (message.includes("reviewed Web database pool") ||
+            message.includes("server-side PostgreSQL access")),
+      );
+      const restrictedSyntax = result?.messages.filter(
+        ({ message, ruleId }) =>
+          ruleId === "no-restricted-syntax" && message.includes("Web PostgreSQL access"),
+      );
+      expect(restrictedImports).toHaveLength(3);
+      expect(restrictedSyntax).toHaveLength(2);
+    }
+  }, 15_000);
 });

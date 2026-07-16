@@ -36,15 +36,18 @@ message shared with the production Ingest verifier. An isolated one-use signer r
 unsigned access, consumes that value only with an inaccessible device-bound key capability, and
 returns the same body plus five exact signed header values. The shared synthetic vector is strictly
 verified across Rust and Ingest. A second inaccessible signer and pure Web verifier now agree on an
-exact synthetic pairing-possession proof without creating a transaction, handling a poll token, or
-calling activation. No boundary creates a context or real key or opens a network request. Candidate
-release, schema, fixture, synthetic-process, composer, pairing, and request-signer evidence does not
-populate the support matrix. Phase 0 hosted-publication controls remain blocked on real maintainer
-identities and GitHub configuration. No authentication route, OAuth/Argon2id/WebAuthn application
-flow, production secret-manager/edge key injection, Ingest host/port/TLS deployment entry point,
-production deployment, live Web/Jobs/Ingest database login/TLS integration, released or operational
-connector, supported Codex version, real-user ingestion, end-to-end public ranking, or finalization
-scheduler exists.
+exact synthetic pairing-possession proof. A dormant transport-free Web/Auth application now derives
+two fixed-shape HMAC poll-verifier candidates from protected primary/optional-secondary keys, probes
+a separate read-write Web pool, selects at most one approved row, runs that strict proof, and alone
+invokes exact atomic activation with server-owned identifiers behind four-call admission and a
+250-millisecond settlement floor. It creates no pairing transaction, browser approval, HTTP request,
+real key, or live database connection. Candidate release, schema, fixture, synthetic-process,
+composer, pairing, and request-signer evidence does not populate the support matrix. Phase 0
+hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
+No authentication route, OAuth/Argon2id/WebAuthn application flow, production secret-manager/edge
+key injection, Ingest host/port/TLS deployment entry point, production deployment, live
+Web/Jobs/Ingest database login/TLS integration, released or operational connector, supported Codex
+version, real-user ingestion, end-to-end public ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -137,19 +140,21 @@ scheduler exists.
   server-only Web kernel independently validates exact approved material and the canonical signature
   under strict Ed25519 semantics. Five Rust and seven Web cases share the same synthetic key/vector,
   reject changed or malformed inputs and zero material, and prove copy-before-await behavior. There
-  is still no poll-token verifier, pairing HTTP boundary, WebAuthn approval composition, database
-  adapter, activation call, or real key. A separate candidate-only composer consumes the real parser
-  output behind another capability with no public constructor. It revalidates source/sync/device
-  IDs, canonical UTC time, and daily bounds; manually emits the exact seven-field body; computes the
-  SHA-256 digest; and builds the exact unpadded base64url, LF-separated device message. An isolated
-  one-use signer consumes that otherwise inaccessible value with a device-bound Ed25519 key
-  capability, rejects an exact device mismatch, signs only the fixed message, and returns the same
-  body plus five header values. Nine Rust sync cases plus one production-path Ingest case share and
-  strictly verify an exact synthetic body, public-key, and signature vector. Prepared/signed private
-  byte buffers and the upstream key are zeroed on drop. No source/device context provider, fresh
-  entropy, clock, real key generation/store, end-to-end pairing, transport, retry, schedule, or
-  support claim exists; the compatibility matrix remains empty.
-- An ADR lifecycle/template and twenty-six accepted design decisions covering Community trust,
+  is now a protected primary/secondary poll-token verifier plus closed local database/application
+  activation composition, but still no pairing start, pairing HTTP boundary, WebAuthn approval,
+  connector pairing client, live database login, or real key. A separate candidate-only composer
+  consumes the real parser output behind another capability with no public constructor. It
+  revalidates source/sync/device IDs, canonical UTC time, and daily bounds; manually emits the exact
+  seven-field body; computes the SHA-256 digest; and builds the exact unpadded base64url,
+  LF-separated device message. An isolated one-use signer consumes that otherwise inaccessible value
+  with a device-bound Ed25519 key capability, rejects an exact device mismatch, signs only the fixed
+  message, and returns the same body plus five header values. Nine Rust sync cases plus one
+  production-path Ingest case share and strictly verify an exact synthetic body, public-key, and
+  signature vector. Prepared/signed private byte buffers and the upstream key are zeroed on drop. No
+  source/device context provider, fresh entropy, clock, real key generation/store, end-to-end
+  pairing, transport, retry, schedule, or support claim exists; the compatibility matrix remains
+  empty.
+- An ADR lifecycle/template and twenty-seven accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -158,7 +163,8 @@ scheduler exists.
   atomic origin replay, transport-free Community sync application composition, and the bounded local
   Fastify HTTP boundary, plus the fail-closed Codex handshake, candidate account/usage adapter, and
   inaccessible bounded one-shot process supervisor, exact-body sync composer, isolated one-use
-  device signing boundary, and bounded pairing-possession proof.
+  device signing boundary, bounded pairing-possession proof, and bounded pairing activation
+  composition.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -344,11 +350,11 @@ scheduler exists.
   challenge/context completion, terminal authority, deletion revoke, activated-device preservation,
   oversized/replay/role denial, atomic rollback, and fail-closed behavior at the lifetime-passkey
   provenance ceiling. These identity/pairing procedures do not perform OAuth, Argon2id, WebAuthn, or
-  pairing-possession Ed25519 cryptographic verification. A separate pure Web kernel now performs
-  only the last check against caller-supplied approved material; no route, poll lookup, database
-  adapter, or activation composition can reach it. The database therefore still cannot prove its
-  caller ran the verifier, and the separate request-signature kernel does not approve or activate a
-  pairing.
+  pairing-possession Ed25519 cryptographic verification internally. The closed Web pairing adapter
+  now derives the keyed poll lookup, obtains only one matching approved tuple, runs the separate
+  strict verifier, and calls activation only on success; the SQL procedure independently rechecks
+  the full binding atomically. No HTTP route can reach that composition, and the separate later
+  request-signature kernel does not approve or activate a pairing.
 - Community ingest PostgreSQL scenarios prove exact activated device/source binding, minimal lookup,
   strict identifier/version/date/token/digest and 31-entry bounds, canonical millisecond time,
   server-time freshness, exact duplicate acknowledgement, mutated idempotency and nonce replay
@@ -392,6 +398,21 @@ scheduler exists.
   non-reflective error/signal codes. Config, pool, and store tests cover positive and negative
   boundaries without a live deployment credential. The local route is wired to this adapter, but no
   cache, live login/certificate, audited correction flow, or scheduler exists.
+- A second dormant server-only Web pairing adapter reuses the same environment-owned narrow Web/Auth
+  login through a separate four-connection read-write pool. It derives exactly two HMAC-SHA-256 poll
+  candidates from one mandatory primary and optional secondary 32-byte key, rejects duplicate or
+  malformed configuration, and clears retained/candidate copies on settlement or close. Every
+  checkout verifies the exact Web role, distinct narrow login, sole membership, database capability,
+  search path, and read-write state. One fixed query returns at most one approved/unexpired pairing
+  ID/challenge/public key; for every structurally valid lookup outcome, the high-level adapter runs
+  the strict ADR 0026 proof and alone invokes the exact activation procedure with a server-generated
+  `dev_` ID, audit UUID, and common `req_` ID. The transport-free application admits four unsettled
+  attempts, holds each through a 250-millisecond floor, and returns only frozen `activated` or
+  generic `not_activated` decisions. The Web suite now contains 313 tests covering HMAC
+  vectors/rotation, hostile configuration/input/result shapes, fixed queries, driver confinement,
+  role drift, strict proof selection, IDs, admission/timing, generic failure, clearing, release, and
+  close. No pairing start/approval/HTTP route, client identity or distributed rate limit, live
+  login/TLS connection, capacity evidence, real key, or deployment is claimed.
 - A private TypeScript Jobs workspace now accepts exactly one fixed 1000-row cleanup command or one
   canonical Monday refresh/finalization command. It revalidates closed plain job data, reads only
   redacted `VIBERACING_JOBS_DATABASE_*` configuration, permits cleartext only for explicit
@@ -511,28 +532,28 @@ defect found and corrected during review. The report names its local-only limita
 
 Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/pepper and
 authentication-route generic HTTP response translation, WebAuthn cryptographic verification, pairing
-poll-token hashing/custody, HTTP admission, verification-to-activation composition, and anonymous
-login/pairing/recovery edge rate limits and cleanup, an Ingest host/port/TLS deployment entry point,
-trusted edge routing and direct-origin denial, live secret-manager/edge key injection, the Ingest
-live PostgreSQL login/TLS connection, distributed rate/backpressure controls and load evidence,
-scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring state, the
-Jobs scheduler/live login and application-to-PostgreSQL integration, audited corrections, deployed
-public-score delivery, purge workers, connector executable discovery/link/ownership and
-artifact/version admission, live Codex and cross-platform process evidence, supported operational
-account/usage integration, secure device-key storage, upload/CLI/packaging, release signing,
-deployment, and public beta operations remain proposed. The local Ingest key reader, kernel,
-adapter, application composer, and Fastify server now prove bounded protected configuration,
-raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
-pool, fixed-query, orchestration, no-queue/deadline policy, and result/problem serialization
-behavior, but not those deployed edge, live persistence, capacity, or operational boundaries. A
-bounded database score projection, versioned response-only schema, fail-closed server mapper,
-bounded PostgreSQL adapter, and local HTTP route now exist, including URL/media parsing,
-admission/deadline policy, store translation, and final serialization. Cache/invalidation,
-CarRecipe, streak/freshness, profile detail, client-rate and production-capacity controls,
-monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
-The visible web scoring and ranking experience still operates only on clearly synthetic in-process
-fixtures; no component calls the route or connects that page to the database-only
-scoring/finalization/read state in revisions 0001 through 0012.
+start/browser approval and connector client, HTTP parsing/response contracts, client-identity and
+distributed admission/rate/deadline policy, and anonymous login/pairing/recovery edge limits and
+cleanup, an Ingest host/port/TLS deployment entry point, trusted edge routing and direct-origin
+denial, live secret-manager/edge key injection, the Ingest live PostgreSQL login/TLS connection,
+distributed rate/backpressure controls and load evidence, scheduled execution/monitoring of
+ingest-retention cleanup, cleanup for other expiring state, the Jobs scheduler/live login and
+application-to-PostgreSQL integration, audited corrections, deployed public-score delivery, purge
+workers, connector executable discovery/link/ownership and artifact/version admission, live Codex
+and cross-platform process evidence, supported operational account/usage integration, secure
+device-key storage, upload/CLI/packaging, release signing, deployment, and public beta operations
+remain proposed. The local Ingest key reader, kernel, adapter, application composer, and Fastify
+server now prove bounded protected configuration, raw-envelope/JSON/HTTP framing, origin-proof,
+contract, strict Ed25519 device, least-privileged pool, fixed-query, orchestration,
+no-queue/deadline policy, and result/problem serialization behavior, but not those deployed edge,
+live persistence, capacity, or operational boundaries. A bounded database score projection,
+versioned response-only schema, fail-closed server mapper, bounded PostgreSQL adapter, and local
+HTTP route now exist, including URL/media parsing, admission/deadline policy, store translation, and
+final serialization. Cache/invalidation, CarRecipe, streak/freshness, profile detail, client-rate
+and production-capacity controls, monitoring backend, deployment login, certificate, edge policy,
+and live adapter integration do not. The visible web scoring and ranking experience still operates
+only on clearly synthetic in-process fixtures; no component calls the route or connects that page to
+the database-only scoring/finalization/read state in revisions 0001 through 0012.
 
 ## Evidence commands
 
