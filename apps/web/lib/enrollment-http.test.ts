@@ -67,6 +67,15 @@ function serviceFixture(): EnrollmentService {
         passkeyCookie: "opaque-passkey",
       }),
     ),
+    beginPasskeyAdd: vi.fn(() =>
+      Promise.resolve({
+        authenticationOptions: { challenge: Buffer.alloc(32, 6).toString("base64url") },
+        passkeyAddCookie: "opaque-passkey-add",
+        registrationOptions: {
+          challenge: Buffer.alloc(32, 7).toString("base64url"),
+        } as PublicKeyCredentialCreationOptionsJSON,
+      }),
+    ),
     beginPasskeyRevoke: vi.fn(() =>
       Promise.resolve({
         options: { challenge: Buffer.alloc(32, 5).toString("base64url") },
@@ -77,6 +86,7 @@ function serviceFixture(): EnrollmentService {
     completeGithub: vi.fn(() => Promise.resolve({ sessionCookie: "opaque-session" })),
     completeLogin: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskey: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
+    completePasskeyAdd: vi.fn(() => Promise.resolve(true)),
     completePasskeyRevoke: vi.fn(() => Promise.resolve(true)),
     logout: vi.fn(() => Promise.resolve(true)),
     readPasskeyInventory: vi.fn(() => Promise.resolve(undefined)),
@@ -249,6 +259,53 @@ describe("enrollment HTTP boundary", () => {
     ).resolves.toMatchObject({ status: 400 });
   });
 
+  it("binds passkey addition to the session and two fresh ceremonies", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const options = await http.passkeyAddOptions(
+      post(
+        "/auth/passkeys/add/options",
+        JSON.stringify({ label: "Backup passkey" }),
+        "application/json",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(options.status).toBe(200);
+    expect(options.headers.get("set-cookie")).toContain(
+      "viberacing_passkey_add=opaque-passkey-add",
+    );
+    expect(options.headers.get("set-cookie")).toContain("Path=/auth/passkeys/add");
+    await expect(options.json()).resolves.toEqual({
+      authenticationOptions: { challenge: Buffer.alloc(32, 6).toString("base64url") },
+      registrationOptions: { challenge: Buffer.alloc(32, 7).toString("base64url") },
+    });
+    expect(service.beginPasskeyAdd).toHaveBeenCalledWith("opaque-session", {
+      label: "Backup passkey",
+    });
+
+    const body = {
+      authentication: { id: "existing" },
+      registration: { id: "new" },
+    };
+    const verification = await http.passkeyAddVerify(
+      post(
+        "/auth/passkeys/add/verify",
+        JSON.stringify(body),
+        "application/json",
+        "viberacing_session=opaque-session; viberacing_passkey_add=opaque-passkey-add",
+      ),
+    );
+    expect(verification.status).toBe(204);
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_passkey_add=");
+    expect(service.completePasskeyAdd).toHaveBeenCalledWith(
+      "opaque-session",
+      "opaque-passkey-add",
+      body,
+    );
+  });
+
   it("binds passkey revocation to the session, target, and fresh assertion", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
@@ -310,6 +367,7 @@ describe("enrollment HTTP boundary", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`${origin}/join?error=unavailable`);
     expect(response.headers.get("set-cookie")).toContain("viberacing_login=");
+    expect(response.headers.get("set-cookie")).toContain("viberacing_passkey_add=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_passkey_revoke=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.logout).not.toHaveBeenCalled();

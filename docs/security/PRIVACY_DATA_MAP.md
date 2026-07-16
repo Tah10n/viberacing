@@ -95,11 +95,16 @@ The authenticated account read rounds passkey creation to a UTC date and renders
 labels, active/revoked state, and the current-authenticator marker; credential IDs, public keys,
 sign counters, exact activity timestamps, and profile IDs stay outside HTML. Only an owned
 non-current active key's opaque passkey ID enters the authenticated revoke control and its options
-request; the verify request carries only the WebAuthn response. The decoded master key is
-overwritten immediately after those purpose keys are derived, and the HTTP runtime exposes only the
-public origin and secure-cookie flag. The fixed GitHub user response parser accepts only a positive
-safe numeric `id` for return; the token and every other response field are discarded after the
-callback. Tests use reserved, synthetic values and injected GitHub/database/authenticator
+request; the verify request carries only the WebAuthn response. Backup-key addition validates and
+seals the Account label before prompting. Its authenticated options response supplies the profile
+UUID and handle only as WebAuthn user fields to the user's authenticator plus two independent
+challenges; the verify request carries only the existing-key assertion and new-key registration
+responses. Neither credential material nor profile ID enters account HTML. The decoded master key is
+overwritten immediately after those purpose keys are derived. Add/revoke step-up is also one-time
+and at most five minutes; its consumed-row cleanup remains a launch requirement. The HTTP runtime
+exposes only the public origin and secure-cookie flag. The fixed GitHub user response parser accepts
+only a positive safe numeric `id` for return; the token and every other response field are discarded
+after the callback. Tests use reserved, synthetic values and injected GitHub/database/authenticator
 capabilities. No real-user retention or deployed subprocessor claim follows from this local
 boundary.
 

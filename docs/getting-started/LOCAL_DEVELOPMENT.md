@@ -10,18 +10,19 @@ retention cleanup, scoring, terminal finalization, and public score-projection p
 Web slice now composes invite redemption, GitHub OAuth state plus PKCE, encrypted browser cookies,
 initial WebAuthn registration, returning discoverable-credential login, a private session-scoped
 passkey inventory, an account page, fresh revocation of an owned non-current passkey, and logout. It
-has no working invite/OAuth/database credential or live-authenticator evidence, and passkey
-addition, recovery, pairing approval, a Jobs scheduler, real-user ingestion, audited correction, and
-an operational connector remain absent. A library-only Rust crate implements the bounded stable App
-Server initialization exchange and a candidate `0.144.4` account/usage parser with fixed methods,
-discarded account/summary fields, and bounded normalized daily output. A one-shot supervisor now
-composes those states with a fixed child argument, local pipes, cleared ambient environment,
-output/deadline limits, and reap-before-success behavior. Its reviewed-launch capability has no
-public constructor, so it cannot discover, admit, or execute a local Codex installation. A second
-inaccessible reviewed context lets a composer consume the minimized usage into the exact bounded
-sync JSON, SHA-256 digest, nonce encoding, and device message checked by Ingest. An isolated one-use
-signer consumes that closed value only with a third inaccessible device-bound key capability. A
-separate inaccessible pending-key/challenge signer and pure Web verifier agree on an exact synthetic
+can also add a backup passkey after separate existing-key assertion and registration ceremonies. It
+has no working invite/OAuth/database credential or live-authenticator evidence, and recovery,
+pairing approval, a Jobs scheduler, real-user ingestion, audited correction, and an operational
+connector remain absent. A library-only Rust crate implements the bounded stable App Server
+initialization exchange and a candidate `0.144.4` account/usage parser with fixed methods, discarded
+account/summary fields, and bounded normalized daily output. A one-shot supervisor now composes
+those states with a fixed child argument, local pipes, cleared ambient environment, output/deadline
+limits, and reap-before-success behavior. Its reviewed-launch capability has no public constructor,
+so it cannot discover, admit, or execute a local Codex installation. A second inaccessible reviewed
+context lets a composer consume the minimized usage into the exact bounded sync JSON, SHA-256
+digest, nonce encoding, and device message checked by Ingest. An isolated one-use signer consumes
+that closed value only with a third inaccessible device-bound key capability. A separate
+inaccessible pending-key/challenge signer and pure Web verifier agree on an exact synthetic
 pairing-possession proof. Two dormant Web/Auth applications create bounded pending material and
 later handle protected poll-verifier derivation, a fixed approved-row lookup through a separately
 probed read-write pool, that strict proof, and exact atomic activation with server-owned IDs behind

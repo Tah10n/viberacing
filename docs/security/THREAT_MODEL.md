@@ -10,8 +10,8 @@ Racing profiles in a self-reported Community league.
 This is a repository-scoped design threat model. The current tree contains public repository policy,
 toolchain, CI, documentation, local PostgreSQL identity/passkey/recovery foundations, and one local
 Next.js public-score route, one local invite/OAuth/initial-passkey enrollment and returning-passkey
-login plus private inventory/revocation slice with encrypted cookies and logout, one local one-shot
-Jobs runner, and local Community sync verification plus PostgreSQL-adapter, transport-free
+login plus private inventory/add/revocation slice with encrypted cookies and logout, one local
+one-shot Jobs runner, and local Community sync verification plus PostgreSQL-adapter, transport-free
 composition, and bounded Fastify HTTP boundaries; it does not yet contain a deployed Ingest service,
 Jobs scheduler, operational connector, deployment, or production data. A library-only Rust connector
 foundation now bounds and validates the stable App Server initialization and candidate account/usage
@@ -35,10 +35,10 @@ mock pool and validated result/problem decisions. The public score route has req
 admission, production-build, and visible browser-consumer/fallback evidence, while the Jobs runner
 has strict command/config/pool/role/result evidence. The identity slice has
 exact-origin/body/cookie, state/PKCE, token minimization, initial-registration, returning-login,
-session-derived passkey inventory, non-current-key revocation, fixed queries, admission, exact
-GitHub-only OAuth `form-action`, and EN/RU UI evidence with injected dependencies. None has a live
-database login, OAuth app, authenticator, edge, scheduler, or network deployment. Controls below are
-marked **implemented** only when executable evidence exists in
+session-derived passkey inventory, non-current-key revocation, backup-key addition, fixed queries,
+admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence with injected dependencies.
+None has a live database login, OAuth app, authenticator, edge, scheduler, or network deployment.
+Controls below are marked **implemented** only when executable evidence exists in
 [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
 security claims about the current tree.
 
@@ -149,7 +149,7 @@ and migration or rollback where applicable.
 | Surface                             | Realistic attacker story                                                                                   | Required mitigations                                                                                                             | Current status                                                                                                         |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Public race and profiles            | A visitor injects markup through a handle, enumerates profiles, or infers exact work hours                 | Plain-text bounded names, CSP, public-field allowlist, rounded freshness, rate and cache policy                                  | Visible route consumer/fallback tested; cache, real car/freshness, rate, live login/deployment planned                 |
-| OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up     | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke | Enrollment/login, inventory and revoke tested; passkey add, recovery, edge rate, cleanup, and live integration planned |
+| OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up     | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke | Enrollment/login plus passkey inventory/add/revoke tested; recovery, edge rate, cleanup, and live integration planned. |
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration           | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, revoke and rotate                        | DB, local start/proof/activation/cleanup tested; approval, HTTP/live rate and scheduling planned                       |
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Protocol plus synthetic supervisor tested; executable admission, platforms, support planned                            |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                    | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                        | Local signer/vector, verifier, replay stores, application, and HTTP tested; operational/live planned                   |

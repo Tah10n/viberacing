@@ -4,6 +4,7 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 
 const base64Url32Pattern = /^[A-Za-z0-9_-]{43}$/;
+const unsafePasskeyLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 const handlePattern = /^[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]$/;
 const uuidV4Pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const invitePattern = new RegExp(
@@ -41,6 +42,14 @@ const sessionKeys = new Set([
   "version",
 ]);
 const challengeKeys = new Set(["challenge", "challengeId", "expiresAt", "version"]);
+const addChallengeKeys = new Set([
+  "authenticationChallenge",
+  "challengeId",
+  "expiresAt",
+  "label",
+  "registrationChallenge",
+  "version",
+]);
 const revokeChallengeKeys = new Set([
   "challenge",
   "challengeId",
@@ -81,6 +90,15 @@ export interface PasskeyRegistrationChallenge {
   readonly challenge: string;
   readonly challengeId: string;
   readonly expiresAt: number;
+  readonly version: 1;
+}
+
+export interface PasskeyAddChallenge {
+  readonly authenticationChallenge: string;
+  readonly challengeId: string;
+  readonly expiresAt: number;
+  readonly label: string;
+  readonly registrationChallenge: string;
   readonly version: 1;
 }
 
@@ -276,6 +294,33 @@ export function readPasskeyRevokeChallenge(
     return undefined;
   }
   return Object.freeze(value as unknown as PasskeyRevokeChallenge);
+}
+
+export function readPasskeyAddChallenge(
+  value: unknown,
+  nowSeconds: number,
+): PasskeyAddChallenge | undefined {
+  if (
+    !isPlainObject(value) ||
+    !exactKeys(value, addChallengeKeys) ||
+    value.version !== 1 ||
+    !canonicalBase64Url32(value.authenticationChallenge) ||
+    !canonicalBase64Url32(value.registrationChallenge) ||
+    value.authenticationChallenge === value.registrationChallenge ||
+    typeof value.challengeId !== "string" ||
+    !uuidV4Pattern.test(value.challengeId) ||
+    typeof value.label !== "string" ||
+    value.label.length < 1 ||
+    value.label.length > 64 ||
+    value.label !== value.label.trim() ||
+    value.label !== value.label.normalize("NFC") ||
+    unsafePasskeyLabelPattern.test(value.label) ||
+    Array.from(value.label).length > 64 ||
+    !futureExpiry(value.expiresAt, nowSeconds, 300)
+  ) {
+    return undefined;
+  }
+  return Object.freeze(value as unknown as PasskeyAddChallenge);
 }
 
 export const enrollmentPatterns = Object.freeze({ handle: handlePattern, uuidV4: uuidV4Pattern });

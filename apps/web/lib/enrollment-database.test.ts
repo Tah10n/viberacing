@@ -11,6 +11,7 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
   const releases: boolean[] = [];
   const client: EnrollmentDatabaseClient = {
     completeInitialPasskey: vi.fn(() => Promise.resolve([{ registered: true }])),
+    completePasskeyAddition: vi.fn(() => Promise.resolve([{ added: true }])),
     completePasskeyLogin: vi.fn(() =>
       Promise.resolve([
         {
@@ -21,6 +22,7 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
       ]),
     ),
     completePasskeyRevocation: vi.fn(() => Promise.resolve([{ revoked: true }])),
+    createPasskeyAddChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
@@ -157,6 +159,37 @@ describe("enrollment database", () => {
       },
     ]);
     await expect(
+      database.createPasskeyAddChallenge({
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000411",
+        contextDigest: new Uint8Array(32),
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      database.completePasskeyAddition({
+        auditEventId: profile.auditEventId,
+        backupEligible: false,
+        backupState: false,
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000411",
+        contextDigest: new Uint8Array(32),
+        cosePublicKey: new Uint8Array(77),
+        credentialId: new Uint8Array(32),
+        label: "Backup passkey",
+        observedSignCount: 2,
+        passkeyId: "00000000-0000-4000-8000-000000000412",
+        requestId: profile.requestId,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        signCount: 0,
+        verifiedBackupState: false,
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000406",
+      }),
+    ).resolves.toBe(true);
+    await expect(
       database.createPasskeyRevokeChallenge({
         challengeDigest: new Uint8Array(32),
         challengeId: "00000000-0000-4000-8000-000000000411",
@@ -211,8 +244,20 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(9);
-    expect(releases).toEqual([false, false, false, false, false, false, false, false, false]);
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(11);
+    expect(releases).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
   });
 
   it("destroys a checkout after boundary, query, or result failure", async () => {

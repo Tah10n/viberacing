@@ -6,7 +6,7 @@ import type { PasskeyInventoryItem } from "@/lib/enrollment-database";
 import type { Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
-import { PasskeyRevokeButton } from "./passkey-setup";
+import { PasskeyAddForm, PasskeyRevokeButton } from "./passkey-setup";
 
 interface AccountExperienceProps {
   readonly handle: string;
@@ -35,33 +35,36 @@ export function AccountExperience({ handle, locale, passkeys }: AccountExperienc
               {copy.passkeysUnavailable}
             </p>
           ) : (
-            <ul className="passkey-list">
-              {passkeys.map((passkey) => (
-                <li className="passkey-item" key={passkey.passkeyId}>
-                  <div className="passkey-item-heading">
-                    <strong>{passkey.label}</strong>
-                    <span className="passkey-state">
-                      {passkey.currentAuthenticator
-                        ? copy.currentPasskey
-                        : passkey.state === "active"
-                          ? copy.activePasskey
-                          : copy.revokedPasskey}
-                    </span>
-                  </div>
-                  <p className="auth-status">
-                    {copy.passkeyCreated}{" "}
-                    <time dateTime={passkey.createdOn}>{passkey.createdOn}</time>
-                  </p>
-                  {passkey.state === "active" && !passkey.currentAuthenticator ? (
-                    <PasskeyRevokeButton
-                      label={passkey.label}
-                      locale={locale}
-                      passkeyId={passkey.passkeyId}
-                    />
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <>
+              {passkeys.length < 32 ? <PasskeyAddForm locale={locale} /> : null}
+              <ul className="passkey-list">
+                {passkeys.map((passkey) => (
+                  <li className="passkey-item" key={passkey.passkeyId}>
+                    <div className="passkey-item-heading">
+                      <strong>{passkey.label}</strong>
+                      <span className="passkey-state">
+                        {passkey.currentAuthenticator
+                          ? copy.currentPasskey
+                          : passkey.state === "active"
+                            ? copy.activePasskey
+                            : copy.revokedPasskey}
+                      </span>
+                    </div>
+                    <p className="auth-status">
+                      {copy.passkeyCreated}{" "}
+                      <time dateTime={passkey.createdOn}>{passkey.createdOn}</time>
+                    </p>
+                    {passkey.state === "active" && !passkey.currentAuthenticator ? (
+                      <PasskeyRevokeButton
+                        label={passkey.label}
+                        locale={locale}
+                        passkeyId={passkey.passkeyId}
+                      />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </section>
         <form action="/auth/logout" method="post">

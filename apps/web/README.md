@@ -9,8 +9,8 @@ and default product shell remain synthetic and unauthenticated, with no working 
 pairing approval/HTTP route, real user data, or deployment. A separate local Phase 2 slice now
 implements invite redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations,
 initial passkey registration, returning login, a session-scoped passkey inventory, an account page,
-fresh revocation of an owned non-current passkey, and logout. It fails closed without externally
-provisioned configuration and has no live-user or deployment evidence.
+fresh backup-passkey addition, revocation of an owned non-current passkey, and logout. It fails
+closed without externally provisioned configuration and has no live-user or deployment evidence.
 
 ## Run it
 
@@ -47,9 +47,9 @@ provides no valid invite or working credential. See `.env.example` and the local
 | `lib/public-community-score-route.ts`              | Parses and serializes the public score HTTP boundary             | Closed query/Accept, exact errors, admission, deadlines, and no CORS               |
 | `lib/public-score-admission.ts`                    | Enforces the no-queue public-read concurrency ceiling            | Four active reads; lease held until adapter settlement                             |
 | `lib/public-http-problem.ts`                       | Generates opaque request IDs and closed public error responses   | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
-| `app/join`, `app/login`, `app/account`, `app/auth` | Presents and routes enrollment, login, revoke, and logout        | Thin entrypoints; no recovery, pairing approval, or admin                          |
-| `components/account-experience.tsx`                | Renders private passkey inventory, revoke, and logout            | Opaque target ID only; no credential/key/profile ID or exact activity timestamp    |
-| `lib/enrollment-http.ts`                           | Owns the nine local identity HTTP decisions                      | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
+| `app/join`, `app/login`, `app/account`, `app/auth` | Presents and routes enrollment, login, add, revoke, and logout   | Thin entrypoints; no recovery, pairing approval, or admin                          |
+| `components/account-experience.tsx`                | Renders private passkey inventory, add, revoke, and logout       | Opaque target ID only; no credential/key/profile ID or exact activity timestamp    |
+| `lib/enrollment-http.ts`                           | Owns the eleven local identity HTTP decisions                    | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
 | `lib/enrollment-service.ts`                        | Composes OAuth, registration, login, account, and logout         | Server IDs/secrets only; fixed database capabilities; generic failure              |
 | `lib/enrollment-cookie.ts`                         | Seals login, OAuth, passkey, and session continuations           | AES-GCM with purpose-separated keys, bounded expiry, HttpOnly, and narrow paths    |
 | `lib/github-oauth.ts`                              | Resolves one GitHub numeric user ID                              | State plus PKCE, no extra scope, fixed endpoints, token and other fields discarded |
@@ -179,9 +179,20 @@ and pending pairing authority derived from the target; activated devices remain 
 revocable. Only the authenticated revoke control/request receives the opaque target ID. Credential
 IDs, public keys, sign counters, exact activity times, and profile IDs remain server-only.
 
+The add control is available below the 32-record lifetime cap. `POST /auth/passkeys/add/options`
+accepts and validates only the bounded NFC label before any prompt, creates independent five-minute
+assertion and registration challenges, and seals both plus that label. The first ceremony freshly
+verifies an existing active credential; the second creates a discoverable user-verified credential
+for the same profile. The verify route accepts only those two responses. One fixed statement
+atomically consumes the session/profile/label/RP/origin-bound step-up, advances the verifying key's
+monotonic state, and inserts the new key. Duplicate credentials, cap races, malformed or mixed
+continuations, and replay fail generically. The profile UUID appears only as the authenticated
+registration options' pseudonymous WebAuthn user ID required by the authenticator; it is not added
+to account HTML or the verify request.
+
 This is not a launch-ready authentication system. There is no invite-issuance UI, recovery, passkey
-addition or other profile mutation beyond this revoke and logout, aggregate/distributed edge rate
-policy, cleanup for abandoned enrollment state, live OAuth/authenticator/database-login evidence,
+profile mutation beyond passkey add/revoke and logout, aggregate/distributed edge rate policy,
+cleanup for abandoned enrollment state, live OAuth/authenticator/database-login evidence,
 monitoring, or deployment. The tracked environment values are non-working placeholders.
 
 ## Pairing start and activation boundaries

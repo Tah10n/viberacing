@@ -47,7 +47,7 @@ function uuidBytes(value: string): Uint8Array<ArrayBuffer> {
   }
 }
 
-export async function createInitialPasskeyOptions(
+export async function createPasskeyRegistrationOptions(
   profileId: string,
   handle: string,
   rpId: string,
@@ -104,6 +104,23 @@ export async function createPasskeyLoginOptions(
 export function passkeyLoginContextDigest(rpId: string, origin: string): Buffer {
   return createHash("sha256")
     .update(`viberacing-passkey-login-v1\n${rpId}\n${origin}`, "utf8")
+    .digest();
+}
+
+export function passkeyAddContextDigest(
+  sessionId: string,
+  profileId: string,
+  handle: string,
+  label: string,
+  registrationChallenge: string,
+  rpId: string,
+  origin: string,
+): Buffer {
+  return createHash("sha256")
+    .update(
+      `viberacing-passkey-add-v1\n${sessionId}\n${profileId}\n${handle}\n${label}\n${registrationChallenge}\n${rpId}\n${origin}`,
+      "utf8",
+    )
     .digest();
 }
 

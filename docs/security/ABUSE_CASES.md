@@ -258,7 +258,11 @@ material availability cost.
   five-minute challenge and sealed continuation to that session/target/RP/origin context, requires a
   fresh exact user-verified assertion, and atomically consumes the challenge with terminal revoke.
   Tests cover current/foreign targets, closed body shapes, target binding, and replay-shaped
-  database failure. Passkey addition, other step-up and recovery verification, aggregate edge rate
+  database failure. The add path validates and seals the label before prompts, uses distinct
+  five-minute existing-key assertion and registration challenges, verifies both exact ceremonies,
+  and atomically consumes the session/profile/label/RP/origin-bound step-up while inserting the new
+  credential. Closed shapes, mixed challenge-cookie types, replay-shaped failure, lifetime cap, and
+  duplicate credentials fail closed. Other step-up and recovery verification, aggregate edge rate
   policy, abandoned consumed-state cleanup, live OAuth/authenticator/database integration, and
   deployment remain absent. The account read additionally revalidates exact session possession and
   accepts at most 32 closed, ordered rows with one current active authenticator; it renders no

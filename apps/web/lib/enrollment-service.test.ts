@@ -16,6 +16,8 @@ import type { JoinRequest } from "./enrollment-domain";
 import { createEnrollmentService } from "./enrollment-service";
 import type {
   EnrollmentDatabaseLoginCompletion,
+  EnrollmentDatabasePasskeyAddition,
+  EnrollmentDatabasePasskeyAddChallenge,
   EnrollmentDatabasePasskeyChallenge,
   EnrollmentDatabasePasskeyInventoryRequest,
   EnrollmentDatabasePasskeyRevocation,
@@ -51,11 +53,24 @@ function createFixture() {
   let loginCredentialLookup: Buffer | undefined;
   let inventorySessionDigest: Buffer | undefined;
   let inventorySessionDigestInput: Uint8Array | undefined;
+  let addChallengeWrite: EnrollmentDatabasePasskeyAddChallenge | undefined;
+  let additionWrite: EnrollmentDatabasePasskeyAddition | undefined;
   let revokeChallengeWrite: EnrollmentDatabasePasskeyRevokeChallenge | undefined;
   let revocationWrite: EnrollmentDatabasePasskeyRevocation | undefined;
   let verifiedLoginCredential: Buffer | undefined;
   const database: EnrollmentDatabase = {
     completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
+    completePasskeyAddition: vi.fn((input: EnrollmentDatabasePasskeyAddition) => {
+      additionWrite = {
+        ...input,
+        challengeDigest: Buffer.from(input.challengeDigest),
+        contextDigest: Buffer.from(input.contextDigest),
+        cosePublicKey: Buffer.from(input.cosePublicKey),
+        credentialId: Buffer.from(input.credentialId),
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve(true);
+    }),
     completePasskeyLogin: vi.fn((input: EnrollmentDatabaseLoginCompletion) => {
       loginCompletion = input;
       return Promise.resolve({
@@ -66,6 +81,15 @@ function createFixture() {
     }),
     completePasskeyRevocation: vi.fn((input: EnrollmentDatabasePasskeyRevocation) => {
       revocationWrite = {
+        ...input,
+        challengeDigest: Buffer.from(input.challengeDigest),
+        contextDigest: Buffer.from(input.contextDigest),
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve(true);
+    }),
+    createPasskeyAddChallenge: vi.fn((input: EnrollmentDatabasePasskeyAddChallenge) => {
+      addChallengeWrite = {
         ...input,
         challengeDigest: Buffer.from(input.challengeDigest),
         contextDigest: Buffer.from(input.contextDigest),
@@ -138,9 +162,12 @@ function createFixture() {
     "00000000-0000-4000-8000-000000000509",
     "00000000-0000-4000-8000-000000000510",
   ];
-  const challenge = Buffer.alloc(32, 0x61).toString("base64url");
-  const options = { challenge } as PublicKeyCredentialCreationOptionsJSON;
-  const loginOptions = { challenge } as PublicKeyCredentialRequestOptionsJSON;
+  const registrationChallenge = Buffer.alloc(32, 0x61).toString("base64url");
+  const authenticationChallenge = Buffer.alloc(32, 0x62).toString("base64url");
+  const options = { challenge: registrationChallenge } as PublicKeyCredentialCreationOptionsJSON;
+  const loginOptions = {
+    challenge: authenticationChallenge,
+  } as PublicKeyCredentialRequestOptionsJSON;
   const exchangeGithub = vi.fn(() => Promise.resolve(123_456));
   const createOptions = vi.fn(() => Promise.resolve(options));
   const createLoginOptions = vi.fn(() => Promise.resolve(loginOptions));
@@ -184,6 +211,9 @@ function createFixture() {
     verifyPasskey,
   });
   return {
+    addChallengeWrite: () => addChallengeWrite,
+    additionWrite: () => additionWrite,
+    authenticationChallenge,
     challengeSessionDigest: () => challengeSessionDigest,
     challengeSessionDigestInput: () => challengeSessionDigestInput,
     cookieCodec,
@@ -197,6 +227,7 @@ function createFixture() {
     inventorySessionDigest: () => inventorySessionDigest,
     inventorySessionDigestInput: () => inventorySessionDigestInput,
     revokeChallengeWrite: () => revokeChallengeWrite,
+    registrationChallenge,
     revocationWrite: () => revocationWrite,
     service,
     verifyPasskey,
@@ -387,6 +418,91 @@ describe("enrollment service", () => {
     expect(database.readPasskeyInventory).toHaveBeenCalledOnce();
   });
 
+  it("freshly authorizes and atomically adds one backup passkey", async () => {
+    const {
+      addChallengeWrite,
+      additionWrite,
+      authenticationChallenge,
+      cookieCodec,
+      database,
+      registrationChallenge,
+      service,
+      verifyLogin,
+      verifyPasskey,
+    } = createFixture();
+    const verifier = Buffer.alloc(32, 0x46);
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId: "00000000-0000-4000-8000-000000000520",
+      sessionVerifier: verifier.toString("base64url"),
+      version: 1,
+    });
+    const start = await service.beginPasskeyAdd(sessionCookie, { label: "Backup passkey" });
+    expect(start?.authenticationOptions.challenge).toBe(authenticationChallenge);
+    expect(start?.registrationOptions.challenge).toBe(registrationChallenge);
+    expect(database.createPasskeyAddChallenge).toHaveBeenCalledOnce();
+    expect(addChallengeWrite()).toMatchObject({
+      challengeId: "00000000-0000-4000-8000-000000000502",
+      sessionId: "00000000-0000-4000-8000-000000000520",
+    });
+
+    const credentialId = Buffer.alloc(32, 0x74);
+    const authentication = {
+      id: credentialId.toString("base64url"),
+      rawId: credentialId.toString("base64url"),
+      response: {},
+      type: "public-key",
+    };
+    const body = {
+      authentication,
+      registration: { id: "synthetic-registration" },
+    };
+    await expect(
+      service.completePasskeyAdd(sessionCookie, start?.passkeyAddCookie ?? "", body),
+    ).resolves.toBe(true);
+    expect(verifyLogin).toHaveBeenCalledWith(
+      authentication,
+      authenticationChallenge,
+      config.webauthnOrigin,
+      config.webauthnRpId,
+      expect.any(Object),
+    );
+    expect(verifyPasskey).toHaveBeenCalledWith(
+      body.registration,
+      registrationChallenge,
+      config.webauthnOrigin,
+      config.webauthnRpId,
+    );
+    expect(additionWrite()).toMatchObject({
+      auditEventId: "00000000-0000-4000-8000-000000000504",
+      challengeId: "00000000-0000-4000-8000-000000000502",
+      label: "Backup passkey",
+      observedSignCount: 4,
+      passkeyId: "00000000-0000-4000-8000-000000000503",
+      sessionId: "00000000-0000-4000-8000-000000000520",
+      verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
+    });
+
+    vi.mocked(database.completePasskeyAddition).mockResolvedValueOnce(false);
+    await expect(
+      service.completePasskeyAdd(sessionCookie, start?.passkeyAddCookie ?? "", body),
+    ).resolves.toBe(false);
+    await expect(
+      service.completePasskeyAdd(sessionCookie, start?.passkeyAddCookie ?? "", {
+        ...body,
+        label: "Changed label",
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      service.beginPasskeyAdd(sessionCookie, { label: " Backup passkey" }),
+    ).resolves.toBeUndefined();
+    expect(database.createPasskeyAddChallenge).toHaveBeenCalledOnce();
+  });
+
   it("authorizes and atomically revokes only a non-current owned passkey", async () => {
     const { cookieCodec, database, revokeChallengeWrite, revocationWrite, service, verifyLogin } =
       createFixture();
@@ -569,6 +685,7 @@ describe("enrollment service", () => {
   it("seals continuation cookies before consuming an invite or passkey challenge", async () => {
     const database: EnrollmentDatabase = {
       completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
+      completePasskeyAddition: vi.fn(() => Promise.resolve(true)),
       completePasskeyLogin: vi.fn(() =>
         Promise.resolve({
           handle: "pixel_driver",
@@ -577,6 +694,7 @@ describe("enrollment service", () => {
         }),
       ),
       completePasskeyRevocation: vi.fn(() => Promise.resolve(true)),
+      createPasskeyAddChallenge: vi.fn(() => Promise.resolve(true)),
       createPasskeyChallenge: vi.fn(() => Promise.resolve(true)),
       createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve(true)),
       enrollProfile: vi.fn(() => Promise.resolve(true)),

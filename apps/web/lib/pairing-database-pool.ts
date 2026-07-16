@@ -211,6 +211,57 @@ const readPasskeyInventoryQuery = `SELECT
 FROM viberacing_api.read_passkey_inventory($1::uuid, $2::bytea) AS inventory
 ORDER BY (inventory.created_at AT TIME ZONE 'UTC')::date, inventory.passkey_id`;
 
+const createPasskeyAddChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
+  SELECT viberacing_api.create_passkey_change_challenge(
+    $1::uuid,
+    $2::bytea,
+    'add'::text,
+    NULL::uuid,
+    $3::uuid,
+    $4::bytea,
+    $5::bytea,
+    $6::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS created
+FROM challenge_creation`;
+
+const completePasskeyAdditionQuery = `WITH challenge_consumption AS MATERIALIZED (
+  SELECT viberacing_api.consume_passkey_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    'passkey_change'::text,
+    $4::bytea,
+    $5::bytea,
+    $6::uuid,
+    $7::bigint,
+    $8::boolean
+  ) AS consumed
+), passkey_addition AS MATERIALIZED (
+  SELECT viberacing_api.add_passkey(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    $5::bytea,
+    $9::uuid,
+    $10::bytea,
+    $11::bytea,
+    $12::text,
+    $13::bigint,
+    $14::boolean,
+    $15::boolean,
+    $16::uuid,
+    $17::text
+  ) AS ignored
+  FROM challenge_consumption
+  WHERE consumed
+)
+SELECT
+  (SELECT consumed FROM challenge_consumption)
+  AND pg_catalog.count(*) = 1 AS added
+FROM passkey_addition`;
+
 const createPasskeyRevokeChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
   SELECT viberacing_api.create_passkey_change_challenge(
     $1::uuid,
@@ -353,6 +404,35 @@ export interface EnrollmentDatabasePasskeyInventoryRequest {
   readonly sessionVerifierDigest: Uint8Array;
 }
 
+export interface EnrollmentDatabasePasskeyAddChallenge {
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly expiresAt: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+}
+
+export interface EnrollmentDatabasePasskeyAddition {
+  readonly auditEventId: string;
+  readonly backupEligible: boolean;
+  readonly backupState: boolean;
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly cosePublicKey: Uint8Array;
+  readonly credentialId: Uint8Array;
+  readonly label: string;
+  readonly observedSignCount: number;
+  readonly passkeyId: string;
+  readonly requestId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly signCount: number;
+  readonly verifiedBackupState: boolean;
+  readonly verifiedPasskeyId: string;
+}
+
 export interface EnrollmentDatabasePasskeyRevokeChallenge {
   readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
@@ -394,8 +474,10 @@ export interface PairingDatabaseClient {
 
 export interface EnrollmentDatabaseClient {
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown>;
+  completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<unknown>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown>;
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<unknown>;
+  createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<unknown>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
@@ -511,6 +593,40 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         rotatedSessionVerifierDigest.fill(0);
       }
     },
+    async completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      const credentialId = Buffer.from(input.credentialId);
+      const cosePublicKey = Buffer.from(input.cosePublicKey);
+      try {
+        return await fixedQuery(completePasskeyAdditionQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.verifiedPasskeyId,
+          input.observedSignCount,
+          input.verifiedBackupState,
+          input.passkeyId,
+          credentialId,
+          cosePublicKey,
+          input.label,
+          input.signCount,
+          input.backupEligible,
+          input.backupState,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+        credentialId.fill(0);
+        cosePublicKey.fill(0);
+      }
+    },
     async completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown> {
       const challengeDigest = Buffer.from(input.challengeDigest);
       const contextDigest = Buffer.from(input.contextDigest);
@@ -556,6 +672,27 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           input.targetPasskeyId,
           input.auditEventId,
           input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
+    async createPasskeyAddChallenge(
+      input: EnrollmentDatabasePasskeyAddChallenge,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(createPasskeyAddChallengeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.expiresAt,
         ]);
       } finally {
         sessionVerifierDigest.fill(0);

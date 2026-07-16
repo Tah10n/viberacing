@@ -41,6 +41,10 @@ apply.
   fresh required-UV assertion to the exact active session, target, RP, origin, and five-minute
   challenge, then consume and revoke atomically. The opaque target ID may enter only the
   authenticated revoke control/request; never expose credential IDs or key material.
+- Passkey addition must validate and seal the label before WebAuthn, use independent required-UV
+  assertion and registration challenges, bind both to the active session/profile/RP/origin, and
+  consume-plus-add atomically under the existing lifetime cap. Profile UUID may enter only the
+  authenticated registration options required by the user's authenticator.
 - Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
   correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
   CORS/auth/retry semantics to the common problem-response boundary.

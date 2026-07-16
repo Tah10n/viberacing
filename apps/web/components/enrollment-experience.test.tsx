@@ -191,6 +191,73 @@ describe("enrollment experience", () => {
     expect(markup).not.toContain(passkeyId);
   });
 
+  it("uses an existing assertion before creating one backup passkey", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const fetchMock = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            authenticationOptions: { challenge: "authentication" },
+            registrationOptions: { challenge: "registration" },
+          }),
+          { headers: { "content-type": "application/json; charset=utf-8" } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(
+      <AccountExperience
+        handle="pixel_driver"
+        locale="en"
+        passkeys={[
+          {
+            createdOn: "2026-07-15",
+            currentAuthenticator: true,
+            label: "Primary passkey",
+            passkeyId: "00000000-0000-4000-8000-000000000511",
+            state: "active",
+          },
+        ]}
+      />,
+    );
+    const input = mounted.container.querySelector<HTMLInputElement>('input[name="label"]');
+    if (input === null) {
+      throw new Error("expected backup passkey label input");
+    }
+    input.value = "Laptop backup";
+    await act(async () => {
+      input
+        .closest("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(webauthn.startAuthentication).toHaveBeenCalledWith({
+      optionsJSON: { challenge: "authentication" },
+    });
+    expect(webauthn.startRegistration).toHaveBeenCalledWith({
+      optionsJSON: { challenge: "registration" },
+    });
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      "/auth/passkeys/add/options",
+      "/auth/passkeys/add/verify",
+    ]);
+    expect(fetchMock.mock.calls[0]?.[1].body).toBe('{"label":"Laptop backup"}');
+    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
+    expect(typeof verificationBody).toBe("string");
+    if (typeof verificationBody !== "string") {
+      throw new Error("expected serialized add request body");
+    }
+    expect(JSON.parse(verificationBody)).toEqual({
+      authentication: { id: "synthetic-login" },
+      registration: { id: "synthetic" },
+    });
+    expect(mounted.container.textContent).toContain("could not be completed");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
   it("uses a fresh browser passkey assertion before revoking a non-current key", async () => {
     webauthn.browserSupportsWebAuthn.mockReturnValue(true);
     const targetPasskeyId = "00000000-0000-4000-8000-000000000512";

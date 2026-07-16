@@ -16,6 +16,7 @@ const enrollmentCookiePaths = Object.freeze({
   login: "/auth/login",
   oauth: "/auth/github/callback",
   passkey: "/auth/passkey",
+  passkeyAdd: "/auth/passkeys/add",
   passkeyRevoke: "/auth/passkeys/revoke",
   session: "/",
 });
@@ -26,6 +27,8 @@ export interface EnrollmentHttp {
   loginVerify(request: Request): Promise<Response>;
   logout(request: Request): Promise<Response>;
   passkeyOptions(request: Request): Promise<Response>;
+  passkeyAddOptions(request: Request): Promise<Response>;
+  passkeyAddVerify(request: Request): Promise<Response>;
   passkeyRevokeOptions(request: Request): Promise<Response>;
   passkeyRevokeVerify(request: Request): Promise<Response>;
   passkeyVerify(request: Request): Promise<Response>;
@@ -353,6 +356,126 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         lease.release();
       }
     },
+    async passkeyAddOptions(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/passkeys/add/options") ||
+        !contentType(request, jsonContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 256);
+        if (body === undefined) {
+          return problem("invalid_request");
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
+          return problem("invalid_request");
+        }
+        const sessionCookie = readCookie(
+          request.headers.get("cookie"),
+          enrollmentCookieNames.session,
+        );
+        if (sessionCookie === undefined) {
+          return problem("unauthorized");
+        }
+        const decision = await currentRuntime.service.beginPasskeyAdd(sessionCookie, parsed);
+        if (decision === undefined) {
+          return problem("unauthorized");
+        }
+        return new Response(
+          JSON.stringify({
+            authenticationOptions: decision.authenticationOptions,
+            registrationOptions: decision.registrationOptions,
+          }),
+          {
+            headers: noStoreHeaders({
+              "content-type": "application/json; charset=utf-8",
+              "set-cookie": serializeEnrollmentCookie(
+                enrollmentCookieNames.passkeyAdd,
+                decision.passkeyAddCookie,
+                300,
+                currentRuntime.config.secureCookies,
+                enrollmentCookiePaths.passkeyAdd,
+              ),
+            }),
+            status: 200,
+          },
+        );
+      } finally {
+        lease.release();
+      }
+    },
+    async passkeyAddVerify(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/passkeys/add/verify") ||
+        !contentType(request, jsonContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 32_768);
+        if (body === undefined) {
+          return problem("invalid_request");
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
+          return problem("invalid_request");
+        }
+        const cookieHeader = request.headers.get("cookie");
+        const sessionCookie = readCookie(cookieHeader, enrollmentCookieNames.session);
+        const passkeyAddCookie = readCookie(cookieHeader, enrollmentCookieNames.passkeyAdd);
+        if (sessionCookie === undefined || passkeyAddCookie === undefined) {
+          return problem("unauthorized");
+        }
+        const added = await currentRuntime.service.completePasskeyAdd(
+          sessionCookie,
+          passkeyAddCookie,
+          parsed,
+        );
+        if (!added) {
+          return problem("unauthorized");
+        }
+        return new Response(null, {
+          headers: noStoreHeaders({
+            "set-cookie": clearEnrollmentCookie(
+              enrollmentCookieNames.passkeyAdd,
+              currentRuntime.config.secureCookies,
+              enrollmentCookiePaths.passkeyAdd,
+            ),
+          }),
+          status: 204,
+        });
+      } finally {
+        lease.release();
+      }
+    },
     async passkeyRevokeOptions(request: Request): Promise<Response> {
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
@@ -497,6 +620,11 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           enrollmentCookieNames.passkey,
           currentRuntime.config.secureCookies,
           enrollmentCookiePaths.passkey,
+        ),
+        clearEnrollmentCookie(
+          enrollmentCookieNames.passkeyAdd,
+          currentRuntime.config.secureCookies,
+          enrollmentCookiePaths.passkeyAdd,
         ),
         clearEnrollmentCookie(
           enrollmentCookieNames.passkeyRevoke,

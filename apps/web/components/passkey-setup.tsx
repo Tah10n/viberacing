@@ -231,6 +231,91 @@ export function PasskeyLogin({ initialError = false }: PasskeyLoginProps) {
   );
 }
 
+interface PasskeyAddFormProps {
+  readonly locale: Locale;
+}
+
+interface PasskeyAddOptions {
+  readonly authenticationOptions: PublicKeyCredentialRequestOptionsJSON;
+  readonly registrationOptions: PublicKeyCredentialCreationOptionsJSON;
+}
+
+export function PasskeyAddForm({ locale }: PasskeyAddFormProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const copy = joinTranslations[locale];
+
+  async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy) {
+      return;
+    }
+    if (!browserSupportsWebAuthn()) {
+      setError(true);
+      return;
+    }
+    const form = new FormData(event.currentTarget);
+    const label = form.get("label");
+    if (typeof label !== "string") {
+      setError(true);
+      return;
+    }
+    setBusy(true);
+    setError(false);
+    try {
+      const optionsResponse = await fetch("/auth/passkeys/add/options", {
+        body: JSON.stringify({ label }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (!optionsResponse.ok) {
+        throw new Error("options unavailable");
+      }
+      const options = (await optionsResponse.json()) as PasskeyAddOptions;
+      const authentication = await startAuthentication({
+        optionsJSON: options.authenticationOptions,
+      });
+      const registration = await startRegistration({
+        optionsJSON: options.registrationOptions,
+      });
+      const verification = await fetch("/auth/passkeys/add/verify", {
+        body: JSON.stringify({ authentication, registration }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (verification.status !== 204) {
+        throw new Error("verification failed");
+      }
+      window.location.assign("/account");
+    } catch {
+      setError(true);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="auth-form" onSubmit={(event) => void submit(event)}>
+      <label>
+        {copy.passkeyLabel}
+        <input autoComplete="off" maxLength={64} name="label" required type="text" />
+        <small>{copy.addPasskeyCopy}</small>
+      </label>
+      <button className="primary-action" disabled={busy} type="submit">
+        {busy ? copy.addingPasskey : copy.addPasskey}
+      </button>
+      <span aria-live="polite" className={error ? "auth-error" : "auth-status"}>
+        {error ? copy.genericError : ""}
+      </span>
+    </form>
+  );
+}
+
 interface PasskeyRevokeButtonProps {
   readonly label: string;
   readonly locale: Locale;

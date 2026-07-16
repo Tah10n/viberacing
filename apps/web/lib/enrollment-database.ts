@@ -8,6 +8,8 @@ import {
   type EnrollmentDatabaseClient,
   type EnrollmentDatabaseInitialPasskey,
   type EnrollmentDatabaseLoginCompletion,
+  type EnrollmentDatabasePasskeyAddition,
+  type EnrollmentDatabasePasskeyAddChallenge,
   type EnrollmentDatabasePasskeyChallenge,
   type EnrollmentDatabasePasskeyInventoryRequest,
   type EnrollmentDatabasePasskeyRevocation,
@@ -58,8 +60,10 @@ export class EnrollmentDatabaseError extends Error {
 
 export interface EnrollmentDatabase {
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<boolean>;
+  completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<boolean>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile>;
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<boolean>;
+  createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<boolean>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
@@ -316,6 +320,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "registered"),
       );
     },
+    completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<boolean> {
+      return execute(
+        (client) => client.completePasskeyAddition(input),
+        (value) => exactBooleanRow(value, "added"),
+      );
+    },
     completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile> {
       return execute((client) => client.completePasskeyLogin(input), exactLoginProfile);
     },
@@ -323,6 +333,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
       return execute(
         (client) => client.completePasskeyRevocation(input),
         (value) => exactBooleanRow(value, "revoked"),
+      );
+    },
+    createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean> {
+      return execute(
+        (client) => client.createPasskeyAddChallenge(input),
+        (value) => exactBooleanRow(value, "created"),
       );
     },
     createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean> {

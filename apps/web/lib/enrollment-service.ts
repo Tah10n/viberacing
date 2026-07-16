@@ -18,11 +18,13 @@ import type {
 import {
   enrollmentPatterns,
   readEnrollmentSession,
+  readPasskeyAddChallenge,
   readPasskeyChallenge,
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
   type EnrollmentSession,
   type JoinRequest,
+  type PasskeyAddChallenge,
   type PasskeyRegistrationChallenge,
   type PasskeyRevokeChallenge,
   type PendingEnrollment,
@@ -33,9 +35,10 @@ import {
   githubAuthorizationUrl,
 } from "./github-oauth";
 import {
-  createInitialPasskeyOptions,
   createPasskeyLoginOptions,
+  createPasskeyRegistrationOptions,
   passkeyChallengeDigest,
+  passkeyAddContextDigest,
   passkeyContextDigest,
   passkeyLoginContextDigest,
   passkeyLoginCredentialId,
@@ -53,6 +56,8 @@ const activeSessionLifetimeSeconds = 30 * 24 * 60 * 60;
 const base64Url32Pattern = /^[A-Za-z0-9_-]{43}$/;
 const registrationBodyKeys = new Set(["label", "response"]);
 const authenticationBodyKeys = new Set(["response"]);
+const addStartBodyKeys = new Set(["label"]);
+const addBodyKeys = new Set(["authentication", "registration"]);
 const revokeTargetBodyKeys = new Set(["passkeyId"]);
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 
@@ -60,6 +65,7 @@ export const enrollmentCookieNames = Object.freeze({
   login: "viberacing_login",
   oauth: "viberacing_oauth",
   passkey: "viberacing_passkey",
+  passkeyAdd: "viberacing_passkey_add",
   passkeyRevoke: "viberacing_passkey_revoke",
   session: "viberacing_session",
 });
@@ -74,7 +80,7 @@ export interface EnrollmentCallbackDecision {
 }
 
 export interface PasskeyOptionsDecision {
-  readonly options: Awaited<ReturnType<typeof createInitialPasskeyOptions>>;
+  readonly options: Awaited<ReturnType<typeof createPasskeyRegistrationOptions>>;
   readonly passkeyCookie: string;
 }
 
@@ -96,10 +102,20 @@ export interface PasskeyRevokeOptionsDecision {
   readonly passkeyRevokeCookie: string;
 }
 
+export interface PasskeyAddOptionsDecision {
+  readonly authenticationOptions: Awaited<ReturnType<typeof createPasskeyLoginOptions>>;
+  readonly passkeyAddCookie: string;
+  readonly registrationOptions: Awaited<ReturnType<typeof createPasskeyRegistrationOptions>>;
+}
+
 export interface EnrollmentService {
   beginGithub(join: JoinRequest): EnrollmentStartDecision | undefined;
   beginLogin(): Promise<PasskeyLoginOptionsDecision | undefined>;
   beginPasskey(sessionCookie: string): Promise<PasskeyOptionsDecision | undefined>;
+  beginPasskeyAdd(
+    sessionCookie: string,
+    body: unknown,
+  ): Promise<PasskeyAddOptionsDecision | undefined>;
   beginPasskeyRevoke(
     sessionCookie: string,
     body: unknown,
@@ -120,6 +136,11 @@ export interface EnrollmentService {
     passkeyCookie: string,
     body: unknown,
   ): Promise<PasskeyCompletionDecision | undefined>;
+  completePasskeyAdd(
+    sessionCookie: string,
+    passkeyAddCookie: string,
+    body: unknown,
+  ): Promise<boolean>;
   completePasskeyRevoke(
     sessionCookie: string,
     passkeyRevokeCookie: string,
@@ -133,7 +154,7 @@ export interface EnrollmentService {
 interface EnrollmentServiceDependencies {
   readonly config: EnrollmentConfig;
   readonly cookieCodec: EnrollmentCookieCodec;
-  readonly createOptions?: typeof createInitialPasskeyOptions;
+  readonly createOptions?: typeof createPasskeyRegistrationOptions;
   readonly createLoginOptions?: typeof createPasskeyLoginOptions;
   readonly createRequestId?: () => string;
   readonly database: EnrollmentDatabase;
@@ -152,6 +173,15 @@ interface RegistrationBody {
 
 interface AuthenticationBody {
   readonly response: unknown;
+}
+
+interface PasskeyAddBody {
+  readonly authentication: unknown;
+  readonly registration: unknown;
+}
+
+interface PasskeyAddStartBody {
+  readonly label: string;
 }
 
 interface PasskeyRevokeTargetBody {
@@ -199,6 +229,21 @@ function sameState(expected: string, received: string): boolean {
   }
 }
 
+function readPasskeyLabel(value: unknown): string | undefined {
+  if (
+    typeof value !== "string" ||
+    value.length < 1 ||
+    value.length > 64 ||
+    value !== value.trim() ||
+    value !== value.normalize("NFC") ||
+    unsafeLabelPattern.test(value) ||
+    Array.from(value).length > 64
+  ) {
+    return undefined;
+  }
+  return value;
+}
+
 function readRegistrationBody(value: unknown): RegistrationBody | undefined {
   if (
     value === null ||
@@ -210,23 +255,18 @@ function readRegistrationBody(value: unknown): RegistrationBody | undefined {
   }
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
+  const label = readPasskeyLabel(record.label);
   if (
     keys.length !== registrationBodyKeys.size ||
     keys.some((key) => !registrationBodyKeys.has(key)) ||
-    typeof record.label !== "string" ||
-    record.label.length < 1 ||
-    record.label.length > 64 ||
-    record.label !== record.label.trim() ||
-    record.label !== record.label.normalize("NFC") ||
-    unsafeLabelPattern.test(record.label) ||
-    Array.from(record.label).length > 64 ||
+    label === undefined ||
     record.response === null ||
     typeof record.response !== "object" ||
     Array.isArray(record.response)
   ) {
     return undefined;
   }
-  return Object.freeze({ label: record.label, response: record.response });
+  return Object.freeze({ label, response: record.response });
 }
 
 function readAuthenticationBody(value: unknown): AuthenticationBody | undefined {
@@ -250,6 +290,53 @@ function readAuthenticationBody(value: unknown): AuthenticationBody | undefined 
     return undefined;
   }
   return Object.freeze({ response: record.response });
+}
+
+function readPasskeyAddBody(value: unknown): PasskeyAddBody | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (keys.length !== addBodyKeys.size || keys.some((key) => !addBodyKeys.has(key))) {
+    return undefined;
+  }
+  const authentication = readAuthenticationBody({ response: record.authentication });
+  const registration = readAuthenticationBody({ response: record.registration });
+  if (authentication === undefined || registration === undefined) {
+    return undefined;
+  }
+  return Object.freeze({
+    authentication: authentication.response,
+    registration: registration.response,
+  });
+}
+
+function readPasskeyAddStartBody(value: unknown): PasskeyAddStartBody | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  const label = readPasskeyLabel(record.label);
+  if (
+    keys.length !== addStartBodyKeys.size ||
+    keys.some((key) => !addStartBodyKeys.has(key)) ||
+    label === undefined
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ label });
 }
 
 function readPasskeyRevokeTargetBody(value: unknown): PasskeyRevokeTargetBody | undefined {
@@ -293,7 +380,7 @@ export function createEnrollmentService(
     cookieCodec,
     database,
     createLoginOptions = createPasskeyLoginOptions,
-    createOptions = createInitialPasskeyOptions,
+    createOptions = createPasskeyRegistrationOptions,
     createRequestId = () => createPublicRequestId().value,
     exchangeGithub = exchangeGithubUserId,
     now = () => new Date(),
@@ -418,6 +505,83 @@ export function createEnrollmentService(
           options,
           passkeyCookie: sealedChallenge,
         });
+      } catch {
+        return undefined;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+      }
+    },
+    async beginPasskeyAdd(
+      sessionCookie: string,
+      body: unknown,
+    ): Promise<PasskeyAddOptionsDecision | undefined> {
+      const session = readSession(sessionCookie);
+      const addition = readPasskeyAddStartBody(body);
+      const seconds = currentSeconds();
+      if (!session?.passkeyRegistered || addition === undefined || seconds === undefined) {
+        return undefined;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        const authenticationOptions = await createLoginOptions(config.webauthnRpId);
+        const registrationOptions = await createOptions(
+          session.profileId,
+          session.handle,
+          config.webauthnRpId,
+        );
+        if (
+          !base64Url32Pattern.test(authenticationOptions.challenge) ||
+          !base64Url32Pattern.test(registrationOptions.challenge) ||
+          authenticationOptions.challenge === registrationOptions.challenge
+        ) {
+          return undefined;
+        }
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return undefined;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        challengeDigest = passkeyChallengeDigest(authenticationOptions.challenge);
+        contextDigest = passkeyAddContextDigest(
+          session.sessionId,
+          session.profileId,
+          session.handle,
+          addition.label,
+          registrationOptions.challenge,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        const challengeId = randomUuid();
+        if (!enrollmentPatterns.uuidV4.test(challengeId)) {
+          return undefined;
+        }
+        const expiresAt = seconds + passkeyLifetimeSeconds;
+        const challenge: PasskeyAddChallenge = Object.freeze({
+          authenticationChallenge: authenticationOptions.challenge,
+          challengeId,
+          expiresAt,
+          label: addition.label,
+          registrationChallenge: registrationOptions.challenge,
+          version: 1,
+        });
+        const passkeyAddCookie = cookieCodec.seal("passkey", challenge);
+        const created = await database.createPasskeyAddChallenge({
+          challengeDigest,
+          challengeId,
+          contextDigest,
+          expiresAt: new Date(expiresAt * 1000).toISOString(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+        return created
+          ? Object.freeze({ authenticationOptions, passkeyAddCookie, registrationOptions })
+          : undefined;
       } catch {
         return undefined;
       } finally {
@@ -800,6 +964,118 @@ export function createEnrollmentService(
         sessionDigest?.fill(0);
         rotatedSessionSecret?.fill(0);
         rotatedSessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+      }
+    },
+    async completePasskeyAdd(
+      sessionCookie: string,
+      passkeyAddCookie: string,
+      body: unknown,
+    ): Promise<boolean> {
+      const session = readSession(sessionCookie);
+      const seconds = currentSeconds();
+      const addition = readPasskeyAddBody(body);
+      const challenge =
+        seconds === undefined
+          ? undefined
+          : readPasskeyAddChallenge(cookieCodec.open("passkey", passkeyAddCookie), seconds);
+      if (
+        !session?.passkeyRegistered ||
+        seconds === undefined ||
+        addition === undefined ||
+        challenge === undefined
+      ) {
+        return false;
+      }
+      let authenticationCredentialId: Buffer | undefined;
+      let material: PasskeyLoginMaterial | undefined;
+      let passkey: RegisteredPasskey | undefined;
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        authenticationCredentialId = passkeyLoginCredentialId(addition.authentication);
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (authenticationCredentialId === undefined || sessionVerifier === undefined) {
+          return false;
+        }
+        material = await database.readPasskeyLoginMaterial(authenticationCredentialId);
+        if (material === undefined) {
+          return false;
+        }
+        const verified = await verifyLogin(
+          addition.authentication,
+          challenge.authenticationChallenge,
+          config.webauthnOrigin,
+          config.webauthnRpId,
+          {
+            backupEligible: material.backupEligible,
+            cosePublicKey: material.cosePublicKey,
+            credentialId: authenticationCredentialId,
+            signCount: material.signCount,
+          },
+        );
+        if (verified === undefined) {
+          return false;
+        }
+        passkey = await verifyPasskey(
+          addition.registration,
+          challenge.registrationChallenge,
+          config.webauthnOrigin,
+          config.webauthnRpId,
+        );
+        if (passkey === undefined) {
+          return false;
+        }
+        const passkeyId = randomUuid();
+        const auditEventId = randomUuid();
+        if (
+          !enrollmentPatterns.uuidV4.test(passkeyId) ||
+          !enrollmentPatterns.uuidV4.test(auditEventId) ||
+          passkeyId === auditEventId
+        ) {
+          return false;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        challengeDigest = passkeyChallengeDigest(challenge.authenticationChallenge);
+        contextDigest = passkeyAddContextDigest(
+          session.sessionId,
+          session.profileId,
+          session.handle,
+          challenge.label,
+          challenge.registrationChallenge,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        return await database.completePasskeyAddition({
+          auditEventId,
+          backupEligible: passkey.backupEligible,
+          backupState: passkey.backupState,
+          challengeDigest,
+          challengeId: challenge.challengeId,
+          contextDigest,
+          cosePublicKey: passkey.cosePublicKey,
+          credentialId: passkey.credentialId,
+          label: challenge.label,
+          observedSignCount: verified.signCount,
+          passkeyId,
+          requestId: createRequestId(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+          signCount: passkey.signCount,
+          verifiedBackupState: verified.backupState,
+          verifiedPasskeyId: material.passkeyId,
+        });
+      } catch {
+        return false;
+      } finally {
+        authenticationCredentialId?.fill(0);
+        clearLoginMaterial(material);
+        clearRegisteredPasskey(passkey);
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
         challengeDigest?.fill(0);
         contextDigest?.fill(0);
       }

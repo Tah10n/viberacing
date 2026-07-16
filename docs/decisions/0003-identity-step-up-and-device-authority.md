@@ -131,7 +131,9 @@ The local Web/Auth account slice now supplies that application evidence for revo
 non-current active passkey. It revalidates the session-derived inventory, binds one five-minute
 challenge to the exact session, target, RP, and origin, verifies a fresh user-verified assertion,
 and uses one atomic consume-and-revoke query. Current, last, foreign, malformed, and replayed
-attempts fail closed. Passkey addition and the other critical-action step-up paths remain separate.
+attempts fail closed. The same account slice now validates and seals a backup-key label, verifies
+independent existing-key assertion and registration challenges, and uses one atomic consume-and-add
+query under the existing lifetime cap. The other critical-action step-up paths remain separate.
 
 Revision 0006 adds passkey-protected recovery-code regeneration, immediate used-PHC scrub, a single
 ten-minute recovery-only registration authority, deletion revoke, and atomic replacement-passkey
@@ -142,9 +144,9 @@ authority and remaining application boundary.
 
 Remaining application and protocol evidence includes:
 
-- Application WebAuthn transaction rendering and verification for passkey addition and remaining
-  critical-action step-up, recovery Argon2id/pepper and generic-response behavior, and anonymous
-  ceremony/recovery-lookup rate-limit and cleanup tests.
+- Application WebAuthn transaction rendering and verification for remaining critical-action step-up,
+  recovery Argon2id/pepper and generic-response behavior, and anonymous ceremony/recovery-lookup
+  rate-limit and cleanup tests.
 - Application-level pairing code attempt/rate limits, displayed-transaction rendering, external
   Ed25519 proof verification, device-revoke UI/route, key rotation, bounded cleanup, and plaintext
   token log rejection.

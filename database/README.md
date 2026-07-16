@@ -440,6 +440,13 @@ session/target/context-bound challenge and, after fresh WebAuthn verification, u
 that consumes the challenge before calling `revoke_passkey`. Credential IDs, public keys, sign
 counters, exact activity timestamps, and profile IDs remain outside the page and request.
 
+The same application now composes the existing add capability without a migration. It validates and
+seals one label, issues independent existing-key assertion and new-key registration challenges, and
+binds both to the exact session/profile/RP/origin context. After both application verifiers succeed,
+one materialized statement consumes the step-up and calls `add_passkey`; a failed consume never
+calls add, while any insert/audit failure rolls back the consume. The database rechecks the lifetime
+cap under its existing profile serialization.
+
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
 belong to private deployment configuration and require application-level tests before use.

@@ -2,10 +2,10 @@
 
 ## Status and notation
 
-Most sequences remain planned application contracts. The enrollment, returning-login, and
-non-current-passkey revocation sequences below plus the public score consumer are now locally
-implemented boundaries; none has live credentials, edge, or deployment evidence. Revisions 0001
-through 0014 provide private identity/source/device/pairing/audit/deletion/usage tables,
+Most sequences remain planned application contracts. The enrollment, returning-login, backup-key
+addition, and non-current-passkey revocation sequences below plus the public score consumer are now
+locally implemented boundaries; none has live credentials, edge, or deployment evidence. Revisions
+0001 through 0014 provide private identity/source/device/pairing/audit/deletion/usage tables,
 deny-by-default roles, and a narrow database slice for invite issuance, enrollment, exact-session
 challenges, initial-passkey activation, passkey login and management, restricted recovery, session
 rotation/revocation, immediate deletion lock-down, source-bound pairing, source/device lifecycle
@@ -113,6 +113,13 @@ sequenceDiagram
   DB-->>Web: Labels, lifecycle state, rounded creation dates, current marker
   Web-->>Browser: Server-rendered private list without credential or key material
 
+  User->>Browser: Add a labeled backup passkey
+  Browser->>Web: Send validated label with current session
+  Web-->>Browser: Independent assertion and registration challenges
+  Web->>Authenticator: Fresh existing-key assertion, then new-key registration
+  Web->>Web: Verify both exact ceremonies
+  Web->>DB: Atomically consume add step-up and insert new credential
+
   User->>Browser: Revoke an owned non-current active passkey
   Browser->>Web: Send opaque target ID with current session
   Web->>DB: Read inventory and create exact session/target/context challenge
@@ -137,7 +144,14 @@ enters only the authenticated revoke control/request for a non-current active ta
 revalidates ownership and state before creating the five-minute challenge, while the atomic database
 call rechecks last-key protection under lock. Current, last, foreign, expired, malformed, and
 replayed attempts fail generically. Credential IDs, public keys, sign counters, exact activity
-timestamps, and profile IDs never enter the page or request. Passkey addition remains planned.
+timestamps, and profile IDs never enter the page or verify request.
+
+The add control appears only below the 32-record lifetime cap. It validates and seals the label
+before either prompt, uses distinct five-minute assertion and registration challenges, and binds
+both to the active session/profile/RP/origin. The profile UUID enters only the authenticated
+registration options as the pseudonymous WebAuthn user ID required by the authenticator. One
+materialized statement consumes the verified existing-key step-up and adds the new credential; cap,
+duplicate, mixed-cookie, malformed, expired, and replayed attempts fail generically.
 
 ## Recovery-code rotation and passkey replacement
 

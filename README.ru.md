@@ -19,6 +19,7 @@ reduced-motion режим работают без реальных данных.
 соединяет GitHub OAuth со state и PKCE, зашифрованное краткоживущее продолжение, атомарное
 enrollment, обязательную регистрацию passkey, повторный discoverable-credential вход, session-scoped
 список ключей доступа, страницу активного профиля, защищённый отзыв не текущего passkey и logout.
+Страница также позволяет добавить резервный passkey после свежей проверки существующим ключом.
 Репозиторий не предоставляет рабочий invite issuer, OAuth registration, реальные secrets, live
 OAuth/authenticator/database credentials, edge abuse controls или evidence с реальным пользователем.
 
@@ -170,22 +171,25 @@ login options хранят profile-free challenge только в encrypted cook
 создания и отметку текущего authenticator; credential IDs и key material не рендерятся. Для owned
 non-current passkey страница отправляет только opaque ID, требует свежий user-verified assertion с
 привязкой к сессии и цели и вызывает атомарный consume-and-revoke; текущий или последний активный
-ключ удалить нельзя. Verifier для остальных step-up действий, recovery, WebAuthn pairing approval и
-edge rate limits для анонимного login и recovery lookup пока отсутствуют. Database-only Community
-ingest capability уже выдаёт минимальный материал активного устройства и принимает bounded
-source-bound snapshots с exact retry, nonce replay, monotonic source/date, quarantine и
-lifecycle-race enforcement. Отдельная Jobs-only procedure независимо удаляет bounded batches
-истёкших origin nonces, device nonces и raw snapshots, сохраняя current source/day values. Локальный
-one-shot Jobs runner теперь вызывает только cleanup, scoring refresh или finalization через
-отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
-deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI output.
-Сама база не проверяет wire signature; локальные kernel, adapter и application объединены на
-synthetic/mock-pool evidence, а Fastify boundary отдельно проверена через injection/loopback с mock
-application. Полный HTTP-to-PostgreSQL path не проверен через реальный login. Deployed HTTP ingest
-route, pairing-possession verifier, operational connector, cleanup/scoring scheduler, live
-Ingest/Jobs login/TLS integration, monitoring backend, deployed public score read, audited
-correction flow, purge worker и deployed database ещё не реализованы, поэтому локальный enrollment
-ещё не является готовой production-авторизацией, а приёма реальных данных пока нет.
+ключ удалить нельзя. Отдельный add-flow заранее валидирует и шифрует label, затем требует
+независимые assertion существующим ключом и регистрацию нового; один database statement атомарно
+consume-ит step-up и добавляет credential в пределах lifetime cap 32. Verifier для остальных step-up
+действий, recovery, WebAuthn pairing approval и edge rate limits для анонимного login и recovery
+lookup пока отсутствуют. Database-only Community ingest capability уже выдаёт минимальный материал
+активного устройства и принимает bounded source-bound snapshots с exact retry, nonce replay,
+monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure
+независимо удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots, сохраняя
+current source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup, scoring
+refresh или finalization через отдельный least-privileged config, single-client pool, проверку
+role/login/search path, fixed deadlines, prepared parameters, closed result validation и стабильный
+non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel, adapter и
+application объединены на synthetic/mock-pool evidence, а Fastify boundary отдельно проверена через
+injection/loopback с mock application. Полный HTTP-to-PostgreSQL path не проверен через реальный
+login. Deployed HTTP ingest route, pairing-possession verifier, operational connector,
+cleanup/scoring scheduler, live Ingest/Jobs login/TLS integration, monitoring backend, deployed
+public score read, audited correction flow, purge worker и deployed database ещё не реализованы,
+поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
+данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

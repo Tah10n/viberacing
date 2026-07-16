@@ -204,6 +204,8 @@ describe("pairing database pool", () => {
         },
       ],
       [{ created: true }],
+      [{ added: true }],
+      [{ created: true }],
       [{ revoked: true }],
       [{ revoked: true }],
     ];
@@ -333,9 +335,40 @@ describe("pairing database pool", () => {
       },
     ]);
     await expect(
-      client.createPasskeyRevokeChallenge({
+      client.createPasskeyAddChallenge({
         challengeDigest: digest,
         challengeId: "00000000-0000-4000-8000-000000000313",
+        contextDigest: context,
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([{ created: true }]);
+    await expect(
+      client.completePasskeyAddition({
+        auditEventId: "00000000-0000-4000-8000-000000000315",
+        backupEligible: true,
+        backupState: false,
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000313",
+        contextDigest: context,
+        cosePublicKey: publicKey,
+        credentialId: credential,
+        label: "Backup passkey",
+        observedSignCount: 3,
+        passkeyId: "00000000-0000-4000-8000-000000000314",
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+        signCount: 0,
+        verifiedBackupState: false,
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000306",
+      }),
+    ).resolves.toEqual([{ added: true }]);
+    await expect(
+      client.createPasskeyRevokeChallenge({
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000316",
         contextDigest: context,
         expiresAt: "2026-07-16T10:05:00.000Z",
         sessionId: "00000000-0000-4000-8000-000000000312",
@@ -345,10 +378,10 @@ describe("pairing database pool", () => {
     ).resolves.toEqual([{ created: true }]);
     await expect(
       client.completePasskeyRevocation({
-        auditEventId: "00000000-0000-4000-8000-000000000314",
+        auditEventId: "00000000-0000-4000-8000-000000000317",
         backupState: false,
         challengeDigest: digest,
-        challengeId: "00000000-0000-4000-8000-000000000313",
+        challengeId: "00000000-0000-4000-8000-000000000316",
         contextDigest: context,
         observedSignCount: 3,
         requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
@@ -376,13 +409,17 @@ describe("pairing database pool", () => {
       expect.stringContaining("read_passkey_inventory"),
       expect.stringContaining("create_passkey_change_challenge"),
       expect.stringContaining("consume_passkey_challenge"),
+      expect.stringContaining("create_passkey_change_challenge"),
+      expect.stringContaining("consume_passkey_challenge"),
       expect.stringContaining("revoke_session"),
     ]);
     expect(snapshots[2]?.text).toContain("register_initial_passkey");
     expect(snapshots[2]?.text).toContain("rotate_session");
     expect(snapshots[2]?.text).toContain("AS MATERIALIZED");
-    expect(snapshots[7]?.text).toContain("revoke_passkey");
+    expect(snapshots[7]?.text).toContain("add_passkey");
     expect(snapshots[7]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[9]?.text).toContain("revoke_passkey");
+    expect(snapshots[9]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[4]?.values).toEqual([
       "00000000-0000-4000-8000-000000000310",
       digest,
@@ -402,7 +439,6 @@ describe("pairing database pool", () => {
     expect(snapshots[6]?.values).toEqual([
       "00000000-0000-4000-8000-000000000312",
       digest,
-      "00000000-0000-4000-8000-000000000307",
       "00000000-0000-4000-8000-000000000313",
       digest,
       context,
@@ -417,8 +453,36 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000306",
       3,
       false,
-      "00000000-0000-4000-8000-000000000307",
       "00000000-0000-4000-8000-000000000314",
+      credential,
+      publicKey,
+      "Backup passkey",
+      0,
+      true,
+      false,
+      "00000000-0000-4000-8000-000000000315",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
+    expect(snapshots[8]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      "00000000-0000-4000-8000-000000000307",
+      "00000000-0000-4000-8000-000000000316",
+      digest,
+      context,
+      "2026-07-16T10:05:00.000Z",
+    ]);
+    expect(snapshots[9]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      "00000000-0000-4000-8000-000000000316",
+      digest,
+      context,
+      "00000000-0000-4000-8000-000000000306",
+      3,
+      false,
+      "00000000-0000-4000-8000-000000000307",
+      "00000000-0000-4000-8000-000000000317",
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));

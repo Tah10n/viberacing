@@ -4,7 +4,8 @@ import type { VerifyAuthenticationResponseOpts } from "@simplewebauthn/server";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  createInitialPasskeyOptions,
+  createPasskeyRegistrationOptions,
+  passkeyAddContextDigest,
   createPasskeyLoginOptions,
   passkeyChallengeDigest,
   passkeyContextDigest,
@@ -17,7 +18,7 @@ import {
 
 describe("initial passkey registration", () => {
   it("creates a discoverable user-verified option set without attestation", async () => {
-    const options = await createInitialPasskeyOptions(
+    const options = await createPasskeyRegistrationOptions(
       "00000000-0000-4000-8000-000000000201",
       "pixel_driver",
       "race.example.com",
@@ -155,6 +156,48 @@ describe("passkey login", () => {
       passkeyLoginContextDigest("race.example.com", "https://race.example.com").toString("hex"),
     ).not.toBe(
       passkeyLoginContextDigest("other.example.com", "https://race.example.com").toString("hex"),
+    );
+    expect(
+      passkeyAddContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000102",
+        "pixel_driver",
+        "Backup passkey",
+        Buffer.alloc(32, 0x41).toString("base64url"),
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    ).not.toEqual(
+      passkeyAddContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000102",
+        "pixel_driver",
+        "Backup passkey",
+        Buffer.alloc(32, 0x42).toString("base64url"),
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    );
+    expect(
+      passkeyAddContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000102",
+        "pixel_driver",
+        "Backup passkey",
+        Buffer.alloc(32, 0x41).toString("base64url"),
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    ).not.toEqual(
+      passkeyAddContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000102",
+        "pixel_driver",
+        "Travel key",
+        Buffer.alloc(32, 0x41).toString("base64url"),
+        "race.example.com",
+        "https://race.example.com",
+      ),
     );
     expect(
       passkeyRevokeContextDigest(

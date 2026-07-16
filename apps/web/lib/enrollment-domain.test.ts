@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseJoinRequest,
   readEnrollmentSession,
+  readPasskeyAddChallenge,
   readPasskeyChallenge,
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
@@ -82,15 +83,34 @@ describe("enrollment domain", () => {
       ...challenge,
       targetPasskeyId: "00000000-0000-4000-8000-000000000105",
     } as const;
+    const addChallenge = {
+      authenticationChallenge: challenge.challenge,
+      challengeId: challenge.challengeId,
+      expiresAt: challenge.expiresAt,
+      label: "Backup passkey",
+      registrationChallenge: Buffer.alloc(32, 0x45).toString("base64url"),
+      version: 1,
+    } as const;
 
     expect(readPendingEnrollment(pending, now)).toEqual(pending);
     expect(readEnrollmentSession(session, now)).toEqual(session);
     expect(readPasskeyChallenge(challenge, now)).toEqual(challenge);
+    expect(readPasskeyAddChallenge(addChallenge, now)).toEqual(addChallenge);
     expect(readPasskeyRevokeChallenge(revokeChallenge, now)).toEqual(revokeChallenge);
     expect(readPendingEnrollment({ ...pending, extra: true }, now)).toBeUndefined();
     expect(readEnrollmentSession({ ...session, expiresAt: now }, now)).toBeUndefined();
     expect(readPasskeyChallenge({ ...challenge, challenge: "bad" }, now)).toBeUndefined();
     expect(readPasskeyChallenge(revokeChallenge, now)).toBeUndefined();
+    expect(readPasskeyChallenge(addChallenge, now)).toBeUndefined();
+    expect(readPasskeyAddChallenge(challenge, now)).toBeUndefined();
+    expect(
+      readPasskeyAddChallenge(
+        { ...addChallenge, registrationChallenge: addChallenge.authenticationChallenge },
+        now,
+      ),
+    ).toBeUndefined();
+    expect(readPasskeyAddChallenge({ ...addChallenge, label: " Backup" }, now)).toBeUndefined();
+    expect(readPasskeyRevokeChallenge(addChallenge, now)).toBeUndefined();
     expect(readPasskeyRevokeChallenge(challenge, now)).toBeUndefined();
     expect(
       readPasskeyRevokeChallenge({ ...revokeChallenge, targetPasskeyId: "bad" }, now),

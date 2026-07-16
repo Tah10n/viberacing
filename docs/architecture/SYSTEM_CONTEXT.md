@@ -5,7 +5,7 @@
 This is the planned runtime architecture. The current repository contains a tested SQL persistence
 foundation, one local public-score route with a visible validated browser consumer and synthetic
 fallback, local invite/OAuth/initial-passkey enrollment, returning-passkey login, and private
-passkey-inventory/revocation slices with encrypted cookies and logout, one local one-shot Jobs
+passkey-inventory/add/revocation slices with encrypted cookies and logout, one local one-shot Jobs
 runner, and local Ingest request-verification, PostgreSQL-adapter, application-composition, and
 bounded HTTP-server boundaries, plus library-only connector initialization and candidate `0.144.4`
 account/usage parser boundaries, a synthetic one-shot supervisor, an exact-body sync composer,
