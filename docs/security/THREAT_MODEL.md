@@ -10,7 +10,7 @@ Racing profiles in a self-reported Community league.
 This is a repository-scoped design threat model. The current tree contains public repository policy,
 toolchain, CI, documentation, local PostgreSQL identity/passkey/recovery foundations, and one local
 Next.js public-score route, one local invite/OAuth/initial-passkey enrollment and returning-passkey
-login plus private passkey/source/device inventory, source pause/reactivation, device/passkey
+login plus private passkey/source/device inventory, source pause/reactivation/unlink, device/passkey
 revocation, and fresh-passkey profile-deletion-request slice with encrypted cookies and logout, one
 local one-shot Jobs runner, and local Community sync verification plus PostgreSQL-adapter,
 transport-free composition, and bounded Fastify HTTP boundaries; it does not yet contain a deletion
@@ -38,13 +38,14 @@ browser-consumer/fallback evidence, while the Jobs runner has strict command/con
 evidence. The identity slice has exact-origin/body/cookie, state/PKCE, token minimization,
 initial-registration, returning-login, session-derived passkey inventory, non-current-key
 revocation, backup-key addition, exact-handle profile-deletion request, source
-inventory/pause/reactivation, and active-device revoke including hidden-profile PostgreSQL evidence,
-fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence with injected
-dependencies. Raw source IDs stay server-only; source controls receive only a 15-minute encrypted
-token bound to the active session. None has a live database login, OAuth app, authenticator, edge,
-scheduler, purge execution, or network deployment. Controls below are marked **implemented** only
-when executable evidence exists in [implementation status](../IMPLEMENTATION_STATUS.md). Other
-controls are release requirements, not security claims about the current tree.
+inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile PostgreSQL
+evidence, fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence
+with injected dependencies. Raw source IDs stay server-only; source controls receive only a
+15-minute encrypted token bound to the active session. None has a live database login, OAuth app,
+authenticator, edge, scheduler, purge execution, or network deployment. Controls below are marked
+**implemented** only when executable evidence exists in
+[implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
+security claims about the current tree.
 
 ### Assets and security objectives
 
@@ -154,7 +155,7 @@ and migration or rollback where applicable.
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Public race and profiles            | A visitor injects markup through a handle, enumerates profiles, or infers exact work hours                 | Plain-text bounded names, CSP, public-field allowlist, immediate hide, rounded freshness, rate and cache policy                  | Visible route/fallback and exact-session hide/publish tested; cache, real freshness, rate, live integration planned       |
 | OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up     | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke | Enrollment/login, visibility, passkey inventory/add/revoke tested; recovery, edge rate, cleanup, live integration planned |
-| Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration           | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, pause, revoke, and rotate                | DB plus local source pause/reactivation, active-device revoke, and start/proof/activation tested; approval/rate planned   |
+| Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration           | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, pause, unlink, revoke, and rotate        | DB plus local source pause/reactivation/unlink, active-device revoke, and start/proof/activation tested; approval planned |
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Protocol plus synthetic supervisor tested; executable admission, platforms, support planned                               |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                    | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                        | Local signer/vector, verifier, replay stores, application, and HTTP tested; operational/live planned                      |
 | Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                     | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                  | Local verifier/config/replay/server tested; edge injection, trusted route, direct-origin planned                          |

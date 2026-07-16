@@ -2,12 +2,12 @@
 
 ## Status
 
-This directory contains seventeen SQL-first revisions for identity, passkey login and management,
+This directory contains eighteen SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
 implemented. A local invite/OAuth/initial-passkey, returning-passkey, session-scoped passkey,
-source/device inventory, source pause/reactivation, and immediate device-revoke application now
-consumes only fixed Web/Auth capabilities with injected or synthetic dependencies. No
+source/device inventory, source pause/reactivation/unlink, and immediate device-revoke application
+now consumes only fixed Web/Auth capabilities with injected or synthetic dependencies. No
 authentication/HTTP pairing route, Argon2id recovery application, production credential, or deployed
 database consumes the remaining protected identity/ingest capabilities. A dormant Web/Auth boundary
 creates bounded pairing material through one fixed start call; a second composes keyed pairing
@@ -25,7 +25,8 @@ The `viberacing_api` schema is a closed procedure boundary. Runtime roles receiv
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
 32-byte verifier instead of accepting a caller-selected profile ID. The database still relies on
 Web/Auth to perform OAuth and WebAuthn cryptographic verification before invoking the matching
-procedure; the current repository has no such application code.
+procedure. The local identity slice does so for enrollment, login, passkey, profile, device, and
+source controls with injected/synthetic evidence; recovery and pairing approval remain absent.
 
 ## Layout
 
@@ -73,6 +74,8 @@ procedure; the current repository has no such application code.
   immediate owned-device revoke for an exact possessed session while public visibility is hidden.
 - `migrations/0017_hidden_profile_source_pause_reactivation.sql` preserves immediate source pause
   and fresh-passkey paused-source reactivation for a possessed session while visibility is hidden.
+- `migrations/0018_hidden_profile_source_unlink.sql` preserves terminal fresh-passkey source unlink
+  for a possessed session while visibility is hidden.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -251,9 +254,9 @@ Runtime access must remain procedure-only and must have positive and negative in
 - `create_source_action_challenge`, `reactivate_source`, and `unlink_source` bind a short-lived
   source action to the exact active or hidden session, profile, purpose, source, and context.
   Reactivation is limited to paused sources and does not change profile visibility; normal user
-  authority cannot lift quarantine. Unlink remains limited to an active profile and is terminal,
-  revokes every active device, cancels approved pairings, and invalidates unused source actions in
-  the same transaction.
+  authority cannot lift quarantine. Unlink accepts any non-terminal source while the profile is
+  active or hidden and is terminal: it revokes every active device, cancels approved pairings, and
+  invalidates unused source actions in the same transaction without changing visibility.
 - `read_device_verification_material` returns only the exact active device key ID, opaque bound
   source ID, and Ed25519 public key. Paused/unlinked sources, revoked devices, and deletion-pending
   profiles return no material; quarantined sources remain verifiable so their submissions can be
@@ -461,7 +464,13 @@ Revision 0017 adds no table, field, role, or new action. It permits the existing
 session while its profile is hidden. The source must still be active to pause and `paused` to
 reactivate; reactivation leaves the profile hidden, cannot lift quarantine, and consumes the exact
 fresh source/session/context-bound proof in the same transaction as the state change. Unlink remains
-active-profile-only.
+active-profile-only in that revision.
+
+Revision 0018 adds no table, field, role, or new action. It permits the existing `source_unlink`
+challenge/consume and `unlink_source` capability for the same possessed session while its profile is
+hidden. The distinct fresh passkey context, active/paused/quarantined input states, terminal result,
+recursive active-device revoke, approved-pairing cancellation, stale-action invalidation, and public
+visibility all retain their prior semantics.
 
 The local account application consumes those capabilities through the same probed read-write pool.
 Its fixed query projects active credentials plus one exact all-null device sentinel for each source
@@ -472,7 +481,9 @@ source ID, internal key/profile ID, public key, or exact time. Only the selected
 enters its same-origin revoke form. Source actions instead receive an exact-shape encrypted
 session-bound control token for at most 15 minutes. Pause is a bounded same-origin form;
 reactivation requires one fresh application-verified passkey assertion before an atomic
-consume-and-reactivate call. Both controls preserve hidden visibility.
+consume-and-reactivate call. A distinct fresh context reaches one atomic consume-and-unlink call,
+which terminally unlinks any active, paused, or quarantined source and revokes all of its active
+devices. All three controls preserve hidden visibility.
 
 The local account application also consumes the existing `read_passkey_inventory` capability. Its
 fixed query and closed mapper retain at most 32 rows, require exactly one current active

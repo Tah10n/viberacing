@@ -24,6 +24,9 @@ cases, and privacy data map before changing this subtree.
 - Source pause and passkey-protected reactivation must remain available to a possessed session while
   its profile is hidden without changing that visibility. Reactivation is limited to `paused`, uses
   one fresh consumed source-bound challenge, and must never lift `quarantined`.
+- Terminal source unlink must likewise remain available while hidden only after its distinct fresh
+  source-bound passkey challenge. It revokes every active source device and must not change profile
+  visibility.
 - Pairing creates only opaque user-declared sources. Preserve the public ceilings of 32 lifetime
   sources and 64 active plus unexpired approved device authorities per profile; lower deployable
   anti-abuse thresholds remain private configuration and must not enter fixtures or documentation.

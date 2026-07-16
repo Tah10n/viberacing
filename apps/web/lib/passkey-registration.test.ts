@@ -14,6 +14,7 @@ import {
   passkeyRevokeContextDigest,
   profileDeletionContextDigest,
   sourceReactivationContextDigest,
+  sourceUnlinkContextDigest,
   verifyInitialPasskey,
   verifyPasskeyLogin,
 } from "./passkey-registration";
@@ -244,6 +245,21 @@ describe("passkey login", () => {
       sourceReactivationContextDigest(
         "00000000-0000-4000-8000-000000000101",
         `src_${"B".repeat(22)}`,
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    );
+    expect(
+      sourceUnlinkContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        `src_${"A".repeat(22)}`,
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    ).not.toEqual(
+      sourceReactivationContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        `src_${"A".repeat(22)}`,
         "race.example.com",
         "https://race.example.com",
       ),

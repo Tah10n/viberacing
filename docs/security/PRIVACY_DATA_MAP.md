@@ -111,24 +111,25 @@ date, and an exact-shape encrypted source-control token. Raw source IDs, profile
 internal key IDs, and exact timestamps remain server-only; only the owned device's opaque ID and the
 encrypted source-control token enter their respective authenticated controls. Revision 0016 adds no
 column or retained field and preserves inventory/revoke while the profile is hidden. Revision 0017
-likewise adds no retained field and preserves pause/reactivation while hidden. The token expires
-within 15 minutes, is bound to the exact session, and is not proof without that session; the
-reactivation challenge is a separate five-minute HttpOnly continuation. The Web slice does not log,
-cache, or persist the projection. The decoded master key is overwritten immediately after those
-purpose keys are derived. Add/revoke step-up is also one-time and at most five minutes; its
-consumed-row cleanup remains a launch requirement. The HTTP runtime exposes only the public origin
-and secure-cookie flag. The fixed GitHub user response parser accepts only a positive safe numeric
-`id` for return; the token and every other response field are discarded after the callback. Tests
-use reserved, synthetic values and injected GitHub/database/authenticator capabilities. No real-user
-retention or deployed subprocessor claim follows from this local boundary.
+likewise adds no retained field and preserves pause/reactivation while hidden; revision 0018 does
+the same for terminal unlink. The token expires within 15 minutes, is bound to the exact session,
+and is not proof without that session; reactivation and unlink use distinct five-minute HttpOnly
+challenge continuations. The Web slice does not log, cache, or persist the projection. The decoded
+master key is overwritten immediately after those purpose keys are derived. Add/revoke step-up is
+also one-time and at most five minutes; its consumed-row cleanup remains a launch requirement. The
+HTTP runtime exposes only the public origin and secure-cookie flag. The fixed GitHub user response
+parser accepts only a positive safe numeric `id` for return; the token and every other response
+field are discarded after the callback. Tests use reserved, synthetic values and injected
+GitHub/database/authenticator capabilities. No real-user retention or deployed subprocessor claim
+follows from this local boundary.
 
 Opaque sources deliberately contain no Codex account email or upstream account identifier. The
 implemented pairing database caps each profile at 32 lifetime source records and 64 active plus
 unexpired approved device authorities. These public safety ceilings do not replace lower
 deployment-private rate and fair-use controls, and exact per-source details remain non-public
-Account data. Revisions 0004, 0016, and 0017 add no new personal-data column: the private inventory
-procedure returns only the requesting session profile's opaque source state and bounded device
-metadata, including while that profile is hidden. Lifecycle procedures retain the existing
+Account data. Revisions 0004, 0016, 0017, and 0018 add no new personal-data column: the private
+inventory procedure returns only the requesting session profile's opaque source state and bounded
+device metadata, including while that profile is hidden. Lifecycle procedures retain the existing
 source/device rows, append only closed audit references, and never accept or expose account email,
 upstream account identity, exact usage, public keys, or internal key IDs.
 
@@ -449,8 +450,9 @@ model and requires an ADR, consent/notice analysis, data-map update, and public 
 - **Hide profile:** public reads and caches stop immediately without waiting for full deletion.
 - **Revoke device:** the key loses submission authority immediately; previous season attribution
   remains under policy.
-- **Unlink source:** future submissions stop; historical season attribution remains until deletion
-  or documented correction.
+- **Unlink source:** the local control requires a fresh passkey, terminally revokes every active
+  source device without publishing a hidden profile, and stops future submissions; historical season
+  attribution remains until deletion or documented correction.
 - **Export:** any future export is authenticated, bounded, generated on demand, and contains only
   the requesting profile's data. No export endpoint is implied by this design document.
 - **Delete:** the local request now requires the exact active session, typed handle, and fresh

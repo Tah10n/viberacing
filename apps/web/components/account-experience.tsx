@@ -12,6 +12,7 @@ import {
   PasskeyRevokeButton,
   ProfileDeletionForm,
   SourceReactivationButton,
+  SourceUnlinkButton,
 } from "./passkey-setup";
 
 interface AccountExperienceProps {
@@ -110,6 +111,13 @@ export function AccountExperience({
                     </form>
                   ) : source.state === "paused" ? (
                     <SourceReactivationButton
+                      label={`${copy.sourceLabel} ${String(sourceIndex + 1)}`}
+                      locale={locale}
+                      sourceControl={source.sourceControl}
+                    />
+                  ) : null}
+                  {source.state !== "unlinked" ? (
+                    <SourceUnlinkButton
                       label={`${copy.sourceLabel} ${String(sourceIndex + 1)}`}
                       locale={locale}
                       sourceControl={source.sourceControl}

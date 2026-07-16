@@ -229,6 +229,8 @@ describe("pairing database pool", () => {
       [{ paused: true }],
       [{ created: true }],
       [{ reactivated: true }],
+      [{ created: true }],
+      [{ unlinked: true }],
     ];
     const liveQueries: { text: string; values: unknown[] }[] = [];
     const snapshots: { text: string; values: unknown[] }[] = [];
@@ -515,6 +517,32 @@ describe("pairing database pool", () => {
         verifiedPasskeyId: "00000000-0000-4000-8000-000000000306",
       }),
     ).resolves.toEqual([{ reactivated: true }]);
+    await expect(
+      client.createSourceUnlinkChallenge({
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000325",
+        contextDigest: context,
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+        sourceId: `src_${"B".repeat(22)}`,
+      }),
+    ).resolves.toEqual([{ created: true }]);
+    await expect(
+      client.completeSourceUnlink({
+        auditEventId: "00000000-0000-4000-8000-000000000326",
+        backupState: false,
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000325",
+        contextDigest: context,
+        observedSignCount: 6,
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+        sourceId: `src_${"B".repeat(22)}`,
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000306",
+      }),
+    ).resolves.toEqual([{ unlinked: true }]);
 
     expect(snapshots.map(({ text }) => text)).toEqual([
       expect.stringContaining("enroll_profile"),
@@ -537,6 +565,8 @@ describe("pairing database pool", () => {
       expect.stringContaining("pause_source"),
       expect.stringContaining("create_source_action_challenge"),
       expect.stringContaining("reactivate_source"),
+      expect.stringContaining("create_source_action_challenge"),
+      expect.stringContaining("unlink_source"),
     ]);
     expect(snapshots[2]?.text).toContain("register_initial_passkey");
     expect(snapshots[2]?.text).toContain("rotate_session");
@@ -557,6 +587,9 @@ describe("pairing database pool", () => {
     expect(snapshots[18]?.text).toContain("'source_reactivation'::text");
     expect(snapshots[19]?.text).toContain("consume_passkey_challenge");
     expect(snapshots[19]?.text).toContain("reactivate_source");
+    expect(snapshots[20]?.text).toContain("'source_unlink'::text");
+    expect(snapshots[21]?.text).toContain("consume_passkey_challenge");
+    expect(snapshots[21]?.text).toContain("unlink_source");
     expect(snapshots[4]?.values).toEqual([
       "00000000-0000-4000-8000-000000000310",
       digest,
@@ -682,6 +715,28 @@ describe("pairing database pool", () => {
       false,
       `src_${"B".repeat(22)}`,
       "00000000-0000-4000-8000-000000000324",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
+    expect(snapshots[20]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      `src_${"B".repeat(22)}`,
+      "00000000-0000-4000-8000-000000000325",
+      digest,
+      context,
+      "2026-07-16T10:05:00.000Z",
+    ]);
+    expect(snapshots[21]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      "00000000-0000-4000-8000-000000000325",
+      digest,
+      context,
+      "00000000-0000-4000-8000-000000000306",
+      6,
+      false,
+      `src_${"B".repeat(22)}`,
+      "00000000-0000-4000-8000-000000000326",
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));

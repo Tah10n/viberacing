@@ -25,6 +25,8 @@ import {
   type EnrollmentDatabaseSourcePause,
   type EnrollmentDatabaseSourceReactivation,
   type EnrollmentDatabaseSourceReactivationChallenge,
+  type EnrollmentDatabaseSourceUnlink,
+  type EnrollmentDatabaseSourceUnlinkChallenge,
   type EnrollmentDatabaseSourceDeviceInventoryRequest,
   type PairingDatabasePoolSignalSink,
 } from "./pairing-database-pool";
@@ -88,6 +90,7 @@ export interface EnrollmentDatabase {
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<boolean>;
   completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<boolean>;
   completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<boolean>;
+  completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<boolean>;
   createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<boolean>;
@@ -97,6 +100,7 @@ export interface EnrollmentDatabase {
   createSourceReactivationChallenge(
     input: EnrollmentDatabaseSourceReactivationChallenge,
   ): Promise<boolean>;
+  createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<boolean>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
   pauseSource(input: EnrollmentDatabaseSourcePause): Promise<boolean>;
   readActiveDeviceInventory(
@@ -542,6 +546,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "reactivated"),
       );
     },
+    completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<boolean> {
+      return execute(
+        (client) => client.completeSourceUnlink(input),
+        (value) => exactBooleanRow(value, "unlinked"),
+      );
+    },
     createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean> {
       return execute(
         (client) => client.createPasskeyAddChallenge(input),
@@ -575,6 +585,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
     ): Promise<boolean> {
       return execute(
         (client) => client.createSourceReactivationChallenge(input),
+        (value) => exactBooleanRow(value, "created"),
+      );
+    },
+    createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<boolean> {
+      return execute(
+        (client) => client.createSourceUnlinkChallenge(input),
         (value) => exactBooleanRow(value, "created"),
       );
     },

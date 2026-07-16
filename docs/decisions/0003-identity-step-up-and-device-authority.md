@@ -127,7 +127,9 @@ field, role, or broader capability. Revision 0017 similarly preserves pause and 
 hidden. The application sends no raw source ID to HTML: a 15-minute encrypted session-bound token
 selects the source. Pause is immediate; reactivation requires a fresh required-UV assertion bound to
 the session, source, RP ID, and origin before one atomic consume/reactivate statement. Source unlink
-still requires its separate application path.
+now uses a distinct fresh context and one atomic consume/unlink statement. It accepts only an
+active, paused, or quarantined owned source, is terminal, revokes every active source device, and
+preserves hidden visibility.
 
 Revision 0005 adds credential-derived passkey login, session and step-up provenance, private
 multi-passkey inventory, bounded add/revoke, terminal revoke, last-key protection, monotonic stored

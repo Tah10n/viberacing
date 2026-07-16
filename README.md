@@ -19,10 +19,10 @@ state and PKCE, one encrypted short-lived continuation, atomic profile enrollmen
 registration, returning discoverable-credential login, a session-scoped passkey inventory, an active
 account page, immediate public-profile hide/show, source and active-device inventory, immediate
 source pause, fresh-passkey paused-source reactivation, device revoke, backup-passkey addition and
-non-current-passkey revocation, an exact-handle fresh-passkey profile-deletion request, and logout.
-It is locally tested only: the repository supplies no invite issuer UI, OAuth registration, real
-secret, live OAuth/authenticator/database credentials, deletion purge worker, edge abuse controls,
-or live-user evidence.
+fresh-passkey terminal source unlink, non-current-passkey revocation, an exact-handle fresh-passkey
+profile-deletion request, and logout. It is locally tested only: the repository supplies no invite
+issuer UI, OAuth registration, real secret, live OAuth/authenticator/database credentials, deletion
+purge worker, edge abuse controls, or live-user evidence.
 
 ## Trust model
 
@@ -143,7 +143,7 @@ discovery/path or artifact/version admission, real Codex execution, cross-platfo
 source/device context provider, secure key generation/store, browser-approval application, connector
 pairing HTTP client, public pairing route, signed upload, live protected key injection, edge signer,
 direct-origin denial, host/port/TLS configuration, distributed client-rate policy, monitoring,
-operational connector, live database connection, load evidence, or deployment. Seventeen SQL
+operational connector, live database connection, load evidence, or deployment. Eighteen SQL
 migrations now add 24 private identity, passkey, restricted-recovery, source, device, pairing,
 audit, deletion, replay, usage, and Community scoring tables with deny-by-default runtime roles,
 forced RLS, state-machine constraints, checksum drift detection, and an isolated PostgreSQL
@@ -155,25 +155,27 @@ pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-c
 short-lived recovery-only replacement-passkey authority. Pairing creates only opaque user-declared
 sources: it never reads or stores Codex account email or claims account uniqueness. Source pause is
 immediate. Paused-source reactivation now requires a fresh user-verified passkey assertion and one
-atomic challenge-consume/reactivate call. Source unlink still has only its database capability and
-no application verifier or control. The local identity flow verifies both initial passkey
-registration and returning discoverable-credential login. Login options keep the profile-free
-challenge only in an encrypted cookie; a valid assertion causes one atomic database
-create-consume-session call. Anonymous login still requires edge rate/capacity controls before
-exposure. The account page uses that same possessed session to read only passkey labels,
-active/revoked state, rounded creation dates, the current-authenticator marker, the closed
-`public`/`hidden` profile state, at most 32 opaque sources, and at most 64 active device
+atomic challenge-consume/reactivate call. Terminal source unlink now uses its own fresh passkey
+context and one atomic consume/unlink call that revokes every active source device. The local
+identity flow verifies both initial passkey registration and returning discoverable-credential
+login. Login options keep the profile-free challenge only in an encrypted cookie; a valid assertion
+causes one atomic database create-consume-session call. Anonymous login still requires edge
+rate/capacity controls before exposure. The account page uses that same possessed session to read
+only passkey labels, active/revoked state, rounded creation dates, the current-authenticator marker,
+the closed `public`/`hidden` profile state, at most 32 opaque sources, and at most 64 active device
 labels/platforms/versions with rounded activation dates. Credential IDs, raw source IDs, internal
 keys, and profile IDs are not rendered; source actions receive only a 15-minute encrypted token
 bound to the current session. A same-origin server form can hide the profile from the public score
 read or publish it again without stopping source sync. Another can immediately revoke one exact
 owned active device even while the profile is hidden. The same page can immediately pause a source
 and can reactivate only a paused source after a fresh required-UV passkey assertion; neither action
-changes hidden/public visibility or lifts quarantine. An authenticated passkey revoke control sends
-only the selected opaque passkey ID, requires a fresh user-verified assertion bound to that session
-and target, and reaches one atomic consume-and-revoke call; the current or last active passkey
-cannot be removed. A separate add control validates and seals the label before prompting, requires
-an existing-key assertion plus an independent registration ceremony, and atomically consumes that
+changes hidden/public visibility or lifts quarantine. A separate destructive control permanently
+unlinks any non-terminal source after the same kind of fresh assertion, including while the profile
+is hidden; it does not publish the profile. An authenticated passkey revoke control sends only the
+selected opaque passkey ID, requires a fresh user-verified assertion bound to that session and
+target, and reaches one atomic consume-and-revoke call; the current or last active passkey cannot be
+removed. A separate add control validates and seals the label before prompting, requires an
+existing-key assertion plus an independent registration ceremony, and atomically consumes that
 step-up while inserting the new credential under the 32-record lifetime cap. A database-only
 Community ingest capability now exposes minimal active-device verification material and accepts
 bounded source-bound snapshots with exact retry, nonce replay, monotonic source/date, quarantine,

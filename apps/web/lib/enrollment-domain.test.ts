@@ -11,7 +11,7 @@ import {
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
   readProfileDeletionChallenge,
-  readSourceReactivationChallenge,
+  readSourceActionChallenge,
 } from "./enrollment-domain";
 
 const secret = Buffer.alloc(32, 0x42);
@@ -110,7 +110,7 @@ describe("enrollment domain", () => {
     expect(readProfileDeletionChallenge(profileDeletionChallenge, now)).toEqual(
       profileDeletionChallenge,
     );
-    expect(readSourceReactivationChallenge(sourceReactivationChallenge, now)).toEqual(
+    expect(readSourceActionChallenge(sourceReactivationChallenge, now)).toEqual(
       sourceReactivationChallenge,
     );
     expect(readPendingEnrollment({ ...pending, extra: true }, now)).toBeUndefined();
@@ -142,13 +142,13 @@ describe("enrollment domain", () => {
     expect(
       readProfileDeletionChallenge({ ...profileDeletionChallenge, extra: true }, now),
     ).toBeUndefined();
-    expect(readSourceReactivationChallenge(challenge, now)).toBeUndefined();
-    expect(readSourceReactivationChallenge(revokeChallenge, now)).toBeUndefined();
+    expect(readSourceActionChallenge(challenge, now)).toBeUndefined();
+    expect(readSourceActionChallenge(revokeChallenge, now)).toBeUndefined();
     expect(
-      readSourceReactivationChallenge({ ...sourceReactivationChallenge, sourceId: "bad" }, now),
+      readSourceActionChallenge({ ...sourceReactivationChallenge, sourceId: "bad" }, now),
     ).toBeUndefined();
     expect(
-      readSourceReactivationChallenge({ ...sourceReactivationChallenge, extra: true }, now),
+      readSourceActionChallenge({ ...sourceReactivationChallenge, extra: true }, now),
     ).toBeUndefined();
   });
 });

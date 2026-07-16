@@ -994,6 +994,62 @@ SELECT pg_temp.assert_true(
   'hidden profile can immediately remove one owned device authority'
 );
 
+SELECT viberacing_api.create_source_action_challenge(
+  '00000000-0000-4000-8000-000000004201',
+  pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+  'src_' || pg_catalog.repeat('Q', 22),
+  'source_unlink',
+  '00000000-0000-4000-8000-000000004608',
+  pg_catalog.decode(pg_catalog.repeat('98', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('a8', 32), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '4 minutes'
+);
+
+SELECT pg_temp.assert_true(
+  viberacing_api.consume_passkey_challenge(
+    '00000000-0000-4000-8000-000000004201',
+    pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+    '00000000-0000-4000-8000-000000004608',
+    'source_unlink',
+    pg_catalog.decode(pg_catalog.repeat('98', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('a8', 32), 'hex'),
+    '00000000-0000-4000-8000-000000004301',
+    5,
+    false
+  ),
+  'hidden profile consumes one exact fresh source unlink proof'
+);
+
+SELECT viberacing_api.unlink_source(
+  '00000000-0000-4000-8000-000000004201',
+  pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+  'src_' || pg_catalog.repeat('Q', 22),
+  '00000000-0000-4000-8000-000000004608',
+  pg_catalog.decode(pg_catalog.repeat('a8', 32), 'hex'),
+  '00000000-0000-4000-8000-000000004909',
+  'req_' || pg_catalog.repeat('K', 22)
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT visibility = 'hidden'
+    FROM viberacing_api.read_profile_visibility(
+      '00000000-0000-4000-8000-000000004201',
+      pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex')
+    )
+  )
+  AND (
+    SELECT source_state = 'unlinked'
+    FROM viberacing_api.read_source_inventory(
+      '00000000-0000-4000-8000-000000004201',
+      pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex')
+    )
+    WHERE source_id = 'src_' || pg_catalog.repeat('Q', 22)
+    LIMIT 1
+  ),
+  'fresh-passkey unlink is terminal without publishing a hidden profile or lifting quarantine'
+);
+
 RESET ROLE;
 SET LOCAL ROLE viberacing_owner;
 
@@ -1053,7 +1109,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 8
+    SELECT pg_catalog.count(*) = 9
     FROM viberacing_private.audit_events
     WHERE profile_id = '00000000-0000-4000-8000-000000004101'
       AND event_type IN (

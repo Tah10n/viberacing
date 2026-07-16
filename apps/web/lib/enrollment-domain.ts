@@ -64,7 +64,7 @@ const profileDeletionChallengeKeys = new Set([
   "handle",
   "version",
 ]);
-const sourceReactivationChallengeKeys = new Set([
+const sourceActionChallengeKeys = new Set([
   "challenge",
   "challengeId",
   "expiresAt",
@@ -124,7 +124,7 @@ export interface ProfileDeletionChallenge extends PasskeyRegistrationChallenge {
   readonly handle: string;
 }
 
-export interface SourceReactivationChallenge extends PasskeyRegistrationChallenge {
+export interface SourceActionChallenge extends PasskeyRegistrationChallenge {
   readonly sourceId: string;
 }
 
@@ -338,13 +338,13 @@ export function readProfileDeletionChallenge(
   return Object.freeze(value as unknown as ProfileDeletionChallenge);
 }
 
-export function readSourceReactivationChallenge(
+export function readSourceActionChallenge(
   value: unknown,
   nowSeconds: number,
-): SourceReactivationChallenge | undefined {
+): SourceActionChallenge | undefined {
   if (
     !isPlainObject(value) ||
-    !exactKeys(value, sourceReactivationChallengeKeys) ||
+    !exactKeys(value, sourceActionChallengeKeys) ||
     value.version !== 1 ||
     !canonicalBase64Url32(value.challenge) ||
     typeof value.challengeId !== "string" ||
@@ -355,7 +355,7 @@ export function readSourceReactivationChallenge(
   ) {
     return undefined;
   }
-  return Object.freeze(value as unknown as SourceReactivationChallenge);
+  return Object.freeze(value as unknown as SourceActionChallenge);
 }
 
 export function readPasskeyAddChallenge(

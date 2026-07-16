@@ -4,9 +4,9 @@
 
 Most sequences remain planned application contracts. The enrollment, returning-login, backup-key
 addition, non-current-passkey revocation, immediate profile-deletion-request, source
-inventory/pause/reactivation, and active-device revoke sequences below plus the public score
+inventory/pause/reactivation/unlink, and active-device revoke sequences below plus the public score
 consumer are now locally implemented boundaries; none has live credentials, edge, purge-worker, or
-deployment evidence. Revisions 0001 through 0017 provide private
+deployment evidence. Revisions 0001 through 0018 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
@@ -277,7 +277,7 @@ sequenceDiagram
     User->>Browser: Select immediate protective action
     Web->>DB: Exact session plus owned source or device ID
     DB-->>Web: State change and bounded audit reference
-  else Reactivate source or plan unlink
+  else Reactivate or unlink source
     User->>Browser: Confirm exact source and action
     Web->>Authenticator: Fresh source-bound step-up
     Authenticator-->>Web: User-verified response
@@ -290,22 +290,24 @@ Revision 0004 implements the database lifecycle boundary. Inventory derives the 
 possessed session and omits internal key IDs, public keys, profile IDs, exact usage, and account
 email. Revision 0016 preserves private inventory and immediate owned-device revoke while public
 visibility is hidden. Revision 0017 does the same for pause and source reactivation without changing
-visibility. The local account application now projects at most 32 sources and 64 active device
-credentials, preserves a source with no active device, rounds activation to a day, and renders
-source ordinal/state rather than its ID. One exact opaque device ID may enter its same-origin revoke
-form. Source actions receive only a 15-minute encrypted token bound to the current session; raw
-source IDs stay server-only. Pause and device revoke are immediate session-authenticated protective
-actions. Reactivation works only from `paused` after a fresh required-UV assertion and one atomic
-consume/reactivate call; a normal user cannot lift `quarantined`. Unlink accepts an exact fresh
-source-bound challenge, moves the source to terminal `unlinked`, revokes every active device,
-cancels approved pairings, and invalidates unused source challenges atomically.
+visibility; revision 0018 preserves terminal source unlink under the same hidden state. The local
+account application now projects at most 32 sources and 64 active device credentials, preserves a
+source with no active device, rounds activation to a day, and renders source ordinal/state rather
+than its ID. One exact opaque device ID may enter its same-origin revoke form. Source actions
+receive only a 15-minute encrypted token bound to the current session; raw source IDs stay
+server-only. Pause and device revoke are immediate session-authenticated protective actions.
+Reactivation works only from `paused` after a fresh required-UV assertion and one atomic
+consume/reactivate call; a normal user cannot lift `quarantined`. A distinct fresh context lets the
+same account application unlink an active, paused, or quarantined source while active or hidden.
+Unlink moves the source to terminal `unlinked`, revokes every active device, cancels approved
+pairings, and invalidates unused source challenges atomically.
 
 The PostgreSQL runner releases pause against pairing approval and unlink against device activation
 on separate connections. Either ordering ends without approved authority on a paused source or an
 active device on an unlinked source. Inventory, pause, reactivation, and revoke now have
 exact-session HTTP authorization, same-origin or exact-JSON enforcement, private no-store responses,
-closed mapping, and generic failure. Source unlink and user notifications remain application work.
-Revision 0007 adds the database-side submission enforcement described below.
+closed mapping, and generic failure. User notifications remain application work. Revision 0007 adds
+the database-side submission enforcement described below.
 
 ## Local collection and signed synchronization
 

@@ -320,6 +320,51 @@ SELECT
   AND pg_catalog.count(*) = 1 AS reactivated
 FROM source_reactivation`;
 
+const createSourceUnlinkChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
+  SELECT viberacing_api.create_source_action_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::text,
+    'source_unlink'::text,
+    $4::uuid,
+    $5::bytea,
+    $6::bytea,
+    $7::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS created
+FROM challenge_creation`;
+
+const completeSourceUnlinkQuery = `WITH challenge_consumption AS MATERIALIZED (
+  SELECT viberacing_api.consume_passkey_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    'source_unlink'::text,
+    $4::bytea,
+    $5::bytea,
+    $6::uuid,
+    $7::bigint,
+    $8::boolean
+  ) AS consumed
+), source_unlink AS MATERIALIZED (
+  SELECT viberacing_api.unlink_source(
+    $1::uuid,
+    $2::bytea,
+    $9::text,
+    $3::uuid,
+    $5::bytea,
+    $10::uuid,
+    $11::text
+  ) AS ignored
+  FROM challenge_consumption
+  WHERE consumed
+)
+SELECT
+  (SELECT consumed FROM challenge_consumption)
+  AND pg_catalog.count(*) = 1 AS unlinked
+FROM source_unlink`;
+
 const readProfileVisibilityQuery = `SELECT visibility.visibility
 FROM viberacing_api.read_profile_visibility($1::uuid, $2::bytea) AS visibility`;
 
@@ -612,6 +657,10 @@ export interface EnrollmentDatabaseSourceReactivation {
   readonly verifiedPasskeyId: string;
 }
 
+export type EnrollmentDatabaseSourceUnlinkChallenge = EnrollmentDatabaseSourceReactivationChallenge;
+
+export type EnrollmentDatabaseSourceUnlink = EnrollmentDatabaseSourceReactivation;
+
 export interface EnrollmentDatabaseProfileVisibilityRequest {
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
@@ -720,6 +769,8 @@ export interface EnrollmentDatabaseClient {
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown>;
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<unknown>;
   completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<unknown>;
+  completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<unknown>;
+  completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<unknown>;
   createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<unknown>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<unknown>;
@@ -729,6 +780,7 @@ export interface EnrollmentDatabaseClient {
   createSourceReactivationChallenge(
     input: EnrollmentDatabaseSourceReactivationChallenge,
   ): Promise<unknown>;
+  createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
   pauseSource(input: EnrollmentDatabaseSourcePause): Promise<unknown>;
   readActiveDeviceInventory(
@@ -739,7 +791,6 @@ export interface EnrollmentDatabaseClient {
   readProfileVisibility(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
   release(destroy?: boolean): void;
   revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<unknown>;
-  completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<unknown>;
   revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown>;
   setProfileVisibility(input: EnrollmentDatabaseProfileVisibilityUpdate): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
@@ -990,6 +1041,30 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         contextDigest.fill(0);
       }
     },
+    async completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(completeSourceUnlinkQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.verifiedPasskeyId,
+          input.observedSignCount,
+          input.backupState,
+          input.sourceId,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
     async createPasskeyAddChallenge(
       input: EnrollmentDatabasePasskeyAddChallenge,
     ): Promise<unknown> {
@@ -1081,6 +1156,28 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
       const contextDigest = Buffer.from(input.contextDigest);
       try {
         return await fixedQuery(createSourceReactivationChallengeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.sourceId,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.expiresAt,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
+    async createSourceUnlinkChallenge(
+      input: EnrollmentDatabaseSourceUnlinkChallenge,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(createSourceUnlinkChallengeQuery, [
           input.sessionId,
           sessionVerifierDigest,
           input.sourceId,

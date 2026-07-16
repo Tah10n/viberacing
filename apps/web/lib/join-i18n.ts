@@ -5,7 +5,7 @@ const english = {
   accountCopy: "Your invited Community profile is active and protected by a passkey.",
   accountTitle: "Profile ready",
   activeDevicesCopy:
-    "Sources stay visible even without an active device. Pausing stops future submissions from every device on that source immediately; reactivation requires a fresh passkey. Quarantine cannot be lifted here. Device revoke is permanent and keeps existing season attribution.",
+    "Sources stay visible even without an active device. Pausing stops submissions and reactivation requires a fresh passkey. Unlink is permanent, revokes every source device, and keeps existing season attribution. Quarantine cannot be lifted here.",
   activeDevicesTitle: "Sources and connected devices",
   activeDevicesUnavailable: "Source and device details are temporarily unavailable.",
   activePasskey: "Active",
@@ -95,6 +95,8 @@ const english = {
   themeCyber: "Cyber Rally",
   themeNeon: "Neon Night Arcade",
   unsupportedPasskey: "This browser or device does not support WebAuthn passkeys.",
+  unlinkingSource: "Checking passkey…",
+  unlinkSource: "Unlink source permanently",
 } as const;
 
 type JoinTranslationKey = keyof typeof english;
@@ -104,7 +106,7 @@ const russian: Record<JoinTranslationKey, string> = {
   accountCopy: "Профиль участника активирован и защищён ключом доступа.",
   accountTitle: "Профиль готов",
   activeDevicesCopy:
-    "Источники остаются видимыми даже без активного устройства. Пауза сразу останавливает будущие отправки всех устройств источника; для возобновления нужен свежий ключ доступа. Карантин нельзя снять здесь. Отзыв устройства необратим и не удаляет уже учтённые сезоны.",
+    "Источники остаются видимыми даже без активного устройства. Пауза останавливает отправку, а для возобновления нужен свежий ключ доступа. Отключение источника необратимо, отзывает все его устройства и сохраняет уже учтённые сезоны. Карантин нельзя снять здесь.",
   activeDevicesTitle: "Источники и устройства",
   activeDevicesUnavailable: "Сведения об источниках и устройствах временно недоступны.",
   activePasskey: "Активен",
@@ -195,6 +197,8 @@ const russian: Record<JoinTranslationKey, string> = {
   themeCyber: "Кибер-ралли",
   themeNeon: "Неоновая аркада",
   unsupportedPasskey: "Этот браузер или устройство не поддерживает ключи доступа WebAuthn.",
+  unlinkingSource: "Проверяем ключ…",
+  unlinkSource: "Отключить источник навсегда",
 };
 
 export const joinTranslations: Record<Locale, Record<JoinTranslationKey, string>> = Object.freeze({

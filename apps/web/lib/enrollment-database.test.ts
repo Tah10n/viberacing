@@ -24,11 +24,13 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     completePasskeyRevocation: vi.fn(() => Promise.resolve([{ revoked: true }])),
     completeProfileDeletion: vi.fn(() => Promise.resolve([{ deleted: true }])),
     completeSourceReactivation: vi.fn(() => Promise.resolve([{ reactivated: true }])),
+    completeSourceUnlink: vi.fn(() => Promise.resolve([{ unlinked: true }])),
     createPasskeyAddChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createProfileDeletionChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createSourceReactivationChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
+    createSourceUnlinkChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
     pauseSource: vi.fn(() => Promise.resolve([{ paused: true }])),
     readActiveDeviceInventory: vi.fn(() =>
@@ -322,6 +324,32 @@ describe("enrollment database", () => {
       }),
     ).resolves.toBe(true);
     await expect(
+      database.createSourceUnlinkChallenge({
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000416",
+        contextDigest: new Uint8Array(32),
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        sourceId: `src_${"A".repeat(22)}`,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      database.completeSourceUnlink({
+        auditEventId: profile.auditEventId,
+        backupState: false,
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000416",
+        contextDigest: new Uint8Array(32),
+        observedSignCount: 5,
+        requestId: profile.requestId,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        sourceId: `src_${"A".repeat(22)}`,
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000406",
+      }),
+    ).resolves.toBe(true);
+    await expect(
       database.completePasskeyLogin({
         auditEventId: profile.auditEventId,
         backupState: false,
@@ -372,8 +400,10 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(20);
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(22);
     expect(releases).toEqual([
+      false,
+      false,
       false,
       false,
       false,

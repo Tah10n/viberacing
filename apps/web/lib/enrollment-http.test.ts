@@ -94,6 +94,12 @@ function serviceFixture(): EnrollmentService {
         sourceReactivationCookie: "opaque-source-reactivation",
       }),
     ),
+    beginSourceUnlink: vi.fn(() =>
+      Promise.resolve({
+        options: { challenge: Buffer.alloc(32, 10).toString("base64url") },
+        sourceUnlinkCookie: "opaque-source-unlink",
+      }),
+    ),
     cancelGithub: vi.fn(() => true),
     completeGithub: vi.fn(() => Promise.resolve({ sessionCookie: "opaque-session" })),
     completeLogin: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
@@ -102,6 +108,7 @@ function serviceFixture(): EnrollmentService {
     completePasskeyRevoke: vi.fn(() => Promise.resolve(true)),
     completeProfileDeletion: vi.fn(() => Promise.resolve(true)),
     completeSourceReactivation: vi.fn(() => Promise.resolve(true)),
+    completeSourceUnlink: vi.fn(() => Promise.resolve(true)),
     logout: vi.fn(() => Promise.resolve(true)),
     readActiveDeviceInventory: vi.fn(() => Promise.resolve(undefined)),
     readPasskeyInventory: vi.fn(() => Promise.resolve(undefined)),
@@ -409,6 +416,7 @@ describe("enrollment HTTP boundary", () => {
     expect(verification.headers.get("cache-control")).toBe("no-store");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_profile_deletion=");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_source_unlink=");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.completeProfileDeletion).toHaveBeenCalledWith(
       "opaque-session",
@@ -600,6 +608,37 @@ describe("enrollment HTTP boundary", () => {
       { response: { id: "synthetic" } },
     );
 
+    const unlinkOptions = await http.sourceUnlinkOptions(
+      post(
+        "/auth/sources/unlink/options",
+        JSON.stringify({ sourceControl }),
+        "application/json",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(unlinkOptions.status).toBe(200);
+    expect(unlinkOptions.headers.get("set-cookie")).toContain(
+      "viberacing_source_unlink=opaque-source-unlink",
+    );
+    expect(unlinkOptions.headers.get("set-cookie")).toContain("Path=/auth/sources/unlink");
+    expect(service.beginSourceUnlink).toHaveBeenCalledWith("opaque-session", { sourceControl });
+
+    const unlinkVerification = await http.sourceUnlinkVerify(
+      post(
+        "/auth/sources/unlink/verify",
+        JSON.stringify({ response: { id: "synthetic" } }),
+        "application/json",
+        "viberacing_session=opaque-session; viberacing_source_unlink=opaque-source-unlink",
+      ),
+    );
+    expect(unlinkVerification.status).toBe(204);
+    expect(unlinkVerification.headers.get("set-cookie")).toContain("viberacing_source_unlink=");
+    expect(service.completeSourceUnlink).toHaveBeenCalledWith(
+      "opaque-session",
+      "opaque-source-unlink",
+      { response: { id: "synthetic" } },
+    );
+
     await expect(
       http.sourcePause(
         post(
@@ -637,6 +676,7 @@ describe("enrollment HTTP boundary", () => {
     expect(response.headers.get("set-cookie")).toContain("viberacing_passkey_revoke=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_profile_deletion=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
+    expect(response.headers.get("set-cookie")).toContain("viberacing_source_unlink=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.logout).not.toHaveBeenCalled();
 

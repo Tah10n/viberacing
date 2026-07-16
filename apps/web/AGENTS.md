@@ -52,7 +52,9 @@ apply.
   active session for at most 15 minutes. Keep sources visible even when they have no active device.
   Pause is immediate. Reactivation is allowed only from `paused` after a fresh required-UV assertion
   bound to the session, source, RP ID, and origin, followed by one atomic consume-and-reactivate
-  statement. Neither action may lift quarantine or change profile visibility.
+  statement. Unlink requires a distinct fresh assertion context and one atomic consume-and-unlink
+  statement; it is terminal and revokes every active source device. None of these actions may
+  publish a hidden profile, and reactivation must not lift quarantine.
 - Passkey revocation must target only an owned non-current active key from that inventory. Bind one
   fresh required-UV assertion to the exact active session, target, RP, origin, and five-minute
   challenge, then consume and revoke atomically. The opaque target ID may enter only the

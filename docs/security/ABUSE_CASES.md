@@ -50,7 +50,9 @@ material availability cost.
 - **Current evidence:** The account page can pause an exact owned source immediately and reactivate
   only a paused source after a fresh required-UV passkey assertion. Raw source IDs stay server-only;
   the encrypted source-control token is session-bound and expires within 15 minutes. Quarantine
-  remains outside normal user authority, and source unlink is not yet an application control.
+  remains outside normal reactivation authority. A distinct fresh context can terminally unlink an
+  active, paused, or quarantined source and revoke all of its active devices without publishing a
+  hidden profile.
 - **Residual risk:** Duplicate declarations remain possible without a server-verifiable upstream
   account identifier.
 
@@ -276,14 +278,15 @@ material availability cost.
   call. Source pause accepts only the encrypted session-bound control token through a same-origin
   form. Reactivation binds a fresh required-UV assertion to the session, source, RP ID, and origin,
   then atomically consumes the challenge and reactivates only `paused`; tests reject token
-  tampering, cross-session use, replay-shaped failure, quarantine, and malformed request shapes.
-  Both controls remain available while the profile is hidden without publishing it. Source unlink
-  application and recovery verification, aggregate edge rate policy, abandoned consumed-state
-  cleanup, live OAuth/authenticator/database integration, deletion purge execution, and deployment
-  remain absent. The account read additionally revalidates exact session possession and accepts at
-  most 32 closed, ordered rows with one current active authenticator; it renders no credential ID,
-  key, sign counter, exact activity timestamp, or profile ID. Only a revocable target's opaque
-  passkey ID enters the authenticated control and options request.
+  tampering, cross-session use, replay-shaped failure, quarantine, and malformed request shapes. A
+  distinct fresh context atomically unlinks only active, paused, or quarantined owned sources and
+  recursively revokes active source devices. All source controls remain available while the profile
+  is hidden without publishing it. Recovery verification, aggregate edge rate policy, abandoned
+  consumed-state cleanup, live OAuth/authenticator/database integration, deletion purge execution,
+  and deployment remain absent. The account read additionally revalidates exact session possession
+  and accepts at most 32 closed, ordered rows with one current active authenticator; it renders no
+  credential ID, key, sign counter, exact activity timestamp, or profile ID. Only a revocable
+  target's opaque passkey ID enters the authenticated control and options request.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a

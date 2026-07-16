@@ -387,20 +387,27 @@ export function PasskeyRevokeButton({ label, locale, passkeyId }: PasskeyRevokeB
   );
 }
 
-interface SourceReactivationButtonProps {
+interface SourcePasskeyActionButtonProps {
+  readonly action: "reactivate" | "unlink";
   readonly label: string;
   readonly locale: Locale;
   readonly sourceControl: string;
 }
 
-export function SourceReactivationButton({
+function SourcePasskeyActionButton({
+  action,
   label,
   locale,
   sourceControl,
-}: SourceReactivationButtonProps) {
+}: SourcePasskeyActionButtonProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const copy = joinTranslations[locale];
+  const unlink = action === "unlink";
+  const optionsPath = unlink ? "/auth/sources/unlink/options" : "/auth/sources/reactivate/options";
+  const verifyPath = unlink ? "/auth/sources/unlink/verify" : "/auth/sources/reactivate/verify";
+  const actionLabel = unlink ? copy.unlinkSource : copy.reactivateSource;
+  const busyLabel = unlink ? copy.unlinkingSource : copy.reactivatingSource;
 
   async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -414,7 +421,7 @@ export function SourceReactivationButton({
     setBusy(true);
     setError(false);
     try {
-      const optionsResponse = await fetch("/auth/sources/reactivate/options", {
+      const optionsResponse = await fetch(optionsPath, {
         body: JSON.stringify({ sourceControl }),
         cache: "no-store",
         credentials: "same-origin",
@@ -427,7 +434,7 @@ export function SourceReactivationButton({
       }
       const options = (await optionsResponse.json()) as PublicKeyCredentialRequestOptionsJSON;
       const response = await startAuthentication({ optionsJSON: options });
-      const verification = await fetch("/auth/sources/reactivate/verify", {
+      const verification = await fetch(verifyPath, {
         body: JSON.stringify({ response }),
         cache: "no-store",
         credentials: "same-origin",
@@ -448,18 +455,32 @@ export function SourceReactivationButton({
   return (
     <form className="passkey-revoke" onSubmit={(event) => void submit(event)}>
       <button
-        aria-label={`${copy.reactivateSource}: ${label}`}
-        className="secondary-action"
+        aria-label={`${actionLabel}: ${label}`}
+        className={unlink ? "danger-action" : "secondary-action"}
         disabled={busy}
         type="submit"
       >
-        {busy ? copy.reactivatingSource : copy.reactivateSource}
+        {busy ? busyLabel : actionLabel}
       </button>
       <span aria-live="polite" className={error ? "auth-error" : "auth-status"}>
         {error ? copy.genericError : ""}
       </span>
     </form>
   );
+}
+
+interface SourceActionButtonProps {
+  readonly label: string;
+  readonly locale: Locale;
+  readonly sourceControl: string;
+}
+
+export function SourceReactivationButton(props: SourceActionButtonProps) {
+  return <SourcePasskeyActionButton action="reactivate" {...props} />;
+}
+
+export function SourceUnlinkButton(props: SourceActionButtonProps) {
+  return <SourcePasskeyActionButton action="unlink" {...props} />;
 }
 
 interface ProfileDeletionFormProps {

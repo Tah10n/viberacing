@@ -167,6 +167,17 @@ export function sourceReactivationContextDigest(
     .digest();
 }
 
+export function sourceUnlinkContextDigest(
+  sessionId: string,
+  sourceId: string,
+  rpId: string,
+  origin: string,
+): Buffer {
+  return createHash("sha256")
+    .update(`viberacing-source-unlink-v1\n${sessionId}\n${sourceId}\n${rpId}\n${origin}`, "utf8")
+    .digest();
+}
+
 export function passkeyLoginCredentialId(response: unknown): Buffer | undefined {
   if (
     response === null ||
