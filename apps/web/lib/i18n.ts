@@ -6,6 +6,7 @@ export type Locale = (typeof locales)[number];
 type CarPart = CarBody | CarPaint | CarSpoiler | CarTrim;
 
 const english = {
+  account: "Account",
   activeDays: "Active days",
   brand: "Vibe Racing",
   car: "Car",
@@ -81,6 +82,7 @@ const english = {
 export type TranslationKey = keyof typeof english;
 
 const russian: Record<TranslationKey, string> = {
+  account: "Аккаунт",
   activeDays: "Активные дни",
   brand: "Vibe Racing",
   car: "Машина",

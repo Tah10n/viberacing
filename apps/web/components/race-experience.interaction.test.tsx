@@ -72,7 +72,10 @@ function installMatchMedia(initialMatches: boolean): MediaController {
   };
 }
 
-function mountExperience(communitySeasonStart?: string): MountedExperience {
+function mountExperience(
+  communitySeasonStart?: string,
+  accountSessionAvailable = false,
+): MountedExperience {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -80,8 +83,12 @@ function mountExperience(communitySeasonStart?: string): MountedExperience {
   act(() => {
     root.render(
       communitySeasonStart === undefined
-        ? createElement(RaceExperience, { payload })
-        : createElement(RaceExperience, { communitySeasonStart, payload }),
+        ? createElement(RaceExperience, { accountSessionAvailable, payload })
+        : createElement(RaceExperience, {
+            accountSessionAvailable,
+            communitySeasonStart,
+            payload,
+          }),
     );
   });
   return { container, root };
@@ -105,6 +112,28 @@ afterEach(() => {
 });
 
 describe("RaceExperience interactions", () => {
+  it("replaces enrollment links with the localized account entry for a local session", () => {
+    installMatchMedia(false);
+    const mounted = mountExperience(undefined, true);
+    const navigation = mounted.container.querySelector(".site-nav");
+    expect(navigation?.querySelector<HTMLAnchorElement>('a[href="/account"]')?.textContent).toBe(
+      "Account",
+    );
+    expect(navigation?.querySelector('a[href="/login"]')).toBeNull();
+    expect(navigation?.querySelector('a[href="/join"]')).toBeNull();
+
+    const localeSelect = mounted.container.querySelectorAll<HTMLSelectElement>("select")[1];
+    expect(localeSelect).toBeDefined();
+    changeSelect(localeSelect!, "ru");
+    expect(navigation?.querySelector<HTMLAnchorElement>('a[href="/account"]')?.textContent).toBe(
+      "Аккаунт",
+    );
+
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
   it("replaces the preview standings with a validated same-origin Community page", async () => {
     installMatchMedia(false);
     const fetchScore = vi.fn(() =>

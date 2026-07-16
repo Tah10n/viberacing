@@ -26,6 +26,7 @@ type ScoreState =
   | Readonly<{ source: Exclude<ScoreSource, "community"> }>;
 
 interface RaceExperienceProps {
+  readonly accountSessionAvailable?: boolean;
   readonly communitySeasonStart?: string;
   readonly payload: SyntheticRacePayload;
 }
@@ -40,7 +41,11 @@ function isMotionPreference(value: unknown): value is MotionPreference {
   return value === "system" || value === "on" || value === "off";
 }
 
-export function RaceExperience({ communitySeasonStart, payload }: RaceExperienceProps) {
+export function RaceExperience({
+  accountSessionAvailable = false,
+  communitySeasonStart,
+  payload,
+}: RaceExperienceProps) {
   const [locale, setLocale] = useState<Locale>("en");
   const [theme, setTheme] = useState<RaceThemeId>("neon-night");
   const [motionPreference, setMotionPreference] = useState<MotionPreference>("system");
@@ -166,8 +171,14 @@ export function RaceExperience({ communitySeasonStart, payload }: RaceExperience
           <a href="#race">{translation.liveRace}</a>
           <a href="#leaderboard">{translation.leaderboard}</a>
           <a href="#profile">{translation.profile}</a>
-          <a href="/login">{translation.signIn}</a>
-          <a href="/join">{translation.joinRace}</a>
+          {accountSessionAvailable ? (
+            <a href="/account">{translation.account}</a>
+          ) : (
+            <>
+              <a href="/login">{translation.signIn}</a>
+              <a href="/join">{translation.joinRace}</a>
+            </>
+          )}
         </nav>
       </header>
 

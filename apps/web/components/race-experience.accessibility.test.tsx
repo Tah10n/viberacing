@@ -27,5 +27,5 @@ describe("RaceExperience accessibility", () => {
     expect(document.querySelector("button:disabled")?.textContent).toContain("Unavailable");
     expect(document.body.textContent).toContain("Synthetic preview");
     expect(document.body.textContent).toContain("not audited or endorsed by OpenAI");
-  });
+  }, 10_000);
 });

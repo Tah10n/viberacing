@@ -489,27 +489,27 @@ exists.
   and admission is held from the first body read through dependency settlement; overload cancels the
   body without a queue. Cookies are HttpOnly/SameSite=Lax/secure-on-HTTPS with narrow paths,
   callback URLs are excluded from Next development request logs, and responses are generic,
-  `no-store`, and `no-referrer`. EN/RU join, passkey, returning-login, passkey-inventory,
-  active-account, profile-visibility, active-device inventory/revoke, passkey add/revoke, deletion,
-  and logout UI is present. Each route has four-call local admission. The CSP permits GitHub only as
-  the exact OAuth `form-action`; no remote script/connect/asset/frame capability is added. The two
-  exact-pinned SimpleWebAuthn packages are confined by effective lint policy to one server verifier
-  and one browser component; licenses, full 23-record lock addition, production asset budget, and
-  online advisory state were reviewed. Tests cover configuration, cookie purpose/tamper/ambiguity,
-  invite grammar/minimization, state, PKCE, token minimization, fixed SQL and role probes,
-  continuation-before-write ordering, replay and dependency failure shapes,
-  profile-free/database-state-free login options, atomic login settlement, closed account inventory,
-  exact-session idempotent visibility change, independent-challenge atomic add, session/target-bound
-  revoke, current/foreign/replay denial, exact-handle/session-bound deletion, atomic consume/delete
-  settlement, active-only device mapping, hidden-profile inventory/revoke,
+  `no-store`, and `no-referrer`. EN/RU home-session navigation, join, passkey, returning-login,
+  passkey-inventory, active-account, profile-visibility, active-device inventory/revoke, passkey
+  add/revoke, deletion, and logout UI is present. Each route has four-call local admission. The CSP
+  permits GitHub only as the exact OAuth `form-action`; no remote script/connect/asset/frame
+  capability is added. The two exact-pinned SimpleWebAuthn packages are confined by effective lint
+  policy to one server verifier and one browser component; licenses, full 23-record lock addition,
+  production asset budget, and online advisory state were reviewed. Tests cover configuration,
+  cookie purpose/tamper/ambiguity, invite grammar/minimization, state, PKCE, token minimization,
+  fixed SQL and role probes, continuation-before-write ordering, replay and dependency failure
+  shapes, profile-free/database-state-free login options, atomic login settlement, closed account
+  inventory, exact-session idempotent visibility change, independent-challenge atomic add,
+  session/target-bound revoke, current/foreign/replay denial, exact-handle/session-bound deletion,
+  atomic consume/delete settlement, active-only device mapping, hidden-profile inventory/revoke,
   cross-origin/duplicate-form denial, origin/body/admission/logout policy, actual browser-adapter
-  calls, EN/RU, and accessibility. A `localhost` Next dev-server smoke also proves the join page,
-  exact no-scope GitHub redirect and callback-only cookie, state-bound cancellation, cross-origin
-  rejection, missing-session denial, cookie-clearing logout, and callback-query suppression in
-  development logs. This is HTTP/runtime evidence only, not visual browser, OAuth-provider,
-  authenticator, or database E2E. There is no invite issuer UI, recovery, pairing approval,
-  aggregate/distributed attempt policy, abandoned-state cleanup, live OAuth/authenticator/database
-  integration, monitoring, or deployment evidence.
+  calls, local-session home navigation, EN/RU, and accessibility. A `localhost` Next dev-server
+  smoke also proves the join page, exact no-scope GitHub redirect and callback-only cookie,
+  state-bound cancellation, cross-origin rejection, missing-session denial, cookie-clearing logout,
+  and callback-query suppression in development logs. This is HTTP/runtime evidence only, not visual
+  browser, OAuth-provider, authenticator, or database E2E. There is no invite issuer UI, recovery,
+  pairing approval, aggregate/distributed attempt policy, abandoned-state cleanup, live
+  OAuth/authenticator/database integration, monitoring, or deployment evidence.
 - A second dormant server-only Web pairing adapter reuses the same environment-owned narrow Web/Auth
   login through a separate four-connection read-write pool. The start application accepts only a
   closed canonical public-key/label/version/OS/architecture request, generates fresh pairing and
@@ -524,7 +524,7 @@ exists.
   procedure with a server-generated `dev_` ID, audit UUID, and common `req_` ID. Each transport-free
   application admits four unsettled attempts, holds each through a 250-millisecond floor, and
   returns only its frozen success shape or generic failure plus a request ID. The Web suite now
-  contains 495 tests; pairing coverage includes material/code bounds, HMAC vectors/rotation and key
+  contains 496 tests; pairing coverage includes material/code bounds, HMAC vectors/rotation and key
   separation, hostile configuration/input/result shapes, fixed start/lookup/activation queries,
   driver confinement, role drift, strict proof selection, IDs, admission/timing, generic failure,
   clearing, release, and close. No pairing approval/HTTP route, client identity or distributed rate
@@ -593,9 +593,9 @@ exists.
   deployment without a real HTTPS DNS value remains forbidden. The separate enrollment slice stores
   account state only in encrypted HttpOnly cookies and reads its exact server-only configuration
   lazily; the default preview still needs none of it.
-- Four hundred ninety-five unit, component, interaction, security-header, localization, scoring,
+- Four hundred ninety-six unit, component, interaction, security-header, localization, scoring,
   HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
-  coverage gate currently reports 88.30% statements, 86.74% branches, 95.54% functions, and 88.43%
+  coverage gate currently reports 88.30% statements, 86.76% branches, 95.54% functions, and 88.43%
   lines over product components and libraries; framework entrypoints are verified by the production
   build instead of artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift; contract, Ingest, and
