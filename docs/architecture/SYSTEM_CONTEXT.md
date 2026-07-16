@@ -6,7 +6,8 @@ This is the planned runtime architecture. The current repository contains a test
 foundation, one local public-score route, one local one-shot Jobs runner, and local Ingest
 request-verification, PostgreSQL-adapter, application-composition, and bounded HTTP-server
 boundaries, plus library-only connector initialization and candidate `0.144.4` account/usage parser
-boundaries, but no deployed application service, operational connector, supported Codex version,
+boundaries and a synthetic one-shot supervisor behind a launch capability with no public
+constructor, but no deployed application service, operational connector, supported Codex version,
 Cloudflare/Railway deployment, or production database. Component status is tracked in
 [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
 not deployed evidence.
@@ -107,12 +108,15 @@ behind one transport-free validated application decision. ADR 0020 adds one conf
 factory with exact raw-body/header preservation, closed POST/error serialization, local
 connection/deadline bounds, four-call no-queue admission, and no proxy/request-ID trust. The
 library-only ADR 0021 Rust foundation adds one bounded stable App Server JSONL initialization state
-machine and discards all server values. It does not implement the connector container's process,
-account/usage, key, signing, scheduling, upload, CLI, or release responsibilities. The host/port/TLS
-deployment entry point, live secret-manager/edge key injection, working deployment
-login/certificate, composed live end-to-end flow, distributed rate/backpressure and capacity
-evidence, Cloudflare/Railway path, operational connector, Jobs scheduler/monitoring, public cache,
-and audited correction authority shown in the design remain planned.
+machine and discards all server values. ADR 0022 adds the exact-version candidate account/usage
+adapter, and ADR 0023 composes both through a fixed, deadline/output-bounded, reap-before-success
+synthetic child supervisor. Its reviewed-launch capability has no public constructor, so executable
+discovery/admission, official-artifact execution, account keys, signing, scheduling, upload, CLI,
+and release responsibilities remain absent. The host/port/TLS deployment entry point, live
+secret-manager/edge key injection, working deployment login/certificate, composed live end-to-end
+flow, distributed rate/backpressure and capacity evidence, Cloudflare/Railway path, operational
+connector, Jobs scheduler/monitoring, public cache, and audited correction authority shown in the
+design remain planned.
 
 ## Component responsibilities
 

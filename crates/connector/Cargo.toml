@@ -13,5 +13,16 @@ version.workspace = true
 serde = { version = "=1.0.228", default-features = false, features = ["std"] }
 serde_json = { version = "=1.0.150", default-features = false, features = ["std"] }
 
+[features]
+process-test-fixture = []
+
+[[bin]]
+name = "viberacing-connector-process-fixture"
+path = "tests/fixtures/process_fixture.rs"
+required-features = ["process-test-fixture"]
+test = false
+bench = false
+doc = false
+
 [lints]
 workspace = true

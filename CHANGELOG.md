@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and twenty-two accepted ADRs.
+  fail-closed compatibility policy and matrix, and twenty-three accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -120,6 +120,16 @@ Versioning where its guarantees are applicable.
   adapter tests cover fixture and generated hostile cases. This does not verify or launch the
   official artifact, clean a child process, support a Codex version, store a key, upload, package,
   or release a connector; the matrix remains empty.
+- A bounded one-shot candidate App Server supervisor. It accepts only `ReviewedCodexLaunch`, which
+  has no public constructor, and starts one fixed `app-server` argument in a capability-owned
+  working directory, clears ambient environment and re-allows only reviewed keys, uses local pipes,
+  admits three 16 KiB stdout frames, permits 8 KiB discard-only stderr and fails on the next byte,
+  applies 10-second response and 45-second lifetime bounds, checks late output, and returns
+  minimized usage only after child reap. Nine unit cases execute only a target-built Rust fixture
+  and cover exact protocol composition, environment filtering, timeout, early exit,
+  pre/post-response output overload, stable diagnostics, missing executable, nonzero terminal
+  status, and forced cleanup. No binary discovery/path ownership, official-artifact execution,
+  platform matrix, live Codex path, key, upload, CLI, package, or support row is implied.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

@@ -54,9 +54,12 @@ The Rust library implements the fixed stable handshake plus a candidate-only Cod
 account/usage parser. After the handshake, it emits only fixed IDs `1` and `2`, confirms ChatGPT
 mode, discards email/plan/summary fields, and returns at most 31 sorted unique date/token buckets
 under the sync bounds. The candidate manifest records release metadata, full generated schema
-digests, minimal extracts, fixtures, and unresolved blockers. It does not launch a process, verify
-the selected artifact, store a key, upload, negotiate support, or alter the empty matrix. ADRs 0021
-and 0022 record that distinction.
+digests, minimal extracts, fixtures, and unresolved blockers. A one-shot supervisor now composes
+those exact state machines through a fixed `app-server` argument, local pipes, a capability-owned
+working directory/environment, bounded output/time, and reap-before-success cleanup. The capability
+has no public constructor, so the library still cannot discover or admit an executable, execute the
+selected official artifact, store a key, upload, negotiate support, or alter the empty matrix. ADRs
+0021 through 0023 record those distinctions.
 
 Generated schema output is exact to the Codex version that produced it. The repository commits only
 reviewed relevant schema extracts and synthetic fixtures, not account data or a developer's local

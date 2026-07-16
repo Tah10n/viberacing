@@ -18,7 +18,8 @@ changing it.
 - A generated schema proves only the exact Codex CLI version that generated it. Do not mark a
   version supported until its checked-in fixtures and fail-closed compatibility tests pass.
 - Candidate schema/parser evidence is not support. Keep the public matrix empty until the manifest
-  has no blockers and process, cleanup, platform, packaging, and release evidence all pass.
+  has no blockers and executable admission, official-artifact, platform, privacy-egress, packaging,
+  and release evidence all pass.
 - Keep process launch, credential storage, upload, and desktop UI outside a parser change unless the
   task explicitly includes that boundary.
 

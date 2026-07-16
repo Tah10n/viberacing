@@ -27,13 +27,16 @@ factory now preserves exact raw HTTP evidence, admits four application calls wit
 applies fixed parser/header/connection/deadline policies, and serializes only revalidated sync
 acknowledgement/problem contracts. A library-only Rust connector foundation now bounds the stable
 App Server handshake and a candidate `0.144.4` account/usage parser, discarding account/summary
-fields and returning only bounded normalized daily usage in caller memory. Candidate release,
-schema, and fixture evidence is drift-checked but does not populate the support matrix. Phase 0
-hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
-No authentication route, OAuth/Argon2id/WebAuthn application flow, production secret-manager/edge
-key injection, Ingest host/port/TLS deployment entry point, production deployment, live
-Web/Jobs/Ingest database login/TLS integration, released or operational connector, supported Codex
-version, real-user ingestion, end-to-end public ranking, or finalization scheduler exists.
+fields and returning only bounded normalized daily usage in caller memory. An inaccessible one-shot
+supervisor composes those exact states through fixed local pipes, a fixed child argument, no ambient
+environment, bounded stdout/stderr/time, terminal-event draining, and reap-before-success cleanup.
+Candidate release, schema, fixture, and synthetic-process evidence does not populate the support
+matrix. Phase 0 hosted-publication controls remain blocked on real maintainer identities and GitHub
+configuration. No authentication route, OAuth/Argon2id/WebAuthn application flow, production
+secret-manager/edge key injection, Ingest host/port/TLS deployment entry point, production
+deployment, live Web/Jobs/Ingest database login/TLS integration, released or operational connector,
+supported Codex version, real-user ingestion, end-to-end public ranking, or finalization scheduler
+exists.
 
 ## Implemented and locally verified
 
@@ -110,17 +113,27 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   ChatGPT mode, validates then discards email/plan/summary fields, and returns at most 31 sorted
   unique real `20xx` dates with integers through the sync-safe maximum. Ten further integration
   tests use every checked-in fixture and generated duplicate/UTF-8/frame/ID/count/date/integer
-  cases, prove terminal remote failure, and keep diagnostics to entry count. There is no process
-  launcher, stderr reader, supported Codex version, device key, upload, network transport, CLI,
-  installer, or released binary; the compatibility matrix remains empty.
-- An ADR lifecycle/template and twenty-two accepted design decisions covering Community trust,
+  cases, prove terminal remote failure, and keep diagnostics to entry count. A one-shot supervisor
+  then writes only those fixed messages to a child started with one `app-server` argument and a
+  capability-owned working directory/environment. It clears ambient variables, admits only three 16
+  KiB stdout frames, permits 8 KiB discard-only stderr and fails on the next byte, applies 10-second
+  response and 45-second lifetime limits, detects terminal output after the usage response, and
+  returns data only after the child is reaped. Nine unit cases launch only a target-built Rust
+  fixture and cover exact composition, environment filtering, timeout, early exit, stdout/stderr
+  overload before and after the final response, non-reflection, missing executable, nonzero terminal
+  status, and forced cleanup. The opaque launch capability has no public constructor: there is no
+  executable discovery/path-ownership review, official-artifact execution, supported Codex version,
+  device key, upload, network transport, CLI, installer, or released binary; the compatibility
+  matrix remains empty.
+- An ADR lifecycle/template and twenty-three accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
   score operation, bounded maintenance runner, bounded Community sync verification kernel,
   least-privileged Ingest PostgreSQL adapter, protected origin-proof key configuration, persistent
   atomic origin replay, transport-free Community sync application composition, and the bounded local
-  Fastify HTTP boundary, plus the fail-closed Codex handshake and candidate account/usage adapter.
+  Fastify HTTP boundary, plus the fail-closed Codex handshake, candidate account/usage adapter, and
+  inaccessible bounded one-shot process supervisor.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -475,10 +488,11 @@ entry point, trusted edge routing and direct-origin denial, live secret-manager/
 the Ingest live PostgreSQL login/TLS connection, distributed rate/backpressure controls and load
 evidence, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring
 state, the Jobs scheduler/live login and application-to-PostgreSQL integration, audited corrections,
-deployed public-score delivery, purge workers, connector process discovery/launch/cleanup, supported
-operational account/usage integration, secure device-key storage, upload/CLI/packaging, release
-signing, deployment, and public beta operations remain proposed. The local Ingest key reader,
-kernel, adapter, application composer, and Fastify server now prove bounded protected configuration,
+deployed public-score delivery, purge workers, connector executable discovery/link/ownership and
+artifact/version admission, live Codex and cross-platform process evidence, supported operational
+account/usage integration, secure device-key storage, upload/CLI/packaging, release signing,
+deployment, and public beta operations remain proposed. The local Ingest key reader, kernel,
+adapter, application composer, and Fastify server now prove bounded protected configuration,
 raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
 pool, fixed-query, orchestration, no-queue/deadline policy, and result/problem serialization
 behavior, but not those deployed edge, live persistence, capacity, or operational boundaries. A

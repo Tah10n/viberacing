@@ -39,12 +39,15 @@ serializes only revalidated sync contracts. The public score route and Ingest bo
 verified but have no real proof key, secret-manager binding, live database login, host/port/TLS
 Ingest entry point, edge deployment, capacity evidence, or visible-component consumer. A
 library-only Rust connector foundation now implements a bounded stable App Server JSONL handshake
-and a candidate-only `0.144.4` account/usage parser with checked schema/fixture evidence; it has no
-process launcher, supported Codex version, key store, upload, CLI, or release. Do not claim that
-deployed browser/session HTTP authentication, OAuth/Argon2id/WebAuthn application verification,
-real-user ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
-correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
-implementation and verification are present in the working tree.
+and a candidate-only `0.144.4` account/usage parser with checked schema/fixture evidence. A one-shot
+supervisor composes that sequence with fixed local pipes, arguments, deadlines, output budgets,
+ambient-environment clearing, and reap-before-success behavior, but its reviewed-launch capability
+has no public constructor. There is no executable discovery/admission, live Codex launch path,
+supported version, key store, upload, CLI, or release. Do not claim that deployed browser/session
+HTTP authentication, OAuth/Argon2id/WebAuthn application verification, real-user ingestion, an
+operational connector, a Jobs scheduler or deployed public-race read, season correction, scheduled
+or broader cleanup, deployment, or a hosted security control exists until its implementation and
+verification are present in the working tree.
 
 ## Repository map
 
@@ -70,9 +73,9 @@ implementation and verification are present in the working tree.
   nested security guidance. Read `packages/contracts/AGENTS.md` before editing it.
 - `database/` contains the SQL migration ledger, non-login role bootstrap, identity/source/device
   persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
-- `crates/connector/` contains the bounded App Server JSONL handshake plus candidate exact-version
-  account/usage parser and nested connector security guidance. Read `crates/connector/AGENTS.md`
-  before editing it.
+- `crates/connector/` contains the bounded App Server JSONL handshake, candidate exact-version
+  account/usage parser, inaccessible one-shot child supervisor, synthetic process fixture, and
+  nested connector security guidance. Read `crates/connector/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
 - The Ingest host/port/TLS deployment entry point, authentication application code, and operational
@@ -130,7 +133,8 @@ implementation and verification are present in the working tree.
 These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`. The Web, Ingest,
 and Jobs tests use synthetic/injected data and do not prove authentication, real-user ingestion,
 connector, scheduler, live edge/replay/database integration, deployment, or production behavior; the
-database integration proves only its isolated SQL boundary. Install dependencies with
+database integration proves only its isolated SQL boundary. Rust process tests execute only a
+target-built synthetic child, not a discovered or installed Codex binary. Install dependencies with
 `pnpm install --frozen-lockfile --ignore-scripts`.
 
 ## Public repository boundary

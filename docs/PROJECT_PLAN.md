@@ -210,8 +210,12 @@ broad semantic-version range.
 ADR 0022 now adds candidate-only `0.144.4` evidence: immutable release metadata, full stable-schema
 digests, minimal account extracts, synthetic fixtures, a drift checker, and a closed library parser
 for the two planned reads. It confirms ChatGPT mode while discarding email/plan/summary values and
-returns only bounded sorted daily date/token entries. The candidate does not launch or clean a
-process, verify the official artifact, run on all platforms, sign/upload, or create a matrix row.
+returns only bounded sorted daily date/token entries. ADR 0023 adds a one-shot supervisor with a
+fixed `app-server` argument, local pipes, no ambient environment, bounded stdout/stderr/time, and
+reap-before-success composition. Its launch capability deliberately has no public constructor until
+a later boundary resolves links, rejects untrusted writable paths, and verifies the exact executable
+and version. The candidate does not execute the official artifact, run on all platforms,
+sign/upload, or create a matrix row.
 
 ### Date semantics
 

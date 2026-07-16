@@ -117,9 +117,13 @@ Rust foundation теперь выполняет фиксированный stabl
 `0.144.4` account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает email/plan/summary и
 возвращает не более 31 отсортированной строгой date/token записи. В репозитории есть exact release
 metadata, schema digests, minimal extracts, fixtures и drift/matrix checker, но официальный artifact
-не был независимо выполнен, а support matrix остаётся пустой. Process discovery/launch/cleanup,
-secure device key, signed upload, operational connector, live database connection, load evidence и
-deployment всё ещё отсутствуют.
+не был независимо выполнен, а support matrix остаётся пустой. One-shot supervisor теперь проверяет
+точную sequence на target-built synthetic child: фиксированный `app-server` argument, local pipes,
+очищенное ambient environment, bounded stdout/stderr/time, отклонение late output и
+reap-before-success cleanup. У reviewed-launch capability нет публичного constructor, поэтому
+executable discovery, link/path ownership и artifact/version admission, реальный запуск Codex,
+cross-platform evidence, secure device key, signed upload, operational connector, live database
+connection, load evidence и deployment всё ещё отсутствуют.
 
 Также добавлены двенадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,

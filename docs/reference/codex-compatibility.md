@@ -6,7 +6,8 @@ Compatibility status: no supported versions.
 
 No Codex version and no Vibe Racing connector version is supported. A library-only connector now
 implements the bounded initialization exchange and a candidate parser for exact version `0.144.4`,
-but process launch/cleanup, official artifact execution, cross-platform evidence, secure keys,
+plus a synthetic one-shot process supervisor behind a launch capability with no public constructor.
+Executable discovery/admission, official-artifact execution, cross-platform results, secure keys,
 upload, packaging, and a released connector do not exist. This empty matrix is fail-closed evidence,
 not an invitation to run the candidate against an arbitrary local version.
 
@@ -29,10 +30,18 @@ contract. Ten adapter tests plus generated hostile cases exercise exact bytes, n
 values, schema drift, dates, integer/count bounds, framing, terminal failure, and non-reflective
 diagnostics.
 
+Nine supervisor unit cases launch only a target-built Rust fixture. They prove one fixed
+`app-server` argument and working directory, cleared ambient environment with a narrow
+capability-owned allowlist, exact handshake/account/usage composition, three-frame stdout and 8 KiB
+discard-only stderr budgets, response/lifetime deadlines, early-exit handling, late-output checks,
+stable errors, nonzero terminal-status rejection, and reap-before-success cleanup.
+`ReviewedCodexLaunch` has no public constructor, so this is not an installed-Codex or
+selected-artifact execution result.
+
 The repository compatibility checker verifies manifest paths, shapes, byte counts, digests,
 provenance syntax, fixed methods, fixture coverage, and the candidate/support-matrix separation. Its
-fourteen black-box cases prove those fail-closed rules. ADR 0022 records the decision. None of this
-clears the remaining admission requirements below.
+fourteen black-box cases prove those fail-closed rules. ADRs 0022 and 0023 record the parser and
+process decisions. None of this clears the remaining admission requirements below.
 
 ## Admission requirements
 
@@ -62,18 +71,20 @@ duplicate and unknown members, validates the four reviewed stable initialization
 discards them, then emits one fixed `initialized` notification. A remote protocol failure is
 terminal for that state-machine instance and errors do not reflect server content.
 
-The candidate adapter adds exact-version parsing evidence described above. Neither library boundary
-identifies or launches a Codex executable, verifies the selected release artifact, bounds stderr or
-child lifetime, cleans a process, stores a key, signs/uploads data, admits a release, or creates a
-connector artifact. Every matrix row still requires the complete admission evidence above.
+The candidate adapter adds exact-version parsing evidence described above. The one-shot supervisor
+adds fixed local launch mechanics and synthetic timeout/overload/cleanup evidence but accepts only
+the inaccessible `ReviewedCodexLaunch` capability. No library boundary discovers a binary, resolves
+its links/ownership, constructs that capability, verifies or executes the selected release artifact,
+stores a key, signs/uploads data, admits a release, or creates a connector artifact. Every matrix
+row still requires the complete admission evidence above.
 
 ## Planned stable surface
 
 The implementation plan names `account/read` for a local auth-mode decision and `account/usage/read`
 for bounded usage daily buckets. The `0.144.4` candidate proves those methods and reviewed fields
 exist in one generated stable schema and implements their closed parser. It is still not a current
-support claim. The first proposed row must additionally prove the official artifact, process
-lifecycle, clean-machine platforms, privacy egress, and released connector range.
+support claim. The first proposed row must additionally prove executable admission, the official
+artifact, clean-machine platforms, privacy egress, and a released connector range.
 
 All other App Server methods and transports are denied for connector v1. In particular, Vibe Racing
 does not consume thread, turn, item, approval, MCP, file, shell, login, conversation, or repository

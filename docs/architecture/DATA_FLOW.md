@@ -14,12 +14,14 @@ only cleanup, refresh, or finalization, but no browser/session authentication or
 endpoint, OAuth callback, Argon2id/WebAuthn or pairing-possession application verifier, operational
 connector, purge worker, Jobs scheduler/monitor, audited correction, or deployed service executes
 the complete sequences. A library-only Rust connector foundation validates the bounded stable App
-Server initialization exchange and candidate `0.144.4` account/usage responses, but has no process,
-key, signer, upload, or supported-version path. A local Ingest kernel now verifies the bounded
-exact-body origin/device request, while the separate adapter maps origin replay, device lookup, and
-submission through fixed calls. PostgreSQL now proves atomic origin replay consumption and bounded
-cleanup. A transport-free application now composes those exact local capabilities and validates only
-closed acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+Server initialization exchange and candidate `0.144.4` account/usage responses. A synthetic one-shot
+supervisor composes those states with fixed local process mechanics, but its launch capability has
+no public constructor and it has no executable admission, real Codex execution, key, signer, upload,
+or supported-version path. A local Ingest kernel now verifies the bounded exact-body origin/device
+request, while the separate adapter maps origin replay, device lookup, and submission through fixed
+calls. PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
+application now composes those exact local capabilities and validates only closed
+acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
 evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
 no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
 certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
@@ -319,9 +321,12 @@ ADR 0021 implements the first local App Server protocol step: a fixed capability
 one 16 KiB LF-only closed response, discarded initialization strings, and fixed `initialized`. ADR
 0022 adds a candidate `0.144.4` sequence after that handshake: fixed account/usage reads, ChatGPT
 mode confirmation with account fields discarded, and no more than 31 normalized daily usage entries.
-It cannot identify/launch/clean Codex, verify the official artifact, hold a device key, sign,
-schedule, or upload, so no Community sync sequence reaches it yet and the support matrix stays
-empty.
+ADR 0023 composes that exact one-shot sequence through one fixed `app-server` argument, a reviewed
+working directory/environment with ambient variables cleared, local pipes, bounded stdout/stderr and
+deadlines, terminal-event checks, and reap-before-success cleanup. The required launch capability
+has no public constructor, so it cannot identify or admit a binary, execute the official artifact,
+hold a device key, sign, schedule, or upload. No Community sync sequence reaches it yet and the
+support matrix stays empty.
 
 The operational connector layers, edge signer, direct-origin denial, host/port/TLS Ingest deployment
 entry point, live secret-manager/edge key injection, live PostgreSQL login/TLS connection,

@@ -176,18 +176,22 @@ material availability cost.
 - **Controls:** The implemented library foundation has one fixed stable initialization exchange,
   then a candidate-only `0.144.4` account/usage state machine with fixed IDs/methods, 16 KiB LF-only
   frames, closed duplicate-rejecting fields, exact order, terminal hostile input, discarded
-  account/summary values, 31 bounded normalized daily entries, and non-reflective errors. The
-  operational connector still requires a user-scoped install, resolved trusted binary path, fixed
-  argument array, no shell, sanitized environment, bounded child/stderr/time, version adapter, and
-  egress allowlist.
+  account/summary values, 31 bounded normalized daily entries, and non-reflective errors. A one-shot
+  supervisor now uses one fixed `app-server` argument, local pipes, a capability-owned working
+  directory and allowlisted environment with ambient variables cleared, three bounded stdout frames,
+  discard-only bounded stderr, fixed response/lifetime deadlines, terminal-event draining, and
+  reap-before-success cleanup. The operational connector still requires a user-scoped install,
+  resolved trusted binary path, link/ownership and artifact/version admission, public construction
+  of that exact capability, safe diagnostics, platform evidence, and the existing egress allowlist.
 - **Detection:** Local safe diagnostics for selected binary/version, bounded failure reason, and
   child cleanup verification without uploading content.
 - **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified
   binary, and rotate the device key after suspected compromise.
 - **Residual risk:** A computer owner can replace all local components; official signing and clear
   diagnostics reduce accidental compromise, not owner control. Candidate schema/parser tests do not
-  prove selected-artifact provenance, process cleanup, cross-platform behavior, or release integrity
-  and do not make the version supported.
+  prove selected-artifact provenance, real Codex execution, cross-platform behavior, or release
+  integrity. The synthetic supervisor tests prove bounded mechanics only and do not make the version
+  supported.
 
 ## Web, privacy, and content abuse
 

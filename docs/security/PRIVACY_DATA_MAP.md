@@ -4,7 +4,8 @@
 
 The current repository contains a private SQL schema, synthetic PostgreSQL integration test, local
 Community sync verification kernel, mock-pool database adapter, and bounded local HTTP server
-factory, plus a library-only connector initialization boundary, but no deployed application
+factory, plus library-only connector protocol/parser boundaries and a synthetic one-shot process
+supervisor behind a launch capability with no public constructor, but no deployed application
 database, user accounts, production service, operational connector, or real user data. This document
 remains the required inventory for implementation. A field may not be collected merely because it
 appears here: its schema, purpose, visibility, retention, deletion, and access tests must exist
@@ -155,10 +156,20 @@ values. Only the already mapped private `codexReportedDate`/token entries leave 
 caller-owned memory: at most 31, sorted, unique, calendar-valid, and integer-bounded. Its diagnostic
 representation contains entry count only. The local Codex home and account email remain prohibited
 outside their validators. No value reaches a log, metric, file, database, HTTP payload, cache,
-analytics event, export, key, or network sink. The library does not launch Codex, access a
-credential store, or upload. Any future compatibility diagnostic or retained connector/Codex version
-must use the existing mapped Security/Operational class with an explicit purpose and bounded
-retention.
+analytics event, export, key, or network sink.
+
+ADR 0023 adds no collected or retained field. The one-shot supervisor receives only a future
+capability-owned executable path, isolated working directory, and allowlisted environment values;
+none has a public accessor or diagnostic representation. It reads no ambient environment, launches
+only one fixed argument over local pipes, retains at most three 16 KiB stdout frames in bounded
+memory, and permits only 8 KiB discard-only stderr before failing on the next byte without retaining
+or returning its content. Child status, operating-system errors, paths, environment values, and raw
+output never enter returned errors. The only success result is the already mapped minimized
+`DailyUsage`, returned after terminal-event checking and child reap. Synthetic tests use a
+target-built fixture and temporary directory only. Because `ReviewedCodexLaunch` has no public
+constructor, the library cannot discover or execute a local Codex installation, access a credential
+store, or upload. A future executable-admission diagnostic or retained connector/Codex version must
+use the existing mapped Security/Operational class with an explicit purpose and bounded retention.
 
 Revision 0008 adds deletion evidence for only those raw nonce and snapshot rows: a Jobs-only
 procedure derives cutoff time on the server, deletes bounded expired batches, cascades raw entries,
@@ -272,9 +283,10 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   authority.
 - The connector library validates and discards the App Server initialization values and candidate
   `0.144.4` account/summary fields, then exposes only bounded private daily usage to its caller. It
-  has no process, device key, signed payload, log, store, or egress capability; the candidate
-  remains unsupported until process, platform, artifact, privacy-egress, packaging, and release
-  gates pass.
+  composes that sequence only behind a reviewed-launch capability with no public constructor and
+  bounded synthetic process evidence. It has no executable discovery/admission, real Codex path,
+  device key, signed payload, log, store, or egress capability; the candidate remains unsupported
+  until official-artifact, platform, privacy-egress, packaging, and release gates pass.
 - Jobs currently receive only bounded expired ingest-state cleanup, open-season Community scoring
   refresh, and terminal finalization. The local one-shot adapter rechecks the exact Jobs-only login
   and invokes one prepared capability without logging inputs or results. Correction and deletion

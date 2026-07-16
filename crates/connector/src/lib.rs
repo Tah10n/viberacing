@@ -1,8 +1,9 @@
 //! Fail-closed protocol primitives for the local Codex App Server stdio boundary.
 //!
-//! This crate implements the stable initialization exchange plus a candidate-only account/usage
-//! adapter for one exact schema extract. It does not launch Codex, expose a generic JSON-RPC
-//! client, or claim compatibility with any Codex release.
+//! This crate implements the stable initialization exchange, a candidate-only account/usage
+//! adapter for one exact schema extract, and a bounded one-shot child supervisor behind an
+//! reviewed-launch capability with no public constructor. It does not discover or admit a Codex executable,
+//! expose a generic JSON-RPC client, or claim compatibility with any Codex release.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -12,10 +13,16 @@ use std::fmt;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 
 mod codex_0_144_4;
+mod process;
 
 pub use codex_0_144_4::{
     CandidateCodex01444AccountUsage, DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES,
     MAX_SYNC_TOKEN_VALUE,
+};
+pub use process::{
+    APP_SERVER_EXIT_GRACE, APP_SERVER_LIFETIME, APP_SERVER_RESPONSE_TIMEOUT,
+    CandidateCodex01444Collector, CollectionError, MAX_APP_SERVER_STDERR_BYTES,
+    MAX_APP_SERVER_STDOUT_FRAMES, ReviewedCodexLaunch,
 };
 
 /// Maximum accepted App Server JSONL frame size, including its final line-feed byte.
