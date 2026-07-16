@@ -45,6 +45,9 @@ export const nextConfig: NextConfig = {
     remotePatterns: [],
     unoptimized: true,
   },
+  logging: {
+    incomingRequests: { ignore: [/\/auth\/github\/callback(?:\?|$)/] },
+  },
   output: "standalone",
   poweredByHeader: false,
   productionBrowserSourceMaps: false,

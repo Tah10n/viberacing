@@ -158,6 +158,15 @@ Versioning where its guarantees are applicable.
   admission plus a 250-millisecond floor produces only generic local failure decisions. There is no
   browser approval/HTTP route, connector client, distributed rate policy, live login, real key, or
   deployment.
+- A local invite-to-passkey enrollment vertical slice with EN/RU join/account UI, exact bounded
+  same-origin POST routes, state plus S256 PKCE and no extra GitHub scope, purpose-separated
+  AES-256-GCM HttpOnly cookies, fixed atomic enrollment/challenge/passkey/session database calls,
+  required user-verified initial WebAuthn registration, atomic rotation from a 15-minute pending
+  session to a fresh passkey-bound session, logout, no-queue admission, and generic
+  no-store/no-referrer failures. SimpleWebAuthn server/browser packages are exact-pinned, confined
+  to one owner each, license/advisory/asset-reviewed, and covered through injected production paths.
+  No invite issuer UI, returning login, recovery, live OAuth/authenticator/database credential, edge
+  rate policy, cleanup schedule, monitoring, or deployment is implied.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

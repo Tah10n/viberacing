@@ -1,0 +1,90 @@
+import type { Locale } from "./i18n";
+
+const english = {
+  accountCopy: "Your invited Community profile is active and protected by a passkey.",
+  accountTitle: "Profile ready",
+  backToRace: "Back to the race",
+  brand: "Vibe Racing",
+  continueGithub: "Continue with GitHub",
+  createPasskey: "Create passkey",
+  creatingPasskey: "Waiting for your passkey…",
+  genericError: "The request could not be completed. Check the fields or try again later.",
+  handleHint: "3–24 lowercase letters, numbers, hyphens, or underscores.",
+  handleLabel: "Public racing handle",
+  inviteHint: "Use the one-time invite exactly as it was issued.",
+  inviteLabel: "Invite code",
+  joinCopy:
+    "Redeem one invite, confirm your GitHub identity, then create a passkey. Vibe Racing requests no extra OAuth scope, keeps only your numeric GitHub user ID, and immediately discards the token and other response fields.",
+  joinTitle: "Join the Community race",
+  language: "Language",
+  logout: "Sign out",
+  motion: "Motion preference",
+  motionOff: "Off",
+  motionOn: "On",
+  motionSystem: "Device setting",
+  passkeyCopy:
+    "A passkey is required before the profile becomes active and replaces a password. Device approval, recovery, and deletion are not available in this local slice yet.",
+  passkeyLabel: "Passkey label",
+  passkeyTitle: "Protect your profile",
+  privacyNote:
+    "Email, repositories, prompts, conversations, Codex credentials, and exact token totals are neither retained nor used.",
+  primaryPasskey: "Primary passkey",
+  russian: "Русский",
+  english: "English",
+  streakHidden: "Hide streak",
+  streakVisible: "Show rounded streak",
+  streakVisibility: "Public streak",
+  theme: "Garage theme",
+  themeClassic: "Classic Grand Prix",
+  themeCyber: "Cyber Rally",
+  themeNeon: "Neon Night Arcade",
+  unsupportedPasskey: "This browser or device does not support WebAuthn passkeys.",
+} as const;
+
+type JoinTranslationKey = keyof typeof english;
+
+const russian: Record<JoinTranslationKey, string> = {
+  accountCopy: "Профиль участника активирован и защищён ключом доступа.",
+  accountTitle: "Профиль готов",
+  backToRace: "Вернуться к гонке",
+  brand: "Vibe Racing",
+  continueGithub: "Продолжить через GitHub",
+  createPasskey: "Создать ключ доступа",
+  creatingPasskey: "Ожидаем ключ доступа…",
+  genericError: "Не удалось завершить запрос. Проверьте поля или попробуйте позже.",
+  handleHint: "От 3 до 24 строчных букв, цифр, дефисов или подчёркиваний.",
+  handleLabel: "Публичное имя пилота",
+  inviteHint: "Введите одноразовый инвайт точно в выданном виде.",
+  inviteLabel: "Код приглашения",
+  joinCopy:
+    "Активируйте инвайт, подтвердите личность через GitHub и создайте ключ доступа. Vibe Racing не запрашивает дополнительных OAuth-разрешений, сохраняет только числовой GitHub ID и сразу удаляет токен и остальные поля ответа.",
+  joinTitle: "Присоединиться к гонке сообщества",
+  language: "Язык",
+  logout: "Выйти",
+  motion: "Анимация",
+  motionOff: "Выключена",
+  motionOn: "Включена",
+  motionSystem: "Как на устройстве",
+  passkeyCopy:
+    "До активации профиля нужен ключ доступа, заменяющий пароль. Подключение устройств, восстановление и удаление в этом локальном срезе пока недоступны.",
+  passkeyLabel: "Название ключа",
+  passkeyTitle: "Защитите профиль",
+  privacyNote:
+    "Email, репозитории, промпты, диалоги, данные входа Codex и точное число токенов не сохраняются и не используются.",
+  primaryPasskey: "Основной ключ доступа",
+  russian: "Русский",
+  english: "English",
+  streakHidden: "Скрыть серию",
+  streakVisible: "Показывать округлённую серию",
+  streakVisibility: "Публичная серия",
+  theme: "Тема гаража",
+  themeClassic: "Классический Гран-при",
+  themeCyber: "Кибер-ралли",
+  themeNeon: "Неоновая аркада",
+  unsupportedPasskey: "Этот браузер или устройство не поддерживает ключи доступа WebAuthn.",
+};
+
+export const joinTranslations: Record<Locale, Record<JoinTranslationKey, string>> = Object.freeze({
+  en: Object.freeze(english),
+  ru: Object.freeze(russian),
+});

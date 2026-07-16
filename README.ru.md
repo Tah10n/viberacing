@@ -1,7 +1,7 @@
 # Vibe Racing
 
-> Статус: создаются безопасные persistence foundations для Phase 2/3. Production-сервис и готовый
-> connector не выпущены.
+> Статус: реализуются локальные vertical slices Phase 2/3. Production-сервис и готовый connector не
+> выпущены.
 
 Внешние contributions пока закрыты: сначала нужны реальные публичные maintainers, CODEOWNERS и
 проверенные приватные каналы для security/conduct reports. Локальные имена и контакты не будут
@@ -15,7 +15,11 @@ Vibe Racing — открытый пиксельный недельный рей�
 помеченное синтетическое превью. Видимая гонка и таблица теперь также запрашивают текущую неделю у
 same-origin public score route и переключаются на Community results только после проверки ответа;
 при ошибке остаётся синтетический fallback. Демо-профиль, три темы, русский/английский интерфейс и
-reduced-motion режим работают без реальных данных.
+reduced-motion режим работают без реальных данных. Отдельный invite-only flow теперь локально
+соединяет GitHub OAuth со state и PKCE, зашифрованное краткоживущее продолжение, атомарное
+enrollment, обязательную регистрацию passkey, страницу активного профиля и logout. Репозиторий не
+предоставляет рабочий invite issuer, OAuth registration, реальные secrets, Web login, повторный
+passkey-вход, edge abuse controls или evidence с реальным пользователем.
 
 ## Модель доверия
 
@@ -133,7 +137,7 @@ admission, реальный запуск Codex, cross-platform evidence, source/
 key generation/store, pairing proof, signed upload, operational connector, live database connection,
 load evidence и deployment всё ещё отсутствуют.
 
-Также добавлены двенадцать SQL migrations: 24 приватные
+Также добавлены тринадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
 deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая
 procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
@@ -144,7 +148,8 @@ passkeys, rotate/revoke сессии, немедленную блокировк�
 критических действий база сохраняет точный passkey step-up. Реализованы также защищённая
 passkey-проверкой замена recovery-кодов и отдельное краткоживущее право только на регистрацию нового
 passkey: обычная сессия создаётся лишь после успешной замены, а использованный PHC сразу удаляется.
-Проверяющего Argon2id/WebAuthn приложения пока нет. Database-only scoring refresh уже суммирует
+Локальный enrollment flow теперь проверяет initial WebAuthn registration; verifier для login,
+step-up и Argon2id recovery всё ещё отсутствует. Database-only scoring refresh уже суммирует
 distinct eligible sources одного профиля перед единым дневным лимитом, закрепляет immutable версию
 формулы за ISO-week season и сохраняет только derived score/rank/active-days/source-count без raw
 tokens и source IDs. Database-only finalization закрывает grace window через 48 часов после ISO-week
@@ -155,23 +160,23 @@ bounded active-profile score rows без raw values, private IDs и exact timest
 allowlist, а server-only mapper, bounded Web PostgreSQL adapter и локальный score route проверяют
 форму, season/rank invariants, database role и contract до сериализации. Видимая гонка и таблица
 теперь запрашивают у этого route текущую server-selected неделю без credentials, проверяют только
-public поля и честно сохраняют synthetic fallback при недоступности. HTTP login/recovery routes,
-OAuth callback, Argon2id/WebAuthn и pairing-possession verifier, generic auth-response translation и
-edge rate limits для анонимных challenges и recovery lookup пока отсутствуют. Database-only
-Community ingest capability уже выдаёт минимальный материал активного устройства и принимает bounded
-source-bound snapshots с exact retry, nonce replay, monotonic source/date, quarantine и
-lifecycle-race enforcement. Отдельная Jobs-only procedure независимо удаляет bounded batches
-истёкших origin nonces, device nonces и raw snapshots, сохраняя current source/day values. Локальный
-one-shot Jobs runner теперь вызывает только cleanup, scoring refresh или finalization через
-отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
+public поля и честно сохраняют synthetic fallback при недоступности. Локальные invite/OAuth/
+initial-passkey routes теперь существуют, но returning passkey login, recovery, WebAuthn pairing
+approval и edge rate limits для анонимных challenges и recovery lookup пока отсутствуют.
+Database-only Community ingest capability уже выдаёт минимальный материал активного устройства и
+принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic source/date,
+quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure независимо удаляет bounded
+batches истёкших origin nonces, device nonces и raw snapshots, сохраняя current source/day values.
+Локальный one-shot Jobs runner теперь вызывает только cleanup, scoring refresh или finalization
+через отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
 deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI output.
 Сама база не проверяет wire signature; локальные kernel, adapter и application объединены на
 synthetic/mock-pool evidence, а Fastify boundary отдельно проверена через injection/loopback с mock
 application. Полный HTTP-to-PostgreSQL path не проверен через реальный login. Deployed HTTP ingest
 route, pairing-possession verifier, operational connector, cleanup/scoring scheduler, live
 Ingest/Jobs login/TLS integration, monitoring backend, deployed public score read, audited
-correction flow, purge worker и deployed database ещё не реализованы, поэтому готовой
-пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
+correction flow, purge worker и deployed database ещё не реализованы, поэтому локальный enrollment
+ещё не является готовой production-авторизацией, а приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

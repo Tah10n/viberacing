@@ -89,6 +89,91 @@ const startPairingQuery = `WITH pairing_start AS MATERIALIZED (
 SELECT pg_catalog.count(*) = 1 AS started
 FROM pairing_start`;
 
+const enrollProfileQuery = `WITH profile_enrollment AS MATERIALIZED (
+  SELECT viberacing_api.enroll_profile(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    $4::bigint,
+    $5::text,
+    $6::text,
+    $7::text,
+    $8::text,
+    $9::boolean,
+    $10::uuid,
+    $11::bytea,
+    $12::timestamptz,
+    $13::uuid,
+    $14::text
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS enrolled
+FROM profile_enrollment`;
+
+const createPasskeyChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
+  SELECT viberacing_api.create_auth_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    'passkey_registration'::text,
+    $4::bytea,
+    $5::bytea,
+    $6::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS created
+FROM challenge_creation`;
+
+const completeInitialPasskeyQuery = `WITH challenge_consumption AS MATERIALIZED (
+  SELECT viberacing_api.consume_auth_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    'passkey_registration'::text,
+    $4::bytea,
+    $5::bytea
+  ) AS consumed
+), passkey_registration AS MATERIALIZED (
+  SELECT viberacing_api.register_initial_passkey(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    $6::uuid,
+    $7::bytea,
+    $8::bytea,
+    $9::text,
+    $10::bigint,
+    $11::boolean,
+    $12::boolean,
+    $13::uuid,
+    $14::text
+  ) AS ignored
+  FROM challenge_consumption
+  WHERE consumed
+), session_rotation AS MATERIALIZED (
+  SELECT viberacing_api.rotate_session(
+    $1::uuid,
+    $2::bytea,
+    $15::uuid,
+    $16::bytea,
+    $17::timestamptz,
+    $18::uuid,
+    $14::text
+  ) AS profile_id
+  FROM passkey_registration
+)
+SELECT
+  (SELECT consumed FROM challenge_consumption)
+  AND pg_catalog.count(*) = 1 AS registered
+FROM session_rotation`;
+
+const revokeEnrollmentSessionQuery = `SELECT viberacing_api.revoke_session(
+  $1::uuid,
+  $2::bytea,
+  $3::uuid,
+  $4::text
+) AS revoked`;
+
 export interface PairingDatabaseActivation {
   readonly auditEventId: string;
   readonly deviceId: string;
@@ -111,6 +196,60 @@ export interface PairingDatabaseStart {
   readonly userCodeDigest: Uint8Array;
 }
 
+export interface EnrollmentDatabaseProfile {
+  readonly auditEventId: string;
+  readonly githubUserId: number;
+  readonly handle: string;
+  readonly inviteId: string;
+  readonly inviteVerifierDigest: Uint8Array;
+  readonly locale: "en" | "ru";
+  readonly motionPreference: "off" | "on" | "system";
+  readonly profileId: string;
+  readonly requestId: string;
+  readonly sessionExpiresAt: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly streakVisible: boolean;
+  readonly theme: "classic-grand-prix" | "cyber-rally" | "neon-night";
+}
+
+export interface EnrollmentDatabasePasskeyChallenge {
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly expiresAt: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+}
+
+export interface EnrollmentDatabaseInitialPasskey {
+  readonly auditEventId: string;
+  readonly backupEligible: boolean;
+  readonly backupState: boolean;
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly cosePublicKey: Uint8Array;
+  readonly credentialId: Uint8Array;
+  readonly label: string;
+  readonly passkeyId: string;
+  readonly requestId: string;
+  readonly rotatedSessionExpiresAt: string;
+  readonly rotatedSessionId: string;
+  readonly rotatedSessionVerifierDigest: Uint8Array;
+  readonly rotationAuditEventId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly signCount: number;
+}
+
+export interface EnrollmentDatabaseSessionRevocation {
+  readonly auditEventId: string;
+  readonly requestId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+}
+
 export type PairingDatabasePoolSignal = "idle_client_error";
 export type PairingDatabasePoolSignalSink = (
   signal: PairingDatabasePoolSignal,
@@ -126,9 +265,29 @@ export interface PairingDatabaseClient {
   verifyRuntimeBoundary(): Promise<unknown>;
 }
 
+export interface EnrollmentDatabaseClient {
+  completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown>;
+  createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown>;
+  enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
+  release(destroy?: boolean): void;
+  revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown>;
+  verifyRuntimeBoundary(): Promise<unknown>;
+}
+
 export interface PairingDatabasePool {
   close(): Promise<void>;
   connect(): Promise<PairingDatabaseClient>;
+}
+
+export interface EnrollmentDatabasePool {
+  close(): Promise<void>;
+  connect(): Promise<EnrollmentDatabaseClient>;
+}
+
+export interface WebAuthDatabaseClient extends PairingDatabaseClient, EnrollmentDatabaseClient {}
+
+export interface WebAuthDatabasePool extends PairingDatabasePool, EnrollmentDatabasePool {
+  connect(): Promise<WebAuthDatabaseClient>;
 }
 
 interface NodePostgresPool {
@@ -162,7 +321,7 @@ function signalSafely(
   }
 }
 
-function wrapClient(client: NodePostgresClient): PairingDatabaseClient {
+function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
   async function fixedQuery(text: string, values: readonly unknown[] = []): Promise<unknown> {
     const result = await client.query({ text, values: [...values] });
     return result.rows;
@@ -181,6 +340,87 @@ function wrapClient(client: NodePostgresClient): PairingDatabaseClient {
         ]);
       } finally {
         digest.fill(0);
+      }
+    },
+    async completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      const credentialId = Buffer.from(input.credentialId);
+      const cosePublicKey = Buffer.from(input.cosePublicKey);
+      const rotatedSessionVerifierDigest = Buffer.from(input.rotatedSessionVerifierDigest);
+      try {
+        return await fixedQuery(completeInitialPasskeyQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.passkeyId,
+          credentialId,
+          cosePublicKey,
+          input.label,
+          input.signCount,
+          input.backupEligible,
+          input.backupState,
+          input.auditEventId,
+          input.requestId,
+          input.rotatedSessionId,
+          rotatedSessionVerifierDigest,
+          input.rotatedSessionExpiresAt,
+          input.rotationAuditEventId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+        credentialId.fill(0);
+        cosePublicKey.fill(0);
+        rotatedSessionVerifierDigest.fill(0);
+      }
+    },
+    async createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(createPasskeyChallengeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.expiresAt,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
+    async enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown> {
+      const inviteVerifierDigest = Buffer.from(input.inviteVerifierDigest);
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(enrollProfileQuery, [
+          input.inviteId,
+          inviteVerifierDigest,
+          input.profileId,
+          input.githubUserId,
+          input.handle,
+          input.locale,
+          input.theme,
+          input.motionPreference,
+          input.streakVisible,
+          input.sessionId,
+          sessionVerifierDigest,
+          input.sessionExpiresAt,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        inviteVerifierDigest.fill(0);
+        sessionVerifierDigest.fill(0);
       }
     },
     async readVerificationMaterial(
@@ -224,6 +464,19 @@ function wrapClient(client: NodePostgresClient): PairingDatabaseClient {
         publicKey.fill(0);
       }
     },
+    async revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(revokeEnrollmentSessionQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
+    },
     verifyRuntimeBoundary(): Promise<unknown> {
       return fixedQuery(runtimeBoundaryQuery);
     },
@@ -234,7 +487,7 @@ export function createPairingDatabasePool(
   config: PairingDatabaseConfig,
   signalSink?: PairingDatabasePoolSignalSink,
   poolFactory: NodePostgresPoolFactory = defaultPoolFactory,
-): PairingDatabasePool {
+): WebAuthDatabasePool {
   const pool = poolFactory(config);
   pool.on("error", () => {
     signalSafely(signalSink, "idle_client_error");
@@ -244,7 +497,7 @@ export function createPairingDatabasePool(
     async close(): Promise<void> {
       await pool.end();
     },
-    async connect(): Promise<PairingDatabaseClient> {
+    async connect(): Promise<WebAuthDatabaseClient> {
       return wrapClient(await pool.connect());
     },
   });

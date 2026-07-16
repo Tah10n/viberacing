@@ -9,7 +9,7 @@ export function buildContentSecurityPolicy(nonce: string, development: boolean):
     "object-src 'none'",
     "frame-src 'none'",
     "frame-ancestors 'none'",
-    "form-action 'self'",
+    "form-action 'self' https://github.com",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""}`,
     `style-src 'self' 'nonce-${nonce}'`,
     "img-src 'self' data:",

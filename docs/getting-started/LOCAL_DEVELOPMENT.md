@@ -3,40 +3,42 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and twelve Phase 2/3 database-foundation migrations. Everything runnable uses synthetic data only.
-It has procedure-only identity, passkey login/management, restricted recovery, pairing, and
-source/device lifecycle database capabilities plus Community ingest, retention cleanup, scoring, and
-terminal finalization and public score-projection procedures, but no browser/session authentication
-or recovery application code, OAuth/Argon2id/WebAuthn or composed pairing route, Jobs scheduler,
-real-user ingestion, audited correction, or operational connector. A library-only Rust crate
-implements the bounded stable App Server initialization exchange and a candidate `0.144.4`
-account/usage parser with fixed methods, discarded account/summary fields, and bounded normalized
-daily output. A one-shot supervisor now composes those states with a fixed child argument, local
-pipes, cleared ambient environment, output/deadline limits, and reap-before-success behavior. Its
-reviewed-launch capability has no public constructor, so it cannot discover, admit, or execute a
-local Codex installation. A second inaccessible reviewed context lets a composer consume the
-minimized usage into the exact bounded sync JSON, SHA-256 digest, nonce encoding, and device message
-checked by Ingest. An isolated one-use signer consumes that closed value only with a third
+and thirteen Phase 2/3 database-foundation migrations. Repository verification uses synthetic data
+and injected capabilities only. It has procedure-only identity, passkey login/management, restricted
+recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
+retention cleanup, scoring, terminal finalization, and public score-projection procedures. A local
+Web slice now composes invite redemption, GitHub OAuth state plus PKCE, encrypted browser cookies,
+initial WebAuthn registration, an account page, and logout. It has no working invite/OAuth/database
+credential or live-user evidence, and returning login, recovery, pairing approval, a Jobs scheduler,
+real-user ingestion, audited correction, and an operational connector remain absent. A library-only
+Rust crate implements the bounded stable App Server initialization exchange and a candidate
+`0.144.4` account/usage parser with fixed methods, discarded account/summary fields, and bounded
+normalized daily output. A one-shot supervisor now composes those states with a fixed child
+argument, local pipes, cleared ambient environment, output/deadline limits, and reap-before-success
+behavior. Its reviewed-launch capability has no public constructor, so it cannot discover, admit, or
+execute a local Codex installation. A second inaccessible reviewed context lets a composer consume
+the minimized usage into the exact bounded sync JSON, SHA-256 digest, nonce encoding, and device
+message checked by Ingest. An isolated one-use signer consumes that closed value only with a third
 inaccessible device-bound key capability. A separate inaccessible pending-key/challenge signer and
-pure Web verifier agree on an exact synthetic pairing-possession proof. A dormant Web/Auth
-application now handles protected primary/secondary poll-verifier derivation, a fixed approved-row
-lookup through a separately probed read-write pool, that strict proof, and exact atomic activation
-with server-owned IDs behind local admission/timing. It cannot create a transaction, perform browser
-or WebAuthn approval, generate/load a real key, or make an HTTP request; no supported version,
-source/device provider, key store, connector pairing client, or upload exists. A local Ingest kernel
-bounds and authenticates a synthetic exact-body sync request, and a separate adapter constrains
-origin replay, database lookup, and submission mapping with mock-pool evidence. A transport-free
-application composes those exact boundaries, generates a server request ID, and validates the
-acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic replay and
-cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies no-queue and
-deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS launch entry
-point. There is no working database login/certificate, live end-to-end PostgreSQL flow, edge path,
-connector process, supported adapter, or deployment. A bounded local one-shot Jobs process now wraps
-only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A
-bounded server-only Web PostgreSQL adapter and local public-score GET are implemented and
-unit/build-tested, but this repository supplies no working deployment login or TLS certificate. A
-successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL
-constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
+pure Web verifier agree on an exact synthetic pairing-possession proof. Two dormant Web/Auth
+applications create bounded pending material and later handle protected poll-verifier derivation, a
+fixed approved-row lookup through a separately probed read-write pool, that strict proof, and exact
+atomic activation with server-owned IDs behind local admission/timing. They cannot perform pairing
+browser or WebAuthn approval, generate/load a real key, or make an HTTP request; no supported
+version, source/device provider, key store, connector pairing client, or upload exists. A local
+Ingest kernel bounds and authenticates a synthetic exact-body sync request, and a separate adapter
+constrains origin replay, database lookup, and submission mapping with mock-pool evidence. A
+transport-free application composes those exact boundaries, generates a server request ID, and
+validates the acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic
+replay and cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies
+no-queue and deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS
+launch entry point. There is no working database login/certificate, live end-to-end PostgreSQL flow,
+edge path, connector process, supported adapter, or deployment. A bounded local one-shot Jobs
+process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or
+deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are implemented
+and unit/build-tested, but this repository supplies no working deployment login or TLS certificate.
+A successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries,
+SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
 isolation; it does not prove a live adapter, deployed API, or production flow. The Ingest server
 tests bind only ephemeral loopback sockets and use synthetic requests; no development command
 exposes it to the LAN or Internet.
@@ -89,8 +91,10 @@ repository root:
 pnpm run dev:web
 ```
 
-Open the loopback URL printed by Next.js. The development server binds to `127.0.0.1`; do not change
-it to a LAN-wide address for convenience. All displayed participants and activity are synthetic.
+Open the configured port through the `localhost` hostname. The development server binds to that
+loopback hostname; do not change it to a LAN-wide address for convenience. The matching browser
+origin keeps local WebAuthn standards compliant. All displayed participants and activity are
+synthetic.
 
 Useful focused commands:
 
@@ -193,14 +197,25 @@ metadata. Without it, development uses loopback and production builds use a rese
 origin that is not suitable for deployment. A real hosted build must receive its public HTTPS DNS
 origin through the deployment environment.
 
-The server-only score and dormant pairing adapters use only `VIBERACING_WEB_DATABASE_*`. Their
-tracked user/password are deliberately non-working placeholders and are checked against accidental
-reuse of the `DATABASE_*` compose owner. Local integration requires a separately provisioned login
-whose only membership is `viberacing_web`; login creation remains environment-owned and is not
-automated here. `disable` requires explicit `NODE_ENV=development` or `test` plus loopback. Every
-other environment requires `verify-full`, a certificate-valid multi-label DNS hostname, and TLS 1.2
-or later. The synthetic page and build never construct either adapter, so they need none of these
-settings.
+The server-only score, enrollment, and dormant pairing adapters use only
+`VIBERACING_WEB_DATABASE_*`. Their tracked user/password are deliberately non-working placeholders
+and are checked against accidental reuse of the `DATABASE_*` compose owner. Local integration
+requires a separately provisioned login whose only membership is `viberacing_web`; login creation
+remains environment-owned and is not automated here. `disable` requires explicit
+`NODE_ENV=development` or `test` plus loopback. Every other environment requires `verify-full`, a
+certificate-valid multi-label DNS hostname, and TLS 1.2 or later. The synthetic page and build never
+construct either adapter, so they need none of these settings. The join form also renders without
+configuration; its server actions fail closed until the complete enrollment environment exists.
+
+Local enrollment additionally requires a dedicated GitHub OAuth app whose callback is exactly
+`/auth/github/callback` on the configured `localhost` origin, valid `GITHUB_CLIENT_ID` and
+`GITHUB_CLIENT_SECRET`, and a fresh canonical 32-byte base64url `SESSION_SECRET`. Set
+`WEBAUTHN_ORIGIN` exactly equal to `VIBERACING_PUBLIC_ORIGIN` and set `WEBAUTHN_RP_ID` to that
+origin's lowercase hostname (`localhost` for the documented loopback setup). WebAuthn RP IDs cannot
+be IP addresses. The tracked values are non-working placeholders. A manual flow also needs an
+externally issued invite whose stored digest matches its 256-bit secret; this repository
+intentionally provides no issuer shortcut or sample valid invite. Never reuse these values between
+development, staging, and production.
 
 Constructing the pairing applications additionally requires fresh, distinct 32-byte canonical
 base64url values in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL` and

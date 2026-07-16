@@ -173,6 +173,123 @@ describe("pairing database pool", () => {
     expect(JSON.stringify(signals)).not.toContain(privateValue);
   });
 
+  it("exposes only fixed enrollment, passkey, and session procedures on the shared Web/Auth pool", async () => {
+    const returnedRows = [
+      [{ enrolled: true }],
+      [{ created: true }],
+      [{ registered: true }],
+      [{ revoked: true }],
+    ];
+    const liveQueries: { text: string; values: unknown[] }[] = [];
+    const snapshots: { text: string; values: unknown[] }[] = [];
+    const release = vi.fn();
+    const driverClient = {
+      query(query: { text: string; values: unknown[] }): Promise<{ rows: unknown }> {
+        liveQueries.push(query);
+        snapshots.push({
+          text: query.text,
+          values: query.values.map((value) =>
+            Buffer.isBuffer(value) ? Buffer.from(value) : value,
+          ),
+        });
+        return Promise.resolve({ rows: returnedRows.shift() });
+      },
+      release,
+    };
+    const pool = createPairingDatabasePool(config, undefined, () => ({
+      connect: () => Promise.resolve(driverClient),
+      end: () => Promise.resolve(),
+      on() {
+        return this;
+      },
+    }));
+    const client = await pool.connect();
+    const digest = Buffer.alloc(32, 0x51);
+    const context = Buffer.alloc(32, 0x52);
+    const credential = Buffer.alloc(32, 0x53);
+    const publicKey = Buffer.alloc(77, 0x54);
+
+    await expect(
+      client.enrollProfile({
+        auditEventId: "00000000-0000-4000-8000-000000000305",
+        githubUserId: 123,
+        handle: "pixel_driver",
+        inviteId: "00000000-0000-4000-8000-000000000301",
+        inviteVerifierDigest: digest,
+        locale: "en",
+        motionPreference: "system",
+        profileId: "00000000-0000-4000-8000-000000000302",
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionExpiresAt: "2026-08-15T10:00:00.000Z",
+        sessionId: "00000000-0000-4000-8000-000000000303",
+        sessionVerifierDigest: digest,
+        streakVisible: false,
+        theme: "neon-night",
+      }),
+    ).resolves.toEqual([{ enrolled: true }]);
+    await expect(
+      client.createPasskeyChallenge({
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000304",
+        contextDigest: context,
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: "00000000-0000-4000-8000-000000000303",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([{ created: true }]);
+    await expect(
+      client.completeInitialPasskey({
+        auditEventId: "00000000-0000-4000-8000-000000000305",
+        backupEligible: true,
+        backupState: false,
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000304",
+        contextDigest: context,
+        cosePublicKey: publicKey,
+        credentialId: credential,
+        label: "Primary passkey",
+        passkeyId: "00000000-0000-4000-8000-000000000306",
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        rotatedSessionExpiresAt: "2026-08-15T10:00:00.000Z",
+        rotatedSessionId: "00000000-0000-4000-8000-000000000308",
+        rotatedSessionVerifierDigest: digest,
+        rotationAuditEventId: "00000000-0000-4000-8000-000000000309",
+        sessionId: "00000000-0000-4000-8000-000000000303",
+        sessionVerifierDigest: digest,
+        signCount: 1,
+      }),
+    ).resolves.toEqual([{ registered: true }]);
+    await expect(
+      client.revokeEnrollmentSession({
+        auditEventId: "00000000-0000-4000-8000-000000000307",
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionId: "00000000-0000-4000-8000-000000000303",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([{ revoked: true }]);
+
+    expect(snapshots.map(({ text }) => text)).toEqual([
+      expect.stringContaining("enroll_profile"),
+      expect.stringContaining("create_auth_challenge"),
+      expect.stringContaining("consume_auth_challenge"),
+      expect.stringContaining("revoke_session"),
+    ]);
+    expect(snapshots[2]?.text).toContain("register_initial_passkey");
+    expect(snapshots[2]?.text).toContain("rotate_session");
+    expect(snapshots[2]?.text).toContain("AS MATERIALIZED");
+    expect(digest).toEqual(Buffer.alloc(32, 0x51));
+    expect(context).toEqual(Buffer.alloc(32, 0x52));
+    expect(credential).toEqual(Buffer.alloc(32, 0x53));
+    expect(publicKey).toEqual(Buffer.alloc(77, 0x54));
+    for (const query of liveQueries) {
+      for (const value of query.values) {
+        if (Buffer.isBuffer(value)) {
+          expect(value).toEqual(Buffer.alloc(value.length));
+        }
+      }
+    }
+  });
+
   it("contains synchronous and asynchronous monitoring failures", async () => {
     const listeners: ((error: Error) => void)[] = [];
     const driverPool = {

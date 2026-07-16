@@ -12,7 +12,7 @@ describe("public metadata origin", () => {
   });
 
   it("uses reserved defaults without reading workstation identity", () => {
-    expect(resolvePublicOrigin(undefined, "development").href).toBe("http://127.0.0.1:3000/");
+    expect(resolvePublicOrigin(undefined, "development").href).toBe("http://localhost:3000/");
     expect(resolvePublicOrigin(undefined, "production").href).toBe("https://viberacing.example/");
   });
 

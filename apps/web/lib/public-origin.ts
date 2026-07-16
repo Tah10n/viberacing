@@ -2,7 +2,7 @@ import "server-only";
 
 import { isIP } from "node:net";
 
-const developmentFallback = "http://127.0.0.1:3000";
+const developmentFallback = "http://localhost:3000";
 const productionFallback = "https://viberacing.example";
 const maximumOriginLength = 256;
 const domainPattern =

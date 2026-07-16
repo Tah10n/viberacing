@@ -236,6 +236,20 @@ material availability cost.
   RP ID/origin, transaction-bound challenges, user verification, exact session/passkey provenance,
   fresh step-up, last-passkey protection, restricted recovery authority, and terminal credential
   revoke that closes stale browser and pending device authority.
+- **Current evidence:** The local invite-enrollment slice accepts only one exact same-origin bounded
+  form, immediately reduces the 256-bit invite secret to its digest, seals state and S256 PKCE in a
+  ten-minute callback-path cookie, requests no extra OAuth scope, follows no upstream redirect, and
+  retains only a positive numeric GitHub ID. Purpose-separated AES-GCM cookies reject tampering and
+  duplicate names. Initial registration creates one session-bound five-minute challenge and requires
+  a discoverable credential, user presence and verification, exact `webauthn.create`, RP ID, origin,
+  challenge, and ES256/RS256 verification before atomic activation. Success rotates the 15-minute
+  pending session to a fresh passkey-bound session and revokes the old verifier in the same query.
+  Route bodies are stream-bounded under admission held through settlement; overload cancels the body
+  without a queue. Responses are generic/no-store/no-referrer, and the CSP permits only self plus
+  GitHub for OAuth form navigation. Injected tests cover wrong state, origin, RP, type, UV,
+  replay-shaped failures, cookie ambiguity, overload, and continuation-before-write ordering.
+  Returning login, recovery/step-up verification, aggregate edge rate policy, abandoned-state
+  cleanup, live OAuth/authenticator/database integration, and deployment remain absent.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a

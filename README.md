@@ -1,7 +1,7 @@
 # Vibe Racing
 
-> Status: Phase 2/3 persistence foundations in progress. No production service or released connector
-> exists.
+> Status: Phase 2/3 local vertical slices are in progress. No production service or released
+> connector exists.
 
 External participation is closed until real public maintainers, CODEOWNERS, and private reporting
 channels are configured. Local identities are never copied into the repository to fill that gap.
@@ -14,7 +14,11 @@ The current runnable site starts with a clearly labeled synthetic preview so con
 without an account, connector, or database. It now also requests the current Community week from the
 same-origin public score route and replaces the visible race and leaderboard only after a bounded
 response passes browser-side validation. An unavailable route leaves the synthetic fallback visible;
-the demo garage remains synthetic.
+the demo garage remains synthetic. A separate invite-only join flow now composes GitHub OAuth with
+state and PKCE, one encrypted short-lived continuation, atomic profile enrollment, required WebAuthn
+registration, an active account page, and logout. It is locally tested only: the repository supplies
+no invite issuer UI, OAuth registration, real secret, working Web login, returning passkey login,
+edge abuse controls, or live-user evidence.
 
 ## Trust model
 
@@ -146,36 +150,37 @@ one-time new/existing-source device pairing, private source/device inventory, so
 pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation, and
 short-lived recovery-only replacement-passkey authority. Pairing creates only opaque user-declared
 sources: it never reads or stores Codex account email or claims account uniqueness. The source
-unlink/reactivation procedures require a fresh consumed source-bound step-up record, but the
-application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
-also require edge rate limits and bounded cleanup before exposure. A database-only Community ingest
-capability now exposes minimal active-device verification material and accepts bounded source-bound
-snapshots with exact retry, nonce replay, monotonic source/date, quarantine, and lifecycle-race
-enforcement. A Jobs-only procedure deletes independently bounded batches of expired origin nonces,
-device nonces, and raw snapshots while preserving current source/day values. A separate Jobs-only
-procedure deletes bounded expired non-activated pairing transactions plus their still-pending keys,
-while preserving live and activated bindings. The database does not verify a wire signature; the
-local kernel and adapter are composed locally and exercised together with a signed synthetic
-request, while the Fastify boundary separately proves the raw transport handoff with a mock
-application. The complete HTTP-to-PostgreSQL path is not exercised through a real login. Another
-Jobs-only procedure serializes an atomic refresh of one open ISO-week Community season: it sums
-distinct eligible sources before one profile daily cap, stores an immutable formula and season
-binding, shares rank on equal score and active days, and persists no raw token or source identifier
-in the score tables. Revision 0010 adds a public 48-hour server-time grace rule, late-snapshot
-quarantine, and a Jobs-only idempotent finalization procedure whose terminal metadata and score
-projection reject silent rewrites while profile purge can still remove personal rows. One local
-one-shot Jobs runner now wraps exactly one of four fixed functions: ingest cleanup, pairing cleanup,
-refresh, or finalization. It uses a distinct least-privileged configuration namespace, one-client
-pool, per-checkout role/login/search-path probe, fixed deadlines and prepared parameters, closed
-result validation, destructive release after failure, and stable non-reflective CLI output. It has
-no scheduler, live login/certificate, monitoring backend, retry loop, application-to-PostgreSQL
-integration result, or deployment. Revision 0011 gives only the Web database role a bounded
-active-profile score projection containing no raw values, private identifiers, or exact timestamps.
-The score response component and Web PostgreSQL adapter preserve only that public allowlist through
-the local score route. The visible race and leaderboard now consume its validated current-week
-response with a credential-free same-origin request and an explicit synthetic fallback. There is
-still no browser/session authentication or recovery route, OAuth callback, Argon2id/WebAuthn pairing
-approval, pairing start/poll HTTP route, deployed Ingest/score API, operational connector,
+unlink/reactivation procedures require a fresh consumed source-bound step-up record, but their
+application-level WebAuthn assertion verifier is still absent. The local enrollment flow verifies
+only initial passkey registration. Anonymous login challenges also require edge rate limits and
+bounded cleanup before exposure. A database-only Community ingest capability now exposes minimal
+active-device verification material and accepts bounded source-bound snapshots with exact retry,
+nonce replay, monotonic source/date, quarantine, and lifecycle-race enforcement. A Jobs-only
+procedure deletes independently bounded batches of expired origin nonces, device nonces, and raw
+snapshots while preserving current source/day values. A separate Jobs-only procedure deletes bounded
+expired non-activated pairing transactions plus their still-pending keys, while preserving live and
+activated bindings. The database does not verify a wire signature; the local kernel and adapter are
+composed locally and exercised together with a signed synthetic request, while the Fastify boundary
+separately proves the raw transport handoff with a mock application. The complete HTTP-to-PostgreSQL
+path is not exercised through a real login. Another Jobs-only procedure serializes an atomic refresh
+of one open ISO-week Community season: it sums distinct eligible sources before one profile daily
+cap, stores an immutable formula and season binding, shares rank on equal score and active days, and
+persists no raw token or source identifier in the score tables. Revision 0010 adds a public 48-hour
+server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization procedure
+whose terminal metadata and score projection reject silent rewrites while profile purge can still
+remove personal rows. One local one-shot Jobs runner now wraps exactly one of four fixed functions:
+ingest cleanup, pairing cleanup, refresh, or finalization. It uses a distinct least-privileged
+configuration namespace, one-client pool, per-checkout role/login/search-path probe, fixed deadlines
+and prepared parameters, closed result validation, destructive release after failure, and stable
+non-reflective CLI output. It has no scheduler, live login/certificate, monitoring backend, retry
+loop, application-to-PostgreSQL integration result, or deployment. Revision 0011 gives only the Web
+database role a bounded active-profile score projection containing no raw values, private
+identifiers, or exact timestamps. The score response component and Web PostgreSQL adapter preserve
+only that public allowlist through the local score route. The visible race and leaderboard now
+consume its validated current-week response with a credential-free same-origin request and an
+explicit synthetic fallback. There is now a local invite/OAuth/initial-passkey enrollment flow, but
+there is still no returning passkey login or recovery route, Argon2id recovery verifier, WebAuthn
+pairing approval, pairing start/poll HTTP route, deployed Ingest/score API, operational connector,
 cleanup/scoring scheduler, audited correction flow, asynchronous purge worker, live Ingest/Jobs
 database integration, or deployed database.
 
@@ -194,8 +199,11 @@ The development site binds to loopback and remains fully usable with committed s
 If a separately provisioned Web login is configured, the browser can display the current public
 Community projection through the same-origin route; the repository still supplies no working
 credential or real user data. See [local development](docs/getting-started/LOCAL_DEVELOPMENT.md)
-before running it or starting PostgreSQL. Application authentication and real-user ingestion do not
-exist yet; database evidence uses only rolled-back or disposable synthetic fixtures.
+before running it or starting PostgreSQL. The local enrollment application fails closed without an
+externally issued invite, dedicated GitHub OAuth app, fresh cookie key, exact RP/origin settings,
+and separately provisioned read-write Web login. No live OAuth, authenticator, or database-login
+result is claimed; real-user ingestion does not exist, and database evidence uses only rolled-back
+or disposable synthetic fixtures.
 
 ## Important warning
 

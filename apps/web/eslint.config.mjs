@@ -82,6 +82,24 @@ export default defineConfig([
           selector: "CallExpression[callee.name='require'][arguments.0.value='pg']",
           message: "Web PostgreSQL access must not use CommonJS access.",
         },
+        {
+          selector: "ImportExpression[source.value='@simplewebauthn/server']",
+          message: "Server WebAuthn verification must not use dynamic imports.",
+        },
+        {
+          selector:
+            "CallExpression[callee.name='require'][arguments.0.value='@simplewebauthn/server']",
+          message: "Server WebAuthn verification must not use CommonJS access.",
+        },
+        {
+          selector: "ImportExpression[source.value='@simplewebauthn/browser']",
+          message: "Browser WebAuthn ceremonies must not use dynamic imports.",
+        },
+        {
+          selector:
+            "CallExpression[callee.name='require'][arguments.0.value='@simplewebauthn/browser']",
+          message: "Browser WebAuthn ceremonies must not use CommonJS access.",
+        },
       ],
       "react-hooks/exhaustive-deps": "error",
       "react-hooks/rules-of-hooks": "error",
@@ -92,6 +110,8 @@ export default defineConfig([
     files: ["**/*.{js,jsx,mjs,cjs,ts,tsx}"],
     ignores: [
       "**/*.test.{ts,tsx}",
+      "components/passkey-setup.tsx",
+      "lib/passkey-registration.ts",
       "lib/pairing-database-pool.ts",
       "lib/pairing-possession-verifier.ts",
       "lib/public-score-database-pool.ts",
@@ -109,6 +129,38 @@ export default defineConfig([
             {
               name: "pg",
               message: "Only reviewed Web database pool wrappers may access node-postgres.",
+            },
+            {
+              name: "@simplewebauthn/browser",
+              message: "Only passkey-setup.tsx may start a browser WebAuthn ceremony.",
+            },
+            {
+              name: "@simplewebauthn/server",
+              message: "Only passkey-registration.ts may verify WebAuthn registration proofs.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["lib/passkey-registration.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@noble/ed25519",
+              message: "Only pairing-possession-verifier.ts may own Web Ed25519 verification.",
+            },
+            {
+              name: "pg",
+              message: "Only reviewed Web database pool wrappers may access node-postgres.",
+            },
+            {
+              name: "@simplewebauthn/browser",
+              message: "Browser WebAuthn code belongs only in passkey-setup.tsx.",
             },
           ],
         },
@@ -169,6 +221,38 @@ export default defineConfig([
             {
               name: "pg",
               message: "Client components must not import server-side PostgreSQL access.",
+            },
+            {
+              name: "@simplewebauthn/browser",
+              message: "Only passkey-setup.tsx may start a browser WebAuthn ceremony.",
+            },
+            {
+              name: "@simplewebauthn/server",
+              message: "Client components must not import server-side WebAuthn verification.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["components/passkey-setup.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@noble/ed25519",
+              message: "Client components must not import server-side cryptography.",
+            },
+            {
+              name: "pg",
+              message: "Client components must not import server-side PostgreSQL access.",
+            },
+            {
+              name: "@simplewebauthn/server",
+              message: "Client components must not import server-side WebAuthn verification.",
             },
           ],
         },

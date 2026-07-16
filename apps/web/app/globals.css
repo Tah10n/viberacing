@@ -18,6 +18,7 @@ body {
 }
 
 button,
+input,
 select {
   font: inherit;
 }
@@ -72,6 +73,127 @@ a {
   --panel-2: #164139;
   --shadow: #020d0c;
   --text: #edffe8;
+}
+
+.auth-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 4vw, 3rem);
+  background: linear-gradient(135deg, rgb(85 247 255 / 10%), transparent 45%), #130b2e;
+  color: #f7f2ff;
+}
+
+.auth-card {
+  width: min(100%, 42rem);
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  border: 3px solid #f7f2ff;
+  box-shadow: 10px 10px 0 #07040f;
+  background: #20133f;
+}
+
+.auth-card h1 {
+  max-width: 18ch;
+  margin-block: 0.5rem 1rem;
+  color: #ffe66d;
+  font-size: clamp(2rem, 7vw, 4rem);
+  line-height: 0.95;
+}
+
+.auth-card > p {
+  line-height: 1.65;
+}
+
+.auth-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #55f7ff;
+  font-weight: 900;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.auth-language {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 1.5rem;
+}
+
+.auth-language button,
+.auth-form input,
+.auth-form select {
+  border: 2px solid #f7f2ff;
+  background: #130b2e;
+  color: #f7f2ff;
+}
+
+.auth-language button {
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.auth-language button[aria-pressed="true"] {
+  background: #ffe66d;
+  color: #11131a;
+}
+
+.auth-form {
+  display: grid;
+  gap: 1.15rem;
+  margin-block: 2rem;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 0.45rem;
+  font-weight: 800;
+}
+
+.auth-form input,
+.auth-form select {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.auth-form small,
+.auth-privacy,
+.auth-status {
+  color: #bcb1d6;
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.auth-error {
+  padding: 0.8rem;
+  border-left: 4px solid #ff6d78;
+  background: rgb(255 109 120 / 12%);
+  color: #fff;
+}
+
+.account-handle {
+  color: #55f7ff;
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.auth-card .primary-action,
+.auth-card .secondary-action {
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+
+.auth-card .primary-action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.auth-card :focus-visible {
+  outline: 4px solid #55f7ff;
+  outline-offset: 3px;
 }
 
 .sr-only {

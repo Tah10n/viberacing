@@ -22,6 +22,7 @@ describe("static security headers", () => {
     expect(headers.get("Referrer-Policy")).toBe("no-referrer");
     expect(headers.get("Permissions-Policy")).toContain("camera=()");
     expect(headers.get("Permissions-Policy")).toContain("publickey-credentials-get=()");
+    expect(headers.get("Permissions-Policy")).not.toContain("publickey-credentials-create=()");
     expect(headers.has("Strict-Transport-Security")).toBe(false);
   });
 
@@ -35,5 +36,22 @@ describe("static security headers", () => {
     expect(nextConfig.images?.unoptimized).toBe(true);
     expect(nextConfig.images?.remotePatterns).toEqual([]);
     expect(nextConfig.images?.dangerouslyAllowSVG).toBe(false);
+  });
+
+  it("keeps OAuth callback codes out of development request logs", () => {
+    const logging = nextConfig.logging;
+    if (logging === undefined || logging === false) {
+      throw new Error("Expected a narrow logging policy.");
+    }
+    const incomingRequests = logging.incomingRequests;
+    if (typeof incomingRequests !== "object") {
+      throw new Error("Expected a narrow incoming-request logging policy.");
+    }
+    expect(
+      incomingRequests.ignore?.some((pattern) =>
+        pattern.test("/auth/github/callback?code=temporary&state=opaque"),
+      ),
+    ).toBe(true);
+    expect(incomingRequests.ignore?.some((pattern) => pattern.test("/join"))).toBe(false);
   });
 });

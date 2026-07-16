@@ -2,7 +2,9 @@
 
 ## Status and notation
 
-These sequences remain planned application contracts. Revisions 0001 through 0013 provide private
+Most sequences remain planned application contracts. The enrollment sequence below and the public
+score consumer are now locally implemented boundaries; neither has live credentials, edge, or
+deployment evidence. Revisions 0001 through 0013 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
@@ -13,18 +15,18 @@ public-score GET constructs the bounded adapter lazily after closed request admi
 home race now requests its current server-selected week from that exact same-origin route, validates
 the public fields, and retains a clearly labeled synthetic fallback on failure. One local one-shot
 Jobs runner can invoke exactly one of four fixed functions: either cleanup function, refresh, or
-finalization, but no browser/session authentication or deployed ingest endpoint, OAuth callback,
-Argon2id/WebAuthn pairing approval, operational connector, purge worker, Jobs scheduler/monitor,
-audited correction, or deployed service executes the complete sequences. A library-only Rust
-connector foundation validates the bounded stable App Server initialization exchange and candidate
-`0.144.4` account/usage responses. A synthetic one-shot supervisor composes those states with fixed
-local process mechanics, while an exact-body composer and isolated one-use signer produce a
-synthetic signed envelope. A separate inaccessible pending-key and challenge signer plus a pure
-server-only Web verifier now agree on one exact pairing-possession message and synthetic signature.
-A dormant Web/Auth start application generates fresh IDs, token, challenge, 60-bit code, separate
-protected poll/code verifiers, and a nine-minute pending transaction from closed device metadata. A
-second application performs protected keyed poll lookup, mandates that proof, and invokes only exact
-atomic activation behind local admission/timing. All required connector capabilities have no public
+finalization, but no returning passkey login/recovery, deployed ingest endpoint, Argon2id/WebAuthn
+pairing approval, operational connector, purge worker, Jobs scheduler/monitor, audited correction,
+or deployed service executes the complete sequences. A library-only Rust connector foundation
+validates the bounded stable App Server initialization exchange and candidate `0.144.4`
+account/usage responses. A synthetic one-shot supervisor composes those states with fixed local
+process mechanics, while an exact-body composer and isolated one-use signer produce a synthetic
+signed envelope. A separate inaccessible pending-key and challenge signer plus a pure server-only
+Web verifier now agree on one exact pairing-possession message and synthetic signature. A dormant
+Web/Auth start application generates fresh IDs, token, challenge, 60-bit code, separate protected
+poll/code verifiers, and a nine-minute pending transaction from closed device metadata. A second
+application performs protected keyed poll lookup, mandates that proof, and invokes only exact atomic
+activation behind local admission/timing. All required connector capabilities have no public
 constructor, and there is no executable admission, real Codex execution, key generation/store,
 pairing-start client, browser/WebAuthn approval, pairing HTTP route, upload, or supported-version
 path. A local Ingest kernel now verifies the bounded exact-body origin/device request, while the
@@ -44,36 +46,47 @@ and Prohibited.
 sequenceDiagram
   actor User
   participant Browser
-  participant Edge as Cloudflare edge
   participant Web as Web/Auth
   participant GitHub as GitHub OAuth
   participant Authenticator as Passkey authenticator
   participant DB as Profile/Auth database role
 
-  User->>Browser: Redeem invite with synthetic-safe public input
-  Browser->>Edge: Invite enrollment request
-  Edge->>Web: Fresh body-bound origin proof
-  Web->>GitHub: OAuth authorization with state and PKCE
-  GitHub-->>Web: One-time callback code
-  Web->>GitHub: Resolve minimal numeric user ID
-  Web->>Web: Discard GitHub access token
-  Web->>DB: Create unique profile binding and rotated session
-  Web->>Authenticator: One-time transaction-bound registration challenge
-  Authenticator-->>Web: Verified WebAuthn response
-  Web->>DB: Store credential ID and public key
-  Web-->>Browser: Private no-store authenticated profile
+  User->>Browser: Enter invite, public handle, and preferences
+  Browser->>Web: Exact same-origin bounded form
+  Web->>Web: Digest invite secret; seal state and PKCE continuation
+  Web-->>Browser: Redirect to GitHub with callback-only cookie
+  Browser->>GitHub: OAuth authorization with state and PKCE
+  GitHub-->>Browser: One-time callback code and state
+  Browser->>Web: Exact callback plus encrypted continuation
+  Web->>GitHub: Exchange code and resolve numeric user ID
+  Web->>Web: Discard token and every other response field
+  Web->>DB: Atomically consume invite and create profile/session
+  Web-->>Browser: Encrypted pending session; passkey page
+  Browser->>Web: Exact same-origin options request
+  Web->>DB: Create session-bound one-time challenge
+  Web-->>Browser: Registration options plus short-lived cookie
+  Browser->>Authenticator: Create discoverable user-verified credential
+  Authenticator-->>Browser: WebAuthn registration response
+  Browser->>Web: Bounded registration proof
+  Web->>Web: Verify type, RP ID, origin, challenge, and UV
+  Web->>DB: Consume challenge, activate passkey/profile, rotate session
+  Web-->>Browser: Encrypted active session and no-store account page
 ```
 
-Only the numeric GitHub user ID crosses into persistent Account data. GitHub access tokens are
-callback-memory data and are discarded. The public handle and optional GitHub link require a later
-explicit preview/choice; neither is inferred from local or OAuth-private data.
+Only the numeric GitHub user ID crosses from GitHub into persistent Account data. The OAuth app
+requests no extra scope; the access token and every non-ID response field remain callback-memory
+data and are discarded. The user explicitly supplies the public handle before authorization; no
+GitHub name, login, email, avatar, repository, or profile link is persisted or rendered.
 
-Revisions 0002 and 0005 enforce the database steps shown here only after Web/Auth supplies a
-resolved numeric GitHub ID and, for the passkey step, a cryptographically verified WebAuthn result.
-They create a fresh session during enrollment, bind each stored challenge to that exact
-session/profile pair, make initial activation one-time, and bind the activated session to the new
-credential. They do not implement the browser, edge, OAuth, cookie, CSRF, RP ID, origin, signature,
-or user-verification checks.
+Revisions 0002 and 0005 enforce the database steps after Web/Auth supplies a resolved numeric GitHub
+ID and a cryptographically verified WebAuthn result. The local application now supplies exact
+same-origin POST checks, state plus S256 PKCE, purpose-separated AES-GCM cookies, fixed GitHub
+endpoints, streaming body limits, exact RP/origin/type/user-verification checks, and fixed database
+calls. The pending session lasts at most 15 minutes; successful passkey registration atomically
+rotates it to a fresh 30-day passkey-bound session. The suite uses injected GitHub,
+authenticator-verifier, and database capabilities; there is no live OAuth app, invite issuer UI,
+real key/login, edge proof, aggregate/distributed attempt limit, abandoned-state cleanup, returning
+login/recovery, or deployment evidence.
 
 ## Passkey login and credential management
 
@@ -152,9 +165,9 @@ Code rotation and completion serialize on the profile row and take terminal time
 acquisition. Observed cross-connection tests prove rotation dominates a concurrent start with an old
 code and completion dominates a concurrent login with an old passkey. Completion fails closed at the
 32-lifetime-passkey provenance ceiling until bounded cleanup exists. The repository still lacks
-application Argon2id and pepper handling, WebAuthn verification, cookies/CSRF, generic HTTP timing
-and response shaping, rate limits, cleanup, notifications, inventory UI, and deployment evidence;
-therefore no recovery endpoint is launch-ready.
+application Argon2id and pepper handling, recovery WebAuthn verification, recovery cookies/CSRF,
+generic HTTP timing and response shaping, rate limits, cleanup, notifications, inventory UI, and
+deployment evidence; therefore no recovery endpoint is launch-ready.
 
 ## Device pairing and source choice
 

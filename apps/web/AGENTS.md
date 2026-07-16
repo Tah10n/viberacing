@@ -26,6 +26,12 @@ apply.
   protected primary/secondary HMAC capability, strict proof-before-activation sequence, server-owned
   IDs, four-call admission, 250-millisecond settlement floor, and generic decision. Do not import
   `pg` outside the two reviewed pool wrappers or expose a generic query/activation surface.
+- Enrollment may reuse the same read-write pool only through `enrollment-database.ts`. Preserve the
+  exact invite grammar and immediate digest reduction, OAuth state/PKCE/no-extra-scope contract,
+  purpose-separated encrypted HttpOnly cookies, exact same-origin bounded POST bodies, fixed
+  enrollment/challenge/passkey/session calls, atomic pending-to-passkey session rotation, and
+  generic failures. Keep server WebAuthn imports in `passkey-registration.ts` and browser WebAuthn
+  imports in `passkey-setup.tsx` only.
 - Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
   correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
   CORS/auth/retry semantics to the common problem-response boundary.
@@ -40,8 +46,10 @@ apply.
   Server code owns all IDs, token, challenge, code, digests, and expiry; poll and human-code HMAC
   keys remain separate protected capabilities. Only the closed start adapter may invoke the fixed
   start procedure.
-- Do not add a pairing route, browser/session approval, connector client, or WebAuthn claim without
-  complete transport admission, distributed rate/deadline policy, contracts, and negative tests.
+- Do not add a pairing route, its browser/session approval, a connector client, or a pairing
+  WebAuthn claim without complete transport admission, distributed rate/deadline policy, contracts,
+  and negative tests. Do not describe the local enrollment slice as returning login, recovery,
+  deployed authentication, or live-user evidence.
 
 ## Commands
 

@@ -36,6 +36,7 @@ const english = {
   heroCopy:
     "A privacy-first weekly leaderboard where coding activity becomes a deterministic pixel-art race.",
   heroTitle: "Build fast. Race fair.",
+  joinRace: "Join with invite",
   language: "Language",
   leaderboard: "Leaderboard",
   liveRace: "Weekly race",
@@ -109,6 +110,7 @@ const russian: Record<TranslationKey, string> = {
   heroCopy:
     "Приватный недельный рейтинг, где активность в кодинге превращается в детерминированную пиксельную гонку.",
   heroTitle: "Коди быстро. Гоняй честно.",
+  joinRace: "Войти по приглашению",
   language: "Язык",
   leaderboard: "Таблица лидеров",
   liveRace: "Недельная гонка",

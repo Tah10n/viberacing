@@ -9,6 +9,8 @@ describe("content security policy", () => {
     expect(policy).toContain("script-src 'self' 'nonce-fixedNonce123' 'strict-dynamic'");
     expect(policy).toContain("style-src 'self' 'nonce-fixedNonce123'");
     expect(policy).toContain("frame-ancestors 'none'");
+    expect(policy).toContain("form-action 'self' https://github.com");
+    expect(policy).not.toContain("connect-src 'self' https://github.com");
     expect(policy).toContain("upgrade-insecure-requests");
     expect(policy).not.toContain("'unsafe-inline'");
     expect(policy).not.toContain("'unsafe-eval'");

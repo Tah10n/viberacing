@@ -9,8 +9,9 @@ checks when they are clear and maintainable.
 Mature frameworks and analysis tools are used only where their maintained behavior materially
 reduces project risk. The current deliberate set includes Next.js and React for the web runtime,
 `@noble/ed25519` for two strict server-side device-signature checks, `pg` for four confined pool
-wrappers serving five narrow server-side PostgreSQL adapters, Fastify for one confined Ingest HTTP
-server factory, and CSpell, TypeScript, ESLint, Vitest, jsdom, and axe-core for offline
+wrappers serving six narrow server-side PostgreSQL adapters, `@simplewebauthn/server` and
+`@simplewebauthn/browser` for one passkey-registration ceremony, Fastify for one confined Ingest
+HTTP server factory, and CSpell, TypeScript, ESLint, Vitest, jsdom, and axe-core for offline
 verification. Every direct package is exact-pinned, installs without lifecycle scripts, and is
 represented with its complete transitive graph in the dependency inventory. Pull-request CI is
 secretless.
@@ -52,6 +53,20 @@ exposure. Its exact registry integrity, MIT license, canonical repository/releas
 security-review history, and adversarial zero-key regressions were reviewed under ADRs 0015
 and 0026. Replacing or updating it requires the same review and proof of strict behavior on every
 supported runtime; permissive native fallback is prohibited.
+
+`@simplewebauthn/server@13.3.2` and `@simplewebauthn/browser@13.3.0` implement the WebAuthn binary,
+CBOR/COSE, authenticator-response, and browser ceremony details that should not be reimplemented in
+application code. ESLint permits the server package only in the initial-registration verifier and
+the browser package only in the passkey setup component; static imports are mandatory. Registration
+requires a discoverable credential, user presence and verification, exact RP ID, exact origin, exact
+ceremony type, and one-time server challenge. Both direct packages have no lifecycle scripts and use
+MIT. The browser package adds no transitive package; the server adds twenty-one exact transitive
+records using MIT, BSD-3-Clause, Apache-2.0, or 0BSD. Official-registry integrity, release
+quarantine, manifests, complete lock diff, notices, production asset budget, and the online
+moderate-or-higher advisory result were reviewed on 2026-07-16. An update requires the same review
+plus the options/proof, wrong-origin, wrong-RP, replay, user-verification, dependency-confinement,
+coverage, and production-build regressions. Remove both packages if passkeys are removed; do not
+replace the verifier with repository-owned WebAuthn parsing.
 
 `pg@8.22.0` is the only application PostgreSQL client. It is confined to fixed pool-wrapper files
 inside the private Web, Jobs, and Ingest workspaces; each workspace lint policy rejects static,
