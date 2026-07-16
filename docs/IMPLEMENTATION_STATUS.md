@@ -631,31 +631,32 @@ defect found and corrected during review. The report names its local-only limita
 
 ## Not implemented yet
 
-Invite issuance UI, passkey-management and lifecycle step-up applications, recovery Argon2id/pepper
-and replacement-passkey application handling, pairing browser approval and connector client,
-client-identity and distributed admission/rate/deadline policy, anonymous login/pairing/recovery
-edge limits, cleanup for abandoned enrollment/recovery challenges and consumed login ceremonies, an
-Ingest host/port/TLS deployment entry point, trusted edge routing and direct-origin denial, live
-secret-manager/edge key injection, the Ingest live PostgreSQL login/TLS connection, distributed
-rate/backpressure controls and load evidence, scheduled execution/monitoring of ingest- and
-pairing-retention cleanup, cleanup for other expiring state, the Jobs scheduler/live login and
-application-to-PostgreSQL integration, audited corrections, deployed public-score delivery, purge
-workers, connector executable discovery/link/ownership and artifact/version admission, live Codex
-and cross-platform process evidence, supported operational account/usage integration, secure
-device-key storage, upload/CLI/packaging, release signing, deployment, and public beta operations
-remain proposed. The local Ingest key reader, kernel, adapter, application composer, and Fastify
-server now prove bounded protected configuration, raw-envelope/JSON/HTTP framing, origin-proof,
-contract, strict Ed25519 device, least-privileged pool, fixed-query, orchestration,
-no-queue/deadline policy, and result/problem serialization behavior, but not those deployed edge,
-live persistence, capacity, or operational boundaries. A bounded database score projection,
-versioned response-only schema, fail-closed server mapper, bounded PostgreSQL adapter, and local
-HTTP route now exist, including URL/media parsing, admission/deadline policy, store translation, and
-final serialization. Cache/invalidation, CarRecipe, streak/freshness, profile detail, client-rate
-and production-capacity controls, monitoring backend, deployment login, certificate, edge policy,
-and live adapter integration do not. The visible web scoring and ranking experience now consumes a
-validated current-week response from the local route when its separately provisioned database login
-works, but local defaults and every unavailable/error path remain clearly synthetic. No working
-database/OAuth login, deployed data, cache, or end-to-end real-user ranking evidence exists.
+Invite issuance UI, recovery Argon2id/pepper and replacement-passkey application handling, pairing
+browser approval and connector client, remaining source/device/deletion lifecycle step-up
+applications, client-identity and distributed admission/rate/deadline policy, anonymous
+login/pairing/recovery edge limits, cleanup for abandoned enrollment/recovery challenges and
+consumed login ceremonies, an Ingest host/port/TLS deployment entry point, trusted edge routing and
+direct-origin denial, live secret-manager/edge key injection, the Ingest live PostgreSQL login/TLS
+connection, distributed rate/backpressure controls and load evidence, scheduled execution/monitoring
+of ingest- and pairing-retention cleanup, cleanup for other expiring state, the Jobs scheduler/live
+login and application-to-PostgreSQL integration, audited corrections, deployed public-score
+delivery, purge workers, connector executable discovery/link/ownership and artifact/version
+admission, live Codex and cross-platform process evidence, supported operational account/usage
+integration, secure device-key storage, upload/CLI/packaging, release signing, deployment, and
+public beta operations remain proposed. The local Ingest key reader, kernel, adapter, application
+composer, and Fastify server now prove bounded protected configuration, raw-envelope/JSON/HTTP
+framing, origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query,
+orchestration, no-queue/deadline policy, and result/problem serialization behavior, but not those
+deployed edge, live persistence, capacity, or operational boundaries. A bounded database score
+projection, versioned response-only schema, fail-closed server mapper, bounded PostgreSQL adapter,
+and local HTTP route now exist, including URL/media parsing, admission/deadline policy, store
+translation, and final serialization. Cache/invalidation, CarRecipe, streak/freshness, profile
+detail, client-rate and production-capacity controls, monitoring backend, deployment login,
+certificate, edge policy, and live adapter integration do not. The visible web scoring and ranking
+experience now consumes a validated current-week response from the local route when its separately
+provisioned database login works, but local defaults and every unavailable/error path remain clearly
+synthetic. No working database/OAuth login, deployed data, cache, or end-to-end real-user ranking
+evidence exists.
 
 ## Evidence commands
 
