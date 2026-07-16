@@ -173,14 +173,18 @@ material availability cost.
   shell argument, or induce upload of prohibited fields.
 - **Impact:** Local code execution under the user, resource exhaustion, key theft, or prompt and
   credential disclosure.
-- **Controls:** User-scoped install, resolved trusted binary path, fixed argument array, no shell,
-  sanitized environment, bounded process/output/time, stable schema adapter, and egress allowlist.
+- **Controls:** The implemented library foundation has one fixed stable initialization exchange, 16
+  KiB LF-only frames, closed duplicate-rejecting fields, exact state order, terminal hostile input,
+  discarded server values, and non-reflective errors. The operational connector still requires a
+  user-scoped install, resolved trusted binary path, fixed argument array, no shell, sanitized
+  environment, bounded child/stderr/time, version adapter, and egress allowlist.
 - **Detection:** Local safe diagnostics for selected binary/version, bounded failure reason, and
   child cleanup verification without uploading content.
 - **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified
   binary, and rotate the device key after suspected compromise.
 - **Residual risk:** A computer owner can replace all local components; official signing and clear
-  diagnostics reduce accidental compromise, not owner control.
+  diagnostics reduce accidental compromise, not owner control. The current protocol tests do not
+  prove executable provenance, process cleanup, supported account fields, or release integrity.
 
 ## Web, privacy, and content abuse
 

@@ -34,7 +34,8 @@ evidence. Deployment, edge behavior, and any future cache remain separate compat
 
 The official [Codex App Server documentation](https://learn.chatgpt.com/docs/app-server) describes a
 required `initialize`/`initialized` handshake, version-specific schema generation, local stdio as
-the default transport, and a separate opt-in for experimental API capability. Vibe Racing therefore:
+the default transport, and a separate opt-in for experimental API capability. The final connector
+must therefore:
 
 - launches a reviewed Codex executable locally and uses stdio only;
 - sends the required handshake once per connection;
@@ -48,6 +49,12 @@ the default transport, and a separate opt-in for experimental API capability. Vi
   email and other response fields never enter the egress contract;
 - stops before upload on missing fields, unknown fields, malformed dates, oversized output, protocol
   errors, unsupported auth mode, or schema drift.
+
+The current Rust library implements only the first bounded protocol step: fixed stable handshake
+messages, a 16 KiB LF-only response frame, duplicate/unknown-field rejection, discarded
+initialization values, terminal remote failure, and non-reflective errors. It does not launch a
+process, emit either planned account method, negotiate a supported version, upload, or alter the
+empty support matrix. That distinction is recorded in ADR 0021.
 
 Generated schema output is exact to the Codex version that produced it. The repository commits only
 reviewed relevant schema extracts and synthetic fixtures, not account data or a developer's local

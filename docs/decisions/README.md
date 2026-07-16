@@ -29,6 +29,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0018](0018-persistent-ingest-origin-replay-store.md)          | Persistent atomic Ingest origin replay consumption                  | Accepted; database and local adapter implemented    |
 | [0019](0019-bounded-community-sync-application-composition.md) | Bounded Community sync application composition                      | Accepted; local application boundary implemented    |
 | [0020](0020-bounded-community-sync-fastify-http-boundary.md)   | Bounded Community sync Fastify HTTP boundary                        | Accepted; local server; deployment pending          |
+| [0021](0021-fail-closed-codex-handshake-foundation.md)         | Fail-closed Codex App Server handshake foundation                   | Accepted; library-only protocol foundation          |
 
 ## Lifecycle
 

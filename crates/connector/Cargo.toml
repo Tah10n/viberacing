@@ -1,0 +1,17 @@
+[package]
+name = "viberacing-connector"
+description = "Fail-closed Codex App Server protocol boundary for Vibe Racing"
+publish = false
+readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+serde = { version = "=1.0.228", default-features = false, features = ["std"] }
+serde_json = { version = "=1.0.150", default-features = false, features = ["std"] }
+
+[lints]
+workspace = true

@@ -42,6 +42,7 @@ Verified-лига останется выключенной до появлен�
 - [Локальная разработка (EN)](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Веб-прототип и его границы (EN)](apps/web/README.md)
 - [Локальное Ingest verification kernel (EN)](apps/ingest/README.md)
+- [Connector protocol foundation (EN)](crates/connector/README.md)
 - [Dependency policy (EN)](docs/security/DEPENDENCY_POLICY.md)
 - [Dependency inventory (EN)](docs/reference/dependency-inventory.json)
 - [Происхождение визуальных assets (EN)](docs/reference/ASSET_PROVENANCE.md)
@@ -88,18 +89,18 @@ parameterized top-32 procedure call. Server-only HTTP problem factory генер
 request IDs и закрытые contract-validated no-store error responses. Thin server-only route проверяет
 точный query, GET-only method/`Accept`, no-queue admission на четыре запроса, adapter deadlines,
 store-error translation и финальный response contract. Это локальная реализация, а не deployment:
-cache, deployment login/TLS integration, edge rate policy, connector и приём реальной статистики ещё
-отсутствуют. Отдельное чистое Ingest kernel теперь копирует и ограничивает точные raw body/headers
-Community sync, до JSON и device lookup проверяет body-bound origin HMAC с одноразовым nonce,
-отклоняет дубликаты headers/decoded JSON keys и превышение parser budgets, валидирует sync contract
-и строго проверяет source-bound Ed25519 request. Оно возвращает только frozen database-ready
-allowlist. Отдельный bounded Ingest PostgreSQL adapter повторно проверяет этот allowlist, копирует
-binary/array parameters, при каждом checkout проверяет точный least-privileged Ingest login/role и
-вызывает только fixed origin-replay consume, device lookup или submission через four-client pool с
-deadlines. Без TLS разрешён только loopback development/test, в остальных случаях обязательна
-certificate verification. Тесты используют mock pools и не содержат рабочего login. Локальная
-protected factory теперь требует точную primary origin-HMAC пару и допускает только одну полную
-distinct rotation-пару из namespaced configuration; наружу она возвращает только verifier, а
+cache, deployment login/TLS integration, edge rate policy, operational connector и приём реальной
+статистики ещё отсутствуют. Отдельное чистое Ingest kernel теперь копирует и ограничивает точные raw
+body/headers Community sync, до JSON и device lookup проверяет body-bound origin HMAC с одноразовым
+nonce, отклоняет дубликаты headers/decoded JSON keys и превышение parser budgets, валидирует sync
+contract и строго проверяет source-bound Ed25519 request. Оно возвращает только frozen
+database-ready allowlist. Отдельный bounded Ingest PostgreSQL adapter повторно проверяет этот
+allowlist, копирует binary/array parameters, при каждом checkout проверяет точный least-privileged
+Ingest login/role и вызывает только fixed origin-replay consume, device lookup или submission через
+four-client pool с deadlines. Без TLS разрешён только loopback development/test, в остальных случаях
+обязательна certificate verification. Тесты используют mock pools и не содержат рабочего login.
+Локальная protected factory теперь требует точную primary origin-HMAC пару и допускает только одну
+полную distinct rotation-пару из namespaced configuration; наружу она возвращает только verifier, а
 реальных key и secret-manager binding в репозитории нет. Forced-RLS PostgreSQL table хранит только
 origin key ID, domain-separated nonce digest и millisecond expiry; Ingest-only function атомарно
 consume-ит tuple, а observed race доказывает одного победителя. Transport-free application boundary
@@ -111,8 +112,12 @@ evidence для `POST /v1/community/sync`, не доверяет proxy headers �
 5/33/34-second request/handler/connection deadlines, после чего сериализует только повторно
 проверенные `no-store` success/problem contracts. Есть loopback и injection evidence, но нет
 deployment entry point. Live protected key injection, edge signer, direct-origin denial,
-host/port/TLS configuration, distributed rate policy, monitoring, connector, live database
-connection, load evidence и deployment всё ещё отсутствуют.
+host/port/TLS configuration, distributed rate policy и monitoring всё ещё отсутствуют. Добавлен
+только library-only Rust foundation: он отправляет фиксированный stable `initialize`, принимает один
+bounded LF-terminated response, отклоняет duplicate/unknown/oversized/out-of-order данные, не
+сохраняет path/platform values и лишь затем выдаёт `initialized`. Он не запускает Codex, не читает
+account/usage, не хранит key и не загружает данные; support matrix остаётся пустой. Operational
+connector, live database connection, load evidence и deployment всё ещё отсутствуют.
 
 Также добавлены двенадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
@@ -147,10 +152,11 @@ scoring refresh или finalization через отдельный least-privileg
 стабильный non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel,
 adapter и application объединены на synthetic/mock-pool evidence, а Fastify boundary отдельно
 проверена через injection/loopback с mock application. Полный HTTP-to-PostgreSQL path не проверен
-через реальный login. Deployed HTTP ingest route, pairing-possession verifier, connector,
-cleanup/scoring scheduler, live Ingest/Jobs login/TLS integration, monitoring backend, deployed
-public score read, audited correction flow, purge worker и deployed database ещё не реализованы,
-поэтому готовой пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
+через реальный login. Deployed HTTP ingest route, pairing-possession verifier, operational
+connector, cleanup/scoring scheduler, live Ingest/Jobs login/TLS integration, monitoring backend,
+deployed public score read, audited correction flow, purge worker и deployed database ещё не
+реализованы, поэтому готовой пользовательской авторизации, публичного рейтинга и приёма реальных
+данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

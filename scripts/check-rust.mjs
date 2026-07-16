@@ -39,6 +39,7 @@ const metadata = JSON.parse(metadataText);
 if (metadata.packages.length > 0) {
   run("cargo", ["fmt", "--all", "--check"]);
   run("cargo", ["check", "--workspace", "--all-targets", "--all-features", "--locked"]);
+  run("cargo", ["test", "--workspace", "--all-targets", "--all-features", "--locked"]);
   run("cargo", [
     "clippy",
     "--workspace",
@@ -52,6 +53,6 @@ if (metadata.packages.length > 0) {
 
 console.log(
   metadata.packages.length > 0
-    ? "Rust workspace check passed (toolchain, metadata, formatting, check, clippy)."
+    ? "Rust workspace check passed (toolchain, metadata, formatting, check, tests, clippy)."
     : "Rust workspace check passed (toolchain and empty-workspace metadata).",
 );

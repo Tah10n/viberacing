@@ -4,10 +4,11 @@
 
 The current repository contains a private SQL schema, synthetic PostgreSQL integration test, local
 Community sync verification kernel, mock-pool database adapter, and bounded local HTTP server
-factory, but no deployed application database, user accounts, production service, connector, or real
-user data. This document remains the required inventory for implementation. A field may not be
-collected merely because it appears here: its schema, purpose, visibility, retention, deletion, and
-access tests must exist first. The implemented column-level mapping is documented in
+factory, plus a library-only connector initialization boundary, but no deployed application
+database, user accounts, production service, operational connector, or real user data. This document
+remains the required inventory for implementation. A field may not be collected merely because it
+appears here: its schema, purpose, visibility, retention, deletion, and access tests must exist
+first. The implemented column-level mapping is documented in
 [`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
@@ -146,6 +147,15 @@ destination. Loopback and injection tests use synthetic values only. A future li
 access log, metric, trace, proxy signal, or monitoring backend requires a separate mapped purpose,
 access policy, and retention decision before collection.
 
+ADR 0021 adds no collected or retained field. The connector library transiently validates the stable
+initialization response's Codex home, platform family, operating-system name, and user agent under
+fixed string/frame bounds, then discards all four values before returning. The local Codex home
+remains a prohibited path outside that validator. No value reaches a log, metric, diagnostic, file,
+database, HTTP payload, cache, analytics event, export, or network sink. The library does not launch
+Codex, read account or usage data, access a credential store, or upload. Any future compatibility
+diagnostic or retained connector/Codex version must use the existing mapped Security/Operational
+class with an explicit purpose and bounded retention.
+
 Revision 0008 adds deletion evidence for only those raw nonce and snapshot rows: a Jobs-only
 procedure derives cutoff time on the server, deletes bounded expired batches, cascades raw entries,
 and preserves the current source/day value while clearing its deleted snapshot reference. A fixed
@@ -256,6 +266,9 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   fixed origin-consume/lookup/submission calls and a protected database config contract; mock
   evidence opens no connection. Neither boundary has HTTP, logging, analytics, export, or deployment
   authority.
+- The connector library currently validates and discards only the App Server initialization values.
+  It has no process, account/usage method, device key, payload, log, store, or egress capability;
+  the planned account-mode and daily-usage flow remains subject to compatibility and privacy tests.
 - Jobs currently receive only bounded expired ingest-state cleanup, open-season Community scoring
   refresh, and terminal finalization. The local one-shot adapter rechecks the exact Jobs-only login
   and invokes one prepared capability without logging inputs or results. Correction and deletion

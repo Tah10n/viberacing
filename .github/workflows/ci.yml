@@ -44,6 +44,12 @@ jobs:
       - name: Scan public files before dependency installation
         run: node scripts/check-public-files.mjs --all
 
+      - name: Install pinned Rust for Cargo license metadata
+        run: rustup toolchain install 1.94.0 --profile minimal
+
+      - name: Fetch the exact locked Cargo graph without building it
+        run: cargo fetch --locked
+
       - name: Install locked dependencies without lifecycle scripts
         run: >-
           pnpm install --frozen-lockfile --ignore-scripts --registry=https://registry.npmjs.org/

@@ -8,23 +8,25 @@ It has procedure-only identity, passkey login/management, restricted recovery, p
 source/device lifecycle database capabilities plus Community ingest, retention cleanup, scoring, and
 terminal finalization and public score-projection procedures, but no browser/session authentication
 or recovery application code, OAuth/Argon2id/WebAuthn or pairing-possession verifier, Jobs
-scheduler, real-user ingestion, audited correction, or connector. A local Ingest kernel bounds and
-authenticates a synthetic exact-body sync request, and a separate adapter constrains origin replay,
-database lookup, and submission mapping with mock-pool evidence. A transport-free application
-composes those exact boundaries, generates a server request ID, and validates the
-acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic replay and
-cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies no-queue and
-deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS launch entry
-point. There is no working database login/certificate, live end-to-end PostgreSQL flow, edge path,
-connector, or deployment. A bounded local one-shot Jobs process now wraps only
-cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A bounded
-server-only Web PostgreSQL adapter and local public-score GET are implemented and unit/build-tested,
-but this repository supplies no working deployment login or TLS certificate. A successful setup
-proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
-session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
-does not prove a live adapter, deployed API, or production flow. The Ingest server tests bind only
-ephemeral loopback sockets and use synthetic requests; no development command exposes it to the LAN
-or Internet.
+scheduler, real-user ingestion, audited correction, or operational connector. A library-only Rust
+crate implements only the bounded stable App Server initialization exchange; it does not launch a
+process, admit a Codex version, read account/usage data, store a key, or upload. A local Ingest
+kernel bounds and authenticates a synthetic exact-body sync request, and a separate adapter
+constrains origin replay, database lookup, and submission mapping with mock-pool evidence. A
+transport-free application composes those exact boundaries, generates a server request ID, and
+validates the acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic
+replay and cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies
+no-queue and deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS
+launch entry point. There is no working database login/certificate, live end-to-end PostgreSQL flow,
+edge path, connector process/read adapter, or deployment. A bounded local one-shot Jobs process now
+wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A
+bounded server-only Web PostgreSQL adapter and local public-score GET are implemented and
+unit/build-tested, but this repository supplies no working deployment login or TLS certificate. A
+successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL
+constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
+isolation; it does not prove a live adapter, deployed API, or production flow. The Ingest server
+tests bind only ephemeral loopback sockets and use synthetic requests; no development command
+exposes it to the LAN or Internet.
 
 ## Prerequisites
 
@@ -53,10 +55,11 @@ untrusted registry redirects, and exotic transitive sources.
 Git-history scan, external-host policy, English spelling, dependency-license inventory, contract and
 Ingest/Jobs lint/types/coverage, Ingest/Jobs production compilation, contract generation/drift
 checks and coverage, web component coverage, and a production web build. It also runs the offline
-migration manifest/capability checker; the real PostgreSQL integration is a separate Docker command
-and a secretless CI job. The optional `pnpm run check:external-links:online` performs bounded
-network validation and may fail closed behind a private DNS/proxy; do not weaken its address or
-redirect rules to accommodate a workstation.
+migration manifest/capability checker plus Rust formatting, all-target checking, tests, and Clippy;
+the real PostgreSQL integration is a separate Docker command and a secretless CI job. The optional
+`pnpm run check:external-links:online` performs bounded network validation and may fail closed
+behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
+workstation.
 
 After an intentionally reviewed dependency change, regenerate the machine inventory with
 `node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun

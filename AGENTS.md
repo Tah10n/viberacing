@@ -37,11 +37,13 @@ and returns only a validated sync acknowledgement or generic problem decision. A
 server factory now preserves raw body/header evidence, applies no-queue/deadline policy, and
 serializes only revalidated sync contracts. The public score route and Ingest boundaries are locally
 verified but have no real proof key, secret-manager binding, live database login, host/port/TLS
-Ingest entry point, edge deployment, capacity evidence, or visible-component/connector consumer. Do
-not claim that deployed browser/session HTTP authentication, OAuth/Argon2id/WebAuthn application
-verification, real-user ingestion, a connector, a Jobs scheduler or deployed public-race read,
-season correction, scheduled or broader cleanup, deployment, or a hosted security control exists
-until its implementation and verification are present in the working tree.
+Ingest entry point, edge deployment, capacity evidence, or visible-component consumer. A
+library-only Rust connector foundation now implements a bounded stable App Server JSONL handshake;
+it has no process launcher, supported-version adapter, account/usage read, key store, upload, CLI,
+or release. Do not claim that deployed browser/session HTTP authentication, OAuth/Argon2id/WebAuthn
+application verification, real-user ingestion, an operational connector, a Jobs scheduler or
+deployed public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted
+security control exists until its implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -65,16 +67,19 @@ until its implementation and verification are present in the working tree.
   nested security guidance. Read `packages/contracts/AGENTS.md` before editing it.
 - `database/` contains the SQL migration ledger, non-login role bootstrap, identity/source/device
   persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
+- `crates/connector/` contains only the bounded App Server JSONL initialization foundation and
+  nested connector security guidance. Read `crates/connector/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
-- The Ingest host/port/TLS deployment entry point, authentication application code, and connector
-  workspaces are not present yet; follow `docs/PROJECT_PLAN.md` when they are introduced.
+- The Ingest host/port/TLS deployment entry point, authentication application code, and operational
+  connector layers are not present yet; follow `docs/PROJECT_PLAN.md` when they are introduced.
 
 ## Verified commands
 
 - `pnpm run verify` runs public-data/history, checker regression, documentation/link, spelling,
   license inventory, formatting, Markdown, configuration, workflow-policy,
-  contract/Ingest/Jobs/frontend lint/type/coverage/production-build, and Rust workspace gates.
+  contract/Ingest/Jobs/frontend lint/type/coverage/production-build, and Rust formatting/check/test/
+  Clippy gates.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
 - `pnpm run check:public:staged` scans the exact staged blobs before a commit.
 - `pnpm run check:community` validates governance and community-health files and forms.

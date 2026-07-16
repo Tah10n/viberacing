@@ -25,11 +25,14 @@ verifier and database capabilities, generates a server-owned request ID, waits f
 returns only a validated acknowledgement or generic problem decision. A bounded local Fastify server
 factory now preserves exact raw HTTP evidence, admits four application calls without a queue,
 applies fixed parser/header/connection/deadline policies, and serializes only revalidated sync
-acknowledgement/problem contracts. Phase 0 hosted-publication controls remain blocked on real
-maintainer identities and GitHub configuration. No authentication route, OAuth/Argon2id/WebAuthn
-application flow, production secret-manager/edge key injection, Ingest host/port/TLS deployment
-entry point, production deployment, live Web/Jobs/Ingest database login/TLS integration, released
-connector, real-user ingestion, end-to-end public ranking, or finalization scheduler exists.
+acknowledgement/problem contracts. A library-only Rust connector foundation now emits and validates
+only the bounded stable App Server initialization exchange, discards all server values, and fails
+closed on framing, shape, duplication, size, or state drift. Phase 0 hosted-publication controls
+remain blocked on real maintainer identities and GitHub configuration. No authentication route,
+OAuth/Argon2id/WebAuthn application flow, production secret-manager/edge key injection, Ingest
+host/port/TLS deployment entry point, production deployment, live Web/Jobs/Ingest database login/TLS
+integration, released or operational connector, supported Codex version, real-user ingestion,
+end-to-end public ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -50,17 +53,21 @@ connector, real-user ingestion, end-to-end public ranking, or finalization sched
 - A pnpm workspace with release quarantine, trust and source policy, exact external direct
   dependencies in every bounded workspace, `workspace:*` internal references, private workspace
   manifests, and install-script denial by default.
-- Prettier, Markdownlint, CSpell 10.0.1, YAML/configuration policy, and Rust workspace gates.
+- Prettier, Markdownlint, CSpell 10.0.1, YAML/configuration policy, and Rust formatting, check,
+  test, and Clippy workspace gates.
 - An offline external-link gate with 12 reviewed hosts, HTTPS/credential/port/query/address rules,
   no dormant host permissions, and eight black-box cases. A separate online mode pins public DNS
   results, sends no credentials, follows no redirects, and is excluded from deterministic PR CI.
-- A deterministic dependency inventory covering 499 locked npm packages, zero Cargo dependencies,
+- A deterministic dependency inventory covering 499 locked npm packages, eleven Cargo dependencies,
   two pinned GitHub Actions, and one pinned local-development container. License expressions,
   installed manifests, every root/workspace importer, dependency scopes, direct notices, and
   external-artifact usage are checked with ten black-box cases.
 - Positive and negative workflow-policy tests for action pins, permissions, secrets, shell
   interpolation, timeouts, complete-history checkout, checkout credentials, and forbidden triggers.
 - A secretless, read-only GitHub Actions CI definition and bounded weekly Dependabot configuration.
+  The Node job scans the public tree before installing anything, fetches the exact Cargo lock graph
+  without builds for offline license metadata, and leaves compilation/tests to the separate Rust
+  job.
 - A loopback-only disposable PostgreSQL Compose service plus an opt-in portless `tmpfs` integration
   service, both pinned to the same version and index digest.
 - Cross-platform root verification entry point: `pnpm run verify`.
@@ -85,14 +92,23 @@ connector, real-user ingestion, end-to-end public ranking, or finalization sched
   trusted-release Mermaid views.
 - A fail-closed Codex compatibility policy and empty support matrix; no upstream or connector
   version is claimed supported without pinned schema/fixture/platform evidence.
-- An ADR lifecycle/template and twenty accepted design decisions covering Community trust,
+- A library-only Rust connector protocol foundation. It emits one compile-time fixed `initialize`
+  request with no capabilities, accepts only one LF-terminated frame up to 16 KiB, manually rejects
+  duplicate/unknown envelope and result fields, validates and discards the four bounded stable
+  initialization strings, and emits `initialized` only after a matching ID `0` response. Hostile
+  remote input permanently fails the instance and errors never reflect it. Seven integration tests
+  cover exact bytes, state order, framing/UTF-8/size, envelope/result shape, duplicates, unknowns,
+  string/path bounds, safe Unicode, and non-reflection. There is no process launcher, stderr reader,
+  supported-version adapter, account/usage method, device key, upload, network transport, CLI,
+  installer, or released binary; the compatibility matrix remains empty.
+- An ADR lifecycle/template and twenty-one accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
   score operation, bounded maintenance runner, bounded Community sync verification kernel,
   least-privileged Ingest PostgreSQL adapter, protected origin-proof key configuration, persistent
   atomic origin replay, transport-free Community sync application composition, and the bounded local
-  Fastify HTTP boundary.
+  Fastify HTTP boundary, plus the fail-closed Codex handshake foundation.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -447,20 +463,21 @@ entry point, trusted edge routing and direct-origin denial, live secret-manager/
 the Ingest live PostgreSQL login/TLS connection, distributed rate/backpressure controls and load
 evidence, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring
 state, the Jobs scheduler/live login and application-to-PostgreSQL integration, audited corrections,
-deployed public-score delivery, purge workers, Codex connector, release signing, deployment, and
-public beta operations remain proposed. The local Ingest key reader, kernel, adapter, application
-composer, and Fastify server now prove bounded protected configuration, raw-envelope/JSON/HTTP
-framing, origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query,
-orchestration, no-queue/deadline policy, and result/problem serialization behavior, but not those
-deployed edge, live persistence, capacity, or operational boundaries. A bounded database score
-projection, versioned response-only schema, fail-closed server mapper, bounded PostgreSQL adapter,
-and local HTTP route now exist, including URL/media parsing, admission/deadline policy, store
-translation, and final serialization. Cache/invalidation, CarRecipe, streak/freshness, profile
-detail, client-rate and production-capacity controls, monitoring backend, deployment login,
-certificate, edge policy, and live adapter integration do not. The visible web scoring and ranking
-experience still operates only on clearly synthetic in-process fixtures; no component calls the
-route or connects that page to the database-only scoring/finalization/read state in revisions 0001
-through 0012.
+deployed public-score delivery, purge workers, connector process discovery/launch/cleanup,
+supported-version account/usage adapters, secure device-key storage, upload/CLI/packaging, release
+signing, deployment, and public beta operations remain proposed. The local Ingest key reader,
+kernel, adapter, application composer, and Fastify server now prove bounded protected configuration,
+raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
+pool, fixed-query, orchestration, no-queue/deadline policy, and result/problem serialization
+behavior, but not those deployed edge, live persistence, capacity, or operational boundaries. A
+bounded database score projection, versioned response-only schema, fail-closed server mapper,
+bounded PostgreSQL adapter, and local HTTP route now exist, including URL/media parsing,
+admission/deadline policy, store translation, and final serialization. Cache/invalidation,
+CarRecipe, streak/freshness, profile detail, client-rate and production-capacity controls,
+monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
+The visible web scoring and ranking experience still operates only on clearly synthetic in-process
+fixtures; no component calls the route or connects that page to the database-only
+scoring/finalization/read state in revisions 0001 through 0012.
 
 ## Evidence commands
 
@@ -475,6 +492,7 @@ pnpm run test:ingest:coverage
 pnpm run build:ingest
 pnpm run test:jobs:coverage
 pnpm run build:jobs
+cargo test --workspace --all-targets --all-features --locked
 pnpm run check:web-build
 pnpm run check:public:staged
 git diff --cached --check

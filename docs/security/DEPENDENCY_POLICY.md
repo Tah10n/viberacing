@@ -106,7 +106,25 @@ reason, and a regression check. `dangerouslyAllowAllBuilds` is prohibited.
 
 The Rust compiler is pinned in `rust-toolchain.toml`; the workspace uses a committed `Cargo.lock`.
 Once a crate exists, the root Rust gate automatically runs formatting, all-target/all-feature
-checking, and Clippy with warnings denied.
+checking, tests, and Clippy with warnings denied.
+
+The connector protocol foundation directly pins `serde@1.0.228` without derive and
+`serde_json@1.0.150` for one closed deserialization boundary. Cargo.lock records eleven
+non-workspace packages. The enabled runtime tree contains Serde, serde_core, serde_json, itoa,
+memchr, and zmij; the remaining derive/proc-macro chain is retained only by impossible `cfg(any())`
+metadata and is not compiled by `cargo tree --all-features`. All lock entries, exact license
+expressions, registry provenance, active feature edges, upstream unsafe surface, and build scripts
+were reviewed. Active build scripts only inspect the pinned compiler/target or generate internal
+OUT_DIR source; none downloads, links native code, or opens a network client. An exact-version OSV
+query on 2026-07-15 reported no known advisory for any of the eleven records. This is point-in-time
+evidence, not a permanent safety claim; automated RustSec/cargo-deny release enforcement, SBOM, and
+binary audit remain required before connector distribution.
+
+The Node CI job performs the public-file scan first, installs the pinned minimal Rust toolchain, and
+runs `cargo fetch --locked` before deterministic repository verification. Fetch resolves only the
+committed checksums and does not execute crate build scripts. The license checker then runs Cargo
+metadata offline. The separate Rust job compiles and tests the same lock graph; neither job receives
+secrets or release authority.
 
 New crates require the same necessity, maintenance, license, provenance, and advisory review as npm
 packages. Native code, build scripts, proc macros, network clients, cryptography, parsers, and

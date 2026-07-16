@@ -11,9 +11,11 @@ This is a repository-scoped design threat model. The current tree contains publi
 toolchain, CI, documentation, local PostgreSQL identity/passkey/recovery foundations, and one local
 Next.js public-score route, one local one-shot Jobs runner, and local Community sync verification
 plus PostgreSQL-adapter, transport-free composition, and bounded Fastify HTTP boundaries; it does
-not yet contain a deployed Ingest service, Jobs scheduler, connector, deployment, or production
-data. Its database-only Community ingest and bounded ingest-retention boundaries have synthetic
-executable evidence. The kernel has raw-envelope, origin-proof, bounded-parser, contract, and strict
+not yet contain a deployed Ingest service, Jobs scheduler, operational connector, deployment, or
+production data. A library-only Rust connector foundation now bounds and validates the stable App
+Server initialization exchange without launching Codex or reading account/usage data. Its
+database-only Community ingest and bounded ingest-retention boundaries have synthetic executable
+evidence. The kernel has raw-envelope, origin-proof, bounded-parser, contract, and strict
 device-signature evidence; the adapter has configuration, fixed-query, role-probe, mapper, and
 failure evidence with mock pools. A local server factory now has loopback framing and injection
 evidence, but no live HTTP edge, host/port/TLS deployment entry point, or working database login/TLS
@@ -113,8 +115,9 @@ security boundary.
   supported Codex releases are dependencies, not absolute trust. Compromise, outage, and contract
   drift need detection, rotation, fail-closed behavior, and recovery plans.
 - No Codex version is supported until version-specific generated schemas and synthetic compatibility
-  fixtures pass. The connector will use the default local stdio transport, omit experimental API
-  capability, and reject unknown methods and fields.
+  fixtures pass. The connector foundation already fixes the default local stdio JSONL handshake,
+  omits experimental API capability, and rejects unknown initialization fields; process launch and
+  all account/usage methods remain blocked until the rest of the admission evidence passes.
 - Production anti-abuse thresholds and incident evidence remain private. Public code still defines
   safe maximum shapes, state machines, and tests so secrecy is never the only control.
 
@@ -131,7 +134,7 @@ and migration or rollback where applicable.
 | Public race and profiles            | A visitor injects markup through a handle, enumerates profiles, or infers exact work hours                 | Plain-text bounded names, CSP, public-field allowlist, rounded freshness, rate and cache policy                                  | DB/schema/mapper/adapter/local route tested; cache, car, freshness, rate, deployment planned     |
 | OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up     | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke | Passkey/recovery DB tested; app crypto, routes, rate and cleanup planned                         |
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration           | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, revoke and rotate                        | Pairing/lifecycle DB tested; app crypto, routes, and rate planned                                |
-| Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Planned                                                                                          |
+| Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Bounded initialization framing/state tested; discovery, process, methods, cleanup planned        |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                    | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                        | Local verifier, replay stores, application, and HTTP boundary tested; connector/live planned     |
 | Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                     | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                  | Local verifier/config/replay/server tested; edge injection, trusted route, direct-origin planned |
 | Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections             | Strict versioned schema, bounded bodies, fixed adapter, stored procedure, non-owner role, constraints, deadlines, backpressure   | Local HTTP/verifier/adapter/composer and ingest/retention SQL tested; live operations planned    |

@@ -89,6 +89,47 @@ const goodWorkflow = {
 };
 
 assert.deepEqual(validateWorkflow("good.yml", goodWorkflow), []);
+
+const requiredNodeSteps = [
+  { run: "node scripts/check-public-files.mjs --all" },
+  { run: "rustup toolchain install 1.94.0 --profile minimal" },
+  { run: "cargo fetch --locked" },
+  { run: "pnpm run verify:node" },
+];
+const goodCiWorkflow = {
+  ...goodWorkflow,
+  jobs: {
+    node: {
+      ...goodWorkflow.jobs.verify,
+      steps: requiredNodeSteps,
+    },
+  },
+};
+assert.deepEqual(validateWorkflow(".github/workflows/ci.yml", goodCiWorkflow), []);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      node: {
+        ...goodCiWorkflow.jobs.node,
+        steps: requiredNodeSteps.filter((step) => step.run !== "cargo fetch --locked"),
+      },
+    },
+  }).join("\n"),
+  /fetch Cargo with --locked/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      node: {
+        ...goodCiWorkflow.jobs.node,
+        steps: [requiredNodeSteps[2], ...requiredNodeSteps.slice(0, 2), requiredNodeSteps[3]],
+      },
+    },
+  }).join("\n"),
+  /scan public files before pinned Rust setup/,
+);
 assert.match(
   validateWorkflow("unpinned.yml", {
     ...goodWorkflow,
@@ -408,4 +449,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (35 cases).");
+console.log("Configuration checker tests passed (38 cases).");

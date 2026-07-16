@@ -4,9 +4,11 @@
 
 Compatibility status: no supported versions.
 
-No Codex version and no Vibe Racing connector version is supported. The connector workspace and
-version-specific compatibility fixtures do not exist yet. This empty matrix is fail-closed evidence,
-not an invitation to try an arbitrary local version.
+No Codex version and no Vibe Racing connector version is supported. A library-only connector
+workspace now implements the bounded generic initialization exchange, but version-specific schema
+extracts, compatibility fixtures, process launch, account/usage adapters, platform evidence, and a
+released connector do not exist. This empty matrix is fail-closed evidence, not an invitation to try
+an arbitrary local version.
 
 | Codex version | Stable schema digest | Compatible connector | Platforms tested | Status and evidence                                 |
 | ------------- | -------------------- | -------------------- | ---------------- | --------------------------------------------------- |
@@ -32,12 +34,25 @@ The generic process and version rules are defined in the
 can open an issue but cannot edit this matrix, release an artifact, or turn an unknown version into
 a supported version.
 
+## Implemented protocol foundation
+
+The Rust library emits one fixed `initialize` request with ID `0`, fixed client metadata, and no
+experimental capability. It accepts only one LF-terminated frame up to 16 KiB, manually rejects
+duplicate and unknown members, validates the four reviewed stable initialization result strings,
+discards them, then emits one fixed `initialized` notification. A remote protocol failure is
+terminal for that state-machine instance and errors do not reflect server content.
+
+This is transport framing evidence only. It does not identify or launch a Codex executable, prove a
+schema digest, send an account/usage method, admit a release, retain diagnostics, or create a
+connector artifact. Every matrix row still requires the complete admission evidence above.
+
 ## Planned stable surface
 
 The implementation plan currently names `account/read` for a local auth-mode decision and
 `account/usage/read` for bounded usage summary/daily buckets. These names are a design target, not a
 current support claim. The first proposed row must prove both methods and every consumed field exist
-on the pinned stable schema without experimental capability.
+on the pinned stable schema without experimental capability. The current protocol foundation does
+not emit either method.
 
 All other App Server methods and transports are denied for connector v1. In particular, Vibe Racing
 does not consume thread, turn, item, approval, MCP, file, shell, login, conversation, or repository

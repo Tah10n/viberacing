@@ -161,6 +161,35 @@ export function validateWorkflow(path, workflow) {
   if (JSON.stringify(workflow).includes("${{ secrets.")) {
     findings.push(`${path} references secrets; pull-request CI must remain secretless`);
   }
+
+  if (path === ".github/workflows/ci.yml") {
+    const nodeSteps = workflow.jobs?.node?.steps;
+    if (!Array.isArray(nodeSteps)) {
+      findings.push("primary CI must define the Node repository-gate job");
+      return findings;
+    }
+
+    const requiredRuns = [
+      "node scripts/check-public-files.mjs --all",
+      "rustup toolchain install 1.94.0 --profile minimal",
+      "cargo fetch --locked",
+      "pnpm run verify:node",
+    ];
+    const positions = requiredRuns.map((command) =>
+      nodeSteps.findIndex((step) => isObject(step) && step.run === command),
+    );
+    if (positions.some((position) => position === -1)) {
+      findings.push(
+        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, and run verify:node using exact commands",
+      );
+    } else if (
+      !positions.every((position, index) => index === 0 || position > positions[index - 1])
+    ) {
+      findings.push(
+        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, and offline repository verification",
+      );
+    }
+  }
   return findings;
 }
 

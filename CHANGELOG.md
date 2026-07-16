@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and twenty accepted ADRs.
+  fail-closed compatibility policy and matrix, and twenty-one accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
@@ -101,6 +101,14 @@ Versioning where its guarantees are applicable.
   generates both public GET and POST OpenAPI operations and binds the sync authentication policy
   into its digest. This does not add a host/port/TLS entry point, edge signer, direct-origin denial,
   live database credential, monitoring, load evidence, connector, or deployment.
+- A library-only Rust connector protocol foundation with one fixed stable App Server initialization
+  exchange, 16 KiB LF-only framing, manual duplicate/unknown-field rejection, bounded discarded
+  response values, terminal hostile-input state, and non-reflective errors. Seven public-API tests
+  prove exact bytes, state order, framing, shape, bounds, duplicate/unknown rejection, and privacy;
+  no Codex process, supported version, account/usage method, key store, upload, CLI, or release is
+  implied. The root Rust gate now runs tests, and the exact Serde/serde_json lock graph, build
+  scripts, licenses, features, and point-in-time advisories are reviewed and inventoried. Clean CI
+  fetches the exact Cargo lock graph without building it before the offline Node license gate.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

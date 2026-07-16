@@ -5,10 +5,10 @@
 This is the planned runtime architecture. The current repository contains a tested SQL persistence
 foundation, one local public-score route, one local one-shot Jobs runner, and local Ingest
 request-verification, PostgreSQL-adapter, application-composition, and bounded HTTP-server
-boundaries, but no deployed application service, connector, Cloudflare/Railway deployment, or
-production database. Component status is tracked in
-[implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
-not deployed evidence.
+boundaries, plus a library-only connector initialization boundary, but no deployed application
+service, operational connector, Cloudflare/Railway deployment, or production database. Component
+status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
+required runtime boundaries, not deployed evidence.
 
 ## System context
 
@@ -105,10 +105,13 @@ persistent atomic origin replay, and ADR 0019 composes the same replay/device/su
 behind one transport-free validated application decision. ADR 0020 adds one confined Fastify server
 factory with exact raw-body/header preservation, closed POST/error serialization, local
 connection/deadline bounds, four-call no-queue admission, and no proxy/request-ID trust. The
-host/port/TLS deployment entry point, live secret-manager/edge key injection, working deployment
+library-only ADR 0021 Rust foundation adds one bounded stable App Server JSONL initialization state
+machine and discards all server values. It does not implement the connector container's process,
+account/usage, key, signing, scheduling, upload, CLI, or release responsibilities. The host/port/TLS
+deployment entry point, live secret-manager/edge key injection, working deployment
 login/certificate, composed live end-to-end flow, distributed rate/backpressure and capacity
-evidence, Cloudflare/Railway path, connector, Jobs scheduler/monitoring, public cache, and audited
-correction authority shown in the design remain planned.
+evidence, Cloudflare/Railway path, operational connector, Jobs scheduler/monitoring, public cache,
+and audited correction authority shown in the design remain planned.
 
 ## Component responsibilities
 

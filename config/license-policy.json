@@ -15,7 +15,12 @@
     "MPL-2.0",
     "Python-2.0"
   ],
-  "approvedCargoLicenseExpressions": [],
+  "approvedCargoLicenseExpressions": [
+    "(MIT OR Apache-2.0) AND Unicode-3.0",
+    "MIT",
+    "MIT OR Apache-2.0",
+    "Unlicense OR MIT"
+  ],
   "externalArtifacts": [
     {
       "kind": "github-action",
