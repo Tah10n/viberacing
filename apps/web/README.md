@@ -10,8 +10,8 @@ pairing approval/HTTP route, real user data, or deployment. A separate local Pha
 implements invite redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations,
 initial passkey registration, returning login, a session-scoped passkey inventory, an account page,
 public-profile hide/show, fresh backup-passkey addition, revocation of an owned non-current passkey,
-and logout. It fails closed without externally provisioned configuration and has no live-user or
-deployment evidence.
+an exact-handle fresh-passkey profile-deletion request, and logout. It fails closed without
+externally provisioned configuration and has no live-user or deployment evidence.
 
 ## Run it
 
@@ -48,10 +48,10 @@ provides no valid invite or working credential. See `.env.example` and the local
 | `lib/public-community-score-route.ts`              | Parses and serializes the public score HTTP boundary             | Closed query/Accept, exact errors, admission, deadlines, and no CORS               |
 | `lib/public-score-admission.ts`                    | Enforces the no-queue public-read concurrency ceiling            | Four active reads; lease held until adapter settlement                             |
 | `lib/public-http-problem.ts`                       | Generates opaque request IDs and closed public error responses   | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
-| `app/join`, `app/login`, `app/account`, `app/auth` | Routes enrollment, login, visibility, passkeys, and logout       | Thin entrypoints; no recovery, pairing approval, or admin                          |
-| `components/account-experience.tsx`                | Renders visibility, private passkeys, and logout                 | Closed state and opaque target only; no credential/key/profile ID or exact time    |
-| `lib/enrollment-http.ts`                           | Owns the twelve local identity HTTP decisions                    | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
-| `lib/enrollment-service.ts`                        | Composes OAuth, login, account controls, passkeys, and logout    | Server IDs/secrets only; fixed database capabilities; generic failure              |
+| `app/join`, `app/login`, `app/account`, `app/auth` | Routes enrollment, login, visibility, passkeys, deletion, logout | Thin entrypoints; no recovery, pairing approval, or admin                          |
+| `components/account-experience.tsx`                | Renders visibility, passkeys, deletion, and logout               | Closed state and opaque target only; no credential/key/profile ID or exact time    |
+| `lib/enrollment-http.ts`                           | Owns the fourteen local identity HTTP decisions                  | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
+| `lib/enrollment-service.ts`                        | Composes OAuth, login, account controls, passkeys, and deletion  | Server IDs/secrets only; fixed database capabilities; generic failure              |
 | `lib/enrollment-cookie.ts`                         | Seals login, OAuth, passkey, and session continuations           | AES-GCM with purpose-separated keys, bounded expiry, HttpOnly, and narrow paths    |
 | `lib/github-oauth.ts`                              | Resolves one GitHub numeric user ID                              | State plus PKCE, no extra scope, fixed endpoints, token and other fields discarded |
 | `lib/passkey-registration.ts`                      | Creates and verifies registration and login ceremonies           | Exact RP/origin/type, required UV, fixed algorithms, and bounded output            |
@@ -194,9 +194,19 @@ continuations, and replay fail generically. The profile UUID appears only as the
 registration options' pseudonymous WebAuthn user ID required by the authenticator; it is not added
 to account HTML or the verify request.
 
+Profile deletion requires the exact typed handle before the browser prompts. The
+`POST /auth/profile/delete/options` route revalidates the active passkey-provenance session, creates
+one five-minute required-UV assertion challenge, and binds it to that session, profile, handle, RP
+ID, and origin. The verify route accepts only the assertion response. Exact application verification
+then reaches one statement that consumes the challenge and calls the existing atomic deletion
+capability: it hides the profile, revokes browser/passkey/device/recovery authority, unlinks
+sources, cancels approved pairing, and queues one opaque deletion job. Only success clears every
+local auth cookie and redirects home. This local slice does not execute the queued primary-data
+purge, clear a future public cache, or prove backup restore replay.
+
 This is not a launch-ready authentication system. There is no invite-issuance UI, recovery, passkey
-profile mutation beyond passkey add/revoke and logout, aggregate/distributed edge rate policy,
-cleanup for abandoned enrollment state, live OAuth/authenticator/database-login evidence,
+profile mutation beyond the listed controls, aggregate/distributed edge rate policy, cleanup for
+abandoned enrollment state, deletion purge worker, live OAuth/authenticator/database-login evidence,
 monitoring, or deployment. The tracked environment values are non-working placeholders.
 
 ## Pairing start and activation boundaries
@@ -287,8 +297,8 @@ aggregate source count; it does not pair or verify accounts.
   Next.js's type-only reference, while lint policy forbids importing the absent runtime.
 
 These controls reduce current risk; they do not make Community claims authoritative or replace the
-remaining Phase 2 recovery, profile-control, ingestion, retention, deletion, and edge abuse-control
-gates.
+remaining Phase 2 recovery, source/device controls, ingestion, retention, deletion-purge, and edge
+abuse-control gates.
 
 ## Test strategy
 
@@ -299,8 +309,9 @@ accessibility tests. Enrollment cases cover exact form/JSON bodies, streaming li
 cookie ambiguity, state plus PKCE, no-extra-scope token exchange, encrypted purpose separation,
 fixed SQL, one-time challenge binding, exact RP/origin/type and UV verification,
 continuation-before-write ordering, profile-free database-state-free login options, atomic login
-completion, overload, logout, EN/RU rendering, native ceremonies, and generic failures without a
-live account or credential. Other HTTP-boundary cases cover entropy, opaque tokens, every problem
+completion, exact-handle deletion binding, atomic challenge-consume/delete settlement, cookie
+clearing, overload, logout, EN/RU rendering, native ceremonies, and generic failures without a live
+account or credential. Other HTTP-boundary cases cover entropy, opaque tokens, every problem
 mapping, closed URL parsing, bounded media negotiation, overload settlement, headers, contract
 validation, hostile reflective inputs, and non-reflection. Adapter tests cover TLS/environment
 bounds, non-reflective failures, pool lifecycle, every-checkout role/login/search-path/read-only

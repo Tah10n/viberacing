@@ -28,6 +28,8 @@ const english = {
   loginCopy:
     "Use the passkey already registered for your Vibe Racing profile. The challenge identifies no profile until your exact active credential is verified.",
   loginTitle: "Welcome back",
+  deleteProfile: "Delete profile",
+  deletingProfile: "Checking passkey…",
   logout: "Sign out",
   motion: "Motion preference",
   motionOff: "Off",
@@ -35,7 +37,7 @@ const english = {
   motionSystem: "Device setting",
   needInvite: "Need an invite? Join the Community race",
   passkeyCopy:
-    "A passkey is required before the profile becomes active and replaces a password. Device approval, recovery, and deletion are not available in this local slice yet.",
+    "A passkey is required before the profile becomes active and replaces a password. Device approval and recovery are not available in this local slice yet.",
   passkeyLabel: "Passkey label",
   passkeyRevokeCopy:
     "Revoking a passkey is permanent and requires a fresh passkey check. The key protecting this session cannot be selected.",
@@ -48,6 +50,12 @@ const english = {
     "Email, repositories, prompts, conversations, Codex credentials, and exact token totals are neither retained nor used.",
   primaryPasskey: "Primary passkey",
   profileHidden: "Public profile is off. It will not appear in the Community race.",
+  profileDeletionCopy:
+    "This permanently starts deletion. Your profile is hidden immediately and all sessions, passkeys, and connected-device access are revoked. Primary-data removal is queued; this local build does not run the purge worker yet.",
+  profileDeletionHandleHelp: "The handle must match exactly. A fresh passkey check follows.",
+  profileDeletionHandleLabel: "Type your handle to confirm",
+  profileDeletionMismatch: "Type your exact handle before continuing.",
+  profileDeletionTitle: "Delete profile",
   profileVisible: "Public profile is on. Eligible scores can appear in the Community race.",
   profileVisibilityCopy:
     "Hiding removes your profile from the public race. Existing device sync can continue; after publishing, eligible scores can appear at the next refresh.",
@@ -102,6 +110,8 @@ const russian: Record<JoinTranslationKey, string> = {
   loginCopy:
     "Используйте ключ доступа, уже зарегистрированный для профиля Vibe Racing. Запрос не связан с профилем, пока сервер не проверит точный активный ключ.",
   loginTitle: "С возвращением",
+  deleteProfile: "Удалить профиль",
+  deletingProfile: "Проверяем ключ…",
   logout: "Выйти",
   motion: "Анимация",
   motionOff: "Выключена",
@@ -109,7 +119,7 @@ const russian: Record<JoinTranslationKey, string> = {
   motionSystem: "Как на устройстве",
   needInvite: "Нужен инвайт? Присоединиться к гонке сообщества",
   passkeyCopy:
-    "До активации профиля нужен ключ доступа, заменяющий пароль. Подключение устройств, восстановление и удаление в этом локальном срезе пока недоступны.",
+    "До активации профиля нужен ключ доступа, заменяющий пароль. Подключение устройств и восстановление в этом локальном срезе пока недоступны.",
   passkeyLabel: "Название ключа",
   passkeyRevokeCopy:
     "Отзыв ключа необратим и требует свежей проверки ключом доступа. Ключ, защищающий эту сессию, выбрать нельзя.",
@@ -122,6 +132,13 @@ const russian: Record<JoinTranslationKey, string> = {
     "Email, репозитории, промпты, диалоги, данные входа Codex и точное число токенов не сохраняются и не используются.",
   primaryPasskey: "Основной ключ доступа",
   profileHidden: "Публичный профиль выключен и не появится в гонке сообщества.",
+  profileDeletionCopy:
+    "Это необратимо запускает удаление. Профиль сразу скрывается, все сессии, ключи доступа и доступ подключённых устройств отзываются. Удаление основных данных ставится в очередь; локальная сборка пока не запускает задачу очистки.",
+  profileDeletionHandleHelp:
+    "Хэндл должен совпасть точно. Затем потребуется свежая проверка ключом доступа.",
+  profileDeletionHandleLabel: "Введите свой хэндл для подтверждения",
+  profileDeletionMismatch: "Перед продолжением введите свой хэндл точно.",
+  profileDeletionTitle: "Удалить профиль",
   profileVisible: "Публичный профиль включён. Подходящие результаты могут появиться в гонке.",
   profileVisibilityCopy:
     "Скрытие убирает профиль из публичной гонки. Синхронизация подключённых устройств может продолжаться; после публикации результат появится при следующем пересчёте.",

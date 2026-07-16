@@ -12,6 +12,7 @@ import {
   passkeyLoginContextDigest,
   passkeyLoginCredentialId,
   passkeyRevokeContextDigest,
+  profileDeletionContextDigest,
   verifyInitialPasskey,
   verifyPasskeyLogin,
 } from "./passkey-registration";
@@ -210,6 +211,23 @@ describe("passkey login", () => {
       passkeyRevokeContextDigest(
         "00000000-0000-4000-8000-000000000101",
         "00000000-0000-4000-8000-000000000103",
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    );
+    expect(
+      profileDeletionContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000102",
+        "pixel_driver",
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    ).not.toEqual(
+      profileDeletionContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000102",
+        "other_driver",
         "race.example.com",
         "https://race.example.com",
       ),

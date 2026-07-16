@@ -6,7 +6,7 @@ import type { PasskeyInventoryItem, ProfileVisibility } from "@/lib/enrollment-d
 import type { Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
-import { PasskeyAddForm, PasskeyRevokeButton } from "./passkey-setup";
+import { PasskeyAddForm, PasskeyRevokeButton, ProfileDeletionForm } from "./passkey-setup";
 
 interface AccountExperienceProps {
   readonly actionUnavailable?: boolean;
@@ -104,6 +104,11 @@ export function AccountExperience({
               </ul>
             </>
           )}
+        </section>
+        <section aria-labelledby="profile-deletion-title" className="account-security">
+          <h2 id="profile-deletion-title">{copy.profileDeletionTitle}</h2>
+          <p>{copy.profileDeletionCopy}</p>
+          <ProfileDeletionForm handle={handle} locale={locale} />
         </section>
         <form action="/auth/logout" method="post">
           <button className="secondary-action" type="submit">

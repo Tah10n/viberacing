@@ -10,6 +10,7 @@ import {
   readPasskeyChallenge,
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
+  readProfileDeletionChallenge,
 } from "./enrollment-domain";
 
 const secret = Buffer.alloc(32, 0x42);
@@ -83,6 +84,10 @@ describe("enrollment domain", () => {
       ...challenge,
       targetPasskeyId: "00000000-0000-4000-8000-000000000105",
     } as const;
+    const profileDeletionChallenge = {
+      ...challenge,
+      handle: "pixel_driver",
+    } as const;
     const addChallenge = {
       authenticationChallenge: challenge.challenge,
       challengeId: challenge.challengeId,
@@ -97,11 +102,15 @@ describe("enrollment domain", () => {
     expect(readPasskeyChallenge(challenge, now)).toEqual(challenge);
     expect(readPasskeyAddChallenge(addChallenge, now)).toEqual(addChallenge);
     expect(readPasskeyRevokeChallenge(revokeChallenge, now)).toEqual(revokeChallenge);
+    expect(readProfileDeletionChallenge(profileDeletionChallenge, now)).toEqual(
+      profileDeletionChallenge,
+    );
     expect(readPendingEnrollment({ ...pending, extra: true }, now)).toBeUndefined();
     expect(readEnrollmentSession({ ...session, expiresAt: now }, now)).toBeUndefined();
     expect(readPasskeyChallenge({ ...challenge, challenge: "bad" }, now)).toBeUndefined();
     expect(readPasskeyChallenge(revokeChallenge, now)).toBeUndefined();
     expect(readPasskeyChallenge(addChallenge, now)).toBeUndefined();
+    expect(readPasskeyChallenge(profileDeletionChallenge, now)).toBeUndefined();
     expect(readPasskeyAddChallenge(challenge, now)).toBeUndefined();
     expect(
       readPasskeyAddChallenge(
@@ -116,5 +125,13 @@ describe("enrollment domain", () => {
       readPasskeyRevokeChallenge({ ...revokeChallenge, targetPasskeyId: "bad" }, now),
     ).toBeUndefined();
     expect(readPasskeyRevokeChallenge({ ...revokeChallenge, extra: true }, now)).toBeUndefined();
+    expect(readProfileDeletionChallenge(challenge, now)).toBeUndefined();
+    expect(readProfileDeletionChallenge(revokeChallenge, now)).toBeUndefined();
+    expect(
+      readProfileDeletionChallenge({ ...profileDeletionChallenge, handle: "UPPERCASE" }, now),
+    ).toBeUndefined();
+    expect(
+      readProfileDeletionChallenge({ ...profileDeletionChallenge, extra: true }, now),
+    ).toBeUndefined();
   });
 });

@@ -49,6 +49,12 @@ apply.
   assertion and registration challenges, bind both to the active session/profile/RP/origin, and
   consume-plus-add atomically under the existing lifetime cap. Profile UUID may enter only the
   authenticated registration options required by the user's authenticator.
+- Profile deletion must require the exact active session, exact typed handle, and a fresh
+  required-UV assertion bound to that session, profile, handle, RP, origin, and five-minute
+  challenge. Consume the challenge and invoke the existing atomic hide/revoke/unlink/enqueue
+  capability in one statement, clear all browser auth cookies only after success, and keep every
+  failure generic. Do not claim that queueing runs the absent purge worker, clears a future public
+  cache, or proves restore replay.
 - Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
   correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
   CORS/auth/retry semantics to the common problem-response boundary.

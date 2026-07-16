@@ -22,9 +22,11 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
       ]),
     ),
     completePasskeyRevocation: vi.fn(() => Promise.resolve([{ revoked: true }])),
+    completeProfileDeletion: vi.fn(() => Promise.resolve([{ deleted: true }])),
     createPasskeyAddChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
+    createProfileDeletionChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
     readPasskeyInventory: vi.fn(() =>
       Promise.resolve([
@@ -218,6 +220,33 @@ describe("enrollment database", () => {
       }),
     ).resolves.toBe(true);
     await expect(
+      database.createProfileDeletionChallenge({
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000413",
+        contextDigest: new Uint8Array(32),
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      database.completeProfileDeletion({
+        auditEventId: profile.auditEventId,
+        backupState: false,
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000413",
+        contextDigest: new Uint8Array(32),
+        deletionJobId: "00000000-0000-4000-8000-000000000414",
+        observedSignCount: 3,
+        profileRefDigest: new Uint8Array(32),
+        requestId: profile.requestId,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        typedHandle: profile.handle,
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000406",
+      }),
+    ).resolves.toBe(true);
+    await expect(
       database.completePasskeyLogin({
         auditEventId: profile.auditEventId,
         backupState: false,
@@ -259,8 +288,10 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(13);
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(15);
     expect(releases).toEqual([
+      false,
+      false,
       false,
       false,
       false,

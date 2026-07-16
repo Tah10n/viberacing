@@ -10,37 +10,38 @@ Racing profiles in a self-reported Community league.
 This is a repository-scoped design threat model. The current tree contains public repository policy,
 toolchain, CI, documentation, local PostgreSQL identity/passkey/recovery foundations, and one local
 Next.js public-score route, one local invite/OAuth/initial-passkey enrollment and returning-passkey
-login plus private inventory/add/revocation slice with encrypted cookies and logout, one local
-one-shot Jobs runner, and local Community sync verification plus PostgreSQL-adapter, transport-free
-composition, and bounded Fastify HTTP boundaries; it does not yet contain a deployed Ingest service,
-Jobs scheduler, operational connector, deployment, or production data. A library-only Rust connector
-foundation now bounds and validates the stable App Server initialization and candidate account/usage
-exchanges, then composes them through a synthetic one-shot child supervisor and produces exact sync
-material behind a second inaccessible reviewed context. An isolated one-use signer consumes that
-material only with a third inaccessible device-bound key capability and returns a closed signed
-envelope. A separate pending-key/challenge signer and pure Web verifier agree on an exact synthetic
-pairing-possession proof. A dormant Web/Auth start application now generates bounded
-pending-transaction material, separate protected poll/code verifiers, and one fixed database call. A
-second application composes protected keyed poll lookup, strict proof, and exact atomic activation
-through the separately probed read-write pool with local admission/timing. No connector capability
-has a public constructor, so the library cannot discover, admit, or execute a local Codex binary,
-create a real source/device/time/nonce context, generate/load a real key, or complete pairing. Its
-database-only Community ingest and bounded ingest-retention boundaries have synthetic executable
-evidence. The kernel has raw-envelope, origin-proof, bounded-parser, contract, and strict
-device-signature evidence; the adapter has configuration, fixed-query, role-probe, mapper, and
-failure evidence with mock pools. A local server factory now has loopback framing and injection
-evidence, but no live HTTP edge, host/port/TLS deployment entry point, or working database login/TLS
-connection. One signed synthetic request now exercises their required local composition through a
-mock pool and validated result/problem decisions. The public score route has request/response,
-admission, production-build, and visible browser-consumer/fallback evidence, while the Jobs runner
-has strict command/config/pool/role/result evidence. The identity slice has
-exact-origin/body/cookie, state/PKCE, token minimization, initial-registration, returning-login,
-session-derived passkey inventory, non-current-key revocation, backup-key addition, fixed queries,
-admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence with injected dependencies.
-None has a live database login, OAuth app, authenticator, edge, scheduler, or network deployment.
-Controls below are marked **implemented** only when executable evidence exists in
-[implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
-security claims about the current tree.
+login plus private inventory/add/revocation and fresh-passkey profile-deletion-request slice with
+encrypted cookies and logout, one local one-shot Jobs runner, and local Community sync verification
+plus PostgreSQL-adapter, transport-free composition, and bounded Fastify HTTP boundaries; it does
+not yet contain a deletion purge worker, deployed Ingest service, Jobs scheduler, operational
+connector, deployment, or production data. A library-only Rust connector foundation now bounds and
+validates the stable App Server initialization and candidate account/usage exchanges, then composes
+them through a synthetic one-shot child supervisor and produces exact sync material behind a second
+inaccessible reviewed context. An isolated one-use signer consumes that material only with a third
+inaccessible device-bound key capability and returns a closed signed envelope. A separate
+pending-key/challenge signer and pure Web verifier agree on an exact synthetic pairing-possession
+proof. A dormant Web/Auth start application now generates bounded pending-transaction material,
+separate protected poll/code verifiers, and one fixed database call. A second application composes
+protected keyed poll lookup, strict proof, and exact atomic activation through the separately probed
+read-write pool with local admission/timing. No connector capability has a public constructor, so
+the library cannot discover, admit, or execute a local Codex binary, create a real
+source/device/time/nonce context, generate/load a real key, or complete pairing. Its database-only
+Community ingest and bounded ingest-retention boundaries have synthetic executable evidence. The
+kernel has raw-envelope, origin-proof, bounded-parser, contract, and strict device-signature
+evidence; the adapter has configuration, fixed-query, role-probe, mapper, and failure evidence with
+mock pools. A local server factory now has loopback framing and injection evidence, but no live HTTP
+edge, host/port/TLS deployment entry point, or working database login/TLS connection. One signed
+synthetic request now exercises their required local composition through a mock pool and validated
+result/problem decisions. The public score route has request/response, admission, production-build,
+and visible browser-consumer/fallback evidence, while the Jobs runner has strict
+command/config/pool/role/result evidence. The identity slice has exact-origin/body/cookie,
+state/PKCE, token minimization, initial-registration, returning-login, session-derived passkey
+inventory, non-current-key revocation, backup-key addition, exact-handle profile-deletion request,
+fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence with injected
+dependencies. None has a live database login, OAuth app, authenticator, edge, scheduler, purge
+execution, or network deployment. Controls below are marked **implemented** only when executable
+evidence exists in [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release
+requirements, not security claims about the current tree.
 
 ### Assets and security objectives
 
@@ -158,7 +159,7 @@ and migration or rollback where applicable.
 | Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons        | SQL and local one-shot runner tested; live login, scheduler, correction planned                                           |
 | CarRecipe and assets                | A proposal smuggles a URL, markup, executable value, copyrighted binary, or nondeterministic output        | Enum-only schema, project-owned assets, preview and approval, provenance, deterministic snapshots                                | Planned                                                                                                                   |
 | Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                        | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                               | Invite role/reason/reference implemented; hosted controls planned                                                         |
-| Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                     | Immediate hide/revoke, idempotent purge, bounded tombstone, backup expiry, deletion replay after restore                         | DB hide/revoke/queue implemented; purge/restore planned                                                                   |
+| Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                     | Immediate hide/revoke, idempotent purge, bounded tombstone, backup expiry, deletion replay after restore                         | Exact-handle/fresh-passkey request plus DB hide/revoke/queue implemented; cache/purge/restore planned                     |
 | Pull-request CI                     | A fork changes a workflow or package to steal a token or publish an artifact                               | Read-only secretless CI, no privileged environment, pinned inputs, no persisted checkout credentials, protected review           | Implemented locally; hosted controls pending                                                                              |
 | Release and dependencies            | A compromised dependency or runner produces an official malicious connector                                | Exact locks, quarantine, review, isolated trusted build, signatures, SBOM, provenance, clean-machine verification                | Dependency baseline implemented; release path planned                                                                     |
 | Public repository                   | A maintainer accidentally commits a credential, personal record, local path, or private incident detail    | Public-file scan, exact staged-blob scan, synthetic-only policy, manual diff and history review                                  | Implemented locally; history and hosted scans pending                                                                     |

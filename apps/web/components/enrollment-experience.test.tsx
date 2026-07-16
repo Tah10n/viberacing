@@ -187,6 +187,8 @@ describe("enrollment experience", () => {
     );
     expect(markup).toContain("Your passkeys");
     expect(markup).toContain("Public profile");
+    expect(markup).toContain("Delete profile");
+    expect(markup).toContain('name="handle"');
     expect(markup).toContain("Eligible scores can appear in the Community race");
     expect(markup).toContain('action="/auth/profile/visibility"');
     expect(markup).toContain('type="hidden" name="visibility" value="hidden"');
@@ -347,6 +349,59 @@ describe("enrollment experience", () => {
     expect(JSON.parse(verificationBody)).toEqual({
       response: { id: "synthetic-login" },
     });
+    expect(mounted.container.textContent).toContain("could not be completed");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
+  it("requires the exact handle and a fresh passkey before deleting the profile", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const fetchMock = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ challenge: "synthetic" }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(
+      <AccountExperience handle="pixel_driver" locale="en" passkeys={[]} visibility="public" />,
+    );
+    const input = mounted.container.querySelector<HTMLInputElement>('input[name="handle"]');
+    if (input === null) {
+      throw new Error("expected deletion confirmation input");
+    }
+    input.value = "other_driver";
+    await act(async () => {
+      input
+        .closest("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mounted.container.textContent).toContain("Type your exact handle");
+
+    input.value = "pixel_driver";
+    await act(async () => {
+      input
+        .closest("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(webauthn.startAuthentication).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      "/auth/profile/delete/options",
+      "/auth/profile/delete/verify",
+    ]);
+    expect(fetchMock.mock.calls[0]?.[1].body).toBe('{"handle":"pixel_driver"}');
+    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
+    expect(typeof verificationBody).toBe("string");
+    if (typeof verificationBody !== "string") {
+      throw new Error("expected serialized deletion verification body");
+    }
+    expect(JSON.parse(verificationBody)).toEqual({ response: { id: "synthetic-login" } });
     expect(mounted.container.textContent).toContain("could not be completed");
     act(() => {
       mounted.root.unmount();

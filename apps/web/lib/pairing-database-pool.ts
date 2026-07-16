@@ -220,6 +220,51 @@ const setProfileVisibilityQuery = `SELECT viberacing_api.set_profile_visibility(
   $3::boolean
 ) AS visibility`;
 
+const createProfileDeletionChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
+  SELECT viberacing_api.create_auth_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    'profile_deletion'::text,
+    $4::bytea,
+    $5::bytea,
+    $6::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS created
+FROM challenge_creation`;
+
+const completeProfileDeletionQuery = `WITH challenge_consumption AS MATERIALIZED (
+  SELECT viberacing_api.consume_passkey_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    'profile_deletion'::text,
+    $4::bytea,
+    $5::bytea,
+    $6::uuid,
+    $7::bigint,
+    $8::boolean
+  ) AS consumed
+), profile_deletion AS MATERIALIZED (
+  SELECT viberacing_api.request_profile_deletion(
+    $1::uuid,
+    $2::bytea,
+    $9::text,
+    $3::uuid,
+    $10::uuid,
+    $11::bytea,
+    $12::uuid,
+    $13::text
+  ) AS ignored
+  FROM challenge_consumption
+  WHERE consumed
+)
+SELECT
+  (SELECT consumed FROM challenge_consumption)
+  AND pg_catalog.count(*) = 1 AS deleted
+FROM profile_deletion`;
+
 const createPasskeyAddChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
   SELECT viberacing_api.create_passkey_change_challenge(
     $1::uuid,
@@ -422,6 +467,31 @@ export interface EnrollmentDatabaseProfileVisibilityUpdate extends EnrollmentDat
   readonly publiclyVisible: boolean;
 }
 
+export interface EnrollmentDatabaseProfileDeletionChallenge {
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly expiresAt: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+}
+
+export interface EnrollmentDatabaseProfileDeletion {
+  readonly auditEventId: string;
+  readonly backupState: boolean;
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly deletionJobId: string;
+  readonly observedSignCount: number;
+  readonly profileRefDigest: Uint8Array;
+  readonly requestId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly typedHandle: string;
+  readonly verifiedPasskeyId: string;
+}
+
 export interface EnrollmentDatabasePasskeyAddChallenge {
   readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
@@ -495,9 +565,13 @@ export interface EnrollmentDatabaseClient {
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<unknown>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown>;
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<unknown>;
+  completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<unknown>;
   createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<unknown>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<unknown>;
+  createProfileDeletionChallenge(
+    input: EnrollmentDatabaseProfileDeletionChallenge,
+  ): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
   readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown>;
@@ -699,6 +773,34 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         contextDigest.fill(0);
       }
     },
+    async completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      const profileRefDigest = Buffer.from(input.profileRefDigest);
+      try {
+        return await fixedQuery(completeProfileDeletionQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.verifiedPasskeyId,
+          input.observedSignCount,
+          input.backupState,
+          input.typedHandle,
+          input.deletionJobId,
+          profileRefDigest,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+        profileRefDigest.fill(0);
+      }
+    },
     async createPasskeyAddChallenge(
       input: EnrollmentDatabasePasskeyAddChallenge,
     ): Promise<unknown> {
@@ -750,6 +852,27 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           input.sessionId,
           sessionVerifierDigest,
           input.targetPasskeyId,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.expiresAt,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
+    async createProfileDeletionChallenge(
+      input: EnrollmentDatabaseProfileDeletionChallenge,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(createProfileDeletionChallengeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
           input.challengeId,
           challengeDigest,
           contextDigest,

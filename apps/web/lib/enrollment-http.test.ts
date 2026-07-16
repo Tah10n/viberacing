@@ -82,12 +82,19 @@ function serviceFixture(): EnrollmentService {
         passkeyRevokeCookie: "opaque-passkey-revoke",
       }),
     ),
+    beginProfileDeletion: vi.fn(() =>
+      Promise.resolve({
+        options: { challenge: Buffer.alloc(32, 8).toString("base64url") },
+        profileDeletionCookie: "opaque-profile-deletion",
+      }),
+    ),
     cancelGithub: vi.fn(() => true),
     completeGithub: vi.fn(() => Promise.resolve({ sessionCookie: "opaque-session" })),
     completeLogin: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskey: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskeyAdd: vi.fn(() => Promise.resolve(true)),
     completePasskeyRevoke: vi.fn(() => Promise.resolve(true)),
+    completeProfileDeletion: vi.fn(() => Promise.resolve(true)),
     logout: vi.fn(() => Promise.resolve(true)),
     readPasskeyInventory: vi.fn(() => Promise.resolve(undefined)),
     readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
@@ -358,6 +365,75 @@ describe("enrollment HTTP boundary", () => {
     ).resolves.toMatchObject({ status: 401 });
   });
 
+  it("binds profile deletion to the exact handle, session, and fresh assertion", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const options = await http.profileDeletionOptions(
+      post(
+        "/auth/profile/delete/options",
+        JSON.stringify({ handle: "pixel_driver" }),
+        "application/json",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(options.status).toBe(200);
+    expect(options.headers.get("set-cookie")).toContain(
+      "viberacing_profile_deletion=opaque-profile-deletion",
+    );
+    expect(options.headers.get("set-cookie")).toContain("Path=/auth/profile/delete");
+    expect(service.beginProfileDeletion).toHaveBeenCalledWith("opaque-session", {
+      handle: "pixel_driver",
+    });
+
+    const verification = await http.profileDeletionVerify(
+      post(
+        "/auth/profile/delete/verify",
+        JSON.stringify({ response: { id: "synthetic" } }),
+        "application/json",
+        "viberacing_session=opaque-session; viberacing_profile_deletion=opaque-profile-deletion",
+      ),
+    );
+    expect(verification.status).toBe(204);
+    expect(verification.headers.get("cache-control")).toBe("no-store");
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_profile_deletion=");
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_session=");
+    expect(service.completeProfileDeletion).toHaveBeenCalledWith(
+      "opaque-session",
+      "opaque-profile-deletion",
+      { response: { id: "synthetic" } },
+    );
+
+    await expect(
+      http.profileDeletionOptions(
+        post(
+          "/auth/profile/delete/options",
+          JSON.stringify({ handle: "pixel_driver" }),
+          "application/json",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 401 });
+    await expect(
+      http.profileDeletionVerify(
+        post(
+          "/auth/profile/delete/verify",
+          "not-json",
+          "application/json",
+          "viberacing_session=opaque-session; viberacing_profile_deletion=opaque-profile-deletion",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 400 });
+    const crossOrigin = post(
+      "/auth/profile/delete/options",
+      JSON.stringify({ handle: "pixel_driver" }),
+      "application/json",
+      "viberacing_session=opaque-session",
+    );
+    crossOrigin.headers.set("origin", "https://attacker.example");
+    await expect(http.profileDeletionOptions(crossOrigin)).resolves.toMatchObject({ status: 400 });
+  });
+
   it("changes profile visibility only from the exact same-origin session form", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
@@ -427,6 +503,7 @@ describe("enrollment HTTP boundary", () => {
     expect(response.headers.get("set-cookie")).toContain("viberacing_login=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_passkey_add=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_passkey_revoke=");
+    expect(response.headers.get("set-cookie")).toContain("viberacing_profile_deletion=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.logout).not.toHaveBeenCalled();
 

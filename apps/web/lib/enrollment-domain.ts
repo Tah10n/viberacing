@@ -57,6 +57,13 @@ const revokeChallengeKeys = new Set([
   "targetPasskeyId",
   "version",
 ]);
+const profileDeletionChallengeKeys = new Set([
+  "challenge",
+  "challengeId",
+  "expiresAt",
+  "handle",
+  "version",
+]);
 
 export interface JoinRequest {
   readonly handle: string;
@@ -104,6 +111,10 @@ export interface PasskeyAddChallenge {
 
 export interface PasskeyRevokeChallenge extends PasskeyRegistrationChallenge {
   readonly targetPasskeyId: string;
+}
+
+export interface ProfileDeletionChallenge extends PasskeyRegistrationChallenge {
+  readonly handle: string;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -294,6 +305,26 @@ export function readPasskeyRevokeChallenge(
     return undefined;
   }
   return Object.freeze(value as unknown as PasskeyRevokeChallenge);
+}
+
+export function readProfileDeletionChallenge(
+  value: unknown,
+  nowSeconds: number,
+): ProfileDeletionChallenge | undefined {
+  if (
+    !isPlainObject(value) ||
+    !exactKeys(value, profileDeletionChallengeKeys) ||
+    value.version !== 1 ||
+    !canonicalBase64Url32(value.challenge) ||
+    typeof value.challengeId !== "string" ||
+    !uuidV4Pattern.test(value.challengeId) ||
+    typeof value.handle !== "string" ||
+    !handlePattern.test(value.handle) ||
+    !futureExpiry(value.expiresAt, nowSeconds, 300)
+  ) {
+    return undefined;
+  }
+  return Object.freeze(value as unknown as ProfileDeletionChallenge);
 }
 
 export function readPasskeyAddChallenge(

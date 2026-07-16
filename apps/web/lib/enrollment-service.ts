@@ -23,12 +23,14 @@ import {
   readPasskeyChallenge,
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
+  readProfileDeletionChallenge,
   type EnrollmentSession,
   type JoinRequest,
   type PasskeyAddChallenge,
   type PasskeyRegistrationChallenge,
   type PasskeyRevokeChallenge,
   type PendingEnrollment,
+  type ProfileDeletionChallenge,
 } from "./enrollment-domain";
 import {
   createGithubOAuthMaterial,
@@ -44,6 +46,7 @@ import {
   passkeyLoginContextDigest,
   passkeyLoginCredentialId,
   passkeyRevokeContextDigest,
+  profileDeletionContextDigest,
   verifyInitialPasskey,
   verifyPasskeyLogin,
   type RegisteredPasskey,
@@ -60,6 +63,7 @@ const authenticationBodyKeys = new Set(["response"]);
 const addStartBodyKeys = new Set(["label"]);
 const addBodyKeys = new Set(["authentication", "registration"]);
 const revokeTargetBodyKeys = new Set(["passkeyId"]);
+const profileDeletionStartBodyKeys = new Set(["handle"]);
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 
 export const enrollmentCookieNames = Object.freeze({
@@ -68,6 +72,7 @@ export const enrollmentCookieNames = Object.freeze({
   passkey: "viberacing_passkey",
   passkeyAdd: "viberacing_passkey_add",
   passkeyRevoke: "viberacing_passkey_revoke",
+  profileDeletion: "viberacing_profile_deletion",
   session: "viberacing_session",
 });
 
@@ -109,6 +114,11 @@ export interface PasskeyAddOptionsDecision {
   readonly registrationOptions: Awaited<ReturnType<typeof createPasskeyRegistrationOptions>>;
 }
 
+export interface ProfileDeletionOptionsDecision {
+  readonly options: Awaited<ReturnType<typeof createPasskeyLoginOptions>>;
+  readonly profileDeletionCookie: string;
+}
+
 export interface EnrollmentService {
   beginGithub(join: JoinRequest): EnrollmentStartDecision | undefined;
   beginLogin(): Promise<PasskeyLoginOptionsDecision | undefined>;
@@ -121,6 +131,10 @@ export interface EnrollmentService {
     sessionCookie: string,
     body: unknown,
   ): Promise<PasskeyRevokeOptionsDecision | undefined>;
+  beginProfileDeletion(
+    sessionCookie: string,
+    body: unknown,
+  ): Promise<ProfileDeletionOptionsDecision | undefined>;
   cancelGithub(state: string, oauthCookie: string): boolean;
   completeGithub(
     code: string,
@@ -145,6 +159,11 @@ export interface EnrollmentService {
   completePasskeyRevoke(
     sessionCookie: string,
     passkeyRevokeCookie: string,
+    body: unknown,
+  ): Promise<boolean>;
+  completeProfileDeletion(
+    sessionCookie: string,
+    profileDeletionCookie: string,
     body: unknown,
   ): Promise<boolean>;
   logout(sessionCookie: string | undefined): Promise<boolean>;
@@ -192,6 +211,10 @@ interface PasskeyAddStartBody {
 
 interface PasskeyRevokeTargetBody {
   readonly passkeyId: string;
+}
+
+interface ProfileDeletionStartBody {
+  readonly handle: string;
 }
 
 function nowSeconds(now: Date): number | undefined {
@@ -365,6 +388,28 @@ function readPasskeyRevokeTargetBody(value: unknown): PasskeyRevokeTargetBody | 
     return undefined;
   }
   return Object.freeze({ passkeyId: record.passkeyId });
+}
+
+function readProfileDeletionStartBody(value: unknown): ProfileDeletionStartBody | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== profileDeletionStartBodyKeys.size ||
+    keys.some((key) => !profileDeletionStartBodyKeys.has(key)) ||
+    typeof record.handle !== "string" ||
+    !enrollmentPatterns.handle.test(record.handle)
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ handle: record.handle });
 }
 
 function clearRegisteredPasskey(passkey: RegisteredPasskey | undefined): void {
@@ -659,6 +704,73 @@ export function createEnrollmentService(
           targetPasskeyId: target.passkeyId,
         });
         return created ? Object.freeze({ options, passkeyRevokeCookie }) : undefined;
+      } catch {
+        return undefined;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+      }
+    },
+    async beginProfileDeletion(
+      sessionCookie: string,
+      body: unknown,
+    ): Promise<ProfileDeletionOptionsDecision | undefined> {
+      const session = readSession(sessionCookie);
+      const target = readProfileDeletionStartBody(body);
+      const seconds = currentSeconds();
+      if (
+        !session?.passkeyRegistered ||
+        target?.handle !== session.handle ||
+        seconds === undefined
+      ) {
+        return undefined;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return undefined;
+        }
+        const options = await createLoginOptions(config.webauthnRpId);
+        if (!base64Url32Pattern.test(options.challenge)) {
+          return undefined;
+        }
+        const challengeId = randomUuid();
+        if (!enrollmentPatterns.uuidV4.test(challengeId)) {
+          return undefined;
+        }
+        const expiresAt = seconds + passkeyLifetimeSeconds;
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        challengeDigest = passkeyChallengeDigest(options.challenge);
+        contextDigest = profileDeletionContextDigest(
+          session.sessionId,
+          session.profileId,
+          session.handle,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        const challenge: ProfileDeletionChallenge = Object.freeze({
+          challenge: options.challenge,
+          challengeId,
+          expiresAt,
+          handle: session.handle,
+          version: 1,
+        });
+        const profileDeletionCookie = cookieCodec.seal("passkey", challenge);
+        const created = await database.createProfileDeletionChallenge({
+          challengeDigest,
+          challengeId,
+          contextDigest,
+          expiresAt: new Date(expiresAt * 1000).toISOString(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+        return created ? Object.freeze({ options, profileDeletionCookie }) : undefined;
       } catch {
         return undefined;
       } finally {
@@ -1171,6 +1283,110 @@ export function createEnrollmentService(
         sessionDigest?.fill(0);
         challengeDigest?.fill(0);
         contextDigest?.fill(0);
+      }
+    },
+    async completeProfileDeletion(
+      sessionCookie: string,
+      profileDeletionCookie: string,
+      body: unknown,
+    ): Promise<boolean> {
+      const session = readSession(sessionCookie);
+      const seconds = currentSeconds();
+      const authentication = readAuthenticationBody(body);
+      const challenge =
+        seconds === undefined
+          ? undefined
+          : readProfileDeletionChallenge(
+              cookieCodec.open("passkey", profileDeletionCookie),
+              seconds,
+            );
+      if (
+        !session?.passkeyRegistered ||
+        seconds === undefined ||
+        authentication === undefined ||
+        challenge?.handle !== session.handle
+      ) {
+        return false;
+      }
+      let credentialId: Buffer | undefined;
+      let material: PasskeyLoginMaterial | undefined;
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      let profileRefDigest: Buffer | undefined;
+      try {
+        credentialId = passkeyLoginCredentialId(authentication.response);
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (credentialId === undefined || sessionVerifier === undefined) {
+          return false;
+        }
+        material = await database.readPasskeyLoginMaterial(credentialId);
+        if (material === undefined) {
+          return false;
+        }
+        const verified = await verifyLogin(
+          authentication.response,
+          challenge.challenge,
+          config.webauthnOrigin,
+          config.webauthnRpId,
+          {
+            backupEligible: material.backupEligible,
+            cosePublicKey: material.cosePublicKey,
+            credentialId,
+            signCount: material.signCount,
+          },
+        );
+        if (verified === undefined) {
+          return false;
+        }
+        const deletionJobId = randomUuid();
+        const auditEventId = randomUuid();
+        if (
+          !enrollmentPatterns.uuidV4.test(deletionJobId) ||
+          !enrollmentPatterns.uuidV4.test(auditEventId) ||
+          deletionJobId === auditEventId
+        ) {
+          return false;
+        }
+        profileRefDigest = randomSecret(randomBytes);
+        if (profileRefDigest === undefined) {
+          return false;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        challengeDigest = passkeyChallengeDigest(challenge.challenge);
+        contextDigest = profileDeletionContextDigest(
+          session.sessionId,
+          session.profileId,
+          session.handle,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        return await database.completeProfileDeletion({
+          auditEventId,
+          backupState: verified.backupState,
+          challengeDigest,
+          challengeId: challenge.challengeId,
+          contextDigest,
+          deletionJobId,
+          observedSignCount: verified.signCount,
+          profileRefDigest,
+          requestId: createRequestId(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+          typedHandle: challenge.handle,
+          verifiedPasskeyId: material.passkeyId,
+        });
+      } catch {
+        return false;
+      } finally {
+        credentialId?.fill(0);
+        clearLoginMaterial(material);
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+        profileRefDigest?.fill(0);
       }
     },
     async logout(sessionCookie: string | undefined): Promise<boolean> {

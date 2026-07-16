@@ -386,3 +386,98 @@ export function PasskeyRevokeButton({ label, locale, passkeyId }: PasskeyRevokeB
     </form>
   );
 }
+
+interface ProfileDeletionFormProps {
+  readonly handle: string;
+  readonly locale: Locale;
+}
+
+export function ProfileDeletionForm({ handle, locale }: ProfileDeletionFormProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<"generic" | "mismatch" | undefined>();
+  const copy = joinTranslations[locale];
+
+  async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy) {
+      return;
+    }
+    const form = new FormData(event.currentTarget);
+    const typedHandle = form.get("handle");
+    if (typedHandle !== handle) {
+      setError("mismatch");
+      return;
+    }
+    if (!browserSupportsWebAuthn()) {
+      setError("generic");
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      const optionsResponse = await fetch("/auth/profile/delete/options", {
+        body: JSON.stringify({ handle: typedHandle }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (!optionsResponse.ok) {
+        throw new Error("options unavailable");
+      }
+      const options = (await optionsResponse.json()) as PublicKeyCredentialRequestOptionsJSON;
+      const response = await startAuthentication({ optionsJSON: options });
+      const verification = await fetch("/auth/profile/delete/verify", {
+        body: JSON.stringify({ response }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (verification.status !== 204) {
+        throw new Error("verification failed");
+      }
+      window.location.assign("/");
+    } catch {
+      setError("generic");
+      setBusy(false);
+    }
+  }
+
+  const errorMessage =
+    error === "mismatch"
+      ? copy.profileDeletionMismatch
+      : error === "generic"
+        ? copy.genericError
+        : "";
+
+  return (
+    <form className="auth-form" onSubmit={(event) => void submit(event)}>
+      <label>
+        {copy.profileDeletionHandleLabel}
+        <input
+          autoCapitalize="none"
+          autoComplete="off"
+          maxLength={24}
+          minLength={3}
+          name="handle"
+          pattern="[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]"
+          required
+          spellCheck={false}
+          type="text"
+        />
+        <small>
+          {copy.profileDeletionHandleHelp} {handle}
+        </small>
+      </label>
+      <button className="danger-action" disabled={busy} type="submit">
+        {busy ? copy.deletingProfile : copy.deleteProfile}
+      </button>
+      <span aria-live="polite" className={error === undefined ? "auth-status" : "auth-error"}>
+        {errorMessage}
+      </span>
+    </form>
+  );
+}

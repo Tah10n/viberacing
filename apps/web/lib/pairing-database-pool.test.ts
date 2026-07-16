@@ -208,6 +208,8 @@ describe("pairing database pool", () => {
       [{ added: true }],
       [{ created: true }],
       [{ revoked: true }],
+      [{ created: true }],
+      [{ deleted: true }],
       [{ visibility: "hidden" }],
       [{ revoked: true }],
     ];
@@ -400,6 +402,33 @@ describe("pairing database pool", () => {
       }),
     ).resolves.toEqual([{ revoked: true }]);
     await expect(
+      client.createProfileDeletionChallenge({
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000318",
+        contextDigest: context,
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([{ created: true }]);
+    await expect(
+      client.completeProfileDeletion({
+        auditEventId: "00000000-0000-4000-8000-000000000320",
+        backupState: false,
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000318",
+        contextDigest: context,
+        deletionJobId: "00000000-0000-4000-8000-000000000319",
+        observedSignCount: 4,
+        profileRefDigest: digest,
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+        typedHandle: "pixel_driver",
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000306",
+      }),
+    ).resolves.toEqual([{ deleted: true }]);
+    await expect(
       client.setProfileVisibility({
         publiclyVisible: false,
         sessionId: "00000000-0000-4000-8000-000000000312",
@@ -427,6 +456,8 @@ describe("pairing database pool", () => {
       expect.stringContaining("consume_passkey_challenge"),
       expect.stringContaining("create_passkey_change_challenge"),
       expect.stringContaining("consume_passkey_challenge"),
+      expect.stringContaining("create_auth_challenge"),
+      expect.stringContaining("consume_passkey_challenge"),
       expect.stringContaining("set_profile_visibility"),
       expect.stringContaining("revoke_session"),
     ]);
@@ -437,6 +468,8 @@ describe("pairing database pool", () => {
     expect(snapshots[8]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[10]?.text).toContain("revoke_passkey");
     expect(snapshots[10]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[12]?.text).toContain("request_profile_deletion");
+    expect(snapshots[12]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[4]?.values).toEqual([
       "00000000-0000-4000-8000-000000000310",
       digest,
@@ -503,7 +536,30 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000317",
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
-    expect(snapshots[11]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest, false]);
+    expect(snapshots[11]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      "00000000-0000-4000-8000-000000000318",
+      digest,
+      context,
+      "2026-07-16T10:05:00.000Z",
+    ]);
+    expect(snapshots[12]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      "00000000-0000-4000-8000-000000000318",
+      digest,
+      context,
+      "00000000-0000-4000-8000-000000000306",
+      4,
+      false,
+      "pixel_driver",
+      "00000000-0000-4000-8000-000000000319",
+      digest,
+      "00000000-0000-4000-8000-000000000320",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
+    expect(snapshots[13]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest, false]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));
     expect(context).toEqual(Buffer.alloc(32, 0x52));
     expect(credential).toEqual(Buffer.alloc(32, 0x53));

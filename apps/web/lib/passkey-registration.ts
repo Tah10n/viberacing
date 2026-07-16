@@ -138,6 +138,21 @@ export function passkeyRevokeContextDigest(
     .digest();
 }
 
+export function profileDeletionContextDigest(
+  sessionId: string,
+  profileId: string,
+  handle: string,
+  rpId: string,
+  origin: string,
+): Buffer {
+  return createHash("sha256")
+    .update(
+      `viberacing-profile-deletion-v1\n${sessionId}\n${profileId}\n${handle}\n${rpId}\n${origin}`,
+      "utf8",
+    )
+    .digest();
+}
+
 export function passkeyLoginCredentialId(response: unknown): Buffer | undefined {
   if (
     response === null ||

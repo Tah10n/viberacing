@@ -23,6 +23,8 @@ import type {
   EnrollmentDatabasePasskeyRevocation,
   EnrollmentDatabasePasskeyRevokeChallenge,
   EnrollmentDatabaseProfile,
+  EnrollmentDatabaseProfileDeletion,
+  EnrollmentDatabaseProfileDeletionChallenge,
   EnrollmentDatabaseProfileVisibilityRequest,
   EnrollmentDatabaseProfileVisibilityUpdate,
 } from "./pairing-database-pool";
@@ -59,6 +61,9 @@ function createFixture() {
   let additionWrite: EnrollmentDatabasePasskeyAddition | undefined;
   let revokeChallengeWrite: EnrollmentDatabasePasskeyRevokeChallenge | undefined;
   let revocationWrite: EnrollmentDatabasePasskeyRevocation | undefined;
+  let deletionChallengeWrite: EnrollmentDatabaseProfileDeletionChallenge | undefined;
+  let deletionWrite: EnrollmentDatabaseProfileDeletion | undefined;
+  let deletionProfileRefDigestInput: Uint8Array | undefined;
   let visibilityRead: EnrollmentDatabaseProfileVisibilityRequest | undefined;
   let visibilityReadDigestInput: Uint8Array | undefined;
   let visibilityWrite: EnrollmentDatabaseProfileVisibilityUpdate | undefined;
@@ -94,6 +99,17 @@ function createFixture() {
       };
       return Promise.resolve(true);
     }),
+    completeProfileDeletion: vi.fn((input: EnrollmentDatabaseProfileDeletion) => {
+      deletionProfileRefDigestInput = input.profileRefDigest;
+      deletionWrite = {
+        ...input,
+        challengeDigest: Buffer.from(input.challengeDigest),
+        contextDigest: Buffer.from(input.contextDigest),
+        profileRefDigest: Buffer.from(input.profileRefDigest),
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve(true);
+    }),
     createPasskeyAddChallenge: vi.fn((input: EnrollmentDatabasePasskeyAddChallenge) => {
       addChallengeWrite = {
         ...input,
@@ -110,6 +126,15 @@ function createFixture() {
     }),
     createPasskeyRevokeChallenge: vi.fn((input: EnrollmentDatabasePasskeyRevokeChallenge) => {
       revokeChallengeWrite = {
+        ...input,
+        challengeDigest: Buffer.from(input.challengeDigest),
+        contextDigest: Buffer.from(input.contextDigest),
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve(true);
+    }),
+    createProfileDeletionChallenge: vi.fn((input: EnrollmentDatabaseProfileDeletionChallenge) => {
+      deletionChallengeWrite = {
         ...input,
         challengeDigest: Buffer.from(input.challengeDigest),
         contextDigest: Buffer.from(input.contextDigest),
@@ -183,6 +208,11 @@ function createFixture() {
     "00000000-0000-4000-8000-000000000508",
     "00000000-0000-4000-8000-000000000509",
     "00000000-0000-4000-8000-000000000510",
+    "00000000-0000-4000-8000-000000000520",
+    "00000000-0000-4000-8000-000000000521",
+    "00000000-0000-4000-8000-000000000522",
+    "00000000-0000-4000-8000-000000000523",
+    "00000000-0000-4000-8000-000000000524",
   ];
   const registrationChallenge = Buffer.alloc(32, 0x61).toString("base64url");
   const authenticationChallenge = Buffer.alloc(32, 0x62).toString("base64url");
@@ -242,6 +272,9 @@ function createFixture() {
     createOptions,
     createLoginOptions,
     database,
+    deletionChallengeWrite: () => deletionChallengeWrite,
+    deletionProfileRefDigestInput: () => deletionProfileRefDigestInput,
+    deletionWrite: () => deletionWrite,
     enrollmentWrite: () => enrollmentWrite,
     exchangeGithub,
     loginCredentialLookup: () => loginCredentialLookup,
@@ -631,6 +664,93 @@ describe("enrollment service", () => {
     expect(database.createPasskeyRevokeChallenge).toHaveBeenCalledOnce();
   });
 
+  it("requires an exact handle and fresh passkey before atomically requesting deletion", async () => {
+    const {
+      cookieCodec,
+      database,
+      deletionChallengeWrite,
+      deletionProfileRefDigestInput,
+      deletionWrite,
+      authenticationChallenge,
+      service,
+      verifyLogin,
+    } = createFixture();
+    const verifier = Buffer.alloc(32, 0x48);
+    const sessionId = "00000000-0000-4000-8000-000000000520";
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId,
+      sessionVerifier: verifier.toString("base64url"),
+      version: 1,
+    });
+
+    await expect(
+      service.beginProfileDeletion(sessionCookie, { handle: "other_driver" }),
+    ).resolves.toBeUndefined();
+    const start = await service.beginProfileDeletion(sessionCookie, { handle: join.handle });
+    expect(start?.options.challenge).toBe(authenticationChallenge);
+    expect(database.createProfileDeletionChallenge).toHaveBeenCalledOnce();
+    expect(deletionChallengeWrite()).toMatchObject({
+      challengeId: "00000000-0000-4000-8000-000000000502",
+      sessionId,
+      sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
+    });
+    expect(deletionChallengeWrite()?.contextDigest).toEqual(
+      createHash("sha256")
+        .update(
+          `viberacing-profile-deletion-v1\n${sessionId}\n${join.inviteId}\n${join.handle}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
+          "utf8",
+        )
+        .digest(),
+    );
+
+    const credentialId = Buffer.alloc(32, 0x74);
+    const response = {
+      id: credentialId.toString("base64url"),
+      rawId: credentialId.toString("base64url"),
+      response: {},
+      type: "public-key",
+    };
+    await expect(
+      service.completeProfileDeletion(sessionCookie, start?.profileDeletionCookie ?? "", {
+        response,
+      }),
+    ).resolves.toBe(true);
+    expect(verifyLogin).toHaveBeenCalledOnce();
+    expect(deletionWrite()).toMatchObject({
+      auditEventId: "00000000-0000-4000-8000-000000000504",
+      challengeId: "00000000-0000-4000-8000-000000000502",
+      deletionJobId: "00000000-0000-4000-8000-000000000503",
+      observedSignCount: 4,
+      profileRefDigest: Buffer.alloc(32, 0x22),
+      sessionId,
+      typedHandle: join.handle,
+      verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
+    });
+    expect(deletionProfileRefDigestInput()).toEqual(Buffer.alloc(32));
+
+    vi.mocked(database.completeProfileDeletion).mockResolvedValueOnce(false);
+    await expect(
+      service.completeProfileDeletion(sessionCookie, start?.profileDeletionCookie ?? "", {
+        response,
+      }),
+    ).resolves.toBe(false);
+    const wrongHandleCookie = cookieCodec.seal("passkey", {
+      challenge: authenticationChallenge,
+      challengeId: "00000000-0000-4000-8000-000000000522",
+      expiresAt: Math.floor(now.valueOf() / 1000) + 300,
+      handle: "other_driver",
+      version: 1,
+    });
+    await expect(
+      service.completeProfileDeletion(sessionCookie, wrongHandleCookie, { response }),
+    ).resolves.toBe(false);
+  });
+
   it("revokes a minted login session when its browser cookie cannot be sealed", async () => {
     const fixture = createFixture();
     const credentialId = Buffer.alloc(32, 0x74);
@@ -763,9 +883,11 @@ describe("enrollment service", () => {
         }),
       ),
       completePasskeyRevocation: vi.fn(() => Promise.resolve(true)),
+      completeProfileDeletion: vi.fn(() => Promise.resolve(true)),
       createPasskeyAddChallenge: vi.fn(() => Promise.resolve(true)),
       createPasskeyChallenge: vi.fn(() => Promise.resolve(true)),
       createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve(true)),
+      createProfileDeletionChallenge: vi.fn(() => Promise.resolve(true)),
       enrollProfile: vi.fn(() => Promise.resolve(true)),
       readPasskeyInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),

@@ -16,6 +16,8 @@ import {
   type EnrollmentDatabasePasskeyRevokeChallenge,
   type EnrollmentDatabasePool,
   type EnrollmentDatabaseProfile,
+  type EnrollmentDatabaseProfileDeletion,
+  type EnrollmentDatabaseProfileDeletionChallenge,
   type EnrollmentDatabaseProfileVisibilityRequest,
   type EnrollmentDatabaseProfileVisibilityUpdate,
   type EnrollmentDatabaseSessionRevocation,
@@ -65,9 +67,13 @@ export interface EnrollmentDatabase {
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<boolean>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile>;
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<boolean>;
+  completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<boolean>;
   createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<boolean>;
+  createProfileDeletionChallenge(
+    input: EnrollmentDatabaseProfileDeletionChallenge,
+  ): Promise<boolean>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
   readPasskeyInventory(
     input: EnrollmentDatabasePasskeyInventoryRequest,
@@ -361,6 +367,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "revoked"),
       );
     },
+    completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<boolean> {
+      return execute(
+        (client) => client.completeProfileDeletion(input),
+        (value) => exactBooleanRow(value, "deleted"),
+      );
+    },
     createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean> {
       return execute(
         (client) => client.createPasskeyAddChallenge(input),
@@ -378,6 +390,14 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
     ): Promise<boolean> {
       return execute(
         (client) => client.createPasskeyRevokeChallenge(input),
+        (value) => exactBooleanRow(value, "created"),
+      );
+    },
+    createProfileDeletionChallenge(
+      input: EnrollmentDatabaseProfileDeletionChallenge,
+    ): Promise<boolean> {
+      return execute(
+        (client) => client.createProfileDeletionChallenge(input),
         (value) => exactBooleanRow(value, "created"),
       );
     },

@@ -262,10 +262,13 @@ material availability cost.
   five-minute existing-key assertion and registration challenges, verifies both exact ceremonies,
   and atomically consumes the session/profile/label/RP/origin-bound step-up while inserting the new
   credential. Closed shapes, mixed challenge-cookie types, replay-shaped failure, lifetime cap, and
-  duplicate credentials fail closed. Other step-up and recovery verification, aggregate edge rate
-  policy, abandoned consumed-state cleanup, live OAuth/authenticator/database integration, and
-  deployment remain absent. The account read additionally revalidates exact session possession and
-  accepts at most 32 closed, ordered rows with one current active authenticator; it renders no
+  duplicate credentials fail closed. The deletion path accepts only the session's exact typed handle
+  before prompting, binds a five-minute fresh assertion to session/profile/handle/RP/origin, and
+  uses one statement to consume the challenge with the existing atomic hide/revoke/unlink/enqueue
+  call. Other source/device step-up and recovery verification, aggregate edge rate policy, abandoned
+  consumed-state cleanup, live OAuth/authenticator/database integration, deletion purge execution,
+  and deployment remain absent. The account read additionally revalidates exact session possession
+  and accepts at most 32 closed, ordered rows with one current active authenticator; it renders no
   credential ID, key, sign counter, exact activity timestamp, or profile ID. Only a revocable
   target's opaque passkey ID enters the authenticated control and options request.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
@@ -521,8 +524,13 @@ material availability cost.
 - **Recovery:** Re-hide and revoke synchronously, rerun purge, replay markers, purge caches, and
   report honest progress without record identifiers.
 - **Current evidence:** Revision 0011 filters `active` profile state on every score read and
-  re-ranks the surviving public rows after a committed hide. The HTTP/cache invalidation and primary
-  purge/restore paths remain unimplemented.
+  re-ranks the surviving public rows after a committed hide. The local deletion endpoint requires
+  the exact active session and typed handle, verifies a fresh session/profile/handle/RP/origin-bound
+  passkey challenge, and atomically consumes it with revision 0002's immediate
+  hide/revoke/unlink/enqueue transaction. Negative application and route tests cover handle
+  mismatch, malformed/replayed proof shapes, database refusal, cross-origin and cookie denial, and
+  cookie clearing only after success. Cache invalidation, primary purge execution, tombstone policy,
+  and restore replay remain unimplemented.
 - **Residual risk:** Immutable backup media may retain encrypted data until documented expiry.
 
 ### VR-ABUSE-RESOURCE-EXHAUSTION — Expensive endpoint or state-table growth

@@ -18,6 +18,7 @@ const enrollmentCookiePaths = Object.freeze({
   passkey: "/auth/passkey",
   passkeyAdd: "/auth/passkeys/add",
   passkeyRevoke: "/auth/passkeys/revoke",
+  profileDeletion: "/auth/profile/delete",
   session: "/",
 });
 
@@ -32,6 +33,8 @@ export interface EnrollmentHttp {
   passkeyRevokeOptions(request: Request): Promise<Response>;
   passkeyRevokeVerify(request: Request): Promise<Response>;
   passkeyVerify(request: Request): Promise<Response>;
+  profileDeletionOptions(request: Request): Promise<Response>;
+  profileDeletionVerify(request: Request): Promise<Response>;
   profileVisibility(request: Request): Promise<Response>;
   start(request: Request): Promise<Response>;
 }
@@ -601,6 +604,151 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         lease.release();
       }
     },
+    async profileDeletionOptions(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/profile/delete/options") ||
+        !contentType(request, jsonContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 64);
+        if (body === undefined) {
+          return problem("invalid_request");
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
+          return problem("invalid_request");
+        }
+        const sessionCookie = readCookie(
+          request.headers.get("cookie"),
+          enrollmentCookieNames.session,
+        );
+        if (sessionCookie === undefined) {
+          return problem("unauthorized");
+        }
+        const decision = await currentRuntime.service.beginProfileDeletion(sessionCookie, parsed);
+        if (decision === undefined) {
+          return problem("unauthorized");
+        }
+        return new Response(JSON.stringify(decision.options), {
+          headers: noStoreHeaders({
+            "content-type": "application/json; charset=utf-8",
+            "set-cookie": serializeEnrollmentCookie(
+              enrollmentCookieNames.profileDeletion,
+              decision.profileDeletionCookie,
+              300,
+              currentRuntime.config.secureCookies,
+              enrollmentCookiePaths.profileDeletion,
+            ),
+          }),
+          status: 200,
+        });
+      } finally {
+        lease.release();
+      }
+    },
+    async profileDeletionVerify(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/profile/delete/verify") ||
+        !contentType(request, jsonContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 16_384);
+        if (body === undefined) {
+          return problem("invalid_request");
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
+          return problem("invalid_request");
+        }
+        const cookieHeader = request.headers.get("cookie");
+        const sessionCookie = readCookie(cookieHeader, enrollmentCookieNames.session);
+        const profileDeletionCookie = readCookie(
+          cookieHeader,
+          enrollmentCookieNames.profileDeletion,
+        );
+        if (sessionCookie === undefined || profileDeletionCookie === undefined) {
+          return problem("unauthorized");
+        }
+        const deleted = await currentRuntime.service.completeProfileDeletion(
+          sessionCookie,
+          profileDeletionCookie,
+          parsed,
+        );
+        if (!deleted) {
+          return problem("unauthorized");
+        }
+        const headers = noStoreHeaders();
+        const cookies = [
+          clearEnrollmentCookie(
+            enrollmentCookieNames.login,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.login,
+          ),
+          clearEnrollmentCookie(
+            enrollmentCookieNames.oauth,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.oauth,
+          ),
+          clearEnrollmentCookie(
+            enrollmentCookieNames.passkey,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.passkey,
+          ),
+          clearEnrollmentCookie(
+            enrollmentCookieNames.passkeyAdd,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.passkeyAdd,
+          ),
+          clearEnrollmentCookie(
+            enrollmentCookieNames.passkeyRevoke,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.passkeyRevoke,
+          ),
+          clearEnrollmentCookie(
+            enrollmentCookieNames.profileDeletion,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.profileDeletion,
+          ),
+          clearEnrollmentCookie(enrollmentCookieNames.session, currentRuntime.config.secureCookies),
+        ];
+        for (const cookie of cookies) {
+          headers.append("set-cookie", cookie);
+        }
+        return new Response(null, { headers, status: 204 });
+      } finally {
+        lease.release();
+      }
+    },
     async logout(request: Request): Promise<Response> {
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
@@ -641,6 +789,11 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           enrollmentCookieNames.passkeyRevoke,
           currentRuntime.config.secureCookies,
           enrollmentCookiePaths.passkeyRevoke,
+        ),
+        clearEnrollmentCookie(
+          enrollmentCookieNames.profileDeletion,
+          currentRuntime.config.secureCookies,
+          enrollmentCookiePaths.profileDeletion,
         ),
         clearEnrollmentCookie(enrollmentCookieNames.session, currentRuntime.config.secureCookies),
       ];

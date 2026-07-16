@@ -82,7 +82,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | IP-derived request signal and user-agent family                             | Operational                     | Edge/service; security, rate shaping, and reliability                    | Restricted operations; never leaderboard or behavioral advertising                          | Prefer aggregate/ephemeral edge controls; minimal event when necessary                                                              | Shortest operational window; exact scope and duration require launch privacy review                                              |
 | Request ID, outcome, latency, and bounded error code                        | Operational                     | Server-generated correlation; debugging and SLO evidence                 | Response recipient and restricted operations; aggregate metrics                             | Not retained today; future structured logs/metrics                                                                                  | Future bounded logs exclude usage, credentials, bodies, and profiles                                                             |
 | Security/admin audit event and reason                                       | Security; Operational           | Auth/admin/jobs/release; accountability                                  | Restricted responders/auditors; user-visible subset where appropriate                       | Bounded `audit_events` reference; external append-only sink planned                                                                 | Publicly documented bounded policy; profile link redacted on purge; delete unrelated personal data                               |
-| Deletion state and security tombstone                                       | Security                        | Deletion workflow; prevent ingestion and restore resurrection            | Deletion/jobs/auth and limited audit                                                        | Deletion job plus minimal tombstone                                                                                                 | Primary data purged in service window; tombstone expires after disclosed minimum security period                                 |
+| Deletion state and security tombstone                                       | Security                        | Deletion workflow; prevent ingestion and restore resurrection            | Deletion/jobs/auth and limited audit                                                        | Local request queues an opaque deletion job; minimal tombstone remains planned                                                      | Immediate lock-down is implemented; primary purge and disclosed tombstone expiry remain launch-blocking work                     |
 | Maintenance capability mutex                                                | Operational                     | Database; serialize bounded cleanup and scoring capabilities             | Owner-defined Jobs procedures only                                                          | Three fixed `maintenance_locks` enum rows; no user or request data                                                                  | Retained while each capability exists; removed only by a reviewed migration                                                      |
 
 The local identity implementation reads the invite body as a bounded stream, hashes and clears the
@@ -397,7 +397,7 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
 - Jobs currently receive only bounded expired ingest- and pairing-state cleanup, open-season
   Community scoring refresh, and terminal finalization. The local one-shot adapter rechecks the
   exact Jobs-only login and invokes one prepared capability without logging inputs or results.
-  Correction and deletion capabilities require separate migrations and tests; migrations use a
+  Correction and deletion-purge capabilities require separate migrations and tests; migrations use a
   different non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
@@ -440,9 +440,15 @@ model and requires an ADR, consent/notice analysis, data-map update, and public 
   or documented correction.
 - **Export:** any future export is authenticated, bounded, generated on demand, and contains only
   the requesting profile's data. No export endpoint is implied by this design document.
-- **Delete:** GitHub session, fresh passkey, and typed handle trigger immediate hide,
-  session/passkey/device/recovery-authority revoke, recovery-code removal, ingest rejection,
-  idempotent primary purge, cache purge, and backup/tombstone handling.
+- **Delete:** the local request now requires the exact active session, typed handle, and fresh
+  passkey. It immediately hides the profile; revokes session, passkey, device, and recovery
+  authority; removes recovery codes; makes ingest reject the profile; unlinks sources; cancels
+  approved pairing; and queues a random opaque 32-byte purge reference. Successful HTTP completion
+  clears every browser auth cookie.
+
+The queued primary purge, cache purge, disclosed tombstone expiry, and backup handling are not
+implemented by the local request slice. They remain launch-blocking work and the UI states that the
+local build does not run the purge worker.
 
 Restore procedures replay deletion markers before restored data is made available. The UI reports
 progress without exposing internal record IDs. Legal retention exceptions, if any, require launch
