@@ -121,9 +121,12 @@ material availability cost.
   mutation. ADR 0027 adds exact 32-byte canonical poll tokens, protected primary/secondary
   HMAC-SHA-256 verifier derivation, a fixed two-candidate approved-material lookup through a probed
   read-write Web pool, mandatory strict proof, server-owned activation IDs, four-call admission, a
-  250-millisecond settlement floor, and one generic local failure decision. Pairing remains
-  externally unavailable: there is no start/approval/HTTP route, WebAuthn composition, connector
-  client, distributed client-rate policy, live login, or real key.
+  250-millisecond settlement floor, and one generic local failure decision. ADR 0028 adds a closed
+  transport-free start request, fresh server IDs, 32-byte poll/challenge material, a 60-bit human
+  code, separate protected poll/code HMAC keys and primary verifiers, a nine-minute expiry, a fixed
+  database call, four-call admission, and generic local failure. Pairing remains externally
+  unavailable: there is no approval/HTTP route, WebAuthn composition, connector client, distributed
+  client-rate policy, live login, cleanup schedule, or real key.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the
@@ -517,22 +520,26 @@ material availability cost.
   route may call the store. The local route rejects bodies and oversized/malformed URL or `Accept`
   work, admits at most four active reads with no queue, holds each lease through adapter settlement,
   and returns 503 on exhaustion. The operation reserves a 429 response without claiming a
-  client-rate limiter exists. The local Jobs runner adds a one-client ceiling, 2/31/32-second
-  connect/server/client deadlines, one fixed 1000-row cleanup command, canonical season validation,
-  closed one-row results, and destructive release on failure. The kernel itself has no socket/
-  stream authority. The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
-  checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row origin consume,
-  zero-or-one device lookup, and one-row submission results, with destructive release on failure.
-  The transport-free application generates request correlation before verification, submits only
-  after verification, waits for settlement, and contains dependency failures without a retry loop.
-  The local Fastify boundary caps the raw body at 8192 bytes, parsed headers at 16384 bytes, raw
-  header pairs at 64, connections at 32, and requests per socket at 16; it sets 5/33/34-second
-  request/handler/connection deadlines and a five-second keep-alive, admits four unsettled
-  application calls without a queue, holds each lease through settlement, and returns generic 503 on
-  exhaustion. Real loopback tests close malformed and partial requests; injection tests cover
-  overload and response policy. There is no live login, distributed rate/backpressure policy,
-  monitoring, or combined capacity evidence. Scheduling, cache, scoring/read capacity evidence,
-  quotas, edge shaping, and production load evidence remain unimplemented.
+  client-rate limiter exists. The transport-free pairing-start application bounds labels, metadata,
+  keys, entropy, and HMAC work, admits four unsettled attempts without a queue, holds each lease
+  through a 250-millisecond floor, and makes no database call for malformed input. This is not a
+  distributed or client-identity rate limit, and physical expired-row cleanup is still pending. The
+  local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client deadlines, one
+  fixed 1000-row cleanup command, canonical season validation, closed one-row results, and
+  destructive release on failure. The kernel itself has no socket/ stream authority. The separate
+  Ingest adapter adds a four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines,
+  idle/lifetime recycling, exact one-row origin consume, zero-or-one device lookup, and one-row
+  submission results, with destructive release on failure. The transport-free application generates
+  request correlation before verification, submits only after verification, waits for settlement,
+  and contains dependency failures without a retry loop. The local Fastify boundary caps the raw
+  body at 8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and
+  requests per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a
+  five-second keep-alive, admits four unsettled application calls without a queue, holds each lease
+  through settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and
+  partial requests; injection tests cover overload and response policy. There is no live login,
+  distributed rate/backpressure policy, monitoring, or combined capacity evidence. Scheduling,
+  cache, scoring/read capacity evidence, quotas, edge shaping, and production load evidence remain
+  unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

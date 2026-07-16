@@ -16,8 +16,8 @@ const config = resolvePairingDatabaseConfig({
 });
 
 describe("pairing database pool", () => {
-  it("exposes only the fixed probe, two-candidate lookup, activation, release, and close", async () => {
-    const returnedRows = [[{ role_ok: true }], [], [{ activated: true }]];
+  it("exposes only fixed probe, start, two-candidate lookup, activation, release, and close", async () => {
+    const returnedRows = [[{ role_ok: true }], [], [{ activated: true }], [{ started: true }]];
     const liveQueries: { text: string; values: unknown[] }[] = [];
     const querySnapshots: { text: string; values: unknown[] }[] = [];
     const releases: boolean[] = [];
@@ -57,6 +57,9 @@ describe("pairing database pool", () => {
     const firstDigest = Buffer.alloc(32, 0x11);
     const secondDigest = Buffer.alloc(32, 0x22);
     const activationDigest = Buffer.alloc(32, 0x33);
+    const codeDigest = Buffer.alloc(32, 0x44);
+    const challenge = Buffer.alloc(32, 0x55);
+    const publicKey = Buffer.alloc(32, 0x66);
 
     await expect(client.verifyRuntimeBoundary()).resolves.toEqual([{ role_ok: true }]);
     await expect(client.readVerificationMaterial([firstDigest, secondDigest])).resolves.toEqual([]);
@@ -69,11 +72,26 @@ describe("pairing database pool", () => {
         requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
       }),
     ).resolves.toEqual([{ activated: true }]);
+    await expect(
+      client.startPairing({
+        architecture: "x86_64",
+        connectorVersion: "0.0.0-test",
+        deviceKeyId: "00000000-0000-4000-8000-000000000028",
+        deviceLabel: "Synthetic device",
+        expiresAt: "2026-07-16T08:00:00.000Z",
+        osFamily: "windows",
+        pairingChallenge: challenge,
+        pairingId: "00000000-0000-4000-8000-000000000029",
+        pollVerifierDigest: activationDigest,
+        publicKey,
+        userCodeDigest: codeDigest,
+      }),
+    ).resolves.toEqual([{ started: true }]);
     client.release();
     client.release(true);
     await pool.close();
 
-    expect(querySnapshots).toHaveLength(3);
+    expect(querySnapshots).toHaveLength(4);
     expect(querySnapshots[0]?.text).toContain("CURRENT_USER = 'viberacing_web'");
     expect(querySnapshots[0]?.text).toContain("default_transaction_read_only') = 'off'");
     expect(querySnapshots[0]?.values).toEqual([]);
@@ -89,11 +107,35 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000027",
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
+    expect(querySnapshots[3]?.text).toContain("start_pairing");
+    expect(querySnapshots[3]?.text).toContain("AS MATERIALIZED");
+    expect(querySnapshots[3]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000029",
+      activationDigest,
+      codeDigest,
+      challenge,
+      "00000000-0000-4000-8000-000000000028",
+      publicKey,
+      "Synthetic device",
+      "0.0.0-test",
+      "windows",
+      "x86_64",
+      "2026-07-16T08:00:00.000Z",
+    ]);
     expect(firstDigest).toEqual(Buffer.alloc(32, 0x11));
     expect(secondDigest).toEqual(Buffer.alloc(32, 0x22));
     expect(activationDigest).toEqual(Buffer.alloc(32, 0x33));
+    expect(codeDigest).toEqual(Buffer.alloc(32, 0x44));
+    expect(challenge).toEqual(Buffer.alloc(32, 0x55));
+    expect(publicKey).toEqual(Buffer.alloc(32, 0x66));
     expect(liveQueries[1]?.values).toEqual([Buffer.alloc(32), Buffer.alloc(32)]);
     expect(liveQueries[2]?.values[0]).toEqual(Buffer.alloc(32));
+    expect(liveQueries[3]?.values.slice(1, 4)).toEqual([
+      Buffer.alloc(32),
+      Buffer.alloc(32),
+      Buffer.alloc(32),
+    ]);
+    expect(liveQueries[3]?.values[5]).toEqual(Buffer.alloc(32));
     expect(releases).toEqual([false, true]);
     expect(ended).toBe(true);
     expect(Object.isFrozen(client)).toBe(true);

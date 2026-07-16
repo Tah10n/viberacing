@@ -47,16 +47,18 @@ inaccessible reviewed context and fixes the versioned JSON/digest/LF message. An
 signer consumes that otherwise inaccessible material with a device-bound key capability that also
 has no public constructor, returning only the same body and five exact signed header values. A
 separate inaccessible pending-key/challenge signer and pure server-only Web verifier now agree on
-one exact synthetic pairing-possession proof. A dormant transport-free Web/Auth application now
-derives protected primary/secondary poll verifiers, probes a separate read-write Web pool, runs the
-strict proof, and alone invokes exact activation with server-owned IDs behind fixed admission and
-timing. There is no executable discovery/admission, live Codex launch path, supported version,
-source/device context provider, key generation/store, pairing start/browser approval/HTTP route or
-connector client, upload, CLI, or release. Do not claim that deployed browser/session HTTP
-authentication, OAuth/Argon2id/WebAuthn application verification, real-user ingestion, an
-operational connector, a Jobs scheduler or deployed public-race read, season correction, scheduled
-or broader cleanup, deployment, or a hosted security control exists until its implementation and
-verification are present in the working tree.
+one exact synthetic pairing-possession proof. A dormant transport-free Web/Auth start application
+creates nine-minute pending transactions from closed device metadata with fresh server IDs, poll
+tokens, challenges, 60-bit human codes, and separate protected poll/code verifiers through the fixed
+read-write Web pool. A second dormant application performs protected poll lookup, runs the strict
+proof, and alone invokes exact activation with server-owned IDs behind fixed admission and timing.
+There is no executable discovery/admission, live Codex launch path, supported version, source/device
+context provider, key generation/store, browser approval/HTTP route or connector client, upload,
+CLI, or release. Do not claim that deployed browser/session HTTP authentication,
+OAuth/Argon2id/WebAuthn application verification, real-user ingestion, an operational connector, a
+Jobs scheduler or deployed public-race read, season correction, scheduled or broader cleanup,
+deployment, or a hosted security control exists until its implementation and verification are
+present in the working tree.
 
 ## Repository map
 

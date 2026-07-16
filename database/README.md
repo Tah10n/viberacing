@@ -202,7 +202,10 @@ Runtime access must remain procedure-only and must have positive and negative in
   active browser/passkey/device authority, removes recovery/challenge state, unlinks sources,
   cancels approved pairings, and queues one opaque deletion job.
 - `start_pairing` stores only keyed poll/code verifiers, a bounded challenge, immutable pending
-  public key, and bounded display metadata for at most ten minutes.
+  public key, and bounded display metadata for at most ten minutes. ADR 0028's transport-free Web
+  boundary now generates all IDs, 32-byte token/challenge material, a separate keyed 60-bit human
+  code, and a nine-minute expiry before invoking only this fixed procedure through the probed
+  read-write Web pool. Tests use injected pools and create no live row.
 - `read_pairing_for_approval`, `create_pairing_approval_challenge`, and `approve_pairing` require
   the exact active session. Approval also requires a fresh, consumed, transaction-bound WebAuthn
   challenge and persists the exact verifying passkey plus approving session. The user can select a

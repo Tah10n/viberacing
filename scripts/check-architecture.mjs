@@ -65,7 +65,7 @@ const requiredContent = new Map([
       "## Planned field inventory",
       "## Prohibited data",
       "## User controls and deletion",
-      "Pairing poll token, HMAC keys/verifier, challenge, user code, transaction",
+      "Pairing poll token, HMAC keys/verifiers, challenge, user code, transaction",
       "launch decision required",
     ],
   ],

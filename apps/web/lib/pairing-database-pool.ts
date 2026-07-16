@@ -71,12 +71,44 @@ const activatePairingQuery = `WITH activation AS MATERIALIZED (
 SELECT pg_catalog.count(*) = 1 AS activated
 FROM activation`;
 
+const startPairingQuery = `WITH pairing_start AS MATERIALIZED (
+  SELECT viberacing_api.start_pairing(
+    $1::uuid,
+    $2::bytea,
+    $3::bytea,
+    $4::bytea,
+    $5::uuid,
+    $6::bytea,
+    $7::text,
+    $8::text,
+    $9::text,
+    $10::text,
+    $11::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS started
+FROM pairing_start`;
+
 export interface PairingDatabaseActivation {
   readonly auditEventId: string;
   readonly deviceId: string;
   readonly pairingId: string;
   readonly pollVerifierDigest: Uint8Array;
   readonly requestId: string;
+}
+
+export interface PairingDatabaseStart {
+  readonly architecture: string;
+  readonly connectorVersion: string;
+  readonly deviceKeyId: string;
+  readonly deviceLabel: string;
+  readonly expiresAt: string;
+  readonly osFamily: string;
+  readonly pairingChallenge: Uint8Array;
+  readonly pairingId: string;
+  readonly pollVerifierDigest: Uint8Array;
+  readonly publicKey: Uint8Array;
+  readonly userCodeDigest: Uint8Array;
 }
 
 export type PairingDatabasePoolSignal = "idle_client_error";
@@ -90,6 +122,7 @@ export interface PairingDatabaseClient {
     pollVerifierDigests: readonly [Uint8Array, Uint8Array],
   ): Promise<unknown>;
   release(destroy?: boolean): void;
+  startPairing(input: PairingDatabaseStart): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
 }
 
@@ -164,6 +197,32 @@ function wrapClient(client: NodePostgresClient): PairingDatabaseClient {
     },
     release(destroy = false): void {
       client.release(destroy);
+    },
+    async startPairing(input: PairingDatabaseStart): Promise<unknown> {
+      const pollVerifierDigest = Buffer.from(input.pollVerifierDigest);
+      const userCodeDigest = Buffer.from(input.userCodeDigest);
+      const pairingChallenge = Buffer.from(input.pairingChallenge);
+      const publicKey = Buffer.from(input.publicKey);
+      try {
+        return await fixedQuery(startPairingQuery, [
+          input.pairingId,
+          pollVerifierDigest,
+          userCodeDigest,
+          pairingChallenge,
+          input.deviceKeyId,
+          publicKey,
+          input.deviceLabel,
+          input.connectorVersion,
+          input.osFamily,
+          input.architecture,
+          input.expiresAt,
+        ]);
+      } finally {
+        pollVerifierDigest.fill(0);
+        userCodeDigest.fill(0);
+        pairingChallenge.fill(0);
+        publicKey.fill(0);
+      }
     },
     verifyRuntimeBoundary(): Promise<unknown> {
       return fixedQuery(runtimeBoundaryQuery);

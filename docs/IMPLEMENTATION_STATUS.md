@@ -36,13 +36,15 @@ message shared with the production Ingest verifier. An isolated one-use signer r
 unsigned access, consumes that value only with an inaccessible device-bound key capability, and
 returns the same body plus five exact signed header values. The shared synthetic vector is strictly
 verified across Rust and Ingest. A second inaccessible signer and pure Web verifier now agree on an
-exact synthetic pairing-possession proof. A dormant transport-free Web/Auth application now derives
-two fixed-shape HMAC poll-verifier candidates from protected primary/optional-secondary keys, probes
-a separate read-write Web pool, selects at most one approved row, runs that strict proof, and alone
-invokes exact atomic activation with server-owned identifiers behind four-call admission and a
-250-millisecond settlement floor. It creates no pairing transaction, browser approval, HTTP request,
-real key, or live database connection. Candidate release, schema, fixture, synthetic-process,
-composer, pairing, and request-signer evidence does not populate the support matrix. Phase 0
+exact synthetic pairing-possession proof. A dormant transport-free Web/Auth start application now
+generates fresh server identifiers, 32-byte poll/challenge material, a 60-bit human code, separate
+protected poll/code verifiers, and a nine-minute pending transaction from closed device metadata
+through one fixed call on the probed read-write Web pool. A second dormant application derives two
+fixed-shape HMAC poll-verifier candidates, selects at most one approved row, runs that strict proof,
+and alone invokes exact atomic activation with server-owned identifiers behind four-call admission
+and a 250-millisecond settlement floor. Neither creates browser approval, an HTTP request, a real
+key, or a live database connection. Candidate release, schema, fixture, synthetic-process, composer,
+pairing, and request-signer evidence does not populate the support matrix. Phase 0
 hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
 No authentication route, OAuth/Argon2id/WebAuthn application flow, production secret-manager/edge
 key injection, Ingest host/port/TLS deployment entry point, production deployment, live
@@ -140,8 +142,8 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   server-only Web kernel independently validates exact approved material and the canonical signature
   under strict Ed25519 semantics. Five Rust and seven Web cases share the same synthetic key/vector,
   reject changed or malformed inputs and zero material, and prove copy-before-await behavior. There
-  is now a protected primary/secondary poll-token verifier plus closed local database/application
-  activation composition, but still no pairing start, pairing HTTP boundary, WebAuthn approval,
+  is now a protected primary/secondary poll-token verifier plus closed local start and activation
+  database/application compositions, but still no pairing HTTP boundary, WebAuthn approval,
   connector pairing client, live database login, or real key. A separate candidate-only composer
   consumes the real parser output behind another capability with no public constructor. It
   revalidates source/sync/device IDs, canonical UTC time, and daily bounds; manually emits the exact
@@ -154,7 +156,7 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   source/device context provider, fresh entropy, clock, real key generation/store, end-to-end
   pairing, transport, retry, schedule, or support claim exists; the compatibility matrix remains
   empty.
-- An ADR lifecycle/template and twenty-seven accepted design decisions covering Community trust,
+- An ADR lifecycle/template and twenty-eight accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -163,8 +165,8 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   atomic origin replay, transport-free Community sync application composition, and the bounded local
   Fastify HTTP boundary, plus the fail-closed Codex handshake, candidate account/usage adapter, and
   inaccessible bounded one-shot process supervisor, exact-body sync composer, isolated one-use
-  device signing boundary, bounded pairing-possession proof, and bounded pairing activation
-  composition.
+  device signing boundary, bounded pairing-possession proof, bounded pairing activation composition,
+  and bounded pairing start composition.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -399,20 +401,25 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   boundaries without a live deployment credential. The local route is wired to this adapter, but no
   cache, live login/certificate, audited correction flow, or scheduler exists.
 - A second dormant server-only Web pairing adapter reuses the same environment-owned narrow Web/Auth
-  login through a separate four-connection read-write pool. It derives exactly two HMAC-SHA-256 poll
-  candidates from one mandatory primary and optional secondary 32-byte key, rejects duplicate or
-  malformed configuration, and clears retained/candidate copies on settlement or close. Every
-  checkout verifies the exact Web role, distinct narrow login, sole membership, database capability,
-  search path, and read-write state. One fixed query returns at most one approved/unexpired pairing
-  ID/challenge/public key; for every structurally valid lookup outcome, the high-level adapter runs
-  the strict ADR 0026 proof and alone invokes the exact activation procedure with a server-generated
-  `dev_` ID, audit UUID, and common `req_` ID. The transport-free application admits four unsettled
-  attempts, holds each through a 250-millisecond floor, and returns only frozen `activated` or
-  generic `not_activated` decisions. The Web suite now contains 313 tests covering HMAC
-  vectors/rotation, hostile configuration/input/result shapes, fixed queries, driver confinement,
-  role drift, strict proof selection, IDs, admission/timing, generic failure, clearing, release, and
-  close. No pairing start/approval/HTTP route, client identity or distributed rate limit, live
-  login/TLS connection, capacity evidence, real key, or deployment is claimed.
+  login through a separate four-connection read-write pool. The start application accepts only a
+  closed canonical public-key/label/version/OS/architecture request, generates fresh pairing and
+  pending-key UUIDs, a 32-byte poll token/challenge, a 12-symbol 60-bit code, and a nine-minute
+  expiry, derives separate primary poll/code HMAC digests, and invokes only the fixed start
+  procedure. The human-code primary/optional-secondary keys must also differ from every poll key.
+  Malformed admitted input performs fixed-shape local material/HMAC work without a database write.
+  Every checkout verifies the exact Web role, distinct narrow login, sole membership, database
+  capability, search path, and read-write state. One fixed activation query returns at most one
+  approved/unexpired pairing ID/challenge/public key; for every structurally valid lookup outcome,
+  the high-level adapter runs the strict ADR 0026 proof and alone invokes the exact activation
+  procedure with a server-generated `dev_` ID, audit UUID, and common `req_` ID. Each transport-free
+  application admits four unsettled attempts, holds each through a 250-millisecond floor, and
+  returns only its frozen success shape or generic failure plus a request ID. The Web suite now
+  contains 398 tests covering material/code bounds, HMAC vectors/rotation and key separation,
+  hostile configuration/input/result shapes, fixed start/lookup/activation queries, driver
+  confinement, role drift, strict proof selection, IDs, admission/timing, generic failure, clearing,
+  release, and close. No pairing approval/HTTP route, client identity or distributed rate limit,
+  live login/TLS connection, cleanup schedule, capacity evidence, real key, or deployment is
+  claimed.
 - A private TypeScript Jobs workspace now accepts exactly one fixed 1000-row cleanup command or one
   canonical Monday refresh/finalization command. It revalidates closed plain job data, reads only
   redacted `VIBERACING_JOBS_DATABASE_*` configuration, permits cleartext only for explicit
@@ -532,7 +539,7 @@ defect found and corrected during review. The report names its local-only limita
 
 Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/pepper and
 authentication-route generic HTTP response translation, WebAuthn cryptographic verification, pairing
-start/browser approval and connector client, HTTP parsing/response contracts, client-identity and
+browser approval and connector client, HTTP parsing/response contracts, client-identity and
 distributed admission/rate/deadline policy, and anonymous login/pairing/recovery edge limits and
 cleanup, an Ingest host/port/TLS deployment entry point, trusted edge routing and direct-origin
 denial, live secret-manager/edge key injection, the Ingest live PostgreSQL login/TLS connection,

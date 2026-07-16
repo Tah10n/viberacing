@@ -18,21 +18,22 @@ exchange and candidate `0.144.4` account/usage responses. A synthetic one-shot s
 those states with fixed local process mechanics, while an exact-body composer and isolated one-use
 signer produce a synthetic signed envelope. A separate inaccessible pending-key and challenge signer
 plus a pure server-only Web verifier now agree on one exact pairing-possession message and synthetic
-signature. A dormant Web/Auth application derives a protected keyed poll verifier, performs a fixed
-approved-material lookup, mandates that proof, and invokes only exact atomic activation behind local
-admission/timing. All required connector capabilities have no public constructor, and there is no
-executable admission, real Codex execution, key generation/store, pairing-start client,
-browser/WebAuthn approval, pairing HTTP route, upload, or supported-version path. A local Ingest
-kernel now verifies the bounded exact-body origin/device request, while the separate adapter maps
-origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic
-origin replay consumption and bounded cleanup. A transport-free application now composes those exact
-local capabilities and validates only closed acknowledgement/problem decisions. A bounded local
-Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline policy, and
-serializes only revalidated contracts. There is no edge/live-database/deployment integration. No
-host/port/TLS entry point, deployment login, certificate, edge signer/direct-origin policy, or live
-route/Jobs evidence is supplied. Data labels refer to the classifications in the
-[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
-and Prohibited.
+signature. A dormant Web/Auth start application generates fresh IDs, token, challenge, 60-bit code,
+separate protected poll/code verifiers, and a nine-minute pending transaction from closed device
+metadata. A second application performs protected keyed poll lookup, mandates that proof, and
+invokes only exact atomic activation behind local admission/timing. All required connector
+capabilities have no public constructor, and there is no executable admission, real Codex execution,
+key generation/store, pairing-start client, browser/WebAuthn approval, pairing HTTP route, upload,
+or supported-version path. A local Ingest kernel now verifies the bounded exact-body origin/device
+request, while the separate adapter maps origin replay, device lookup, and submission through fixed
+calls. PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
+application now composes those exact local capabilities and validates only closed
+acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
+no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
+certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
+refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public,
+Account, Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -186,19 +187,22 @@ and the pending public key is immutable. The server returns the plaintext poll t
 only a keyed verifier, and never logs it. Device authority begins only after atomic source binding
 and never includes profile administration.
 
-Revision 0003 implements the database steps in this sequence. It supports an explicit new or
-existing opaque source, binds approval to the exact session/pairing/source-choice challenge, exposes
-minimal public-key material for an external Ed25519 verifier, and activates the exact key only after
-that verifier succeeds. ADRs 0026 and 0027 now implement the transport-free final proof/activation
-composition: protected primary/secondary HMAC candidates select at most one approved row, the strict
-proof is executed for each structurally valid lookup outcome, and only server-generated
-device/audit/request IDs reach activation behind four-call admission and a settlement floor.
-PostgreSQL scenarios cover competing profiles, wrong poll possession, replay, immutable binding, 32
-lifetime sources, and 64 active/unexpired-approved device authorities per profile. Pairing start,
-browser/HTTP/WebAuthn approval, connector transport, distributed edge rate limits, live login, and
-cleanup remain planned. ADR 0015's later device-request verifier does not consume or activate this
-pairing transaction. The ceiling and first-winner assertions use separate PostgreSQL connections
-held behind a real row lock before simultaneous release.
+Revision 0003 implements the database steps in this sequence. ADR 0028 now composes the
+transport-free start step: a closed request generates all identifiers, 32-byte poll/challenge
+material, separate keyed poll/code verifiers, a 60-bit human code, and a nine-minute expiry before
+one fixed database call. It supports an explicit new or existing opaque source, binds approval to
+the exact session/pairing/source-choice challenge, exposes minimal public-key material for an
+external Ed25519 verifier, and activates the exact key only after that verifier succeeds. ADRs 0026
+and 0027 implement the transport-free final proof/activation composition: protected
+primary/secondary HMAC candidates select at most one approved row, the strict proof is executed for
+each structurally valid lookup outcome, and only server-generated device/audit/request IDs reach
+activation behind four-call admission and a settlement floor. PostgreSQL scenarios cover competing
+profiles, wrong poll possession, replay, immutable binding, 32 lifetime sources, and 64
+active/unexpired-approved device authorities per profile. Browser/HTTP/WebAuthn approval, connector
+transport, distributed edge rate limits, live login, and cleanup remain planned. ADR 0015's later
+device-request verifier does not consume or activate this pairing transaction. The ceiling and
+first-winner assertions use separate PostgreSQL connections held behind a real row lock before
+simultaneous release.
 
 ## Source and device lifecycle
 
@@ -343,9 +347,10 @@ one-use Ed25519 key capability; the returned envelope contains the same body and
 values. ADR 0026 adds a separate inaccessible pending-key/challenge signer and pure Web verifier for
 one exact synthetic pairing-possession proof. ADR 0027 adds a dormant protected poll-verifier, fixed
 approved-material lookup, strict proof-to-activation adapter, and local admission/timing
-composition. No boundary can create a pairing transaction, perform browser/WebAuthn approval, open
-the pairing HTTP path, create either operational connector context, generate or load a real key,
-schedule, or upload, and the support matrix stays empty.
+composition. ADR 0028 adds a dormant closed pairing-start composition with fresh material, separate
+keyed poll/code verifiers, and one fixed database call. No boundary can perform browser/WebAuthn
+approval, open the pairing HTTP path, create either operational connector context, generate or load
+a real key, schedule, or upload, and the support matrix stays empty.
 
 The operational connector layers, edge signer, direct-origin denial, host/port/TLS Ingest deployment
 entry point, live secret-manager/edge key injection, live PostgreSQL login/TLS connection,

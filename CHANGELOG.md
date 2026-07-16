@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and twenty-seven accepted ADRs.
+  fail-closed compatibility policy and matrix, and twenty-eight accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -147,15 +147,17 @@ Versioning where its guarantees are applicable.
   license/advisory/feature/build/unsafe-reviewed, and default features remain disabled except
   zeroization. No real key generation/store, pairing proof, context provider, upload, scheduler,
   supported Codex version, or release is implied.
-- A bounded pairing-possession and dormant activation composition. Rust and Web share one exact
-  transaction/challenge/public-key Ed25519 vector; the Web verifier is strict and server-only. A
-  protected Web capability derives two fixed HMAC-SHA-256 poll candidates from a mandatory primary
-  and optional secondary rotation key. A separate four-client read-write pool probes the exact Web
-  role/login/search path, one fixed query selects at most one approved transaction, and the
-  high-level adapter alone invokes exact atomic activation after proof with server-owned device,
-  audit, and request IDs. Four-call admission plus a 250-millisecond floor produces only generic
-  local failure decisions. There is no pairing start/approval/HTTP route, connector client,
-  distributed rate policy, live login, real key, or deployment.
+- Bounded pairing start, possession, and dormant activation compositions. The start boundary accepts
+  only closed device metadata, creates fresh server IDs, a 32-byte poll token and challenge, a
+  60-bit human code, and a nine-minute expiry, then stores separate protected poll/code HMAC
+  verifiers through one fixed procedure. Rust and Web share one exact
+  transaction/challenge/public-key Ed25519 vector; the Web verifier is strict and server-only. The
+  fixed four-client read-write pool wrapper probes the exact Web role/login/search path, one fixed
+  query selects at most one approved transaction, and the high-level adapter alone invokes exact
+  atomic activation after proof with server-owned device, audit, and request IDs. Four-call
+  admission plus a 250-millisecond floor produces only generic local failure decisions. There is no
+  browser approval/HTTP route, connector client, distributed rate policy, live login, real key, or
+  deployment.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

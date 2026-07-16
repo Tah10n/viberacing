@@ -30,12 +30,16 @@ function productionModulesReferencing(fragment: string): string[] {
 }
 
 describe("pairing activation module policy", () => {
-  it("confines the low-level database pool and proof-to-activation adapter", () => {
+  it("confines the low-level pairing pool and high-level database adapters", () => {
     expect(productionModulesReferencing("pairing-database-pool")).toEqual([
       "lib/pairing-activation-database.ts",
+      "lib/pairing-start-database.ts",
     ]);
     expect(productionModulesReferencing("pairing-activation-database")).toEqual([
       "lib/pairing-activation-application.ts",
+    ]);
+    expect(productionModulesReferencing("pairing-start-database")).toEqual([
+      "lib/pairing-start-application.ts",
     ]);
   });
 });

@@ -35,8 +35,8 @@ UTF8("viberacing-pairing-poll-verifier-v1") || LF || raw_poll_token
 The HMAC key is exactly 32 bytes. Configuration requires
 `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL` and optionally accepts
 `VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL`. Both values must be canonical unpadded
-base64url, and duplicate material is rejected in constant time. A future pairing-start boundary must
-persist only the primary-key digest. Activation computes both candidates so an operator may
+base64url, and duplicate material is rejected in constant time. ADR 0028's pairing-start boundary
+persists only the primary-key digest. Activation computes both candidates so an operator may
 introduce a new primary while accepting transactions created under the previous secondary for the
 existing ten-minute database lifetime. Removing the secondary ends that overlap; no key identifier
 or plaintext token is added to PostgreSQL.

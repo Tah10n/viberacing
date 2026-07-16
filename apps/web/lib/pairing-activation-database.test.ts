@@ -101,6 +101,9 @@ function harness(options: HarnessOptions = {}): {
         throw options.releaseError;
       }
     },
+    startPairing(): Promise<never> {
+      return Promise.reject(new Error("unexpected pairing start"));
+    },
     verifyRuntimeBoundary(): Promise<unknown> {
       events.push("boundary");
       return Promise.resolve(options.boundary ?? runtimeBoundary);

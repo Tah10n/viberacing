@@ -202,11 +202,14 @@ other environment requires `verify-full`, a certificate-valid multi-label DNS ho
 or later. The synthetic page and build never construct either adapter, so they need none of these
 settings.
 
-Constructing the pairing application additionally requires a fresh 32-byte canonical base64url value
-in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL`. The tracked value is intentionally invalid.
-During a bounded rotation only, the previous primary may be supplied as
-`VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL`; remove it after every transaction created
-under that key has passed the ten-minute database lifetime. Never track, print, or reuse real keys.
+Constructing the pairing applications additionally requires fresh, distinct 32-byte canonical
+base64url values in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL` and
+`VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL`. The tracked values are intentionally invalid.
+During a bounded rotation only, each previous primary may be supplied under its corresponding
+`VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL` or
+`VIBERACING_WEB_PAIRING_CODE_SECONDARY_KEY_BASE64URL`; all configured poll/code values must remain
+pairwise distinct. Remove a secondary after every transaction created under that key has passed the
+ten-minute database lifetime. Never track, print, or reuse real keys.
 
 The one-shot Jobs runner independently uses only `VIBERACING_JOBS_DATABASE_*`. Its tracked
 user/password are separate non-working placeholders, and configuration checks reject reuse of the

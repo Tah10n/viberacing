@@ -124,26 +124,28 @@ capability and returns only the same body plus five exact header values. A share
 proves the exact public key/signature across Rust and the production Ingest verifier. A separate
 inaccessible pending-key/challenge signer and server-only Web verifier now agree on the exact
 domain-separated pairing-possession message and a second shared vector. A dormant transport-free
-Web/Auth boundary now derives a keyed poll verifier under protected primary/secondary configuration,
-uses a separate probed read-write pool, verifies the exact approved proof, and alone invokes atomic
-activation with server-owned identifiers behind four-call admission and a settlement floor. There is
-still no executable discovery/path or artifact/version admission, real Codex execution,
-cross-platform result, source/device context provider, secure key generation/store, pairing-start or
-browser-approval application, connector pairing HTTP client, public pairing route, signed upload,
-live protected key injection, edge signer, direct-origin denial, host/port/TLS configuration,
-distributed client-rate policy, monitoring, operational connector, live database connection, load
-evidence, or deployment. Twelve SQL migrations now add 24 private identity, passkey,
-restricted-recovery, source, device, pairing, audit, deletion, replay, usage, and Community scoring
-tables with deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift
-detection, and an isolated PostgreSQL capability test. A narrow procedure boundary implements invite
-issuance, atomic enrollment, session-bound initial-passkey challenges, credential-derived login,
-bounded multi-passkey management, session rotation/revocation, the immediate lock-down portion of
-profile deletion, one-time new/existing-source device pairing, private source/device inventory,
-source pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation,
-and short-lived recovery-only replacement-passkey authority. Pairing creates only opaque
-user-declared sources: it never reads or stores Codex account email or claims account uniqueness.
-The source unlink/reactivation procedures require a fresh consumed source-bound step-up record, but
-the application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
+Web/Auth start boundary generates fresh server identifiers, poll token, challenge, 60-bit human
+code, separate keyed verifiers, and a nine-minute pending transaction from closed device metadata. A
+second dormant boundary uses the same separately probed read-write pool wrapper for protected poll
+lookup, verifies the exact approved proof, and alone invokes atomic activation with server-owned
+identifiers behind four-call admission and a settlement floor. There is still no executable
+discovery/path or artifact/version admission, real Codex execution, cross-platform result,
+source/device context provider, secure key generation/store, browser-approval application, connector
+pairing HTTP client, public pairing route, signed upload, live protected key injection, edge signer,
+direct-origin denial, host/port/TLS configuration, distributed client-rate policy, monitoring,
+operational connector, live database connection, load evidence, or deployment. Twelve SQL migrations
+now add 24 private identity, passkey, restricted-recovery, source, device, pairing, audit, deletion,
+replay, usage, and Community scoring tables with deny-by-default runtime roles, forced RLS,
+state-machine constraints, checksum drift detection, and an isolated PostgreSQL capability test. A
+narrow procedure boundary implements invite issuance, atomic enrollment, session-bound
+initial-passkey challenges, credential-derived login, bounded multi-passkey management, session
+rotation/revocation, the immediate lock-down portion of profile deletion, one-time
+new/existing-source device pairing, private source/device inventory, source
+pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation, and
+short-lived recovery-only replacement-passkey authority. Pairing creates only opaque user-declared
+sources: it never reads or stores Codex account email or claims account uniqueness. The source
+unlink/reactivation procedures require a fresh consumed source-bound step-up record, but the
+application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
 also require edge rate limits and bounded cleanup before exposure. A database-only Community ingest
 capability now exposes minimal active-device verification material and accepts bounded source-bound
 snapshots with exact retry, nonce replay, monotonic source/date, quarantine, and lifecycle-race

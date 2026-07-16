@@ -4,10 +4,10 @@ This workspace is the Phase 1 product shell: a responsive pixel-art race, Commun
 demo profile built entirely from committed synthetic fixtures. It is suitable for local design,
 accessibility, localization, and scoring review. It is not an authenticated product and does not
 read Codex or user accounts. Server-only score database, public problem-response, local score route,
-pure pairing-possession verification, and dormant poll-verifier/database/activation composition
-modules now exist, but no visible component calls those boundaries and no working database login,
-pairing start/approval/HTTP route, or deployment is supplied; the synthetic prototype still does not
-query a database.
+pure pairing-possession verification, and dormant pairing start/activation composition modules now
+exist, but no visible component calls those boundaries and no working database login, pairing
+approval/HTTP route, or deployment is supplied; the synthetic prototype still does not query a
+database.
 
 ## Run it
 
@@ -27,31 +27,35 @@ for a hosted deployment; it is public configuration, not a secret. Focused check
 
 ## Module map
 
-| Path                                    | Responsibility                                                 | Trust boundary                                                                   |
-| --------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `app/page.tsx`                          | Builds the synthetic public payload on the server              | Must pass only public presentation data into the client tree                     |
-| `lib/race-data.ts`                      | Clearly synthetic raw activity fixtures and payload projection | Marked `server-only`; never replace with exports or real account data            |
-| `lib/public-community-score-mapper.ts`  | Validates and maps the exact SQL score projection              | Server-only, exact allowlist, top-32, and fail-closed                            |
-| `lib/public-community-score-store.ts`   | Executes the fixed public-score procedure and mapper           | Canonical Monday only; verifies every checkout; route constructs it lazily       |
-| `lib/public-community-score-route.ts`   | Parses and serializes the public score HTTP boundary           | Closed query/Accept, exact errors, admission, deadlines, and no CORS             |
-| `lib/public-score-admission.ts`         | Enforces the no-queue public-read concurrency ceiling          | Four active reads; lease held until adapter settlement                           |
-| `lib/public-http-problem.ts`            | Generates opaque request IDs and closed public error responses | Server-only; validates the contract; no inbound ID, CORS, detail, or cause       |
-| `lib/pairing-possession-verifier.ts`    | Strictly verifies one approved pending-device proof            | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence  |
-| `lib/pairing-poll-verifier.ts`          | Derives fixed poll-verifier candidates under protected keys    | Primary plus optional secondary; no raw key container; close clears key copies   |
-| `lib/pairing-activation-database.ts`    | Owns approved lookup, strict proof, and exact activation       | Fixed procedures only; server IDs only; destructive release on boundary failure  |
-| `lib/pairing-activation-application.ts` | Composes dormant transport-free activation policy              | Four admitted calls, 250 ms floor, generic failure, no HTTP or browser authority |
-| `lib/pairing-database-config.ts`        | Derives a separate read-write pool from the Web/Auth login     | Same strict TLS/deadlines; explicit role/search-path/read-write probe            |
-| `lib/pairing-database-pool.ts`          | Wraps `pg` with fixed pairing lookup/activation calls          | No generic query; copies/clears verifier parameters; stable idle-error signal    |
-| `lib/public-score-database-config.ts`   | Parses the dedicated Web login and TLS/pool contract           | Owner settings are separate; production is verify-full; errors reflect no value  |
-| `lib/public-score-database-pool.ts`     | Wraps `pg` with narrow connect/query/release/close authority   | Four connections; bounded waits; stable idle-error signal only                   |
-| `lib/scoring.ts`                        | Bounded daily/weekly score and deterministic rank calculation  | Treat all future device input as untrusted and validate before calling           |
-| `lib/race-types.ts`                     | Client-safe participant and demo-profile shape                 | Must not gain raw tokens or source/account identifiers                           |
-| `lib/public-origin.ts`                  | Strict parser for the canonical social-metadata origin         | Server-only; hosted origins require HTTPS DNS and no extra URL parts             |
-| `lib/car-recipe.ts`                     | Closed-enum car customization and fixed sprites                | No arbitrary colors, markup, text, files, SVG, or URLs                           |
-| `components/pixel-race-canvas.tsx`      | Deterministic code-native renderer                             | Draws fixed primitives only; semantic DOM description is mandatory               |
-| `components/race-experience.tsx`        | EN/RU interaction, table, profile, theme, and motion controls  | Local storage is restricted to non-personal preferences                          |
-| `proxy.ts`                              | Per-response nonce CSP                                         | Keep production CSP fail-closed and free of remote origins                       |
-| `next.config.ts`                        | Static security headers and build isolation                    | Turbopack must remain pinned to this repository root                             |
+| Path                                    | Responsibility                                                   | Trust boundary                                                                    |
+| --------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `app/page.tsx`                          | Builds the synthetic public payload on the server                | Must pass only public presentation data into the client tree                      |
+| `lib/race-data.ts`                      | Clearly synthetic raw activity fixtures and payload projection   | Marked `server-only`; never replace with exports or real account data             |
+| `lib/public-community-score-mapper.ts`  | Validates and maps the exact SQL score projection                | Server-only, exact allowlist, top-32, and fail-closed                             |
+| `lib/public-community-score-store.ts`   | Executes the fixed public-score procedure and mapper             | Canonical Monday only; verifies every checkout; route constructs it lazily        |
+| `lib/public-community-score-route.ts`   | Parses and serializes the public score HTTP boundary             | Closed query/Accept, exact errors, admission, deadlines, and no CORS              |
+| `lib/public-score-admission.ts`         | Enforces the no-queue public-read concurrency ceiling            | Four active reads; lease held until adapter settlement                            |
+| `lib/public-http-problem.ts`            | Generates opaque request IDs and closed public error responses   | Server-only; validates the contract; no inbound ID, CORS, detail, or cause        |
+| `lib/pairing-possession-verifier.ts`    | Strictly verifies one approved pending-device proof              | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence   |
+| `lib/pairing-poll-verifier.ts`          | Derives fixed poll-verifier candidates under protected keys      | Primary plus optional secondary; no raw key container; close clears key copies    |
+| `lib/pairing-user-code-verifier.ts`     | Derives fixed human-code verifier candidates under separate keys | Primary plus optional secondary; cross-purpose key reuse is rejected              |
+| `lib/pairing-start-material.ts`         | Generates bounded pending-transaction material                   | Server IDs, 32-byte token/challenge, 60-bit code, and nine-minute expiry          |
+| `lib/pairing-start-database.ts`         | Owns exact pending-pairing creation                              | Closed metadata and generated fields only; destructive release on failure         |
+| `lib/pairing-start-application.ts`      | Composes dormant transport-free start policy                     | Four admitted calls, 250 ms floor, generic failure, no HTTP or approval authority |
+| `lib/pairing-activation-database.ts`    | Owns approved lookup, strict proof, and exact activation         | Fixed procedures only; server IDs only; destructive release on boundary failure   |
+| `lib/pairing-activation-application.ts` | Composes dormant transport-free activation policy                | Four admitted calls, 250 ms floor, generic failure, no HTTP or browser authority  |
+| `lib/pairing-database-config.ts`        | Derives a separate read-write pool from the Web/Auth login       | Same strict TLS/deadlines; explicit role/search-path/read-write probe             |
+| `lib/pairing-database-pool.ts`          | Wraps `pg` with fixed pairing start/lookup/activation calls      | No generic query; copies/clears byte parameters; stable idle-error signal         |
+| `lib/public-score-database-config.ts`   | Parses the dedicated Web login and TLS/pool contract             | Owner settings are separate; production is verify-full; errors reflect no value   |
+| `lib/public-score-database-pool.ts`     | Wraps `pg` with narrow connect/query/release/close authority     | Four connections; bounded waits; stable idle-error signal only                    |
+| `lib/scoring.ts`                        | Bounded daily/weekly score and deterministic rank calculation    | Treat all future device input as untrusted and validate before calling            |
+| `lib/race-types.ts`                     | Client-safe participant and demo-profile shape                   | Must not gain raw tokens or source/account identifiers                            |
+| `lib/public-origin.ts`                  | Strict parser for the canonical social-metadata origin           | Server-only; hosted origins require HTTPS DNS and no extra URL parts              |
+| `lib/car-recipe.ts`                     | Closed-enum car customization and fixed sprites                  | No arbitrary colors, markup, text, files, SVG, or URLs                            |
+| `components/pixel-race-canvas.tsx`      | Deterministic code-native renderer                               | Draws fixed primitives only; semantic DOM description is mandatory                |
+| `components/race-experience.tsx`        | EN/RU interaction, table, profile, theme, and motion controls    | Local storage is restricted to non-personal preferences                           |
+| `proxy.ts`                              | Per-response nonce CSP                                           | Keep production CSP fail-closed and free of remote origins                        |
+| `next.config.ts`                        | Static security headers and build isolation                      | Turbopack must remain pinned to this repository root                              |
 
 ## Public HTTP problem boundary
 
@@ -95,29 +99,44 @@ later. The pool checks the effective Web role, narrow login membership/attribute
 capability, search path, and read-only state before every fixed parameterized score query. No
 setting, driver error, SQL, or row value belongs in logs or client responses.
 
-## Pairing activation boundary
+## Pairing start and activation boundaries
 
-The dormant pairing application reuses the same environment-owned Web/Auth login settings through a
-separate `viberacing-web-pairing` pool with explicit read-write state. It additionally requires a
-fresh canonical 32-byte `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL` and accepts a distinct
-optional `VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL` only for a bounded rotation overlap.
-The tracked primary value is intentionally invalid. The application retains decoded keys only in a
-closeable HMAC capability and never returns a key container.
+The dormant pairing applications reuse the same environment-owned Web/Auth login settings through
+the dedicated `viberacing-web-pairing` pool wrapper with explicit read-write state. They require
+fresh canonical 32-byte primary poll and human-code HMAC keys in
+`VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL` and
+`VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL`. Each accepts a distinct optional secondary key
+only for bounded rotation overlap. All configured values across both namespaces must be pairwise
+distinct. The tracked primary values are intentionally invalid. The applications retain decoded keys
+only in closeable HMAC capabilities and never return a key container.
 
-An admitted attempt accepts exactly `pollToken` and `possessionSignature`, derives two fixed-shape
-HMAC-SHA-256 candidates, probes the effective Web role/login/search-path/read-write state, and uses
-one fixed query to select at most one approved unexpired transaction. For every structurally valid
-lookup outcome, the high-level adapter runs the strict possession verifier and alone calls exact SQL
-activation with a generated `dev_` ID, audit UUID, and common `req_` ID. The SQL procedure
-atomically rechecks expiry, approval, pending-key, profile, and source binding. Four in-flight
-leases held through a 250-millisecond floor bound steady-state local work to at most 16 minimum-path
-completions per second; short windows may still be bursty, and every non-success returns only
-`not_activated` plus the request ID.
+An admitted start accepts exactly a canonical nonzero 32-byte candidate Ed25519 public key, a
+bounded NFC device label, syntactically bounded SemVer, OS family, and architecture. It generates
+the pairing and pending-key UUIDs, a 32-byte poll token and challenge, and a 12-symbol 60-bit human
+code, derives separate primary digests, and calls only the fixed `start_pairing` procedure with an
+expiry exactly nine minutes after its local clock reading. The success decision returns the poll
+token, challenge, code, pairing ID, expiry, and one request ID; after request-ID generation and
+admission, every operational non-success returns only `not_created` and that request ID. Malformed
+admitted input performs fresh fixed-shape entropy/HMAC work without writing to the database. Strict
+point and possession checks remain in the later proof/activation boundary.
 
-This is not an HTTP endpoint or complete abuse control. There is no pairing start, browser/session
-or WebAuthn approval, connector client, body/header parser, distributed client rate limit, live
-login/TLS connection, capacity evidence, monitoring, or deployment. The synthetic page and build do
-not construct the application.
+An admitted activation accepts exactly `pollToken` and `possessionSignature`, derives two
+fixed-shape HMAC-SHA-256 candidates, probes the effective Web role/login/search-path/read-write
+state, and uses one fixed query to select at most one approved unexpired transaction. For every
+structurally valid lookup outcome, the high-level adapter runs the strict possession verifier and
+alone calls exact SQL activation with a generated `dev_` ID, audit UUID, and common `req_` ID. The
+SQL procedure atomically rechecks expiry, approval, pending-key, profile, and source binding. Four
+in-flight leases held through a 250-millisecond floor bound steady-state local work to at most 16
+minimum-path completions per second; short windows may still be bursty, and every non-success
+returns only `not_activated` plus the request ID.
+
+Each application uses four in-flight leases held through a 250-millisecond floor. These are not HTTP
+endpoints or complete abuse controls. There is no browser/session or WebAuthn approval, connector
+client, body/header parser or response schema, distributed client rate limit, live login/TLS
+connection, capacity evidence, monitoring, cleanup schedule, or deployment. The synthetic page and
+build do not construct either application. Their configured factories own independent admission
+counters and pool instances; a future host that composes both must enforce and verify one aggregate
+CPU, connection, and anonymous-attempt budget.
 
 ## Public client data contract
 

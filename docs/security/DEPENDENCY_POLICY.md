@@ -8,11 +8,12 @@ checks when they are clear and maintainable.
 
 Mature frameworks and analysis tools are used only where their maintained behavior materially
 reduces project risk. The current deliberate set includes Next.js and React for the web runtime,
-`@noble/ed25519` for two strict server-side device-signature checks, `pg` for four narrow
-server-side PostgreSQL adapters, Fastify for one confined Ingest HTTP server factory, and CSpell,
-TypeScript, ESLint, Vitest, jsdom, and axe-core for offline verification. Every direct package is
-exact-pinned, installs without lifecycle scripts, and is represented with its complete transitive
-graph in the dependency inventory. Pull-request CI is secretless.
+`@noble/ed25519` for two strict server-side device-signature checks, `pg` for four confined pool
+wrappers serving five narrow server-side PostgreSQL adapters, Fastify for one confined Ingest HTTP
+server factory, and CSpell, TypeScript, ESLint, Vitest, jsdom, and axe-core for offline
+verification. Every direct package is exact-pinned, installs without lifecycle scripts, and is
+represented with its complete transitive graph in the dependency inventory. Pull-request CI is
+secretless.
 
 The project does not auto-merge dependency updates. A green dependency pull request still requires
 human review of purpose, provenance, release history, permissions, transitive changes, and license.
@@ -57,10 +58,10 @@ inside the private Web, Jobs, and Ingest workspaces; each workspace lint policy 
 dynamic, re-export, and CommonJS driver access elsewhere. The adapters expose only their reviewed
 parameterized functions and no general query or ORM surface. Its exact registry integrity, MIT
 license, transitive graph, optional unused native peer, absence of install lifecycle scripts,
-maintenance, and advisory state were reviewed under ADRs 0011, 0014, 0016, and 0027. Adding the
-second Web pool changes no package version or transitive node. An update requires renewed
-source/release/advisory/license/script/transitive review plus all role, query, result, timeout, and
-failure-isolation regressions.
+maintenance, and advisory state were reviewed under ADRs 0011, 0014, 0016, 0027, and 0028. Adding
+the second Web pool and its fixed pairing-start method changes no package version or transitive
+node. An update requires renewed source/release/advisory/license/script/transitive review plus all
+role, query, result, timeout, and failure-isolation regressions.
 
 `fastify@5.10.0` is the only direct HTTP server framework. It is confined to the private Ingest
 workspace and one reviewed server module; effective lint policy rejects Fastify imports, re-exports,

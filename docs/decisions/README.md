@@ -36,6 +36,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0025](0025-bounded-candidate-device-signing-boundary.md)      | Bounded candidate device signing boundary                           | Accepted; key store and transport pending           |
 | [0026](0026-bounded-pairing-possession-proof.md)               | Bounded pairing possession proof                                    | Accepted; pure kernels; composed by ADR 0027        |
 | [0027](0027-bounded-pairing-activation-composition.md)         | Bounded pairing activation composition                              | Accepted; local application; transport pending      |
+| [0028](0028-bounded-pairing-start-composition.md)              | Bounded pairing start composition                                   | Accepted; local start; transport pending            |
 
 ## Lifecycle
 

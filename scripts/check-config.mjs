@@ -33,6 +33,10 @@ const requiredEnvExampleValues = new Map([
     "VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL",
     "replace-with-random-32-byte-base64url-key",
   ],
+  [
+    "VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL",
+    "replace-with-distinct-random-32-byte-base64url-key",
+  ],
 ]);
 
 function isObject(value) {

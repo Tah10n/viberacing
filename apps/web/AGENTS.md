@@ -34,9 +34,14 @@ apply.
   it until that work settles, and preserve ADR 0013's no-store/same-origin response matrix.
 - Keep pairing possession in the server-only pure verifier. It may accept only the exact approved
   material tuple and versioned message, use strict Ed25519 semantics, and return no reflected
-  detail. The dormant application may call activation only through the closed ADR 0027 composition.
-  Do not add pairing start, a route, browser/session approval, or a WebAuthn claim without complete
-  transport admission, distributed rate/deadline policy, contracts, and negative tests.
+  detail. The dormant activation application may call activation only through the closed ADR 0027
+  composition.
+- Pairing start may accept only ADR 0028's closed public-key/label/version/OS/architecture request.
+  Server code owns all IDs, token, challenge, code, digests, and expiry; poll and human-code HMAC
+  keys remain separate protected capabilities. Only the closed start adapter may invoke the fixed
+  start procedure.
+- Do not add a pairing route, browser/session approval, connector client, or WebAuthn claim without
+  complete transport admission, distributed rate/deadline policy, contracts, and negative tests.
 
 ## Commands
 
