@@ -4,6 +4,7 @@ node_modules
 coverage
 dist
 target
+compat/codex/*/schemas/*.json
 
 Cargo.lock
 pnpm-lock.yaml

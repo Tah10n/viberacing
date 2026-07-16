@@ -30,6 +30,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0019](0019-bounded-community-sync-application-composition.md) | Bounded Community sync application composition                      | Accepted; local application boundary implemented    |
 | [0020](0020-bounded-community-sync-fastify-http-boundary.md)   | Bounded Community sync Fastify HTTP boundary                        | Accepted; local server; deployment pending          |
 | [0021](0021-fail-closed-codex-handshake-foundation.md)         | Fail-closed Codex App Server handshake foundation                   | Accepted; library-only protocol foundation          |
+| [0022](0022-candidate-codex-account-usage-adapter.md)          | Candidate exact-version Codex account and usage adapter             | Accepted; candidate only; support pending           |
 
 ## Lifecycle
 

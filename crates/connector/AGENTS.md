@@ -17,8 +17,10 @@ changing it.
   account email, or App Server paths.
 - A generated schema proves only the exact Codex CLI version that generated it. Do not mark a
   version supported until its checked-in fixtures and fail-closed compatibility tests pass.
-- Keep process launch, credential storage, account/usage mapping, upload, and desktop UI outside a
-  protocol-foundation change unless the task explicitly includes that boundary.
+- Candidate schema/parser evidence is not support. Keep the public matrix empty until the manifest
+  has no blockers and process, cleanup, platform, packaging, and release evidence all pass.
+- Keep process launch, credential storage, upload, and desktop UI outside a parser change unless the
+  task explicitly includes that boundary.
 
 Run `cargo test --workspace --all-targets --all-features --locked` while developing. Before handoff,
 run the root `pnpm run verify` gate.

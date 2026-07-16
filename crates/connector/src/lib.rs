@@ -1,7 +1,8 @@
 //! Fail-closed protocol primitives for the local Codex App Server stdio boundary.
 //!
-//! This crate deliberately implements only the stable initialization exchange. It does not launch
-//! Codex, expose a generic JSON-RPC client, or claim compatibility with any Codex release.
+//! This crate implements the stable initialization exchange plus a candidate-only account/usage
+//! adapter for one exact schema extract. It does not launch Codex, expose a generic JSON-RPC
+//! client, or claim compatibility with any Codex release.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -9,6 +10,13 @@
 use std::fmt;
 
 use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
+
+mod codex_0_144_4;
+
+pub use codex_0_144_4::{
+    CandidateCodex01444AccountUsage, DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES,
+    MAX_SYNC_TOKEN_VALUE,
+};
 
 /// Maximum accepted App Server JSONL frame size, including its final line-feed byte.
 pub const MAX_FRAME_BYTES: usize = 16 * 1024;
@@ -33,6 +41,8 @@ pub enum ProtocolError {
     InvalidFrame,
     /// The record was not valid UTF-8 JSON with the reviewed initialization response shape.
     InvalidMessage,
+    /// The active Codex account is not an authenticated `ChatGPT` account.
+    UnsupportedAccountMode,
 }
 
 impl fmt::Display for ProtocolError {
@@ -42,6 +52,7 @@ impl fmt::Display for ProtocolError {
             Self::FrameTooLarge => "app-server frame exceeds the size limit",
             Self::InvalidFrame => "app-server frame is invalid",
             Self::InvalidMessage => "app-server message is invalid",
+            Self::UnsupportedAccountMode => "active Codex account mode is unsupported",
         })
     }
 }
@@ -123,6 +134,23 @@ impl ConnectorHandshake {
     pub fn is_initialized(&self) -> bool {
         self.state == HandshakeState::Initialized
     }
+
+    /// Consumes a completed handshake into the candidate Codex `0.144.4` account/usage adapter.
+    ///
+    /// This exact-version adapter is development evidence only. Its existence does not mark Codex
+    /// `0.144.4` supported; the public compatibility matrix remains authoritative.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProtocolError::InvalidState`] unless initialization completed successfully.
+    pub fn into_codex_0_144_4_account_usage(
+        self,
+    ) -> Result<CandidateCodex01444AccountUsage, ProtocolError> {
+        if self.state != HandshakeState::Initialized {
+            return Err(ProtocolError::InvalidState);
+        }
+        Ok(CandidateCodex01444AccountUsage::new())
+    }
 }
 
 fn decode_initialize_response(frame: &[u8]) -> Result<(), ProtocolError> {
@@ -133,7 +161,7 @@ fn decode_initialize_response(frame: &[u8]) -> Result<(), ProtocolError> {
         .map_err(|_| ProtocolError::InvalidMessage)
 }
 
-fn validate_frame(frame: &[u8]) -> Result<&[u8], ProtocolError> {
+pub(crate) fn validate_frame(frame: &[u8]) -> Result<&[u8], ProtocolError> {
     if frame.len() > MAX_FRAME_BYTES {
         return Err(ProtocolError::FrameTooLarge);
     }

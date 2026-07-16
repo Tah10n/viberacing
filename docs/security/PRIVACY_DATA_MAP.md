@@ -149,12 +149,16 @@ access policy, and retention decision before collection.
 
 ADR 0021 adds no collected or retained field. The connector library transiently validates the stable
 initialization response's Codex home, platform family, operating-system name, and user agent under
-fixed string/frame bounds, then discards all four values before returning. The local Codex home
-remains a prohibited path outside that validator. No value reaches a log, metric, diagnostic, file,
-database, HTTP payload, cache, analytics event, export, or network sink. The library does not launch
-Codex, read account or usage data, access a credential store, or upload. Any future compatibility
-diagnostic or retained connector/Codex version must use the existing mapped Security/Operational
-class with an explicit purpose and bounded retention.
+fixed string/frame bounds, then discards all four values before returning. ADR 0022 then validates
+the candidate `0.144.4` account variant and immediately discards email, plan, and nullable summary
+values. Only the already mapped private `codexReportedDate`/token entries leave the parser in
+caller-owned memory: at most 31, sorted, unique, calendar-valid, and integer-bounded. Its diagnostic
+representation contains entry count only. The local Codex home and account email remain prohibited
+outside their validators. No value reaches a log, metric, file, database, HTTP payload, cache,
+analytics event, export, key, or network sink. The library does not launch Codex, access a
+credential store, or upload. Any future compatibility diagnostic or retained connector/Codex version
+must use the existing mapped Security/Operational class with an explicit purpose and bounded
+retention.
 
 Revision 0008 adds deletion evidence for only those raw nonce and snapshot rows: a Jobs-only
 procedure derives cutoff time on the server, deletes bounded expired batches, cascades raw entries,
@@ -266,9 +270,11 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   fixed origin-consume/lookup/submission calls and a protected database config contract; mock
   evidence opens no connection. Neither boundary has HTTP, logging, analytics, export, or deployment
   authority.
-- The connector library currently validates and discards only the App Server initialization values.
-  It has no process, account/usage method, device key, payload, log, store, or egress capability;
-  the planned account-mode and daily-usage flow remains subject to compatibility and privacy tests.
+- The connector library validates and discards the App Server initialization values and candidate
+  `0.144.4` account/summary fields, then exposes only bounded private daily usage to its caller. It
+  has no process, device key, signed payload, log, store, or egress capability; the candidate
+  remains unsupported until process, platform, artifact, privacy-egress, packaging, and release
+  gates pass.
 - Jobs currently receive only bounded expired ingest-state cleanup, open-season Community scoring
   refresh, and terminal finalization. The local one-shot adapter rechecks the exact Jobs-only login
   and invokes one prepared capability without logging inputs or results. Correction and deletion

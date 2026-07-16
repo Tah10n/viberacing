@@ -38,12 +38,13 @@ server factory now preserves raw body/header evidence, applies no-queue/deadline
 serializes only revalidated sync contracts. The public score route and Ingest boundaries are locally
 verified but have no real proof key, secret-manager binding, live database login, host/port/TLS
 Ingest entry point, edge deployment, capacity evidence, or visible-component consumer. A
-library-only Rust connector foundation now implements a bounded stable App Server JSONL handshake;
-it has no process launcher, supported-version adapter, account/usage read, key store, upload, CLI,
-or release. Do not claim that deployed browser/session HTTP authentication, OAuth/Argon2id/WebAuthn
-application verification, real-user ingestion, an operational connector, a Jobs scheduler or
-deployed public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted
-security control exists until its implementation and verification are present in the working tree.
+library-only Rust connector foundation now implements a bounded stable App Server JSONL handshake
+and a candidate-only `0.144.4` account/usage parser with checked schema/fixture evidence; it has no
+process launcher, supported Codex version, key store, upload, CLI, or release. Do not claim that
+deployed browser/session HTTP authentication, OAuth/Argon2id/WebAuthn application verification,
+real-user ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
+correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
+implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -63,12 +64,15 @@ security control exists until its implementation and verification are present in
   guidance. Read `apps/ingest/AGENTS.md` before editing it.
 - `contracts/v1/` contains canonical public JSON Schemas; `contracts/generated/` contains
   drift-checked derivatives.
+- `compat/codex/` contains candidate/supported exact-version App Server evidence. Candidate
+  manifests must remain outside the public support matrix.
 - `packages/contracts/` contains generated TypeScript types plus the bounded runtime validator and
   nested security guidance. Read `packages/contracts/AGENTS.md` before editing it.
 - `database/` contains the SQL migration ledger, non-login role bootstrap, identity/source/device
   persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
-- `crates/connector/` contains only the bounded App Server JSONL initialization foundation and
-  nested connector security guidance. Read `crates/connector/AGENTS.md` before editing it.
+- `crates/connector/` contains the bounded App Server JSONL handshake plus candidate exact-version
+  account/usage parser and nested connector security guidance. Read `crates/connector/AGENTS.md`
+  before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
 - The Ingest host/port/TLS deployment entry point, authentication application code, and operational
@@ -86,6 +90,8 @@ security control exists until its implementation and verification are present in
 - `pnpm run check:architecture` validates required security/architecture contracts, structured abuse
   cases, ADR metadata/indexes, compatibility fail-closed state, privacy classes, and Mermaid fence
   structure.
+- `pnpm run check:codex-compatibility` validates canonical exact-version manifests, extract/fixture
+  digests, fixed stable methods, safe paths, evidence inventory, and candidate/matrix separation.
 - `pnpm run check:contracts` validates bounded JSON Schema structure, the connector writable-field
   allowlist, generated TypeScript/OpenAPI drift, and version-manifest integrity.
 - `pnpm run check:history` scans every reachable ref, commit message, historical path, text blob,

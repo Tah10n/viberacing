@@ -13,18 +13,18 @@ the bounded adapter lazily after closed request admission. One local one-shot Jo
 only cleanup, refresh, or finalization, but no browser/session authentication or deployed ingest
 endpoint, OAuth callback, Argon2id/WebAuthn or pairing-possession application verifier, operational
 connector, purge worker, Jobs scheduler/monitor, audited correction, or deployed service executes
-the complete sequences. A library-only Rust connector foundation validates only the bounded stable
-App Server initialization exchange and has no process or account/usage method. A local Ingest kernel
-now verifies the bounded exact-body origin/device request, while the separate adapter maps origin
-replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic origin
-replay consumption and bounded cleanup. A transport-free application now composes those exact local
-capabilities and validates only closed acknowledgement/problem decisions. A bounded local Fastify
-factory preserves exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes
-only revalidated contracts. There is no edge/live-database/deployment integration. No host/port/TLS
-entry point, deployment login, certificate, edge signer/direct-origin policy, or live route/Jobs
-evidence is supplied. Data labels refer to the classifications in the
-[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
-and Prohibited.
+the complete sequences. A library-only Rust connector foundation validates the bounded stable App
+Server initialization exchange and candidate `0.144.4` account/usage responses, but has no process,
+key, signer, upload, or supported-version path. A local Ingest kernel now verifies the bounded
+exact-body origin/device request, while the separate adapter maps origin replay, device lookup, and
+submission through fixed calls. PostgreSQL now proves atomic origin replay consumption and bounded
+cleanup. A transport-free application now composes those exact local capabilities and validates only
+closed acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
+no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
+certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
+refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public,
+Account, Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -315,10 +315,13 @@ four unsettled application calls without a queue. It revalidates every applicati
 returns only generic `no-store` acknowledgement/problem contracts. Real loopback tests exercise
 malformed framing and partial sockets; injection tests exercise route, overload, and serialization.
 
-ADR 0021 implements only the first local App Server protocol step shown elsewhere in the planned
-flow: a fixed capability-free `initialize`, one 16 KiB LF-only closed response, discarded
-initialization strings, and fixed `initialized`. It cannot launch Codex, read account/usage fields,
-hold a device key, sign, schedule, or upload, so no Community sync sequence reaches it yet.
+ADR 0021 implements the first local App Server protocol step: a fixed capability-free `initialize`,
+one 16 KiB LF-only closed response, discarded initialization strings, and fixed `initialized`. ADR
+0022 adds a candidate `0.144.4` sequence after that handshake: fixed account/usage reads, ChatGPT
+mode confirmation with account fields discarded, and no more than 31 normalized daily usage entries.
+It cannot identify/launch/clean Codex, verify the official artifact, hold a device key, sign,
+schedule, or upload, so no Community sync sequence reaches it yet and the support matrix stays
+empty.
 
 The operational connector layers, edge signer, direct-origin denial, host/port/TLS Ingest deployment
 entry point, live secret-manager/edge key injection, live PostgreSQL login/TLS connection,

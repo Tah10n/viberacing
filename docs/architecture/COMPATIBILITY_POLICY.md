@@ -50,15 +50,22 @@ must therefore:
 - stops before upload on missing fields, unknown fields, malformed dates, oversized output, protocol
   errors, unsupported auth mode, or schema drift.
 
-The current Rust library implements only the first bounded protocol step: fixed stable handshake
-messages, a 16 KiB LF-only response frame, duplicate/unknown-field rejection, discarded
-initialization values, terminal remote failure, and non-reflective errors. It does not launch a
-process, emit either planned account method, negotiate a supported version, upload, or alter the
-empty support matrix. That distinction is recorded in ADR 0021.
+The Rust library implements the fixed stable handshake plus a candidate-only Codex `0.144.4`
+account/usage parser. After the handshake, it emits only fixed IDs `1` and `2`, confirms ChatGPT
+mode, discards email/plan/summary fields, and returns at most 31 sorted unique date/token buckets
+under the sync bounds. The candidate manifest records release metadata, full generated schema
+digests, minimal extracts, fixtures, and unresolved blockers. It does not launch a process, verify
+the selected artifact, store a key, upload, negotiate support, or alter the empty matrix. ADRs 0021
+and 0022 record that distinction.
 
 Generated schema output is exact to the Codex version that produced it. The repository commits only
 reviewed relevant schema extracts and synthetic fixtures, not account data or a developer's local
 configuration.
+
+`scripts/check-codex-compatibility.mjs` requires canonical duplicate-free evidence files, verifies
+their byte counts and digests, closes the method/fixture inventory, and forbids a candidate manifest
+from appearing in the supported matrix. A future supported manifest must have a matching matrix row
+and no unresolved blockers.
 
 ## Codex support matrix process
 

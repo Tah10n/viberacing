@@ -25,14 +25,15 @@ verifier and database capabilities, generates a server-owned request ID, waits f
 returns only a validated acknowledgement or generic problem decision. A bounded local Fastify server
 factory now preserves exact raw HTTP evidence, admits four application calls without a queue,
 applies fixed parser/header/connection/deadline policies, and serializes only revalidated sync
-acknowledgement/problem contracts. A library-only Rust connector foundation now emits and validates
-only the bounded stable App Server initialization exchange, discards all server values, and fails
-closed on framing, shape, duplication, size, or state drift. Phase 0 hosted-publication controls
-remain blocked on real maintainer identities and GitHub configuration. No authentication route,
-OAuth/Argon2id/WebAuthn application flow, production secret-manager/edge key injection, Ingest
-host/port/TLS deployment entry point, production deployment, live Web/Jobs/Ingest database login/TLS
-integration, released or operational connector, supported Codex version, real-user ingestion,
-end-to-end public ranking, or finalization scheduler exists.
+acknowledgement/problem contracts. A library-only Rust connector foundation now bounds the stable
+App Server handshake and a candidate `0.144.4` account/usage parser, discarding account/summary
+fields and returning only bounded normalized daily usage in caller memory. Candidate release,
+schema, and fixture evidence is drift-checked but does not populate the support matrix. Phase 0
+hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
+No authentication route, OAuth/Argon2id/WebAuthn application flow, production secret-manager/edge
+key injection, Ingest host/port/TLS deployment entry point, production deployment, live
+Web/Jobs/Ingest database login/TLS integration, released or operational connector, supported Codex
+version, real-user ingestion, end-to-end public ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -91,24 +92,35 @@ end-to-end public ranking, or finalization scheduler exists.
 - Planned system/container and enrollment, login/recovery, pairing, sync, public-read, deletion, and
   trusted-release Mermaid views.
 - A fail-closed Codex compatibility policy and empty support matrix; no upstream or connector
-  version is claimed supported without pinned schema/fixture/platform evidence.
-- A library-only Rust connector protocol foundation. It emits one compile-time fixed `initialize`
-  request with no capabilities, accepts only one LF-terminated frame up to 16 KiB, manually rejects
-  duplicate/unknown envelope and result fields, validates and discards the four bounded stable
-  initialization strings, and emits `initialized` only after a matching ID `0` response. Hostile
-  remote input permanently fails the instance and errors never reflect it. Seven integration tests
-  cover exact bytes, state order, framing/UTF-8/size, envelope/result shape, duplicates, unknowns,
-  string/path bounds, safe Unicode, and non-reflection. There is no process launcher, stderr reader,
-  supported-version adapter, account/usage method, device key, upload, network transport, CLI,
+  version is claimed supported without pinned schema/fixture/process/platform/release evidence. A
+  candidate `0.144.4` manifest records the official release tag, immutable commit and artifact
+  metadata, full stable-bundle and client-request digests, three minimal source/checked-in schema
+  extracts, nine synthetic JSONL fixtures, generated hostile cases, and three explicit blockers. A
+  canonical/digest/path/method/fixture/matrix checker has fourteen black-box regression cases and
+  prevents candidates from becoming supported rows.
+- A library-only Rust connector protocol and candidate-adapter foundation. It emits one compile-time
+  fixed `initialize` request with no capabilities, accepts only one LF-terminated frame up to 16
+  KiB, manually rejects duplicate/unknown envelope and result fields, validates and discards the
+  four bounded stable initialization strings, and emits `initialized` only after a matching ID `0`
+  response. Hostile remote input permanently fails the instance and errors never reflect it. Seven
+  integration tests cover exact bytes, state order, framing/UTF-8/size, envelope/result shape,
+  duplicates, unknowns, string/path bounds, safe Unicode, and non-reflection. Only after that
+  handshake, the candidate exact-version state machine emits fixed `account/read` ID `1` with
+  refresh disabled and `account/usage/read` ID `2` with null parameters. It accepts only complete
+  ChatGPT mode, validates then discards email/plan/summary fields, and returns at most 31 sorted
+  unique real `20xx` dates with integers through the sync-safe maximum. Ten further integration
+  tests use every checked-in fixture and generated duplicate/UTF-8/frame/ID/count/date/integer
+  cases, prove terminal remote failure, and keep diagnostics to entry count. There is no process
+  launcher, stderr reader, supported Codex version, device key, upload, network transport, CLI,
   installer, or released binary; the compatibility matrix remains empty.
-- An ADR lifecycle/template and twenty-one accepted design decisions covering Community trust,
+- An ADR lifecycle/template and twenty-two accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
   score operation, bounded maintenance runner, bounded Community sync verification kernel,
   least-privileged Ingest PostgreSQL adapter, protected origin-proof key configuration, persistent
   atomic origin replay, transport-free Community sync application composition, and the bounded local
-  Fastify HTTP boundary, plus the fail-closed Codex handshake foundation.
+  Fastify HTTP boundary, plus the fail-closed Codex handshake and candidate account/usage adapter.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -463,8 +475,8 @@ entry point, trusted edge routing and direct-origin denial, live secret-manager/
 the Ingest live PostgreSQL login/TLS connection, distributed rate/backpressure controls and load
 evidence, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring
 state, the Jobs scheduler/live login and application-to-PostgreSQL integration, audited corrections,
-deployed public-score delivery, purge workers, connector process discovery/launch/cleanup,
-supported-version account/usage adapters, secure device-key storage, upload/CLI/packaging, release
+deployed public-score delivery, purge workers, connector process discovery/launch/cleanup, supported
+operational account/usage integration, secure device-key storage, upload/CLI/packaging, release
 signing, deployment, and public beta operations remain proposed. The local Ingest key reader,
 kernel, adapter, application composer, and Fastify server now prove bounded protected configuration,
 raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged

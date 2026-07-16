@@ -74,6 +74,11 @@ const checks = [
     [resolve(import.meta.dirname, "test-architecture-check.mjs")],
   ],
   [
+    "Codex compatibility checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-codex-compatibility-check.mjs")],
+  ],
+  [
     "contract checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-contract-check.mjs")],
@@ -109,6 +114,11 @@ const checks = [
     "architecture contracts",
     process.execPath,
     [resolve(import.meta.dirname, "check-architecture.mjs")],
+  ],
+  [
+    "Codex compatibility evidence",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-codex-compatibility.mjs")],
   ],
   ["versioned contracts", process.execPath, [resolve(import.meta.dirname, "check-contracts.mjs")]],
   ["database migrations", process.execPath, [resolve(import.meta.dirname, "check-database.mjs")]],

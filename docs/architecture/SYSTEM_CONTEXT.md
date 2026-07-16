@@ -5,10 +5,11 @@
 This is the planned runtime architecture. The current repository contains a tested SQL persistence
 foundation, one local public-score route, one local one-shot Jobs runner, and local Ingest
 request-verification, PostgreSQL-adapter, application-composition, and bounded HTTP-server
-boundaries, plus a library-only connector initialization boundary, but no deployed application
-service, operational connector, Cloudflare/Railway deployment, or production database. Component
-status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
-required runtime boundaries, not deployed evidence.
+boundaries, plus library-only connector initialization and candidate `0.144.4` account/usage parser
+boundaries, but no deployed application service, operational connector, supported Codex version,
+Cloudflare/Railway deployment, or production database. Component status is tracked in
+[implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
+not deployed evidence.
 
 ## System context
 

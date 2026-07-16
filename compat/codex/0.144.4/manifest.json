@@ -1,0 +1,154 @@
+{
+  "manifestVersion": 1,
+  "codexVersion": "0.144.4",
+  "status": "candidate",
+  "release": {
+    "repository": "https://github.com/openai/codex",
+    "tag": "rust-v0.144.4",
+    "commit": "8c68d4c87dc54d38861f5114e920c3de2efa5876",
+    "publishedAt": "2026-07-14T05:08:11Z",
+    "url": "https://github.com/openai/codex/releases/tag/rust-v0.144.4",
+    "artifact": {
+      "name": "codex-x86_64-pc-windows-msvc.exe",
+      "bytes": 341142832,
+      "sha256": "51398051c2332b6afe08dc3b9dbb4056085c197f35ca57a307ee303d450cada5",
+      "verificationStatus": "release-metadata-recorded"
+    }
+  },
+  "generation": {
+    "command": "codex app-server generate-json-schema --out <output-directory>",
+    "experimentalApi": false,
+    "reportedVersion": "0.144.4",
+    "fullStableBundle": {
+      "sourcePath": "codex_app_server_protocol.schemas.json",
+      "bytes": 560640,
+      "sha256": "ce60b1ce3632c026f26c6eedfd516ab2836384b6dcc20bde540f5cffbaa2ce21"
+    },
+    "clientRequestSchema": {
+      "sourcePath": "ClientRequest.json",
+      "bytes": 166089,
+      "sha256": "e52f3ef71c9980be0e65222f064ef08e09e69dff337e5c7d8891c05569afe27e"
+    }
+  },
+  "extracts": [
+    {
+      "path": "schemas/GetAccountParams.json",
+      "sourcePath": "v2/GetAccountParams.json",
+      "sourceBytes": 485,
+      "sourceSha256": "d0dc3c0d428d37b1ec7887fa6b044244e6474578e1ff397c0872b2a6292073db",
+      "checkedInBytes": 486,
+      "checkedInSha256": "076ae38aa92cabd4f834f119c04a9bd2b0e6c9c6cdd998e17a7636d283ec9ef5"
+    },
+    {
+      "path": "schemas/GetAccountResponse.json",
+      "sourcePath": "v2/GetAccountResponse.json",
+      "sourceBytes": 2519,
+      "sourceSha256": "f681035a67d7779fa90a43c38b2deffaa230a32cfe10de87729b67ed97555621",
+      "checkedInBytes": 2520,
+      "checkedInSha256": "87d61137c42dc411975abb0c8b3dba32eb42d655a7bae01804a904f67a0fd52e"
+    },
+    {
+      "path": "schemas/GetAccountTokenUsageResponse.json",
+      "sourcePath": "v2/GetAccountTokenUsageResponse.json",
+      "sourceBytes": 1589,
+      "sourceSha256": "b4cb098e35c43a7e3b8c9211c3c1b12a79e5d89afdcf40304e6b777e25a8c74b",
+      "checkedInBytes": 1590,
+      "checkedInSha256": "f908460e0d24de79e156ad8a0b127c84d1d96c7a10f2df71604cda2a7f9efed3"
+    }
+  ],
+  "stableMethods": [
+    {
+      "method": "account/read",
+      "requestId": 1,
+      "params": {
+        "refreshToken": false
+      },
+      "responseSchema": "schemas/GetAccountResponse.json"
+    },
+    {
+      "method": "account/usage/read",
+      "requestId": 2,
+      "params": null,
+      "responseSchema": "schemas/GetAccountTokenUsageResponse.json"
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "fixtures/account-chatgpt.jsonl",
+      "kind": "account-positive",
+      "expected": "accept",
+      "bytes": 126,
+      "sha256": "b656928cc27c53190566e3f60f2f5e8e998e9f4c6273e5a5f4201a460d7115c5"
+    },
+    {
+      "path": "fixtures/account-null-email.jsonl",
+      "kind": "account-nullable",
+      "expected": "accept",
+      "bytes": 110,
+      "sha256": "ca06b0ed23f041e8432ebf0adc7fae19295d631756a7f984ac02b3ff09739f6a"
+    },
+    {
+      "path": "fixtures/account-unsupported.jsonl",
+      "kind": "account-unsupported",
+      "expected": "reject-unsupported",
+      "bytes": 75,
+      "sha256": "a2a80e1f78ddfd3132c557972521e5905afe37278a8a95ca836b95a39a1d17c2"
+    },
+    {
+      "path": "fixtures/account-unknown-field.jsonl",
+      "kind": "account-unknown-field",
+      "expected": "reject-invalid",
+      "bytes": 146,
+      "sha256": "c57e0bb48137b0021f770a7a81cb2842e56e5b8f297643ece7ac04270a38761a"
+    },
+    {
+      "path": "fixtures/usage-daily.jsonl",
+      "kind": "usage-positive",
+      "expected": "accept",
+      "bytes": 248,
+      "sha256": "3c2c74ec1de9eaa6e9e9df9c2198086d239935b1b79fd707d724d1e73748dcfa"
+    },
+    {
+      "path": "fixtures/usage-nullable.jsonl",
+      "kind": "usage-nullable",
+      "expected": "accept-empty",
+      "bytes": 181,
+      "sha256": "d702f40a31f00b4a9c19e1e0526aa8123cdc4d378c3a29b943c5cb687a8db9ad"
+    },
+    {
+      "path": "fixtures/usage-missing-field.jsonl",
+      "kind": "usage-missing-field",
+      "expected": "reject-invalid",
+      "bytes": 82,
+      "sha256": "2ba7c21937a2c06bbefae713a1d283a7cc08db0997164441cf094afe92f00215"
+    },
+    {
+      "path": "fixtures/usage-malformed-date.jsonl",
+      "kind": "usage-malformed-date",
+      "expected": "reject-invalid",
+      "bytes": 93,
+      "sha256": "31eea947e72161030930ab1ff600c9df8df246796373db89ee282c887fe68960"
+    },
+    {
+      "path": "fixtures/usage-unknown-field.jsonl",
+      "kind": "usage-unknown-field",
+      "expected": "reject-invalid",
+      "bytes": 130,
+      "sha256": "bfc0240858a5e58313d1b56123a1fe501ac5981b95cbc60da65e6248132327ef"
+    }
+  ],
+  "generatedAdversarialCases": [
+    "duplicate-json-key",
+    "duplicate-reported-date",
+    "frame-too-large",
+    "invalid-envelope-id",
+    "invalid-utf8",
+    "more-than-31-daily-buckets",
+    "unsafe-integer"
+  ],
+  "supportBlockers": [
+    "The official release metadata is recorded, but the release artifact was not independently downloaded and verified for this extract.",
+    "No reviewed process discovery, launch, timeout, stderr, cleanup, or cross-platform execution evidence exists.",
+    "No secure device-key storage, signed upload, connector CLI, packaged artifact, or connector release exists."
+  ]
+}

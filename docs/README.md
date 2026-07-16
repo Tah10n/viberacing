@@ -30,8 +30,9 @@ remain safe to publish verbatim.
   supply-chain requirements.
 - [Dependency inventory](reference/dependency-inventory.json) — deterministic locked npm/Cargo and
   external artifact/license evidence.
-- [Connector protocol foundation](../crates/connector/README.md) — bounded local App Server
-  initialization only; no supported release or operational connector.
+- [Connector protocol and candidate adapter](../crates/connector/README.md) — bounded local App
+  Server handshake plus exact `0.144.4` account/usage parser evidence; no supported release or
+  operational connector.
 - [Asset provenance](reference/ASSET_PROVENANCE.md) — generation/source records, integrity digests,
   metadata sanitation, accessibility text, and release-review status for non-code visuals.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary
@@ -44,7 +45,7 @@ remain safe to publish verbatim.
   read, deletion, and release sequences.
 - [Compatibility policy](architecture/COMPATIBILITY_POLICY.md) and
   [empty Codex support matrix](reference/codex-compatibility.md) — independently versioned contracts
-  and fail-closed upstream admission.
+  and fail-closed upstream admission; candidate manifests stay outside supported rows.
 - [Architecture decision records](decisions/README.md) — accepted decisions, alternatives,
   consequences, verification, and supersession.
 - [Governance](../GOVERNANCE.md), [maintainers](../MAINTAINERS.md), and

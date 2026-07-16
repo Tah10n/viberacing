@@ -112,12 +112,14 @@ evidence для `POST /v1/community/sync`, не доверяет proxy headers �
 5/33/34-second request/handler/connection deadlines, после чего сериализует только повторно
 проверенные `no-store` success/problem contracts. Есть loopback и injection evidence, но нет
 deployment entry point. Live protected key injection, edge signer, direct-origin denial,
-host/port/TLS configuration, distributed rate policy и monitoring всё ещё отсутствуют. Добавлен
-только library-only Rust foundation: он отправляет фиксированный stable `initialize`, принимает один
-bounded LF-terminated response, отклоняет duplicate/unknown/oversized/out-of-order данные, не
-сохраняет path/platform values и лишь затем выдаёт `initialized`. Он не запускает Codex, не читает
-account/usage, не хранит key и не загружает данные; support matrix остаётся пустой. Operational
-connector, live database connection, load evidence и deployment всё ещё отсутствуют.
+host/port/TLS configuration, distributed rate policy и monitoring всё ещё отсутствуют. Library-only
+Rust foundation теперь выполняет фиксированный stable handshake и только после него — candidate
+`0.144.4` account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает email/plan/summary и
+возвращает не более 31 отсортированной строгой date/token записи. В репозитории есть exact release
+metadata, schema digests, minimal extracts, fixtures и drift/matrix checker, но официальный artifact
+не был независимо выполнен, а support matrix остаётся пустой. Process discovery/launch/cleanup,
+secure device key, signed upload, operational connector, live database connection, load evidence и
+deployment всё ещё отсутствуют.
 
 Также добавлены двенадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,

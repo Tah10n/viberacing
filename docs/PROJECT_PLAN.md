@@ -196,7 +196,8 @@ App Server schemas are version-specific. Compatibility is therefore explicit, no
 broad semantic-version range.
 
 - docs/reference/codex-compatibility.md lists every supported Codex version.
-- compat/codex contains a manifest and synthetic fixtures for each supported contract.
+- compat/codex contains a manifest and synthetic fixtures for each candidate or supported exact
+  contract; candidate evidence is forbidden from the supported matrix.
 - Required CI installs pinned supported Codex releases, generates their stable JSON schemas, and
   compares the extracted account contracts.
 - A non-blocking scheduled job probes the latest release and opens an issue when the contract
@@ -205,6 +206,12 @@ broad semantic-version range.
   interpretation.
 - Compatibility additions require fixtures, an ADR when semantics change, and connector release
   notes.
+
+ADR 0022 now adds candidate-only `0.144.4` evidence: immutable release metadata, full stable-schema
+digests, minimal account extracts, synthetic fixtures, a drift checker, and a closed library parser
+for the two planned reads. It confirms ChatGPT mode while discarding email/plan/summary values and
+returns only bounded sorted daily date/token entries. The candidate does not launch or clean a
+process, verify the official artifact, run on all platforms, sign/upload, or create a matrix row.
 
 ### Date semantics
 

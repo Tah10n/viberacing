@@ -9,24 +9,25 @@ source/device lifecycle database capabilities plus Community ingest, retention c
 terminal finalization and public score-projection procedures, but no browser/session authentication
 or recovery application code, OAuth/Argon2id/WebAuthn or pairing-possession verifier, Jobs
 scheduler, real-user ingestion, audited correction, or operational connector. A library-only Rust
-crate implements only the bounded stable App Server initialization exchange; it does not launch a
-process, admit a Codex version, read account/usage data, store a key, or upload. A local Ingest
-kernel bounds and authenticates a synthetic exact-body sync request, and a separate adapter
-constrains origin replay, database lookup, and submission mapping with mock-pool evidence. A
-transport-free application composes those exact boundaries, generates a server request ID, and
-validates the acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic
-replay and cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies
-no-queue and deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS
-launch entry point. There is no working database login/certificate, live end-to-end PostgreSQL flow,
-edge path, connector process/read adapter, or deployment. A bounded local one-shot Jobs process now
-wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A
-bounded server-only Web PostgreSQL adapter and local public-score GET are implemented and
-unit/build-tested, but this repository supplies no working deployment login or TLS certificate. A
-successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL
-constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
-isolation; it does not prove a live adapter, deployed API, or production flow. The Ingest server
-tests bind only ephemeral loopback sockets and use synthetic requests; no development command
-exposes it to the LAN or Internet.
+crate implements the bounded stable App Server initialization exchange and a candidate `0.144.4`
+account/usage parser with fixed methods, discarded account/summary fields, and bounded normalized
+daily output. It does not launch or clean a process, admit a supported Codex version, store a key,
+sign, or upload. A local Ingest kernel bounds and authenticates a synthetic exact-body sync request,
+and a separate adapter constrains origin replay, database lookup, and submission mapping with
+mock-pool evidence. A transport-free application composes those exact boundaries, generates a server
+request ID, and validates the acknowledgement/problem decision; isolated PostgreSQL tests separately
+prove atomic replay and cleanup. A bounded local Fastify factory now preserves exact raw HTTP
+evidence, applies no-queue and deadline policy, and serializes only revalidated contracts, but it
+has no host/port/TLS launch entry point. There is no working database login/certificate, live
+end-to-end PostgreSQL flow, edge path, connector process, supported adapter, or deployment. A
+bounded local one-shot Jobs process now wraps only cleanup/refresh/finalization, but has no live
+login, scheduler, monitor, or deployment. A bounded server-only Web PostgreSQL adapter and local
+public-score GET are implemented and unit/build-tested, but this repository supplies no working
+deployment login or TLS certificate. A successful setup proves repository gates, synthetic frontend
+behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
+lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
+deployed API, or production flow. The Ingest server tests bind only ephemeral loopback sockets and
+use synthetic requests; no development command exposes it to the LAN or Internet.
 
 ## Prerequisites
 
@@ -103,6 +104,18 @@ operation under `contracts/v1/`; review both generated diffs and their source di
 OpenAPI document contains two paths marked `implemented-local`. The corresponding dynamic Next.js
 GET and bounded Ingest POST have request/response and build evidence, but no working database login
 is tracked and no deployment exists merely because the local operations are documented.
+
+Connector-focused commands use only checked-in synthetic fixtures. They do not launch Codex, read a
+local account, open a credential store, or upload:
+
+```text
+pnpm run check:codex-compatibility
+pnpm run test:codex-compatibility-check
+cargo test --workspace --all-targets --all-features --locked
+```
+
+The `0.144.4` directory is candidate parser evidence, not a supported-version installation or live
+integration command. Do not run a local account through repository tests.
 
 Ingest-focused commands use only synthetic key material, injected capabilities, and mock database
 pools:

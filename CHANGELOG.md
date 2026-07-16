@@ -15,9 +15,11 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and twenty-one accepted ADRs.
+  fail-closed compatibility policy and matrix, and twenty-two accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
+- Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
+  paths, complete hostile-case inventory, and strict candidate/support-matrix separation.
 - Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
 - Offline spelling, reviewed external-link policy, and deterministic dependency/license inventory
   covering the exact npm lock graph, pinned Actions, and local PostgreSQL image.
@@ -109,6 +111,15 @@ Versioning where its guarantees are applicable.
   implied. The root Rust gate now runs tests, and the exact Serde/serde_json lock graph, build
   scripts, licenses, features, and point-in-time advisories are reviewed and inventoried. Clean CI
   fetches the exact Cargo lock graph without building it before the offline Node license gate.
+- Candidate-only Codex `0.144.4` account/usage evidence and parser. The manifest records the
+  official release tag/commit/artifact metadata, full stable-schema digests, three minimal extracts,
+  and nine synthetic fixtures; a new checker plus fourteen black-box cases enforce canonical files,
+  digests, exact methods, safe paths, coverage inventory, and candidate/matrix separation. After a
+  completed handshake the Rust adapter emits only fixed IDs `1` and `2`, accepts ChatGPT mode,
+  discards email/plan/summary, and returns at most 31 sorted unique strict date/token entries. Ten
+  adapter tests cover fixture and generated hostile cases. This does not verify or launch the
+  official artifact, clean a child process, support a Codex version, store a key, upload, package,
+  or release a connector; the matrix remains empty.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,
