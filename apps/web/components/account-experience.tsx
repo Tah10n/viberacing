@@ -2,9 +2,13 @@ import "server-only";
 
 import Link from "next/link";
 
-import type { PasskeyInventoryItem, ProfileVisibility } from "@/lib/enrollment-database";
+import type {
+  AccountScore,
+  PasskeyInventoryItem,
+  ProfileVisibility,
+} from "@/lib/enrollment-database";
 import type { AccountSourceDeviceInventoryItem } from "@/lib/enrollment-service";
-import type { Locale } from "@/lib/i18n";
+import { dayLabels, formatScore, translations, type Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
 import {
@@ -21,6 +25,7 @@ interface AccountExperienceProps {
   readonly handle: string;
   readonly locale: Locale;
   readonly passkeys: readonly PasskeyInventoryItem[] | undefined;
+  readonly score?: AccountScore | null | undefined;
   readonly visibility: ProfileVisibility | undefined;
 }
 
@@ -30,9 +35,12 @@ export function AccountExperience({
   handle,
   locale,
   passkeys,
+  score,
   visibility,
 }: AccountExperienceProps) {
   const copy = joinTranslations[locale];
+  const raceCopy = translations[locale];
+  const days = dayLabels(locale);
   return (
     <main className="auth-shell" lang={locale}>
       <section aria-labelledby="account-title" className="auth-card">
@@ -77,6 +85,56 @@ export function AccountExperience({
                   {visibility === "public" ? copy.hideProfile : copy.publishProfile}
                 </button>
               </form>
+            </>
+          )}
+        </section>
+        <section aria-labelledby="current-score-title" className="account-security">
+          <h2 id="current-score-title">{copy.currentScoreTitle}</h2>
+          <p>{copy.currentScoreCopy}</p>
+          {score === undefined ? (
+            <p className="auth-error" role="status">
+              {copy.currentScoreUnavailable}
+            </p>
+          ) : score === null ? (
+            <p className="auth-status" role="status">
+              {visibility === "hidden" ? copy.currentScoreHidden : copy.currentScoreEmpty}
+            </p>
+          ) : (
+            <>
+              <p className="auth-status">
+                <time dateTime={score.seasonStart}>{score.seasonStart}</time> –{" "}
+                <time dateTime={score.seasonEnd}>{score.seasonEnd}</time> ·{" "}
+                {score.seasonFinalized ? copy.seasonFinalized : copy.seasonOpen}
+              </p>
+              <strong className="large-score">
+                {formatScore(score.weeklyScore, locale)} {raceCopy.points}
+              </strong>
+              <dl className="stat-pair">
+                <div>
+                  <dt>{raceCopy.activeDays}</dt>
+                  <dd>{score.activeDays}/7</dd>
+                </div>
+                <div>
+                  <dt>{raceCopy.sourceCount}</dt>
+                  <dd>{score.sourceCount}</dd>
+                </div>
+              </dl>
+              <div className="daily-bars">
+                {score.dailyScores.map((dailyScore, index) => {
+                  const day = days[index] ?? String(index + 1);
+                  return (
+                    <label key={day}>
+                      <span>{day}</span>
+                      <progress
+                        aria-label={`${day}: ${formatScore(dailyScore, locale)} ${raceCopy.points}`}
+                        max={1_000}
+                        value={dailyScore}
+                      />
+                      <small>{formatScore(dailyScore, locale)}</small>
+                    </label>
+                  );
+                })}
+              </div>
             </>
           )}
         </section>

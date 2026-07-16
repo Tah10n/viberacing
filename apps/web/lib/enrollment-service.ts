@@ -11,6 +11,7 @@ import {
 import type { EnrollmentConfig } from "./enrollment-config";
 import type { EnrollmentCookieCodec, EnrollmentRandomBytes } from "./enrollment-cookie";
 import type {
+  AccountOverview,
   ActiveDeviceInventoryItem,
   EnrollmentDatabase,
   PasskeyInventoryItem,
@@ -57,6 +58,7 @@ import {
   verifyPasskeyLogin,
   type RegisteredPasskey,
 } from "./passkey-registration";
+import { currentCommunitySeasonStart } from "./public-community-race";
 import { createPublicRequestId } from "./public-http-problem";
 
 const oauthLifetimeSeconds = 600;
@@ -214,6 +216,7 @@ export interface EnrollmentService {
     body: unknown,
   ): Promise<boolean>;
   logout(sessionCookie: string | undefined): Promise<boolean>;
+  readAccountOverview(sessionCookie: string): Promise<AccountOverview | undefined>;
   readActiveDeviceInventory(
     sessionCookie: string,
   ): Promise<readonly AccountSourceDeviceInventoryItem[] | undefined>;
@@ -1755,6 +1758,35 @@ export function createEnrollmentService(
         });
       } catch {
         return false;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+      }
+    },
+    async readAccountOverview(sessionCookie: string): Promise<AccountOverview | undefined> {
+      const session = readSession(sessionCookie);
+      if (!session?.passkeyRegistered) {
+        return undefined;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      try {
+        const seasonStart = currentCommunitySeasonStart(now());
+        if (seasonStart === undefined) {
+          return undefined;
+        }
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return undefined;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        return await database.readAccountOverview({
+          seasonStart,
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+      } catch {
+        return undefined;
       } finally {
         sessionVerifier?.fill(0);
         sessionDigest?.fill(0);

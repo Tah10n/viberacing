@@ -5,6 +5,7 @@ import { Buffer } from "node:buffer";
 import { resolvePairingDatabaseConfig } from "./pairing-database-config";
 import {
   createPairingDatabasePool,
+  type EnrollmentDatabaseAccountOverviewRequest,
   type EnrollmentDatabaseClient,
   type EnrollmentDatabaseDeviceRevocation,
   type EnrollmentDatabaseInitialPasskey,
@@ -59,6 +60,27 @@ const activeDeviceInventoryColumns = new Set([
   "source_id",
   "source_state",
 ]);
+const accountOverviewColumns = new Set([
+  "active_days",
+  "daily_score",
+  "score_date",
+  "season_end",
+  "season_finalized",
+  "season_start",
+  "source_count",
+  "visibility",
+  "weekly_score",
+]);
+const accountScoreColumns = [
+  "active_days",
+  "daily_score",
+  "score_date",
+  "season_end",
+  "season_finalized",
+  "season_start",
+  "source_count",
+  "weekly_score",
+] as const;
 const canonicalDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
 const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
@@ -103,6 +125,7 @@ export interface EnrollmentDatabase {
   createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<boolean>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
   pauseSource(input: EnrollmentDatabaseSourcePause): Promise<boolean>;
+  readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<AccountOverview>;
   readActiveDeviceInventory(
     input: EnrollmentDatabaseSourceDeviceInventoryRequest,
   ): Promise<readonly SourceDeviceInventoryItem[]>;
@@ -121,6 +144,21 @@ export interface EnrollmentDatabase {
 }
 
 export type ProfileVisibility = "hidden" | "public";
+
+export interface AccountScore {
+  readonly activeDays: number;
+  readonly dailyScores: readonly number[];
+  readonly seasonEnd: string;
+  readonly seasonFinalized: boolean;
+  readonly seasonStart: string;
+  readonly sourceCount: number;
+  readonly weeklyScore: number;
+}
+
+export interface AccountOverview {
+  readonly score: AccountScore | null;
+  readonly visibility: ProfileVisibility;
+}
 
 export interface PasskeyLoginMaterial {
   readonly backupEligible: boolean;
@@ -199,6 +237,96 @@ function exactProfileVisibility(value: unknown): ProfileVisibility {
     fail("result_invalid");
   }
   return row.visibility;
+}
+
+function boundedInteger(value: unknown, minimum: number, maximum: number): value is number {
+  return (
+    typeof value === "number" && Number.isSafeInteger(value) && value >= minimum && value <= maximum
+  );
+}
+
+function dateAfter(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function exactAccountOverview(value: unknown, expectedSeasonStart: string): AccountOverview {
+  if (!Array.isArray(value) || (value.length !== 1 && value.length !== 7)) {
+    fail("result_invalid");
+  }
+  const rows = value.map((row: unknown) => {
+    if (!isRecord(row)) {
+      fail("result_invalid");
+    }
+    const keys = Object.keys(row);
+    if (
+      keys.length !== accountOverviewColumns.size ||
+      keys.some((key) => !accountOverviewColumns.has(key)) ||
+      (row.visibility !== "hidden" && row.visibility !== "public")
+    ) {
+      fail("result_invalid");
+    }
+    return row;
+  });
+  const first = rows[0];
+  if (first === undefined) {
+    fail("result_invalid");
+  }
+  const visibility = first.visibility as ProfileVisibility;
+  const nullScore = accountScoreColumns.every((column) => first[column] === null);
+  if (nullScore) {
+    if (rows.length !== 1) {
+      fail("result_invalid");
+    }
+    return Object.freeze({ score: null, visibility });
+  }
+  if (
+    rows.length !== 7 ||
+    visibility !== "public" ||
+    !canonicalDate(first.season_start) ||
+    first.season_start !== expectedSeasonStart ||
+    !canonicalDate(first.season_end) ||
+    first.season_end !== dateAfter(first.season_start, 6) ||
+    typeof first.season_finalized !== "boolean" ||
+    !boundedInteger(first.weekly_score, 0, 7000) ||
+    !boundedInteger(first.active_days, 0, 7) ||
+    !boundedInteger(first.source_count, 0, 32)
+  ) {
+    fail("result_invalid");
+  }
+  const dailyScores: number[] = [];
+  for (const [index, row] of rows.entries()) {
+    if (
+      row.visibility !== visibility ||
+      row.season_start !== first.season_start ||
+      row.season_end !== first.season_end ||
+      row.season_finalized !== first.season_finalized ||
+      row.weekly_score !== first.weekly_score ||
+      row.active_days !== first.active_days ||
+      row.source_count !== first.source_count ||
+      row.score_date !== dateAfter(first.season_start, index) ||
+      !boundedInteger(row.daily_score, 0, 1000)
+    ) {
+      fail("result_invalid");
+    }
+    dailyScores.push(row.daily_score);
+  }
+  if (dailyScores.reduce((total, score) => total + score, 0) !== first.weekly_score) {
+    fail("result_invalid");
+  }
+  return Object.freeze({
+    score: Object.freeze({
+      activeDays: first.active_days,
+      dailyScores: Object.freeze(dailyScores),
+      seasonEnd: first.season_end,
+      seasonFinalized: first.season_finalized,
+      seasonStart: first.season_start,
+      sourceCount: first.source_count,
+      weeklyScore: first.weekly_score,
+    }),
+    visibility,
+  });
 }
 
 function copyBoundedBytes(value: unknown, minimum: number, maximum: number): Buffer | undefined {
@@ -604,6 +732,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
       return execute(
         (client) => client.pauseSource(input),
         (value) => exactBooleanRow(value, "paused"),
+      );
+    },
+    readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<AccountOverview> {
+      return execute(
+        (client) => client.readAccountOverview(input),
+        (value) => exactAccountOverview(value, input.seasonStart),
       );
     },
     readActiveDeviceInventory(

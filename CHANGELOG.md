@@ -178,6 +178,11 @@ Versioning where its guarantees are applicable.
   fixed Web/Auth capability and renders only label, active/revoked state, rounded creation date, and
   the current-authenticator marker. Invalid, cross-profile, empty, oversized, duplicate, unordered,
   or open database rows fail closed; an unavailable inventory leaves logout usable.
+- The authenticated account page now also renders its current Community week from one combined
+  visibility/score checkout. A Web-only exact-session procedure returns only existing derived
+  summary fields and seven daily scores; the closed mapper rejects malformed or inconsistent rows,
+  hidden profiles expose no score, and no raw usage, private identifier, browser fetch, or storage
+  is added.
 - An authenticated account can now revoke an owned non-current active passkey after one fresh
   user-verified assertion. A five-minute continuation binds the exact session, target, RP, origin,
   and database challenge; one fixed atomic call consumes that challenge and terminally revokes the

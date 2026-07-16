@@ -28,6 +28,10 @@ only: the repository supplies no invite issuer UI, OAuth registration, real secr
 OAuth/authenticator/database credentials, deletion purge worker, edge abuse controls, or live-user
 evidence.
 
+The authenticated account page now also renders the current Community week's seven derived daily
+scores and bounded summary from one combined server-side visibility/score checkout. Hidden profiles
+show no score; raw usage, private identifiers, a browser fetch, and browser storage remain absent.
+
 ## Trust model
 
 Community results are self-reported by local devices. They are not verified by OpenAI and must never

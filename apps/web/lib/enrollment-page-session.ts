@@ -3,7 +3,7 @@ import "server-only";
 import { headers } from "next/headers";
 
 import { readCookie } from "./enrollment-cookie";
-import type { PasskeyInventoryItem, ProfileVisibility } from "./enrollment-database";
+import type { AccountScore, PasskeyInventoryItem, ProfileVisibility } from "./enrollment-database";
 import type { EnrollmentSession } from "./enrollment-domain";
 import { getEnrollmentRuntime } from "./enrollment-runtime";
 import { enrollmentCookieNames, type AccountSourceDeviceInventoryItem } from "./enrollment-service";
@@ -24,6 +24,7 @@ export async function readEnrollmentPageSession(): Promise<EnrollmentSession | u
 export interface EnrollmentPageAccount {
   readonly activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
   readonly passkeys: readonly PasskeyInventoryItem[] | undefined;
+  readonly score: AccountScore | null | undefined;
   readonly session: EnrollmentSession;
   readonly visibility: ProfileVisibility | undefined;
 }
@@ -40,12 +41,18 @@ export async function readEnrollmentPageAccount(): Promise<EnrollmentPageAccount
     if (session === undefined) {
       return undefined;
     }
-    const [activeDeviceInventory, passkeys, visibility] = await Promise.all([
+    const [activeDeviceInventory, overview, passkeys] = await Promise.all([
       service.readActiveDeviceInventory(sessionCookie),
+      service.readAccountOverview(sessionCookie),
       service.readPasskeyInventory(sessionCookie),
-      service.readProfileVisibility(sessionCookie),
     ]);
-    return Object.freeze({ activeDeviceInventory, passkeys, session, visibility });
+    return Object.freeze({
+      activeDeviceInventory,
+      passkeys,
+      score: overview?.score,
+      session,
+      visibility: overview?.visibility,
+    });
   } catch {
     return undefined;
   }

@@ -131,6 +131,11 @@ now uses a distinct fresh context and one atomic consume/unlink statement. It ac
 active, paused, or quarantined owned source, is terminal, revokes every active source device, and
 preserves hidden visibility.
 
+Revision 0019 reuses that possessed-session authority for a read-only private account score view.
+Only Web can request one bounded Monday's existing derived season summary and seven daily scores;
+hidden profiles return no score, and raw usage or private identifiers are not exposed. The local
+server render combines this with visibility in one checkout and adds no browser fetch or storage.
+
 Revision 0005 adds credential-derived passkey login, session and step-up provenance, private
 multi-passkey inventory, bounded add/revoke, terminal revoke, last-key protection, monotonic stored
 sign state, and atomic rollback on audit/session conflicts. Two observed blocker-chain races prove a

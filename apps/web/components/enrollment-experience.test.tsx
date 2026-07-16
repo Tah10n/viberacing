@@ -185,7 +185,6 @@ describe("enrollment experience", () => {
         ]}
         handle="pixel_driver"
         locale="en"
-        visibility="public"
         passkeys={[
           {
             createdOn: "2026-07-15",
@@ -202,6 +201,16 @@ describe("enrollment experience", () => {
             state: "revoked",
           },
         ]}
+        score={{
+          activeDays: 7,
+          dailyScores: [100, 200, 300, 400, 500, 600, 700],
+          seasonEnd: "2026-07-19",
+          seasonFinalized: false,
+          seasonStart: "2026-07-13",
+          sourceCount: 2,
+          weeklyScore: 2800,
+        }}
+        visibility="public"
       />,
     );
     expect(markup).toContain("Your passkeys");
@@ -222,6 +231,13 @@ describe("enrollment experience", () => {
     expect(markup).toContain("View public profile");
     expect(markup).toContain('action="/auth/profile/visibility"');
     expect(markup).toContain('type="hidden" name="visibility" value="hidden"');
+    expect(markup).toContain("Current-week score");
+    expect(markup).toContain("2,800 pts");
+    expect(markup).toContain('aria-label="Mon: 100 pts"');
+    expect(markup).toContain('aria-label="Sun: 700 pts"');
+    expect(markup.match(/<progress/g)).toHaveLength(7);
+    expect(markup).toContain("Exact token totals and per-source values stay private");
+    expect(markup).not.toContain("raw_tokens");
     expect(markup).toContain("Current session");
     expect(markup).toContain("Revoked");
     expect(markup).toContain('dateTime="2026-07-15"');
@@ -247,6 +263,7 @@ describe("enrollment experience", () => {
         handle="pixel_driver"
         locale="ru"
         passkeys={[]}
+        score={null}
         visibility="hidden"
       />,
     );
@@ -257,6 +274,7 @@ describe("enrollment experience", () => {
     expect(hidden).toContain('type="hidden" name="visibility" value="public"');
     expect(hidden).not.toContain("Открыть публичный профиль");
     expect(hidden).toContain("Не удалось изменить аккаунт");
+    expect(hidden).toContain("Для скрытого профиля текущий результат не показывается");
 
     const unavailable = renderToStaticMarkup(
       <AccountExperience
@@ -268,6 +286,7 @@ describe("enrollment experience", () => {
       />,
     );
     expect(unavailable).toContain("Profile visibility is temporarily unavailable");
+    expect(unavailable).toContain("Current score is temporarily unavailable");
     expect(unavailable).toContain("Source and device details are temporarily unavailable");
     expect(unavailable).not.toContain('action="/auth/profile/visibility"');
   });

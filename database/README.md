@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains eighteen SQL-first revisions for identity, passkey login and management,
+This directory contains nineteen SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
 implemented. A local invite/OAuth/initial-passkey, returning-passkey, session-scoped passkey,
@@ -18,8 +18,8 @@ its output to three capabilities through a probed least-privileged pool. Mock te
 PostgreSQL or supply a working login. One local public-score route and one local one-shot Jobs
 runner wrap narrow capabilities without a working database login. The database-only ingest and
 Jobs-only ingest-retention, pairing-retention, open-season scoring, and terminal finalization
-procedures plus one Web-only public score projection are implemented; HTTP ingest, scheduled
-execution, audited corrections, and broader purge are not.
+procedures plus Web-only public and exact-session private score projections are implemented; HTTP
+ingest, scheduled execution, audited corrections, and broader purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -76,11 +76,14 @@ source controls with injected/synthetic evidence; recovery and pairing approval 
   and fresh-passkey paused-source reactivation for a possessed session while visibility is hidden.
 - `migrations/0018_hidden_profile_source_unlink.sql` preserves terminal fresh-passkey source unlink
   for a possessed session while visibility is hidden.
+- `migrations/0019_account_score_read.sql` gives only Web an exact-session read of one active
+  profile's existing derived season summary and seven daily scores; hidden profiles return no rows.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
-  cross-profile denial, visibility hide/publish/idempotency, expiry, replay, rollback, audit
-  redaction, and synchronous deletion effects.
+  cross-profile denial, private derived-score read/hide/republish, visibility
+  hide/publish/idempotency, expiry, replay, rollback, audit redaction, and synchronous deletion
+  effects.
 - `tests/pairing_capabilities.sql` exercises new/existing-source choice, first-winner rebinding
   denial, replay, poll possession, exact activation, immutable binding, and public safety ceilings.
 - `tests/source_device_lifecycle.sql` exercises inventory isolation, hidden-profile
@@ -227,6 +230,10 @@ Runtime access must remain procedure-only and must have positive and negative in
 - `read_profile_visibility` maps only the possessed active session's current profile state to
   `public` or `hidden`. `set_profile_visibility` accepts no profile ID, moves only between active
   and hidden, preserves source sync, and treats repeated state as a no-op.
+- `read_profile_score` authenticates the exact active or hidden session and accepts one bounded
+  canonical Monday. It returns only the active profile's existing derived weekly score, active-day
+  and contributing-source counts, season dates/state, and seven 0–1000 daily scores. It exposes no
+  raw usage or private identifier; a hidden profile returns no rows.
 - `request_profile_deletion` derives the target from the possessed session, requires the exact typed
   handle and a consumed, unused deletion challenge, then atomically hides the profile, revokes
   active browser/passkey/device authority, removes recovery/challenge state, unlinks sources,
@@ -472,18 +479,27 @@ hidden. The distinct fresh passkey context, active/paused/quarantined input stat
 recursive active-device revoke, approved-pairing cancellation, stale-action invalidation, and public
 visibility all retain their prior semantics.
 
+Revision 0019 adds no table, column, retained value, or runtime role. Its Web-only
+`read_profile_score` derives the profile from the exact possessed session, admits only a bounded
+Monday, and projects existing derived season rows. PostgreSQL evidence covers exact possession,
+canonical-week rejection, seven-row shape, hidden empty state, and republish restoration. Ingest,
+Jobs, Admin, and `PUBLIC` remain denied by the runtime capability matrix.
+
 The local account application consumes those capabilities through the same probed read-write pool.
-Its fixed query projects active credentials plus one exact all-null device sentinel for each source
-without one, caps the result at 96 so the mapper can reject more than the maximum 95 rows implied by
-32 sources and 64 active devices, rounds activation to a UTC date, and maps at most 32 opaque
-sources. The page renders source ordinal/state plus bounded device label/platform/version, not the
-source ID, internal key/profile ID, public key, or exact time. Only the selected opaque device ID
-enters its same-origin revoke form. Source actions instead receive an exact-shape encrypted
-session-bound control token for at most 15 minutes. Pause is a bounded same-origin form;
-reactivation requires one fresh application-verified passkey assertion before an atomic
-consume-and-reactivate call. A distinct fresh context reaches one atomic consume-and-unlink call,
-which terminally unlinks any active, paused, or quarantined source and revokes all of its active
-devices. All three controls preserve hidden visibility.
+Its combined overview query reads visibility and the current week's derived score with one checkout,
+then accepts only one all-null empty row or exactly seven consecutive, internally consistent daily
+rows. Hidden profiles never map a score, and raw usage, source IDs, profile IDs, and timestamps do
+not enter the page. Its fixed query projects active credentials plus one exact all-null device
+sentinel for each source without one, caps the result at 96 so the mapper can reject more than the
+maximum 95 rows implied by 32 sources and 64 active devices, rounds activation to a UTC date, and
+maps at most 32 opaque sources. The page renders source ordinal/state plus bounded device
+label/platform/version, not the source ID, internal key/profile ID, public key, or exact time. Only
+the selected opaque device ID enters its same-origin revoke form. Source actions instead receive an
+exact-shape encrypted session-bound control token for at most 15 minutes. Pause is a bounded
+same-origin form; reactivation requires one fresh application-verified passkey assertion before an
+atomic consume-and-reactivate call. A distinct fresh context reaches one atomic consume-and-unlink
+call, which terminally unlinks any active, paused, or quarantined source and revokes all of its
+active devices. All three controls preserve hidden visibility.
 
 The local account application also consumes the existing `read_passkey_inventory` capability. Its
 fixed query and closed mapper retain at most 32 rows, require exactly one current active

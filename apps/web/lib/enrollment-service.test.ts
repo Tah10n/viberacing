@@ -16,6 +16,7 @@ import type { JoinRequest } from "./enrollment-domain";
 import { createEnrollmentService } from "./enrollment-service";
 import type {
   EnrollmentDatabaseLoginCompletion,
+  EnrollmentDatabaseAccountOverviewRequest,
   EnrollmentDatabaseDeviceRevocation,
   EnrollmentDatabasePasskeyAddition,
   EnrollmentDatabasePasskeyAddChallenge,
@@ -66,6 +67,8 @@ function createFixture() {
   let inventorySessionDigestInput: Uint8Array | undefined;
   let activeDeviceInventoryRead: EnrollmentDatabaseSourceDeviceInventoryRequest | undefined;
   let activeDeviceInventoryDigestInput: Uint8Array | undefined;
+  let accountOverviewRead: EnrollmentDatabaseAccountOverviewRequest | undefined;
+  let accountOverviewDigestInput: Uint8Array | undefined;
   let deviceRevocationWrite: EnrollmentDatabaseDeviceRevocation | undefined;
   let deviceRevocationDigestInput: Uint8Array | undefined;
   let sourcePauseWrite: EnrollmentDatabaseSourcePause | undefined;
@@ -203,6 +206,14 @@ function createFixture() {
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
       return Promise.resolve(true);
+    }),
+    readAccountOverview: vi.fn((input: EnrollmentDatabaseAccountOverviewRequest) => {
+      accountOverviewDigestInput = input.sessionVerifierDigest;
+      accountOverviewRead = {
+        ...input,
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve({ score: null, visibility: "public" as const });
     }),
     readActiveDeviceInventory: vi.fn((input: EnrollmentDatabaseSourceDeviceInventoryRequest) => {
       activeDeviceInventoryDigestInput = input.sessionVerifierDigest;
@@ -355,6 +366,8 @@ function createFixture() {
     verifyPasskey,
   });
   return {
+    accountOverviewDigestInput: () => accountOverviewDigestInput,
+    accountOverviewRead: () => accountOverviewRead,
     activeDeviceInventoryDigestInput: () => activeDeviceInventoryDigestInput,
     activeDeviceInventoryRead: () => activeDeviceInventoryRead,
     addChallengeWrite: () => addChallengeWrite,
@@ -816,6 +829,36 @@ describe("enrollment service", () => {
     expect(database.setProfileVisibility).toHaveBeenCalledOnce();
   });
 
+  it("reads the possessed account's current Community week without retaining the verifier", async () => {
+    const { accountOverviewDigestInput, accountOverviewRead, cookieCodec, database, service } =
+      createFixture();
+    const verifier = Buffer.alloc(32, 0x48);
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId: "00000000-0000-4000-8000-000000000513",
+      sessionVerifier: verifier.toString("base64url"),
+      version: 1,
+    });
+
+    await expect(service.readAccountOverview(sessionCookie)).resolves.toEqual({
+      score: null,
+      visibility: "public",
+    });
+    expect(accountOverviewRead()).toEqual({
+      seasonStart: "2026-07-13",
+      sessionId: "00000000-0000-4000-8000-000000000513",
+      sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
+    });
+    expect(accountOverviewDigestInput()).toEqual(Buffer.alloc(32));
+
+    await expect(service.readAccountOverview("invalid")).resolves.toBeUndefined();
+    expect(database.readAccountOverview).toHaveBeenCalledOnce();
+  });
+
   it("freshly authorizes and atomically adds one backup passkey", async () => {
     const {
       addChallengeWrite,
@@ -1190,6 +1233,9 @@ describe("enrollment service", () => {
       createSourceUnlinkChallenge: vi.fn(() => Promise.resolve(true)),
       enrollProfile: vi.fn(() => Promise.resolve(true)),
       pauseSource: vi.fn(() => Promise.resolve(true)),
+      readAccountOverview: vi.fn(() =>
+        Promise.resolve({ score: null, visibility: "public" as const }),
+      ),
       readActiveDeviceInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),

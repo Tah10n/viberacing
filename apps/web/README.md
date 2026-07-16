@@ -19,6 +19,11 @@ addition, revocation of an owned non-current passkey, an exact-handle fresh-pass
 request, and logout. It fails closed without externally provisioned configuration and has no
 live-user or deployment evidence.
 
+The private account render now combines visibility with the exact session's current Community week
+in one existing Web/Auth pool checkout. Its closed mapper accepts one empty sentinel or exactly
+seven consecutive derived daily scores plus bounded summary fields; hidden profiles show no score,
+and no raw usage, private identifier, browser fetch, cache, or storage is added.
+
 ## Run it
 
 From the repository root:

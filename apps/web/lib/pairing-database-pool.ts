@@ -368,6 +368,28 @@ FROM source_unlink`;
 const readProfileVisibilityQuery = `SELECT visibility.visibility
 FROM viberacing_api.read_profile_visibility($1::uuid, $2::bytea) AS visibility`;
 
+const readAccountOverviewQuery = `WITH visibility AS MATERIALIZED (
+  SELECT visibility.visibility
+  FROM viberacing_api.read_profile_visibility($1::uuid, $2::bytea) AS visibility
+)
+SELECT
+  visibility.visibility,
+  score.season_start::text AS season_start,
+  score.season_end::text AS season_end,
+  score.season_finalized,
+  score.weekly_score,
+  score.active_days,
+  score.source_count,
+  score.score_date::text AS score_date,
+  score.daily_score
+FROM visibility
+LEFT JOIN LATERAL viberacing_api.read_profile_score(
+  $1::uuid,
+  $2::bytea,
+  $3::date
+) AS score ON TRUE
+ORDER BY score.score_date NULLS FIRST`;
+
 const setProfileVisibilityQuery = `SELECT viberacing_api.set_profile_visibility(
   $1::uuid,
   $2::bytea,
@@ -666,6 +688,10 @@ export interface EnrollmentDatabaseProfileVisibilityRequest {
   readonly sessionVerifierDigest: Uint8Array;
 }
 
+export interface EnrollmentDatabaseAccountOverviewRequest extends EnrollmentDatabaseProfileVisibilityRequest {
+  readonly seasonStart: string;
+}
+
 export interface EnrollmentDatabaseProfileVisibilityUpdate extends EnrollmentDatabaseProfileVisibilityRequest {
   readonly publiclyVisible: boolean;
 }
@@ -783,6 +809,7 @@ export interface EnrollmentDatabaseClient {
   createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
   pauseSource(input: EnrollmentDatabaseSourcePause): Promise<unknown>;
+  readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<unknown>;
   readActiveDeviceInventory(
     input: EnrollmentDatabaseSourceDeviceInventoryRequest,
   ): Promise<unknown>;
@@ -1259,6 +1286,18 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         return await fixedQuery(readActiveDeviceInventoryQuery, [
           input.sessionId,
           sessionVerifierDigest,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
+    },
+    async readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(readAccountOverviewQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.seasonStart,
         ]);
       } finally {
         sessionVerifierDigest.fill(0);

@@ -6,7 +6,7 @@ Most sequences remain planned application contracts. The enrollment, returning-l
 addition, non-current-passkey revocation, immediate profile-deletion-request, source
 inventory/pause/reactivation/unlink, and active-device revoke sequences below plus the public score
 consumer are now locally implemented boundaries; none has live credentials, edge, purge-worker, or
-deployment evidence. Revisions 0001 through 0018 provide private
+deployment evidence. Revisions 0001 through 0019 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
@@ -115,7 +115,9 @@ sequenceDiagram
   Browser->>Web: Open account with encrypted session
   Web->>DB: Read bounded session-derived passkey inventory
   DB-->>Web: Labels, lifecycle state, rounded creation dates, current marker
-  Web-->>Browser: Server-rendered private list without credential or key material
+  Web->>DB: Read visibility and current-week derived score in one checkout
+  DB-->>Web: Closed visibility plus seven daily scores or empty result
+  Web-->>Browser: Server-rendered private account without raw usage or key material
 
   User->>Browser: Hide or publish the public profile
   Browser->>Web: Exact same-origin bounded form with encrypted session
@@ -155,6 +157,12 @@ revalidates ownership and state before creating the five-minute challenge, while
 call rechecks last-key protection under lock. Current, last, foreign, expired, malformed, and
 replayed attempts fail generically. Credential IDs, public keys, sign counters, exact activity
 timestamps, and profile IDs never enter the page or verify request.
+
+Revision 0019 adds the private score read used above without a new client API. The exact-session
+procedure returns only existing derived season rows, and the mapper requires the requested Monday,
+seven consecutive 0–1000 daily scores, a matching weekly sum, and coherent bounded metadata. Hidden
+profiles return no score; no raw usage, private identifier, browser fetch, cache, or storage is
+added.
 
 The add control appears only below the 32-record lifetime cap. It validates and seals the label
 before either prompt, uses distinct five-minute assertion and registration challenges, and binds

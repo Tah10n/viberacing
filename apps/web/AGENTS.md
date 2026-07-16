@@ -41,6 +41,11 @@ apply.
   `public`/`hidden` mapper. Hiding removes the profile from public reads but does not pause existing
   source sync; publishing makes it eligible for public reads again. Preserve idempotency, generic
   failures, no browser persistence, and the fixed Web/Auth database capability.
+- The private account score view must remain server-rendered and session-derived. Read only the
+  selected current Monday's seven 0–1000 derived daily scores plus bounded weekly score, active-day
+  count, contributing-source count, season dates/state, and visibility. Hidden profiles expose no
+  score. Never add raw usage, source/device/profile IDs, a browser fetch/cache, or an extra account
+  database checkout for this view.
 - Active-device inventory must remain session-derived, server-rendered, and usable while the profile
   is hidden. Project only the at-most-64 active credentials with bounded label/platform/version and
   day-rounded activation; omit source IDs, internal key/profile IDs, public keys, and exact times

@@ -7,6 +7,26 @@ import { describe, expect, it, vi } from "vitest";
 import { createEnrollmentDatabase, EnrollmentDatabaseError } from "./enrollment-database";
 import type { EnrollmentDatabaseClient, EnrollmentDatabasePool } from "./pairing-database-pool";
 
+function accountScoreRows() {
+  return Array.from({ length: 7 }, (_, index) => ({
+    active_days: 7,
+    daily_score: (index + 1) * 100,
+    score_date: `2026-07-${String(13 + index).padStart(2, "0")}`,
+    season_end: "2026-07-19",
+    season_finalized: false,
+    season_start: "2026-07-13",
+    source_count: 2,
+    visibility: "public",
+    weekly_score: 2800,
+  }));
+}
+
+const accountOverviewRequest = {
+  seasonStart: "2026-07-13",
+  sessionId: "00000000-0000-4000-8000-000000000403",
+  sessionVerifierDigest: new Uint8Array(32),
+};
+
 function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
   const releases: boolean[] = [];
   const client: EnrollmentDatabaseClient = {
@@ -33,6 +53,7 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     createSourceUnlinkChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
     pauseSource: vi.fn(() => Promise.resolve([{ paused: true }])),
+    readAccountOverview: vi.fn(() => Promise.resolve(accountScoreRows())),
     readActiveDeviceInventory: vi.fn(() =>
       Promise.resolve([
         {
@@ -376,6 +397,22 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe("public");
+    const accountOverview = await database.readAccountOverview(accountOverviewRequest);
+    expect(accountOverview).toEqual({
+      score: {
+        activeDays: 7,
+        dailyScores: [100, 200, 300, 400, 500, 600, 700],
+        seasonEnd: "2026-07-19",
+        seasonFinalized: false,
+        seasonStart: "2026-07-13",
+        sourceCount: 2,
+        weeklyScore: 2800,
+      },
+      visibility: "public",
+    });
+    expect(Object.isFrozen(accountOverview)).toBe(true);
+    expect(Object.isFrozen(accountOverview.score)).toBe(true);
+    expect(Object.isFrozen(accountOverview.score?.dailyScores)).toBe(true);
     await expect(
       database.setProfileVisibility({
         publiclyVisible: false,
@@ -400,31 +437,71 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(22);
-    expect(releases).toEqual([
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-    ]);
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(23);
+    expect(releases).toEqual(Array.from({ length: 23 }, () => false));
+  });
+
+  it("accepts only an exact bounded account score projection", async () => {
+    for (const visibility of ["hidden", "public"] as const) {
+      const empty = fixture({
+        readAccountOverview: () =>
+          Promise.resolve([
+            {
+              active_days: null,
+              daily_score: null,
+              score_date: null,
+              season_end: null,
+              season_finalized: null,
+              season_start: null,
+              source_count: null,
+              visibility,
+              weekly_score: null,
+            },
+          ]),
+      });
+      await expect(empty.database.readAccountOverview(accountOverviewRequest)).resolves.toEqual({
+        score: null,
+        visibility,
+      });
+      expect(empty.releases).toEqual([false]);
+    }
+
+    const validRows = accountScoreRows();
+    const invalidResults: readonly unknown[] = [
+      validRows.slice(0, 6),
+      [...validRows, validRows[6]],
+      validRows.map((row, index) => (index === 3 ? { ...row, season_end: "2026-07-20" } : row)),
+      validRows.map((row) => ({ ...row, visibility: "hidden" })),
+      validRows.map((row, index) => (index === 1 ? { ...row, score_date: "2026-07-16" } : row)),
+      validRows.map((row, index) => ({
+        ...row,
+        score_date: `2026-07-${String(6 + index).padStart(2, "0")}`,
+        season_end: "2026-07-12",
+        season_start: "2026-07-06",
+      })),
+      validRows.map((row) => ({ ...row, weekly_score: 2799 })),
+      [
+        {
+          ...validRows[0],
+          active_days: null,
+          daily_score: null,
+          score_date: null,
+          season_end: null,
+          season_finalized: null,
+          season_start: null,
+          source_count: null,
+        },
+      ],
+      validRows.map((row) => ({ ...row, raw_tokens: 123 })),
+    ];
+
+    for (const rows of invalidResults) {
+      const invalid = fixture({ readAccountOverview: () => Promise.resolve(rows) });
+      await expect(
+        invalid.database.readAccountOverview(accountOverviewRequest),
+      ).rejects.toMatchObject({ code: "result_invalid" });
+      expect(invalid.releases).toEqual([true]);
+    }
   });
 
   it("destroys a checkout after boundary, query, or result failure", async () => {

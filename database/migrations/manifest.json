@@ -108,6 +108,12 @@
       "name": "hidden_profile_source_unlink",
       "path": "database/migrations/0018_hidden_profile_source_unlink.sql",
       "sha256": "f78c56b2fa81f8d00e9b7686ad1394cb3f5371c46f77e8d6ff17a37757eeb20c"
+    },
+    {
+      "revision": 19,
+      "name": "account_score_read",
+      "path": "database/migrations/0019_account_score_read.sql",
+      "sha256": "c913153de3ff4bddcba2085043b44d1d110233febffe5097ec9935dfb2a87084"
     }
   ]
 }

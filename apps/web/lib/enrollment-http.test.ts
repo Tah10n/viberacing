@@ -110,6 +110,7 @@ function serviceFixture(): EnrollmentService {
     completeSourceReactivation: vi.fn(() => Promise.resolve(true)),
     completeSourceUnlink: vi.fn(() => Promise.resolve(true)),
     logout: vi.fn(() => Promise.resolve(true)),
+    readAccountOverview: vi.fn(() => Promise.resolve(undefined)),
     readActiveDeviceInventory: vi.fn(() => Promise.resolve(undefined)),
     readPasskeyInventory: vi.fn(() => Promise.resolve(undefined)),
     readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),

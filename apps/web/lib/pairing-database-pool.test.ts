@@ -231,6 +231,19 @@ describe("pairing database pool", () => {
       [{ reactivated: true }],
       [{ created: true }],
       [{ unlinked: true }],
+      [
+        {
+          active_days: null,
+          daily_score: null,
+          score_date: null,
+          season_end: null,
+          season_finalized: null,
+          season_start: null,
+          source_count: null,
+          visibility: "public",
+          weekly_score: null,
+        },
+      ],
     ];
     const liveQueries: { text: string; values: unknown[] }[] = [];
     const snapshots: { text: string; values: unknown[] }[] = [];
@@ -543,6 +556,18 @@ describe("pairing database pool", () => {
         verifiedPasskeyId: "00000000-0000-4000-8000-000000000306",
       }),
     ).resolves.toEqual([{ unlinked: true }]);
+    await expect(
+      client.readAccountOverview({
+        seasonStart: "2026-07-13",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        score_date: null,
+        visibility: "public",
+      }),
+    ]);
 
     expect(snapshots.map(({ text }) => text)).toEqual([
       expect.stringContaining("enroll_profile"),
@@ -567,6 +592,7 @@ describe("pairing database pool", () => {
       expect.stringContaining("reactivate_source"),
       expect.stringContaining("create_source_action_challenge"),
       expect.stringContaining("unlink_source"),
+      expect.stringContaining("read_profile_score"),
     ]);
     expect(snapshots[2]?.text).toContain("register_initial_passkey");
     expect(snapshots[2]?.text).toContain("rotate_session");
@@ -590,6 +616,9 @@ describe("pairing database pool", () => {
     expect(snapshots[20]?.text).toContain("'source_unlink'::text");
     expect(snapshots[21]?.text).toContain("consume_passkey_challenge");
     expect(snapshots[21]?.text).toContain("unlink_source");
+    expect(snapshots[22]?.text).toContain("read_profile_visibility");
+    expect(snapshots[22]?.text).toContain("read_profile_score");
+    expect(snapshots[22]?.text).toContain("LEFT JOIN LATERAL");
     expect(snapshots[4]?.values).toEqual([
       "00000000-0000-4000-8000-000000000310",
       digest,
@@ -738,6 +767,11 @@ describe("pairing database pool", () => {
       `src_${"B".repeat(22)}`,
       "00000000-0000-4000-8000-000000000326",
       "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
+    expect(snapshots[22]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      "2026-07-13",
     ]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));
     expect(context).toEqual(Buffer.alloc(32, 0x52));

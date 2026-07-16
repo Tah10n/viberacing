@@ -172,6 +172,10 @@ flowchart LR
   strict possession proof, server-owned activation IDs, and fixed admission/timing. Pairing browser
   approval, recovery, edge attempt policy, live provider/database credentials, and deployment remain
   separate gates.
+- Authenticated score view: the account server render reuses the exact possessed session and one
+  combined Web/Auth pool checkout to read visibility plus the current Monday's existing seven
+  derived daily scores and bounded summary. Hidden profiles return no score; raw usage, private
+  identifiers, client fetching, and browser storage stay absent.
 - Ingest: a small Fastify service with no OAuth, admin, signing, or deployment credentials. Its
   first local slices are a pure raw-request verification kernel and a bounded least-privileged
   PostgreSQL adapter, a protected exact two-key origin configuration reader, and an atomic

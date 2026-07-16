@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 45
+    SELECT pg_catalog.count(*) = 46
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -561,6 +561,58 @@ SELECT pg_temp.assert_true(
 );
 
 RESET ROLE;
+SET LOCAL ROLE viberacing_owner;
+
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  season_end,
+  score_version,
+  grace_ends_at
+)
+VALUES (
+  pg_catalog.current_setting('viberacing.test_week_start')::date,
+  pg_catalog.current_setting('viberacing.test_week_start')::date + 6,
+  'community_v1',
+  viberacing_private.community_season_grace_ends_at(
+    pg_catalog.current_setting('viberacing.test_week_start')::date
+  )
+);
+
+INSERT INTO viberacing_private.season_entries (
+  season_start,
+  profile_id,
+  weekly_score,
+  active_days,
+  contributing_source_count,
+  rank_position,
+  display_order,
+  computed_at
+)
+VALUES (
+  pg_catalog.current_setting('viberacing.test_week_start')::date,
+  '00000000-0000-4000-8000-000000000101',
+  2800,
+  7,
+  2,
+  1,
+  1,
+  pg_catalog.statement_timestamp()
+);
+
+INSERT INTO viberacing_private.season_daily_scores (
+  season_start,
+  profile_id,
+  score_date,
+  daily_score
+)
+SELECT
+  pg_catalog.current_setting('viberacing.test_week_start')::date,
+  '00000000-0000-4000-8000-000000000101',
+  pg_catalog.current_setting('viberacing.test_week_start')::date + day_offset,
+  ((day_offset + 1) * 100)::smallint
+FROM pg_catalog.generate_series(0, 6) AS generated_day(day_offset);
+
+RESET ROLE;
 SET LOCAL ROLE viberacing_web;
 
 SELECT pg_temp.assert_true(
@@ -575,12 +627,69 @@ SELECT pg_temp.assert_true(
 );
 
 SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 7
+      AND pg_catalog.min(score_date) = pg_catalog.min(season_start)
+      AND pg_catalog.max(score_date) = pg_catalog.max(season_end)
+      AND pg_catalog.sum(daily_score) = 2800
+      AND pg_catalog.bool_and(
+        weekly_score = 2800
+        AND active_days = 7
+        AND source_count = 2
+        AND NOT season_finalized
+      )
+    FROM viberacing_api.read_profile_score(
+      '00000000-0000-4000-8000-000000000203',
+      pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex'),
+      pg_catalog.current_setting('viberacing.test_week_start')::date
+    )
+  ),
+  'an exact active session reads seven derived daily scores without private values'
+);
+
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT *
+    FROM viberacing_api.read_profile_score(
+      '00000000-0000-4000-8000-000000000203',
+      pg_catalog.decode(pg_catalog.repeat('99', 32), 'hex'),
+      pg_catalog.current_setting('viberacing.test_week_start')::date
+    )
+  $sql$,
+  'the private score read requires the exact session verifier'
+);
+
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT *
+    FROM viberacing_api.read_profile_score(
+      '00000000-0000-4000-8000-000000000203',
+      pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex'),
+      pg_catalog.current_setting('viberacing.test_week_start')::date + 1
+    )
+  $sql$,
+  'the private score read accepts only a canonical Monday'
+);
+
+SELECT pg_temp.assert_true(
   viberacing_api.set_profile_visibility(
     '00000000-0000-4000-8000-000000000203',
     pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex'),
     false
   ) = 'hidden',
   'an exact active session hides its profile'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 0
+    FROM viberacing_api.read_profile_score(
+      '00000000-0000-4000-8000-000000000203',
+      pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex'),
+      pg_catalog.current_setting('viberacing.test_week_start')::date
+    )
+  ),
+  'a hidden profile retains its session but exposes no materialized account score'
 );
 
 RESET ROLE;
@@ -625,6 +734,18 @@ SELECT pg_temp.assert_true(
     true
   ) = 'public',
   'an exact hidden session republishes its profile'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 7
+    FROM viberacing_api.read_profile_score(
+      '00000000-0000-4000-8000-000000000203',
+      pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex'),
+      pg_catalog.current_setting('viberacing.test_week_start')::date
+    )
+  ),
+  'publishing restores the existing current-week account score read'
 );
 
 RESET ROLE;

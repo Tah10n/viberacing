@@ -21,6 +21,9 @@ cases, and privacy data map before changing this subtree.
 - Hiding a profile changes public visibility only. Its possessed session must retain private active
   device inventory and immediate owned-device revoke; do not reactivate public visibility as a
   workaround for a lifecycle action.
+- A private profile-score read must derive the profile from the exact active or hidden session, be
+  executable only by Web, and return only existing derived season/daily score fields. A hidden
+  profile returns no score rows; never expose raw usage, source/device/profile IDs, or timestamps.
 - Source pause and passkey-protected reactivation must remain available to a possessed session while
   its profile is hidden without changing that visibility. Reactivation is limited to `paused`, uses
   one fresh consumed source-bound challenge, and must never lift `quarantined`.

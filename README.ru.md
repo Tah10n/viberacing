@@ -26,6 +26,10 @@ passkey, необратимое отключение источника со с�
 invite issuer, OAuth registration, реальные secrets, live OAuth/authenticator/database credentials,
 deletion purge worker, edge abuse controls или evidence с реальным пользователем.
 
+Страница аккаунта теперь также рендерит семь derived-баллов по дням текущей Community-недели и
+bounded summary через один объединённый server-side visibility/score checkout. Hidden-профиль не
+показывает score; raw usage, private identifiers, browser fetch и browser storage не добавлены.
+
 ## Модель доверия
 
 Community-статистика предоставляется локальными устройствами и не подтверждается OpenAI. Её нельзя

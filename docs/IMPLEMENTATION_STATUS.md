@@ -527,6 +527,12 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   invite issuer UI, recovery, pairing approval, aggregate/distributed attempt policy,
   abandoned-state cleanup, live OAuth/authenticator/database integration, monitoring, or deployment
   evidence.
+- A private current-week account score slice now reuses the exact possessed session and one combined
+  Web/Auth pool checkout for visibility plus revision 0019's derived-score read. The server-only
+  mapper accepts one empty sentinel or exactly seven consecutive 0–1000 daily scores with coherent
+  weekly/season metadata, rejects raw or inconsistent fields, and renders no score while hidden.
+  EN/RU component tests cover score, hidden, and unavailable states. There is no client fetch,
+  browser storage, working database credential, or live-user evidence.
 - A second dormant server-only Web pairing adapter reuses the same environment-owned narrow Web/Auth
   login through a separate four-connection read-write pool. The start application accepts only a
   closed canonical public-key/label/version/OS/architecture request, generates fresh pairing and
@@ -541,7 +547,7 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   procedure with a server-generated `dev_` ID, audit UUID, and common `req_` ID. Each transport-free
   application admits four unsettled attempts, holds each through a 250-millisecond floor, and
   returns only its frozen success shape or generic failure plus a request ID. The Web suite now
-  contains 501 tests; pairing coverage includes material/code bounds, HMAC vectors/rotation and key
+  contains 509 tests; pairing coverage includes material/code bounds, HMAC vectors/rotation and key
   separation, hostile configuration/input/result shapes, fixed start/lookup/activation queries,
   driver confinement, role drift, strict proof selection, IDs, admission/timing, generic failure,
   clearing, release, and close. No pairing approval/HTTP route, client identity or distributed rate
@@ -610,9 +616,9 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   deployment without a real HTTPS DNS value remains forbidden. The separate enrollment slice stores
   account state only in encrypted HttpOnly cookies and reads its exact server-only configuration
   lazily; the default preview still needs none of it.
-- Five hundred seven unit, component, interaction, security-header, localization, scoring,
+- Five hundred nine unit, component, interaction, security-header, localization, scoring,
   HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
-  coverage gate currently reports 87.70% statements, 86.49% branches, 95.89% functions, and 87.81%
+  coverage gate currently reports 87.75% statements, 86.51% branches, 95.97% functions, and 87.85%
   lines over product components and libraries; framework entrypoints are verified by the production
   build instead of artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift; contract, Ingest, and
@@ -635,7 +641,7 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0018 from the checksum manifest,
+reached `healthy`, validated and applied revisions 0001 through 0019 from the checksum manifest,
 passed 24-table state/ownership/RLS assertions, twenty-three observed lock-wait races, eight
 relation-denial checks, twenty-eight cross-capability denials, and the identity, passkey, recovery,
 pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention,
