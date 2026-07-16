@@ -21,7 +21,7 @@ describe("static security headers", () => {
     expect(headers.get("X-Frame-Options")).toBe("DENY");
     expect(headers.get("Referrer-Policy")).toBe("no-referrer");
     expect(headers.get("Permissions-Policy")).toContain("camera=()");
-    expect(headers.get("Permissions-Policy")).toContain("publickey-credentials-get=()");
+    expect(headers.get("Permissions-Policy")).toContain("publickey-credentials-get=(self)");
     expect(headers.get("Permissions-Policy")).not.toContain("publickey-credentials-create=()");
     expect(headers.has("Strict-Transport-Security")).toBe(false);
   });

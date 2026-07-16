@@ -36,43 +36,43 @@ provides no valid invite or working credential. See `.env.example` and the local
 
 ## Module map
 
-| Path                                    | Responsibility                                                   | Trust boundary                                                                     |
-| --------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `app/page.tsx`                          | Selects the current week and builds the synthetic fallback       | Must pass only public labels and presentation data into the client tree            |
-| `lib/race-data.ts`                      | Clearly synthetic raw activity fixtures and payload projection   | Marked `server-only`; never replace with exports or real account data              |
-| `lib/public-community-race.ts`          | Loads and maps the current public score page for visible racing  | Exact same-origin GET; no credentials/cache; closed fields and synthetic fallback  |
-| `lib/public-community-score-mapper.ts`  | Validates and maps the exact SQL score projection                | Server-only, exact allowlist, top-32, and fail-closed                              |
-| `lib/public-community-score-store.ts`   | Executes the fixed public-score procedure and mapper             | Canonical Monday only; verifies every checkout; route constructs it lazily         |
-| `lib/public-community-score-route.ts`   | Parses and serializes the public score HTTP boundary             | Closed query/Accept, exact errors, admission, deadlines, and no CORS               |
-| `lib/public-score-admission.ts`         | Enforces the no-queue public-read concurrency ceiling            | Four active reads; lease held until adapter settlement                             |
-| `lib/public-http-problem.ts`            | Generates opaque request IDs and closed public error responses   | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
-| `app/join`, `app/account`, `app/auth`   | Presents and routes the invite-to-passkey enrollment slice       | Thin entrypoints; no returning login, recovery, pairing approval, or admin         |
-| `lib/enrollment-http.ts`                | Owns the five enrollment HTTP decisions                          | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
-| `lib/enrollment-service.ts`             | Composes OAuth, enrollment, passkey registration, and logout     | Server IDs/secrets only; fixed database capability; generic failure                |
-| `lib/enrollment-cookie.ts`              | Seals OAuth, passkey, and session continuations                  | AES-GCM with purpose-separated keys, bounded expiry, HttpOnly, and narrow paths    |
-| `lib/github-oauth.ts`                   | Resolves one GitHub numeric user ID                              | State plus PKCE, no extra scope, fixed endpoints, token and other fields discarded |
-| `lib/passkey-registration.ts`           | Creates and verifies initial passkey ceremonies                  | Exact RP/origin/type, required UV, fixed algorithms, and bounded output            |
-| `lib/enrollment-database.ts`            | Owns fixed enrollment database operations                        | Reuses the probed Web/Auth pool; no general query or reflected database detail     |
-| `lib/pairing-possession-verifier.ts`    | Strictly verifies one approved pending-device proof              | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence    |
-| `lib/pairing-poll-verifier.ts`          | Derives fixed poll-verifier candidates under protected keys      | Primary plus optional secondary; no raw key container; close clears key copies     |
-| `lib/pairing-user-code-verifier.ts`     | Derives fixed human-code verifier candidates under separate keys | Primary plus optional secondary; cross-purpose key reuse is rejected               |
-| `lib/pairing-start-material.ts`         | Generates bounded pending-transaction material                   | Server IDs, 32-byte token/challenge, 60-bit code, and nine-minute expiry           |
-| `lib/pairing-start-database.ts`         | Owns exact pending-pairing creation                              | Closed metadata and generated fields only; destructive release on failure          |
-| `lib/pairing-start-application.ts`      | Composes dormant transport-free start policy                     | Four admitted calls, 250 ms floor, generic failure, no HTTP or approval authority  |
-| `lib/pairing-activation-database.ts`    | Owns approved lookup, strict proof, and exact activation         | Fixed procedures only; server IDs only; destructive release on boundary failure    |
-| `lib/pairing-activation-application.ts` | Composes dormant transport-free activation policy                | Four admitted calls, 250 ms floor, generic failure, no HTTP or browser authority   |
-| `lib/pairing-database-config.ts`        | Derives a separate read-write pool from the Web/Auth login       | Same strict TLS/deadlines; explicit role/search-path/read-write probe              |
-| `lib/pairing-database-pool.ts`          | Wraps `pg` with fixed pairing start/lookup/activation calls      | No generic query; copies/clears byte parameters; stable idle-error signal          |
-| `lib/public-score-database-config.ts`   | Parses the dedicated Web login and TLS/pool contract             | Owner settings are separate; production is verify-full; errors reflect no value    |
-| `lib/public-score-database-pool.ts`     | Wraps `pg` with narrow connect/query/release/close authority     | Four connections; bounded waits; stable idle-error signal only                     |
-| `lib/scoring.ts`                        | Bounded daily/weekly score and deterministic rank calculation    | Treat all future device input as untrusted and validate before calling             |
-| `lib/race-types.ts`                     | Client-safe participant and demo-profile shape                   | Must not gain raw tokens or source/account identifiers                             |
-| `lib/public-origin.ts`                  | Strict parser for the canonical social-metadata origin           | Server-only; hosted origins require HTTPS DNS and no extra URL parts               |
-| `lib/car-recipe.ts`                     | Closed-enum car customization and fixed sprites                  | No arbitrary colors, markup, text, files, SVG, or URLs                             |
-| `components/pixel-race-canvas.tsx`      | Deterministic code-native renderer                               | Draws fixed primitives only; semantic DOM description is mandatory                 |
-| `components/race-experience.tsx`        | EN/RU interaction, table, profile, theme, and motion controls    | Local storage is restricted to non-personal preferences                            |
-| `proxy.ts`                              | Per-response nonce CSP                                           | Keep production CSP fail-closed and free of remote origins                         |
-| `next.config.ts`                        | Static security headers and build isolation                      | Turbopack must remain pinned to this repository root                               |
+| Path                                               | Responsibility                                                   | Trust boundary                                                                     |
+| -------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `app/page.tsx`                                     | Selects the current week and builds the synthetic fallback       | Must pass only public labels and presentation data into the client tree            |
+| `lib/race-data.ts`                                 | Clearly synthetic raw activity fixtures and payload projection   | Marked `server-only`; never replace with exports or real account data              |
+| `lib/public-community-race.ts`                     | Loads and maps the current public score page for visible racing  | Exact same-origin GET; no credentials/cache; closed fields and synthetic fallback  |
+| `lib/public-community-score-mapper.ts`             | Validates and maps the exact SQL score projection                | Server-only, exact allowlist, top-32, and fail-closed                              |
+| `lib/public-community-score-store.ts`              | Executes the fixed public-score procedure and mapper             | Canonical Monday only; verifies every checkout; route constructs it lazily         |
+| `lib/public-community-score-route.ts`              | Parses and serializes the public score HTTP boundary             | Closed query/Accept, exact errors, admission, deadlines, and no CORS               |
+| `lib/public-score-admission.ts`                    | Enforces the no-queue public-read concurrency ceiling            | Four active reads; lease held until adapter settlement                             |
+| `lib/public-http-problem.ts`                       | Generates opaque request IDs and closed public error responses   | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
+| `app/join`, `app/login`, `app/account`, `app/auth` | Presents and routes enrollment plus returning login              | Thin entrypoints; no recovery, pairing approval, or admin                          |
+| `lib/enrollment-http.ts`                           | Owns the seven local identity HTTP decisions                     | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
+| `lib/enrollment-service.ts`                        | Composes OAuth, registration, returning login, and logout        | Server IDs/secrets only; fixed database capability; generic failure                |
+| `lib/enrollment-cookie.ts`                         | Seals login, OAuth, passkey, and session continuations           | AES-GCM with purpose-separated keys, bounded expiry, HttpOnly, and narrow paths    |
+| `lib/github-oauth.ts`                              | Resolves one GitHub numeric user ID                              | State plus PKCE, no extra scope, fixed endpoints, token and other fields discarded |
+| `lib/passkey-registration.ts`                      | Creates and verifies registration and login ceremonies           | Exact RP/origin/type, required UV, fixed algorithms, and bounded output            |
+| `lib/enrollment-database.ts`                       | Owns fixed identity database operations                          | Reuses the probed Web/Auth pool; no general query or reflected database detail     |
+| `lib/pairing-possession-verifier.ts`               | Strictly verifies one approved pending-device proof              | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence    |
+| `lib/pairing-poll-verifier.ts`                     | Derives fixed poll-verifier candidates under protected keys      | Primary plus optional secondary; no raw key container; close clears key copies     |
+| `lib/pairing-user-code-verifier.ts`                | Derives fixed human-code verifier candidates under separate keys | Primary plus optional secondary; cross-purpose key reuse is rejected               |
+| `lib/pairing-start-material.ts`                    | Generates bounded pending-transaction material                   | Server IDs, 32-byte token/challenge, 60-bit code, and nine-minute expiry           |
+| `lib/pairing-start-database.ts`                    | Owns exact pending-pairing creation                              | Closed metadata and generated fields only; destructive release on failure          |
+| `lib/pairing-start-application.ts`                 | Composes dormant transport-free start policy                     | Four admitted calls, 250 ms floor, generic failure, no HTTP or approval authority  |
+| `lib/pairing-activation-database.ts`               | Owns approved lookup, strict proof, and exact activation         | Fixed procedures only; server IDs only; destructive release on boundary failure    |
+| `lib/pairing-activation-application.ts`            | Composes dormant transport-free activation policy                | Four admitted calls, 250 ms floor, generic failure, no HTTP or browser authority   |
+| `lib/pairing-database-config.ts`                   | Derives a separate read-write pool from the Web/Auth login       | Same strict TLS/deadlines; explicit role/search-path/read-write probe              |
+| `lib/pairing-database-pool.ts`                     | Wraps `pg` with fixed pairing start/lookup/activation calls      | No generic query; copies/clears byte parameters; stable idle-error signal          |
+| `lib/public-score-database-config.ts`              | Parses the dedicated Web login and TLS/pool contract             | Owner settings are separate; production is verify-full; errors reflect no value    |
+| `lib/public-score-database-pool.ts`                | Wraps `pg` with narrow connect/query/release/close authority     | Four connections; bounded waits; stable idle-error signal only                     |
+| `lib/scoring.ts`                                   | Bounded daily/weekly score and deterministic rank calculation    | Treat all future device input as untrusted and validate before calling             |
+| `lib/race-types.ts`                                | Client-safe participant and demo-profile shape                   | Must not gain raw tokens or source/account identifiers                             |
+| `lib/public-origin.ts`                             | Strict parser for the canonical social-metadata origin           | Server-only; hosted origins require HTTPS DNS and no extra URL parts               |
+| `lib/car-recipe.ts`                                | Closed-enum car customization and fixed sprites                  | No arbitrary colors, markup, text, files, SVG, or URLs                             |
+| `components/pixel-race-canvas.tsx`                 | Deterministic code-native renderer                               | Draws fixed primitives only; semantic DOM description is mandatory                 |
+| `components/race-experience.tsx`                   | EN/RU interaction, table, profile, theme, and motion controls    | Local storage is restricted to non-personal preferences                            |
+| `proxy.ts`                                         | Per-response nonce CSP                                           | Keep production CSP fail-closed and free of remote origins                         |
+| `next.config.ts`                                   | Static security headers and build isolation                      | Turbopack must remain pinned to this repository root                               |
 
 ## Public HTTP problem boundary
 
@@ -137,7 +137,23 @@ verification. The bounded proof route atomically consumes the challenge, registe
 passkey, rotates to a fresh 30-day passkey-bound session, and revokes the pending session. Only that
 success returns the encrypted active browser session.
 
-All enrollment POST bodies are read as bounded streams with invalid encoding rejected before
+## Returning passkey login
+
+`POST /auth/login/options` creates a five-minute discoverable-credential challenge with required
+user verification and no profile identifier or credential allowlist. It stores no database row: the
+challenge, server ID, and expiry live only in a separate encrypted HttpOnly cookie. The browser uses
+`webauthn.get`, then `POST /auth/login/verify` accepts only one bounded response object, derives the
+canonical credential ID, reads only the active key's opaque ID, COSE public key, counter, and backup
+flags, and verifies the exact challenge, origin, RP ID, type, signature, and UV result.
+
+Only valid proof reaches revision 0014's fixed call. One transaction creates and immediately
+consumes the profile-free challenge, derives the profile from the exact active credential, advances
+monotonic usage state, creates a 30-day passkey-provenance session, and returns only profile ID,
+handle, and locale for the encrypted session cookie. Replay loses on the challenge ID. If cookie
+sealing fails after the database call, the application revokes the just-created session instead of
+leaking one of the profile's 32 active-session slots.
+
+All identity POST bodies are read as bounded streams with invalid encoding rejected before
 application work. Admission is acquired before the first body read and held through dependency
 settlement; rejected or overloaded requests cancel their body without a queue. Cookies are
 purpose-keyed AES-256-GCM values with authenticated context, HttpOnly, SameSite=Lax, HTTPS `Secure`,
@@ -146,10 +162,10 @@ and the narrowest useful path; duplicate cookie names fail closed. Every respons
 renders only the sealed session's public handle; every state-changing operation still requires the
 database verifier and session state.
 
-This is not a launch-ready authentication system. There is no invite-issuance UI, returning passkey
-login, recovery, profile controls beyond logout, aggregate/distributed edge rate policy, cleanup for
-abandoned enrollment state, live OAuth/authenticator/database-login evidence, monitoring, or
-deployment. The tracked environment values are non-working placeholders.
+This is not a launch-ready authentication system. There is no invite-issuance UI, recovery, profile
+controls beyond logout, aggregate/distributed edge rate policy, cleanup for abandoned enrollment
+state, live OAuth/authenticator/database-login evidence, monitoring, or deployment. The tracked
+environment values are non-working placeholders.
 
 ## Pairing start and activation boundaries
 
@@ -217,9 +233,8 @@ aggregate source count; it does not pair or verify accounts.
 - Exact activity is projected to bounded scores before client serialization.
 - CSP uses a fresh cryptographic nonce for each navigation and `strict-dynamic` in production.
 - Framing, MIME sniffing, unnecessary browser capabilities, referrer leakage, and remote image
-  sources are denied by policy. Same-origin WebAuthn creation is used only for initial enrollment;
-  the `publickey-credentials-get` capability remains disabled until returning login or step-up
-  exists.
+  sources are denied by policy. WebAuthn creation remains same-origin for initial enrollment, and
+  `publickey-credentials-get` is enabled only for same-origin returning login.
 - `form-action` permits only self and the exact `https://github.com` OAuth navigation so browsers
   may follow the reviewed authorization redirect; GitHub is not added to script, connect, image,
   frame, font, worker, or media sources.
@@ -240,29 +255,30 @@ aggregate source count; it does not pair or verify accounts.
   Next.js's type-only reference, while lint policy forbids importing the absent runtime.
 
 These controls reduce current risk; they do not make Community claims authoritative or replace the
-remaining Phase 2 login, recovery, profile-control, ingestion, retention, deletion, and edge
-abuse-control gates.
+remaining Phase 2 recovery, profile-control, ingestion, retention, deletion, and edge abuse-control
+gates.
 
 ## Test strategy
 
 Vitest runs business-logic, data-boundary, HTTP-route/problem, admission, pairing cryptography and
-activation composition, invite/OAuth/session/passkey enrollment, database-config/pool/store,
-component, interaction, CSP/header, localization, and axe-core accessibility tests. Enrollment cases
-cover exact form/JSON bodies, streaming limits, origin and cookie ambiguity, state plus PKCE,
-no-extra-scope token exchange, encrypted purpose separation, fixed SQL, one-time challenge binding,
-exact RP/origin/type and UV verification, continuation-before-write ordering, overload, logout,
-EN/RU rendering, native ceremony integration, and generic failures without a live account or
-credential. Other HTTP-boundary cases cover entropy, opaque tokens, every problem mapping, closed
-URL parsing, bounded media negotiation, overload settlement, headers, contract validation, hostile
-reflective inputs, and non-reflection. Adapter tests cover TLS/environment bounds, non-reflective
-failures, pool lifecycle, every-checkout role/login/search-path/read-only probes, fixed SQL
-parameters, release/destruction behavior, and mapper integration without requiring or claiming a
-live deployment login. Pairing cases additionally cover exact HMAC derivation and rotation,
-protected configuration, fixed two-candidate SQL, read-write role probes, the shared strict proof,
-hostile input/result/dependency shapes, server IDs, admission/timing, generic failures, clearing,
-release, and close without a real key or connection. Canvas tests execute real render loops against
-a typed context stub, including animated and no-context paths. Visible-score tests cover
-current-week selection, exact credential-free fetch, closed public response mapping,
+activation composition, invite/OAuth/session/passkey enrollment and returning login,
+database-config/pool/store, component, interaction, CSP/header, localization, and axe-core
+accessibility tests. Enrollment cases cover exact form/JSON bodies, streaming limits, origin and
+cookie ambiguity, state plus PKCE, no-extra-scope token exchange, encrypted purpose separation,
+fixed SQL, one-time challenge binding, exact RP/origin/type and UV verification,
+continuation-before-write ordering, profile-free database-state-free login options, atomic login
+completion, overload, logout, EN/RU rendering, native ceremonies, and generic failures without a
+live account or credential. Other HTTP-boundary cases cover entropy, opaque tokens, every problem
+mapping, closed URL parsing, bounded media negotiation, overload settlement, headers, contract
+validation, hostile reflective inputs, and non-reflection. Adapter tests cover TLS/environment
+bounds, non-reflective failures, pool lifecycle, every-checkout role/login/search-path/read-only
+probes, fixed SQL parameters, release/destruction behavior, and mapper integration without requiring
+or claiming a live deployment login. Pairing cases additionally cover exact HMAC derivation and
+rotation, protected configuration, fixed two-candidate SQL, read-write role probes, the shared
+strict proof, hostile input/result/dependency shapes, server IDs, admission/timing, generic
+failures, clearing, release, and close without a real key or connection. Canvas tests execute real
+render loops against a typed context stub, including animated and no-context paths. Visible-score
+tests cover current-week selection, exact credential-free fetch, closed public response mapping,
 success/fallback states, and empty standings. Preference tests cover valid settings, reduced motion,
 pausing, invalid/blocked storage, and cleanup.
 

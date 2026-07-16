@@ -2,9 +2,9 @@
 
 ## Status and notation
 
-Most sequences remain planned application contracts. The enrollment sequence below and the public
-score consumer are now locally implemented boundaries; neither has live credentials, edge, or
-deployment evidence. Revisions 0001 through 0013 provide private
+Most sequences remain planned application contracts. The enrollment and returning-login sequences
+below plus the public score consumer are now locally implemented boundaries; none has live
+credentials, edge, or deployment evidence. Revisions 0001 through 0014 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
@@ -15,28 +15,28 @@ public-score GET constructs the bounded adapter lazily after closed request admi
 home race now requests its current server-selected week from that exact same-origin route, validates
 the public fields, and retains a clearly labeled synthetic fallback on failure. One local one-shot
 Jobs runner can invoke exactly one of four fixed functions: either cleanup function, refresh, or
-finalization, but no returning passkey login/recovery, deployed ingest endpoint, Argon2id/WebAuthn
-pairing approval, operational connector, purge worker, Jobs scheduler/monitor, audited correction,
-or deployed service executes the complete sequences. A library-only Rust connector foundation
-validates the bounded stable App Server initialization exchange and candidate `0.144.4`
-account/usage responses. A synthetic one-shot supervisor composes those states with fixed local
-process mechanics, while an exact-body composer and isolated one-use signer produce a synthetic
-signed envelope. A separate inaccessible pending-key and challenge signer plus a pure server-only
-Web verifier now agree on one exact pairing-possession message and synthetic signature. A dormant
-Web/Auth start application generates fresh IDs, token, challenge, 60-bit code, separate protected
-poll/code verifiers, and a nine-minute pending transaction from closed device metadata. A second
-application performs protected keyed poll lookup, mandates that proof, and invokes only exact atomic
-activation behind local admission/timing. All required connector capabilities have no public
-constructor, and there is no executable admission, real Codex execution, key generation/store,
-pairing-start client, browser/WebAuthn approval, pairing HTTP route, upload, or supported-version
-path. A local Ingest kernel now verifies the bounded exact-body origin/device request, while the
-separate adapter maps origin replay, device lookup, and submission through fixed calls. PostgreSQL
-now proves atomic origin replay consumption and bounded cleanup. A transport-free application now
-composes those exact local capabilities and validates only closed acknowledgement/problem decisions.
-A bounded local Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline
-policy, and serializes only revalidated contracts. There is no edge/live-database/deployment
-integration. No host/port/TLS entry point, deployment login, certificate, edge signer/direct-origin
-policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+finalization, but no recovery/step-up, deployed ingest endpoint, Argon2id/WebAuthn pairing approval,
+operational connector, purge worker, Jobs scheduler/monitor, audited correction, or deployed service
+executes the complete sequences. A library-only Rust connector foundation validates the bounded
+stable App Server initialization exchange and candidate `0.144.4` account/usage responses. A
+synthetic one-shot supervisor composes those states with fixed local process mechanics, while an
+exact-body composer and isolated one-use signer produce a synthetic signed envelope. A separate
+inaccessible pending-key and challenge signer plus a pure server-only Web verifier now agree on one
+exact pairing-possession message and synthetic signature. A dormant Web/Auth start application
+generates fresh IDs, token, challenge, 60-bit code, separate protected poll/code verifiers, and a
+nine-minute pending transaction from closed device metadata. A second application performs protected
+keyed poll lookup, mandates that proof, and invokes only exact atomic activation behind local
+admission/timing. All required connector capabilities have no public constructor, and there is no
+executable admission, real Codex execution, key generation/store, pairing-start client,
+browser/WebAuthn approval, pairing HTTP route, upload, or supported-version path. A local Ingest
+kernel now verifies the bounded exact-body origin/device request, while the separate adapter maps
+origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic
+origin replay consumption and bounded cleanup. A transport-free application now composes those exact
+local capabilities and validates only closed acknowledgement/problem decisions. A bounded local
+Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline policy, and
+serializes only revalidated contracts. There is no edge/live-database/deployment integration. No
+host/port/TLS entry point, deployment login, certificate, edge signer/direct-origin policy, or live
+route/Jobs evidence is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -85,8 +85,8 @@ endpoints, streaming body limits, exact RP/origin/type/user-verification checks,
 calls. The pending session lasts at most 15 minutes; successful passkey registration atomically
 rotates it to a fresh 30-day passkey-bound session. The suite uses injected GitHub,
 authenticator-verifier, and database capabilities; there is no live OAuth app, invite issuer UI,
-real key/login, edge proof, aggregate/distributed attempt limit, abandoned-state cleanup, returning
-login/recovery, or deployment evidence.
+real key/login, edge proof, aggregate/distributed attempt limit, abandoned-state cleanup, recovery,
+or deployment evidence.
 
 ## Passkey login and credential management
 
@@ -99,13 +99,13 @@ sequenceDiagram
   participant DB as Profile/Auth database role
 
   Browser->>Web: Start anonymous login ceremony
-  Web->>DB: Store profile-free challenge for at most five minutes
+  Web-->>Browser: Seal profile-free challenge for at most five minutes
   Web->>Authenticator: Request discoverable credential assertion
   Authenticator-->>Web: Credential ID, signature, UV, and counter flags
   Web->>DB: Read minimal active verification material by credential ID
   Web->>Web: Verify RP ID, origin, challenge, context, signature, and UV
-  Web->>DB: Atomically consume challenge and mint passkey-bound session
-  DB-->>Web: Credential-derived internal profile binding
+  Web->>DB: Atomically create/consume challenge and mint passkey-bound session
+  DB-->>Web: Credential-derived profile ID, handle, and locale
   Web-->>Browser: Private no-store authenticated response
 
   User->>Browser: Add or revoke a passkey
@@ -117,10 +117,12 @@ sequenceDiagram
 ```
 
 The database exposes no profile identifier during credential lookup, stores no attestation
-fingerprint, preserves a monotonic maximum sign counter, and makes revoke terminal. It cannot check
-WebAuthn cryptography or protect an Internet endpoint from anonymous challenge floods; edge/service
-limits and bounded expiry cleanup are mandatory before this flow is reachable. Recovery is a
-separate restricted-authority flow, not a normal login shortcut.
+fingerprint, preserves a monotonic maximum sign counter, and makes revoke terminal. The local
+options route creates no database state; after application proof verification revision 0014 stores
+and consumes the cookie-bound challenge in the session transaction. The database still cannot check
+WebAuthn cryptography or protect an Internet endpoint from request floods; edge/service limits and
+bounded cleanup of consumed ceremonies are mandatory before deployment. Recovery is a separate
+restricted-authority flow, not a normal login shortcut.
 
 ## Recovery-code rotation and passkey replacement
 

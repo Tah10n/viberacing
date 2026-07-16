@@ -10,7 +10,7 @@ import {
 
 import type { EnrollmentConfig } from "./enrollment-config";
 import type { EnrollmentCookieCodec, EnrollmentRandomBytes } from "./enrollment-cookie";
-import type { EnrollmentDatabase } from "./enrollment-database";
+import type { EnrollmentDatabase, PasskeyLoginMaterial } from "./enrollment-database";
 import {
   enrollmentPatterns,
   readEnrollmentSession,
@@ -28,9 +28,13 @@ import {
 } from "./github-oauth";
 import {
   createInitialPasskeyOptions,
+  createPasskeyLoginOptions,
   passkeyChallengeDigest,
   passkeyContextDigest,
+  passkeyLoginContextDigest,
+  passkeyLoginCredentialId,
   verifyInitialPasskey,
+  verifyPasskeyLogin,
   type RegisteredPasskey,
 } from "./passkey-registration";
 import { createPublicRequestId } from "./public-http-problem";
@@ -41,9 +45,11 @@ const pendingSessionLifetimeSeconds = 15 * 60;
 const activeSessionLifetimeSeconds = 30 * 24 * 60 * 60;
 const base64Url32Pattern = /^[A-Za-z0-9_-]{43}$/;
 const registrationBodyKeys = new Set(["label", "response"]);
+const authenticationBodyKeys = new Set(["response"]);
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 
 export const enrollmentCookieNames = Object.freeze({
+  login: "viberacing_login",
   oauth: "viberacing_oauth",
   passkey: "viberacing_passkey",
   session: "viberacing_session",
@@ -67,8 +73,18 @@ export interface PasskeyCompletionDecision {
   readonly sessionCookie: string;
 }
 
+export interface PasskeyLoginOptionsDecision {
+  readonly loginCookie: string;
+  readonly options: Awaited<ReturnType<typeof createPasskeyLoginOptions>>;
+}
+
+export interface PasskeyLoginCompletionDecision {
+  readonly sessionCookie: string;
+}
+
 export interface EnrollmentService {
   beginGithub(join: JoinRequest): EnrollmentStartDecision | undefined;
+  beginLogin(): Promise<PasskeyLoginOptionsDecision | undefined>;
   beginPasskey(sessionCookie: string): Promise<PasskeyOptionsDecision | undefined>;
   cancelGithub(state: string, oauthCookie: string): boolean;
   completeGithub(
@@ -77,6 +93,10 @@ export interface EnrollmentService {
     oauthCookie: string,
     signal: AbortSignal,
   ): Promise<EnrollmentCallbackDecision | undefined>;
+  completeLogin(
+    loginCookie: string,
+    body: unknown,
+  ): Promise<PasskeyLoginCompletionDecision | undefined>;
   completePasskey(
     sessionCookie: string,
     passkeyCookie: string,
@@ -90,6 +110,7 @@ interface EnrollmentServiceDependencies {
   readonly config: EnrollmentConfig;
   readonly cookieCodec: EnrollmentCookieCodec;
   readonly createOptions?: typeof createInitialPasskeyOptions;
+  readonly createLoginOptions?: typeof createPasskeyLoginOptions;
   readonly createRequestId?: () => string;
   readonly database: EnrollmentDatabase;
   readonly exchangeGithub?: typeof exchangeGithubUserId;
@@ -97,10 +118,15 @@ interface EnrollmentServiceDependencies {
   readonly randomBytes?: EnrollmentRandomBytes;
   readonly randomUuid?: () => string;
   readonly verifyPasskey?: typeof verifyInitialPasskey;
+  readonly verifyLogin?: typeof verifyPasskeyLogin;
 }
 
 interface RegistrationBody {
   readonly label: string;
+  readonly response: unknown;
+}
+
+interface AuthenticationBody {
   readonly response: unknown;
 }
 
@@ -175,11 +201,38 @@ function readRegistrationBody(value: unknown): RegistrationBody | undefined {
   return Object.freeze({ label: record.label, response: record.response });
 }
 
+function readAuthenticationBody(value: unknown): AuthenticationBody | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== authenticationBodyKeys.size ||
+    keys.some((key) => !authenticationBodyKeys.has(key)) ||
+    record.response === null ||
+    typeof record.response !== "object" ||
+    Array.isArray(record.response)
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ response: record.response });
+}
+
 function clearRegisteredPasskey(passkey: RegisteredPasskey | undefined): void {
   if (passkey !== undefined) {
     passkey.credentialId.fill(0);
     passkey.cosePublicKey.fill(0);
   }
+}
+
+function clearLoginMaterial(material: PasskeyLoginMaterial | undefined): void {
+  material?.cosePublicKey.fill(0);
 }
 
 export function createEnrollmentService(
@@ -189,6 +242,7 @@ export function createEnrollmentService(
     config,
     cookieCodec,
     database,
+    createLoginOptions = createPasskeyLoginOptions,
     createOptions = createInitialPasskeyOptions,
     createRequestId = () => createPublicRequestId().value,
     exchangeGithub = exchangeGithubUserId,
@@ -196,6 +250,7 @@ export function createEnrollmentService(
     randomBytes = nodeRandomBytes,
     randomUuid = nodeRandomUUID,
     verifyPasskey = verifyInitialPasskey,
+    verifyLogin = verifyPasskeyLogin,
   } = dependencies;
 
   function currentSeconds(): number | undefined {
@@ -228,6 +283,33 @@ export function createEnrollmentService(
           oauthCookie: cookieCodec.seal("oauth", pending),
           redirectUrl: githubAuthorizationUrl(config, material),
         });
+      } catch {
+        return undefined;
+      }
+    },
+    async beginLogin(): Promise<PasskeyLoginOptionsDecision | undefined> {
+      const seconds = currentSeconds();
+      if (seconds === undefined) {
+        return undefined;
+      }
+      try {
+        const options = await createLoginOptions(config.webauthnRpId);
+        if (!base64Url32Pattern.test(options.challenge)) {
+          return undefined;
+        }
+        const challengeId = randomUuid();
+        if (!enrollmentPatterns.uuidV4.test(challengeId)) {
+          return undefined;
+        }
+        const expiresAt = seconds + passkeyLifetimeSeconds;
+        const challenge: PasskeyRegistrationChallenge = Object.freeze({
+          challenge: options.challenge,
+          challengeId,
+          expiresAt,
+          version: 1,
+        });
+        const loginCookie = cookieCodec.seal("login", challenge);
+        return Object.freeze({ loginCookie, options });
       } catch {
         return undefined;
       }
@@ -383,6 +465,114 @@ export function createEnrollmentService(
         inviteDigest?.fill(0);
         sessionSecret?.fill(0);
         sessionDigest?.fill(0);
+      }
+    },
+    async completeLogin(
+      loginCookie: string,
+      body: unknown,
+    ): Promise<PasskeyLoginCompletionDecision | undefined> {
+      const seconds = currentSeconds();
+      const authentication = readAuthenticationBody(body);
+      const challenge =
+        seconds === undefined
+          ? undefined
+          : readPasskeyChallenge(cookieCodec.open("login", loginCookie), seconds);
+      if (seconds === undefined || authentication === undefined || challenge === undefined) {
+        return undefined;
+      }
+      let credentialId: Buffer | undefined;
+      let material: PasskeyLoginMaterial | undefined;
+      let sessionSecret: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        credentialId = passkeyLoginCredentialId(authentication.response);
+        if (credentialId === undefined) {
+          return undefined;
+        }
+        material = await database.readPasskeyLoginMaterial(credentialId);
+        if (material === undefined) {
+          return undefined;
+        }
+        const verified = await verifyLogin(
+          authentication.response,
+          challenge.challenge,
+          config.webauthnOrigin,
+          config.webauthnRpId,
+          {
+            backupEligible: material.backupEligible,
+            cosePublicKey: material.cosePublicKey,
+            credentialId,
+            signCount: material.signCount,
+          },
+        );
+        if (verified === undefined) {
+          return undefined;
+        }
+        sessionSecret = randomSecret(randomBytes);
+        if (sessionSecret === undefined) {
+          return undefined;
+        }
+        sessionDigest = createHash("sha256").update(sessionSecret).digest();
+        challengeDigest = passkeyChallengeDigest(challenge.challenge);
+        contextDigest = passkeyLoginContextDigest(config.webauthnRpId, config.webauthnOrigin);
+        const sessionId = randomUuid();
+        const auditEventId = randomUuid();
+        const cleanupAuditEventId = randomUuid();
+        const generatedIds = [sessionId, auditEventId, cleanupAuditEventId];
+        if (
+          generatedIds.some((id) => !enrollmentPatterns.uuidV4.test(id)) ||
+          new Set(generatedIds).size !== generatedIds.length
+        ) {
+          return undefined;
+        }
+        const expiresAt = seconds + activeSessionLifetimeSeconds;
+        const profile = await database.completePasskeyLogin({
+          auditEventId,
+          backupState: verified.backupState,
+          challengeDigest,
+          challengeExpiresAt: new Date(challenge.expiresAt * 1000).toISOString(),
+          challengeId: challenge.challengeId,
+          contextDigest,
+          credentialId,
+          observedSignCount: verified.signCount,
+          passkeyId: material.passkeyId,
+          requestId: createRequestId(),
+          sessionExpiresAt: new Date(expiresAt * 1000).toISOString(),
+          sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+        const session: EnrollmentSession = Object.freeze({
+          expiresAt,
+          handle: profile.handle,
+          locale: profile.locale,
+          passkeyRegistered: true,
+          profileId: profile.profileId,
+          sessionId,
+          sessionVerifier: sessionSecret.toString("base64url"),
+          version: 1,
+        });
+        try {
+          return Object.freeze({ sessionCookie: cookieCodec.seal("session", session) });
+        } catch {
+          await database.revokeSession({
+            auditEventId: cleanupAuditEventId,
+            requestId: createRequestId(),
+            sessionId,
+            sessionVerifierDigest: sessionDigest,
+          });
+          return undefined;
+        }
+      } catch {
+        return undefined;
+      } finally {
+        credentialId?.fill(0);
+        clearLoginMaterial(material);
+        sessionSecret?.fill(0);
+        sessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
       }
     },
     async completePasskey(

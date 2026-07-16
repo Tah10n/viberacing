@@ -144,12 +144,17 @@ flowchart LR
 
 ### Runtime components
 
-- Web/Auth: Next.js App Router and strict TypeScript. A dormant transport-free pairing start
-  boundary now owns fresh server IDs/token/challenge/code, separate protected poll/code verifiers,
-  closed device metadata, nine-minute expiry, and one fixed call through a separate probed
-  read-write pool wrapper. A second dormant boundary owns protected poll lookup, strict possession
-  proof, server-owned activation IDs, and fixed admission/timing. Browser/session/WebAuthn approval,
-  anonymous HTTP policy, live login, and deployment remain separate gates.
+- Web/Auth: Next.js App Router and strict TypeScript. Local invite/OAuth/initial-passkey enrollment
+  and returning discoverable-credential login use purpose-separated encrypted cookies, exact
+  same-origin bounded routes, application WebAuthn verification, and fixed calls through the probed
+  read-write pool. Login options retain no database state; valid proof alone reaches atomic
+  challenge creation/consumption and passkey-provenance session minting. A dormant transport-free
+  pairing start boundary now owns fresh server IDs/token/challenge/code, separate protected
+  poll/code verifiers, closed device metadata, nine-minute expiry, and one fixed call through a
+  separate probed read-write pool wrapper. A second dormant boundary owns protected poll lookup,
+  strict possession proof, server-owned activation IDs, and fixed admission/timing. Pairing browser
+  approval, recovery/step-up, edge attempt policy, live provider/database credentials, and
+  deployment remain separate gates.
 - Ingest: a small Fastify service with no OAuth, admin, signing, or deployment credentials. Its
   first local slices are a pure raw-request verification kernel and a bounded least-privileged
   PostgreSQL adapter, a protected exact two-key origin configuration reader, and an atomic
@@ -427,7 +432,8 @@ edge rate policy, shared cache, capacity result, or public-beta claim.
 The visible home race now uses that exact same-origin operation for its current server-selected
 Monday. It accepts only the bounded Public response, uses no credentials or browser persistence, and
 keeps a clearly labeled synthetic fallback on any invalid or unavailable result. CarRecipe, streak,
-freshness, profile detail, cache, live login, and deployment remain separate gates.
+freshness, authenticated profile detail, cache, live database integration, and deployment remain
+separate gates.
 
 ### ConnectorSyncV1
 

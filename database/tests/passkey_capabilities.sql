@@ -480,6 +480,33 @@ SELECT pg_temp.assert_true(
   'login can retry safely after an atomic rollback'
 );
 
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.bool_and(
+        profile_id = '00000000-0000-4000-8000-000000005101'
+        AND handle = 'passkey-alpha'
+        AND locale = 'en'
+      )
+    FROM viberacing_api.complete_passkey_login_session(
+      '00000000-0000-4000-8000-000000005691',
+      pg_catalog.decode(pg_catalog.repeat('c9', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('d9', 32), 'hex'),
+      pg_catalog.statement_timestamp() + INTERVAL '4 minutes',
+      '00000000-0000-4000-8000-000000005301',
+      pg_catalog.decode(pg_catalog.repeat('61', 32), 'hex'),
+      7,
+      true,
+      '00000000-0000-4000-8000-000000005291',
+      pg_catalog.decode(pg_catalog.repeat('f9', 32), 'hex'),
+      pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+      '00000000-0000-4000-8000-000000005991',
+      'req_' || pg_catalog.repeat('Q', 22)
+    )
+  ),
+  'post-proof login result returns only the exact profile cookie fields'
+);
+
 SELECT viberacing_api.create_passkey_login_challenge(
   '00000000-0000-4000-8000-000000005604',
   pg_catalog.decode(pg_catalog.repeat('a4', 32), 'hex'),
@@ -928,7 +955,7 @@ SELECT pg_temp.assert_true(
       AND state = 'active'
   )
   AND (
-    SELECT pg_catalog.count(*) = 6
+    SELECT pg_catalog.count(*) = 7
     FROM viberacing_private.audit_events
     WHERE profile_id = '00000000-0000-4000-8000-000000005101'
       AND event_type IN (

@@ -1,18 +1,30 @@
 import "server-only";
 
+import { Buffer } from "node:buffer";
+
 import { resolvePairingDatabaseConfig } from "./pairing-database-config";
 import {
   createPairingDatabasePool,
   type EnrollmentDatabaseClient,
   type EnrollmentDatabaseInitialPasskey,
+  type EnrollmentDatabaseLoginCompletion,
   type EnrollmentDatabasePasskeyChallenge,
   type EnrollmentDatabasePool,
   type EnrollmentDatabaseProfile,
   type EnrollmentDatabaseSessionRevocation,
   type PairingDatabasePoolSignalSink,
 } from "./pairing-database-pool";
+import { enrollmentPatterns } from "./enrollment-domain";
 
 const runtimeColumns = new Set(["login_scope_ok", "read_write_ok", "role_ok", "search_path_ok"]);
+const loginMaterialColumns = new Set([
+  "backup_eligible",
+  "backup_state",
+  "cose_public_key",
+  "passkey_id",
+  "sign_count",
+]);
+const loginProfileColumns = new Set(["handle", "locale", "profile_id"]);
 
 export type EnrollmentDatabaseErrorCode =
   | "connection_release_failed"
@@ -34,9 +46,25 @@ export class EnrollmentDatabaseError extends Error {
 
 export interface EnrollmentDatabase {
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<boolean>;
+  completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
+  readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined>;
   revokeSession(input: EnrollmentDatabaseSessionRevocation): Promise<boolean>;
+}
+
+export interface PasskeyLoginMaterial {
+  readonly backupEligible: boolean;
+  readonly backupState: boolean;
+  readonly cosePublicKey: Buffer;
+  readonly passkeyId: string;
+  readonly signCount: number;
+}
+
+export interface PasskeyLoginProfile {
+  readonly handle: string;
+  readonly locale: "en" | "ru";
+  readonly profileId: string;
 }
 
 export interface ConfiguredEnrollmentDatabase extends EnrollmentDatabase {
@@ -63,6 +91,87 @@ function exactBooleanRow(value: unknown, key: string): boolean {
   return row[key];
 }
 
+function copyBoundedBytes(value: unknown, minimum: number, maximum: number): Buffer | undefined {
+  if (!Buffer.isBuffer(value) && !(value instanceof Uint8Array)) {
+    return undefined;
+  }
+  const prototype: unknown = Object.getPrototypeOf(value);
+  if (
+    (prototype !== Uint8Array.prototype && prototype !== Buffer.prototype) ||
+    value.byteLength < minimum ||
+    value.byteLength > maximum
+  ) {
+    return undefined;
+  }
+  return Buffer.from(value);
+}
+
+function exactLoginMaterial(value: unknown): PasskeyLoginMaterial | undefined {
+  let publicKey: Buffer | undefined;
+  try {
+    if (!Array.isArray(value) || value.length > 1) {
+      fail("result_invalid");
+    }
+    if (value.length === 0) {
+      return undefined;
+    }
+    const row: unknown = value[0];
+    if (!isRecord(row)) {
+      fail("result_invalid");
+    }
+    const keys = Object.keys(row);
+    publicKey = copyBoundedBytes(row.cose_public_key, 32, 4096);
+    if (
+      keys.length !== loginMaterialColumns.size ||
+      keys.some((key) => !loginMaterialColumns.has(key)) ||
+      typeof row.passkey_id !== "string" ||
+      !enrollmentPatterns.uuidV4.test(row.passkey_id) ||
+      typeof row.sign_count !== "string" ||
+      !/^(?:0|[1-9]\d{0,15})$/.test(row.sign_count) ||
+      !Number.isSafeInteger(Number(row.sign_count)) ||
+      typeof row.backup_eligible !== "boolean" ||
+      typeof row.backup_state !== "boolean" ||
+      (row.backup_state && !row.backup_eligible) ||
+      publicKey === undefined
+    ) {
+      fail("result_invalid");
+    }
+    return Object.freeze({
+      backupEligible: row.backup_eligible,
+      backupState: row.backup_state,
+      cosePublicKey: publicKey,
+      passkeyId: row.passkey_id,
+      signCount: Number(row.sign_count),
+    });
+  } catch (error) {
+    publicKey?.fill(0);
+    if (error instanceof EnrollmentDatabaseError) {
+      throw error;
+    }
+    fail("result_invalid");
+  }
+}
+
+function exactLoginProfile(value: unknown): PasskeyLoginProfile {
+  if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
+    fail("result_invalid");
+  }
+  const row = value[0];
+  const keys = Object.keys(row);
+  if (
+    keys.length !== loginProfileColumns.size ||
+    keys.some((key) => !loginProfileColumns.has(key)) ||
+    typeof row.profile_id !== "string" ||
+    !enrollmentPatterns.uuidV4.test(row.profile_id) ||
+    typeof row.handle !== "string" ||
+    !enrollmentPatterns.handle.test(row.handle) ||
+    (row.locale !== "en" && row.locale !== "ru")
+  ) {
+    fail("result_invalid");
+  }
+  return Object.freeze({ handle: row.handle, locale: row.locale, profileId: row.profile_id });
+}
+
 function verifyRuntimeBoundary(value: unknown): void {
   if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
     fail("runtime_boundary_mismatch");
@@ -87,10 +196,10 @@ function releaseClient(client: EnrollmentDatabaseClient, destroy: boolean): void
 }
 
 export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): EnrollmentDatabase {
-  async function execute(
+  async function execute<Result>(
     operation: (client: EnrollmentDatabaseClient) => Promise<unknown>,
-    resultKey: string,
-  ): Promise<boolean> {
+    readResult: (value: unknown) => Result,
+  ): Promise<Result> {
     let client: EnrollmentDatabaseClient;
     try {
       client = await pool.connect();
@@ -100,7 +209,7 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
     let destroy = false;
     try {
       verifyRuntimeBoundary(await client.verifyRuntimeBoundary());
-      return exactBooleanRow(await operation(client), resultKey);
+      return readResult(await operation(client));
     } catch (error) {
       destroy = true;
       if (error instanceof EnrollmentDatabaseError) {
@@ -114,16 +223,34 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
 
   return Object.freeze({
     completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<boolean> {
-      return execute((client) => client.completeInitialPasskey(input), "registered");
+      return execute(
+        (client) => client.completeInitialPasskey(input),
+        (value) => exactBooleanRow(value, "registered"),
+      );
+    },
+    completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile> {
+      return execute((client) => client.completePasskeyLogin(input), exactLoginProfile);
     },
     createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean> {
-      return execute((client) => client.createPasskeyChallenge(input), "created");
+      return execute(
+        (client) => client.createPasskeyChallenge(input),
+        (value) => exactBooleanRow(value, "created"),
+      );
     },
     enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean> {
-      return execute((client) => client.enrollProfile(input), "enrolled");
+      return execute(
+        (client) => client.enrollProfile(input),
+        (value) => exactBooleanRow(value, "enrolled"),
+      );
+    },
+    readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined> {
+      return execute((client) => client.readPasskeyLoginMaterial(credentialId), exactLoginMaterial);
     },
     revokeSession(input: EnrollmentDatabaseSessionRevocation): Promise<boolean> {
-      return execute((client) => client.revokeEnrollmentSession(input), "revoked");
+      return execute(
+        (client) => client.revokeEnrollmentSession(input),
+        (value) => exactBooleanRow(value, "revoked"),
+      );
     },
   });
 }

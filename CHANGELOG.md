@@ -165,8 +165,15 @@ Versioning where its guarantees are applicable.
   session to a fresh passkey-bound session, logout, no-queue admission, and generic
   no-store/no-referrer failures. SimpleWebAuthn server/browser packages are exact-pinned, confined
   to one owner each, license/advisory/asset-reviewed, and covered through injected production paths.
-  No invite issuer UI, returning login, recovery, live OAuth/authenticator/database credential, edge
-  rate policy, cleanup schedule, monitoring, or deployment is implied.
+  No invite issuer UI, recovery, live OAuth/authenticator/database credential, edge rate policy,
+  cleanup schedule, monitoring, or deployment is implied.
+- A local returning-passkey login slice with EN/RU UI, same-origin bounded POST routes, a
+  discoverable profile-free WebAuthn challenge held only in a purpose-separated encrypted cookie,
+  exact active-credential lookup, RP/origin/type/UV/signature verification, and one atomic
+  challenge-create/consume plus passkey-provenance session call. Failed cookie sealing revokes the
+  just-minted session; the route adds no anonymous database state before valid proof. Distributed
+  attempt limits, live OAuth/authenticator/database credentials, recovery, monitoring, and
+  deployment remain separate gates.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

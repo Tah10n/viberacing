@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default async function AccountPage() {
   const session = await readEnrollmentPageSession();
   if (!session?.passkeyRegistered) {
-    redirect("/join?error=unavailable");
+    redirect("/login?error=unavailable");
   }
   const copy = joinTranslations[session.locale];
   return (

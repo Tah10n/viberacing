@@ -136,7 +136,7 @@ export default defineConfig([
             },
             {
               name: "@simplewebauthn/server",
-              message: "Only passkey-registration.ts may verify WebAuthn registration proofs.",
+              message: "Only passkey-registration.ts may verify WebAuthn proofs.",
             },
           ],
         },

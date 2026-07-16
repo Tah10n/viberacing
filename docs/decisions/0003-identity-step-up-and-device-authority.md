@@ -90,8 +90,15 @@ challenge binding, bounded expiry, challenge and action replay, atomic invite re
 passkey activation, session rotation/revocation, cross-profile deletion denial, failed-operation
 rollback, immediate authority revoke, least-privilege role grants, exact pairing/source-choice
 binding, post-approval competing-profile denial, poll possession, single activation, and immutable
-device binding. This evidence does not prove OAuth, cookies, CSRF, WebAuthn cryptographic
-verification, or Ed25519 proof verification in an application service.
+device binding. This database evidence alone does not prove OAuth, cookies, CSRF, WebAuthn
+cryptographic verification, or Ed25519 proof verification in an application service.
+
+The local Web/Auth application now adds injected evidence for invite enrollment, state plus S256
+PKCE, token minimization, purpose-separated cookies, initial WebAuthn registration, and returning
+discoverable-credential login. Login options retain only a profile-free encrypted challenge and
+create no database state; after exact RP ID/origin/challenge/type/user-verification/signature
+checks, one atomic database call advances credential state and mints a passkey-provenance session.
+This does not prove a live OAuth app, authenticator, database login, edge policy, or deployment.
 
 An additional identity concurrency suite holds each authoritative row until both tagged contenders
 are visible in its transitive blocker chain. It proves one winner for shared invite enrollment,
@@ -129,11 +136,9 @@ authority and remaining application boundary.
 
 Remaining application and protocol evidence includes:
 
-- OAuth state, PKCE, exact callback, code replay, token disposal, user-ID uniqueness, and session
-  fixation tests.
-- Application WebAuthn RP/origin, transaction rendering, signature, user-verification, cookie/CSRF,
-  recovery Argon2id/pepper and generic-response behavior, and anonymous ceremony/recovery-lookup
-  rate-limit and cleanup tests.
+- Application WebAuthn transaction rendering and verification for step-up, recovery Argon2id/pepper
+  and generic-response behavior, and anonymous ceremony/recovery-lookup rate-limit and cleanup
+  tests.
 - Application-level pairing code attempt/rate limits, displayed-transaction rendering, external
   Ed25519 proof verification, device-revoke UI/route, key rotation, bounded cleanup, and plaintext
   token log rejection.

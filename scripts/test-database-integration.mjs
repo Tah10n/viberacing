@@ -1622,6 +1622,27 @@ SELECT viberacing_api.complete_passkey_login(
     );`,
     "jobs challenge consumption",
   );
+  for (const role of ["viberacing_ingest", "viberacing_jobs", "viberacing_admin"]) {
+    expectDenied(
+      role,
+      `SELECT * FROM viberacing_api.complete_passkey_login_session(
+        '00000000-0000-4000-8000-000000009035',
+        pg_catalog.decode(pg_catalog.repeat('94', 32), 'hex'),
+        pg_catalog.decode(pg_catalog.repeat('95', 32), 'hex'),
+        pg_catalog.statement_timestamp() + INTERVAL '4 minutes',
+        '00000000-0000-4000-8000-000000009036',
+        pg_catalog.decode(pg_catalog.repeat('96', 32), 'hex'),
+        0,
+        false,
+        '00000000-0000-4000-8000-000000009037',
+        pg_catalog.decode(pg_catalog.repeat('97', 32), 'hex'),
+        pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+        '00000000-0000-4000-8000-000000009038',
+        'req_' || pg_catalog.repeat('W', 22)
+      );`,
+      `${role} passkey login session result`,
+    );
+  }
   expectDenied(
     "viberacing_admin",
     `SELECT viberacing_api.start_pairing(
@@ -1721,7 +1742,7 @@ SELECT viberacing_api.complete_passkey_login(
   }
 
   console.log(
-    "Database integration passed (24 schema tables, 23 observed lock-wait races, 8 relation-denial and 25 cross-capability checks).",
+    "Database integration passed (24 schema tables, 23 observed lock-wait races, 8 relation-denial and 28 cross-capability checks).",
   );
 } finally {
   if (started) {

@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method -- Vitest inspects injected method spies without invoking them. */
 
+import { Buffer } from "node:buffer";
+
 import { describe, expect, it, vi } from "vitest";
 
 import { createEnrollmentDatabase, EnrollmentDatabaseError } from "./enrollment-database";
@@ -9,8 +11,28 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
   const releases: boolean[] = [];
   const client: EnrollmentDatabaseClient = {
     completeInitialPasskey: vi.fn(() => Promise.resolve([{ registered: true }])),
+    completePasskeyLogin: vi.fn(() =>
+      Promise.resolve([
+        {
+          handle: "pixel_driver",
+          locale: "en",
+          profile_id: "00000000-0000-4000-8000-000000000402",
+        },
+      ]),
+    ),
     createPasskeyChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
+    readPasskeyLoginMaterial: vi.fn(() =>
+      Promise.resolve([
+        {
+          backup_eligible: true,
+          backup_state: false,
+          cose_public_key: Buffer.alloc(77, 0x51),
+          passkey_id: "00000000-0000-4000-8000-000000000406",
+          sign_count: "1",
+        },
+      ]),
+    ),
     release(destroy = false): void {
       releases.push(destroy);
     },
@@ -52,7 +74,7 @@ const profile = {
 };
 
 describe("enrollment database", () => {
-  it("probes every checkout and exposes four fixed boolean operations", async () => {
+  it("probes every checkout and exposes only the fixed identity operations", async () => {
     const { client, database, releases } = fixture();
     await expect(database.enrollProfile(profile)).resolves.toBe(true);
     await expect(
@@ -87,6 +109,33 @@ describe("enrollment database", () => {
         signCount: 0,
       }),
     ).resolves.toBe(true);
+    await expect(database.readPasskeyLoginMaterial(new Uint8Array(32))).resolves.toMatchObject({
+      backupEligible: true,
+      backupState: false,
+      passkeyId: "00000000-0000-4000-8000-000000000406",
+      signCount: 1,
+    });
+    await expect(
+      database.completePasskeyLogin({
+        auditEventId: profile.auditEventId,
+        backupState: false,
+        challengeDigest: new Uint8Array(32),
+        challengeExpiresAt: "2026-07-16T10:05:00.000Z",
+        challengeId: "00000000-0000-4000-8000-000000000409",
+        contextDigest: new Uint8Array(32),
+        credentialId: new Uint8Array(32),
+        observedSignCount: 2,
+        passkeyId: "00000000-0000-4000-8000-000000000406",
+        requestId: profile.requestId,
+        sessionExpiresAt: profile.sessionExpiresAt,
+        sessionId: "00000000-0000-4000-8000-000000000410",
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).resolves.toEqual({
+      handle: "pixel_driver",
+      locale: "en",
+      profileId: profile.profileId,
+    });
     await expect(
       database.revokeSession({
         auditEventId: profile.auditEventId,
@@ -95,8 +144,8 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(4);
-    expect(releases).toEqual([false, false, false, false]);
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(6);
+    expect(releases).toEqual([false, false, false, false, false, false]);
   });
 
   it("destroys a checkout after boundary, query, or result failure", async () => {
@@ -119,6 +168,23 @@ describe("enrollment database", () => {
       code: "result_invalid",
     });
     expect(invalid.releases).toEqual([true]);
+
+    const malformedMaterial = fixture({
+      readPasskeyLoginMaterial: () =>
+        Promise.resolve([
+          {
+            backup_eligible: false,
+            backup_state: true,
+            cose_public_key: Buffer.alloc(77),
+            passkey_id: "00000000-0000-4000-8000-000000000406",
+            sign_count: "1",
+          },
+        ]),
+    });
+    await expect(
+      malformedMaterial.database.readPasskeyLoginMaterial(new Uint8Array(32)),
+    ).rejects.toMatchObject({ code: "result_invalid" });
+    expect(malformedMaterial.releases).toEqual([true]);
   });
 
   it("contains connection and release failures without reflecting driver detail", async () => {

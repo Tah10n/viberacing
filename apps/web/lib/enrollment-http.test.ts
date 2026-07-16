@@ -51,6 +51,14 @@ function serviceFixture(): EnrollmentService {
       oauthCookie: "opaque-oauth",
       redirectUrl: "https://github.com/login/oauth/authorize?state=opaque",
     })),
+    beginLogin: vi.fn(() =>
+      Promise.resolve({
+        loginCookie: "opaque-login",
+        options: {
+          challenge: Buffer.alloc(32, 4).toString("base64url"),
+        },
+      }),
+    ),
     beginPasskey: vi.fn(() =>
       Promise.resolve({
         options: {
@@ -61,6 +69,7 @@ function serviceFixture(): EnrollmentService {
     ),
     cancelGithub: vi.fn(() => true),
     completeGithub: vi.fn(() => Promise.resolve({ sessionCookie: "opaque-session" })),
+    completeLogin: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskey: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     logout: vi.fn(() => Promise.resolve(true)),
     readSession: vi.fn(() => undefined),
@@ -161,6 +170,37 @@ describe("enrollment HTTP boundary", () => {
     ).resolves.toMatchObject({ status: 400 });
   });
 
+  it("creates an anonymous login challenge and returns only a passkey-bound session", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const options = await http.loginOptions(post("/auth/login/options", "{}", "application/json"));
+    expect(options.status).toBe(200);
+    expect(options.headers.get("set-cookie")).toContain("viberacing_login=opaque-login");
+    expect(options.headers.get("set-cookie")).toContain("Path=/auth/login");
+    expect(service.beginLogin).toHaveBeenCalledOnce();
+
+    const verification = await http.loginVerify(
+      post(
+        "/auth/login/verify",
+        JSON.stringify({ response: { id: "synthetic" } }),
+        "application/json",
+        "viberacing_login=opaque-login",
+      ),
+    );
+    expect(verification.status).toBe(204);
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_login=");
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_session=active-session");
+    expect(service.completeLogin).toHaveBeenCalledWith("opaque-login", {
+      response: { id: "synthetic" },
+    });
+
+    await expect(
+      http.loginVerify(post("/auth/login/verify", "{}", "application/json")),
+    ).resolves.toMatchObject({ status: 401 });
+  });
+
   it("serves options, verifies one bounded response, and replaces the session cookie", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
@@ -211,6 +251,7 @@ describe("enrollment HTTP boundary", () => {
     held?.release();
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`${origin}/join?error=unavailable`);
+    expect(response.headers.get("set-cookie")).toContain("viberacing_login=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.logout).not.toHaveBeenCalled();
 

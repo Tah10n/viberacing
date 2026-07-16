@@ -7,10 +7,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { joinTranslations } from "@/lib/join-i18n";
 
 import { JoinExperience } from "./join-experience";
-import { PasskeySetup } from "./passkey-setup";
+import { PasskeyLogin, PasskeySetup } from "./passkey-setup";
 
 const webauthn = vi.hoisted(() => ({
   browserSupportsWebAuthn: vi.fn(() => false),
+  startAuthentication: vi.fn(() => Promise.resolve({ id: "synthetic-login" })),
   startRegistration: vi.fn(() => Promise.resolve({ id: "synthetic" })),
 }));
 
@@ -64,6 +65,7 @@ describe("enrollment experience", () => {
     expect(mounted.container.querySelector("form")?.getAttribute("action")).toBe(
       "/auth/github/start",
     );
+    expect(mounted.container.querySelector('a[href="/login"]')).not.toBeNull();
     act(() => {
       mounted.root.unmount();
     });
@@ -116,11 +118,53 @@ describe("enrollment experience", () => {
     });
   });
 
+  it("starts returning login with the official passkey adapter and no profile identifier", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const fetchMock = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ challenge: "synthetic" }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    localStorage.setItem("viberacing.locale", "ru");
+    const mounted = mount(<PasskeyLogin />);
+    await act(async () => {
+      await Promise.resolve();
+      mounted.container
+        .querySelector("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mounted.container.querySelector("main")?.getAttribute("lang")).toBe("ru");
+    expect(webauthn.startAuthentication).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      "/auth/login/options",
+      "/auth/login/verify",
+    ]);
+    expect(fetchMock.mock.calls[0]?.[1].body).toBe("{}");
+    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
+    expect(typeof verificationBody).toBe("string");
+    if (typeof verificationBody !== "string") {
+      throw new Error("expected a serialized login verification body");
+    }
+    expect(JSON.parse(verificationBody)).toEqual({
+      response: { id: "synthetic-login" },
+    });
+    expect(mounted.container.textContent).toContain("Не удалось завершить запрос");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
   it("renders semantic join and passkey forms without automated violations", async () => {
     document.documentElement.lang = "en";
     document.title = "Vibe Racing enrollment test";
     for (const markup of [
       renderToStaticMarkup(<JoinExperience />),
+      renderToStaticMarkup(<PasskeyLogin />),
       renderToStaticMarkup(<PasskeySetup handle="pixel_driver" locale="en" />),
     ]) {
       document.body.innerHTML = markup;

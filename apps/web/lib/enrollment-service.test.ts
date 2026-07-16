@@ -3,7 +3,10 @@
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 
-import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/server";
+import type {
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+} from "@simplewebauthn/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { resolveEnrollmentConfig } from "./enrollment-config";
@@ -12,6 +15,7 @@ import type { EnrollmentDatabase } from "./enrollment-database";
 import type { JoinRequest } from "./enrollment-domain";
 import { createEnrollmentService } from "./enrollment-service";
 import type {
+  EnrollmentDatabaseLoginCompletion,
   EnrollmentDatabasePasskeyChallenge,
   EnrollmentDatabaseProfile,
 } from "./pairing-database-pool";
@@ -40,8 +44,19 @@ function createFixture() {
   let enrollmentWrite: EnrollmentDatabaseProfile | undefined;
   let challengeSessionDigest: Buffer | undefined;
   let challengeSessionDigestInput: Uint8Array | undefined;
+  let loginCompletion: EnrollmentDatabaseLoginCompletion | undefined;
+  let loginCredentialLookup: Buffer | undefined;
+  let verifiedLoginCredential: Buffer | undefined;
   const database: EnrollmentDatabase = {
     completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
+    completePasskeyLogin: vi.fn((input: EnrollmentDatabaseLoginCompletion) => {
+      loginCompletion = input;
+      return Promise.resolve({
+        handle: "pixel_driver",
+        locale: "en" as const,
+        profileId: join.inviteId,
+      });
+    }),
     createPasskeyChallenge: vi.fn((input: EnrollmentDatabasePasskeyChallenge) => {
       challengeSessionDigest = Buffer.from(input.sessionVerifierDigest);
       challengeSessionDigestInput = input.sessionVerifierDigest;
@@ -54,6 +69,16 @@ function createFixture() {
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
       return Promise.resolve(true);
+    }),
+    readPasskeyLoginMaterial: vi.fn((credentialId: Uint8Array) => {
+      loginCredentialLookup = Buffer.from(credentialId);
+      return Promise.resolve({
+        backupEligible: true,
+        backupState: false,
+        cosePublicKey: Buffer.alloc(77, 0x73),
+        passkeyId: "00000000-0000-4000-8000-000000000511",
+        signCount: 3,
+      });
     }),
     revokeSession: vi.fn(() => Promise.resolve(true)),
   };
@@ -70,8 +95,10 @@ function createFixture() {
   ];
   const challenge = Buffer.alloc(32, 0x61).toString("base64url");
   const options = { challenge } as PublicKeyCredentialCreationOptionsJSON;
+  const loginOptions = { challenge } as PublicKeyCredentialRequestOptionsJSON;
   const exchangeGithub = vi.fn(() => Promise.resolve(123_456));
   const createOptions = vi.fn(() => Promise.resolve(options));
+  const createLoginOptions = vi.fn(() => Promise.resolve(loginOptions));
   const verifyPasskey = vi.fn(() =>
     Promise.resolve({
       backupEligible: true,
@@ -81,10 +108,23 @@ function createFixture() {
       signCount: 3,
     }),
   );
+  const verifyLogin = vi.fn(
+    (
+      _response: unknown,
+      _challenge: string,
+      _origin: string,
+      _rpId: string,
+      material: { readonly credentialId: Uint8Array },
+    ) => {
+      verifiedLoginCredential = Buffer.from(material.credentialId);
+      return Promise.resolve({ backupState: true, signCount: 4 });
+    },
+  );
   let randomFill = 0x21;
   const service = createEnrollmentService({
     config,
     cookieCodec: createEnrollmentCookieCodec(config.cookieKey, (size) => Buffer.alloc(size, 0x21)),
+    createLoginOptions,
     createOptions,
     createRequestId: () => "req_AAAAAAAAAAAAAAAAAAAAAA",
     database,
@@ -92,17 +132,23 @@ function createFixture() {
     now: () => now,
     randomBytes: (size) => Buffer.alloc(size, (randomFill += 1)),
     randomUuid: () => uuids.shift() ?? "invalid",
+    verifyLogin,
     verifyPasskey,
   });
   return {
     challengeSessionDigest: () => challengeSessionDigest,
     challengeSessionDigestInput: () => challengeSessionDigestInput,
     createOptions,
+    createLoginOptions,
     database,
     enrollmentWrite: () => enrollmentWrite,
     exchangeGithub,
+    loginCredentialLookup: () => loginCredentialLookup,
+    loginCompletion: () => loginCompletion,
     service,
     verifyPasskey,
+    verifyLogin,
+    verifiedLoginCredential: () => verifiedLoginCredential,
   };
 }
 
@@ -193,6 +239,110 @@ describe("enrollment service", () => {
     );
   });
 
+  it("creates a profile-free challenge and mints a credential-derived passkey session", async () => {
+    const {
+      database,
+      loginCompletion,
+      loginCredentialLookup,
+      service,
+      verifiedLoginCredential,
+      verifyLogin,
+    } = createFixture();
+    const start = await service.beginLogin();
+    expect(start?.options.challenge).toHaveLength(43);
+
+    const credentialId = Buffer.alloc(32, 0x74);
+    const response = {
+      clientExtensionResults: {},
+      id: credentialId.toString("base64url"),
+      rawId: credentialId.toString("base64url"),
+      response: {},
+      type: "public-key",
+    };
+    const completion = await service.completeLogin(start?.loginCookie ?? "", { response });
+    expect(completion).toBeDefined();
+    expect(database.readPasskeyLoginMaterial).toHaveBeenCalledWith(Buffer.alloc(32));
+    expect(loginCredentialLookup()).toEqual(credentialId);
+    expect(verifyLogin).toHaveBeenCalledWith(
+      response,
+      start?.options.challenge,
+      "https://race.example.com",
+      "race.example.com",
+      expect.objectContaining({
+        backupEligible: true,
+        signCount: 3,
+      }),
+    );
+    expect(verifiedLoginCredential()).toEqual(credentialId);
+    expect(database.completePasskeyLogin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backupState: true,
+        challengeExpiresAt: new Date(now.valueOf() + 5 * 60 * 1000).toISOString(),
+        challengeId: "00000000-0000-4000-8000-000000000502",
+        observedSignCount: 4,
+        passkeyId: "00000000-0000-4000-8000-000000000511",
+        sessionExpiresAt: new Date(now.valueOf() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        sessionId: "00000000-0000-4000-8000-000000000503",
+      }),
+    );
+    expect(loginCompletion()?.challengeDigest).toEqual(Buffer.alloc(32));
+    expect(loginCompletion()?.contextDigest).toEqual(Buffer.alloc(32));
+    expect(loginCompletion()?.credentialId).toEqual(Buffer.alloc(32));
+    expect(loginCompletion()?.sessionVerifierDigest).toEqual(Buffer.alloc(32));
+    expect(service.readSession(completion?.sessionCookie)).toMatchObject({
+      handle: "pixel_driver",
+      locale: "en",
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId: "00000000-0000-4000-8000-000000000503",
+    });
+  });
+
+  it("revokes a minted login session when its browser cookie cannot be sealed", async () => {
+    const fixture = createFixture();
+    const credentialId = Buffer.alloc(32, 0x74);
+    const challenge = Buffer.alloc(32, 0x61).toString("base64url");
+    const uuids = [
+      "00000000-0000-4000-8000-000000000520",
+      "00000000-0000-4000-8000-000000000521",
+      "00000000-0000-4000-8000-000000000522",
+    ];
+    const service = createEnrollmentService({
+      config,
+      cookieCodec: {
+        open: () => ({
+          challenge,
+          challengeId: "00000000-0000-4000-8000-000000000519",
+          expiresAt: Math.floor(now.valueOf() / 1000) + 300,
+          version: 1,
+        }),
+        seal: () => {
+          throw new Error("cookie unavailable");
+        },
+      },
+      createRequestId: () => "req_AAAAAAAAAAAAAAAAAAAAAA",
+      database: fixture.database,
+      now: () => now,
+      randomBytes: (size) => Buffer.alloc(size, 0x31),
+      randomUuid: () => uuids.shift() ?? "invalid",
+      verifyLogin: () => Promise.resolve({ backupState: false, signCount: 4 }),
+    });
+    const response = {
+      id: credentialId.toString("base64url"),
+      rawId: credentialId.toString("base64url"),
+      response: {},
+      type: "public-key",
+    };
+    await expect(service.completeLogin("opaque", { response })).resolves.toBeUndefined();
+    expect(fixture.database.completePasskeyLogin).toHaveBeenCalledOnce();
+    expect(fixture.database.revokeSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        auditEventId: "00000000-0000-4000-8000-000000000522",
+        sessionId: "00000000-0000-4000-8000-000000000520",
+      }),
+    );
+  });
+
   it("fails closed for mismatched state, invalid cookies, repeated registration, and unsafe labels", async () => {
     const { database, exchangeGithub, service, verifyPasskey } = createFixture();
     const start = service.beginGithub(join);
@@ -271,8 +421,16 @@ describe("enrollment service", () => {
   it("seals continuation cookies before consuming an invite or passkey challenge", async () => {
     const database: EnrollmentDatabase = {
       completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
+      completePasskeyLogin: vi.fn(() =>
+        Promise.resolve({
+          handle: "pixel_driver",
+          locale: "en" as const,
+          profileId: join.inviteId,
+        }),
+      ),
       createPasskeyChallenge: vi.fn(() => Promise.resolve(true)),
       enrollProfile: vi.fn(() => Promise.resolve(true)),
+      readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),
       revokeSession: vi.fn(() => Promise.resolve(true)),
     };
     const seconds = Math.floor(now.valueOf() / 1000);

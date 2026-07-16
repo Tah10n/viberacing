@@ -174,6 +174,34 @@ const revokeEnrollmentSessionQuery = `SELECT viberacing_api.revoke_session(
   $4::text
 ) AS revoked`;
 
+const readPasskeyLoginMaterialQuery = `SELECT
+  material.passkey_id::text AS passkey_id,
+  material.cose_public_key AS cose_public_key,
+  material.sign_count::text AS sign_count,
+  material.backup_eligible AS backup_eligible,
+  material.backup_state AS backup_state
+FROM viberacing_api.read_passkey_verification_material($1::bytea) AS material`;
+
+const completePasskeyLoginQuery = `SELECT
+  completed.profile_id::text AS profile_id,
+  completed.handle AS handle,
+  completed.locale AS locale
+FROM viberacing_api.complete_passkey_login_session(
+  $1::uuid,
+  $2::bytea,
+  $3::bytea,
+  $4::timestamptz,
+  $5::uuid,
+  $6::bytea,
+  $7::bigint,
+  $8::boolean,
+  $9::uuid,
+  $10::bytea,
+  $11::timestamptz,
+  $12::uuid,
+  $13::text
+) AS completed`;
+
 export interface PairingDatabaseActivation {
   readonly auditEventId: string;
   readonly deviceId: string;
@@ -250,6 +278,22 @@ export interface EnrollmentDatabaseSessionRevocation {
   readonly sessionVerifierDigest: Uint8Array;
 }
 
+export interface EnrollmentDatabaseLoginCompletion {
+  readonly auditEventId: string;
+  readonly backupState: boolean;
+  readonly challengeDigest: Uint8Array;
+  readonly challengeExpiresAt: string;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly credentialId: Uint8Array;
+  readonly observedSignCount: number;
+  readonly passkeyId: string;
+  readonly requestId: string;
+  readonly sessionExpiresAt: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+}
+
 export type PairingDatabasePoolSignal = "idle_client_error";
 export type PairingDatabasePoolSignalSink = (
   signal: PairingDatabasePoolSignal,
@@ -267,8 +311,10 @@ export interface PairingDatabaseClient {
 
 export interface EnrollmentDatabaseClient {
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown>;
+  completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
+  readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown>;
   release(destroy?: boolean): void;
   revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
@@ -379,6 +425,34 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         rotatedSessionVerifierDigest.fill(0);
       }
     },
+    async completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown> {
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      const credentialId = Buffer.from(input.credentialId);
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(completePasskeyLoginQuery, [
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.challengeExpiresAt,
+          input.passkeyId,
+          credentialId,
+          input.observedSignCount,
+          input.backupState,
+          input.sessionId,
+          sessionVerifierDigest,
+          input.sessionExpiresAt,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+        credentialId.fill(0);
+        sessionVerifierDigest.fill(0);
+      }
+    },
     async createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       const challengeDigest = Buffer.from(input.challengeDigest);
@@ -433,6 +507,14 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
       } finally {
         first.fill(0);
         second.fill(0);
+      }
+    },
+    async readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown> {
+      const credential = Buffer.from(credentialId);
+      try {
+        return await fixedQuery(readPasskeyLoginMaterialQuery, [credential]);
+      } finally {
+        credential.fill(0);
       }
     },
     release(destroy = false): void {

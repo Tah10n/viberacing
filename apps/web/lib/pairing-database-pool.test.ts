@@ -178,6 +178,22 @@ describe("pairing database pool", () => {
       [{ enrolled: true }],
       [{ created: true }],
       [{ registered: true }],
+      [
+        {
+          backup_eligible: true,
+          backup_state: false,
+          cose_public_key: Buffer.alloc(77),
+          passkey_id: "00000000-0000-4000-8000-000000000306",
+          sign_count: "1",
+        },
+      ],
+      [
+        {
+          handle: "pixel_driver",
+          locale: "en",
+          profile_id: "00000000-0000-4000-8000-000000000302",
+        },
+      ],
       [{ revoked: true }],
     ];
     const liveQueries: { text: string; values: unknown[] }[] = [];
@@ -259,6 +275,38 @@ describe("pairing database pool", () => {
         signCount: 1,
       }),
     ).resolves.toEqual([{ registered: true }]);
+    await expect(client.readPasskeyLoginMaterial(credential)).resolves.toEqual([
+      {
+        backup_eligible: true,
+        backup_state: false,
+        cose_public_key: Buffer.alloc(77),
+        passkey_id: "00000000-0000-4000-8000-000000000306",
+        sign_count: "1",
+      },
+    ]);
+    await expect(
+      client.completePasskeyLogin({
+        auditEventId: "00000000-0000-4000-8000-000000000311",
+        backupState: false,
+        challengeDigest: digest,
+        challengeExpiresAt: "2026-07-16T10:05:00.000Z",
+        challengeId: "00000000-0000-4000-8000-000000000310",
+        contextDigest: context,
+        credentialId: credential,
+        observedSignCount: 2,
+        passkeyId: "00000000-0000-4000-8000-000000000306",
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionExpiresAt: "2026-08-15T10:00:00.000Z",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([
+      {
+        handle: "pixel_driver",
+        locale: "en",
+        profile_id: "00000000-0000-4000-8000-000000000302",
+      },
+    ]);
     await expect(
       client.revokeEnrollmentSession({
         auditEventId: "00000000-0000-4000-8000-000000000307",
@@ -272,11 +320,28 @@ describe("pairing database pool", () => {
       expect.stringContaining("enroll_profile"),
       expect.stringContaining("create_auth_challenge"),
       expect.stringContaining("consume_auth_challenge"),
+      expect.stringContaining("read_passkey_verification_material"),
+      expect.stringContaining("complete_passkey_login_session"),
       expect.stringContaining("revoke_session"),
     ]);
     expect(snapshots[2]?.text).toContain("register_initial_passkey");
     expect(snapshots[2]?.text).toContain("rotate_session");
     expect(snapshots[2]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[4]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000310",
+      digest,
+      context,
+      "2026-07-16T10:05:00.000Z",
+      "00000000-0000-4000-8000-000000000306",
+      credential,
+      2,
+      false,
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      "2026-08-15T10:00:00.000Z",
+      "00000000-0000-4000-8000-000000000311",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));
     expect(context).toEqual(Buffer.alloc(32, 0x52));
     expect(credential).toEqual(Buffer.alloc(32, 0x53));

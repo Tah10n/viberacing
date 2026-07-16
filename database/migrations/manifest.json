@@ -78,6 +78,12 @@
       "name": "pairing_retention_cleanup",
       "path": "database/migrations/0013_pairing_retention_cleanup.sql",
       "sha256": "35fe801eaf9b1c1774d37e43d613bb2661c2faf396a6cb7211c8966645f39180"
+    },
+    {
+      "revision": 14,
+      "name": "passkey_login_session_result",
+      "path": "database/migrations/0014_passkey_login_session_result.sql",
+      "sha256": "22b91ccd8029aac23ef0291f5db7ab28c4f7c213804c9d0b2d0255288663c79e"
     }
   ]
 }

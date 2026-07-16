@@ -236,20 +236,26 @@ material availability cost.
   RP ID/origin, transaction-bound challenges, user verification, exact session/passkey provenance,
   fresh step-up, last-passkey protection, restricted recovery authority, and terminal credential
   revoke that closes stale browser and pending device authority.
-- **Current evidence:** The local invite-enrollment slice accepts only one exact same-origin bounded
-  form, immediately reduces the 256-bit invite secret to its digest, seals state and S256 PKCE in a
+- **Current evidence:** The local identity slice accepts only one exact same-origin bounded form,
+  immediately reduces the 256-bit invite secret to its digest, seals state and S256 PKCE in a
   ten-minute callback-path cookie, requests no extra OAuth scope, follows no upstream redirect, and
   retains only a positive numeric GitHub ID. Purpose-separated AES-GCM cookies reject tampering and
   duplicate names. Initial registration creates one session-bound five-minute challenge and requires
   a discoverable credential, user presence and verification, exact `webauthn.create`, RP ID, origin,
   challenge, and ES256/RS256 verification before atomic activation. Success rotates the 15-minute
   pending session to a fresh passkey-bound session and revokes the old verifier in the same query.
-  Route bodies are stream-bounded under admission held through settlement; overload cancels the body
-  without a queue. Responses are generic/no-store/no-referrer, and the CSP permits only self plus
-  GitHub for OAuth form navigation. Injected tests cover wrong state, origin, RP, type, UV,
-  replay-shaped failures, cookie ambiguity, overload, and continuation-before-write ordering.
-  Returning login, recovery/step-up verification, aggregate edge rate policy, abandoned-state
-  cleanup, live OAuth/authenticator/database integration, and deployment remain absent.
+  Returning-login options create no database state and seal only a profile-free five-minute
+  challenge under a separate purpose key. Verification looks up only minimal active credential
+  material, requires exact `webauthn.get`, RP ID, origin, challenge, UV, signature, counter, and
+  backup semantics, then atomically creates and consumes the database challenge, advances credential
+  state, and mints a fresh passkey-bound session. A post-commit cookie-sealing failure compensates
+  by revoking that session. Route bodies are stream-bounded under admission held through settlement;
+  overload cancels the body without a queue. Responses are generic/no-store/no-referrer, and the CSP
+  permits only self plus GitHub for OAuth form navigation. Injected tests cover wrong state, origin,
+  RP, type, UV, replay-shaped failures, cookie ambiguity, overload, continuation-before-write
+  ordering, database-free login options, atomic completion, and compensation. Recovery/step-up
+  verification, aggregate edge rate policy, abandoned consumed-state cleanup, live
+  OAuth/authenticator/database integration, and deployment remain absent.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a
@@ -406,7 +412,7 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 25 cross-capability denials.
+  and usage/scoring-table reads or API-schema mutation, and proves 28 cross-capability denials.
   Ingest has exactly three reviewed functions; Jobs has exactly four reviewed functions: bounded
   ingest-retention cleanup, bounded pairing-retention cleanup, open-season scoring refresh, and
   terminal season finalization. Web alone receives the bounded public score function; Ingest, Jobs,
@@ -545,27 +551,31 @@ material availability cost.
   each lease through adapter settlement, and returns 503 on exhaustion. The visible home page makes
   one current-week request per navigation with no client retry loop and retains its synthetic
   fallback after failure. The operation reserves a 429 response without claiming a client-rate
-  limiter exists. The transport-free pairing-start application bounds labels, metadata, keys,
-  entropy, and HMAC work, admits four unsettled attempts without a queue, holds each lease through a
-  250-millisecond floor, and makes no database call for malformed input. This is not a distributed
-  or client-identity rate limit. Physical pairing cleanup now exists as a separate local capability,
-  but scheduling and distributed controls are still pending. The local Jobs runner adds a one-client
-  ceiling, 2/31/32-second connect/server/client deadlines, two fixed 1000-row cleanup commands,
-  canonical season validation, closed one-row results, and destructive release on failure. The
-  kernel itself has no socket/ stream authority. The separate Ingest adapter adds a four-client
-  ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime recycling, exact
-  one-row origin consume, zero-or-one device lookup, and one-row submission results, with
-  destructive release on failure. The transport-free application generates request correlation
-  before verification, submits only after verification, waits for settlement, and contains
-  dependency failures without a retry loop. The local Fastify boundary caps the raw body at 8192
-  bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests per
-  socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
+  limiter exists. The local identity routes separately admit at most four unsettled calls without a
+  queue, reject malformed or over-limit bodies before database work, and create no database state
+  for login options. A valid login proof performs one bounded atomic completion, while failure to
+  seal the resulting browser cookie revokes the new session. These are local process ceilings, not
+  distributed or client-identity rate limits. The transport-free pairing-start application bounds
+  labels, metadata, keys, entropy, and HMAC work, admits four unsettled attempts without a queue,
+  holds each lease through a 250-millisecond floor, and makes no database call for malformed input.
+  This is not a distributed or client-identity rate limit. Physical pairing cleanup now exists as a
+  separate local capability, but scheduling and distributed controls are still pending. The local
+  Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client deadlines, two fixed
+  1000-row cleanup commands, canonical season validation, closed one-row results, and destructive
+  release on failure. The kernel itself has no socket/ stream authority. The separate Ingest adapter
+  adds a four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime
+  recycling, exact one-row origin consume, zero-or-one device lookup, and one-row submission
+  results, with destructive release on failure. The transport-free application generates request
+  correlation before verification, submits only after verification, waits for settlement, and
+  contains dependency failures without a retry loop. The local Fastify boundary caps the raw body at
+  8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests
+  per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
   keep-alive, admits four unsettled application calls without a queue, holds each lease through
   settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and partial
-  requests; injection tests cover overload and response policy. There is no live login, distributed
-  rate/backpressure policy, monitoring, or combined capacity evidence. Scheduling, cache,
-  scoring/read capacity evidence, quotas, edge shaping, and production load evidence remain
-  unimplemented.
+  requests; injection tests cover overload and response policy. There is no live identity/database
+  integration, distributed rate/backpressure policy, monitoring, or combined capacity evidence.
+  Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and production load
+  evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

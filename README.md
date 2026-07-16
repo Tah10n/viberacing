@@ -16,9 +16,9 @@ same-origin public score route and replaces the visible race and leaderboard onl
 response passes browser-side validation. An unavailable route leaves the synthetic fallback visible;
 the demo garage remains synthetic. A separate invite-only join flow now composes GitHub OAuth with
 state and PKCE, one encrypted short-lived continuation, atomic profile enrollment, required WebAuthn
-registration, an active account page, and logout. It is locally tested only: the repository supplies
-no invite issuer UI, OAuth registration, real secret, working Web login, returning passkey login,
-edge abuse controls, or live-user evidence.
+registration, returning discoverable-credential login, an active account page, and logout. It is
+locally tested only: the repository supplies no invite issuer UI, OAuth registration, real secret,
+live OAuth/authenticator/database credentials, edge abuse controls, or live-user evidence.
 
 ## Trust model
 
@@ -139,7 +139,7 @@ discovery/path or artifact/version admission, real Codex execution, cross-platfo
 source/device context provider, secure key generation/store, browser-approval application, connector
 pairing HTTP client, public pairing route, signed upload, live protected key injection, edge signer,
 direct-origin denial, host/port/TLS configuration, distributed client-rate policy, monitoring,
-operational connector, live database connection, load evidence, or deployment. Thirteen SQL
+operational connector, live database connection, load evidence, or deployment. Fourteen SQL
 migrations now add 24 private identity, passkey, restricted-recovery, source, device, pairing,
 audit, deletion, replay, usage, and Community scoring tables with deny-by-default runtime roles,
 forced RLS, state-machine constraints, checksum drift detection, and an isolated PostgreSQL
@@ -151,25 +151,27 @@ pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-c
 short-lived recovery-only replacement-passkey authority. Pairing creates only opaque user-declared
 sources: it never reads or stores Codex account email or claims account uniqueness. The source
 unlink/reactivation procedures require a fresh consumed source-bound step-up record, but their
-application-level WebAuthn assertion verifier is still absent. The local enrollment flow verifies
-only initial passkey registration. Anonymous login challenges also require edge rate limits and
-bounded cleanup before exposure. A database-only Community ingest capability now exposes minimal
-active-device verification material and accepts bounded source-bound snapshots with exact retry,
-nonce replay, monotonic source/date, quarantine, and lifecycle-race enforcement. A Jobs-only
-procedure deletes independently bounded batches of expired origin nonces, device nonces, and raw
-snapshots while preserving current source/day values. A separate Jobs-only procedure deletes bounded
-expired non-activated pairing transactions plus their still-pending keys, while preserving live and
-activated bindings. The database does not verify a wire signature; the local kernel and adapter are
-composed locally and exercised together with a signed synthetic request, while the Fastify boundary
-separately proves the raw transport handoff with a mock application. The complete HTTP-to-PostgreSQL
-path is not exercised through a real login. Another Jobs-only procedure serializes an atomic refresh
-of one open ISO-week Community season: it sums distinct eligible sources before one profile daily
-cap, stores an immutable formula and season binding, shares rank on equal score and active days, and
-persists no raw token or source identifier in the score tables. Revision 0010 adds a public 48-hour
-server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization procedure
-whose terminal metadata and score projection reject silent rewrites while profile purge can still
-remove personal rows. One local one-shot Jobs runner now wraps exactly one of four fixed functions:
-ingest cleanup, pairing cleanup, refresh, or finalization. It uses a distinct least-privileged
+application-level WebAuthn assertion verifier is still absent. The local identity flow verifies both
+initial passkey registration and returning discoverable-credential login. Login options keep the
+profile-free challenge only in an encrypted cookie; a valid assertion causes one atomic database
+create-consume-session call. Anonymous login still requires edge rate/capacity controls before
+exposure. A database-only Community ingest capability now exposes minimal active-device verification
+material and accepts bounded source-bound snapshots with exact retry, nonce replay, monotonic
+source/date, quarantine, and lifecycle-race enforcement. A Jobs-only procedure deletes independently
+bounded batches of expired origin nonces, device nonces, and raw snapshots while preserving current
+source/day values. A separate Jobs-only procedure deletes bounded expired non-activated pairing
+transactions plus their still-pending keys, while preserving live and activated bindings. The
+database does not verify a wire signature; the local kernel and adapter are composed locally and
+exercised together with a signed synthetic request, while the Fastify boundary separately proves the
+raw transport handoff with a mock application. The complete HTTP-to-PostgreSQL path is not exercised
+through a real login. Another Jobs-only procedure serializes an atomic refresh of one open ISO-week
+Community season: it sums distinct eligible sources before one profile daily cap, stores an
+immutable formula and season binding, shares rank on equal score and active days, and persists no
+raw token or source identifier in the score tables. Revision 0010 adds a public 48-hour server-time
+grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization procedure whose
+terminal metadata and score projection reject silent rewrites while profile purge can still remove
+personal rows. One local one-shot Jobs runner now wraps exactly one of four fixed functions: ingest
+cleanup, pairing cleanup, refresh, or finalization. It uses a distinct least-privileged
 configuration namespace, one-client pool, per-checkout role/login/search-path probe, fixed deadlines
 and prepared parameters, closed result validation, destructive release after failure, and stable
 non-reflective CLI output. It has no scheduler, live login/certificate, monitoring backend, retry
@@ -178,11 +180,11 @@ database role a bounded active-profile score projection containing no raw values
 identifiers, or exact timestamps. The score response component and Web PostgreSQL adapter preserve
 only that public allowlist through the local score route. The visible race and leaderboard now
 consume its validated current-week response with a credential-free same-origin request and an
-explicit synthetic fallback. There is now a local invite/OAuth/initial-passkey enrollment flow, but
-there is still no returning passkey login or recovery route, Argon2id recovery verifier, WebAuthn
-pairing approval, pairing start/poll HTTP route, deployed Ingest/score API, operational connector,
-cleanup/scoring scheduler, audited correction flow, asynchronous purge worker, live Ingest/Jobs
-database integration, or deployed database.
+explicit synthetic fallback. There is now a local invite/OAuth/initial-passkey enrollment and
+returning-passkey login flow, but there is still no recovery route, Argon2id recovery verifier,
+WebAuthn pairing approval, pairing start/poll HTTP route, deployed Ingest/score API, operational
+connector, cleanup/scoring scheduler, audited correction flow, asynchronous purge worker, live
+OAuth/authenticator/Ingest/Jobs database integration, or deployed database.
 
 ## Run and verify the synthetic prototype
 

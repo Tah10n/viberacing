@@ -2,21 +2,23 @@
 
 ## Status
 
-This directory contains thirteen SQL-first revisions for identity, passkey login and management,
+This directory contains fourteen SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
-implemented. No authentication/HTTP pairing route, OAuth callback, Argon2id/WebAuthn application,
-production credential, or deployed database consumes the protected identity/ingest capabilities. A
-dormant Web/Auth boundary creates bounded pairing material through one fixed start call; a second
-composes keyed pairing lookup, strict Ed25519 possession proof, and exact activation through the
-same mock-tested fixed-query pool, but neither has a live login or transport. A local Ingest kernel
-verifies a bounded exact-body origin/device request, and a separate fixed-query adapter maps origin
-replay plus its output to three capabilities through a probed least-privileged pool. Mock tests do
-not call PostgreSQL or supply a working login. One local public-score route and one local one-shot
-Jobs runner wrap narrow capabilities without a working database login. The database-only ingest and
-Jobs-only ingest-retention, pairing-retention, open-season scoring, and terminal finalization
-procedures plus one Web-only public score projection are implemented; HTTP ingest, scheduled
-execution, audited corrections, and broader purge are not.
+implemented. A local invite/OAuth/initial-passkey and returning-passkey application now consumes
+only fixed Web/Auth capabilities with injected or synthetic dependencies. No authentication/HTTP
+pairing route, Argon2id recovery application, production credential, or deployed database consumes
+the remaining protected identity/ingest capabilities. A dormant Web/Auth boundary creates bounded
+pairing material through one fixed start call; a second composes keyed pairing lookup, strict
+Ed25519 possession proof, and exact activation through the same mock-tested fixed-query pool, but
+neither has a live login or transport. A local Ingest kernel verifies a bounded exact-body
+origin/device request, and a separate fixed-query adapter maps origin replay plus its output to
+three capabilities through a probed least-privileged pool. Mock tests do not call PostgreSQL or
+supply a working login. One local public-score route and one local one-shot Jobs runner wrap narrow
+capabilities without a working database login. The database-only ingest and Jobs-only
+ingest-retention, pairing-retention, open-season scoring, and terminal finalization procedures plus
+one Web-only public score projection are implemented; HTTP ingest, scheduled execution, audited
+corrections, and broader purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -61,6 +63,9 @@ procedure; the current repository has no such application code.
   Ingest-only nonce consumption, and origin-nonce deletion to the existing Jobs cleanup procedure.
 - `migrations/0013_pairing_retention_cleanup.sql` adds Jobs-only bounded deletion of expired
   non-activated pairing transactions and their still-pending keys through a separate private mutex.
+- `migrations/0014_passkey_login_session_result.sql` composes post-proof login challenge creation
+  and consumption with session minting, then returns only the three encrypted-cookie presentation
+  fields to Web/Auth.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -181,7 +186,10 @@ Runtime access must remain procedure-only and must have positive and negative in
   `read_passkey_verification_material` returns only the active credential's opaque key ID, COSE
   public key, counter, and backup flags. `complete_passkey_login` derives the profile from that
   exact credential, atomically consumes the challenge, advances monotonic usage state, and creates a
-  passkey-bound session. Known revoked and unknown credentials both return no material.
+  passkey-bound session. Revision 0014's `complete_passkey_login_session` stores the sealed-cookie
+  challenge only after application proof verification, immediately consumes it through that same
+  capability, and returns only profile ID, handle, and locale after success. Known revoked and
+  unknown credentials both return no material.
 - `read_passkey_inventory` returns only the authenticated profile's opaque passkey IDs, bounded
   labels, lifecycle times, backup flags, and current-authenticator marker. `add_passkey` and
   `revoke_passkey` require a consumed action- and target-bound step-up. Revocation cannot remove the
@@ -290,12 +298,13 @@ exact Ingest login/role/search-path probe. The database still independently enfo
 replay, time, lifecycle, season, and monotonic state. A future HTTP service must preserve the exact
 raw envelope, use ADR 0017's protected key reader plus ADR 0018's persistent replay capability,
 compose verifier and adapter, and map only a generic public acknowledgement. The mock-pool evidence
-is not a live login or PostgreSQL integration result. In particular, the anonymous login-challenge
-endpoint is not launch-ready without edge/service limits and bounded expiry cleanup. Procedures use
-one generic failure message for closed authorization and constraint failures; HTTP status mapping
-and response shaping remain application work. Recovery SQL now uses a short-lived restricted
-authority and never represents it as an ordinary session, but application Argon2id/pepper and
-WebAuthn verification, timing normalization, rate limits, cleanup, notifications, and UI remain
+is not a live login or PostgreSQL integration result. The local returning-login options route keeps
+its challenge only in an encrypted browser continuation and creates no database state before valid
+proof, but it is not launch-ready without edge/service limits and cleanup of consumed ceremonies.
+Procedures use one generic failure message for closed authorization and constraint failures; HTTP
+status mapping and response shaping remain application work. Recovery SQL now uses a short-lived
+restricted authority and never represents it as an ordinary session, but application Argon2id/pepper
+and WebAuthn verification, timing normalization, rate limits, cleanup, notifications, and UI remain
 absent. The deletion procedure implements immediate lock-down only; primary purge, cache purge,
 tombstones, backup replay, and user-visible progress remain unimplemented.
 
@@ -414,6 +423,14 @@ provenance and explicit source lifecycle remain outside cleanup. The observed tw
 serialization and live-row preservation only in the isolated database; no production schedule, Node
 login, backup policy, or broader ceremony cleanup exists.
 
+Revision 0014 adds no table or pre-proof authority. After Web/Auth verifies the exact active
+credential against the encrypted challenge continuation, one fixed function creates and consumes
+that five-minute profile-free challenge in the same transaction as the existing credential-derived
+session. It returns only profile ID, public handle, and locale so Web/Auth can seal its existing
+session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
+28 cross-capability denials. Consumed ceremony cleanup, a deployment login, edge attempt policy,
+monitoring, and live authenticator/database integration remain open.
+
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers
 belong to private deployment configuration and require application-level tests before use.
@@ -458,14 +475,14 @@ hard failure, not something the script silently broadens or repairs.
 
 ## Remaining security work
 
-- Implement OAuth/cookie/CSRF and WebAuthn application flows without weakening the
-  session/passkey-bound database contract.
+- Integrate the local OAuth/cookie/CSRF and WebAuthn registration/login flows with deployment-owned
+  credentials and live browser/database evidence without weakening the session/passkey contract.
 - Implement the application recovery boundary: bounded Argon2id with protected pepper, exact
   WebAuthn verification, generic response/timing behavior, cookies/CSRF, notifications, inventory,
   and provenance-preserving cleanup at the 32-passkey lifetime edge.
-- Add edge/service rate limiting for unauthenticated pairing starts and bounded cleanup for
-  passkey-login challenges and recovery-code lookups; do not encode deployable private thresholds in
-  this repository.
+- Add edge/service rate limiting for anonymous login and pairing starts plus bounded cleanup for
+  consumed passkey-login challenges and recovery-code lookups; do not encode deployable private
+  thresholds in this repository.
 - Wrap the local Ingest verification kernel and protected key reader with an exact-byte HTTP
   boundary, live secret-manager/edge key injection, generic public errors, no-queue admission,
   socket deadlines, backpressure, and rate limits. Compose them with the local least-privileged

@@ -151,6 +151,9 @@ export function JoinExperience({ error }: JoinExperienceProps) {
             {copy.continueGithub}
           </button>
         </form>
+        <p>
+          {copy.alreadyRacing} <Link href="/login">{copy.signIn}</Link>
+        </p>
         <p className="auth-privacy">{copy.privacyNote}</p>
         <Link href="/">← {copy.backToRace}</Link>
       </section>

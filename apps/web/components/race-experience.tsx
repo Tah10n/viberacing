@@ -166,6 +166,7 @@ export function RaceExperience({ communitySeasonStart, payload }: RaceExperience
           <a href="#race">{translation.liveRace}</a>
           <a href="#leaderboard">{translation.leaderboard}</a>
           <a href="#profile">{translation.profile}</a>
+          <a href="/login">{translation.signIn}</a>
           <a href="/join">{translation.joinRace}</a>
         </nav>
       </header>

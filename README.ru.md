@@ -17,9 +17,10 @@ same-origin public score route и переключаются на Community resu
 при ошибке остаётся синтетический fallback. Демо-профиль, три темы, русский/английский интерфейс и
 reduced-motion режим работают без реальных данных. Отдельный invite-only flow теперь локально
 соединяет GitHub OAuth со state и PKCE, зашифрованное краткоживущее продолжение, атомарное
-enrollment, обязательную регистрацию passkey, страницу активного профиля и logout. Репозиторий не
-предоставляет рабочий invite issuer, OAuth registration, реальные secrets, Web login, повторный
-passkey-вход, edge abuse controls или evidence с реальным пользователем.
+enrollment, обязательную регистрацию passkey, повторный discoverable-credential вход, страницу
+активного профиля и logout. Репозиторий не предоставляет рабочий invite issuer, OAuth registration,
+реальные secrets, live OAuth/authenticator/database credentials, edge abuse controls или evidence с
+реальным пользователем.
 
 ## Модель доверия
 
@@ -137,7 +138,7 @@ admission, реальный запуск Codex, cross-platform evidence, source/
 key generation/store, pairing proof, signed upload, operational connector, live database connection,
 load evidence и deployment всё ещё отсутствуют.
 
-Также добавлены тринадцать SQL migrations: 24 приватные
+Также добавлены четырнадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
 deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая
 procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
@@ -148,27 +149,29 @@ passkeys, rotate/revoke сессии, немедленную блокировк�
 критических действий база сохраняет точный passkey step-up. Реализованы также защищённая
 passkey-проверкой замена recovery-кодов и отдельное краткоживущее право только на регистрацию нового
 passkey: обычная сессия создаётся лишь после успешной замены, а использованный PHC сразу удаляется.
-Локальный enrollment flow теперь проверяет initial WebAuthn registration; verifier для login,
-step-up и Argon2id recovery всё ещё отсутствует. Database-only scoring refresh уже суммирует
-distinct eligible sources одного профиля перед единым дневным лимитом, закрепляет immutable версию
-формулы за ISO-week season и сохраняет только derived score/rank/active-days/source-count без raw
-tokens и source IDs. Database-only finalization закрывает grace window через 48 часов после ISO-week
-по server time, сохраняет late snapshot только как quarantined evidence и делает terminal season
-неизменяемым, сохраняя profile-purge. Отдельная Web-only database projection возвращает только
-bounded active-profile score rows без raw values, private IDs и exact timestamps. Email и
-идентификатор Codex-аккаунта не читаются и не сохраняются. Response schema фиксирует тот же public
-allowlist, а server-only mapper, bounded Web PostgreSQL adapter и локальный score route проверяют
-форму, season/rank invariants, database role и contract до сериализации. Видимая гонка и таблица
-теперь запрашивают у этого route текущую server-selected неделю без credentials, проверяют только
-public поля и честно сохраняют synthetic fallback при недоступности. Локальные invite/OAuth/
-initial-passkey routes теперь существуют, но returning passkey login, recovery, WebAuthn pairing
-approval и edge rate limits для анонимных challenges и recovery lookup пока отсутствуют.
-Database-only Community ingest capability уже выдаёт минимальный материал активного устройства и
-принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic source/date,
-quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure независимо удаляет bounded
-batches истёкших origin nonces, device nonces и raw snapshots, сохраняя current source/day values.
-Локальный one-shot Jobs runner теперь вызывает только cleanup, scoring refresh или finalization
-через отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
+Локальный identity flow теперь проверяет initial WebAuthn registration и returning
+discoverable-credential login; verifier для step-up и Argon2id recovery всё ещё отсутствует.
+Database-only scoring refresh уже суммирует distinct eligible sources одного профиля перед единым
+дневным лимитом, закрепляет immutable версию формулы за ISO-week season и сохраняет только derived
+score/rank/active-days/source-count без raw tokens и source IDs. Database-only finalization
+закрывает grace window через 48 часов после ISO-week по server time, сохраняет late snapshot только
+как quarantined evidence и делает terminal season неизменяемым, сохраняя profile-purge. Отдельная
+Web-only database projection возвращает только bounded active-profile score rows без raw values,
+private IDs и exact timestamps. Email и идентификатор Codex-аккаунта не читаются и не сохраняются.
+Response schema фиксирует тот же public allowlist, а server-only mapper, bounded Web PostgreSQL
+adapter и локальный score route проверяют форму, season/rank invariants, database role и contract до
+сериализации. Видимая гонка и таблица теперь запрашивают у этого route текущую server-selected
+неделю без credentials, проверяют только public поля и честно сохраняют synthetic fallback при
+недоступности. Локальные invite/OAuth/ initial-passkey/returning-login routes теперь существуют;
+login options хранят profile-free challenge только в encrypted cookie, а валидный assertion атомарно
+создаёт и тут же поглощает database challenge при выдаче сессии. Recovery, WebAuthn pairing approval
+и edge rate limits для анонимного login и recovery lookup пока отсутствуют. Database-only Community
+ingest capability уже выдаёт минимальный материал активного устройства и принимает bounded
+source-bound snapshots с exact retry, nonce replay, monotonic source/date, quarantine и
+lifecycle-race enforcement. Отдельная Jobs-only procedure независимо удаляет bounded batches
+истёкших origin nonces, device nonces и raw snapshots, сохраняя current source/day values. Локальный
+one-shot Jobs runner теперь вызывает только cleanup, scoring refresh или finalization через
+отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
 deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI output.
 Сама база не проверяет wire signature; локальные kernel, adapter и application объединены на
 synthetic/mock-pool evidence, а Fastify boundary отдельно проверена через injection/loopback с mock
