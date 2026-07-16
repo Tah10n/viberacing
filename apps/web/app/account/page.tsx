@@ -9,11 +9,24 @@ export const metadata: Metadata = {
   title: "Account | Vibe Racing",
 };
 
-export default async function AccountPage() {
+interface AccountPageProps {
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function AccountPage({ searchParams }: AccountPageProps) {
   const account = await readEnrollmentPageAccount();
   if (!account?.session.passkeyRegistered) {
     redirect("/login?error=unavailable");
   }
-  const { passkeys, session } = account;
-  return <AccountExperience handle={session.handle} locale={session.locale} passkeys={passkeys} />;
+  const parameters = await searchParams;
+  const { passkeys, session, visibility } = account;
+  return (
+    <AccountExperience
+      actionUnavailable={parameters.error === "unavailable"}
+      handle={session.handle}
+      locale={session.locale}
+      passkeys={passkeys}
+      visibility={visibility}
+    />
+  );
 }

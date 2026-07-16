@@ -23,6 +23,8 @@ import type {
   EnrollmentDatabasePasskeyRevocation,
   EnrollmentDatabasePasskeyRevokeChallenge,
   EnrollmentDatabaseProfile,
+  EnrollmentDatabaseProfileVisibilityRequest,
+  EnrollmentDatabaseProfileVisibilityUpdate,
 } from "./pairing-database-pool";
 
 const now = new Date("2026-07-16T10:00:00.000Z");
@@ -57,6 +59,10 @@ function createFixture() {
   let additionWrite: EnrollmentDatabasePasskeyAddition | undefined;
   let revokeChallengeWrite: EnrollmentDatabasePasskeyRevokeChallenge | undefined;
   let revocationWrite: EnrollmentDatabasePasskeyRevocation | undefined;
+  let visibilityRead: EnrollmentDatabaseProfileVisibilityRequest | undefined;
+  let visibilityReadDigestInput: Uint8Array | undefined;
+  let visibilityWrite: EnrollmentDatabaseProfileVisibilityUpdate | undefined;
+  let visibilityWriteDigestInput: Uint8Array | undefined;
   let verifiedLoginCredential: Buffer | undefined;
   const database: EnrollmentDatabase = {
     completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
@@ -149,7 +155,23 @@ function createFixture() {
         signCount: 3,
       });
     }),
+    readProfileVisibility: vi.fn((input: EnrollmentDatabaseProfileVisibilityRequest) => {
+      visibilityReadDigestInput = input.sessionVerifierDigest;
+      visibilityRead = {
+        ...input,
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve("public" as const);
+    }),
     revokeSession: vi.fn(() => Promise.resolve(true)),
+    setProfileVisibility: vi.fn((input: EnrollmentDatabaseProfileVisibilityUpdate) => {
+      visibilityWriteDigestInput = input.sessionVerifierDigest;
+      visibilityWrite = {
+        ...input,
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve(input.publiclyVisible ? ("public" as const) : ("hidden" as const));
+    }),
   };
   const uuids = [
     "00000000-0000-4000-8000-000000000502",
@@ -233,6 +255,10 @@ function createFixture() {
     verifyPasskey,
     verifyLogin,
     verifiedLoginCredential: () => verifiedLoginCredential,
+    visibilityRead: () => visibilityRead,
+    visibilityReadDigestInput: () => visibilityReadDigestInput,
+    visibilityWrite: () => visibilityWrite,
+    visibilityWriteDigestInput: () => visibilityWriteDigestInput,
   };
 }
 
@@ -416,6 +442,49 @@ describe("enrollment service", () => {
     expect(inventorySessionDigestInput()).toEqual(Buffer.alloc(32));
     await expect(service.readPasskeyInventory("invalid")).resolves.toBeUndefined();
     expect(database.readPasskeyInventory).toHaveBeenCalledOnce();
+  });
+
+  it("reads and changes only the possessed session's public profile visibility", async () => {
+    const {
+      cookieCodec,
+      database,
+      service,
+      visibilityRead,
+      visibilityReadDigestInput,
+      visibilityWrite,
+      visibilityWriteDigestInput,
+    } = createFixture();
+    const verifier = Buffer.alloc(32, 0x47);
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId: "00000000-0000-4000-8000-000000000513",
+      sessionVerifier: verifier.toString("base64url"),
+      version: 1,
+    });
+
+    await expect(service.readProfileVisibility(sessionCookie)).resolves.toBe("public");
+    expect(visibilityRead()).toMatchObject({
+      sessionId: "00000000-0000-4000-8000-000000000513",
+      sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
+    });
+    expect(visibilityReadDigestInput()).toEqual(Buffer.alloc(32));
+
+    await expect(service.setProfileVisibility(sessionCookie, false)).resolves.toBe("hidden");
+    expect(visibilityWrite()).toMatchObject({
+      publiclyVisible: false,
+      sessionId: "00000000-0000-4000-8000-000000000513",
+      sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
+    });
+    expect(visibilityWriteDigestInput()).toEqual(Buffer.alloc(32));
+
+    await expect(service.readProfileVisibility("invalid")).resolves.toBeUndefined();
+    await expect(service.setProfileVisibility("invalid", true)).resolves.toBeUndefined();
+    expect(database.readProfileVisibility).toHaveBeenCalledOnce();
+    expect(database.setProfileVisibility).toHaveBeenCalledOnce();
   });
 
   it("freshly authorizes and atomically adds one backup passkey", async () => {
@@ -700,7 +769,9 @@ describe("enrollment service", () => {
       enrollProfile: vi.fn(() => Promise.resolve(true)),
       readPasskeyInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),
+      readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
       revokeSession: vi.fn(() => Promise.resolve(true)),
+      setProfileVisibility: vi.fn(() => Promise.resolve("hidden" as const)),
     };
     const seconds = Math.floor(now.valueOf() / 1000);
     const state = Buffer.alloc(32, 3).toString("base64url");

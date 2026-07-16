@@ -173,7 +173,7 @@ describe("pairing database pool", () => {
     expect(JSON.stringify(signals)).not.toContain(privateValue);
   });
 
-  it("exposes only fixed enrollment, passkey, and session procedures on the shared Web/Auth pool", async () => {
+  it("exposes only fixed enrollment, passkey, profile, and session procedures on the shared Web/Auth pool", async () => {
     const returnedRows = [
       [{ enrolled: true }],
       [{ created: true }],
@@ -203,10 +203,12 @@ describe("pairing database pool", () => {
           state: "active",
         },
       ],
+      [{ visibility: "public" }],
       [{ created: true }],
       [{ added: true }],
       [{ created: true }],
       [{ revoked: true }],
+      [{ visibility: "hidden" }],
       [{ revoked: true }],
     ];
     const liveQueries: { text: string; values: unknown[] }[] = [];
@@ -335,6 +337,12 @@ describe("pairing database pool", () => {
       },
     ]);
     await expect(
+      client.readProfileVisibility({
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([{ visibility: "public" }]);
+    await expect(
       client.createPasskeyAddChallenge({
         challengeDigest: digest,
         challengeId: "00000000-0000-4000-8000-000000000313",
@@ -392,6 +400,13 @@ describe("pairing database pool", () => {
       }),
     ).resolves.toEqual([{ revoked: true }]);
     await expect(
+      client.setProfileVisibility({
+        publiclyVisible: false,
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([{ visibility: "hidden" }]);
+    await expect(
       client.revokeEnrollmentSession({
         auditEventId: "00000000-0000-4000-8000-000000000307",
         requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
@@ -407,19 +422,21 @@ describe("pairing database pool", () => {
       expect.stringContaining("read_passkey_verification_material"),
       expect.stringContaining("complete_passkey_login_session"),
       expect.stringContaining("read_passkey_inventory"),
+      expect.stringContaining("read_profile_visibility"),
       expect.stringContaining("create_passkey_change_challenge"),
       expect.stringContaining("consume_passkey_challenge"),
       expect.stringContaining("create_passkey_change_challenge"),
       expect.stringContaining("consume_passkey_challenge"),
+      expect.stringContaining("set_profile_visibility"),
       expect.stringContaining("revoke_session"),
     ]);
     expect(snapshots[2]?.text).toContain("register_initial_passkey");
     expect(snapshots[2]?.text).toContain("rotate_session");
     expect(snapshots[2]?.text).toContain("AS MATERIALIZED");
-    expect(snapshots[7]?.text).toContain("add_passkey");
-    expect(snapshots[7]?.text).toContain("AS MATERIALIZED");
-    expect(snapshots[9]?.text).toContain("revoke_passkey");
-    expect(snapshots[9]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[8]?.text).toContain("add_passkey");
+    expect(snapshots[8]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[10]?.text).toContain("revoke_passkey");
+    expect(snapshots[10]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[4]?.values).toEqual([
       "00000000-0000-4000-8000-000000000310",
       digest,
@@ -436,7 +453,8 @@ describe("pairing database pool", () => {
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
     expect(snapshots[5]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest]);
-    expect(snapshots[6]?.values).toEqual([
+    expect(snapshots[6]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest]);
+    expect(snapshots[7]?.values).toEqual([
       "00000000-0000-4000-8000-000000000312",
       digest,
       "00000000-0000-4000-8000-000000000313",
@@ -444,7 +462,7 @@ describe("pairing database pool", () => {
       context,
       "2026-07-16T10:05:00.000Z",
     ]);
-    expect(snapshots[7]?.values).toEqual([
+    expect(snapshots[8]?.values).toEqual([
       "00000000-0000-4000-8000-000000000312",
       digest,
       "00000000-0000-4000-8000-000000000313",
@@ -463,7 +481,7 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000315",
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
-    expect(snapshots[8]?.values).toEqual([
+    expect(snapshots[9]?.values).toEqual([
       "00000000-0000-4000-8000-000000000312",
       digest,
       "00000000-0000-4000-8000-000000000307",
@@ -472,7 +490,7 @@ describe("pairing database pool", () => {
       context,
       "2026-07-16T10:05:00.000Z",
     ]);
-    expect(snapshots[9]?.values).toEqual([
+    expect(snapshots[10]?.values).toEqual([
       "00000000-0000-4000-8000-000000000312",
       digest,
       "00000000-0000-4000-8000-000000000316",
@@ -485,6 +503,7 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000317",
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
+    expect(snapshots[11]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest, false]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));
     expect(context).toEqual(Buffer.alloc(32, 0x52));
     expect(credential).toEqual(Buffer.alloc(32, 0x53));

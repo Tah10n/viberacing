@@ -323,9 +323,12 @@ material availability cost.
   body/method/media handling, no-store/same-origin semantics, admission, generic errors, and final
   response validation. The visible browser consumer renders only those public fields, omits
   unavailable streak/freshness, uses fixed project-owned presentation cars, sends no credentials,
-  and falls back to explicitly synthetic rows after any invalid or unavailable response. Deployment,
-  enumeration controls, rounded freshness, cache purge, edge rate policy, and monitoring are still
-  unimplemented.
+  and falls back to explicitly synthetic rows after any invalid or unavailable response. Revision
+  0015 lets only the exact possessed session read and set the closed `public`/`hidden` state; the
+  same-origin form carries no profile ID and repeated state is a no-op. Because the public read
+  already filters current state, a committed hide removes the profile from the next no-store
+  response while source sync may continue. Deployment, enumeration controls, rounded freshness,
+  cache purge, edge rate policy, and monitoring are still unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 

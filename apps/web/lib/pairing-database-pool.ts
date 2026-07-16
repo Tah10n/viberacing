@@ -211,6 +211,15 @@ const readPasskeyInventoryQuery = `SELECT
 FROM viberacing_api.read_passkey_inventory($1::uuid, $2::bytea) AS inventory
 ORDER BY (inventory.created_at AT TIME ZONE 'UTC')::date, inventory.passkey_id`;
 
+const readProfileVisibilityQuery = `SELECT visibility.visibility
+FROM viberacing_api.read_profile_visibility($1::uuid, $2::bytea) AS visibility`;
+
+const setProfileVisibilityQuery = `SELECT viberacing_api.set_profile_visibility(
+  $1::uuid,
+  $2::bytea,
+  $3::boolean
+) AS visibility`;
+
 const createPasskeyAddChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
   SELECT viberacing_api.create_passkey_change_challenge(
     $1::uuid,
@@ -404,6 +413,15 @@ export interface EnrollmentDatabasePasskeyInventoryRequest {
   readonly sessionVerifierDigest: Uint8Array;
 }
 
+export interface EnrollmentDatabaseProfileVisibilityRequest {
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+}
+
+export interface EnrollmentDatabaseProfileVisibilityUpdate extends EnrollmentDatabaseProfileVisibilityRequest {
+  readonly publiclyVisible: boolean;
+}
+
 export interface EnrollmentDatabasePasskeyAddChallenge {
   readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
@@ -483,8 +501,10 @@ export interface EnrollmentDatabaseClient {
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
   readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown>;
+  readProfileVisibility(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
   release(destroy?: boolean): void;
   revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown>;
+  setProfileVisibility(input: EnrollmentDatabaseProfileVisibilityUpdate): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
 }
 
@@ -797,8 +817,33 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         sessionVerifierDigest.fill(0);
       }
     },
+    async readProfileVisibility(
+      input: EnrollmentDatabaseProfileVisibilityRequest,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(readProfileVisibilityQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
+    },
     release(destroy = false): void {
       client.release(destroy);
+    },
+    async setProfileVisibility(input: EnrollmentDatabaseProfileVisibilityUpdate): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(setProfileVisibilityQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.publiclyVisible,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
     },
     async startPairing(input: PairingDatabaseStart): Promise<unknown> {
       const pollVerifierDigest = Buffer.from(input.pollVerifierDigest);

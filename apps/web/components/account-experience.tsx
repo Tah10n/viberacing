@@ -2,19 +2,27 @@ import "server-only";
 
 import Link from "next/link";
 
-import type { PasskeyInventoryItem } from "@/lib/enrollment-database";
+import type { PasskeyInventoryItem, ProfileVisibility } from "@/lib/enrollment-database";
 import type { Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
 import { PasskeyAddForm, PasskeyRevokeButton } from "./passkey-setup";
 
 interface AccountExperienceProps {
+  readonly actionUnavailable?: boolean;
   readonly handle: string;
   readonly locale: Locale;
   readonly passkeys: readonly PasskeyInventoryItem[] | undefined;
+  readonly visibility: ProfileVisibility | undefined;
 }
 
-export function AccountExperience({ handle, locale, passkeys }: AccountExperienceProps) {
+export function AccountExperience({
+  actionUnavailable = false,
+  handle,
+  locale,
+  passkeys,
+  visibility,
+}: AccountExperienceProps) {
   const copy = joinTranslations[locale];
   return (
     <main className="auth-shell" lang={locale}>
@@ -26,6 +34,36 @@ export function AccountExperience({ handle, locale, passkeys }: AccountExperienc
         <h1 id="account-title">{copy.accountTitle}</h1>
         <p className="account-handle">@{handle}</p>
         <p>{copy.accountCopy}</p>
+        {actionUnavailable ? (
+          <p className="auth-error" role="alert">
+            {copy.accountActionUnavailable}
+          </p>
+        ) : null}
+        <section aria-labelledby="visibility-title" className="account-security">
+          <h2 id="visibility-title">{copy.profileVisibilityTitle}</h2>
+          <p>{copy.profileVisibilityCopy}</p>
+          {visibility === undefined ? (
+            <p className="auth-error" role="status">
+              {copy.profileVisibilityUnavailable}
+            </p>
+          ) : (
+            <>
+              <p className="auth-status" role="status">
+                {visibility === "public" ? copy.profileVisible : copy.profileHidden}
+              </p>
+              <form action="/auth/profile/visibility" method="post">
+                <input
+                  name="visibility"
+                  type="hidden"
+                  value={visibility === "public" ? "hidden" : "public"}
+                />
+                <button className="secondary-action" type="submit">
+                  {visibility === "public" ? copy.hideProfile : copy.publishProfile}
+                </button>
+              </form>
+            </>
+          )}
+        </section>
         <section aria-labelledby="passkeys-title" className="account-security">
           <h2 id="passkeys-title">{copy.passkeysTitle}</h2>
           <p>{copy.passkeysCopy}</p>

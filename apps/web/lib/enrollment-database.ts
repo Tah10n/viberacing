@@ -16,6 +16,8 @@ import {
   type EnrollmentDatabasePasskeyRevokeChallenge,
   type EnrollmentDatabasePool,
   type EnrollmentDatabaseProfile,
+  type EnrollmentDatabaseProfileVisibilityRequest,
+  type EnrollmentDatabaseProfileVisibilityUpdate,
   type EnrollmentDatabaseSessionRevocation,
   type PairingDatabasePoolSignalSink,
 } from "./pairing-database-pool";
@@ -71,8 +73,16 @@ export interface EnrollmentDatabase {
     input: EnrollmentDatabasePasskeyInventoryRequest,
   ): Promise<readonly PasskeyInventoryItem[]>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined>;
+  readProfileVisibility(
+    input: EnrollmentDatabaseProfileVisibilityRequest,
+  ): Promise<ProfileVisibility>;
   revokeSession(input: EnrollmentDatabaseSessionRevocation): Promise<boolean>;
+  setProfileVisibility(
+    input: EnrollmentDatabaseProfileVisibilityUpdate,
+  ): Promise<ProfileVisibility>;
 }
+
+export type ProfileVisibility = "hidden" | "public";
 
 export interface PasskeyLoginMaterial {
   readonly backupEligible: boolean;
@@ -118,6 +128,22 @@ function exactBooleanRow(value: unknown, key: string): boolean {
     fail("result_invalid");
   }
   return row[key];
+}
+
+function exactProfileVisibility(value: unknown): ProfileVisibility {
+  if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
+    fail("result_invalid");
+  }
+  const row = value[0];
+  const keys = Object.keys(row);
+  if (
+    keys.length !== 1 ||
+    keys[0] !== "visibility" ||
+    (row.visibility !== "hidden" && row.visibility !== "public")
+  ) {
+    fail("result_invalid");
+  }
+  return row.visibility;
 }
 
 function copyBoundedBytes(value: unknown, minimum: number, maximum: number): Buffer | undefined {
@@ -369,10 +395,29 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
     readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined> {
       return execute((client) => client.readPasskeyLoginMaterial(credentialId), exactLoginMaterial);
     },
+    readProfileVisibility(
+      input: EnrollmentDatabaseProfileVisibilityRequest,
+    ): Promise<ProfileVisibility> {
+      return execute((client) => client.readProfileVisibility(input), exactProfileVisibility);
+    },
     revokeSession(input: EnrollmentDatabaseSessionRevocation): Promise<boolean> {
       return execute(
         (client) => client.revokeEnrollmentSession(input),
         (value) => exactBooleanRow(value, "revoked"),
+      );
+    },
+    setProfileVisibility(
+      input: EnrollmentDatabaseProfileVisibilityUpdate,
+    ): Promise<ProfileVisibility> {
+      return execute(
+        (client) => client.setProfileVisibility(input),
+        (value) => {
+          const visibility = exactProfileVisibility(value);
+          if ((visibility === "public") !== input.publiclyVisible) {
+            fail("result_invalid");
+          }
+          return visibility;
+        },
       );
     },
   });

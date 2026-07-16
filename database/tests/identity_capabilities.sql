@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 43
+    SELECT pg_catalog.count(*) = 45
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -561,7 +561,83 @@ SELECT pg_temp.assert_true(
 );
 
 RESET ROLE;
+SET LOCAL ROLE viberacing_web;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT visibility = 'public'
+    FROM viberacing_api.read_profile_visibility(
+      '00000000-0000-4000-8000-000000000203',
+      pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex')
+    )
+  ),
+  'an exact active session reads only its public visibility state'
+);
+
+SELECT pg_temp.assert_true(
+  viberacing_api.set_profile_visibility(
+    '00000000-0000-4000-8000-000000000203',
+    pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex'),
+    false
+  ) = 'hidden',
+  'an exact active session hides its profile'
+);
+
+RESET ROLE;
 SET LOCAL ROLE viberacing_owner;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT state = 'hidden' AND hidden_at IS NOT NULL
+    FROM viberacing_private.profiles
+    WHERE profile_id = '00000000-0000-4000-8000-000000000101'
+  ),
+  'hide is immediate and records its lifecycle timestamp'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_web;
+
+SELECT pg_temp.assert_true(
+  viberacing_api.set_profile_visibility(
+    '00000000-0000-4000-8000-000000000203',
+    pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex'),
+    false
+  ) = 'hidden',
+  'repeating the current visibility is idempotent'
+);
+
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT viberacing_api.set_profile_visibility(
+      '00000000-0000-4000-8000-000000000203',
+      pg_catalog.decode(pg_catalog.repeat('99', 32), 'hex'),
+      true
+    )
+  $sql$,
+  'visibility changes require the exact session verifier'
+);
+
+SELECT pg_temp.assert_true(
+  viberacing_api.set_profile_visibility(
+    '00000000-0000-4000-8000-000000000203',
+    pg_catalog.decode(pg_catalog.repeat('23', 32), 'hex'),
+    true
+  ) = 'public',
+  'an exact hidden session republishes its profile'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_owner;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT state = 'active' AND hidden_at IS NULL
+    FROM viberacing_private.profiles
+    WHERE profile_id = '00000000-0000-4000-8000-000000000101'
+  ),
+  'publishing restores active state and clears the hide timestamp'
+);
 
 INSERT INTO viberacing_private.recovery_codes (
   recovery_code_id,

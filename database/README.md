@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains fourteen SQL-first revisions for identity, passkey login and management,
+This directory contains fifteen SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
 implemented. A local invite/OAuth/initial-passkey, returning-passkey, and session-scoped inventory
@@ -66,10 +66,13 @@ procedure; the current repository has no such application code.
 - `migrations/0014_passkey_login_session_result.sql` composes post-proof login challenge creation
   and consumption with session minting, then returns only the three encrypted-cookie presentation
   fields to Web/Auth.
+- `migrations/0015_profile_visibility.sql` gives only Web the exact-session closed visibility read
+  and idempotent `active`/`hidden` transition.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
-  cross-profile denial, expiry, replay, rollback, audit redaction, and synchronous deletion effects.
+  cross-profile denial, visibility hide/publish/idempotency, expiry, replay, rollback, audit
+  redaction, and synchronous deletion effects.
 - `tests/pairing_capabilities.sql` exercises new/existing-source choice, first-winner rebinding
   denial, replay, poll possession, exact activation, immutable binding, and public safety ceilings.
 - `tests/source_device_lifecycle.sql` exercises inventory isolation, source/device IDOR denial,
@@ -213,6 +216,9 @@ Runtime access must remain procedure-only and must have positive and negative in
 - `rotate_session` and `revoke_session` require the exact keyed verifier. Rotation serializes on the
   current session/profile, preserves its authentication provenance, and creates a fresh bounded
   record before ending the old one.
+- `read_profile_visibility` maps only the possessed active session's current profile state to
+  `public` or `hidden`. `set_profile_visibility` accepts no profile ID, moves only between active
+  and hidden, preserves source sync, and treats repeated state as a no-op.
 - `request_profile_deletion` derives the target from the possessed session, requires the exact typed
   handle and a consumed, unused deletion challenge, then atomically hides the profile, revokes
   active browser/passkey/device authority, removes recovery/challenge state, unlinks sources,
@@ -314,7 +320,7 @@ All current columns map to the canonical [privacy data map](../docs/security/PRI
 
 | Tables                                      | Classes                       | Stored boundary                                                                    |
 | ------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------- |
-| `profiles`                                  | Account; handle is Public     | Numeric GitHub binding, normalized handle, explicit preferences, lifecycle time    |
+| `profiles`                                  | Account; handle is Public     | Numeric GitHub binding, handle, closed visibility/preferences, lifecycle time      |
 | `invites`, `sessions`, `auth_challenges`    | Security                      | Keyed verifiers, exact session/passkey provenance, expiry, and one-time use        |
 | `passkeys`, `recovery_codes`                | Security; label is Account    | Public credential material, opaque selectors, and unused PHCs; no plaintext        |
 | `recovery_authorities`                      | Security                      | Keyed/challenge/context digests, terminal state, expiry, and opaque provenance     |
@@ -430,6 +436,12 @@ session. It returns only profile ID, public handle, and locale so Web/Auth can s
 session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
 28 cross-capability denials. Consumed ceremony cleanup, a deployment login, edge attempt policy,
 monitoring, and live authenticator/database integration remain open.
+
+Revision 0015 adds no table, preference field, or broader role. It maps the existing active/hidden
+profile lifecycle to one closed account value, derives the target solely from an exact active
+session, and permits only the reversible visibility transition. Hiding leaves source/device ingest
+authority unchanged while the existing public score projection excludes the profile. Repeating the
+current state writes nothing. Only Web can execute either function.
 
 The local account application also consumes the existing `read_passkey_inventory` capability. Its
 fixed query and closed mapper retain at most 32 rows, require exactly one current active

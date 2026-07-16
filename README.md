@@ -17,9 +17,10 @@ response passes browser-side validation. An unavailable route leaves the synthet
 the demo garage remains synthetic. A separate invite-only join flow now composes GitHub OAuth with
 state and PKCE, one encrypted short-lived continuation, atomic profile enrollment, required WebAuthn
 registration, returning discoverable-credential login, a session-scoped passkey inventory, an active
-account page, fresh backup-passkey addition and non-current-passkey revocation, and logout. It is
-locally tested only: the repository supplies no invite issuer UI, OAuth registration, real secret,
-live OAuth/authenticator/database credentials, edge abuse controls, or live-user evidence.
+account page, immediate public-profile hide/show, fresh backup-passkey addition and
+non-current-passkey revocation, and logout. It is locally tested only: the repository supplies no
+invite issuer UI, OAuth registration, real secret, live OAuth/authenticator/database credentials,
+edge abuse controls, or live-user evidence.
 
 ## Trust model
 
@@ -140,7 +141,7 @@ discovery/path or artifact/version admission, real Codex execution, cross-platfo
 source/device context provider, secure key generation/store, browser-approval application, connector
 pairing HTTP client, public pairing route, signed upload, live protected key injection, edge signer,
 direct-origin denial, host/port/TLS configuration, distributed client-rate policy, monitoring,
-operational connector, live database connection, load evidence, or deployment. Fourteen SQL
+operational connector, live database connection, load evidence, or deployment. Fifteen SQL
 migrations now add 24 private identity, passkey, restricted-recovery, source, device, pairing,
 audit, deletion, replay, usage, and Community scoring tables with deny-by-default runtime roles,
 forced RLS, state-machine constraints, checksum drift detection, and an isolated PostgreSQL
@@ -157,12 +158,14 @@ initial passkey registration and returning discoverable-credential login. Login 
 profile-free challenge only in an encrypted cookie; a valid assertion causes one atomic database
 create-consume-session call. Anonymous login still requires edge rate/capacity controls before
 exposure. The account page uses that same possessed session to read only passkey labels,
-active/revoked state, rounded creation dates, and the current-authenticator marker; credential IDs
-and key material are not rendered. An authenticated revoke control sends only the selected opaque
-passkey ID, requires a fresh user-verified assertion bound to that session and target, and reaches
-one atomic consume-and-revoke call; the current or last active passkey cannot be removed. A separate
-add control validates and seals the label before prompting, requires an existing-key assertion plus
-an independent registration ceremony, and atomically consumes that step-up while inserting the new
+active/revoked state, rounded creation dates, the current-authenticator marker, and the closed
+`public`/`hidden` profile state; credential IDs and key material are not rendered. A same-origin
+server form can hide the profile from the public score read or publish it again without stopping
+source sync. An authenticated revoke control sends only the selected opaque passkey ID, requires a
+fresh user-verified assertion bound to that session and target, and reaches one atomic
+consume-and-revoke call; the current or last active passkey cannot be removed. A separate add
+control validates and seals the label before prompting, requires an existing-key assertion plus an
+independent registration ceremony, and atomically consumes that step-up while inserting the new
 credential under the 32-record lifetime cap. A database-only Community ingest capability now exposes
 minimal active-device verification material and accepts bounded source-bound snapshots with exact
 retry, nonce replay, monotonic source/date, quarantine, and lifecycle-race enforcement. A Jobs-only

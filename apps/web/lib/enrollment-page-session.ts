@@ -3,7 +3,7 @@ import "server-only";
 import { headers } from "next/headers";
 
 import { readCookie } from "./enrollment-cookie";
-import type { PasskeyInventoryItem } from "./enrollment-database";
+import type { PasskeyInventoryItem, ProfileVisibility } from "./enrollment-database";
 import type { EnrollmentSession } from "./enrollment-domain";
 import { getEnrollmentRuntime } from "./enrollment-runtime";
 import { enrollmentCookieNames } from "./enrollment-service";
@@ -24,6 +24,7 @@ export async function readEnrollmentPageSession(): Promise<EnrollmentSession | u
 export interface EnrollmentPageAccount {
   readonly passkeys: readonly PasskeyInventoryItem[] | undefined;
   readonly session: EnrollmentSession;
+  readonly visibility: ProfileVisibility | undefined;
 }
 
 export async function readEnrollmentPageAccount(): Promise<EnrollmentPageAccount | undefined> {
@@ -38,8 +39,11 @@ export async function readEnrollmentPageAccount(): Promise<EnrollmentPageAccount
     if (session === undefined) {
       return undefined;
     }
-    const passkeys = await service.readPasskeyInventory(sessionCookie);
-    return Object.freeze({ passkeys, session });
+    const [passkeys, visibility] = await Promise.all([
+      service.readPasskeyInventory(sessionCookie),
+      service.readProfileVisibility(sessionCookie),
+    ]);
+    return Object.freeze({ passkeys, session, visibility });
   } catch {
     return undefined;
   }

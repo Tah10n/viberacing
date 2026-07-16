@@ -90,7 +90,9 @@ function serviceFixture(): EnrollmentService {
     completePasskeyRevoke: vi.fn(() => Promise.resolve(true)),
     logout: vi.fn(() => Promise.resolve(true)),
     readPasskeyInventory: vi.fn(() => Promise.resolve(undefined)),
+    readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
     readSession: vi.fn(() => undefined),
+    setProfileVisibility: vi.fn(() => Promise.resolve("hidden" as const)),
   };
 }
 
@@ -354,6 +356,62 @@ describe("enrollment HTTP boundary", () => {
         ),
       ),
     ).resolves.toMatchObject({ status: 401 });
+  });
+
+  it("changes profile visibility only from the exact same-origin session form", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const hidden = await http.profileVisibility(
+      post(
+        "/auth/profile/visibility",
+        "visibility=hidden",
+        "application/x-www-form-urlencoded",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(hidden.status).toBe(303);
+    expect(hidden.headers.get("location")).toBe(`${origin}/account`);
+    expect(hidden.headers.get("cache-control")).toBe("no-store");
+    expect(service.setProfileVisibility).toHaveBeenCalledWith("opaque-session", false);
+
+    vi.mocked(service.setProfileVisibility).mockResolvedValueOnce(undefined);
+    const unavailable = await http.profileVisibility(
+      post(
+        "/auth/profile/visibility",
+        "visibility=public",
+        "application/x-www-form-urlencoded",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(unavailable.headers.get("location")).toBe(`${origin}/account?error=unavailable`);
+
+    const missingSession = await http.profileVisibility(
+      post("/auth/profile/visibility", "visibility=hidden", "application/x-www-form-urlencoded"),
+    );
+    expect(missingSession.headers.get("location")).toBe(`${origin}/login?error=unavailable`);
+
+    await expect(
+      http.profileVisibility(
+        post(
+          "/auth/profile/visibility",
+          "visibility=hidden&visibility=public",
+          "application/x-www-form-urlencoded",
+          "viberacing_session=opaque-session",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 400 });
+    await expect(
+      http.profileVisibility(
+        post(
+          "/auth/profile/visibility",
+          "visibility=hidden",
+          "text/plain",
+          "viberacing_session=opaque-session",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 400 });
   });
 
   it("clears every browser credential on same-origin logout even when admission is busy", async () => {

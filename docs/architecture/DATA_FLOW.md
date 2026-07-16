@@ -5,7 +5,7 @@
 Most sequences remain planned application contracts. The enrollment, returning-login, backup-key
 addition, and non-current-passkey revocation sequences below plus the public score consumer are now
 locally implemented boundaries; none has live credentials, edge, or deployment evidence. Revisions
-0001 through 0014 provide private identity/source/device/pairing/audit/deletion/usage tables,
+0001 through 0015 provide private identity/source/device/pairing/audit/deletion/usage tables,
 deny-by-default roles, and a narrow database slice for invite issuance, enrollment, exact-session
 challenges, initial-passkey activation, passkey login and management, restricted recovery, session
 rotation/revocation, immediate deletion lock-down, source-bound pairing, source/device lifecycle
@@ -112,6 +112,12 @@ sequenceDiagram
   Web->>DB: Read bounded session-derived passkey inventory
   DB-->>Web: Labels, lifecycle state, rounded creation dates, current marker
   Web-->>Browser: Server-rendered private list without credential or key material
+
+  User->>Browser: Hide or publish the public profile
+  Browser->>Web: Exact same-origin bounded form with encrypted session
+  Web->>DB: Idempotently set public or hidden for the session profile
+  DB-->>Web: Closed public or hidden state
+  Web-->>Browser: No-store redirect to the account state
 
   User->>Browser: Add a labeled backup passkey
   Browser->>Web: Send validated label with current session

@@ -54,7 +54,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Community trust tier and self-reported flag                                 | Public                          | Server constants; prevent Community results from implying verification   | Public score response and localized UI                                                      | Not stored; literal response metadata                                                                                               | Generated per response; no retention                                                                                             |
 | Public score `seasonStart` query label                                      | Public                          | Visitor; select one public Community season                              | Local Web score route                                                                       | Not stored; passed only to the bounded score adapter                                                                                | Per request only; do not retain or log the raw URL                                                                               |
 | Optional GitHub profile link                                                | Public                          | User opt-in; distinguish an upstream public identity                     | Public only after explicit opt-in                                                           | `profiles` preference                                                                                                               | Until opt-out or deletion; purge public cache                                                                                    |
-| Locale, theme, reduced-motion, privacy preferences                          | Account                         | User; product experience and visibility controls                         | User profile; only public effects are visible                                               | `profiles` or preference store                                                                                                      | Until reset or deletion                                                                                                          |
+| Profile visibility, locale, theme, motion, privacy preferences              | Account                         | User; product experience and visibility controls                         | User profile; only public effects are visible                                               | `profiles`; Web maps lifecycle state only to closed `public`/`hidden`                                                               | Until reset or deletion                                                                                                          |
 | Invite secret, verifier digest, and state                                   | Security                        | Operator-issued 256-bit secret; gate beta enrollment                     | Plaintext only in the initial bounded form; digest to Web/Auth and limited admin procedure  | SHA-256 verifier digest, status, expiry, and non-sensitive audit                                                                    | Plaintext discarded during parsing; digest follows expiry/redemption plus a bounded audit window                                 |
 | Session verifier, encrypted cookie, and metadata                            | Security                        | Web/Auth; maintain one browser session                                   | HttpOnly same-site browser cookie and Web/Auth only                                         | Purpose-keyed AES-GCM cookie; database stores SHA-256 verifier digest, expiry, state, and passkey provenance                        | Pending enrollment is at most 15 minutes; passkey success rotates to at most 30 days; clear/revoke on logout or deletion         |
 | Enrollment cookie master key                                                | Security                        | Deployment; seal login, OAuth, passkey, and session continuations        | Web/Auth process memory only; four purpose keys are derived with HKDF                       | Protected environment/secret manager; exactly 32 canonical base64url bytes; never tracked or logged                                 | Rotate on exposure; rotation invalidates outstanding continuations and sessions                                                  |
@@ -99,14 +99,17 @@ request; the verify request carries only the WebAuthn response. Backup-key addit
 seals the Account label before prompting. Its authenticated options response supplies the profile
 UUID and handle only as WebAuthn user fields to the user's authenticator plus two independent
 challenges; the verify request carries only the existing-key assertion and new-key registration
-responses. Neither credential material nor profile ID enters account HTML. The decoded master key is
-overwritten immediately after those purpose keys are derived. Add/revoke step-up is also one-time
-and at most five minutes; its consumed-row cleanup remains a launch requirement. The HTTP runtime
-exposes only the public origin and secure-cookie flag. The fixed GitHub user response parser accepts
-only a positive safe numeric `id` for return; the token and every other response field are discarded
-after the callback. Tests use reserved, synthetic values and injected GitHub/database/authenticator
-capabilities. No real-user retention or deployed subprocessor claim follows from this local
-boundary.
+responses. Neither credential material nor profile ID enters account HTML. The same possessed
+session can read only a closed `public`/`hidden` visibility value and submit that desired value in a
+same-origin form; the database derives the profile instead of accepting its ID. Hiding does not stop
+source sync. Revision 0015 adds no profile column or new retained field; it stores no form body, IP
+address, user agent, or score. The decoded master key is overwritten immediately after those purpose
+keys are derived. Add/revoke step-up is also one-time and at most five minutes; its consumed-row
+cleanup remains a launch requirement. The HTTP runtime exposes only the public origin and
+secure-cookie flag. The fixed GitHub user response parser accepts only a positive safe numeric `id`
+for return; the token and every other response field are discarded after the callback. Tests use
+reserved, synthetic values and injected GitHub/database/authenticator capabilities. No real-user
+retention or deployed subprocessor claim follows from this local boundary.
 
 Opaque sources deliberately contain no Codex account email or upstream account identifier. The
 implemented pairing database caps each profile at 32 lifetime source records and 64 active plus

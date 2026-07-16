@@ -32,6 +32,7 @@ export interface EnrollmentHttp {
   passkeyRevokeOptions(request: Request): Promise<Response>;
   passkeyRevokeVerify(request: Request): Promise<Response>;
   passkeyVerify(request: Request): Promise<Response>;
+  profileVisibility(request: Request): Promise<Response>;
   start(request: Request): Promise<Response>;
 }
 
@@ -83,6 +84,16 @@ function contentType(request: Request, pattern: RegExp): boolean {
 
 function discardBody(request: Request): void {
   void request.body?.cancel().catch(() => undefined);
+}
+
+function readProfileVisibilityForm(value: string): boolean | undefined {
+  const parameters = new URLSearchParams(value);
+  const keys = [...parameters.keys()];
+  if (keys.length !== 1 || keys[0] !== "visibility") {
+    return undefined;
+  }
+  const visibility = parameters.get("visibility");
+  return visibility === "public" ? true : visibility === "hidden" ? false : undefined;
 }
 
 async function boundedBody(request: Request, maximumBytes: number): Promise<string | undefined> {
@@ -780,6 +791,49 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           headers,
           status: 204,
         });
+      } finally {
+        lease.release();
+      }
+    },
+    async profileVisibility(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/profile/visibility") ||
+        !contentType(request, formContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return redirect(currentRuntime.config.publicOrigin, "/account?error=unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 24);
+        const publiclyVisible = body === undefined ? undefined : readProfileVisibilityForm(body);
+        if (publiclyVisible === undefined) {
+          return problem("invalid_request");
+        }
+        const sessionCookie = readCookie(
+          request.headers.get("cookie"),
+          enrollmentCookieNames.session,
+        );
+        if (sessionCookie === undefined) {
+          return redirect(currentRuntime.config.publicOrigin, "/login?error=unavailable");
+        }
+        const visibility = await currentRuntime.service.setProfileVisibility(
+          sessionCookie,
+          publiclyVisible,
+        );
+        return redirect(
+          currentRuntime.config.publicOrigin,
+          visibility === undefined ? "/account?error=unavailable" : "/account",
+        );
       } finally {
         lease.release();
       }

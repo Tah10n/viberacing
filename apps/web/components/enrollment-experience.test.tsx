@@ -166,6 +166,7 @@ describe("enrollment experience", () => {
       <AccountExperience
         handle="pixel_driver"
         locale="en"
+        visibility="public"
         passkeys={[
           {
             createdOn: "2026-07-15",
@@ -185,10 +186,40 @@ describe("enrollment experience", () => {
       />,
     );
     expect(markup).toContain("Your passkeys");
+    expect(markup).toContain("Public profile");
+    expect(markup).toContain("Eligible scores can appear in the Community race");
+    expect(markup).toContain('action="/auth/profile/visibility"');
+    expect(markup).toContain('type="hidden" name="visibility" value="hidden"');
     expect(markup).toContain("Current session");
     expect(markup).toContain("Revoked");
     expect(markup).toContain('dateTime="2026-07-15"');
     expect(markup).not.toContain(passkeyId);
+  });
+
+  it("renders hidden and unavailable profile states without client-side persistence", () => {
+    const hidden = renderToStaticMarkup(
+      <AccountExperience
+        actionUnavailable
+        handle="pixel_driver"
+        locale="ru"
+        passkeys={[]}
+        visibility="hidden"
+      />,
+    );
+    expect(hidden).toContain("Публичный профиль выключен");
+    expect(hidden).toContain('type="hidden" name="visibility" value="public"');
+    expect(hidden).toContain("Не удалось изменить аккаунт");
+
+    const unavailable = renderToStaticMarkup(
+      <AccountExperience
+        handle="pixel_driver"
+        locale="en"
+        passkeys={undefined}
+        visibility={undefined}
+      />,
+    );
+    expect(unavailable).toContain("Profile visibility is temporarily unavailable");
+    expect(unavailable).not.toContain('action="/auth/profile/visibility"');
   });
 
   it("uses an existing assertion before creating one backup passkey", async () => {
@@ -210,6 +241,7 @@ describe("enrollment experience", () => {
       <AccountExperience
         handle="pixel_driver"
         locale="en"
+        visibility="public"
         passkeys={[
           {
             createdOn: "2026-07-15",
@@ -274,6 +306,7 @@ describe("enrollment experience", () => {
       <AccountExperience
         handle="pixel_driver"
         locale="en"
+        visibility="public"
         passkeys={[
           {
             createdOn: "2026-07-15",
@@ -329,6 +362,7 @@ describe("enrollment experience", () => {
         <AccountExperience
           handle="pixel_driver"
           locale="en"
+          visibility="public"
           passkeys={[
             {
               createdOn: "2026-07-15",

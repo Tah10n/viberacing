@@ -1,6 +1,7 @@
 import type { Locale } from "./i18n";
 
 const english = {
+  accountActionUnavailable: "That account change could not be completed. Please try again.",
   accountCopy: "Your invited Community profile is active and protected by a passkey.",
   accountTitle: "Profile ready",
   activePasskey: "Active",
@@ -17,6 +18,7 @@ const english = {
   genericError: "The request could not be completed. Check the fields or try again later.",
   handleHint: "3–24 lowercase letters, numbers, hyphens, or underscores.",
   handleLabel: "Public racing handle",
+  hideProfile: "Hide profile",
   inviteHint: "Use the one-time invite exactly as it was issued.",
   inviteLabel: "Invite code",
   joinCopy:
@@ -45,6 +47,13 @@ const english = {
   privacyNote:
     "Email, repositories, prompts, conversations, Codex credentials, and exact token totals are neither retained nor used.",
   primaryPasskey: "Primary passkey",
+  profileHidden: "Public profile is off. It will not appear in the Community race.",
+  profileVisible: "Public profile is on. Eligible scores can appear in the Community race.",
+  profileVisibilityCopy:
+    "Hiding removes your profile from the public race. Existing device sync can continue; after publishing, eligible scores can appear at the next refresh.",
+  profileVisibilityTitle: "Public profile",
+  profileVisibilityUnavailable: "Profile visibility is temporarily unavailable.",
+  publishProfile: "Show profile",
   russian: "Русский",
   revokedPasskey: "Revoked",
   revokePasskey: "Revoke passkey",
@@ -66,6 +75,7 @@ const english = {
 type JoinTranslationKey = keyof typeof english;
 
 const russian: Record<JoinTranslationKey, string> = {
+  accountActionUnavailable: "Не удалось изменить аккаунт. Попробуйте ещё раз.",
   accountCopy: "Профиль участника активирован и защищён ключом доступа.",
   accountTitle: "Профиль готов",
   activePasskey: "Активен",
@@ -82,6 +92,7 @@ const russian: Record<JoinTranslationKey, string> = {
   genericError: "Не удалось завершить запрос. Проверьте поля или попробуйте позже.",
   handleHint: "От 3 до 24 строчных букв, цифр, дефисов или подчёркиваний.",
   handleLabel: "Публичное имя пилота",
+  hideProfile: "Скрыть профиль",
   inviteHint: "Введите одноразовый инвайт точно в выданном виде.",
   inviteLabel: "Код приглашения",
   joinCopy:
@@ -110,6 +121,13 @@ const russian: Record<JoinTranslationKey, string> = {
   privacyNote:
     "Email, репозитории, промпты, диалоги, данные входа Codex и точное число токенов не сохраняются и не используются.",
   primaryPasskey: "Основной ключ доступа",
+  profileHidden: "Публичный профиль выключен и не появится в гонке сообщества.",
+  profileVisible: "Публичный профиль включён. Подходящие результаты могут появиться в гонке.",
+  profileVisibilityCopy:
+    "Скрытие убирает профиль из публичной гонки. Синхронизация подключённых устройств может продолжаться; после публикации результат появится при следующем пересчёте.",
+  profileVisibilityTitle: "Публичный профиль",
+  profileVisibilityUnavailable: "Настройка видимости профиля временно недоступна.",
+  publishProfile: "Показать профиль",
   russian: "Русский",
   revokedPasskey: "Отозван",
   revokePasskey: "Отозвать ключ",

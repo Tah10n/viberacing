@@ -9,8 +9,9 @@ and default product shell remain synthetic and unauthenticated, with no working 
 pairing approval/HTTP route, real user data, or deployment. A separate local Phase 2 slice now
 implements invite redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations,
 initial passkey registration, returning login, a session-scoped passkey inventory, an account page,
-fresh backup-passkey addition, revocation of an owned non-current passkey, and logout. It fails
-closed without externally provisioned configuration and has no live-user or deployment evidence.
+public-profile hide/show, fresh backup-passkey addition, revocation of an owned non-current passkey,
+and logout. It fails closed without externally provisioned configuration and has no live-user or
+deployment evidence.
 
 ## Run it
 
@@ -47,10 +48,10 @@ provides no valid invite or working credential. See `.env.example` and the local
 | `lib/public-community-score-route.ts`              | Parses and serializes the public score HTTP boundary             | Closed query/Accept, exact errors, admission, deadlines, and no CORS               |
 | `lib/public-score-admission.ts`                    | Enforces the no-queue public-read concurrency ceiling            | Four active reads; lease held until adapter settlement                             |
 | `lib/public-http-problem.ts`                       | Generates opaque request IDs and closed public error responses   | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
-| `app/join`, `app/login`, `app/account`, `app/auth` | Presents and routes enrollment, login, add, revoke, and logout   | Thin entrypoints; no recovery, pairing approval, or admin                          |
-| `components/account-experience.tsx`                | Renders private passkey inventory, add, revoke, and logout       | Opaque target ID only; no credential/key/profile ID or exact activity timestamp    |
-| `lib/enrollment-http.ts`                           | Owns the eleven local identity HTTP decisions                    | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
-| `lib/enrollment-service.ts`                        | Composes OAuth, registration, login, account, and logout         | Server IDs/secrets only; fixed database capabilities; generic failure              |
+| `app/join`, `app/login`, `app/account`, `app/auth` | Routes enrollment, login, visibility, passkeys, and logout       | Thin entrypoints; no recovery, pairing approval, or admin                          |
+| `components/account-experience.tsx`                | Renders visibility, private passkeys, and logout                 | Closed state and opaque target only; no credential/key/profile ID or exact time    |
+| `lib/enrollment-http.ts`                           | Owns the twelve local identity HTTP decisions                    | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
+| `lib/enrollment-service.ts`                        | Composes OAuth, login, account controls, passkeys, and logout    | Server IDs/secrets only; fixed database capabilities; generic failure              |
 | `lib/enrollment-cookie.ts`                         | Seals login, OAuth, passkey, and session continuations           | AES-GCM with purpose-separated keys, bounded expiry, HttpOnly, and narrow paths    |
 | `lib/github-oauth.ts`                              | Resolves one GitHub numeric user ID                              | State plus PKCE, no extra scope, fixed endpoints, token and other fields discarded |
 | `lib/passkey-registration.ts`                      | Creates and verifies registration and login ceremonies           | Exact RP/origin/type, required UV, fixed algorithms, and bounded output            |
@@ -161,12 +162,15 @@ settlement; rejected or overloaded requests cancel their body without a queue. C
 purpose-keyed AES-256-GCM values with authenticated context, HttpOnly, SameSite=Lax, HTTPS `Secure`,
 and the narrowest useful path; duplicate cookie names fail closed. Every response is `no-store` and
 `no-referrer`, and each local route admits at most four unsettled operations. The account page uses
-the exact possessed session to read at most 32 passkey rows through the existing fixed procedure.
-Its mapper requires one current active authenticator and renders only bounded labels, active/revoked
-state, UTC creation dates rounded to a day, and the current marker. Credential IDs, public keys,
-sign counters, exact activity timestamps, and profile IDs do not enter HTML. A failed inventory read
-shows one generic unavailable message while logout remains usable; every state-changing operation
-still requires database verification.
+the exact possessed session to read at most 32 passkey rows and one closed `public`/`hidden`
+visibility value through fixed procedures. The passkey mapper requires one current active
+authenticator and renders only bounded labels, active/revoked state, UTC creation dates rounded to a
+day, and the current marker. Credential IDs, public keys, sign counters, exact activity timestamps,
+and profile IDs do not enter HTML. The visibility form is an exact same-origin, bounded POST backed
+by the same session verifier. Hiding immediately removes the profile from public score reads while
+existing source sync may continue; publishing makes it eligible for public reads again. Repeating
+the current state is a no-op. A failed account read shows a generic unavailable message while logout
+remains usable; every state-changing operation still requires database verification.
 
 An active non-current passkey has one revoke control. `POST /auth/passkeys/revoke/options` accepts
 only its opaque UUID, revalidates the active session and owned inventory, and creates a five-minute

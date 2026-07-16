@@ -150,16 +150,17 @@ flowchart LR
   read-write pool. Login options retain no database state; valid proof alone reaches atomic
   challenge creation/consumption and passkey-provenance session minting. The account page now uses
   that exact session for a bounded, server-rendered passkey inventory without credential or key
-  material. It can revoke an owned non-current active key only after a fresh user-verified assertion
-  bound to that session, target, RP, origin, and one atomically consumed challenge. It can also add
-  a backup key after independent existing-key assertion and registration ceremonies whose validated
-  label and challenges reach one atomic consume-and-add statement. A dormant transport-free pairing
-  start boundary now owns fresh server IDs/token/challenge/code, separate protected poll/code
-  verifiers, closed device metadata, nine-minute expiry, and one fixed call through a separate
-  probed read-write pool wrapper. A second dormant boundary owns protected poll lookup, strict
-  possession proof, server-owned activation IDs, and fixed admission/timing. Pairing browser
-  approval, recovery and remaining step-up, edge attempt policy, live provider/database credentials,
-  and deployment remain separate gates.
+  material and for an idempotent same-origin `public`/`hidden` profile control. Hiding affects
+  public score reads without pausing source sync. It can revoke an owned non-current active key only
+  after a fresh user-verified assertion bound to that session, target, RP, origin, and one
+  atomically consumed challenge. It can also add a backup key after independent existing-key
+  assertion and registration ceremonies whose validated label and challenges reach one atomic
+  consume-and-add statement. A dormant transport-free pairing start boundary now owns fresh server
+  IDs/token/challenge/code, separate protected poll/code verifiers, closed device metadata,
+  nine-minute expiry, and one fixed call through a separate probed read-write pool wrapper. A second
+  dormant boundary owns protected poll lookup, strict possession proof, server-owned activation IDs,
+  and fixed admission/timing. Pairing browser approval, recovery and remaining step-up, edge attempt
+  policy, live provider/database credentials, and deployment remain separate gates.
 - Ingest: a small Fastify service with no OAuth, admin, signing, or deployment credentials. Its
   first local slices are a pure raw-request verification kernel and a bounded least-privileged
   PostgreSQL adapter, a protected exact two-key origin configuration reader, and an atomic

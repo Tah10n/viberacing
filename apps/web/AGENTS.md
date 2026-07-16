@@ -37,6 +37,10 @@ apply.
 - Account passkey inventory must remain session-derived and server-rendered. Preserve the 32-row
   cap, exact closed mapper, one current active authenticator, rounded creation date, and omission of
   credential IDs, public keys, sign counters, exact activity timestamps, and profile IDs from HTML.
+- Profile visibility must remain an exact-session, same-origin server action over the closed
+  `public`/`hidden` mapper. Hiding removes the profile from public reads but does not pause existing
+  source sync; publishing makes it eligible for public reads again. Preserve idempotency, generic
+  failures, no browser persistence, and the fixed Web/Auth database capability.
 - Passkey revocation must target only an owned non-current active key from that inventory. Bind one
   fresh required-UV assertion to the exact active session, target, RP, origin, and five-minute
   challenge, then consume and revoke atomically. The opaque target ID may enter only the

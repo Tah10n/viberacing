@@ -55,10 +55,12 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
         },
       ]),
     ),
+    readProfileVisibility: vi.fn(() => Promise.resolve([{ visibility: "public" }])),
     release(destroy = false): void {
       releases.push(destroy);
     },
     revokeEnrollmentSession: vi.fn(() => Promise.resolve([{ revoked: true }])),
+    setProfileVisibility: vi.fn(() => Promise.resolve([{ visibility: "hidden" }])),
     verifyRuntimeBoundary: vi.fn(() =>
       Promise.resolve([
         {
@@ -237,6 +239,19 @@ describe("enrollment database", () => {
       profileId: profile.profileId,
     });
     await expect(
+      database.readProfileVisibility({
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).resolves.toBe("public");
+    await expect(
+      database.setProfileVisibility({
+        publiclyVisible: false,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).resolves.toBe("hidden");
+    await expect(
       database.revokeSession({
         auditEventId: profile.auditEventId,
         requestId: profile.requestId,
@@ -244,8 +259,10 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(11);
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(13);
     expect(releases).toEqual([
+      false,
+      false,
       false,
       false,
       false,
@@ -317,6 +334,29 @@ describe("enrollment database", () => {
       }),
     ).rejects.toMatchObject({ code: "result_invalid" });
     expect(malformedInventory.releases).toEqual([true]);
+
+    const malformedVisibility = fixture({
+      readProfileVisibility: () => Promise.resolve([{ visibility: "private" }]),
+    });
+    await expect(
+      malformedVisibility.database.readProfileVisibility({
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).rejects.toMatchObject({ code: "result_invalid" });
+    expect(malformedVisibility.releases).toEqual([true]);
+
+    const mismatchedVisibility = fixture({
+      setProfileVisibility: () => Promise.resolve([{ visibility: "public" }]),
+    });
+    await expect(
+      mismatchedVisibility.database.setProfileVisibility({
+        publiclyVisible: false,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).rejects.toMatchObject({ code: "result_invalid" });
+    expect(mismatchedVisibility.releases).toEqual([true]);
 
     const unorderedInventory = fixture({
       readPasskeyInventory: () =>

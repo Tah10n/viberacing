@@ -14,6 +14,7 @@ import type {
   EnrollmentDatabase,
   PasskeyInventoryItem,
   PasskeyLoginMaterial,
+  ProfileVisibility,
 } from "./enrollment-database";
 import {
   enrollmentPatterns,
@@ -148,7 +149,12 @@ export interface EnrollmentService {
   ): Promise<boolean>;
   logout(sessionCookie: string | undefined): Promise<boolean>;
   readPasskeyInventory(sessionCookie: string): Promise<readonly PasskeyInventoryItem[] | undefined>;
+  readProfileVisibility(sessionCookie: string): Promise<ProfileVisibility | undefined>;
   readSession(sessionCookie: string | undefined): EnrollmentSession | undefined;
+  setProfileVisibility(
+    sessionCookie: string,
+    publiclyVisible: boolean,
+  ): Promise<ProfileVisibility | undefined>;
 }
 
 interface EnrollmentServiceDependencies {
@@ -1219,6 +1225,58 @@ export function createEnrollmentService(
         sessionDigest?.fill(0);
       }
     },
+    async readProfileVisibility(sessionCookie: string): Promise<ProfileVisibility | undefined> {
+      const session = readSession(sessionCookie);
+      if (!session?.passkeyRegistered) {
+        return undefined;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      try {
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return undefined;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        return await database.readProfileVisibility({
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+      } catch {
+        return undefined;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+      }
+    },
     readSession,
+    async setProfileVisibility(
+      sessionCookie: string,
+      publiclyVisible: boolean,
+    ): Promise<ProfileVisibility | undefined> {
+      const session = readSession(sessionCookie);
+      if (!session?.passkeyRegistered || typeof publiclyVisible !== "boolean") {
+        return undefined;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      try {
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return undefined;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        return await database.setProfileVisibility({
+          publiclyVisible,
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+      } catch {
+        return undefined;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+      }
+    },
   });
 }
