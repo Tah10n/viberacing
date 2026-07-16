@@ -3,7 +3,7 @@ import type { CarRecipe } from "./car-recipe";
 export interface PublicRaceParticipant {
   readonly activeDays: number;
   readonly car: CarRecipe;
-  readonly freshnessDays: number;
+  readonly freshnessDays: number | null;
   readonly handle: string;
   readonly id: string;
   readonly rank: number;

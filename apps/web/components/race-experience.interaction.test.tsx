@@ -72,12 +72,17 @@ function installMatchMedia(initialMatches: boolean): MediaController {
   };
 }
 
-function mountExperience(): MountedExperience {
+function mountExperience(communitySeasonStart?: string): MountedExperience {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
+  const payload = getSyntheticRacePayload();
   act(() => {
-    root.render(createElement(RaceExperience, { payload: getSyntheticRacePayload() }));
+    root.render(
+      communitySeasonStart === undefined
+        ? createElement(RaceExperience, { payload })
+        : createElement(RaceExperience, { communitySeasonStart, payload }),
+    );
   });
   return { container, root };
 }
@@ -100,6 +105,111 @@ afterEach(() => {
 });
 
 describe("RaceExperience interactions", () => {
+  it("replaces the preview standings with a validated same-origin Community page", async () => {
+    installMatchMedia(false);
+    const fetchScore = vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            participants: [
+              {
+                activeDays: 6,
+                displayPosition: 1,
+                handle: "visible_driver",
+                rankPosition: 1,
+                scoreVersion: "community_v1",
+                seasonEnd: "2026-07-19",
+                seasonFinalized: false,
+                seasonStart: "2026-07-13",
+                sourceCount: 2,
+                weeklyScore: 6123,
+              },
+            ],
+            schemaVersion: 1,
+            selfReported: true,
+            trustTier: "community",
+          }),
+          { headers: { "content-type": "application/json; charset=utf-8" } },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchScore);
+
+    const mounted = mountExperience("2026-07-13");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const app = mounted.container.querySelector<HTMLElement>(".race-app");
+    expect(app?.dataset.scoreSource).toBe("community");
+    expect(mounted.container.textContent).toContain("Community standings");
+    expect(mounted.container.textContent).toContain("visible_driver");
+    expect(mounted.container.textContent).toContain("Visual marker");
+    expect(mounted.container.textContent).not.toContain("neon_otter");
+    expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(fetchScore).toHaveBeenCalledWith(
+      "/v1/community/scores?seasonStart=2026-07-13",
+      expect.objectContaining({ credentials: "omit", method: "GET" }),
+    );
+
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
+  it("labels and preserves the synthetic fallback when Community standings are unavailable", async () => {
+    installMatchMedia(false);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response(null, { status: 503 }))),
+    );
+
+    const mounted = mountExperience("2026-07-13");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mounted.container.textContent).toContain("Synthetic fallback");
+    expect(mounted.container.textContent).toContain("neon_otter");
+    expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(8);
+
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
+  it("renders an explicit empty state for a valid Community week without participants", async () => {
+    installMatchMedia(false);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              participants: [],
+              schemaVersion: 1,
+              selfReported: true,
+              trustTier: "community",
+            }),
+            { headers: { "content-type": "application/json; charset=utf-8" } },
+          ),
+        ),
+      ),
+    );
+
+    const mounted = mountExperience("2026-07-13");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mounted.container.textContent).toContain("No Community participants yet.");
+    expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(1);
+
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
   it("loads, applies, and persists only non-personal device preferences", () => {
     localStorage.setItem("viberacing.locale", "ru");
     localStorage.setItem("viberacing.theme", "cyber-rally");

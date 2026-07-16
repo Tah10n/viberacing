@@ -35,11 +35,12 @@ origin replay tuple and separate Jobs ingest/pairing cleanup capabilities have i
 evidence. A transport-free Ingest application boundary now composes those exact capabilities,
 generates one server request ID, and returns only a validated sync acknowledgement or generic
 problem decision. A confined Fastify server factory now preserves raw body/header evidence, applies
-no-queue/deadline policy, and serializes only revalidated sync contracts. The public score route and
-Ingest boundaries are locally verified but have no real proof key, secret-manager binding, live
-database login, host/port/TLS Ingest entry point, edge deployment, capacity evidence, or
-visible-component consumer. A library-only Rust connector foundation now implements a bounded stable
-App Server JSONL handshake and a candidate-only `0.144.4` account/usage parser with checked
+no-queue/deadline policy, and serializes only revalidated sync contracts. The public score route now
+has a visible current-week browser consumer with an explicit validated synthetic fallback. It and
+the Ingest boundaries are locally verified but have no real proof key, secret-manager binding, live
+database login, host/port/TLS Ingest entry point, edge deployment, capacity evidence, or deployed
+real-data result. A library-only Rust connector foundation now implements a bounded stable App
+Server JSONL handshake and a candidate-only `0.144.4` account/usage parser with checked
 schema/fixture evidence. A one-shot supervisor composes that sequence with fixed local pipes,
 arguments, deadlines, output budgets, ambient-environment clearing, and reap-before-success
 behavior, but its reviewed-launch capability has no public constructor. An exact-body composer now

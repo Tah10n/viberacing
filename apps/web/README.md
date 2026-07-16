@@ -1,13 +1,12 @@
 # Vibe Racing web prototype
 
 This workspace is the Phase 1 product shell: a responsive pixel-art race, Community leaderboard, and
-demo profile built entirely from committed synthetic fixtures. It is suitable for local design,
-accessibility, localization, and scoring review. It is not an authenticated product and does not
-read Codex or user accounts. Server-only score database, public problem-response, local score route,
-pure pairing-possession verification, and dormant pairing start/activation composition modules now
-exist, but no visible component calls those boundaries and no working database login, pairing
-approval/HTTP route, or deployment is supplied; the synthetic prototype still does not query a
-database.
+demo profile with committed synthetic fallback data. It is suitable for local design, accessibility,
+localization, and scoring review. The visible race and leaderboard now request the current
+server-selected Community week from the exact same-origin public score route, validate the bounded
+response in the browser, and retain the labeled synthetic fallback on any failure. The demo garage
+remains synthetic. The product is not authenticated and has no working database login, pairing
+approval/HTTP route, real user data, or deployment.
 
 ## Run it
 
@@ -29,8 +28,9 @@ for a hosted deployment; it is public configuration, not a secret. Focused check
 
 | Path                                    | Responsibility                                                   | Trust boundary                                                                    |
 | --------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `app/page.tsx`                          | Builds the synthetic public payload on the server                | Must pass only public presentation data into the client tree                      |
+| `app/page.tsx`                          | Selects the current week and builds the synthetic fallback       | Must pass only public labels and presentation data into the client tree           |
 | `lib/race-data.ts`                      | Clearly synthetic raw activity fixtures and payload projection   | Marked `server-only`; never replace with exports or real account data             |
+| `lib/public-community-race.ts`          | Loads and maps the current public score page for visible racing  | Exact same-origin GET; no credentials/cache; closed fields and synthetic fallback |
 | `lib/public-community-score-mapper.ts`  | Validates and maps the exact SQL score projection                | Server-only, exact allowlist, top-32, and fail-closed                             |
 | `lib/public-community-score-store.ts`   | Executes the fixed public-score procedure and mapper             | Canonical Monday only; verifies every checkout; route constructs it lazily        |
 | `lib/public-community-score-route.ts`   | Parses and serializes the public score HTTP boundary             | Closed query/Accept, exact errors, admission, deadlines, and no CORS              |
@@ -87,10 +87,12 @@ or visible-page consumer.
 
 ## Score database adapter configuration
 
-The adapter is constructed explicitly; importing or running the synthetic page does not connect. It
-uses only the `VIBERACING_WEB_DATABASE_*` settings documented in `.env.example`. The separate
-`DATABASE_*` values belong to the disposable compose bootstrap owner and are forbidden for Web
-reads. The repository intentionally creates no working login.
+The adapter is constructed lazily only when the visible client reaches the exact score route; an
+invalid or absent configuration returns the generic unavailable response and the page keeps its
+synthetic fallback. Importing or building the page does not connect. The adapter uses only the
+`VIBERACING_WEB_DATABASE_*` settings documented in `.env.example`. The separate `DATABASE_*` values
+belong to the disposable compose bootstrap owner and are forbidden for Web reads. The repository
+intentionally creates no working login.
 
 Local adapter work requires an infrastructure-provisioned login whose only group membership is
 `viberacing_web`. Cleartext requires explicit `NODE_ENV=development` or `test` plus loopback. Every
@@ -200,8 +202,9 @@ cover exact HMAC derivation and rotation, protected configuration, fixed two-can
 read-write role probes, the shared strict proof, hostile input/result/dependency shapes, server IDs,
 admission/timing, generic failures, clearing, release, and close without a real key or connection.
 Canvas tests execute real render loops against a typed context stub, including animated and
-no-context paths. Preference tests cover valid settings, reduced motion, pausing, invalid/blocked
-storage, and cleanup.
+no-context paths. Visible-score tests cover current-week selection, exact credential-free fetch,
+closed public response mapping, success/fallback states, and empty standings. Preference tests cover
+valid settings, reduced motion, pausing, invalid/blocked storage, and cleanup.
 
 Coverage thresholds apply to product components and libraries. Small framework entrypoints are
 excluded from unit coverage and exercised by `next build`; counting imports as unit coverage would
@@ -212,7 +215,8 @@ and are listed honestly in `docs/IMPLEMENTATION_STATUS.md`.
 
 ## Change checklist
 
-1. Preserve the synthetic-only boundary and update EN/RU strings together.
+1. Preserve the explicit synthetic fallback and public-only Community boundary; update EN/RU strings
+   together.
 2. Add negative tests for every new input, persistence key, URL, or serialization field.
 3. Test keyboard and reduced-motion behavior for visible interaction changes.
 4. Keep visual assets local; sanitize binary metadata and document provenance before staging them.

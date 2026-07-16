@@ -289,8 +289,11 @@ material availability cost.
   adapter selects only those columns with a fixed top-32 parameterized call and reflects no input,
   row, SQL, configuration, or driver error. The local GET closes one public Monday season query,
   body/method/media handling, no-store/same-origin semantics, admission, generic errors, and final
-  response validation. Deployment, enumeration controls, rounded freshness, cache purge, edge rate
-  policy, and monitoring are still unimplemented.
+  response validation. The visible browser consumer renders only those public fields, omits
+  unavailable streak/freshness, uses fixed project-owned presentation cars, sends no credentials,
+  and falls back to explicitly synthetic rows after any invalid or unavailable response. Deployment,
+  enumeration controls, rounded freshness, cache purge, edge rate policy, and monitoring are still
+  unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 
@@ -525,28 +528,30 @@ material availability cost.
   visible season entries. The generated query validator now rejects malformed, out-of-range, and
   non-Monday seasons before the route may call the store. The local route rejects bodies and
   oversized/malformed URL or `Accept` work, admits at most four active reads with no queue, holds
-  each lease through adapter settlement, and returns 503 on exhaustion. The operation reserves a 429
-  response without claiming a client-rate limiter exists. The transport-free pairing-start
-  application bounds labels, metadata, keys, entropy, and HMAC work, admits four unsettled attempts
-  without a queue, holds each lease through a 250-millisecond floor, and makes no database call for
-  malformed input. This is not a distributed or client-identity rate limit. Physical pairing cleanup
-  now exists as a separate local capability, but scheduling and distributed controls are still
-  pending. The local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client
-  deadlines, two fixed 1000-row cleanup commands, canonical season validation, closed one-row
-  results, and destructive release on failure. The kernel itself has no socket/ stream authority.
-  The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
-  checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row origin consume,
-  zero-or-one device lookup, and one-row submission results, with destructive release on failure.
-  The transport-free application generates request correlation before verification, submits only
-  after verification, waits for settlement, and contains dependency failures without a retry loop.
-  The local Fastify boundary caps the raw body at 8192 bytes, parsed headers at 16384 bytes, raw
-  header pairs at 64, connections at 32, and requests per socket at 16; it sets 5/33/34-second
-  request/handler/connection deadlines and a five-second keep-alive, admits four unsettled
-  application calls without a queue, holds each lease through settlement, and returns generic 503 on
-  exhaustion. Real loopback tests close malformed and partial requests; injection tests cover
-  overload and response policy. There is no live login, distributed rate/backpressure policy,
-  monitoring, or combined capacity evidence. Scheduling, cache, scoring/read capacity evidence,
-  quotas, edge shaping, and production load evidence remain unimplemented.
+  each lease through adapter settlement, and returns 503 on exhaustion. The visible home page makes
+  one current-week request per navigation with no client retry loop and retains its synthetic
+  fallback after failure. The operation reserves a 429 response without claiming a client-rate
+  limiter exists. The transport-free pairing-start application bounds labels, metadata, keys,
+  entropy, and HMAC work, admits four unsettled attempts without a queue, holds each lease through a
+  250-millisecond floor, and makes no database call for malformed input. This is not a distributed
+  or client-identity rate limit. Physical pairing cleanup now exists as a separate local capability,
+  but scheduling and distributed controls are still pending. The local Jobs runner adds a one-client
+  ceiling, 2/31/32-second connect/server/client deadlines, two fixed 1000-row cleanup commands,
+  canonical season validation, closed one-row results, and destructive release on failure. The
+  kernel itself has no socket/ stream authority. The separate Ingest adapter adds a four-client
+  ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime recycling, exact
+  one-row origin consume, zero-or-one device lookup, and one-row submission results, with
+  destructive release on failure. The transport-free application generates request correlation
+  before verification, submits only after verification, waits for settlement, and contains
+  dependency failures without a retry loop. The local Fastify boundary caps the raw body at 8192
+  bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests per
+  socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
+  keep-alive, admits four unsettled application calls without a queue, holds each lease through
+  settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and partial
+  requests; injection tests cover overload and response policy. There is no live login, distributed
+  rate/backpressure policy, monitoring, or combined capacity evidence. Scheduling, cache,
+  scoring/read capacity evidence, quotas, edge shaping, and production load evidence remain
+  unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

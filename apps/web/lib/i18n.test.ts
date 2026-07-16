@@ -28,6 +28,7 @@ describe("localization", () => {
     expect(formatScore(1234, "ru")).toMatch(/^1[\s\u00a0]234$/);
     expect(formatFreshness(0, "en")).toBe("today");
     expect(formatFreshness(2, "ru")).toBe("2 дня");
+    expect(formatFreshness(null, "en")).toBe("—");
     expect(formatDayCount(11, "ru")).toBe("11 дн.");
     expect(formatCarPart("turbo-blue", "en")).toBe("Turbo blue");
     expect(formatCarPart("turbo-blue", "ru")).toBe("Турбо-синий");

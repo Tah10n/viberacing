@@ -424,6 +424,11 @@ and four-request no-queue admission. The lease remains held through the adapter'
 connect/query/statement deadlines. This local evidence is not a deployment, live database login,
 edge rate policy, shared cache, capacity result, or public-beta claim.
 
+The visible home race now uses that exact same-origin operation for its current server-selected
+Monday. It accepts only the bounded Public response, uses no credentials or browser persistence, and
+keeps a clearly labeled synthetic fallback on any invalid or unavailable result. CarRecipe, streak,
+freshness, profile detail, cache, live login, and deployment remain separate gates.
+
 ### ConnectorSyncV1
 
 The minimum payload contains:

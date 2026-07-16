@@ -6,12 +6,13 @@ The current repository contains a private SQL schema, synthetic PostgreSQL integ
 Community sync verification kernel, mock-pool database adapter, and bounded local HTTP server
 factory, plus library-only connector protocol/parser boundaries, a synthetic one-shot process
 supervisor, an exact-body composer, isolated pairing/request signers, a pure Web pairing verifier,
-dormant pairing applications, and bounded database/local Jobs pairing cleanup behind closed
-boundaries, but no deployed application database, user accounts, production service, operational
-connector, or real user data. This document remains the required inventory for implementation. A
-field may not be collected merely because it appears here: its schema, purpose, visibility,
-retention, deletion, and access tests must exist first. The implemented column-level mapping is
-documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
+dormant pairing applications, a visible public-score consumer with a synthetic fallback, and bounded
+database/local Jobs pairing cleanup behind closed boundaries, but no deployed application database,
+user accounts, production service, operational connector, or real user data. This document remains
+the required inventory for implementation. A field may not be collected merely because it appears
+here: its schema, purpose, visibility, retention, deletion, and access tests must exist first. The
+implemented column-level mapping is documented in
+[`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
 
@@ -315,6 +316,13 @@ encoded field names, bodies, and unsupported media ranges before store work. The
 opaque request ID but no URL/header log, cache entry, analytics event, new network destination, or
 retained record; it must not record the raw URL merely to diagnose an invalid date.
 
+The visible home consumer adds no collected or retained field. The server derives only the current
+Public Monday label; the browser sends it once to the existing same-origin route without cookies or
+credentials, validates the closed Public response in memory, and does not cache or persist it. Fixed
+project-owned CarRecipe values are presentation placeholders rather than participant data; streak
+and freshness remain absent. A failed or invalid response leaves the explicitly synthetic fallback
+visible and creates no retry, log, metric, analytics, export, or third-party request.
+
 ## Prohibited data
 
 The connector, schemas, services, logs, analytics, support process, fixtures, and release artifacts
@@ -353,16 +361,18 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   capability. It has no executable discovery/admission, real Codex path, context provider, real key
   generation/store, pairing, log, persistence, or egress capability; the candidate remains
   unsupported until official-artifact, platform, privacy-egress, packaging, and release gates pass.
-- Jobs currently receive only bounded expired ingest-state cleanup, open-season Community scoring
-  refresh, and terminal finalization. The local one-shot adapter rechecks the exact Jobs-only login
-  and invokes one prepared capability without logging inputs or results. Correction and deletion
-  capabilities require separate migrations and tests; migrations use a different non-runtime owner.
+- Jobs currently receive only bounded expired ingest- and pairing-state cleanup, open-season
+  Community scoring refresh, and terminal finalization. The local one-shot adapter rechecks the
+  exact Jobs-only login and invokes one prepared capability without logging inputs or results.
+  Correction and deletion capabilities require separate migrations and tests; migrations use a
+  different non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The
-  local query/response route adds no cache or retention sink and is not deployed. Authenticated
-  responses are private and `no-store`; future public cache keys cannot include or mix session
-  state.
+  local query/response route adds no cache or retention sink and is not deployed. The visible
+  browser now consumes its current-week Public response transiently and falls back to synthetic data
+  without retaining either response or failure detail. Authenticated responses are private and
+  `no-store`; future public cache keys cannot include or mix session state.
 - Admin access is separate, reasoned, passkey-stepped-up, and audited. Routine support has no need
   to read exact usage.
 

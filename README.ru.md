@@ -11,9 +11,11 @@ Vibe Racing — открытый пиксельный недельный рей�
 передаёт только заявленные пользователем дневные buckets, а участники отображаются как болиды на
 общей трассе.
 
-Сейчас сайт уже можно запустить локально, но он намеренно использует только синтетические данные:
-без аккаунта, connector, подключённой базы приложения, аналитики и реальной статистики. Так можно
-проверить гонку, таблицу, профиль, три темы, русский/английский интерфейс и reduced-motion режим.
+Сайт можно запустить локально без аккаунта, connector и базы: в этом случае он показывает явно
+помеченное синтетическое превью. Видимая гонка и таблица теперь также запрашивают текущую неделю у
+same-origin public score route и переключаются на Community results только после проверки ответа;
+при ошибке остаётся синтетический fallback. Демо-профиль, три темы, русский/английский интерфейс и
+reduced-motion режим работают без реальных данных.
 
 ## Модель доверия
 
@@ -151,24 +153,25 @@ tokens и source IDs. Database-only finalization закрывает grace window
 bounded active-profile score rows без raw values, private IDs и exact timestamps. Email и
 идентификатор Codex-аккаунта не читаются и не сохраняются. Response schema фиксирует тот же public
 allowlist, а server-only mapper, bounded Web PostgreSQL adapter и локальный score route проверяют
-форму, season/rank invariants, database role и contract до сериализации, но route не подключён к
-видимой synthetic странице. HTTP login/recovery routes, OAuth callback, Argon2id/WebAuthn и
-pairing-possession verifier, generic auth-response translation и edge rate limits для анонимных
-challenges и recovery lookup пока отсутствуют. Database-only Community ingest capability уже выдаёт
-минимальный материал активного устройства и принимает bounded source-bound snapshots с exact retry,
-nonce replay, monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only
-procedure независимо удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots,
-сохраняя current source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup,
-scoring refresh или finalization через отдельный least-privileged config, single-client pool,
-проверку role/login/search path, fixed deadlines, prepared parameters, closed result validation и
-стабильный non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel,
-adapter и application объединены на synthetic/mock-pool evidence, а Fastify boundary отдельно
-проверена через injection/loopback с mock application. Полный HTTP-to-PostgreSQL path не проверен
-через реальный login. Deployed HTTP ingest route, pairing-possession verifier, operational
-connector, cleanup/scoring scheduler, live Ingest/Jobs login/TLS integration, monitoring backend,
-deployed public score read, audited correction flow, purge worker и deployed database ещё не
-реализованы, поэтому готовой пользовательской авторизации, публичного рейтинга и приёма реальных
-данных пока нет.
+форму, season/rank invariants, database role и contract до сериализации. Видимая гонка и таблица
+теперь запрашивают у этого route текущую server-selected неделю без credentials, проверяют только
+public поля и честно сохраняют synthetic fallback при недоступности. HTTP login/recovery routes,
+OAuth callback, Argon2id/WebAuthn и pairing-possession verifier, generic auth-response translation и
+edge rate limits для анонимных challenges и recovery lookup пока отсутствуют. Database-only
+Community ingest capability уже выдаёт минимальный материал активного устройства и принимает bounded
+source-bound snapshots с exact retry, nonce replay, monotonic source/date, quarantine и
+lifecycle-race enforcement. Отдельная Jobs-only procedure независимо удаляет bounded batches
+истёкших origin nonces, device nonces и raw snapshots, сохраняя current source/day values. Локальный
+one-shot Jobs runner теперь вызывает только cleanup, scoring refresh или finalization через
+отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
+deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI output.
+Сама база не проверяет wire signature; локальные kernel, adapter и application объединены на
+synthetic/mock-pool evidence, а Fastify boundary отдельно проверена через injection/loopback с mock
+application. Полный HTTP-to-PostgreSQL path не проверен через реальный login. Deployed HTTP ingest
+route, pairing-possession verifier, operational connector, cleanup/scoring scheduler, live
+Ingest/Jobs login/TLS integration, monitoring backend, deployed public score read, audited
+correction flow, purge worker и deployed database ещё не реализованы, поэтому готовой
+пользовательской авторизации, публичного рейтинга и приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

@@ -10,9 +10,11 @@ Vibe Racing is an open-source, pixel-art weekly leaderboard for people using Cod
 connect a local, least-privileged connector, submit their own token-activity buckets, and appear as
 racing cars on a public track.
 
-The current runnable site is deliberately synthetic: it lets contributors evaluate the race,
-leaderboard, profile, themes, localization, accessibility, and scoring presentation without an
-account, connector, attached application database, analytics, or real usage data.
+The current runnable site starts with a clearly labeled synthetic preview so contributors can use it
+without an account, connector, or database. It now also requests the current Community week from the
+same-origin public score route and replaces the visible race and leaderboard only after a bounded
+response passes browser-side validation. An unavailable route leaves the synthetic fallback visible;
+the demo garage remains synthetic.
 
 ## Trust model
 
@@ -170,8 +172,9 @@ no scheduler, live login/certificate, monitoring backend, retry loop, applicatio
 integration result, or deployment. Revision 0011 gives only the Web database role a bounded
 active-profile score projection containing no raw values, private identifiers, or exact timestamps.
 The score response component and Web PostgreSQL adapter preserve only that public allowlist through
-the local score route; the visible site still uses synthetic fixtures. There is still no
-browser/session authentication or recovery route, OAuth callback, Argon2id/WebAuthn pairing
+the local score route. The visible race and leaderboard now consume its validated current-week
+response with a credential-free same-origin request and an explicit synthetic fallback. There is
+still no browser/session authentication or recovery route, OAuth callback, Argon2id/WebAuthn pairing
 approval, pairing start/poll HTTP route, deployed Ingest/score API, operational connector,
 cleanup/scoring scheduler, audited correction flow, asynchronous purge worker, live Ingest/Jobs
 database integration, or deployed database.
@@ -187,10 +190,12 @@ pnpm run verify
 `pnpm run check:publication` is a separate fail-closed gate. It is expected to fail in the current
 pre-public state and must pass only after real hosted identities and controls are configured.
 
-The development site binds to loopback and displays only committed synthetic fixtures. See
-[local development](docs/getting-started/LOCAL_DEVELOPMENT.md) before running it or starting
-PostgreSQL. Application authentication and real-user ingestion do not exist yet; the database
-evidence uses only rolled-back or disposable synthetic fixtures.
+The development site binds to loopback and remains fully usable with committed synthetic fixtures.
+If a separately provisioned Web login is configured, the browser can display the current public
+Community projection through the same-origin route; the repository still supplies no working
+credential or real user data. See [local development](docs/getting-started/LOCAL_DEVELOPMENT.md)
+before running it or starting PostgreSQL. Application authentication and real-user ingestion do not
+exist yet; database evidence uses only rolled-back or disposable synthetic fixtures.
 
 ## Important warning
 

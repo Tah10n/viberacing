@@ -14,12 +14,19 @@ import {
   translations,
   type Locale,
 } from "@/lib/i18n";
-import type { SyntheticRacePayload } from "@/lib/race-types";
+import { loadPublicCommunityRace } from "@/lib/public-community-race";
+import type { PublicRaceParticipant, SyntheticRacePayload } from "@/lib/race-types";
 import { isRaceThemeId, raceThemeIds, type RaceThemeId } from "@/lib/theme";
 
 type MotionPreference = "system" | "on" | "off";
+type ScoreSource = "community" | "fallback" | "synthetic";
+
+type ScoreState =
+  | Readonly<{ participants: readonly PublicRaceParticipant[]; source: "community" }>
+  | Readonly<{ source: Exclude<ScoreSource, "community"> }>;
 
 interface RaceExperienceProps {
+  readonly communitySeasonStart?: string;
   readonly payload: SyntheticRacePayload;
 }
 
@@ -33,13 +40,14 @@ function isMotionPreference(value: unknown): value is MotionPreference {
   return value === "system" || value === "on" || value === "off";
 }
 
-export function RaceExperience({ payload }: RaceExperienceProps) {
+export function RaceExperience({ communitySeasonStart, payload }: RaceExperienceProps) {
   const [locale, setLocale] = useState<Locale>("en");
   const [theme, setTheme] = useState<RaceThemeId>("neon-night");
   const [motionPreference, setMotionPreference] = useState<MotionPreference>("system");
   const [systemReducedMotion, setSystemReducedMotion] = useState(false);
   const [racePaused, setRacePaused] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [scoreState, setScoreState] = useState<ScoreState>({ source: "synthetic" });
   const controlGroupId = useId();
   const translation = translations[locale];
 
@@ -87,11 +95,31 @@ export function RaceExperience({ payload }: RaceExperienceProps) {
     }
   }, [locale, motionPreference, settingsLoaded, theme]);
 
+  useEffect(() => {
+    if (communitySeasonStart === undefined) {
+      return undefined;
+    }
+    const controller = new AbortController();
+    void loadPublicCommunityRace(communitySeasonStart, controller.signal).then((participants) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+      setScoreState(
+        participants === undefined ? { source: "fallback" } : { participants, source: "community" },
+      );
+    });
+    return () => {
+      controller.abort();
+    };
+  }, [communitySeasonStart]);
+
   const motionEnabled =
     motionPreference === "on" || (motionPreference === "system" && !systemReducedMotion);
   const canvasAnimated = motionEnabled && !racePaused;
+  const participants =
+    scoreState.source === "community" ? scoreState.participants : payload.participants;
   const rankCounts = new Map<number, number>();
-  for (const participant of payload.participants) {
+  for (const participant of participants) {
     rankCounts.set(participant.rank, (rankCounts.get(participant.rank) ?? 0) + 1);
   }
   const themeLabels: Record<RaceThemeId, string> = {
@@ -105,9 +133,21 @@ export function RaceExperience({ payload }: RaceExperienceProps) {
     system: translation.motionSystem,
   };
   const days = dayLabels(locale);
+  const scoreSourceLabels: Record<ScoreSource, string> = {
+    community: translation.communityDataBadge,
+    fallback: translation.fallbackBadge,
+    synthetic: translation.demoBadge,
+  };
+  const weekLabel =
+    scoreState.source === "community" ? translation.communityWeek : translation.currentWeek;
 
   return (
-    <div className="race-app" data-motion={motionEnabled ? "on" : "off"} data-theme={theme}>
+    <div
+      className="race-app"
+      data-motion={motionEnabled ? "on" : "off"}
+      data-score-source={scoreState.source === "community" ? "community" : "synthetic"}
+      data-theme={theme}
+    >
       <a className="skip-link" href="#leaderboard">
         {translation.viewLeaderboard}
       </a>
@@ -119,7 +159,9 @@ export function RaceExperience({ payload }: RaceExperienceProps) {
           </span>
           <span>{translation.brand}</span>
         </a>
-        <span className="demo-badge">{translation.demoBadge}</span>
+        <span aria-live="polite" className="demo-badge">
+          {scoreSourceLabels[scoreState.source]}
+        </span>
         <nav aria-label={translation.primaryNavigation} className="site-nav">
           <a href="#race">{translation.liveRace}</a>
           <a href="#leaderboard">{translation.leaderboard}</a>
@@ -130,7 +172,7 @@ export function RaceExperience({ payload }: RaceExperienceProps) {
       <main id="top">
         <section aria-labelledby="hero-title" className="hero-section">
           <div className="hero-copy">
-            <p className="eyebrow">{translation.currentWeek}</p>
+            <p className="eyebrow">{weekLabel}</p>
             <h1 id="hero-title">{translation.heroTitle}</h1>
             <p className="hero-lede">{translation.heroCopy}</p>
             <div className="hero-actions">
@@ -150,7 +192,7 @@ export function RaceExperience({ payload }: RaceExperienceProps) {
         <section aria-labelledby="race-heading" className="race-section" id="race">
           <div className="section-heading-row">
             <div>
-              <p className="eyebrow">{translation.currentWeek}</p>
+              <p className="eyebrow">{weekLabel}</p>
               <h2 id="race-heading">{translation.liveRace}</h2>
             </div>
             <button
@@ -169,7 +211,7 @@ export function RaceExperience({ payload }: RaceExperienceProps) {
             <PixelRaceCanvas
               animate={canvasAnimated}
               description={`${translation.liveRace}. ${translation.communityDetail}`}
-              participants={payload.participants}
+              participants={participants}
               theme={theme}
             />
             <div aria-labelledby={controlGroupId} className="race-controls">
@@ -261,7 +303,7 @@ export function RaceExperience({ payload }: RaceExperienceProps) {
                 </tr>
               </thead>
               <tbody>
-                {payload.participants.map((participant) => {
+                {participants.map((participant) => {
                   const sharedRank = (rankCounts.get(participant.rank) ?? 0) > 1;
                   return (
                     <tr
@@ -276,10 +318,14 @@ export function RaceExperience({ payload }: RaceExperienceProps) {
                       </td>
                       <th scope="row">{participant.handle}</th>
                       <td>
-                        <span className="car-swatch" data-paint={participant.car.paint}>
-                          <span aria-hidden="true">■</span>{" "}
-                          {formatCarPart(participant.car.body, locale)}
-                        </span>
+                        {scoreState.source === "community" ? (
+                          translation.visualMarker
+                        ) : (
+                          <span className="car-swatch" data-paint={participant.car.paint}>
+                            <span aria-hidden="true">■</span>{" "}
+                            {formatCarPart(participant.car.body, locale)}
+                          </span>
+                        )}
                       </td>
                       <td className="numeric-cell">
                         {formatScore(participant.weeklyScore, locale)} {translation.points}
@@ -295,6 +341,11 @@ export function RaceExperience({ payload }: RaceExperienceProps) {
                     </tr>
                   );
                 })}
+                {participants.length === 0 ? (
+                  <tr>
+                    <td colSpan={8}>{translation.noParticipants}</td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -390,7 +441,11 @@ export function RaceExperience({ payload }: RaceExperienceProps) {
           <article>
             <h2>{translation.dataControl}</h2>
             <p>{translation.dataControlCopy}</p>
-            <p>{translation.securityNote}</p>
+            <p>
+              {scoreState.source === "community"
+                ? translation.communityDataSecurityNote
+                : translation.securityNote}
+            </p>
           </article>
         </section>
       </main>

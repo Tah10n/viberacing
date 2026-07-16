@@ -16,13 +16,18 @@ const english = {
   carTrim: "Trim",
   communityDetail:
     "Scores are self-reported by participating users. They are not audited or endorsed by OpenAI.",
+  communityDataBadge: "Community standings",
+  communityDataSecurityNote:
+    "Community standings contain only public derived scores. Cars are visual markers until profile recipes exist. This page uses no trackers, remote fonts, account credentials, or raw token totals.",
   communityNotice: "Community leaderboard",
+  communityWeek: "Current Community week",
   currentWeek: "Current demo week",
   dailyActivity: "Daily score",
   dataControl: "Data control",
   dataControlCopy:
     "The production profile will offer source removal, export, and deletion. This preview stores no account data.",
   demoBadge: "Synthetic preview",
+  fallbackBadge: "Synthetic fallback",
   demoProfile: "Demo garage",
   deviceCount: "Devices",
   driver: "Driver",
@@ -42,6 +47,7 @@ const english = {
   motionOn: "On",
   motionSystem: "Device setting",
   noGlobalClaim: "Ranking covers Vibe Racing participants only — never every Codex user.",
+  noParticipants: "No Community participants yet.",
   noRawTokens: "No raw token totals",
   pauseRace: "Pause race",
   points: "pts",
@@ -66,6 +72,7 @@ const english = {
   unavailable: "Unavailable",
   verified: "Verified league",
   verifiedCopy: "Disabled until an authoritative verification boundary exists.",
+  visualMarker: "Visual marker",
   viewLeaderboard: "View standings",
 } as const;
 
@@ -82,13 +89,18 @@ const russian: Record<TranslationKey, string> = {
   carTrim: "Отделка",
   communityDetail:
     "Результаты заявляют сами участники. Они не проверяются и не подтверждаются OpenAI.",
+  communityDataBadge: "Рейтинг сообщества",
+  communityDataSecurityNote:
+    "В рейтинге сообщества отображаются только публичные производные баллы. Машины служат визуальными маркерами, пока нет рецептов профиля. Здесь нет трекеров, внешних шрифтов, данных входа и точных токенов.",
   communityNotice: "Рейтинг сообщества",
+  communityWeek: "Текущая неделя сообщества",
   currentWeek: "Текущая демо-неделя",
   dailyActivity: "Баллы по дням",
   dataControl: "Управление данными",
   dataControlCopy:
     "В рабочем профиле можно будет удалить источник, экспортировать и удалить данные. Превью не хранит данные аккаунта.",
   demoBadge: "Синтетическое превью",
+  fallbackBadge: "Синтетический резерв",
   demoProfile: "Демо-гараж",
   deviceCount: "Устройства",
   driver: "Пилот",
@@ -108,6 +120,7 @@ const russian: Record<TranslationKey, string> = {
   motionOn: "Включена",
   motionSystem: "Как на устройстве",
   noGlobalClaim: "Рейтинг охватывает только участников Vibe Racing, а не всех пользователей Codex.",
+  noParticipants: "В рейтинге сообщества пока нет участников.",
   noRawTokens: "Без публикации токенов",
   pauseRace: "Остановить гонку",
   points: "б.",
@@ -133,6 +146,7 @@ const russian: Record<TranslationKey, string> = {
   unavailable: "Недоступно",
   verified: "Проверенная лига",
   verifiedCopy: "Отключена до появления авторитетного механизма проверки.",
+  visualMarker: "Визуальный маркер",
   viewLeaderboard: "Смотреть таблицу",
 };
 
@@ -188,7 +202,10 @@ export function formatCarPart(value: CarPart, locale: Locale): string {
   return carPartLabels[locale][value];
 }
 
-export function formatFreshness(days: number, locale: Locale): string {
+export function formatFreshness(days: number | null, locale: Locale): string {
+  if (days === null) {
+    return "—";
+  }
   if (days === 0) {
     return locale === "ru" ? "сегодня" : "today";
   }
