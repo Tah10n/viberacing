@@ -434,8 +434,11 @@ monitoring, and live authenticator/database integration remain open.
 The local account application also consumes the existing `read_passkey_inventory` capability. Its
 fixed query and closed mapper retain at most 32 rows, require exactly one current active
 authenticator, round creation time to a UTC date, and pass only label, active/revoked state, and
-that current marker into server-rendered HTML. Credential IDs, public keys, sign counters, exact
-activity timestamps, and profile IDs remain outside the page.
+that current marker plus an opaque revoke target into the authenticated page. The target ID is sent
+only when revoking an owned non-current active key. The application creates an exact
+session/target/context-bound challenge and, after fresh WebAuthn verification, uses one atomic query
+that consumes the challenge before calling `revoke_passkey`. Credential IDs, public keys, sign
+counters, exact activity timestamps, and profile IDs remain outside the page and request.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers

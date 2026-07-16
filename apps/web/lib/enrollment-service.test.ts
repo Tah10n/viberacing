@@ -18,6 +18,8 @@ import type {
   EnrollmentDatabaseLoginCompletion,
   EnrollmentDatabasePasskeyChallenge,
   EnrollmentDatabasePasskeyInventoryRequest,
+  EnrollmentDatabasePasskeyRevocation,
+  EnrollmentDatabasePasskeyRevokeChallenge,
   EnrollmentDatabaseProfile,
 } from "./pairing-database-pool";
 
@@ -49,6 +51,8 @@ function createFixture() {
   let loginCredentialLookup: Buffer | undefined;
   let inventorySessionDigest: Buffer | undefined;
   let inventorySessionDigestInput: Uint8Array | undefined;
+  let revokeChallengeWrite: EnrollmentDatabasePasskeyRevokeChallenge | undefined;
+  let revocationWrite: EnrollmentDatabasePasskeyRevocation | undefined;
   let verifiedLoginCredential: Buffer | undefined;
   const database: EnrollmentDatabase = {
     completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
@@ -60,9 +64,27 @@ function createFixture() {
         profileId: join.inviteId,
       });
     }),
+    completePasskeyRevocation: vi.fn((input: EnrollmentDatabasePasskeyRevocation) => {
+      revocationWrite = {
+        ...input,
+        challengeDigest: Buffer.from(input.challengeDigest),
+        contextDigest: Buffer.from(input.contextDigest),
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve(true);
+    }),
     createPasskeyChallenge: vi.fn((input: EnrollmentDatabasePasskeyChallenge) => {
       challengeSessionDigest = Buffer.from(input.sessionVerifierDigest);
       challengeSessionDigestInput = input.sessionVerifierDigest;
+      return Promise.resolve(true);
+    }),
+    createPasskeyRevokeChallenge: vi.fn((input: EnrollmentDatabasePasskeyRevokeChallenge) => {
+      revokeChallengeWrite = {
+        ...input,
+        challengeDigest: Buffer.from(input.challengeDigest),
+        contextDigest: Buffer.from(input.contextDigest),
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
       return Promise.resolve(true);
     }),
     enrollProfile: vi.fn((input: EnrollmentDatabaseProfile) => {
@@ -82,6 +104,13 @@ function createFixture() {
           currentAuthenticator: true,
           label: "Primary passkey",
           passkeyId: "00000000-0000-4000-8000-000000000511",
+          state: "active" as const,
+        },
+        {
+          createdOn: "2026-07-16",
+          currentAuthenticator: false,
+          label: "Backup passkey",
+          passkeyId: "00000000-0000-4000-8000-000000000512",
           state: "active" as const,
         },
       ]);
@@ -167,6 +196,8 @@ function createFixture() {
     loginCompletion: () => loginCompletion,
     inventorySessionDigest: () => inventorySessionDigest,
     inventorySessionDigestInput: () => inventorySessionDigestInput,
+    revokeChallengeWrite: () => revokeChallengeWrite,
+    revocationWrite: () => revocationWrite,
     service,
     verifyPasskey,
     verifyLogin,
@@ -341,6 +372,11 @@ describe("enrollment service", () => {
         label: "Primary passkey",
         state: "active",
       }),
+      expect.objectContaining({
+        currentAuthenticator: false,
+        label: "Backup passkey",
+        state: "active",
+      }),
     ]);
     expect(database.readPasskeyInventory).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: "00000000-0000-4000-8000-000000000512" }),
@@ -349,6 +385,65 @@ describe("enrollment service", () => {
     expect(inventorySessionDigestInput()).toEqual(Buffer.alloc(32));
     await expect(service.readPasskeyInventory("invalid")).resolves.toBeUndefined();
     expect(database.readPasskeyInventory).toHaveBeenCalledOnce();
+  });
+
+  it("authorizes and atomically revokes only a non-current owned passkey", async () => {
+    const { cookieCodec, database, revokeChallengeWrite, revocationWrite, service, verifyLogin } =
+      createFixture();
+    const verifier = Buffer.alloc(32, 0x46);
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId: "00000000-0000-4000-8000-000000000520",
+      sessionVerifier: verifier.toString("base64url"),
+      version: 1,
+    });
+    const targetPasskeyId = "00000000-0000-4000-8000-000000000512";
+    const start = await service.beginPasskeyRevoke(sessionCookie, { passkeyId: targetPasskeyId });
+    expect(start?.options.challenge).toHaveLength(43);
+    expect(database.createPasskeyRevokeChallenge).toHaveBeenCalledOnce();
+    expect(revokeChallengeWrite()).toMatchObject({
+      challengeId: "00000000-0000-4000-8000-000000000502",
+      sessionId: "00000000-0000-4000-8000-000000000520",
+      targetPasskeyId,
+    });
+
+    const credentialId = Buffer.alloc(32, 0x74);
+    const response = {
+      id: credentialId.toString("base64url"),
+      rawId: credentialId.toString("base64url"),
+      response: {},
+      type: "public-key",
+    };
+    await expect(
+      service.completePasskeyRevoke(sessionCookie, start?.passkeyRevokeCookie ?? "", { response }),
+    ).resolves.toBe(true);
+    expect(verifyLogin).toHaveBeenCalledOnce();
+    expect(revocationWrite()).toMatchObject({
+      auditEventId: "00000000-0000-4000-8000-000000000503",
+      challengeId: "00000000-0000-4000-8000-000000000502",
+      observedSignCount: 4,
+      sessionId: "00000000-0000-4000-8000-000000000520",
+      targetPasskeyId,
+      verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
+    });
+
+    vi.mocked(database.completePasskeyRevocation).mockResolvedValueOnce(false);
+    await expect(
+      service.completePasskeyRevoke(sessionCookie, start?.passkeyRevokeCookie ?? "", { response }),
+    ).resolves.toBe(false);
+    await expect(
+      service.beginPasskeyRevoke(sessionCookie, {
+        passkeyId: "00000000-0000-4000-8000-000000000511",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.beginPasskeyRevoke(sessionCookie, { extra: true, passkeyId: targetPasskeyId }),
+    ).resolves.toBeUndefined();
+    expect(database.createPasskeyRevokeChallenge).toHaveBeenCalledOnce();
   });
 
   it("revokes a minted login session when its browser cookie cannot be sealed", async () => {
@@ -481,7 +576,9 @@ describe("enrollment service", () => {
           profileId: join.inviteId,
         }),
       ),
+      completePasskeyRevocation: vi.fn(() => Promise.resolve(true)),
       createPasskeyChallenge: vi.fn(() => Promise.resolve(true)),
+      createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve(true)),
       enrollProfile: vi.fn(() => Promise.resolve(true)),
       readPasskeyInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),

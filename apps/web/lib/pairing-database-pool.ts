@@ -211,6 +211,51 @@ const readPasskeyInventoryQuery = `SELECT
 FROM viberacing_api.read_passkey_inventory($1::uuid, $2::bytea) AS inventory
 ORDER BY (inventory.created_at AT TIME ZONE 'UTC')::date, inventory.passkey_id`;
 
+const createPasskeyRevokeChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
+  SELECT viberacing_api.create_passkey_change_challenge(
+    $1::uuid,
+    $2::bytea,
+    'revoke'::text,
+    $3::uuid,
+    $4::uuid,
+    $5::bytea,
+    $6::bytea,
+    $7::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS created
+FROM challenge_creation`;
+
+const completePasskeyRevocationQuery = `WITH challenge_consumption AS MATERIALIZED (
+  SELECT viberacing_api.consume_passkey_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    'passkey_change'::text,
+    $4::bytea,
+    $5::bytea,
+    $6::uuid,
+    $7::bigint,
+    $8::boolean
+  ) AS consumed
+), passkey_revocation AS MATERIALIZED (
+  SELECT viberacing_api.revoke_passkey(
+    $1::uuid,
+    $2::bytea,
+    $9::uuid,
+    $3::uuid,
+    $5::bytea,
+    $10::uuid,
+    $11::text
+  ) AS ignored
+  FROM challenge_consumption
+  WHERE consumed
+)
+SELECT
+  (SELECT consumed FROM challenge_consumption)
+  AND pg_catalog.count(*) = 1 AS revoked
+FROM passkey_revocation`;
+
 export interface PairingDatabaseActivation {
   readonly auditEventId: string;
   readonly deviceId: string;
@@ -308,6 +353,30 @@ export interface EnrollmentDatabasePasskeyInventoryRequest {
   readonly sessionVerifierDigest: Uint8Array;
 }
 
+export interface EnrollmentDatabasePasskeyRevokeChallenge {
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly expiresAt: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly targetPasskeyId: string;
+}
+
+export interface EnrollmentDatabasePasskeyRevocation {
+  readonly auditEventId: string;
+  readonly backupState: boolean;
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly observedSignCount: number;
+  readonly requestId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly targetPasskeyId: string;
+  readonly verifiedPasskeyId: string;
+}
+
 export type PairingDatabasePoolSignal = "idle_client_error";
 export type PairingDatabasePoolSignalSink = (
   signal: PairingDatabasePoolSignal,
@@ -326,7 +395,9 @@ export interface PairingDatabaseClient {
 export interface EnrollmentDatabaseClient {
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown>;
+  completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<unknown>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown>;
+  createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
   readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown>;
@@ -468,6 +539,30 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         sessionVerifierDigest.fill(0);
       }
     },
+    async completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(completePasskeyRevocationQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.verifiedPasskeyId,
+          input.observedSignCount,
+          input.backupState,
+          input.targetPasskeyId,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
     async createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       const challengeDigest = Buffer.from(input.challengeDigest);
@@ -476,6 +571,28 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         return await fixedQuery(createPasskeyChallengeQuery, [
           input.sessionId,
           sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.expiresAt,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
+    async createPasskeyRevokeChallenge(
+      input: EnrollmentDatabasePasskeyRevokeChallenge,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(createPasskeyRevokeChallengeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.targetPasskeyId,
           input.challengeId,
           challengeDigest,
           contextDigest,

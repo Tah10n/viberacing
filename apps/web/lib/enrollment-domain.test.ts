@@ -7,6 +7,7 @@ import {
   parseJoinRequest,
   readEnrollmentSession,
   readPasskeyChallenge,
+  readPasskeyRevokeChallenge,
   readPendingEnrollment,
 } from "./enrollment-domain";
 
@@ -77,12 +78,23 @@ describe("enrollment domain", () => {
       expiresAt: now + 300,
       version: 1,
     } as const;
+    const revokeChallenge = {
+      ...challenge,
+      targetPasskeyId: "00000000-0000-4000-8000-000000000105",
+    } as const;
 
     expect(readPendingEnrollment(pending, now)).toEqual(pending);
     expect(readEnrollmentSession(session, now)).toEqual(session);
     expect(readPasskeyChallenge(challenge, now)).toEqual(challenge);
+    expect(readPasskeyRevokeChallenge(revokeChallenge, now)).toEqual(revokeChallenge);
     expect(readPendingEnrollment({ ...pending, extra: true }, now)).toBeUndefined();
     expect(readEnrollmentSession({ ...session, expiresAt: now }, now)).toBeUndefined();
     expect(readPasskeyChallenge({ ...challenge, challenge: "bad" }, now)).toBeUndefined();
+    expect(readPasskeyChallenge(revokeChallenge, now)).toBeUndefined();
+    expect(readPasskeyRevokeChallenge(challenge, now)).toBeUndefined();
+    expect(
+      readPasskeyRevokeChallenge({ ...revokeChallenge, targetPasskeyId: "bad" }, now),
+    ).toBeUndefined();
+    expect(readPasskeyRevokeChallenge({ ...revokeChallenge, extra: true }, now)).toBeUndefined();
   });
 });

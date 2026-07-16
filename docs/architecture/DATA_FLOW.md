@@ -2,41 +2,41 @@
 
 ## Status and notation
 
-Most sequences remain planned application contracts. The enrollment and returning-login sequences
-below plus the public score consumer are now locally implemented boundaries; none has live
-credentials, edge, or deployment evidence. Revisions 0001 through 0014 provide private
-identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
-database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
-activation, passkey login and management, restricted recovery, session rotation/revocation,
-immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
-ingest, bounded ingest- and pairing-retention cleanup, open-season scoring refresh, late-ingest
-closure, terminal season finalization, and a Web-only public score projection. One local
-public-score GET constructs the bounded adapter lazily after closed request admission. The visible
-home race now requests its current server-selected week from that exact same-origin route, validates
-the public fields, and retains a clearly labeled synthetic fallback on failure. One local one-shot
-Jobs runner can invoke exactly one of four fixed functions: either cleanup function, refresh, or
-finalization, but no recovery/step-up, deployed ingest endpoint, Argon2id/WebAuthn pairing approval,
-operational connector, purge worker, Jobs scheduler/monitor, audited correction, or deployed service
-executes the complete sequences. A library-only Rust connector foundation validates the bounded
-stable App Server initialization exchange and candidate `0.144.4` account/usage responses. A
-synthetic one-shot supervisor composes those states with fixed local process mechanics, while an
-exact-body composer and isolated one-use signer produce a synthetic signed envelope. A separate
-inaccessible pending-key and challenge signer plus a pure server-only Web verifier now agree on one
-exact pairing-possession message and synthetic signature. A dormant Web/Auth start application
-generates fresh IDs, token, challenge, 60-bit code, separate protected poll/code verifiers, and a
-nine-minute pending transaction from closed device metadata. A second application performs protected
-keyed poll lookup, mandates that proof, and invokes only exact atomic activation behind local
-admission/timing. All required connector capabilities have no public constructor, and there is no
-executable admission, real Codex execution, key generation/store, pairing-start client,
-browser/WebAuthn approval, pairing HTTP route, upload, or supported-version path. A local Ingest
-kernel now verifies the bounded exact-body origin/device request, while the separate adapter maps
-origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic
-origin replay consumption and bounded cleanup. A transport-free application now composes those exact
-local capabilities and validates only closed acknowledgement/problem decisions. A bounded local
-Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline policy, and
-serializes only revalidated contracts. There is no edge/live-database/deployment integration. No
-host/port/TLS entry point, deployment login, certificate, edge signer/direct-origin policy, or live
-route/Jobs evidence is supplied. Data labels refer to the classifications in the
+Most sequences remain planned application contracts. The enrollment, returning-login, and
+non-current-passkey revocation sequences below plus the public score consumer are now locally
+implemented boundaries; none has live credentials, edge, or deployment evidence. Revisions 0001
+through 0014 provide private identity/source/device/pairing/audit/deletion/usage tables,
+deny-by-default roles, and a narrow database slice for invite issuance, enrollment, exact-session
+challenges, initial-passkey activation, passkey login and management, restricted recovery, session
+rotation/revocation, immediate deletion lock-down, source-bound pairing, source/device lifecycle
+controls, and Community ingest, bounded ingest- and pairing-retention cleanup, open-season scoring
+refresh, late-ingest closure, terminal season finalization, and a Web-only public score projection.
+One local public-score GET constructs the bounded adapter lazily after closed request admission. The
+visible home race now requests its current server-selected week from that exact same-origin route,
+validates the public fields, and retains a clearly labeled synthetic fallback on failure. One local
+one-shot Jobs runner can invoke exactly one of four fixed functions: either cleanup function,
+refresh, or finalization, but no broader recovery/step-up, deployed ingest endpoint,
+Argon2id/WebAuthn pairing approval, operational connector, purge worker, Jobs scheduler/monitor,
+audited correction, or deployed service executes the complete sequences. A library-only Rust
+connector foundation validates the bounded stable App Server initialization exchange and candidate
+`0.144.4` account/usage responses. A synthetic one-shot supervisor composes those states with fixed
+local process mechanics, while an exact-body composer and isolated one-use signer produce a
+synthetic signed envelope. A separate inaccessible pending-key and challenge signer plus a pure
+server-only Web verifier now agree on one exact pairing-possession message and synthetic signature.
+A dormant Web/Auth start application generates fresh IDs, token, challenge, 60-bit code, separate
+protected poll/code verifiers, and a nine-minute pending transaction from closed device metadata. A
+second application performs protected keyed poll lookup, mandates that proof, and invokes only exact
+atomic activation behind local admission/timing. All required connector capabilities have no public
+constructor, and there is no executable admission, real Codex execution, key generation/store,
+pairing-start client, browser/WebAuthn approval, pairing HTTP route, upload, or supported-version
+path. A local Ingest kernel now verifies the bounded exact-body origin/device request, while the
+separate adapter maps origin replay, device lookup, and submission through fixed calls. PostgreSQL
+now proves atomic origin replay consumption and bounded cleanup. A transport-free application now
+composes those exact local capabilities and validates only closed acknowledgement/problem decisions.
+A bounded local Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline
+policy, and serializes only revalidated contracts. There is no edge/live-database/deployment
+integration. No host/port/TLS entry point, deployment login, certificate, edge signer/direct-origin
+policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -113,12 +113,13 @@ sequenceDiagram
   DB-->>Web: Labels, lifecycle state, rounded creation dates, current marker
   Web-->>Browser: Server-rendered private list without credential or key material
 
-  User->>Browser: Add or revoke a passkey
-  Web->>DB: Create exact action/target-bound step-up challenge
+  User->>Browser: Revoke an owned non-current active passkey
+  Browser->>Web: Send opaque target ID with current session
+  Web->>DB: Read inventory and create exact session/target/context challenge
   Web->>Authenticator: Request fresh assertion
-  Web->>Web: Verify exact ceremony
-  Web->>DB: Record verifying passkey, then claim action once
-  DB-->>Web: Revoke target sessions and pending authority when removing
+  Web->>Web: Verify exact RP, origin, challenge, signature, and UV
+  Web->>DB: Atomically consume challenge and terminally revoke target
+  DB-->>Web: Close target sessions and pending pairing authority
 ```
 
 The database exposes no profile identifier during credential lookup, stores no attestation
@@ -131,9 +132,12 @@ restricted-authority flow, not a normal login shortcut.
 
 The local account page now composes the existing session-derived inventory read. Its closed mapper
 accepts at most 32 ordered rows with exactly one current active authenticator and renders only the
-bounded label, active/revoked state, UTC creation date, and current marker. Opaque passkey IDs
-remain server-side keys; credential IDs, public keys, sign counters, exact activity timestamps, and
-profile IDs never enter the page.
+bounded label, active/revoked state, UTC creation date, and current marker. An opaque passkey ID
+enters only the authenticated revoke control/request for a non-current active target. The service
+revalidates ownership and state before creating the five-minute challenge, while the atomic database
+call rechecks last-key protection under lock. Current, last, foreign, expired, malformed, and
+replayed attempts fail generically. Credential IDs, public keys, sign counters, exact activity
+timestamps, and profile IDs never enter the page or request. Passkey addition remains planned.
 
 ## Recovery-code rotation and passkey replacement
 

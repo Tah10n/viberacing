@@ -10,6 +10,7 @@ import {
   passkeyContextDigest,
   passkeyLoginContextDigest,
   passkeyLoginCredentialId,
+  passkeyRevokeContextDigest,
   verifyInitialPasskey,
   verifyPasskeyLogin,
 } from "./passkey-registration";
@@ -154,6 +155,21 @@ describe("passkey login", () => {
       passkeyLoginContextDigest("race.example.com", "https://race.example.com").toString("hex"),
     ).not.toBe(
       passkeyLoginContextDigest("other.example.com", "https://race.example.com").toString("hex"),
+    );
+    expect(
+      passkeyRevokeContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000102",
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    ).not.toEqual(
+      passkeyRevokeContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000103",
+        "race.example.com",
+        "https://race.example.com",
+      ),
     );
   });
 

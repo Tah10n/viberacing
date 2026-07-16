@@ -5,15 +5,15 @@
 This is the planned runtime architecture. The current repository contains a tested SQL persistence
 foundation, one local public-score route with a visible validated browser consumer and synthetic
 fallback, local invite/OAuth/initial-passkey enrollment, returning-passkey login, and private
-passkey-inventory slices with encrypted cookies and logout, one local one-shot Jobs runner, and
-local Ingest request-verification, PostgreSQL-adapter, application-composition, and bounded
-HTTP-server boundaries, plus library-only connector initialization and candidate `0.144.4`
+passkey-inventory/revocation slices with encrypted cookies and logout, one local one-shot Jobs
+runner, and local Ingest request-verification, PostgreSQL-adapter, application-composition, and
+bounded HTTP-server boundaries, plus library-only connector initialization and candidate `0.144.4`
 account/usage parser boundaries, a synthetic one-shot supervisor, an exact-body sync composer,
 isolated pairing/sync signers, and a pure Web pairing verifier behind closed boundaries, but no
-deployed application service, operational connector, supported Codex version, recovery/step-up,
-Cloudflare/Railway deployment, live OAuth or database login, or production database. Component
-status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
-required runtime boundaries, not deployed evidence.
+deployed application service, operational connector, supported Codex version, broader
+recovery/step-up, Cloudflare/Railway deployment, live OAuth or database login, or production
+database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
+diagrams describe required runtime boundaries, not deployed evidence.
 
 ## System context
 

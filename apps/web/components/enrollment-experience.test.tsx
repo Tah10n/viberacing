@@ -191,6 +191,68 @@ describe("enrollment experience", () => {
     expect(markup).not.toContain(passkeyId);
   });
 
+  it("uses a fresh browser passkey assertion before revoking a non-current key", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const targetPasskeyId = "00000000-0000-4000-8000-000000000512";
+    const fetchMock = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ challenge: "synthetic" }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(
+      <AccountExperience
+        handle="pixel_driver"
+        locale="en"
+        passkeys={[
+          {
+            createdOn: "2026-07-15",
+            currentAuthenticator: true,
+            label: "Primary passkey",
+            passkeyId: "00000000-0000-4000-8000-000000000511",
+            state: "active",
+          },
+          {
+            createdOn: "2026-07-16",
+            currentAuthenticator: false,
+            label: "Backup passkey",
+            passkeyId: targetPasskeyId,
+            state: "active",
+          },
+        ]}
+      />,
+    );
+    await act(async () => {
+      mounted.container
+        .querySelector(".passkey-revoke")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(webauthn.startAuthentication).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      "/auth/passkeys/revoke/options",
+      "/auth/passkeys/revoke/verify",
+    ]);
+    const optionsBody = fetchMock.mock.calls[0]?.[1].body;
+    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
+    expect(typeof optionsBody).toBe("string");
+    expect(typeof verificationBody).toBe("string");
+    if (typeof optionsBody !== "string" || typeof verificationBody !== "string") {
+      throw new Error("expected serialized revoke request bodies");
+    }
+    expect(JSON.parse(optionsBody)).toEqual({ passkeyId: targetPasskeyId });
+    expect(JSON.parse(verificationBody)).toEqual({
+      response: { id: "synthetic-login" },
+    });
+    expect(mounted.container.textContent).toContain("could not be completed");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
   it("renders semantic join and passkey forms without automated violations", async () => {
     document.documentElement.lang = "en";
     document.title = "Vibe Racing enrollment test";

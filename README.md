@@ -17,9 +17,9 @@ response passes browser-side validation. An unavailable route leaves the synthet
 the demo garage remains synthetic. A separate invite-only join flow now composes GitHub OAuth with
 state and PKCE, one encrypted short-lived continuation, atomic profile enrollment, required WebAuthn
 registration, returning discoverable-credential login, a session-scoped passkey inventory, an active
-account page, and logout. It is locally tested only: the repository supplies no invite issuer UI,
-OAuth registration, real secret, live OAuth/authenticator/database credentials, edge abuse controls,
-or live-user evidence.
+account page, fresh revocation of a non-current passkey, and logout. It is locally tested only: the
+repository supplies no invite issuer UI, OAuth registration, real secret, live
+OAuth/authenticator/database credentials, edge abuse controls, or live-user evidence.
 
 ## Trust model
 
@@ -158,23 +158,26 @@ profile-free challenge only in an encrypted cookie; a valid assertion causes one
 create-consume-session call. Anonymous login still requires edge rate/capacity controls before
 exposure. The account page uses that same possessed session to read only passkey labels,
 active/revoked state, rounded creation dates, and the current-authenticator marker; credential IDs
-and key material are not rendered. A database-only Community ingest capability now exposes minimal
-active-device verification material and accepts bounded source-bound snapshots with exact retry,
-nonce replay, monotonic source/date, quarantine, and lifecycle-race enforcement. A Jobs-only
-procedure deletes independently bounded batches of expired origin nonces, device nonces, and raw
-snapshots while preserving current source/day values. A separate Jobs-only procedure deletes bounded
-expired non-activated pairing transactions plus their still-pending keys, while preserving live and
-activated bindings. The database does not verify a wire signature; the local kernel and adapter are
-composed locally and exercised together with a signed synthetic request, while the Fastify boundary
-separately proves the raw transport handoff with a mock application. The complete HTTP-to-PostgreSQL
-path is not exercised through a real login. Another Jobs-only procedure serializes an atomic refresh
-of one open ISO-week Community season: it sums distinct eligible sources before one profile daily
-cap, stores an immutable formula and season binding, shares rank on equal score and active days, and
-persists no raw token or source identifier in the score tables. Revision 0010 adds a public 48-hour
-server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization procedure
-whose terminal metadata and score projection reject silent rewrites while profile purge can still
-remove personal rows. One local one-shot Jobs runner now wraps exactly one of four fixed functions:
-ingest cleanup, pairing cleanup, refresh, or finalization. It uses a distinct least-privileged
+and key material are not rendered. An authenticated revoke control sends only the selected opaque
+passkey ID, requires a fresh user-verified assertion bound to that session and target, and reaches
+one atomic consume-and-revoke call; the current or last active passkey cannot be removed. A
+database-only Community ingest capability now exposes minimal active-device verification material
+and accepts bounded source-bound snapshots with exact retry, nonce replay, monotonic source/date,
+quarantine, and lifecycle-race enforcement. A Jobs-only procedure deletes independently bounded
+batches of expired origin nonces, device nonces, and raw snapshots while preserving current
+source/day values. A separate Jobs-only procedure deletes bounded expired non-activated pairing
+transactions plus their still-pending keys, while preserving live and activated bindings. The
+database does not verify a wire signature; the local kernel and adapter are composed locally and
+exercised together with a signed synthetic request, while the Fastify boundary separately proves the
+raw transport handoff with a mock application. The complete HTTP-to-PostgreSQL path is not exercised
+through a real login. Another Jobs-only procedure serializes an atomic refresh of one open ISO-week
+Community season: it sums distinct eligible sources before one profile daily cap, stores an
+immutable formula and season binding, shares rank on equal score and active days, and persists no
+raw token or source identifier in the score tables. Revision 0010 adds a public 48-hour server-time
+grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization procedure whose
+terminal metadata and score projection reject silent rewrites while profile purge can still remove
+personal rows. One local one-shot Jobs runner now wraps exactly one of four fixed functions: ingest
+cleanup, pairing cleanup, refresh, or finalization. It uses a distinct least-privileged
 configuration namespace, one-client pool, per-checkout role/login/search-path probe, fixed deadlines
 and prepared parameters, closed result validation, destructive release after failure, and stable
 non-reflective CLI output. It has no scheduler, live login/certificate, monitoring backend, retry

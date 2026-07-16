@@ -178,6 +178,10 @@ Versioning where its guarantees are applicable.
   fixed Web/Auth capability and renders only label, active/revoked state, rounded creation date, and
   the current-authenticator marker. Invalid, cross-profile, empty, oversized, duplicate, unordered,
   or open database rows fail closed; an unavailable inventory leaves logout usable.
+- An authenticated account can now revoke an owned non-current active passkey after one fresh
+  user-verified assertion. A five-minute continuation binds the exact session, target, RP, origin,
+  and database challenge; one fixed atomic call consumes that challenge and terminally revokes the
+  target. Current, last, foreign, malformed, expired, and replayed attempts fail generically.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

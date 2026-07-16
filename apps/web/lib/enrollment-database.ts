@@ -10,6 +10,8 @@ import {
   type EnrollmentDatabaseLoginCompletion,
   type EnrollmentDatabasePasskeyChallenge,
   type EnrollmentDatabasePasskeyInventoryRequest,
+  type EnrollmentDatabasePasskeyRevocation,
+  type EnrollmentDatabasePasskeyRevokeChallenge,
   type EnrollmentDatabasePool,
   type EnrollmentDatabaseProfile,
   type EnrollmentDatabaseSessionRevocation,
@@ -57,7 +59,9 @@ export class EnrollmentDatabaseError extends Error {
 export interface EnrollmentDatabase {
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<boolean>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile>;
+  completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<boolean>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean>;
+  createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<boolean>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
   readPasskeyInventory(
     input: EnrollmentDatabasePasskeyInventoryRequest,
@@ -315,9 +319,23 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
     completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile> {
       return execute((client) => client.completePasskeyLogin(input), exactLoginProfile);
     },
+    completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<boolean> {
+      return execute(
+        (client) => client.completePasskeyRevocation(input),
+        (value) => exactBooleanRow(value, "revoked"),
+      );
+    },
     createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean> {
       return execute(
         (client) => client.createPasskeyChallenge(input),
+        (value) => exactBooleanRow(value, "created"),
+      );
+    },
+    createPasskeyRevokeChallenge(
+      input: EnrollmentDatabasePasskeyRevokeChallenge,
+    ): Promise<boolean> {
+      return execute(
+        (client) => client.createPasskeyRevokeChallenge(input),
         (value) => exactBooleanRow(value, "created"),
       );
     },

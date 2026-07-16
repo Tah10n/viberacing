@@ -6,6 +6,8 @@ import type { PasskeyInventoryItem } from "@/lib/enrollment-database";
 import type { Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
+import { PasskeyRevokeButton } from "./passkey-setup";
+
 interface AccountExperienceProps {
   readonly handle: string;
   readonly locale: Locale;
@@ -27,6 +29,7 @@ export function AccountExperience({ handle, locale, passkeys }: AccountExperienc
         <section aria-labelledby="passkeys-title" className="account-security">
           <h2 id="passkeys-title">{copy.passkeysTitle}</h2>
           <p>{copy.passkeysCopy}</p>
+          <p className="auth-status">{copy.passkeyRevokeCopy}</p>
           {passkeys === undefined ? (
             <p className="auth-error" role="status">
               {copy.passkeysUnavailable}
@@ -49,6 +52,13 @@ export function AccountExperience({ handle, locale, passkeys }: AccountExperienc
                     {copy.passkeyCreated}{" "}
                     <time dateTime={passkey.createdOn}>{passkey.createdOn}</time>
                   </p>
+                  {passkey.state === "active" && !passkey.currentAuthenticator ? (
+                    <PasskeyRevokeButton
+                      label={passkey.label}
+                      locale={locale}
+                      passkeyId={passkey.passkeyId}
+                    />
+                  ) : null}
                 </li>
               ))}
             </ul>

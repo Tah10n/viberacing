@@ -20,7 +20,9 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
         },
       ]),
     ),
+    completePasskeyRevocation: vi.fn(() => Promise.resolve([{ revoked: true }])),
     createPasskeyChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
+    createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
     readPasskeyInventory: vi.fn(() =>
       Promise.resolve([
@@ -155,6 +157,32 @@ describe("enrollment database", () => {
       },
     ]);
     await expect(
+      database.createPasskeyRevokeChallenge({
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000411",
+        contextDigest: new Uint8Array(32),
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        targetPasskeyId: "00000000-0000-4000-8000-000000000407",
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      database.completePasskeyRevocation({
+        auditEventId: profile.auditEventId,
+        backupState: false,
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000411",
+        contextDigest: new Uint8Array(32),
+        observedSignCount: 2,
+        requestId: profile.requestId,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        targetPasskeyId: "00000000-0000-4000-8000-000000000407",
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000406",
+      }),
+    ).resolves.toBe(true);
+    await expect(
       database.completePasskeyLogin({
         auditEventId: profile.auditEventId,
         backupState: false,
@@ -183,8 +211,8 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(7);
-    expect(releases).toEqual([false, false, false, false, false, false, false]);
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(9);
+    expect(releases).toEqual([false, false, false, false, false, false, false, false, false]);
   });
 
   it("destroys a checkout after boundary, query, or result failure", async () => {

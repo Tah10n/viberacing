@@ -37,6 +37,10 @@ apply.
 - Account passkey inventory must remain session-derived and server-rendered. Preserve the 32-row
   cap, exact closed mapper, one current active authenticator, rounded creation date, and omission of
   credential IDs, public keys, sign counters, exact activity timestamps, and profile IDs from HTML.
+- Passkey revocation must target only an owned non-current active key from that inventory. Bind one
+  fresh required-UV assertion to the exact active session, target, RP, origin, and five-minute
+  challenge, then consume and revoke atomically. The opaque target ID may enter only the
+  authenticated revoke control/request; never expose credential IDs or key material.
 - Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
   correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
   CORS/auth/retry semantics to the common problem-response boundary.

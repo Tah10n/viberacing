@@ -32,6 +32,8 @@ const english = {
   passkeyCopy:
     "A passkey is required before the profile becomes active and replaces a password. Device approval, recovery, and deletion are not available in this local slice yet.",
   passkeyLabel: "Passkey label",
+  passkeyRevokeCopy:
+    "Revoking a passkey is permanent and requires a fresh passkey check. The key protecting this session cannot be selected.",
   passkeyCreated: "Added",
   passkeysCopy: "Only your registered passkey labels and lifecycle state are shown here.",
   passkeysTitle: "Your passkeys",
@@ -42,6 +44,8 @@ const english = {
   primaryPasskey: "Primary passkey",
   russian: "Русский",
   revokedPasskey: "Revoked",
+  revokePasskey: "Revoke passkey",
+  revokingPasskey: "Checking passkey…",
   english: "English",
   signIn: "Sign in",
   signInWithPasskey: "Sign in with passkey",
@@ -90,6 +94,8 @@ const russian: Record<JoinTranslationKey, string> = {
   passkeyCopy:
     "До активации профиля нужен ключ доступа, заменяющий пароль. Подключение устройств, восстановление и удаление в этом локальном срезе пока недоступны.",
   passkeyLabel: "Название ключа",
+  passkeyRevokeCopy:
+    "Отзыв ключа необратим и требует свежей проверки ключом доступа. Ключ, защищающий эту сессию, выбрать нельзя.",
   passkeyCreated: "Добавлен",
   passkeysCopy: "Здесь показаны только названия ваших ключей доступа и их состояние.",
   passkeysTitle: "Ваши ключи доступа",
@@ -100,6 +106,8 @@ const russian: Record<JoinTranslationKey, string> = {
   primaryPasskey: "Основной ключ доступа",
   russian: "Русский",
   revokedPasskey: "Отозван",
+  revokePasskey: "Отозвать ключ",
+  revokingPasskey: "Проверяем ключ…",
   english: "English",
   signIn: "Войти",
   signInWithPasskey: "Войти с ключом доступа",

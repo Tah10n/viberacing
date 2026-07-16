@@ -230,3 +230,74 @@ export function PasskeyLogin({ initialError = false }: PasskeyLoginProps) {
     </main>
   );
 }
+
+interface PasskeyRevokeButtonProps {
+  readonly label: string;
+  readonly locale: Locale;
+  readonly passkeyId: string;
+}
+
+export function PasskeyRevokeButton({ label, locale, passkeyId }: PasskeyRevokeButtonProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const copy = joinTranslations[locale];
+
+  async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy) {
+      return;
+    }
+    if (!browserSupportsWebAuthn()) {
+      setError(true);
+      return;
+    }
+    setBusy(true);
+    setError(false);
+    try {
+      const optionsResponse = await fetch("/auth/passkeys/revoke/options", {
+        body: JSON.stringify({ passkeyId }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (!optionsResponse.ok) {
+        throw new Error("options unavailable");
+      }
+      const options = (await optionsResponse.json()) as PublicKeyCredentialRequestOptionsJSON;
+      const response = await startAuthentication({ optionsJSON: options });
+      const verification = await fetch("/auth/passkeys/revoke/verify", {
+        body: JSON.stringify({ response }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (verification.status !== 204) {
+        throw new Error("verification failed");
+      }
+      window.location.assign("/account");
+    } catch {
+      setError(true);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="passkey-revoke" onSubmit={(event) => void submit(event)}>
+      <button
+        aria-label={`${copy.revokePasskey}: ${label}`}
+        className="danger-action"
+        disabled={busy}
+        type="submit"
+      >
+        {busy ? copy.revokingPasskey : copy.revokePasskey}
+      </button>
+      <span aria-live="polite" className={error ? "auth-error" : "auth-status"}>
+        {error ? copy.genericError : ""}
+      </span>
+    </form>
+  );
+}

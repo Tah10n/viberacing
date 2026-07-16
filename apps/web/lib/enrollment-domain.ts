@@ -41,6 +41,13 @@ const sessionKeys = new Set([
   "version",
 ]);
 const challengeKeys = new Set(["challenge", "challengeId", "expiresAt", "version"]);
+const revokeChallengeKeys = new Set([
+  "challenge",
+  "challengeId",
+  "expiresAt",
+  "targetPasskeyId",
+  "version",
+]);
 
 export interface JoinRequest {
   readonly handle: string;
@@ -75,6 +82,10 @@ export interface PasskeyRegistrationChallenge {
   readonly challengeId: string;
   readonly expiresAt: number;
   readonly version: 1;
+}
+
+export interface PasskeyRevokeChallenge extends PasskeyRegistrationChallenge {
+  readonly targetPasskeyId: string;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -245,6 +256,26 @@ export function readPasskeyChallenge(
     return undefined;
   }
   return Object.freeze(value as unknown as PasskeyRegistrationChallenge);
+}
+
+export function readPasskeyRevokeChallenge(
+  value: unknown,
+  nowSeconds: number,
+): PasskeyRevokeChallenge | undefined {
+  if (
+    !isPlainObject(value) ||
+    !exactKeys(value, revokeChallengeKeys) ||
+    value.version !== 1 ||
+    !canonicalBase64Url32(value.challenge) ||
+    typeof value.challengeId !== "string" ||
+    !uuidV4Pattern.test(value.challengeId) ||
+    typeof value.targetPasskeyId !== "string" ||
+    !uuidV4Pattern.test(value.targetPasskeyId) ||
+    !futureExpiry(value.expiresAt, nowSeconds, 300)
+  ) {
+    return undefined;
+  }
+  return Object.freeze(value as unknown as PasskeyRevokeChallenge);
 }
 
 export const enrollmentPatterns = Object.freeze({ handle: handlePattern, uuidV4: uuidV4Pattern });

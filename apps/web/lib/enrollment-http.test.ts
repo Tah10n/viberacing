@@ -67,10 +67,17 @@ function serviceFixture(): EnrollmentService {
         passkeyCookie: "opaque-passkey",
       }),
     ),
+    beginPasskeyRevoke: vi.fn(() =>
+      Promise.resolve({
+        options: { challenge: Buffer.alloc(32, 5).toString("base64url") },
+        passkeyRevokeCookie: "opaque-passkey-revoke",
+      }),
+    ),
     cancelGithub: vi.fn(() => true),
     completeGithub: vi.fn(() => Promise.resolve({ sessionCookie: "opaque-session" })),
     completeLogin: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskey: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
+    completePasskeyRevoke: vi.fn(() => Promise.resolve(true)),
     logout: vi.fn(() => Promise.resolve(true)),
     readPasskeyInventory: vi.fn(() => Promise.resolve(undefined)),
     readSession: vi.fn(() => undefined),
@@ -242,6 +249,56 @@ describe("enrollment HTTP boundary", () => {
     ).resolves.toMatchObject({ status: 400 });
   });
 
+  it("binds passkey revocation to the session, target, and fresh assertion", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const targetPasskeyId = "00000000-0000-4000-8000-000000000611";
+    const options = await http.passkeyRevokeOptions(
+      post(
+        "/auth/passkeys/revoke/options",
+        JSON.stringify({ passkeyId: targetPasskeyId }),
+        "application/json",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(options.status).toBe(200);
+    expect(options.headers.get("set-cookie")).toContain(
+      "viberacing_passkey_revoke=opaque-passkey-revoke",
+    );
+    expect(options.headers.get("set-cookie")).toContain("Path=/auth/passkeys/revoke");
+    expect(service.beginPasskeyRevoke).toHaveBeenCalledWith("opaque-session", {
+      passkeyId: targetPasskeyId,
+    });
+
+    const verification = await http.passkeyRevokeVerify(
+      post(
+        "/auth/passkeys/revoke/verify",
+        JSON.stringify({ response: { id: "synthetic" } }),
+        "application/json",
+        "viberacing_session=opaque-session; viberacing_passkey_revoke=opaque-passkey-revoke",
+      ),
+    );
+    expect(verification.status).toBe(204);
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_passkey_revoke=");
+    expect(service.completePasskeyRevoke).toHaveBeenCalledWith(
+      "opaque-session",
+      "opaque-passkey-revoke",
+      { response: { id: "synthetic" } },
+    );
+
+    await expect(
+      http.passkeyRevokeOptions(
+        post(
+          "/auth/passkeys/revoke/options",
+          JSON.stringify({ passkeyId: targetPasskeyId }),
+          "application/json",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 401 });
+  });
+
   it("clears every browser credential on same-origin logout even when admission is busy", async () => {
     const admission = createEnrollmentAdmission(1);
     const held = admission.tryAcquire();
@@ -253,6 +310,7 @@ describe("enrollment HTTP boundary", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`${origin}/join?error=unavailable`);
     expect(response.headers.get("set-cookie")).toContain("viberacing_login=");
+    expect(response.headers.get("set-cookie")).toContain("viberacing_passkey_revoke=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.logout).not.toHaveBeenCalled();
 

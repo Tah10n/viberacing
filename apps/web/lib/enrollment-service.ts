@@ -19,10 +19,12 @@ import {
   enrollmentPatterns,
   readEnrollmentSession,
   readPasskeyChallenge,
+  readPasskeyRevokeChallenge,
   readPendingEnrollment,
   type EnrollmentSession,
   type JoinRequest,
   type PasskeyRegistrationChallenge,
+  type PasskeyRevokeChallenge,
   type PendingEnrollment,
 } from "./enrollment-domain";
 import {
@@ -37,6 +39,7 @@ import {
   passkeyContextDigest,
   passkeyLoginContextDigest,
   passkeyLoginCredentialId,
+  passkeyRevokeContextDigest,
   verifyInitialPasskey,
   verifyPasskeyLogin,
   type RegisteredPasskey,
@@ -50,12 +53,14 @@ const activeSessionLifetimeSeconds = 30 * 24 * 60 * 60;
 const base64Url32Pattern = /^[A-Za-z0-9_-]{43}$/;
 const registrationBodyKeys = new Set(["label", "response"]);
 const authenticationBodyKeys = new Set(["response"]);
+const revokeTargetBodyKeys = new Set(["passkeyId"]);
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 
 export const enrollmentCookieNames = Object.freeze({
   login: "viberacing_login",
   oauth: "viberacing_oauth",
   passkey: "viberacing_passkey",
+  passkeyRevoke: "viberacing_passkey_revoke",
   session: "viberacing_session",
 });
 
@@ -86,10 +91,19 @@ export interface PasskeyLoginCompletionDecision {
   readonly sessionCookie: string;
 }
 
+export interface PasskeyRevokeOptionsDecision {
+  readonly options: Awaited<ReturnType<typeof createPasskeyLoginOptions>>;
+  readonly passkeyRevokeCookie: string;
+}
+
 export interface EnrollmentService {
   beginGithub(join: JoinRequest): EnrollmentStartDecision | undefined;
   beginLogin(): Promise<PasskeyLoginOptionsDecision | undefined>;
   beginPasskey(sessionCookie: string): Promise<PasskeyOptionsDecision | undefined>;
+  beginPasskeyRevoke(
+    sessionCookie: string,
+    body: unknown,
+  ): Promise<PasskeyRevokeOptionsDecision | undefined>;
   cancelGithub(state: string, oauthCookie: string): boolean;
   completeGithub(
     code: string,
@@ -106,6 +120,11 @@ export interface EnrollmentService {
     passkeyCookie: string,
     body: unknown,
   ): Promise<PasskeyCompletionDecision | undefined>;
+  completePasskeyRevoke(
+    sessionCookie: string,
+    passkeyRevokeCookie: string,
+    body: unknown,
+  ): Promise<boolean>;
   logout(sessionCookie: string | undefined): Promise<boolean>;
   readPasskeyInventory(sessionCookie: string): Promise<readonly PasskeyInventoryItem[] | undefined>;
   readSession(sessionCookie: string | undefined): EnrollmentSession | undefined;
@@ -133,6 +152,10 @@ interface RegistrationBody {
 
 interface AuthenticationBody {
   readonly response: unknown;
+}
+
+interface PasskeyRevokeTargetBody {
+  readonly passkeyId: string;
 }
 
 function nowSeconds(now: Date): number | undefined {
@@ -227,6 +250,28 @@ function readAuthenticationBody(value: unknown): AuthenticationBody | undefined 
     return undefined;
   }
   return Object.freeze({ response: record.response });
+}
+
+function readPasskeyRevokeTargetBody(value: unknown): PasskeyRevokeTargetBody | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== revokeTargetBodyKeys.size ||
+    keys.some((key) => !revokeTargetBodyKeys.has(key)) ||
+    typeof record.passkeyId !== "string" ||
+    !enrollmentPatterns.uuidV4.test(record.passkeyId)
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ passkeyId: record.passkeyId });
 }
 
 function clearRegisteredPasskey(passkey: RegisteredPasskey | undefined): void {
@@ -373,6 +418,77 @@ export function createEnrollmentService(
           options,
           passkeyCookie: sealedChallenge,
         });
+      } catch {
+        return undefined;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+      }
+    },
+    async beginPasskeyRevoke(
+      sessionCookie: string,
+      body: unknown,
+    ): Promise<PasskeyRevokeOptionsDecision | undefined> {
+      const session = readSession(sessionCookie);
+      const target = readPasskeyRevokeTargetBody(body);
+      const seconds = currentSeconds();
+      if (!session?.passkeyRegistered || target === undefined || seconds === undefined) {
+        return undefined;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return undefined;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        const inventory = await database.readPasskeyInventory({
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+        const targetPasskey = inventory.find((passkey) => passkey.passkeyId === target.passkeyId);
+        if (targetPasskey?.state !== "active" || targetPasskey.currentAuthenticator) {
+          return undefined;
+        }
+        const options = await createLoginOptions(config.webauthnRpId);
+        if (!base64Url32Pattern.test(options.challenge)) {
+          return undefined;
+        }
+        const challengeId = randomUuid();
+        if (!enrollmentPatterns.uuidV4.test(challengeId)) {
+          return undefined;
+        }
+        const expiresAt = seconds + passkeyLifetimeSeconds;
+        challengeDigest = passkeyChallengeDigest(options.challenge);
+        contextDigest = passkeyRevokeContextDigest(
+          session.sessionId,
+          target.passkeyId,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        const challenge: PasskeyRevokeChallenge = Object.freeze({
+          challenge: options.challenge,
+          challengeId,
+          expiresAt,
+          targetPasskeyId: target.passkeyId,
+          version: 1,
+        });
+        const passkeyRevokeCookie = cookieCodec.seal("passkey", challenge);
+        const created = await database.createPasskeyRevokeChallenge({
+          challengeDigest,
+          challengeId,
+          contextDigest,
+          expiresAt: new Date(expiresAt * 1000).toISOString(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+          targetPasskeyId: target.passkeyId,
+        });
+        return created ? Object.freeze({ options, passkeyRevokeCookie }) : undefined;
       } catch {
         return undefined;
       } finally {
@@ -684,6 +800,93 @@ export function createEnrollmentService(
         sessionDigest?.fill(0);
         rotatedSessionSecret?.fill(0);
         rotatedSessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+      }
+    },
+    async completePasskeyRevoke(
+      sessionCookie: string,
+      passkeyRevokeCookie: string,
+      body: unknown,
+    ): Promise<boolean> {
+      const session = readSession(sessionCookie);
+      const seconds = currentSeconds();
+      const authentication = readAuthenticationBody(body);
+      const challenge =
+        seconds === undefined
+          ? undefined
+          : readPasskeyRevokeChallenge(cookieCodec.open("passkey", passkeyRevokeCookie), seconds);
+      if (
+        !session?.passkeyRegistered ||
+        seconds === undefined ||
+        authentication === undefined ||
+        challenge === undefined
+      ) {
+        return false;
+      }
+      let credentialId: Buffer | undefined;
+      let material: PasskeyLoginMaterial | undefined;
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        credentialId = passkeyLoginCredentialId(authentication.response);
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (credentialId === undefined || sessionVerifier === undefined) {
+          return false;
+        }
+        material = await database.readPasskeyLoginMaterial(credentialId);
+        if (material === undefined) {
+          return false;
+        }
+        const verified = await verifyLogin(
+          authentication.response,
+          challenge.challenge,
+          config.webauthnOrigin,
+          config.webauthnRpId,
+          {
+            backupEligible: material.backupEligible,
+            cosePublicKey: material.cosePublicKey,
+            credentialId,
+            signCount: material.signCount,
+          },
+        );
+        if (verified === undefined) {
+          return false;
+        }
+        const auditEventId = randomUuid();
+        if (!enrollmentPatterns.uuidV4.test(auditEventId)) {
+          return false;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        challengeDigest = passkeyChallengeDigest(challenge.challenge);
+        contextDigest = passkeyRevokeContextDigest(
+          session.sessionId,
+          challenge.targetPasskeyId,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        return await database.completePasskeyRevocation({
+          auditEventId,
+          backupState: verified.backupState,
+          challengeDigest,
+          challengeId: challenge.challengeId,
+          contextDigest,
+          observedSignCount: verified.signCount,
+          requestId: createRequestId(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+          targetPasskeyId: challenge.targetPasskeyId,
+          verifiedPasskeyId: material.passkeyId,
+        });
+      } catch {
+        return false;
+      } finally {
+        credentialId?.fill(0);
+        clearLoginMaterial(material);
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
         challengeDigest?.fill(0);
         contextDigest?.fill(0);
       }

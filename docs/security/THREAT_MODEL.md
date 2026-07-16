@@ -10,36 +10,37 @@ Racing profiles in a self-reported Community league.
 This is a repository-scoped design threat model. The current tree contains public repository policy,
 toolchain, CI, documentation, local PostgreSQL identity/passkey/recovery foundations, and one local
 Next.js public-score route, one local invite/OAuth/initial-passkey enrollment and returning-passkey
-login slice with encrypted cookies and logout, one local one-shot Jobs runner, and local Community
-sync verification plus PostgreSQL-adapter, transport-free composition, and bounded Fastify HTTP
-boundaries; it does not yet contain a deployed Ingest service, Jobs scheduler, operational
-connector, deployment, or production data. A library-only Rust connector foundation now bounds and
-validates the stable App Server initialization and candidate account/usage exchanges, then composes
-them through a synthetic one-shot child supervisor and produces exact sync material behind a second
-inaccessible reviewed context. An isolated one-use signer consumes that material only with a third
-inaccessible device-bound key capability and returns a closed signed envelope. A separate
-pending-key/challenge signer and pure Web verifier agree on an exact synthetic pairing-possession
-proof. A dormant Web/Auth start application now generates bounded pending-transaction material,
-separate protected poll/code verifiers, and one fixed database call. A second application composes
-protected keyed poll lookup, strict proof, and exact atomic activation through the separately probed
-read-write pool with local admission/timing. No connector capability has a public constructor, so
-the library cannot discover, admit, or execute a local Codex binary, create a real
-source/device/time/nonce context, generate/load a real key, or complete pairing. Its database-only
-Community ingest and bounded ingest-retention boundaries have synthetic executable evidence. The
-kernel has raw-envelope, origin-proof, bounded-parser, contract, and strict device-signature
-evidence; the adapter has configuration, fixed-query, role-probe, mapper, and failure evidence with
-mock pools. A local server factory now has loopback framing and injection evidence, but no live HTTP
-edge, host/port/TLS deployment entry point, or working database login/TLS connection. One signed
-synthetic request now exercises their required local composition through a mock pool and validated
-result/problem decisions. The public score route has request/response, admission, production-build,
-and visible browser-consumer/fallback evidence, while the Jobs runner has strict
-command/config/pool/role/result evidence. The identity slice has exact-origin/body/cookie,
-state/PKCE, token minimization, initial-registration, returning-login, session-derived passkey
-inventory, fixed-query, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence with
-injected dependencies. None has a live database login, OAuth app, authenticator, edge, scheduler, or
-network deployment. Controls below are marked **implemented** only when executable evidence exists
-in [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements,
-not security claims about the current tree.
+login plus private inventory/revocation slice with encrypted cookies and logout, one local one-shot
+Jobs runner, and local Community sync verification plus PostgreSQL-adapter, transport-free
+composition, and bounded Fastify HTTP boundaries; it does not yet contain a deployed Ingest service,
+Jobs scheduler, operational connector, deployment, or production data. A library-only Rust connector
+foundation now bounds and validates the stable App Server initialization and candidate account/usage
+exchanges, then composes them through a synthetic one-shot child supervisor and produces exact sync
+material behind a second inaccessible reviewed context. An isolated one-use signer consumes that
+material only with a third inaccessible device-bound key capability and returns a closed signed
+envelope. A separate pending-key/challenge signer and pure Web verifier agree on an exact synthetic
+pairing-possession proof. A dormant Web/Auth start application now generates bounded
+pending-transaction material, separate protected poll/code verifiers, and one fixed database call. A
+second application composes protected keyed poll lookup, strict proof, and exact atomic activation
+through the separately probed read-write pool with local admission/timing. No connector capability
+has a public constructor, so the library cannot discover, admit, or execute a local Codex binary,
+create a real source/device/time/nonce context, generate/load a real key, or complete pairing. Its
+database-only Community ingest and bounded ingest-retention boundaries have synthetic executable
+evidence. The kernel has raw-envelope, origin-proof, bounded-parser, contract, and strict
+device-signature evidence; the adapter has configuration, fixed-query, role-probe, mapper, and
+failure evidence with mock pools. A local server factory now has loopback framing and injection
+evidence, but no live HTTP edge, host/port/TLS deployment entry point, or working database login/TLS
+connection. One signed synthetic request now exercises their required local composition through a
+mock pool and validated result/problem decisions. The public score route has request/response,
+admission, production-build, and visible browser-consumer/fallback evidence, while the Jobs runner
+has strict command/config/pool/role/result evidence. The identity slice has
+exact-origin/body/cookie, state/PKCE, token minimization, initial-registration, returning-login,
+session-derived passkey inventory, non-current-key revocation, fixed queries, admission, exact
+GitHub-only OAuth `form-action`, and EN/RU UI evidence with injected dependencies. None has a live
+database login, OAuth app, authenticator, edge, scheduler, or network deployment. Controls below are
+marked **implemented** only when executable evidence exists in
+[implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
+security claims about the current tree.
 
 ### Assets and security objectives
 
@@ -148,7 +149,7 @@ and migration or rollback where applicable.
 | Surface                             | Realistic attacker story                                                                                   | Required mitigations                                                                                                             | Current status                                                                                                         |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Public race and profiles            | A visitor injects markup through a handle, enumerates profiles, or infers exact work hours                 | Plain-text bounded names, CSP, public-field allowlist, rounded freshness, rate and cache policy                                  | Visible route consumer/fallback tested; cache, real car/freshness, rate, live login/deployment planned                 |
-| OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up     | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke | Enrollment, login, and private inventory tested; mutations, recovery, edge rate, cleanup, and live integration planned |
+| OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up     | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke | Enrollment/login, inventory and revoke tested; passkey add, recovery, edge rate, cleanup, and live integration planned |
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration           | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, revoke and rotate                        | DB, local start/proof/activation/cleanup tested; approval, HTTP/live rate and scheduling planned                       |
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Protocol plus synthetic supervisor tested; executable admission, platforms, support planned                            |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                    | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                        | Local signer/vector, verifier, replay stores, application, and HTTP tested; operational/live planned                   |

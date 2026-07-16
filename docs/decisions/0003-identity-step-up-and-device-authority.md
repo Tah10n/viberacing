@@ -127,6 +127,12 @@ authority for the removed credential under concurrent login. The database return
 verification material and still relies on Web/Auth for exact RP ID, origin, challenge, context,
 signature, and user-verification checks.
 
+The local Web/Auth account slice now supplies that application evidence for revoking an owned
+non-current active passkey. It revalidates the session-derived inventory, binds one five-minute
+challenge to the exact session, target, RP, and origin, verifies a fresh user-verified assertion,
+and uses one atomic consume-and-revoke query. Current, last, foreign, malformed, and replayed
+attempts fail closed. Passkey addition and the other critical-action step-up paths remain separate.
+
 Revision 0006 adds passkey-protected recovery-code regeneration, immediate used-PHC scrub, a single
 ten-minute recovery-only registration authority, deletion revoke, and atomic replacement-passkey
 completion. Three observed blocker-chain races prove one-code/one-authority use, fresh rotation
@@ -136,9 +142,9 @@ authority and remaining application boundary.
 
 Remaining application and protocol evidence includes:
 
-- Application WebAuthn transaction rendering and verification for step-up, recovery Argon2id/pepper
-  and generic-response behavior, and anonymous ceremony/recovery-lookup rate-limit and cleanup
-  tests.
+- Application WebAuthn transaction rendering and verification for passkey addition and remaining
+  critical-action step-up, recovery Argon2id/pepper and generic-response behavior, and anonymous
+  ceremony/recovery-lookup rate-limit and cleanup tests.
 - Application-level pairing code attempt/rate limits, displayed-transaction rendering, external
   Ed25519 proof verification, device-revoke UI/route, key rotation, bounded cleanup, and plaintext
   token log rejection.

@@ -107,6 +107,20 @@ export function passkeyLoginContextDigest(rpId: string, origin: string): Buffer 
     .digest();
 }
 
+export function passkeyRevokeContextDigest(
+  sessionId: string,
+  targetPasskeyId: string,
+  rpId: string,
+  origin: string,
+): Buffer {
+  return createHash("sha256")
+    .update(
+      `viberacing-passkey-revoke-v1\n${sessionId}\n${targetPasskeyId}\n${rpId}\n${origin}`,
+      "utf8",
+    )
+    .digest();
+}
+
 export function passkeyLoginCredentialId(response: unknown): Buffer | undefined {
   if (
     response === null ||

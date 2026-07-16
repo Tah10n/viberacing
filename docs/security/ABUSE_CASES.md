@@ -253,12 +253,17 @@ material availability cost.
   overload cancels the body without a queue. Responses are generic/no-store/no-referrer, and the CSP
   permits only self plus GitHub for OAuth form navigation. Injected tests cover wrong state, origin,
   RP, type, UV, replay-shaped failures, cookie ambiguity, overload, continuation-before-write
-  ordering, database-free login options, atomic completion, and compensation. Recovery/step-up
-  verification, aggregate edge rate policy, abandoned consumed-state cleanup, live
-  OAuth/authenticator/database integration, and deployment remain absent. The account read
-  additionally revalidates exact session possession and accepts at most 32 closed, ordered rows with
-  one current active authenticator; it renders no credential ID, key, sign counter, exact activity
-  timestamp, or profile ID.
+  ordering, database-free login options, atomic completion, and compensation. The account revoke
+  path accepts only an owned non-current active target from the session-derived inventory, binds a
+  five-minute challenge and sealed continuation to that session/target/RP/origin context, requires a
+  fresh exact user-verified assertion, and atomically consumes the challenge with terminal revoke.
+  Tests cover current/foreign targets, closed body shapes, target binding, and replay-shaped
+  database failure. Passkey addition, other step-up and recovery verification, aggregate edge rate
+  policy, abandoned consumed-state cleanup, live OAuth/authenticator/database integration, and
+  deployment remain absent. The account read additionally revalidates exact session possession and
+  accepts at most 32 closed, ordered rows with one current active authenticator; it renders no
+  credential ID, key, sign counter, exact activity timestamp, or profile ID. Only a revocable
+  target's opaque passkey ID enters the authenticated control and options request.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a

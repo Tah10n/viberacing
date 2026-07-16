@@ -203,6 +203,8 @@ describe("pairing database pool", () => {
           state: "active",
         },
       ],
+      [{ created: true }],
+      [{ revoked: true }],
       [{ revoked: true }],
     ];
     const liveQueries: { text: string; values: unknown[] }[] = [];
@@ -331,6 +333,32 @@ describe("pairing database pool", () => {
       },
     ]);
     await expect(
+      client.createPasskeyRevokeChallenge({
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000313",
+        contextDigest: context,
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+        targetPasskeyId: "00000000-0000-4000-8000-000000000307",
+      }),
+    ).resolves.toEqual([{ created: true }]);
+    await expect(
+      client.completePasskeyRevocation({
+        auditEventId: "00000000-0000-4000-8000-000000000314",
+        backupState: false,
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000313",
+        contextDigest: context,
+        observedSignCount: 3,
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+        targetPasskeyId: "00000000-0000-4000-8000-000000000307",
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000306",
+      }),
+    ).resolves.toEqual([{ revoked: true }]);
+    await expect(
       client.revokeEnrollmentSession({
         auditEventId: "00000000-0000-4000-8000-000000000307",
         requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
@@ -346,11 +374,15 @@ describe("pairing database pool", () => {
       expect.stringContaining("read_passkey_verification_material"),
       expect.stringContaining("complete_passkey_login_session"),
       expect.stringContaining("read_passkey_inventory"),
+      expect.stringContaining("create_passkey_change_challenge"),
+      expect.stringContaining("consume_passkey_challenge"),
       expect.stringContaining("revoke_session"),
     ]);
     expect(snapshots[2]?.text).toContain("register_initial_passkey");
     expect(snapshots[2]?.text).toContain("rotate_session");
     expect(snapshots[2]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[7]?.text).toContain("revoke_passkey");
+    expect(snapshots[7]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[4]?.values).toEqual([
       "00000000-0000-4000-8000-000000000310",
       digest,
@@ -367,6 +399,28 @@ describe("pairing database pool", () => {
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
     expect(snapshots[5]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest]);
+    expect(snapshots[6]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      "00000000-0000-4000-8000-000000000307",
+      "00000000-0000-4000-8000-000000000313",
+      digest,
+      context,
+      "2026-07-16T10:05:00.000Z",
+    ]);
+    expect(snapshots[7]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      "00000000-0000-4000-8000-000000000313",
+      digest,
+      context,
+      "00000000-0000-4000-8000-000000000306",
+      3,
+      false,
+      "00000000-0000-4000-8000-000000000307",
+      "00000000-0000-4000-8000-000000000314",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));
     expect(context).toEqual(Buffer.alloc(32, 0x52));
     expect(credential).toEqual(Buffer.alloc(32, 0x53));
