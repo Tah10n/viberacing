@@ -4,12 +4,12 @@
 
 The current repository contains a private SQL schema, synthetic PostgreSQL integration test, local
 Community sync verification kernel, mock-pool database adapter, and bounded local HTTP server
-factory, plus library-only connector protocol/parser boundaries and a synthetic one-shot process
-supervisor behind a launch capability with no public constructor, but no deployed application
-database, user accounts, production service, operational connector, or real user data. This document
-remains the required inventory for implementation. A field may not be collected merely because it
-appears here: its schema, purpose, visibility, retention, deletion, and access tests must exist
-first. The implemented column-level mapping is documented in
+factory, plus library-only connector protocol/parser boundaries, a synthetic one-shot process
+supervisor, and an unsigned sync composer behind capabilities with no public constructors, but no
+deployed application database, user accounts, production service, operational connector, or real
+user data. This document remains the required inventory for implementation. A field may not be
+collected merely because it appears here: its schema, purpose, visibility, retention, deletion, and
+access tests must exist first. The implemented column-level mapping is documented in
 [`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
@@ -171,6 +171,17 @@ constructor, the library cannot discover or execute a local Codex installation, 
 store, or upload. A future executable-admission diagnostic or retained connector/Codex version must
 use the existing mapped Security/Operational class with an explicit purpose and bounded retention.
 
+ADR 0024 adds no new data class or persistent field. It consumes the already mapped private daily
+usage plus reviewed opaque source, sync, device, millisecond UTC, and nonce values in transient
+memory. The exact JSON body and LF-separated signing message contain private usage and security
+material, expose only bounded read-only byte/header accessors, and deliberately implement no
+diagnostic, clone, display, or serialization surface. The composer emits no log, metric, file,
+database value, cache, analytics event, export, signature, or network request. Its shared test
+vector uses only synthetic identifiers and values. Because `ReviewedCommunitySyncContext` has no
+public constructor, no current code can obtain a real source/device/time/nonce context; secure key
+storage, fresh entropy, clock handling, signing, retries, and egress require separate mapping and
+review.
+
 Revision 0008 adds deletion evidence for only those raw nonce and snapshot rows: a Jobs-only
 procedure derives cutoff time on the server, deletes bounded expired batches, cascades raw entries,
 and preserves the current source/day value while clearing its deleted snapshot reference. A fixed
@@ -284,9 +295,10 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
 - The connector library validates and discards the App Server initialization values and candidate
   `0.144.4` account/summary fields, then exposes only bounded private daily usage to its caller. It
   composes that sequence only behind a reviewed-launch capability with no public constructor and
-  bounded synthetic process evidence. It has no executable discovery/admission, real Codex path,
-  device key, signed payload, log, store, or egress capability; the candidate remains unsupported
-  until official-artifact, platform, privacy-egress, packaging, and release gates pass.
+  bounded synthetic process evidence. It can also emit exact unsigned sync bytes only behind a
+  second inaccessible reviewed context. It has no executable discovery/admission, real Codex path,
+  context provider, device key, signature, log, store, or egress capability; the candidate remains
+  unsupported until official-artifact, platform, privacy-egress, packaging, and release gates pass.
 - Jobs currently receive only bounded expired ingest-state cleanup, open-season Community scoring
   refresh, and terminal finalization. The local one-shot adapter rechecks the exact Jobs-only login
   and invokes one prepared capability without logging inputs or results. Correction and deletion

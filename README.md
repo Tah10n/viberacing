@@ -116,9 +116,13 @@ drift/matrix checker are committed, but the official artifact was not independen
 compatibility matrix remains empty. A one-shot supervisor now proves the exact sequence against a
 target-built synthetic child with a fixed `app-server` argument, local pipes, cleared ambient
 environment, bounded stdout/stderr/time, late-output rejection, and reap-before-success cleanup. Its
-reviewed-launch capability has no public constructor, so there is still no executable discovery/path
-or artifact/version admission, real Codex execution, cross-platform result, secure device key,
-signed upload, live protected key injection, edge signer, direct-origin denial, host/port/TLS
+reviewed-launch capability has no public constructor. A second inaccessible reviewed context now
+lets a candidate composer consume the minimized entries into the exact `ConnectorSyncV1` JSON,
+SHA-256 digest, unpadded base64url nonce, and LF-separated device-signature message. A shared
+synthetic vector proves those exact bytes against the production Ingest verifier, but creates no key
+or signature. There is still no executable discovery/path or artifact/version admission, real Codex
+execution, cross-platform result, source/device context provider, secure device key, signer, signed
+upload, live protected key injection, edge signer, direct-origin denial, host/port/TLS
 configuration, distributed rate policy, monitoring, operational connector, live database connection,
 load evidence, or deployment. Twelve SQL migrations now add 24 private identity, passkey,
 restricted-recovery, source, device, pairing, audit, deletion, replay, usage, and Community scoring

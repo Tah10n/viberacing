@@ -18,6 +18,7 @@
   "ignorePaths": [
     "cspell.json",
     "README.ru.md",
+    "contracts/v1/connector-sync-device-request.test-vector.json",
     "node_modules/**",
     ".pnpm-store/**",
     "pnpm-lock.yaml"
@@ -50,6 +51,7 @@
     "COSE",
     "Cloudflare",
     "Codex",
+    "cpufeatures",
     "DCO",
     "datacl",
     "datname",
@@ -72,6 +74,7 @@
     "isready",
     "itoa",
     "JSONL",
+    "libc",
     "lpad",
     "memchr",
     "misbinding",
@@ -140,6 +143,7 @@
     "tmpfs",
     "trunc",
     "Turbopack",
+    "typenum",
     "unindexed",
     "VOPRF",
     "WCAG",

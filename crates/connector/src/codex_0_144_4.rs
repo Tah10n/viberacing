@@ -1,5 +1,7 @@
 //! Candidate-only parser for the stable Codex App Server `0.144.4` account schemas.
 
+pub(crate) const CANDIDATE_CODEX_VERSION: &str = "0.144.4";
+
 use std::{fmt, marker::PhantomData};
 
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
@@ -216,6 +218,10 @@ impl DailyUsage {
     #[must_use]
     pub fn entries(&self) -> &[DailyUsageEntry] {
         &self.entries
+    }
+
+    pub(crate) fn into_entries(self) -> Vec<DailyUsageEntry> {
+        self.entries
     }
 
     /// Returns the number of admitted daily entries.
@@ -889,7 +895,7 @@ impl Visitor<'_> for ReportedDateVisitor {
     }
 }
 
-fn valid_reported_date(value: &str) -> bool {
+pub(crate) fn valid_reported_date(value: &str) -> bool {
     let bytes = value.as_bytes();
     if bytes.len() != 10
         || &bytes[0..2] != b"20"

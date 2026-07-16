@@ -7,8 +7,12 @@ revision 0011 provides a database-only score projection. A local pure Ingest ker
 authenticates and parses the exact bounded sync request, a separate local adapter constrains its
 PostgreSQL mapping, and a transport-free application boundary composes them into validated
 result/problem decisions. A separate bounded Fastify server factory now preserves the exact raw
-request and serializes only those validated decisions. No connector, deployed endpoint, working
-database credential, edge signer, host/port/TLS entry point, or composed live flow exists.
+request and serializes only those validated decisions. The candidate Rust connector now emits exact
+unsigned body and device-message material behind an inaccessible context; one synthetic
+[`test vector`](v1/connector-sync-device-request.test-vector.json) proves its body, digest, nonce,
+and message against production Ingest code. No operational connector, key, signature, deployed
+endpoint, working database credential, edge signer, host/port/TLS entry point, or composed live flow
+exists.
 
 ## Canonical version 1 schemas
 
@@ -30,6 +34,10 @@ database credential, edge signer, host/port/TLS entry point, or composed live fl
   body, rejects duplicate headers and decoded JSON keys, consumes a fresh origin nonce before body
   parsing or device lookup, validates `ConnectorSyncV1`, and verifies the source-bound signature
   under strict RFC 8032/FIPS semantics.
+- [`connector-sync-device-request.test-vector.json`](v1/connector-sync-device-request.test-vector.json)
+  fixes one synthetic exact body, SHA-256 digest, 16-byte nonce encoding, and canonical device
+  message for cross-language Rust/Ingest verification. It contains no key or signature and is not a
+  production request sample.
 - [`ConnectorSyncResultV1`](v1/connector-sync-result.schema.json) acknowledges accepted, duplicate,
   or quarantined input without returning a private anomaly reason. The local Ingest application now
   reconstructs and validates this body only after verification and database settlement.

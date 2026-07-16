@@ -120,10 +120,14 @@ metadata, schema digests, minimal extracts, fixtures и drift/matrix checker, н
 не был независимо выполнен, а support matrix остаётся пустой. One-shot supervisor теперь проверяет
 точную sequence на target-built synthetic child: фиксированный `app-server` argument, local pipes,
 очищенное ambient environment, bounded stdout/stderr/time, отклонение late output и
-reap-before-success cleanup. У reviewed-launch capability нет публичного constructor, поэтому
-executable discovery, link/path ownership и artifact/version admission, реальный запуск Codex,
-cross-platform evidence, secure device key, signed upload, operational connector, live database
-connection, load evidence и deployment всё ещё отсутствуют.
+reap-before-success cleanup. У reviewed-launch capability нет публичного constructor. Второй
+недоступный reviewed context теперь позволяет candidate composer превратить минимизированные записи
+в точные `ConnectorSyncV1` JSON, SHA-256 digest, unpadded base64url nonce и LF-separated
+device-signature message. Общий synthetic vector сверяет эти байты с production Ingest verifier, но
+не создаёт ключ или подпись. Поэтому executable discovery, link/path ownership и artifact/version
+admission, реальный запуск Codex, cross-platform evidence, source/device context provider, secure
+device key, signer, signed upload, operational connector, live database connection, load evidence и
+deployment всё ещё отсутствуют.
 
 Также добавлены двенадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,

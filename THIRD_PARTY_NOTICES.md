@@ -15,8 +15,9 @@ dependency.
 | [pg](https://github.com/brianc/node-postgres)                | PostgreSQL client and pool  | MIT               |
 | [React](https://github.com/facebook/react)                   | User-interface runtime      | MIT               |
 | [react-dom](https://github.com/facebook/react)               | Browser rendering runtime   | MIT               |
-| [Serde](https://github.com/serde-rs/serde)                   | Closed JSON deserialization | MIT OR Apache-2.0 |
-| [serde_json](https://github.com/serde-rs/json)               | Bounded JSONL parsing       | MIT OR Apache-2.0 |
+| [RustCrypto SHA-2](https://github.com/RustCrypto/hashes)     | Exact-body SHA-256 digest   | MIT OR Apache-2.0 |
+| [Serde](https://github.com/serde-rs/serde)                   | Closed JSON field mapping   | MIT OR Apache-2.0 |
+| [serde_json](https://github.com/serde-rs/json)               | Bounded JSON parse/compose  | MIT OR Apache-2.0 |
 
 ## Direct development tools
 
@@ -41,9 +42,10 @@ dependency.
 | [Vitest](https://github.com/vitest-dev/vitest)                              | Unit and component test runner           | MIT              |
 | [YAML](https://eemeli.org/yaml/)                                            | Safe parsing of repository YAML policy   | ISC              |
 
-The connector directly pins Serde and serde_json without derive features. Its active non-workspace
-runtime graph contains six crates; Cargo.lock also records five `cfg(any())`-only Serde derive-chain
-packages that are not compiled by the enabled feature graph. The exact machine inventory remains
+The connector directly pins Serde and serde_json without derive features plus RustCrypto SHA-2 with
+default features disabled. Its active Windows non-workspace runtime graph contains fourteen crates;
+Cargo.lock also records five `cfg(any())`-only Serde derive-chain packages and target-specific libc
+through CPU-feature detection, for twenty records total. The exact machine inventory remains
 authoritative. `compose.yaml` references an official PostgreSQL image for disposable local
 development; the image is pulled separately and is not redistributed in this source tree.
 

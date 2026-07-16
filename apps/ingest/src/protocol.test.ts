@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 
+import { validateConnectorSyncV1 } from "@viberacing/contracts";
 import { describe, expect, it } from "vitest";
 
 import { communitySyncHttpPolicy } from "./community-sync-http-server.js";
@@ -213,6 +214,50 @@ describe("canonical Community sync protocol", () => {
         "syn_CCCCCCCCCCCCCCCCCCCCCC",
       ].join("\n"),
     );
+  });
+
+  it("matches the shared Rust exact-body device request vector", () => {
+    const vector = JSON.parse(
+      readFileSync(
+        new URL(
+          "../../../contracts/v1/connector-sync-device-request.test-vector.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ) as Readonly<{
+      body: string;
+      bodyDigestBase64Url: string;
+      deviceId: string;
+      deviceNonceBase64Url: string;
+      deviceNonceBytes: readonly number[];
+      deviceSignatureMessage: string;
+      observedAt: string;
+      schemaVersion: number;
+      sourceId: string;
+      syncId: string;
+    }>;
+    const body = Buffer.from(vector.body, "utf8");
+    const parsedBody = JSON.parse(vector.body) as unknown;
+
+    expect(vector.schemaVersion).toBe(1);
+    expect(vector.deviceNonceBytes).toHaveLength(deviceNonceBytes);
+    expect(validateConnectorSyncV1(parsedBody).ok).toBe(true);
+    expect(body.byteLength).toBeLessThanOrEqual(maximumCommunitySyncBodyBytes);
+    expect(digestBody(body).base64Url).toBe(vector.bodyDigestBase64Url);
+    expect(Buffer.from(vector.deviceNonceBytes).toString("base64url")).toBe(
+      vector.deviceNonceBase64Url,
+    );
+    expect(
+      createDeviceSignatureMessage({
+        bodyDigestBase64Url: vector.bodyDigestBase64Url,
+        deviceId: vector.deviceId,
+        idempotencyKey: vector.syncId,
+        nonce: vector.deviceNonceBase64Url,
+        timestamp: vector.observedAt,
+      }).toString("utf8"),
+    ).toBe(vector.deviceSignatureMessage);
+    expect((parsedBody as Readonly<{ sourceId?: unknown }>).sourceId).toBe(vector.sourceId);
   });
 
   it("keeps protocol identifiers inside their closed alphabets", () => {

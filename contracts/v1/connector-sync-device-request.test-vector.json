@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "sourceId": "src_AAAAAAAAAAAAAAAAAAAAAA",
+  "syncId": "syn_BBBBBBBBBBBBBBBBBBBBBB",
+  "observedAt": "2026-07-15T12:34:56.789Z",
+  "deviceId": "dev_CCCCCCCCCCCCCCCCCCCCCC",
+  "deviceNonceBytes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "deviceNonceBase64Url": "AAECAwQFBgcICQoLDA0ODw",
+  "body": "{\"schemaVersion\":1,\"sourceId\":\"src_AAAAAAAAAAAAAAAAAAAAAA\",\"syncId\":\"syn_BBBBBBBBBBBBBBBBBBBBBB\",\"observedAt\":\"2026-07-15T12:34:56.789Z\",\"connectorVersion\":\"0.0.0\",\"codexVersion\":\"0.144.4\",\"dailyEntries\":[{\"codexReportedDate\":\"2026-07-13\",\"tokens\":123},{\"codexReportedDate\":\"2026-07-14\",\"tokens\":456}]}",
+  "bodyDigestBase64Url": "RcwgZjfhFt_ZeSBg84XR_ZX3IQSFXuqrYZKzs2j1FGM",
+  "deviceSignatureMessage": "viberacing-device-request-v1\nPOST\n/v1/community/sync\nRcwgZjfhFt_ZeSBg84XR_ZX3IQSFXuqrYZKzs2j1FGM\ndev_CCCCCCCCCCCCCCCCCCCCCC\nAAECAwQFBgcICQoLDA0ODw\n2026-07-15T12:34:56.789Z\nsyn_BBBBBBBBBBBBBBBBBBBBBB"
+}

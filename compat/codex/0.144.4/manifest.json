@@ -149,6 +149,6 @@
   "supportBlockers": [
     "The official release metadata is recorded, but the release artifact was not independently downloaded and verified for this extract.",
     "The one-shot supervisor has synthetic Windows evidence only; executable discovery, path ownership, official-artifact execution, and macOS/Linux results remain absent.",
-    "No secure device-key storage, signed upload, connector CLI, packaged artifact, or connector release exists."
+    "Exact unsigned sync composition exists only behind an inaccessible reviewed context with synthetic evidence; no source/device context provider, secure device-key storage, signer, upload, connector CLI, packaged artifact, or connector release exists."
   ]
 }

@@ -1,8 +1,9 @@
 //! Fail-closed protocol primitives for the local Codex App Server stdio boundary.
 //!
 //! This crate implements the stable initialization exchange, a candidate-only account/usage
-//! adapter for one exact schema extract, and a bounded one-shot child supervisor behind an
-//! reviewed-launch capability with no public constructor. It does not discover or admit a Codex executable,
+//! adapter for one exact schema extract, a bounded one-shot child supervisor, and an exact-body
+//! Community sync composer. Both operational inputs remain behind capabilities with no public
+//! constructor. The crate does not discover or admit a Codex executable, sign or upload usage,
 //! expose a generic JSON-RPC client, or claim compatibility with any Codex release.
 
 #![forbid(unsafe_code)]
@@ -14,6 +15,7 @@ use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 
 mod codex_0_144_4;
 mod process;
+mod sync;
 
 pub use codex_0_144_4::{
     CandidateCodex01444AccountUsage, DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES,
@@ -23,6 +25,12 @@ pub use process::{
     APP_SERVER_EXIT_GRACE, APP_SERVER_LIFETIME, APP_SERVER_RESPONSE_TIMEOUT,
     CandidateCodex01444Collector, CollectionError, MAX_APP_SERVER_STDERR_BYTES,
     MAX_APP_SERVER_STDOUT_FRAMES, ReviewedCodexLaunch,
+};
+pub use sync::{
+    COMMUNITY_SYNC_MEDIA_TYPE, COMMUNITY_SYNC_METHOD, COMMUNITY_SYNC_REQUEST_TARGET,
+    CandidateCommunitySyncV1Composer, DEVICE_NONCE_BYTES, DEVICE_SIGNATURE_MESSAGE_PREFIX,
+    MAX_COMMUNITY_SYNC_BODY_BYTES, PreparedCommunitySync, ReviewedCommunitySyncContext,
+    SyncPreparationError,
 };
 
 /// Maximum accepted App Server JSONL frame size, including its final line-feed byte.

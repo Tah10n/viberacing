@@ -1,9 +1,10 @@
-# Vibe Racing connector protocol, candidate adapter, and supervisor
+# Vibe Racing connector protocol, candidate adapter, supervisor, and sync composer
 
 This Rust crate contains the fail-closed local Codex App Server initialization boundary and one
 candidate-only account/usage adapter for the exact `0.144.4` schema extract. It also contains a
 bounded one-shot child supervisor behind a reviewed-launch capability with no public constructor. It
-is a library foundation, not a runnable, supported, or released connector.
+also contains an exact-body unsigned Community sync composer behind a second inaccessible reviewed
+context. It is a library foundation, not a runnable, supported, or released connector.
 
 The implemented surface is deliberately narrow:
 
@@ -24,12 +25,18 @@ The implemented surface is deliberately narrow:
 - three stdout frames of at most 16 KiB each, discard-only stderr capped at 8 KiB, a 10-second
   response deadline, a 45-second lifetime, and a 500-millisecond graceful-exit window; and
 - exact handshake/account/usage composition that returns daily data only after terminal output is
-  checked and the synthetic child is reaped.
+  checked and the synthetic child is reaped;
+- exact closed identifier, calendar, timestamp, entry-count, integer, and 8 KiB sync-body bounds;
+- fixed manual seven-field JSON serialization, connector/candidate versions, SHA-256 digest, and
+  repository-owned unpadded base64url encoding; and
+- the exact eight-field LF-separated device-signature message with no trailing separator, checked
+  against one synthetic vector shared with the production Ingest verifier.
 
-`ReviewedCodexLaunch` has no public constructor. There is no executable discovery, link/ownership
-review, artifact or version admission, live Codex launch path, WebSocket or network transport,
-generic JSON-RPC method, credential-store access, device key, upload, scheduler, CLI, installer, or
-release artifact. The checked-in
+`ReviewedCodexLaunch` and `ReviewedCommunitySyncContext` have no public constructors. There is no
+executable discovery, link/ownership review, artifact or version admission, live Codex launch path,
+source/device context provider, trusted clock, entropy source, WebSocket or network transport,
+generic JSON-RPC method, credential-store access, device key, signer, upload, retry loop, scheduler,
+CLI, installer, or release artifact. The checked-in
 [`0.144.4` candidate evidence](../../compat/codex/0.144.4/manifest.json) is development evidence
 only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty until
 official-artifact, executable-admission, platform, privacy, packaging, and release evidence all

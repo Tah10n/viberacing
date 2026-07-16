@@ -933,8 +933,50 @@
   ],
   "cargoPackages": [
     {
+      "name": "block-buffer",
+      "version": "0.12.1",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "cfg-if",
+      "version": "1.0.4",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "cpufeatures",
+      "version": "0.3.0",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "crypto-common",
+      "version": "0.2.2",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "digest",
+      "version": "0.11.3",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "hybrid-array",
+      "version": "0.4.13",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
       "name": "itoa",
       "version": "1.0.18",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "libc",
+      "version": "0.2.186",
       "license": "MIT OR Apache-2.0",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
@@ -981,8 +1023,20 @@
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
+      "name": "sha2",
+      "version": "0.11.0",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
       "name": "syn",
       "version": "2.0.119",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "typenum",
+      "version": "1.20.1",
       "license": "MIT OR Apache-2.0",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },

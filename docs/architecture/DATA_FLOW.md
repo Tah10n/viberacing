@@ -324,9 +324,12 @@ mode confirmation with account fields discarded, and no more than 31 normalized 
 ADR 0023 composes that exact one-shot sequence through one fixed `app-server` argument, a reviewed
 working directory/environment with ambient variables cleared, local pipes, bounded stdout/stderr and
 deadlines, terminal-event checks, and reap-before-success cleanup. The required launch capability
-has no public constructor, so it cannot identify or admit a binary, execute the official artifact,
-hold a device key, sign, schedule, or upload. No Community sync sequence reaches it yet and the
-support matrix stays empty.
+has no public constructor, so it cannot identify or admit a binary or execute the official artifact.
+ADR 0024 then consumes the normalized output only with another inaccessible capability containing
+reviewed source/device/time/nonce inputs. It emits the exact bounded `ConnectorSyncV1` bytes,
+SHA-256 digest, unpadded base64url nonce, and LF-separated device message verified by Ingest. It
+cannot create that context, hold a device key, sign, schedule, or upload, and the support matrix
+stays empty.
 
 The operational connector layers, edge signer, direct-origin denial, host/port/TLS Ingest deployment
 entry point, live secret-manager/edge key injection, live PostgreSQL login/TLS connection,

@@ -215,7 +215,11 @@ fixed `app-server` argument, local pipes, no ambient environment, bounded stdout
 reap-before-success composition. Its launch capability deliberately has no public constructor until
 a later boundary resolves links, rejects untrusted writable paths, and verifies the exact executable
 and version. The candidate does not execute the official artifact, run on all platforms,
-sign/upload, or create a matrix row.
+sign/upload, or create a matrix row. ADR 0024 adds only the next unsigned boundary: an inaccessible
+reviewed source/device/time/nonce context plus the minimized daily usage produce one exact bounded
+`ConnectorSyncV1` body, SHA-256 digest, and LF-separated device message. A shared Rust/Ingest vector
+proves byte-level agreement, while context construction, key storage, signing, transport, retry,
+scheduling, and support remain absent.
 
 ### Date semantics
 

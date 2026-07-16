@@ -30,13 +30,16 @@ App Server handshake and a candidate `0.144.4` account/usage parser, discarding 
 fields and returning only bounded normalized daily usage in caller memory. An inaccessible one-shot
 supervisor composes those exact states through fixed local pipes, a fixed child argument, no ambient
 environment, bounded stdout/stderr/time, terminal-event draining, and reap-before-success cleanup.
-Candidate release, schema, fixture, and synthetic-process evidence does not populate the support
-matrix. Phase 0 hosted-publication controls remain blocked on real maintainer identities and GitHub
-configuration. No authentication route, OAuth/Argon2id/WebAuthn application flow, production
-secret-manager/edge key injection, Ingest host/port/TLS deployment entry point, production
-deployment, live Web/Jobs/Ingest database login/TLS integration, released or operational connector,
-supported Codex version, real-user ingestion, end-to-end public ranking, or finalization scheduler
-exists.
+An inaccessible reviewed sync context now lets a candidate-only composer consume those minimized
+entries into the exact bounded JSON body, SHA-256 digest, nonce encoding, and device-signature
+message shared with the production Ingest verifier. It creates no context, key, signature, header
+map, or network request. Candidate release, schema, fixture, synthetic-process, and
+unsigned-composer evidence does not populate the support matrix. Phase 0 hosted-publication controls
+remain blocked on real maintainer identities and GitHub configuration. No authentication route,
+OAuth/Argon2id/WebAuthn application flow, production secret-manager/edge key injection, Ingest
+host/port/TLS deployment entry point, production deployment, live Web/Jobs/Ingest database login/TLS
+integration, released or operational connector, supported Codex version, real-user ingestion,
+end-to-end public ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -62,7 +65,7 @@ exists.
 - An offline external-link gate with 12 reviewed hosts, HTTPS/credential/port/query/address rules,
   no dormant host permissions, and eight black-box cases. A separate online mode pins public DNS
   results, sends no credentials, follows no redirects, and is excluded from deterministic PR CI.
-- A deterministic dependency inventory covering 499 locked npm packages, eleven Cargo dependencies,
+- A deterministic dependency inventory covering 499 locked npm packages, twenty Cargo dependencies,
   two pinned GitHub Actions, and one pinned local-development container. License expressions,
   installed manifests, every root/workspace importer, dependency scopes, direct notices, and
   external-artifact usage are checked with ten black-box cases.
@@ -123,9 +126,15 @@ exists.
   overload before and after the final response, non-reflection, missing executable, nonzero terminal
   status, and forced cleanup. The opaque launch capability has no public constructor: there is no
   executable discovery/path-ownership review, official-artifact execution, supported Codex version,
-  device key, upload, network transport, CLI, installer, or released binary; the compatibility
-  matrix remains empty.
-- An ADR lifecycle/template and twenty-three accepted design decisions covering Community trust,
+  device key, upload, network transport, CLI, installer, or released binary. A separate
+  candidate-only composer consumes the real parser output behind another capability with no public
+  constructor. It revalidates source/sync/device IDs, canonical UTC time, and daily bounds; manually
+  emits the exact seven-field body; computes the SHA-256 digest; and builds the exact unpadded
+  base64url, LF-separated device message. Six Rust cases plus one production-path Ingest case share
+  an exact synthetic vector. No source/device context provider, fresh entropy, clock, key store,
+  signer, transport, retry, schedule, or support claim exists; the compatibility matrix remains
+  empty.
+- An ADR lifecycle/template and twenty-four accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -133,7 +142,7 @@ exists.
   least-privileged Ingest PostgreSQL adapter, protected origin-proof key configuration, persistent
   atomic origin replay, transport-free Community sync application composition, and the bounded local
   Fastify HTTP boundary, plus the fail-closed Codex handshake, candidate account/usage adapter, and
-  inaccessible bounded one-shot process supervisor.
+  inaccessible bounded one-shot process supervisor and unsigned exact-body sync composer.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.

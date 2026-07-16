@@ -14,20 +14,23 @@ account/usage parser with fixed methods, discarded account/summary fields, and b
 daily output. A one-shot supervisor now composes those states with a fixed child argument, local
 pipes, cleared ambient environment, output/deadline limits, and reap-before-success behavior. Its
 reviewed-launch capability has no public constructor, so it cannot discover, admit, or execute a
-local Codex installation; no supported version, key, signer, or upload exists. A local Ingest kernel
-bounds and authenticates a synthetic exact-body sync request, and a separate adapter constrains
-origin replay, database lookup, and submission mapping with mock-pool evidence. A transport-free
-application composes those exact boundaries, generates a server request ID, and validates the
-acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic replay and
-cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies no-queue and
-deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS launch entry
-point. There is no working database login/certificate, live end-to-end PostgreSQL flow, edge path,
-connector process, supported adapter, or deployment. A bounded local one-shot Jobs process now wraps
-only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A
-bounded server-only Web PostgreSQL adapter and local public-score GET are implemented and
-unit/build-tested, but this repository supplies no working deployment login or TLS certificate. A
-successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL
-constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
+local Codex installation. A second inaccessible reviewed context lets an unsigned composer consume
+the minimized usage into the exact bounded sync JSON, SHA-256 digest, nonce encoding, and device
+message checked by Ingest. It cannot create that context, a key, signature, or HTTP request; no
+supported version, source/device provider, key store, signer, or upload exists. A local Ingest
+kernel bounds and authenticates a synthetic exact-body sync request, and a separate adapter
+constrains origin replay, database lookup, and submission mapping with mock-pool evidence. A
+transport-free application composes those exact boundaries, generates a server request ID, and
+validates the acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic
+replay and cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies
+no-queue and deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS
+launch entry point. There is no working database login/certificate, live end-to-end PostgreSQL flow,
+edge path, connector process, supported adapter, or deployment. A bounded local one-shot Jobs
+process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or
+deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are implemented
+and unit/build-tested, but this repository supplies no working deployment login or TLS certificate.
+A successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries,
+SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
 isolation; it does not prove a live adapter, deployed API, or production flow. The Ingest server
 tests bind only ephemeral loopback sockets and use synthetic requests; no development command
 exposes it to the LAN or Internet.
@@ -119,9 +122,9 @@ pnpm run test:codex-compatibility-check
 cargo test --workspace --all-targets --all-features --locked
 ```
 
-The `0.144.4` directory and synthetic process fixture are candidate development evidence, not a
-supported-version installation or live integration command. Do not run a local account through
-repository tests.
+The `0.144.4` directory, synthetic process fixture, and exact unsigned sync vector are candidate
+development evidence, not a supported-version installation or live integration command. The vector
+uses only synthetic identifiers and usage. Do not run a local account through repository tests.
 
 Ingest-focused commands use only synthetic key material, injected capabilities, and mock database
 pools:

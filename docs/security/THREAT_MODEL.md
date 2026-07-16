@@ -14,20 +14,21 @@ plus PostgreSQL-adapter, transport-free composition, and bounded Fastify HTTP bo
 not yet contain a deployed Ingest service, Jobs scheduler, operational connector, deployment, or
 production data. A library-only Rust connector foundation now bounds and validates the stable App
 Server initialization and candidate account/usage exchanges, then composes them through a synthetic
-one-shot child supervisor. The supervisor's reviewed-launch capability has no public constructor, so
-no local Codex binary can be discovered, admitted, or executed. Its database-only Community ingest
-and bounded ingest-retention boundaries have synthetic executable evidence. The kernel has
-raw-envelope, origin-proof, bounded-parser, contract, and strict device-signature evidence; the
-adapter has configuration, fixed-query, role-probe, mapper, and failure evidence with mock pools. A
-local server factory now has loopback framing and injection evidence, but no live HTTP edge,
-host/port/TLS deployment entry point, or working database login/TLS connection. One signed synthetic
-request now exercises their required local composition through a mock pool and validated
-result/problem decisions. The public score route has request/response, admission, and
-production-build evidence, and the Jobs runner has strict command/config/pool/role/result evidence;
-neither has a live database login, edge, scheduler, or network deployment. Controls below are marked
-**implemented** only when executable evidence exists in
-[implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
-security claims about the current tree.
+one-shot child supervisor and produces exact unsigned sync material behind a second inaccessible
+reviewed context. Neither capability has a public constructor, so the library cannot discover,
+admit, or execute a local Codex binary or create a real source/device/time/nonce context. Its
+database-only Community ingest and bounded ingest-retention boundaries have synthetic executable
+evidence. The kernel has raw-envelope, origin-proof, bounded-parser, contract, and strict
+device-signature evidence; the adapter has configuration, fixed-query, role-probe, mapper, and
+failure evidence with mock pools. A local server factory now has loopback framing and injection
+evidence, but no live HTTP edge, host/port/TLS deployment entry point, or working database login/TLS
+connection. One signed synthetic request now exercises their required local composition through a
+mock pool and validated result/problem decisions. The public score route has request/response,
+admission, and production-build evidence, and the Jobs runner has strict
+command/config/pool/role/result evidence; neither has a live database login, edge, scheduler, or
+network deployment. Controls below are marked **implemented** only when executable evidence exists
+in [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements,
+not security claims about the current tree.
 
 ### Assets and security objectives
 
@@ -177,8 +178,11 @@ and migration or rollback where applicable.
    exposes only bounded daily entries, and fails terminally on drift. The one-shot supervisor clears
    ambient environment, uses fixed local pipes/arguments, bounds output and time, discards stderr,
    checks late output, and gates success on reap. Its launch capability has no public constructor,
-   so candidate manifest, fixture, and process evidence cannot become a live path or support claim;
-   executable, platform, and release review remain required.
+   so candidate manifest, fixture, and process evidence cannot become a live path or support claim.
+   The unsigned composer separately consumes only the bounded parser output plus an inaccessible
+   reviewed context, revalidates every body and unsigned device-header input it owns, and fixes
+   exact JSON/digest/device-message bytes shared with Ingest without a key, signature, log, or
+   network sink. Executable, context, key, platform, egress, and release review remain required.
 5. **Direct-origin and header spoofing.** A client avoids edge shaping or supplies a false
    forwarding address. The local kernel verifies one fresh, replay-consumed HMAC proof bound to key
    ID, method, path, exact body, time, and nonce before JSON or device work. A protected local

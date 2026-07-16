@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and twenty-three accepted ADRs.
+  fail-closed compatibility policy and matrix, and twenty-four accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -130,6 +130,13 @@ Versioning where its guarantees are applicable.
   pre/post-response output overload, stable diagnostics, missing executable, nonzero terminal
   status, and forced cleanup. No binary discovery/path ownership, official-artifact execution,
   platform matrix, live Codex path, key, upload, CLI, package, or support row is implied.
+- A bounded unsigned candidate Community sync composer behind an inaccessible
+  `ReviewedCommunitySyncContext`. It consumes production-parsed daily usage, revalidates the closed
+  identifiers/time/entry bounds, emits one exact seven-field `ConnectorSyncV1` body, hashes those
+  bytes with pinned RustCrypto SHA-256, and builds the exact unpadded-base64url, LF-separated device
+  message without loading a key or opening a network path. Six Rust cases and one production-path
+  Ingest case share a synthetic exact-body/digest/message vector. No source/device context provider,
+  entropy, clock, key store, signer, HTTP client, retry loop, scheduler, or support row is implied.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

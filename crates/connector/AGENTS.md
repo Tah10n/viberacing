@@ -15,13 +15,19 @@ changing it.
   access, or direct network transport.
 - Never read, retain, log, or transmit prompts, conversations, repositories, Codex credentials,
   account email, or App Server paths.
+- Treat exact sync bodies, daily usage, nonces, and device-signature messages as private security
+  material. Keep their types non-reflective, bind signatures to returned bytes, and match the
+  versioned Ingest authentication policy and shared synthetic vector exactly.
+- Keep source/device/time/nonce context construction inaccessible until a reviewed boundary owns
+  source binding, fresh entropy, canonical time, and replay behavior. An unsigned composer must not
+  grow a key store, signer, scheduler, or network client implicitly.
 - A generated schema proves only the exact Codex CLI version that generated it. Do not mark a
   version supported until its checked-in fixtures and fail-closed compatibility tests pass.
 - Candidate schema/parser evidence is not support. Keep the public matrix empty until the manifest
   has no blockers and executable admission, official-artifact, platform, privacy-egress, packaging,
   and release evidence all pass.
-- Keep process launch, credential storage, upload, and desktop UI outside a parser change unless the
-  task explicitly includes that boundary.
+- Keep executable admission, credential storage, signing, upload, and desktop UI outside a
+  parser/composer change unless the task explicitly includes that boundary.
 
 Run `cargo test --workspace --all-targets --all-features --locked` while developing. Before handoff,
 run the root `pnpm run verify` gate.
