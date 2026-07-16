@@ -957,9 +957,39 @@
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
+      "name": "curve25519-dalek",
+      "version": "5.0.0",
+      "license": "BSD-3-Clause",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "curve25519-dalek-derive",
+      "version": "0.1.1",
+      "license": "MIT/Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
       "name": "digest",
       "version": "0.11.3",
       "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "ed25519",
+      "version": "3.0.0",
+      "license": "Apache-2.0 OR MIT",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "ed25519-dalek",
+      "version": "3.0.0",
+      "license": "BSD-3-Clause",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "fiat-crypto",
+      "version": "0.3.0",
+      "license": "MIT OR Apache-2.0 OR BSD-1-Clause",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
@@ -999,6 +1029,18 @@
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
+      "name": "rustc_version",
+      "version": "0.4.1",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "semver",
+      "version": "1.0.28",
+      "license": "MIT OR Apache-2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
       "name": "serde",
       "version": "1.0.228",
       "license": "MIT OR Apache-2.0",
@@ -1029,6 +1071,18 @@
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
+      "name": "signature",
+      "version": "3.0.0",
+      "license": "Apache-2.0 OR MIT",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "subtle",
+      "version": "2.6.1",
+      "license": "BSD-3-Clause",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
       "name": "syn",
       "version": "2.0.119",
       "license": "MIT OR Apache-2.0",
@@ -1044,6 +1098,12 @@
       "name": "unicode-ident",
       "version": "1.0.24",
       "license": "(MIT OR Apache-2.0) AND Unicode-3.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "zeroize",
+      "version": "1.9.0",
+      "license": "Apache-2.0 OR MIT",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {

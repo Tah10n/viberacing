@@ -7,17 +7,18 @@ dependency.
 
 ## Direct runtime packages
 
-| Component                                                    | Purpose                     | Declared license  |
-| ------------------------------------------------------------ | --------------------------- | ----------------- |
-| [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) | Strict Ed25519 verification | MIT               |
-| [Fastify](https://github.com/fastify/fastify)                | Bounded Ingest HTTP server  | MIT               |
-| [next](https://github.com/vercel/next.js)                    | Web application framework   | MIT               |
-| [pg](https://github.com/brianc/node-postgres)                | PostgreSQL client and pool  | MIT               |
-| [React](https://github.com/facebook/react)                   | User-interface runtime      | MIT               |
-| [react-dom](https://github.com/facebook/react)               | Browser rendering runtime   | MIT               |
-| [RustCrypto SHA-2](https://github.com/RustCrypto/hashes)     | Exact-body SHA-256 digest   | MIT OR Apache-2.0 |
-| [Serde](https://github.com/serde-rs/serde)                   | Closed JSON field mapping   | MIT OR Apache-2.0 |
-| [serde_json](https://github.com/serde-rs/json)               | Bounded JSON parse/compose  | MIT OR Apache-2.0 |
+| Component                                                               | Purpose                     | Declared license  |
+| ----------------------------------------------------------------------- | --------------------------- | ----------------- |
+| [@noble/ed25519](https://github.com/paulmillr/noble-ed25519)            | Strict Ed25519 verification | MIT               |
+| [Dalek Ed25519](https://github.com/dalek-cryptography/curve25519-dalek) | Isolated device signing     | BSD-3-Clause      |
+| [Fastify](https://github.com/fastify/fastify)                           | Bounded Ingest HTTP server  | MIT               |
+| [next](https://github.com/vercel/next.js)                               | Web application framework   | MIT               |
+| [pg](https://github.com/brianc/node-postgres)                           | PostgreSQL client and pool  | MIT               |
+| [React](https://github.com/facebook/react)                              | User-interface runtime      | MIT               |
+| [react-dom](https://github.com/facebook/react)                          | Browser rendering runtime   | MIT               |
+| [RustCrypto SHA-2](https://github.com/RustCrypto/hashes)                | Exact-body SHA-256 digest   | MIT OR Apache-2.0 |
+| [Serde](https://github.com/serde-rs/serde)                              | Closed JSON field mapping   | MIT OR Apache-2.0 |
+| [serde_json](https://github.com/serde-rs/json)                          | Bounded JSON parse/compose  | MIT OR Apache-2.0 |
 
 ## Direct development tools
 
@@ -42,12 +43,13 @@ dependency.
 | [Vitest](https://github.com/vitest-dev/vitest)                              | Unit and component test runner           | MIT              |
 | [YAML](https://eemeli.org/yaml/)                                            | Safe parsing of repository YAML policy   | ISC              |
 
-The connector directly pins Serde and serde_json without derive features plus RustCrypto SHA-2 with
-default features disabled. Its active Windows non-workspace runtime graph contains fourteen crates;
-Cargo.lock also records five `cfg(any())`-only Serde derive-chain packages and target-specific libc
-through CPU-feature detection, for twenty records total. The exact machine inventory remains
-authoritative. `compose.yaml` references an official PostgreSQL image for disposable local
-development; the image is pulled separately and is not redistributed in this source tree.
+The connector directly pins Serde and serde_json without derive features, RustCrypto SHA-2 with
+default features disabled, and Dalek Ed25519 with only zeroization enabled. Its active Windows
+non-workspace runtime graph contains twenty-three crates. Cargo.lock also records five
+`cfg(any())`-only Serde derive-chain packages plus target-specific libc and Fiat-Crypto, for thirty
+records total. The exact machine inventory remains authoritative. `compose.yaml` references an
+official PostgreSQL image for disposable local development; the image is pulled separately and is
+not redistributed in this source tree.
 
 The machine-readable [dependency inventory](docs/reference/dependency-inventory.json) records every
 locked npm package, every future non-workspace Cargo package, and reviewed external CI/container

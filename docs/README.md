@@ -30,10 +30,11 @@ remain safe to publish verbatim.
   supply-chain requirements.
 - [Dependency inventory](reference/dependency-inventory.json) — deterministic locked npm/Cargo and
   external artifact/license evidence.
-- [Connector protocol, candidate adapter, supervisor, and sync composer](../crates/connector/README.md)
+- [Connector protocol, candidate adapter, supervisor, composer, and signer](../crates/connector/README.md)
   — bounded local App Server handshake, exact `0.144.4` account/usage parser, synthetic one-shot
-  process evidence, and exact unsigned sync material behind inaccessible capabilities; no signer,
-  supported release, or operational connector.
+  process evidence, exact sync material, and isolated one-use Ed25519 signing behind inaccessible
+  capabilities; no key generation/store, pairing proof, upload, supported release, or operational
+  connector.
 - [Asset provenance](reference/ASSET_PROVENANCE.md) — generation/source records, integrity digests,
   metadata sanitation, accessibility text, and release-review status for non-code visuals.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary

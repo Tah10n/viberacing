@@ -1,10 +1,11 @@
-# Vibe Racing connector protocol, candidate adapter, supervisor, and sync composer
+# Vibe Racing connector protocol, candidate adapter, supervisor, composer, and signer
 
 This Rust crate contains the fail-closed local Codex App Server initialization boundary and one
 candidate-only account/usage adapter for the exact `0.144.4` schema extract. It also contains a
 bounded one-shot child supervisor behind a reviewed-launch capability with no public constructor. It
-also contains an exact-body unsigned Community sync composer behind a second inaccessible reviewed
-context. It is a library foundation, not a runnable, supported, or released connector.
+also contains an exact-body Community sync composer and isolated one-use Ed25519 signer behind two
+more inaccessible reviewed capabilities. It is a library foundation, not a runnable, supported, or
+released connector.
 
 The implemented surface is deliberately narrow:
 
@@ -30,13 +31,18 @@ The implemented surface is deliberately narrow:
 - fixed manual seven-field JSON serialization, connector/candidate versions, SHA-256 digest, and
   repository-owned unpadded base64url encoding; and
 - the exact eight-field LF-separated device-signature message with no trailing separator, checked
-  against one synthetic vector shared with the production Ingest verifier.
+  against one synthetic vector shared with the production Ingest verifier;
+- an unsigned prepared type with no public accessors, clone, diagnostic, or serialization surface;
+- one consumed device-bound key capability, exact device-ID equality, Ed25519 signing of only that
+  prepared message, and an exact body-plus-five-header signed envelope; and
+- key/body/message drop zeroization plus cross-language verification of the synthetic public key and
+  signature, including rejection of a one-byte message mutation.
 
-`ReviewedCodexLaunch` and `ReviewedCommunitySyncContext` have no public constructors. There is no
-executable discovery, link/ownership review, artifact or version admission, live Codex launch path,
-source/device context provider, trusted clock, entropy source, WebSocket or network transport,
-generic JSON-RPC method, credential-store access, device key, signer, upload, retry loop, scheduler,
-CLI, installer, or release artifact. The checked-in
+`ReviewedCodexLaunch`, `ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public
+constructors. There is no executable discovery, link/ownership review, artifact or version
+admission, live Codex launch path, source/device context provider, trusted clock, entropy source,
+WebSocket or network transport, generic JSON-RPC method, key generation/store, pairing proof,
+upload, retry loop, scheduler, CLI, installer, or release artifact. The checked-in
 [`0.144.4` candidate evidence](../../compat/codex/0.144.4/manifest.json) is development evidence
 only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty until
 official-artifact, executable-admission, platform, privacy, packaging, and release evidence all

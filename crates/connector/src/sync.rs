@@ -1,4 +1,4 @@
-//! Exact-body composition for a future signed Community sync request.
+//! Exact-body composition for an isolated signed Community sync request.
 
 use std::fmt;
 
@@ -7,6 +7,13 @@ use sha2::{Digest, Sha256};
 
 use crate::codex_0_144_4::{CANDIDATE_CODEX_VERSION, valid_reported_date};
 use crate::{DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES, MAX_SYNC_TOKEN_VALUE};
+
+mod signing;
+
+pub use signing::{
+    CandidateCommunitySyncV1Signer, DEVICE_PUBLIC_KEY_BYTES, DEVICE_SIGNATURE_ALGORITHM,
+    DEVICE_SIGNATURE_BYTES, ReviewedDeviceSigningKey, SignedCommunitySync, SyncSigningError,
+};
 
 /// Fixed HTTP method for the version 1 Community sync operation.
 pub const COMMUNITY_SYNC_METHOD: &str = "POST";
@@ -52,11 +59,11 @@ pub struct ReviewedCommunitySyncContext {
     device_nonce: [u8; DEVICE_NONCE_BYTES],
 }
 
-/// Exact unsigned Community sync material ready for a future isolated Ed25519 signer.
+/// Exact unsigned Community sync material ready for the isolated Ed25519 signer.
 ///
 /// The body and signature message contain private usage and security material. This type does not
-/// implement `Debug`, `Display`, `Clone`, or serialization. Its bounded byte accessors exist only
-/// to support a future signer and fixed HTTP transport; callers must not log either byte sequence.
+/// implement `Debug`, `Display`, `Clone`, serialization, or public accessors. It can only be
+/// consumed by [`CandidateCommunitySyncV1Signer`]; callers must not log or transmit it.
 pub struct PreparedCommunitySync {
     body: Vec<u8>,
     device_signature_message: Vec<u8>,
@@ -66,41 +73,10 @@ pub struct PreparedCommunitySync {
     sync_id: String,
 }
 
-impl PreparedCommunitySync {
-    /// Returns the exact JSON bytes whose SHA-256 digest is bound into the signature message.
-    #[must_use]
-    pub fn body(&self) -> &[u8] {
-        &self.body
-    }
-
-    /// Returns the exact LF-separated UTF-8 message for a future Ed25519 signature.
-    #[must_use]
-    pub fn device_signature_message(&self) -> &[u8] {
-        &self.device_signature_message
-    }
-
-    /// Returns the validated public device identifier required by the HTTP header contract.
-    #[must_use]
-    pub fn device_id(&self) -> &str {
-        &self.device_id
-    }
-
-    /// Returns the canonical unpadded base64url device nonce required by the HTTP header contract.
-    #[must_use]
-    pub fn device_nonce(&self) -> &str {
-        &self.device_nonce
-    }
-
-    /// Returns the canonical device timestamp, exactly equal to the body's `observedAt` value.
-    #[must_use]
-    pub fn device_timestamp(&self) -> &str {
-        &self.observed_at
-    }
-
-    /// Returns the idempotency key, exactly equal to the body's `syncId` value.
-    #[must_use]
-    pub fn idempotency_key(&self) -> &str {
-        &self.sync_id
+impl Drop for PreparedCommunitySync {
+    fn drop(&mut self) {
+        self.body.fill(0);
+        self.device_signature_message.fill(0);
     }
 }
 
@@ -144,12 +120,12 @@ pub struct CandidateCommunitySyncV1Composer;
 
 impl CandidateCommunitySyncV1Composer {
     /// Consumes one reviewed context and minimized daily usage into bounded unsigned request
-    /// material.
+    /// material for the isolated signer.
     ///
     /// The body uses the fixed connector crate version and candidate Codex `0.144.4` version. The
     /// SHA-256 digest is calculated over the exact returned body bytes, then bound into the exact
     /// version 1 LF-separated message. No key is loaded and no signature, HTTP request, persistence,
-    /// log, or network operation is created.
+    /// key-store access, HTTP request, persistence, log, or network operation is created.
     ///
     /// # Errors
     ///
@@ -377,7 +353,9 @@ mod tests {
     const SYNC_ID: &str = "syn_BBBBBBBBBBBBBBBBBBBBBB";
     const OBSERVED_AT: &str = "2026-07-15T12:34:56.789Z";
     const DEVICE_ID: &str = "dev_CCCCCCCCCCCCCCCCCCCCCC";
+    const OTHER_DEVICE_ID: &str = "dev_DDDDDDDDDDDDDDDDDDDDDD";
     const EXPECTED_NONCE: &str = "AAECAwQFBgcICQoLDA0ODw";
+    const TEST_SIGNING_KEY_LABEL: &[u8] = b"viberacing-test-only-device-signing-key-v1";
 
     type ContextMutation = fn(&mut ReviewedCommunitySyncContext);
 
@@ -429,6 +407,13 @@ mod tests {
         )
     }
 
+    fn test_signing_key(device_id: &str) -> ReviewedDeviceSigningKey {
+        let digest = Sha256::digest(TEST_SIGNING_KEY_LABEL);
+        let mut secret_key = [0_u8; ed25519_dalek::SECRET_KEY_LENGTH];
+        secret_key.copy_from_slice(&digest);
+        ReviewedDeviceSigningKey::for_test(device_id, secret_key)
+    }
+
     fn shared_test_vector() -> Value {
         serde_json::from_str(include_str!(
             "../../../contracts/v1/connector-sync-device-request.test-vector.json"
@@ -465,21 +450,100 @@ mod tests {
             serde_json::json!(sequential_nonce())
         );
         assert_eq!(vector["deviceNonceBase64Url"], EXPECTED_NONCE);
-        assert_eq!(prepared.body(), expected_body.as_bytes());
+        assert_eq!(prepared.body, expected_body.as_bytes());
         assert_eq!(
-            encode_base64url(Sha256::digest(prepared.body()).as_ref()),
+            encode_base64url(Sha256::digest(&prepared.body).as_ref()),
             expected_digest
         );
         assert_eq!(
-            prepared.device_signature_message(),
+            prepared.device_signature_message,
             expected_message.as_bytes()
         );
-        assert_eq!(prepared.device_id(), DEVICE_ID);
-        assert_eq!(prepared.device_nonce(), EXPECTED_NONCE);
-        assert_eq!(prepared.device_timestamp(), OBSERVED_AT);
-        assert_eq!(prepared.idempotency_key(), SYNC_ID);
-        assert!(prepared.body().len() <= MAX_COMMUNITY_SYNC_BODY_BYTES);
-        assert!(!prepared.device_signature_message().ends_with(b"\n"));
+        assert_eq!(prepared.device_id, DEVICE_ID);
+        assert_eq!(prepared.device_nonce, EXPECTED_NONCE);
+        assert_eq!(prepared.observed_at, OBSERVED_AT);
+        assert_eq!(prepared.sync_id, SYNC_ID);
+        assert!(prepared.body.len() <= MAX_COMMUNITY_SYNC_BODY_BYTES);
+        assert!(!prepared.device_signature_message.ends_with(b"\n"));
+    }
+
+    #[test]
+    fn signs_the_exact_shared_device_request_vector() {
+        let prepared = CandidateCommunitySyncV1Composer::compose(
+            ReviewedCommunitySyncContext::for_test(),
+            standard_usage(),
+        )
+        .expect("reviewed synthetic inputs must compose");
+        let key = test_signing_key(DEVICE_ID);
+        let public_key = encode_base64url(&key.verifying_key_bytes());
+        let signed = CandidateCommunitySyncV1Signer::sign(key, prepared)
+            .expect("device-bound synthetic key must sign");
+
+        let vector = shared_test_vector();
+        let expected_body = vector["body"]
+            .as_str()
+            .expect("shared vector body must be a string");
+        assert_eq!(
+            public_key,
+            vector["devicePublicKeyBase64Url"]
+                .as_str()
+                .expect("shared vector public key must be a string")
+        );
+        assert_eq!(
+            signed.device_signature(),
+            vector["deviceSignatureBase64Url"]
+                .as_str()
+                .expect("shared vector signature must be a string")
+        );
+        assert_eq!(signed.body(), expected_body.as_bytes());
+        assert_eq!(signed.device_id(), DEVICE_ID);
+        assert_eq!(signed.device_nonce(), EXPECTED_NONCE);
+        assert_eq!(signed.device_timestamp(), OBSERVED_AT);
+        assert_eq!(signed.idempotency_key(), SYNC_ID);
+    }
+
+    #[test]
+    fn rejects_a_key_bound_to_another_device_without_reflection() {
+        let prepared = CandidateCommunitySyncV1Composer::compose(
+            ReviewedCommunitySyncContext::for_test(),
+            standard_usage(),
+        )
+        .expect("reviewed synthetic inputs must compose");
+        let error =
+            CandidateCommunitySyncV1Signer::sign(test_signing_key(OTHER_DEVICE_ID), prepared)
+                .err()
+                .expect("a differently bound key must fail closed");
+
+        assert_eq!(error, SyncSigningError::DeviceBindingMismatch);
+        assert!(!error.to_string().contains(DEVICE_ID));
+        assert!(!error.to_string().contains(OTHER_DEVICE_ID));
+        assert!(!format!("{error:?}").contains(DEVICE_ID));
+        assert!(!format!("{error:?}").contains(OTHER_DEVICE_ID));
+    }
+
+    #[test]
+    fn different_production_parsed_usage_changes_the_signature() {
+        let first = CandidateCommunitySyncV1Signer::sign(
+            test_signing_key(DEVICE_ID),
+            CandidateCommunitySyncV1Composer::compose(
+                ReviewedCommunitySyncContext::for_test(),
+                usage_from_buckets("[{\"startDate\":\"2026-07-14\",\"tokens\":456}]"),
+            )
+            .expect("first usage must compose"),
+        )
+        .expect("first usage must sign");
+        let second = CandidateCommunitySyncV1Signer::sign(
+            test_signing_key(DEVICE_ID),
+            CandidateCommunitySyncV1Composer::compose(
+                ReviewedCommunitySyncContext::for_test(),
+                usage_from_buckets("[{\"startDate\":\"2026-07-14\",\"tokens\":457}]"),
+            )
+            .expect("second usage must compose"),
+        )
+        .expect("second usage must sign");
+
+        assert_ne!(first.body(), second.body());
+        assert_ne!(first.device_signature(), second.device_signature());
     }
 
     #[test]
@@ -553,7 +617,7 @@ mod tests {
         leap_day.observed_at = "2024-02-29T00:00:00.000Z".to_owned();
         let prepared = CandidateCommunitySyncV1Composer::compose(leap_day, standard_usage())
             .expect("canonical leap-day timestamp must be admitted");
-        assert_eq!(prepared.device_timestamp(), "2024-02-29T00:00:00.000Z");
+        assert_eq!(prepared.observed_at, "2024-02-29T00:00:00.000Z");
     }
 
     #[test]
@@ -580,9 +644,9 @@ mod tests {
             maximum,
         )
         .expect("maximum contract usage must fit the transport body budget");
-        assert!(prepared.body().len() <= MAX_COMMUNITY_SYNC_BODY_BYTES);
+        assert!(prepared.body.len() <= MAX_COMMUNITY_SYNC_BODY_BYTES);
         assert_eq!(
-            serde_json::from_slice::<Value>(prepared.body())
+            serde_json::from_slice::<Value>(&prepared.body)
                 .expect("prepared bytes must remain JSON")["dailyEntries"]
                 .as_array()
                 .expect("daily entries must be an array")
@@ -618,6 +682,18 @@ mod tests {
         assert_eq!(
             policy["deviceSignature"]["messagePrefix"],
             DEVICE_SIGNATURE_MESSAGE_PREFIX
+        );
+        assert_eq!(
+            policy["deviceSignature"]["algorithm"],
+            DEVICE_SIGNATURE_ALGORITHM
+        );
+        assert_eq!(
+            policy["deviceSignature"]["publicKeyBytes"],
+            DEVICE_PUBLIC_KEY_BYTES
+        );
+        assert_eq!(
+            policy["deviceSignature"]["signatureBytes"],
+            DEVICE_SIGNATURE_BYTES
         );
         assert_eq!(policy["deviceSignature"]["nonceBytes"], DEVICE_NONCE_BYTES);
         assert_eq!(

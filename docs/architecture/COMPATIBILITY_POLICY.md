@@ -57,11 +57,13 @@ under the sync bounds. The candidate manifest records release metadata, full gen
 digests, minimal extracts, fixtures, and unresolved blockers. A one-shot supervisor now composes
 those exact state machines through a fixed `app-server` argument, local pipes, a capability-owned
 working directory/environment, bounded output/time, and reap-before-success cleanup. The capability
-has no public constructor. A second inaccessible reviewed context now permits exact unsigned
+has no public constructor. A second inaccessible reviewed context now permits exact
 `ConnectorSyncV1` body, SHA-256 digest, nonce, and device-message composition from that candidate
-output. The library still cannot discover or admit an executable, construct either context, execute
-the selected official artifact, store a key, sign, upload, negotiate support, or alter the empty
-matrix. ADRs 0021 through 0024 record those distinctions.
+output. An isolated one-use signer consumes that otherwise inaccessible material only with a third
+inaccessible device-bound key capability and returns the same body plus five signed header values.
+The library still cannot discover or admit an executable, construct any capability, execute the
+selected official artifact, generate/load a real key, prove pairing, upload, negotiate support, or
+alter the empty matrix. ADRs 0021 through 0025 record those distinctions.
 
 Generated schema output is exact to the Codex version that produced it. The repository commits only
 reviewed relevant schema extracts and synthetic fixtures, not account data or a developer's local

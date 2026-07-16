@@ -1,6 +1,6 @@
 # ADR 0024: Bounded candidate Community sync composer
 
-- Status: Accepted (unsigned library boundary; device context and signer pending)
+- Status: Accepted (unsigned composition boundary; consumed by ADR 0025 signer)
 - Date: 2026-07-15
 - Decision owners: Connector, Ingest, Security, Privacy, Compatibility, and Release
 - Supersedes: None
@@ -46,10 +46,11 @@ For that already-reviewed input, the composer:
 - returns `PreparedCommunitySync`, containing only the bounded body, signing message, and four
   already-validated unsigned HTTP header values.
 
-`PreparedCommunitySync` has bounded read-only accessors but no `Debug`, `Display`, `Clone`, or
-serialization implementation. The composer and error type do not accept or reflect arbitrary fields.
-They load no key, generate no randomness or time, create no signature or header map, open no file or
-credential store, retain no log, and perform no network or process operation.
+At acceptance, `PreparedCommunitySync` had bounded read-only accessors but no `Debug`, `Display`,
+`Clone`, or serialization implementation. ADR 0025 removes every public accessor so only its
+isolated signer can consume it. The composer and error type do not accept or reflect arbitrary
+fields. They load no key, generate no randomness or time, create no signature or header map, open no
+file or credential store, retain no log, and perform no network or process operation.
 
 A synthetic language-neutral vector under `contracts/v1` fixes the exact JSON bytes, SHA-256 digest,
 nonce encoding, and device message. Rust produces those bytes from the real handshake/account/usage
@@ -59,7 +60,7 @@ digest and canonical message through production TypeScript code.
 ## Security and privacy consequences
 
 The body and signing message contain private per-day usage plus opaque source/device identifiers and
-replay material. They remain transient caller-owned memory and are deliberately excluded from
+replay material. They remain transient capability-owned memory and are deliberately excluded from
 diagnostics, logs, persistence, fixtures derived from users, and network sinks. The shared vector
 uses only obvious synthetic identifiers and values. Exact-body hashing prevents a signer from
 authorizing one body while transport submits another; fixed source/device/time/nonce/idempotency
@@ -100,16 +101,16 @@ and cross-language tests. Rollback removes the composer exports/module/vector an
 dependency; the upstream parser, process supervisor, public sync contract, and Ingest verifier
 remain valid independent boundaries.
 
-The next source/device slice may construct `ReviewedCommunitySyncContext` only after it documents
-source binding, identifier and nonce generation, clock behavior, storage lifetime, and failure
-recovery. A signer must consume the exact message without logging or serializing the body again and
-must not make this candidate Codex version supported.
+ADR 0025 now consumes this exact message behind an inaccessible one-use signing-key capability. The
+next source/device slice may construct `ReviewedCommunitySyncContext` only after it documents source
+binding, identifier and nonce generation, clock behavior, storage lifetime, and failure recovery.
+Key storage and transport must not make this candidate Codex version supported.
 
 ## Verification
 
 Six Rust unit cases prove:
 
-- exact body bytes, SHA-256 digest, unpadded base64url nonce, LF message, and accessor values
+- exact body bytes, SHA-256 digest, unpadded base64url nonce, LF message, and owned header values
   against the shared vector;
 - rejection of invalid source, sync, time, device, empty-usage, and bound violations with stable
   non-reflective errors;
@@ -120,8 +121,9 @@ The Rust cases obtain every `DailyUsage` value through the production handshake 
 account/usage parser. One Ingest test independently validates the shared body through the generated
 runtime contract and production digest/message functions. Root verification additionally checks all
 Rust targets/features, Clippy with warnings denied, 100% Ingest coverage, generated contract drift,
-architecture documentation, license inventory, and public-data safety. None of this evidence signs,
-uploads, executes an official Codex artifact, or establishes support.
+architecture documentation, license inventory, and public-data safety. These six composer cases do
+not sign; ADR 0025 separately adds synthetic signing evidence. Neither boundary uploads, executes an
+official Codex artifact, or establishes support.
 
 ## References
 

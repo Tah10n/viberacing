@@ -19,15 +19,16 @@ changing it.
   material. Keep their types non-reflective, bind signatures to returned bytes, and match the
   versioned Ingest authentication policy and shared synthetic vector exactly.
 - Keep source/device/time/nonce context construction inaccessible until a reviewed boundary owns
-  source binding, fresh entropy, canonical time, and replay behavior. An unsigned composer must not
-  grow a key store, signer, scheduler, or network client implicitly.
+  source binding, fresh entropy, canonical time, and replay behavior. The composer/signer boundary
+  must not grow a context provider, key generator/store, pairing client, scheduler, or network
+  client implicitly.
 - A generated schema proves only the exact Codex CLI version that generated it. Do not mark a
   version supported until its checked-in fixtures and fail-closed compatibility tests pass.
 - Candidate schema/parser evidence is not support. Keep the public matrix empty until the manifest
   has no blockers and executable admission, official-artifact, platform, privacy-egress, packaging,
   and release evidence all pass.
-- Keep executable admission, credential storage, signing, upload, and desktop UI outside a
-  parser/composer change unless the task explicitly includes that boundary.
+- Keep executable admission, credential generation/storage, pairing, upload, and desktop UI outside
+  a parser/composer/signer change unless the task explicitly includes that boundary.
 
 Run `cargo test --workspace --all-targets --all-features --locked` while developing. Before handoff,
 run the root `pnpm run verify` gate.

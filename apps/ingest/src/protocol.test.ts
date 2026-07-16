@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 
+import { verifyAsync as verifyEd25519Strict } from "@noble/ed25519";
 import { validateConnectorSyncV1 } from "@viberacing/contracts";
 import { describe, expect, it } from "vitest";
 
@@ -216,7 +217,7 @@ describe("canonical Community sync protocol", () => {
     );
   });
 
-  it("matches the shared Rust exact-body device request vector", () => {
+  it("matches and verifies the shared Rust exact-body device request vector", async () => {
     const vector = JSON.parse(
       readFileSync(
         new URL(
@@ -231,6 +232,8 @@ describe("canonical Community sync protocol", () => {
       deviceId: string;
       deviceNonceBase64Url: string;
       deviceNonceBytes: readonly number[];
+      devicePublicKeyBase64Url: string;
+      deviceSignatureBase64Url: string;
       deviceSignatureMessage: string;
       observedAt: string;
       schemaVersion: number;
@@ -258,6 +261,25 @@ describe("canonical Community sync protocol", () => {
       }).toString("utf8"),
     ).toBe(vector.deviceSignatureMessage);
     expect((parsedBody as Readonly<{ sourceId?: unknown }>).sourceId).toBe(vector.sourceId);
+
+    const publicKey = decodeCanonicalBase64Url(
+      vector.devicePublicKeyBase64Url,
+      devicePublicKeyBytes,
+    );
+    const signature = decodeCanonicalBase64Url(
+      vector.deviceSignatureBase64Url,
+      deviceSignatureBytes,
+    );
+    if (publicKey === undefined || signature === undefined) {
+      throw new Error("shared device signature vector must use canonical fixed-length values");
+    }
+    const message = Buffer.from(vector.deviceSignatureMessage, "utf8");
+    expect(await verifyEd25519Strict(signature, message, publicKey, { zip215: false })).toBe(true);
+    expect(
+      await verifyEd25519Strict(signature, Buffer.concat([message, Buffer.from("\n")]), publicKey, {
+        zip215: false,
+      }),
+    ).toBe(false);
   });
 
   it("keeps protocol identifiers inside their closed alphabets", () => {

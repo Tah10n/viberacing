@@ -32,10 +32,13 @@ supervisor composes those exact states through fixed local pipes, a fixed child 
 environment, bounded stdout/stderr/time, terminal-event draining, and reap-before-success cleanup.
 An inaccessible reviewed sync context now lets a candidate-only composer consume those minimized
 entries into the exact bounded JSON body, SHA-256 digest, nonce encoding, and device-signature
-message shared with the production Ingest verifier. It creates no context, key, signature, header
-map, or network request. Candidate release, schema, fixture, synthetic-process, and
-unsigned-composer evidence does not populate the support matrix. Phase 0 hosted-publication controls
-remain blocked on real maintainer identities and GitHub configuration. No authentication route,
+message shared with the production Ingest verifier. An isolated one-use signer removes public
+unsigned access, consumes that value only with an inaccessible device-bound key capability, and
+returns the same body plus five exact signed header values. The shared synthetic vector is strictly
+verified across Rust and Ingest. It creates no context or real key, proves no pairing, and opens no
+network request. Candidate release, schema, fixture, synthetic-process, composer, and signer
+evidence does not populate the support matrix. Phase 0 hosted-publication controls remain blocked on
+real maintainer identities and GitHub configuration. No authentication route,
 OAuth/Argon2id/WebAuthn application flow, production secret-manager/edge key injection, Ingest
 host/port/TLS deployment entry point, production deployment, live Web/Jobs/Ingest database login/TLS
 integration, released or operational connector, supported Codex version, real-user ingestion,
@@ -65,7 +68,7 @@ end-to-end public ranking, or finalization scheduler exists.
 - An offline external-link gate with 12 reviewed hosts, HTTPS/credential/port/query/address rules,
   no dormant host permissions, and eight black-box cases. A separate online mode pins public DNS
   results, sends no credentials, follows no redirects, and is excluded from deterministic PR CI.
-- A deterministic dependency inventory covering 499 locked npm packages, twenty Cargo dependencies,
+- A deterministic dependency inventory covering 499 locked npm packages, thirty Cargo dependencies,
   two pinned GitHub Actions, and one pinned local-development container. License expressions,
   installed manifests, every root/workspace importer, dependency scopes, direct notices, and
   external-artifact usage are checked with ten black-box cases.
@@ -126,15 +129,19 @@ end-to-end public ranking, or finalization scheduler exists.
   overload before and after the final response, non-reflection, missing executable, nonzero terminal
   status, and forced cleanup. The opaque launch capability has no public constructor: there is no
   executable discovery/path-ownership review, official-artifact execution, supported Codex version,
-  device key, upload, network transport, CLI, installer, or released binary. A separate
-  candidate-only composer consumes the real parser output behind another capability with no public
-  constructor. It revalidates source/sync/device IDs, canonical UTC time, and daily bounds; manually
-  emits the exact seven-field body; computes the SHA-256 digest; and builds the exact unpadded
-  base64url, LF-separated device message. Six Rust cases plus one production-path Ingest case share
-  an exact synthetic vector. No source/device context provider, fresh entropy, clock, key store,
-  signer, transport, retry, schedule, or support claim exists; the compatibility matrix remains
-  empty.
-- An ADR lifecycle/template and twenty-four accepted design decisions covering Community trust,
+  real device key generation/store, pairing proof, upload, network transport, CLI, installer, or
+  released binary. A separate candidate-only composer consumes the real parser output behind another
+  capability with no public constructor. It revalidates source/sync/device IDs, canonical UTC time,
+  and daily bounds; manually emits the exact seven-field body; computes the SHA-256 digest; and
+  builds the exact unpadded base64url, LF-separated device message. An isolated one-use signer
+  consumes that otherwise inaccessible value with a device-bound Ed25519 key capability, rejects an
+  exact device mismatch, signs only the fixed message, and returns the same body plus five header
+  values. Nine Rust sync cases plus one production-path Ingest case share and strictly verify an
+  exact synthetic body, public-key, and signature vector. Prepared/signed private byte buffers and
+  the upstream key are zeroed on drop. No source/device context provider, fresh entropy, clock, real
+  key generation/store, pairing proof, transport, retry, schedule, or support claim exists; the
+  compatibility matrix remains empty.
+- An ADR lifecycle/template and twenty-five accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -142,7 +149,8 @@ end-to-end public ranking, or finalization scheduler exists.
   least-privileged Ingest PostgreSQL adapter, protected origin-proof key configuration, persistent
   atomic origin replay, transport-free Community sync application composition, and the bounded local
   Fastify HTTP boundary, plus the fail-closed Codex handshake, candidate account/usage adapter, and
-  inaccessible bounded one-shot process supervisor and unsigned exact-body sync composer.
+  inaccessible bounded one-shot process supervisor, exact-body sync composer, and isolated one-use
+  device signing boundary.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.

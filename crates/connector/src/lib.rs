@@ -2,9 +2,10 @@
 //!
 //! This crate implements the stable initialization exchange, a candidate-only account/usage
 //! adapter for one exact schema extract, a bounded one-shot child supervisor, and an exact-body
-//! Community sync composer. Both operational inputs remain behind capabilities with no public
-//! constructor. The crate does not discover or admit a Codex executable, sign or upload usage,
-//! expose a generic JSON-RPC client, or claim compatibility with any Codex release.
+//! Community sync composer and isolated one-use signer. All operational inputs remain behind
+//! capabilities with no public constructor. The crate does not discover or admit a Codex
+//! executable, generate or load device keys, upload usage, expose a generic JSON-RPC client, or
+//! claim compatibility with any Codex release.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -28,9 +29,11 @@ pub use process::{
 };
 pub use sync::{
     COMMUNITY_SYNC_MEDIA_TYPE, COMMUNITY_SYNC_METHOD, COMMUNITY_SYNC_REQUEST_TARGET,
-    CandidateCommunitySyncV1Composer, DEVICE_NONCE_BYTES, DEVICE_SIGNATURE_MESSAGE_PREFIX,
-    MAX_COMMUNITY_SYNC_BODY_BYTES, PreparedCommunitySync, ReviewedCommunitySyncContext,
-    SyncPreparationError,
+    CandidateCommunitySyncV1Composer, CandidateCommunitySyncV1Signer, DEVICE_NONCE_BYTES,
+    DEVICE_PUBLIC_KEY_BYTES, DEVICE_SIGNATURE_ALGORITHM, DEVICE_SIGNATURE_BYTES,
+    DEVICE_SIGNATURE_MESSAGE_PREFIX, MAX_COMMUNITY_SYNC_BODY_BYTES, PreparedCommunitySync,
+    ReviewedCommunitySyncContext, ReviewedDeviceSigningKey, SignedCommunitySync,
+    SyncPreparationError, SyncSigningError,
 };
 
 /// Maximum accepted App Server JSONL frame size, including its final line-feed byte.

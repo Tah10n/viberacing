@@ -8,5 +8,7 @@
   "deviceNonceBase64Url": "AAECAwQFBgcICQoLDA0ODw",
   "body": "{\"schemaVersion\":1,\"sourceId\":\"src_AAAAAAAAAAAAAAAAAAAAAA\",\"syncId\":\"syn_BBBBBBBBBBBBBBBBBBBBBB\",\"observedAt\":\"2026-07-15T12:34:56.789Z\",\"connectorVersion\":\"0.0.0\",\"codexVersion\":\"0.144.4\",\"dailyEntries\":[{\"codexReportedDate\":\"2026-07-13\",\"tokens\":123},{\"codexReportedDate\":\"2026-07-14\",\"tokens\":456}]}",
   "bodyDigestBase64Url": "RcwgZjfhFt_ZeSBg84XR_ZX3IQSFXuqrYZKzs2j1FGM",
-  "deviceSignatureMessage": "viberacing-device-request-v1\nPOST\n/v1/community/sync\nRcwgZjfhFt_ZeSBg84XR_ZX3IQSFXuqrYZKzs2j1FGM\ndev_CCCCCCCCCCCCCCCCCCCCCC\nAAECAwQFBgcICQoLDA0ODw\n2026-07-15T12:34:56.789Z\nsyn_BBBBBBBBBBBBBBBBBBBBBB"
+  "deviceSignatureMessage": "viberacing-device-request-v1\nPOST\n/v1/community/sync\nRcwgZjfhFt_ZeSBg84XR_ZX3IQSFXuqrYZKzs2j1FGM\ndev_CCCCCCCCCCCCCCCCCCCCCC\nAAECAwQFBgcICQoLDA0ODw\n2026-07-15T12:34:56.789Z\nsyn_BBBBBBBBBBBBBBBBBBBBBB",
+  "devicePublicKeyBase64Url": "9CmK9x_bL0OFX7PoJm34QnhUdpUWaiwEiDZ2lrUJaII",
+  "deviceSignatureBase64Url": "Hk4Stg22dX5FgJJNw3sRIOWqKF6o4RIfdDPktaVKZMKbhyW9SsUOGWNP3H0YhsAxGXQVhfcvIyxAAea3TpCrCQ"
 }

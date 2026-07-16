@@ -108,31 +108,41 @@ The Rust compiler is pinned in `rust-toolchain.toml`; the workspace uses a commi
 Once a crate exists, the root Rust gate automatically runs formatting, all-target/all-feature
 checking, tests, and Clippy with warnings denied.
 
-The connector protocol foundation directly pins `serde@1.0.228` without derive, `serde_json@1.0.150`
-for its closed JSON boundaries, and `sha2@0.11.0` with default features disabled for exactly one
-SHA-256 digest over the candidate Community sync body's returned bytes. The project does not
-implement its own digest primitive, enable optional object-identifier/allocator features, or expose
-a generic hashing API.
+The connector protocol foundation directly pins `serde@1.0.228` without derive and
+`serde_json@1.0.150` for its closed JSON boundaries. Exact-body composition pins `sha2@0.11.0` with
+default features disabled for one SHA-256 digest over the returned body bytes. Isolated device
+signing pins `ed25519-dalek@3.0.0` with default features disabled and only `zeroize` enabled. The
+project does not implement cryptographic primitives, expose generic hashing/signing APIs, or enable
+Dalek allocation, batch, digest, fast-table, hazmat, legacy-compatibility, PKCS8/PEM, random-key,
+Serde, or prehash features.
 
-Cargo.lock records twenty non-workspace packages. The enabled Windows runtime tree contains
-fourteen: Serde, serde_core, serde_json, itoa, memchr, zmij, sha2, cfg-if, cpufeatures, digest,
-block-buffer, crypto-common, hybrid-array, and typenum. The complete cross-target graph additionally
-records the five Serde derive/proc-macro packages retained by impossible `cfg(any())` metadata and
-target-specific libc through CPU-feature detection. All twenty records use `MIT OR Apache-2.0` or
-another already approved permissive expression. All exact registry provenance, checksums, active
-feature edges, upstream unsafe surface, and build scripts were reviewed. The new digest graph is
-pure Rust; its unsafe surface is confined upstream to reviewed array/block-buffer and hardware
-feature/dispatch internals. Repository-owned connector code remains `#![forbid(unsafe_code)]`.
+Cargo.lock records thirty non-workspace packages. The enabled Windows runtime tree contains
+twenty-three: the prior fourteen JSON/digest records plus ed25519-dalek, curve25519-dalek,
+curve25519-dalek-derive, ed25519, signature, subtle, zeroize, rustc_version, and semver. The
+complete cross-target graph additionally records the five Serde derive/proc-macro packages retained
+by impossible `cfg(any())` metadata, target-specific libc through CPU-feature detection, and
+target-specific Fiat-Crypto. All thirty records use reviewed permissive expressions; the Dalek slice
+adds BSD-3-Clause, `Apache-2.0 OR MIT`, `MIT/Apache-2.0`, and `MIT OR Apache-2.0 OR BSD-1-Clause`
+declarations to the exact Cargo allowlist.
 
-No new record provides a network client. Reviewed active scripts only inspect the pinned
-compiler/target or generate internal `OUT_DIR` source; the cross-target libc script performs
-compiler/platform capability probes and does not download or link a bundled native library. Exact
-OSV queries on 2026-07-15 reported no known advisory for the prior eleven records or the nine new
-digest-graph records. The historical SHA-2 `0.9.7` miscomputation advisory is patched from `0.9.8`
-and does not affect the pinned `0.11.0`. This is point-in-time evidence, not a permanent safety
-claim. The dependency must be removed with the composer or re-reviewed with every update or future
-crypto-provider change; automated RustSec/cargo-deny release enforcement, SBOM, and binary audit
-remain required before connector distribution.
+All exact registry provenance, checksums, active feature edges, upstream unsafe surface, and build
+scripts were reviewed. The Ed25519 graph is pure Rust and reuses the existing SHA-2 0.11 graph. Its
+only active build script reads the pinned compiler and Cargo target capabilities to select a local
+curve backend; it neither downloads nor links a bundled native library. Reviewed upstream unsafe is
+confined to curve constants/SIMD intrinsics, generated dispatch glue, constant-time helpers, and
+zeroization's volatile memory operations. Repository-owned connector code remains
+`#![forbid(unsafe_code)]`. No new record provides a runtime network client, credential reader,
+serializer, key generator, persistent store, or transport.
+
+The maintained upstream 3.0.0 release was more than 24 hours old on review, supports the pinned Rust
+toolchain, and avoids a duplicate legacy digest graph. Exact OSV queries on 2026-07-15 reported no
+known advisory for any of the ten added lock records. The historical ed25519-dalek keypair-oracle
+advisory affects pre-2.0 versions and does not affect 3.0.0; the historical SHA-2 0.9.7
+miscomputation advisory is patched from 0.9.8 and does not affect 0.11.0. This is point-in-time
+evidence, not a permanent safety claim. SHA-2 must be removed with the composer and Dalek with the
+signer, or each must be re-reviewed on update or crypto-provider change. Automated
+RustSec/cargo-deny release enforcement, SBOM, and binary audit remain required before connector
+distribution.
 
 The Node CI job performs the public-file scan first, installs the pinned minimal Rust toolchain, and
 runs `cargo fetch --locked` before deterministic repository verification. Fetch resolves only the

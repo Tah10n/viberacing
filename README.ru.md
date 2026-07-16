@@ -123,11 +123,13 @@ metadata, schema digests, minimal extracts, fixtures и drift/matrix checker, н
 reap-before-success cleanup. У reviewed-launch capability нет публичного constructor. Второй
 недоступный reviewed context теперь позволяет candidate composer превратить минимизированные записи
 в точные `ConnectorSyncV1` JSON, SHA-256 digest, unpadded base64url nonce и LF-separated
-device-signature message. Общий synthetic vector сверяет эти байты с production Ingest verifier, но
-не создаёт ключ или подпись. Поэтому executable discovery, link/path ownership и artifact/version
+device-signature message. Изолированный one-use signer потребляет этот закрытый материал вместе с
+таким же недоступным device-bound Ed25519 key capability и возвращает только то же body и пять
+точных header values. Общий synthetic vector проверяет exact public key/signature между Rust и
+production Ingest verifier. Поэтому executable discovery, link/path ownership и artifact/version
 admission, реальный запуск Codex, cross-platform evidence, source/device context provider, secure
-device key, signer, signed upload, operational connector, live database connection, load evidence и
-deployment всё ещё отсутствуют.
+key generation/store, pairing proof, signed upload, operational connector, live database connection,
+load evidence и deployment всё ещё отсутствуют.
 
 Также добавлены двенадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,

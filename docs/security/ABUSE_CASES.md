@@ -139,8 +139,11 @@ material availability cost.
   path, compares the lookup source, and rejects the observed zero-key/zero-signature bypass. The
   local adapter proves the fixed lookup/submission mapping and relies on the procedure to close a
   revoke race. A signed synthetic request now proves the transport-free verifier-to-adapter order,
-  settlement, and generic acknowledgement through a mock pool. OS key storage, rotation, metrics,
-  HTTP controls, live login, and the live verifier-to-PostgreSQL path remain unimplemented.
+  settlement, and generic acknowledgement through a mock pool. The connector's isolated one-use
+  signer now consumes an inaccessible device-bound capability, rejects a different device ID, signs
+  only the exact prepared message, and shares a strictly verified synthetic signature with Ingest.
+  OS key generation/storage, pairing proof, rotation, metrics, connector HTTP transport, live login,
+  and the live verifier-to-PostgreSQL path remain unimplemented.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity.
 
@@ -180,12 +183,15 @@ material availability cost.
   supervisor now uses one fixed `app-server` argument, local pipes, a capability-owned working
   directory and allowlisted environment with ambient variables cleared, three bounded stdout frames,
   discard-only bounded stderr, fixed response/lifetime deadlines, terminal-event draining, and
-  reap-before-success cleanup. An unsigned composer then accepts only production-normalized usage
-  and an inaccessible reviewed context, revalidates every body and unsigned device-header input it
-  owns, and fixes the exact JSON/digest/device-message bytes shared with Ingest without loading a
-  key or opening a network path. The operational connector still requires a user-scoped install,
-  resolved trusted binary path, link/ownership and artifact/version admission, public construction
-  of that exact capability, safe diagnostics, platform evidence, and the existing egress allowlist.
+  reap-before-success cleanup. A composer then accepts only production-normalized usage and an
+  inaccessible reviewed context, revalidates every body and unsigned device-header input it owns,
+  and fixes the exact JSON/digest/device-message bytes shared with Ingest. An isolated one-use
+  signer removes public unsigned access, rejects a key capability bound to another device, signs
+  only the fixed message, and returns the same body plus five header values without opening a
+  network path. The operational connector still requires a user-scoped install, resolved trusted
+  binary path, link/ownership and artifact/version admission, reviewed construction of all three
+  capabilities, OS key generation/storage, pairing proof, safe diagnostics, platform evidence, and
+  the existing egress allowlist.
 - **Detection:** Local safe diagnostics for selected binary/version, bounded failure reason, and
   child cleanup verification without uploading content.
 - **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified
@@ -194,8 +200,9 @@ material availability cost.
   diagnostics reduce accidental compromise, not owner control. Candidate schema/parser tests do not
   prove selected-artifact provenance, real Codex execution, cross-platform behavior, or release
   integrity. The synthetic supervisor tests prove bounded mechanics only and do not make the version
-  supported. The shared sync vector proves byte agreement only; it does not prove fresh entropy,
-  clock correctness, key custody, signature creation, transport, or real-user privacy.
+  supported. The shared signed sync vector proves synthetic byte and cryptographic agreement only;
+  it does not prove fresh entropy, clock correctness, real key custody/pairing, transport, or
+  real-user privacy.
 
 ## Web, privacy, and content abuse
 

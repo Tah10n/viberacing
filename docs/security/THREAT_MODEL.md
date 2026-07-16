@@ -14,21 +14,23 @@ plus PostgreSQL-adapter, transport-free composition, and bounded Fastify HTTP bo
 not yet contain a deployed Ingest service, Jobs scheduler, operational connector, deployment, or
 production data. A library-only Rust connector foundation now bounds and validates the stable App
 Server initialization and candidate account/usage exchanges, then composes them through a synthetic
-one-shot child supervisor and produces exact unsigned sync material behind a second inaccessible
-reviewed context. Neither capability has a public constructor, so the library cannot discover,
-admit, or execute a local Codex binary or create a real source/device/time/nonce context. Its
-database-only Community ingest and bounded ingest-retention boundaries have synthetic executable
-evidence. The kernel has raw-envelope, origin-proof, bounded-parser, contract, and strict
-device-signature evidence; the adapter has configuration, fixed-query, role-probe, mapper, and
-failure evidence with mock pools. A local server factory now has loopback framing and injection
-evidence, but no live HTTP edge, host/port/TLS deployment entry point, or working database login/TLS
-connection. One signed synthetic request now exercises their required local composition through a
-mock pool and validated result/problem decisions. The public score route has request/response,
-admission, and production-build evidence, and the Jobs runner has strict
-command/config/pool/role/result evidence; neither has a live database login, edge, scheduler, or
-network deployment. Controls below are marked **implemented** only when executable evidence exists
-in [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements,
-not security claims about the current tree.
+one-shot child supervisor and produces exact sync material behind a second inaccessible reviewed
+context. An isolated one-use signer consumes that material only with a third inaccessible
+device-bound key capability and returns a closed signed envelope. No capability has a public
+constructor, so the library cannot discover, admit, or execute a local Codex binary, create a real
+source/device/time/nonce context, or generate/load a real key. Its database-only Community ingest
+and bounded ingest-retention boundaries have synthetic executable evidence. The kernel has
+raw-envelope, origin-proof, bounded-parser, contract, and strict device-signature evidence; the
+adapter has configuration, fixed-query, role-probe, mapper, and failure evidence with mock pools. A
+local server factory now has loopback framing and injection evidence, but no live HTTP edge,
+host/port/TLS deployment entry point, or working database login/TLS connection. One signed synthetic
+request now exercises their required local composition through a mock pool and validated
+result/problem decisions. The public score route has request/response, admission, and
+production-build evidence, and the Jobs runner has strict command/config/pool/role/result evidence;
+neither has a live database login, edge, scheduler, or network deployment. Controls below are marked
+**implemented** only when executable evidence exists in
+[implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
+security claims about the current tree.
 
 ### Assets and security objectives
 
@@ -134,22 +136,22 @@ and migration or rollback where applicable.
 
 ### Surface map
 
-| Surface                             | Realistic attacker story                                                                                   | Required mitigations                                                                                                             | Current status                                                                                   |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Public race and profiles            | A visitor injects markup through a handle, enumerates profiles, or infers exact work hours                 | Plain-text bounded names, CSP, public-field allowlist, rounded freshness, rate and cache policy                                  | DB/schema/mapper/adapter/local route tested; cache, car, freshness, rate, deployment planned     |
-| OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up     | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke | Passkey/recovery DB tested; app crypto, routes, rate and cleanup planned                         |
-| Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration           | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, revoke and rotate                        | Pairing/lifecycle DB tested; app crypto, routes, and rate planned                                |
-| Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Protocol plus synthetic supervisor tested; executable admission, platforms, support planned      |
-| Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                    | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                        | Local verifier, replay stores, application, and HTTP boundary tested; connector/live planned     |
-| Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                     | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                  | Local verifier/config/replay/server tested; edge injection, trusted route, direct-origin planned |
-| Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections             | Strict versioned schema, bounded bodies, fixed adapter, stored procedure, non-owner role, constraints, deadlines, backpressure   | Local HTTP/verifier/adapter/composer and ingest/retention SQL tested; live operations planned    |
-| Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons        | SQL and local one-shot runner tested; live login, scheduler, correction planned                  |
-| CarRecipe and assets                | A proposal smuggles a URL, markup, executable value, copyrighted binary, or nondeterministic output        | Enum-only schema, project-owned assets, preview and approval, provenance, deterministic snapshots                                | Planned                                                                                          |
-| Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                        | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                               | Invite role/reason/reference implemented; hosted controls planned                                |
-| Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                     | Immediate hide/revoke, idempotent purge, bounded tombstone, backup expiry, deletion replay after restore                         | DB hide/revoke/queue implemented; purge/restore planned                                          |
-| Pull-request CI                     | A fork changes a workflow or package to steal a token or publish an artifact                               | Read-only secretless CI, no privileged environment, pinned inputs, no persisted checkout credentials, protected review           | Implemented locally; hosted controls pending                                                     |
-| Release and dependencies            | A compromised dependency or runner produces an official malicious connector                                | Exact locks, quarantine, review, isolated trusted build, signatures, SBOM, provenance, clean-machine verification                | Dependency baseline implemented; release path planned                                            |
-| Public repository                   | A maintainer accidentally commits a credential, personal record, local path, or private incident detail    | Public-file scan, exact staged-blob scan, synthetic-only policy, manual diff and history review                                  | Implemented locally; history and hosted scans pending                                            |
+| Surface                             | Realistic attacker story                                                                                   | Required mitigations                                                                                                             | Current status                                                                                       |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Public race and profiles            | A visitor injects markup through a handle, enumerates profiles, or infers exact work hours                 | Plain-text bounded names, CSP, public-field allowlist, rounded freshness, rate and cache policy                                  | DB/schema/mapper/adapter/local route tested; cache, car, freshness, rate, deployment planned         |
+| OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up     | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke | Passkey/recovery DB tested; app crypto, routes, rate and cleanup planned                             |
+| Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration           | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, revoke and rotate                        | Pairing/lifecycle DB tested; app crypto, routes, and rate planned                                    |
+| Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command      | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter    | Protocol plus synthetic supervisor tested; executable admission, platforms, support planned          |
+| Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                    | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                        | Local signer/vector, verifier, replay stores, application, and HTTP tested; operational/live planned |
+| Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                     | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                  | Local verifier/config/replay/server tested; edge injection, trusted route, direct-origin planned     |
+| Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections             | Strict versioned schema, bounded bodies, fixed adapter, stored procedure, non-owner role, constraints, deadlines, backpressure   | Local HTTP/verifier/adapter/composer and ingest/retention SQL tested; live operations planned        |
+| Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons        | SQL and local one-shot runner tested; live login, scheduler, correction planned                      |
+| CarRecipe and assets                | A proposal smuggles a URL, markup, executable value, copyrighted binary, or nondeterministic output        | Enum-only schema, project-owned assets, preview and approval, provenance, deterministic snapshots                                | Planned                                                                                              |
+| Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                        | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                               | Invite role/reason/reference implemented; hosted controls planned                                    |
+| Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                     | Immediate hide/revoke, idempotent purge, bounded tombstone, backup expiry, deletion replay after restore                         | DB hide/revoke/queue implemented; purge/restore planned                                              |
+| Pull-request CI                     | A fork changes a workflow or package to steal a token or publish an artifact                               | Read-only secretless CI, no privileged environment, pinned inputs, no persisted checkout credentials, protected review           | Implemented locally; hosted controls pending                                                         |
+| Release and dependencies            | A compromised dependency or runner produces an official malicious connector                                | Exact locks, quarantine, review, isolated trusted build, signatures, SBOM, provenance, clean-machine verification                | Dependency baseline implemented; release path planned                                                |
+| Public repository                   | A maintainer accidentally commits a credential, personal record, local path, or private incident detail    | Public-file scan, exact staged-blob scan, synthetic-only policy, manual diff and history review                                  | Implemented locally; history and hosted scans pending                                                |
 
 ### High-value attacker stories
 
@@ -179,10 +181,13 @@ and migration or rollback where applicable.
    ambient environment, uses fixed local pipes/arguments, bounds output and time, discards stderr,
    checks late output, and gates success on reap. Its launch capability has no public constructor,
    so candidate manifest, fixture, and process evidence cannot become a live path or support claim.
-   The unsigned composer separately consumes only the bounded parser output plus an inaccessible
-   reviewed context, revalidates every body and unsigned device-header input it owns, and fixes
-   exact JSON/digest/device-message bytes shared with Ingest without a key, signature, log, or
-   network sink. Executable, context, key, platform, egress, and release review remain required.
+   The composer separately consumes only the bounded parser output plus an inaccessible reviewed
+   context, revalidates every body and unsigned device-header input it owns, and fixes exact
+   JSON/digest/device-message bytes shared with Ingest. The isolated signer removes public unsigned
+   access, checks that its inaccessible one-use key capability names the exact request device, signs
+   only that message, and returns the same body plus five header values. Drop paths zero the private
+   byte buffers and key material, while errors remain non-reflective. Executable, context, real-key
+   generation/storage, pairing, platform, egress, and release review remain required.
 5. **Direct-origin and header spoofing.** A client avoids edge shaping or supplies a false
    forwarding address. The local kernel verifies one fresh, replay-consumed HMAC proof bound to key
    ID, method, path, exact body, time, and nonce before JSON or device work. A protected local

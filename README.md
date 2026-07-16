@@ -118,24 +118,26 @@ target-built synthetic child with a fixed `app-server` argument, local pipes, cl
 environment, bounded stdout/stderr/time, late-output rejection, and reap-before-success cleanup. Its
 reviewed-launch capability has no public constructor. A second inaccessible reviewed context now
 lets a candidate composer consume the minimized entries into the exact `ConnectorSyncV1` JSON,
-SHA-256 digest, unpadded base64url nonce, and LF-separated device-signature message. A shared
-synthetic vector proves those exact bytes against the production Ingest verifier, but creates no key
-or signature. There is still no executable discovery/path or artifact/version admission, real Codex
-execution, cross-platform result, source/device context provider, secure device key, signer, signed
-upload, live protected key injection, edge signer, direct-origin denial, host/port/TLS
-configuration, distributed rate policy, monitoring, operational connector, live database connection,
-load evidence, or deployment. Twelve SQL migrations now add 24 private identity, passkey,
-restricted-recovery, source, device, pairing, audit, deletion, replay, usage, and Community scoring
-tables with deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift
-detection, and an isolated PostgreSQL capability test. A narrow procedure boundary implements invite
-issuance, atomic enrollment, session-bound initial-passkey challenges, credential-derived login,
-bounded multi-passkey management, session rotation/revocation, the immediate lock-down portion of
-profile deletion, one-time new/existing-source device pairing, private source/device inventory,
-source pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation,
-and short-lived recovery-only replacement-passkey authority. Pairing creates only opaque
-user-declared sources: it never reads or stores Codex account email or claims account uniqueness.
-The source unlink/reactivation procedures require a fresh consumed source-bound step-up record, but
-the application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
+SHA-256 digest, unpadded base64url nonce, and LF-separated device-signature message. An isolated
+one-use signer consumes that closed material with an equally inaccessible device-bound Ed25519 key
+capability and returns only the same body plus five exact header values. A shared synthetic vector
+proves the exact public key/signature across Rust and the production Ingest verifier. There is still
+no executable discovery/path or artifact/version admission, real Codex execution, cross-platform
+result, source/device context provider, secure key generation/store, pairing proof, signed upload,
+live protected key injection, edge signer, direct-origin denial, host/port/TLS configuration,
+distributed rate policy, monitoring, operational connector, live database connection, load evidence,
+or deployment. Twelve SQL migrations now add 24 private identity, passkey, restricted-recovery,
+source, device, pairing, audit, deletion, replay, usage, and Community scoring tables with
+deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift detection, and
+an isolated PostgreSQL capability test. A narrow procedure boundary implements invite issuance,
+atomic enrollment, session-bound initial-passkey challenges, credential-derived login, bounded
+multi-passkey management, session rotation/revocation, the immediate lock-down portion of profile
+deletion, one-time new/existing-source device pairing, private source/device inventory, source
+pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation, and
+short-lived recovery-only replacement-passkey authority. Pairing creates only opaque user-declared
+sources: it never reads or stores Codex account email or claims account uniqueness. The source
+unlink/reactivation procedures require a fresh consumed source-bound step-up record, but the
+application that cryptographically verifies WebAuthn is still absent. Anonymous login challenges
 also require edge rate limits and bounded cleanup before exposure. A database-only Community ingest
 capability now exposes minimal active-device verification material and accepts bounded source-bound
 snapshots with exact retry, nonce replay, monotonic source/date, quarantine, and lifecycle-race

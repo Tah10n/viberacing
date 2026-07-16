@@ -73,12 +73,13 @@ terminal for that state-machine instance and errors do not reflect server conten
 
 The candidate adapter adds exact-version parsing evidence described above. The one-shot supervisor
 adds fixed local launch mechanics and synthetic timeout/overload/cleanup evidence but accepts only
-the inaccessible `ReviewedCodexLaunch` capability. An unsigned composer now consumes the normalized
-output only behind an equally inaccessible `ReviewedCommunitySyncContext` and fixes the exact sync
-body, SHA-256 digest, nonce encoding, and device message. No library boundary discovers a binary,
-resolves its links/ownership, constructs either capability, verifies or executes the selected
-release artifact, stores a key, signs/uploads data, admits a release, or creates a connector
-artifact. Every matrix row still requires the complete admission evidence above.
+the inaccessible `ReviewedCodexLaunch` capability. A composer now consumes the normalized output
+only behind an equally inaccessible `ReviewedCommunitySyncContext` and fixes the exact sync body,
+SHA-256 digest, nonce encoding, and device message. An isolated one-use signer consumes that closed
+material only with an inaccessible device-bound key capability. No library boundary discovers a
+binary, resolves its links/ownership, constructs any capability, verifies or executes the selected
+release artifact, generates/loads a real key, proves pairing, uploads data, admits a release, or
+creates a connector artifact. Every matrix row still requires the complete admission evidence above.
 
 ## Planned stable surface
 
@@ -86,8 +87,9 @@ The implementation plan names `account/read` for a local auth-mode decision and 
 for bounded usage daily buckets. The `0.144.4` candidate proves those methods and reviewed fields
 exist in one generated stable schema and implements their closed parser. It is still not a current
 support claim. The first proposed row must additionally prove executable admission, the official
-artifact, clean-machine platforms, reviewed context/key/sign/upload behavior, privacy egress, and a
-released connector range. The shared unsigned sync vector is byte-contract evidence only.
+artifact, clean-machine platforms, reviewed context/key-store/pairing/upload behavior, privacy
+egress, and a released connector range. The shared signed sync vector is synthetic cryptographic
+contract evidence only.
 
 All other App Server methods and transports are denied for connector v1. In particular, Vibe Racing
 does not consume thread, turn, item, approval, MCP, file, shell, login, conversation, or repository

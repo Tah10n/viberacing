@@ -214,12 +214,14 @@ returns only bounded sorted daily date/token entries. ADR 0023 adds a one-shot s
 fixed `app-server` argument, local pipes, no ambient environment, bounded stdout/stderr/time, and
 reap-before-success composition. Its launch capability deliberately has no public constructor until
 a later boundary resolves links, rejects untrusted writable paths, and verifies the exact executable
-and version. The candidate does not execute the official artifact, run on all platforms,
-sign/upload, or create a matrix row. ADR 0024 adds only the next unsigned boundary: an inaccessible
-reviewed source/device/time/nonce context plus the minimized daily usage produce one exact bounded
-`ConnectorSyncV1` body, SHA-256 digest, and LF-separated device message. A shared Rust/Ingest vector
-proves byte-level agreement, while context construction, key storage, signing, transport, retry,
-scheduling, and support remain absent.
+and version. The candidate does not execute the official artifact, run on all platforms, upload, or
+create a matrix row. ADR 0024 adds an inaccessible reviewed source/device/time/nonce context whose
+minimized daily usage produces one exact bounded `ConnectorSyncV1` body, SHA-256 digest, and
+LF-separated device message. ADR 0025 removes public access to that unsigned material and adds an
+isolated one-use signer behind an equally inaccessible device-bound key capability. A shared
+Rust/Ingest vector proves exact body, public-key, and signature agreement, while context
+construction, key generation/storage, pairing proof, transport, retry, scheduling, and support
+remain absent.
 
 ### Date semantics
 

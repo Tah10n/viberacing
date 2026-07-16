@@ -15,18 +15,20 @@ endpoint, OAuth callback, Argon2id/WebAuthn or pairing-possession application ve
 connector, purge worker, Jobs scheduler/monitor, audited correction, or deployed service executes
 the complete sequences. A library-only Rust connector foundation validates the bounded stable App
 Server initialization exchange and candidate `0.144.4` account/usage responses. A synthetic one-shot
-supervisor composes those states with fixed local process mechanics, but its launch capability has
-no public constructor and it has no executable admission, real Codex execution, key, signer, upload,
-or supported-version path. A local Ingest kernel now verifies the bounded exact-body origin/device
-request, while the separate adapter maps origin replay, device lookup, and submission through fixed
-calls. PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
-application now composes those exact local capabilities and validates only closed
-acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
-evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
-no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
-certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
-refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public,
-Account, Security, Usage, Operational, and Prohibited.
+supervisor composes those states with fixed local process mechanics, while an exact-body composer
+and isolated one-use signer produce a synthetic signed envelope. All three required capabilities
+have no public constructor, and there is no executable admission, real Codex execution, key
+generation/store, pairing proof, upload, or supported-version path. A local Ingest kernel now
+verifies the bounded exact-body origin/device request, while the separate adapter maps origin
+replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic origin
+replay consumption and bounded cleanup. A transport-free application now composes those exact local
+capabilities and validates only closed acknowledgement/problem decisions. A bounded local Fastify
+factory preserves exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes
+only revalidated contracts. There is no edge/live-database/deployment integration. No host/port/TLS
+entry point, deployment login, certificate, edge signer/direct-origin policy, or live route/Jobs
+evidence is supplied. Data labels refer to the classifications in the
+[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
+and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -327,9 +329,11 @@ deadlines, terminal-event checks, and reap-before-success cleanup. The required 
 has no public constructor, so it cannot identify or admit a binary or execute the official artifact.
 ADR 0024 then consumes the normalized output only with another inaccessible capability containing
 reviewed source/device/time/nonce inputs. It emits the exact bounded `ConnectorSyncV1` bytes,
-SHA-256 digest, unpadded base64url nonce, and LF-separated device message verified by Ingest. It
-cannot create that context, hold a device key, sign, schedule, or upload, and the support matrix
-stays empty.
+SHA-256 digest, unpadded base64url nonce, and LF-separated device message verified by Ingest. ADR
+0025 removes public unsigned access and consumes that value only with an inaccessible, device-bound,
+one-use Ed25519 key capability; the returned envelope contains the same body and five exact header
+values. The library cannot create either context, generate or load a real key, prove pairing,
+schedule, or upload, and the support matrix stays empty.
 
 The operational connector layers, edge signer, direct-origin denial, host/port/TLS Ingest deployment
 entry point, live secret-manager/edge key injection, live PostgreSQL login/TLS connection,

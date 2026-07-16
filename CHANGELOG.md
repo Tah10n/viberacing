@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and twenty-four accepted ADRs.
+  fail-closed compatibility policy and matrix, and twenty-five accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -136,7 +136,17 @@ Versioning where its guarantees are applicable.
   bytes with pinned RustCrypto SHA-256, and builds the exact unpadded-base64url, LF-separated device
   message without loading a key or opening a network path. Six Rust cases and one production-path
   Ingest case share a synthetic exact-body/digest/message vector. No source/device context provider,
-  entropy, clock, key store, signer, HTTP client, retry loop, scheduler, or support row is implied.
+  entropy, clock, key store, HTTP client, retry loop, scheduler, or support row is implied.
+- An isolated one-use candidate Ed25519 signer behind an inaccessible device-bound key capability.
+  It removes public access from prepared unsigned material, consumes the key, rejects a different
+  device ID without reflection, signs only the exact prepared message, and returns the same body
+  plus five exact header values. Prepared/signed private byte buffers and the upstream key are
+  zeroed on drop. Three Rust cases and the production Ingest protocol test now share and strictly
+  verify the synthetic public key/signature, including body-change and trailing-LF rejection. The
+  exact ten-record Dalek graph is pinned, inventoried,
+  license/advisory/feature/build/unsafe-reviewed, and default features remain disabled except
+  zeroization. No real key generation/store, pairing proof, context provider, upload, scheduler,
+  supported Codex version, or release is implied.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,
