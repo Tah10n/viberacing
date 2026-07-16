@@ -90,6 +90,12 @@
       "name": "profile_visibility",
       "path": "database/migrations/0015_profile_visibility.sql",
       "sha256": "677e1d2b5f0a12f71ece528ccb139c3eae99ea8eae5a7279842aa77359b9d5a7"
+    },
+    {
+      "revision": 16,
+      "name": "hidden_profile_device_controls",
+      "path": "database/migrations/0016_hidden_profile_device_controls.sql",
+      "sha256": "62d0d56e3a3331d0f51dbea639b21db60a6fdb83fff283e5d4620f8000abf7b6"
     }
   ]
 }

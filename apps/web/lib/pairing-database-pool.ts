@@ -211,6 +211,36 @@ const readPasskeyInventoryQuery = `SELECT
 FROM viberacing_api.read_passkey_inventory($1::uuid, $2::bytea) AS inventory
 ORDER BY (inventory.created_at AT TIME ZONE 'UTC')::date, inventory.passkey_id`;
 
+const readActiveDeviceInventoryQuery = `SELECT
+  inventory.source_id,
+  inventory.source_state,
+  inventory.device_id,
+  inventory.device_label,
+  inventory.connector_version,
+  inventory.os_family,
+  inventory.architecture,
+  inventory.device_state,
+  (inventory.activated_at AT TIME ZONE 'UTC')::date::text AS activated_on
+FROM viberacing_api.read_source_inventory($1::uuid, $2::bytea) AS inventory
+WHERE inventory.device_state = 'active'
+ORDER BY
+  inventory.source_id,
+  (inventory.activated_at AT TIME ZONE 'UTC')::date,
+  inventory.device_id
+LIMIT 65`;
+
+const revokeDeviceQuery = `WITH device_revocation AS MATERIALIZED (
+  SELECT viberacing_api.revoke_device(
+    $1::uuid,
+    $2::bytea,
+    $3::text,
+    $4::uuid,
+    $5::text
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS revoked
+FROM device_revocation`;
+
 const readProfileVisibilityQuery = `SELECT visibility.visibility
 FROM viberacing_api.read_profile_visibility($1::uuid, $2::bytea) AS visibility`;
 
@@ -458,6 +488,19 @@ export interface EnrollmentDatabasePasskeyInventoryRequest {
   readonly sessionVerifierDigest: Uint8Array;
 }
 
+export interface EnrollmentDatabaseSourceDeviceInventoryRequest {
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+}
+
+export interface EnrollmentDatabaseDeviceRevocation {
+  readonly auditEventId: string;
+  readonly deviceId: string;
+  readonly requestId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+}
+
 export interface EnrollmentDatabaseProfileVisibilityRequest {
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
@@ -573,10 +616,14 @@ export interface EnrollmentDatabaseClient {
     input: EnrollmentDatabaseProfileDeletionChallenge,
   ): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
+  readActiveDeviceInventory(
+    input: EnrollmentDatabaseSourceDeviceInventoryRequest,
+  ): Promise<unknown>;
   readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown>;
   readProfileVisibility(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
   release(destroy?: boolean): void;
+  revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<unknown>;
   revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown>;
   setProfileVisibility(input: EnrollmentDatabaseProfileVisibilityUpdate): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
@@ -929,6 +976,19 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         credential.fill(0);
       }
     },
+    async readActiveDeviceInventory(
+      input: EnrollmentDatabaseSourceDeviceInventoryRequest,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(readActiveDeviceInventoryQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
+    },
     async readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       try {
@@ -955,6 +1015,20 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
     },
     release(destroy = false): void {
       client.release(destroy);
+    },
+    async revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(revokeDeviceQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.deviceId,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
     },
     async setProfileVisibility(input: EnrollmentDatabaseProfileVisibilityUpdate): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);

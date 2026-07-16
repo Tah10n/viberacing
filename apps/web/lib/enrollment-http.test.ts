@@ -96,9 +96,11 @@ function serviceFixture(): EnrollmentService {
     completePasskeyRevoke: vi.fn(() => Promise.resolve(true)),
     completeProfileDeletion: vi.fn(() => Promise.resolve(true)),
     logout: vi.fn(() => Promise.resolve(true)),
+    readActiveDeviceInventory: vi.fn(() => Promise.resolve(undefined)),
     readPasskeyInventory: vi.fn(() => Promise.resolve(undefined)),
     readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
     readSession: vi.fn(() => undefined),
+    revokeDevice: vi.fn(() => Promise.resolve(true)),
     setProfileVisibility: vi.fn(() => Promise.resolve("hidden" as const)),
   };
 }
@@ -432,6 +434,54 @@ describe("enrollment HTTP boundary", () => {
     );
     crossOrigin.headers.set("origin", "https://attacker.example");
     await expect(http.profileDeletionOptions(crossOrigin)).resolves.toMatchObject({ status: 400 });
+  });
+
+  it("revokes only one exact owned device from a same-origin session form", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const deviceId = `dev_${"A".repeat(22)}`;
+    const response = await http.deviceRevoke(
+      post(
+        "/auth/devices/revoke",
+        new URLSearchParams({ deviceId }).toString(),
+        "application/x-www-form-urlencoded",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`${origin}/account`);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(service.revokeDevice).toHaveBeenCalledWith("opaque-session", deviceId);
+
+    await expect(
+      http.deviceRevoke(
+        post(
+          "/auth/devices/revoke",
+          `deviceId=${deviceId}&deviceId=${deviceId}`,
+          "application/x-www-form-urlencoded",
+          "viberacing_session=opaque-session",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 400 });
+    await expect(
+      http.deviceRevoke(
+        post(
+          "/auth/devices/revoke",
+          new URLSearchParams({ deviceId }).toString(),
+          "application/x-www-form-urlencoded",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 303 });
+    const crossOrigin = post(
+      "/auth/devices/revoke",
+      new URLSearchParams({ deviceId }).toString(),
+      "application/x-www-form-urlencoded",
+      "viberacing_session=opaque-session",
+    );
+    crossOrigin.headers.set("origin", "https://attacker.example");
+    await expect(http.deviceRevoke(crossOrigin)).resolves.toMatchObject({ status: 400 });
   });
 
   it("changes profile visibility only from the exact same-origin session form", async () => {

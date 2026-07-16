@@ -887,6 +887,49 @@ SELECT pg_temp.assert_true(
   'private inventory returns every owned source/device row and no cross-profile row'
 );
 
+SELECT pg_temp.assert_true(
+  viberacing_api.set_profile_visibility(
+    '00000000-0000-4000-8000-000000004201',
+    pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+    false
+  ) = 'hidden',
+  'profile can hide without losing its private session'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 1
+    FROM viberacing_api.read_source_inventory(
+      '00000000-0000-4000-8000-000000004201',
+      pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex')
+    )
+    WHERE device_id = 'dev_' || pg_catalog.repeat('P', 22)
+      AND device_state = 'active'
+  ),
+  'hidden profile retains private active-device inventory'
+);
+
+SELECT viberacing_api.revoke_device(
+  '00000000-0000-4000-8000-000000004201',
+  pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+  'dev_' || pg_catalog.repeat('P', 22),
+  '00000000-0000-4000-8000-000000004906',
+  'req_' || pg_catalog.repeat('H', 22)
+);
+
+SELECT pg_temp.assert_true(
+  NOT EXISTS (
+    SELECT 1
+    FROM viberacing_api.read_source_inventory(
+      '00000000-0000-4000-8000-000000004201',
+      pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex')
+    )
+    WHERE device_id = 'dev_' || pg_catalog.repeat('P', 22)
+      AND device_state = 'active'
+  ),
+  'hidden profile can immediately remove one owned device authority'
+);
+
 RESET ROLE;
 SET LOCAL ROLE viberacing_owner;
 
@@ -946,7 +989,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 5
+    SELECT pg_catalog.count(*) = 6
     FROM viberacing_private.audit_events
     WHERE profile_id = '00000000-0000-4000-8000-000000004101'
       AND event_type IN (

@@ -2,7 +2,11 @@ import "server-only";
 
 import Link from "next/link";
 
-import type { PasskeyInventoryItem, ProfileVisibility } from "@/lib/enrollment-database";
+import type {
+  PasskeyInventoryItem,
+  ProfileVisibility,
+  SourceDeviceInventoryItem,
+} from "@/lib/enrollment-database";
 import type { Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
@@ -10,6 +14,7 @@ import { PasskeyAddForm, PasskeyRevokeButton, ProfileDeletionForm } from "./pass
 
 interface AccountExperienceProps {
   readonly actionUnavailable?: boolean;
+  readonly activeDeviceInventory: readonly SourceDeviceInventoryItem[] | undefined;
   readonly handle: string;
   readonly locale: Locale;
   readonly passkeys: readonly PasskeyInventoryItem[] | undefined;
@@ -18,6 +23,7 @@ interface AccountExperienceProps {
 
 export function AccountExperience({
   actionUnavailable = false,
+  activeDeviceInventory,
   handle,
   locale,
   passkeys,
@@ -62,6 +68,65 @@ export function AccountExperience({
                 </button>
               </form>
             </>
+          )}
+        </section>
+        <section aria-labelledby="active-devices-title" className="account-security">
+          <h2 id="active-devices-title">{copy.activeDevicesTitle}</h2>
+          <p>{copy.activeDevicesCopy}</p>
+          {activeDeviceInventory === undefined ? (
+            <p className="auth-error" role="status">
+              {copy.activeDevicesUnavailable}
+            </p>
+          ) : activeDeviceInventory.length === 0 ? (
+            <p className="auth-status" role="status">
+              {copy.noActiveDevices}
+            </p>
+          ) : (
+            <ol className="passkey-list">
+              {activeDeviceInventory.map((source, sourceIndex) => (
+                <li className="passkey-item" key={source.sourceId}>
+                  <div className="passkey-item-heading">
+                    <strong>
+                      {copy.sourceLabel} {sourceIndex + 1}
+                    </strong>
+                    <span className="passkey-state">
+                      {source.state === "active"
+                        ? copy.sourceActive
+                        : source.state === "paused"
+                          ? copy.sourcePaused
+                          : source.state === "quarantined"
+                            ? copy.sourceQuarantined
+                            : copy.sourceUnlinked}
+                    </span>
+                  </div>
+                  <ul className="passkey-list">
+                    {source.devices.map((device) => (
+                      <li className="passkey-item" key={device.deviceId}>
+                        <strong>{device.label}</strong>
+                        <p className="auth-status">
+                          {device.osFamily === "macos"
+                            ? "macOS"
+                            : device.osFamily === "windows"
+                              ? "Windows"
+                              : "Linux"}{" "}
+                          · {device.architecture} · {copy.deviceConnector} {device.connectorVersion}
+                        </p>
+                        <p className="auth-status">
+                          {copy.deviceConnected}{" "}
+                          <time dateTime={device.activatedOn}>{device.activatedOn}</time>
+                        </p>
+                        <form action="/auth/devices/revoke" method="post">
+                          <input name="deviceId" type="hidden" value={device.deviceId} />
+                          <button className="danger-action" type="submit">
+                            {copy.revokeDevice}
+                          </button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ol>
           )}
         </section>
         <section aria-labelledby="passkeys-title" className="account-security">

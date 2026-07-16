@@ -6,6 +6,7 @@ import { resolvePairingDatabaseConfig } from "./pairing-database-config";
 import {
   createPairingDatabasePool,
   type EnrollmentDatabaseClient,
+  type EnrollmentDatabaseDeviceRevocation,
   type EnrollmentDatabaseInitialPasskey,
   type EnrollmentDatabaseLoginCompletion,
   type EnrollmentDatabasePasskeyAddition,
@@ -21,6 +22,7 @@ import {
   type EnrollmentDatabaseProfileVisibilityRequest,
   type EnrollmentDatabaseProfileVisibilityUpdate,
   type EnrollmentDatabaseSessionRevocation,
+  type EnrollmentDatabaseSourceDeviceInventoryRequest,
   type PairingDatabasePoolSignalSink,
 } from "./pairing-database-pool";
 import { enrollmentPatterns } from "./enrollment-domain";
@@ -41,7 +43,21 @@ const passkeyInventoryColumns = new Set([
   "passkey_id",
   "state",
 ]);
+const activeDeviceInventoryColumns = new Set([
+  "activated_on",
+  "architecture",
+  "connector_version",
+  "device_id",
+  "device_label",
+  "device_state",
+  "os_family",
+  "source_id",
+  "source_state",
+]);
 const canonicalDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
+const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
+const connectorVersionPattern = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 
 export type EnrollmentDatabaseErrorCode =
@@ -75,6 +91,9 @@ export interface EnrollmentDatabase {
     input: EnrollmentDatabaseProfileDeletionChallenge,
   ): Promise<boolean>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
+  readActiveDeviceInventory(
+    input: EnrollmentDatabaseSourceDeviceInventoryRequest,
+  ): Promise<readonly SourceDeviceInventoryItem[]>;
   readPasskeyInventory(
     input: EnrollmentDatabasePasskeyInventoryRequest,
   ): Promise<readonly PasskeyInventoryItem[]>;
@@ -82,6 +101,7 @@ export interface EnrollmentDatabase {
   readProfileVisibility(
     input: EnrollmentDatabaseProfileVisibilityRequest,
   ): Promise<ProfileVisibility>;
+  revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<boolean>;
   revokeSession(input: EnrollmentDatabaseSessionRevocation): Promise<boolean>;
   setProfileVisibility(
     input: EnrollmentDatabaseProfileVisibilityUpdate,
@@ -110,6 +130,23 @@ export interface PasskeyInventoryItem {
   readonly label: string;
   readonly passkeyId: string;
   readonly state: "active" | "revoked";
+}
+
+export type SourceState = "active" | "paused" | "quarantined" | "unlinked";
+
+export interface ActiveDeviceInventoryItem {
+  readonly activatedOn: string;
+  readonly architecture: "aarch64" | "x86_64";
+  readonly connectorVersion: string;
+  readonly deviceId: string;
+  readonly label: string;
+  readonly osFamily: "linux" | "macos" | "windows";
+}
+
+export interface SourceDeviceInventoryItem {
+  readonly devices: readonly ActiveDeviceInventoryItem[];
+  readonly sourceId: string;
+  readonly state: SourceState;
 }
 
 export interface ConfiguredEnrollmentDatabase extends EnrollmentDatabase {
@@ -296,6 +333,98 @@ function exactPasskeyInventory(value: unknown): readonly PasskeyInventoryItem[] 
   return Object.freeze(result);
 }
 
+function exactActiveDeviceInventory(value: unknown): readonly SourceDeviceInventoryItem[] {
+  if (!Array.isArray(value) || value.length > 64) {
+    fail("result_invalid");
+  }
+  const deviceIds = new Set<string>();
+  const sources: {
+    devices: ActiveDeviceInventoryItem[];
+    sourceId: string;
+    state: SourceState;
+  }[] = [];
+  let currentSource:
+    | {
+        devices: ActiveDeviceInventoryItem[];
+        sourceId: string;
+        state: SourceState;
+      }
+    | undefined;
+  for (const row of value as unknown[]) {
+    if (!isRecord(row)) {
+      fail("result_invalid");
+    }
+    const keys = Object.keys(row);
+    const labelLength =
+      typeof row.device_label === "string" ? Array.from(row.device_label).length : 0;
+    if (
+      keys.length !== activeDeviceInventoryColumns.size ||
+      keys.some((key) => !activeDeviceInventoryColumns.has(key)) ||
+      typeof row.source_id !== "string" ||
+      !sourceIdPattern.test(row.source_id) ||
+      (row.source_state !== "active" &&
+        row.source_state !== "paused" &&
+        row.source_state !== "quarantined" &&
+        row.source_state !== "unlinked") ||
+      typeof row.device_id !== "string" ||
+      !deviceIdPattern.test(row.device_id) ||
+      deviceIds.has(row.device_id) ||
+      typeof row.device_label !== "string" ||
+      labelLength < 1 ||
+      labelLength > 64 ||
+      row.device_label !== row.device_label.trim() ||
+      row.device_label !== row.device_label.normalize("NFC") ||
+      unsafeLabelPattern.test(row.device_label) ||
+      typeof row.connector_version !== "string" ||
+      row.connector_version.length < 5 ||
+      row.connector_version.length > 64 ||
+      !connectorVersionPattern.test(row.connector_version) ||
+      (row.os_family !== "linux" && row.os_family !== "macos" && row.os_family !== "windows") ||
+      (row.architecture !== "aarch64" && row.architecture !== "x86_64") ||
+      row.device_state !== "active" ||
+      !canonicalDate(row.activated_on)
+    ) {
+      fail("result_invalid");
+    }
+    if (currentSource?.sourceId !== row.source_id) {
+      if (currentSource !== undefined && row.source_id <= currentSource.sourceId) {
+        fail("result_invalid");
+      }
+      currentSource = {
+        devices: [],
+        sourceId: row.source_id,
+        state: row.source_state,
+      };
+      sources.push(currentSource);
+      if (sources.length > 32) {
+        fail("result_invalid");
+      }
+    } else if (currentSource.state !== row.source_state) {
+      fail("result_invalid");
+    }
+    deviceIds.add(row.device_id);
+    currentSource.devices.push(
+      Object.freeze({
+        activatedOn: row.activated_on,
+        architecture: row.architecture,
+        connectorVersion: row.connector_version,
+        deviceId: row.device_id,
+        label: row.device_label,
+        osFamily: row.os_family,
+      }),
+    );
+  }
+  return Object.freeze(
+    sources.map((source) =>
+      Object.freeze({
+        devices: Object.freeze(source.devices),
+        sourceId: source.sourceId,
+        state: source.state,
+      }),
+    ),
+  );
+}
+
 function verifyRuntimeBoundary(value: unknown): void {
   if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
     fail("runtime_boundary_mismatch");
@@ -407,6 +536,14 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "enrolled"),
       );
     },
+    readActiveDeviceInventory(
+      input: EnrollmentDatabaseSourceDeviceInventoryRequest,
+    ): Promise<readonly SourceDeviceInventoryItem[]> {
+      return execute(
+        (client) => client.readActiveDeviceInventory(input),
+        exactActiveDeviceInventory,
+      );
+    },
     readPasskeyInventory(
       input: EnrollmentDatabasePasskeyInventoryRequest,
     ): Promise<readonly PasskeyInventoryItem[]> {
@@ -419,6 +556,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
       input: EnrollmentDatabaseProfileVisibilityRequest,
     ): Promise<ProfileVisibility> {
       return execute((client) => client.readProfileVisibility(input), exactProfileVisibility);
+    },
+    revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<boolean> {
+      return execute(
+        (client) => client.revokeDevice(input),
+        (value) => exactBooleanRow(value, "revoked"),
+      );
     },
     revokeSession(input: EnrollmentDatabaseSessionRevocation): Promise<boolean> {
       return execute(

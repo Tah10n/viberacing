@@ -18,10 +18,12 @@ same-origin public score route и переключаются на Community resu
 reduced-motion режим работают без реальных данных. Отдельный invite-only flow теперь локально
 соединяет GitHub OAuth со state и PKCE, зашифрованное краткоживущее продолжение, атомарное
 enrollment, обязательную регистрацию passkey, повторный discoverable-credential вход, session-scoped
-список ключей доступа, страницу активного профиля, защищённый отзыв не текущего passkey и logout.
-Страница также позволяет добавить резервный passkey после свежей проверки существующим ключом.
-Репозиторий не предоставляет рабочий invite issuer, OAuth registration, реальные secrets, live
-OAuth/authenticator/database credentials, edge abuse controls или evidence с реальным пользователем.
+список ключей доступа, страницу активного профиля, hide/show публичного профиля, список активных
+устройств и их немедленный отзыв, добавление резервного passkey, защищённый отзыв не текущего
+passkey, запрос удаления профиля после точного ввода handle и свежей проверки passkey, а также
+logout. Репозиторий не предоставляет рабочий invite issuer, OAuth registration, реальные secrets,
+live OAuth/authenticator/database credentials, deletion purge worker, edge abuse controls или
+evidence с реальным пользователем.
 
 ## Модель доверия
 

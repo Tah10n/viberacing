@@ -9,9 +9,10 @@ and default product shell remain synthetic and unauthenticated, with no working 
 pairing approval/HTTP route, real user data, or deployment. A separate local Phase 2 slice now
 implements invite redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations,
 initial passkey registration, returning login, a session-scoped passkey inventory, an account page,
-public-profile hide/show, fresh backup-passkey addition, revocation of an owned non-current passkey,
-an exact-handle fresh-passkey profile-deletion request, and logout. It fails closed without
-externally provisioned configuration and has no live-user or deployment evidence.
+public-profile hide/show, active-device inventory and revoke, fresh backup-passkey addition,
+revocation of an owned non-current passkey, an exact-handle fresh-passkey profile-deletion request,
+and logout. It fails closed without externally provisioned configuration and has no live-user or
+deployment evidence.
 
 ## Run it
 
@@ -48,10 +49,10 @@ provides no valid invite or working credential. See `.env.example` and the local
 | `lib/public-community-score-route.ts`              | Parses and serializes the public score HTTP boundary             | Closed query/Accept, exact errors, admission, deadlines, and no CORS               |
 | `lib/public-score-admission.ts`                    | Enforces the no-queue public-read concurrency ceiling            | Four active reads; lease held until adapter settlement                             |
 | `lib/public-http-problem.ts`                       | Generates opaque request IDs and closed public error responses   | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
-| `app/join`, `app/login`, `app/account`, `app/auth` | Routes enrollment, login, visibility, passkeys, deletion, logout | Thin entrypoints; no recovery, pairing approval, or admin                          |
-| `components/account-experience.tsx`                | Renders visibility, passkeys, deletion, and logout               | Closed state and opaque target only; no credential/key/profile ID or exact time    |
-| `lib/enrollment-http.ts`                           | Owns the fourteen local identity HTTP decisions                  | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
-| `lib/enrollment-service.ts`                        | Composes OAuth, login, account controls, passkeys, and deletion  | Server IDs/secrets only; fixed database capabilities; generic failure              |
+| `app/join`, `app/login`, `app/account`, `app/auth` | Routes enrollment, account controls, deletion, and logout        | Thin entrypoints; no recovery, pairing approval, or admin                          |
+| `components/account-experience.tsx`                | Renders visibility, devices, passkeys, deletion, and logout      | Closed state and opaque targets; no key/profile ID or exact time                   |
+| `lib/enrollment-http.ts`                           | Owns the fifteen local identity HTTP decisions                   | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
+| `lib/enrollment-service.ts`                        | Composes OAuth, login, devices, passkeys, visibility, deletion   | Server IDs/secrets only; fixed database capabilities; generic failure              |
 | `lib/enrollment-cookie.ts`                         | Seals login, OAuth, passkey, and session continuations           | AES-GCM with purpose-separated keys, bounded expiry, HttpOnly, and narrow paths    |
 | `lib/github-oauth.ts`                              | Resolves one GitHub numeric user ID                              | State plus PKCE, no extra scope, fixed endpoints, token and other fields discarded |
 | `lib/passkey-registration.ts`                      | Creates and verifies registration and login ceremonies           | Exact RP/origin/type, required UV, fixed algorithms, and bounded output            |
@@ -162,15 +163,21 @@ settlement; rejected or overloaded requests cancel their body without a queue. C
 purpose-keyed AES-256-GCM values with authenticated context, HttpOnly, SameSite=Lax, HTTPS `Secure`,
 and the narrowest useful path; duplicate cookie names fail closed. Every response is `no-store` and
 `no-referrer`, and each local route admits at most four unsettled operations. The account page uses
-the exact possessed session to read at most 32 passkey rows and one closed `public`/`hidden`
-visibility value through fixed procedures. The passkey mapper requires one current active
-authenticator and renders only bounded labels, active/revoked state, UTC creation dates rounded to a
-day, and the current marker. Credential IDs, public keys, sign counters, exact activity timestamps,
-and profile IDs do not enter HTML. The visibility form is an exact same-origin, bounded POST backed
-by the same session verifier. Hiding immediately removes the profile from public score reads while
-existing source sync may continue; publishing makes it eligible for public reads again. Repeating
-the current state is a no-op. A failed account read shows a generic unavailable message while logout
-remains usable; every state-changing operation still requires database verification.
+the exact possessed session to read at most 32 passkey rows, one closed `public`/`hidden` visibility
+value, and at most 64 active device credentials through fixed procedures. The device mapper accepts
+only owned opaque sources plus bounded labels, platform/version metadata, and UTC activation dates
+rounded to a day. It renders source ordinal/state rather than the source ID; internal key/profile
+IDs, public keys, and exact lifecycle times never enter HTML. Only the exact opaque device ID enters
+its hidden same-origin revoke form. Revocation is terminal, immediately removes that device's future
+submission authority, preserves existing season attribution, and remains available while the profile
+is hidden. The passkey mapper requires one current active authenticator and renders only bounded
+labels, active/revoked state, UTC creation dates rounded to a day, and the current marker.
+Credential IDs, public keys, sign counters, exact activity timestamps, and profile IDs do not enter
+HTML. The visibility form is an exact same-origin, bounded POST backed by the same session verifier.
+Hiding immediately removes the profile from public score reads while existing source sync may
+continue; publishing makes it eligible for public reads again. Repeating the current state is a
+no-op. A failed account read shows a generic unavailable message while logout remains usable; every
+state-changing operation still requires database verification.
 
 An active non-current passkey has one revoke control. `POST /auth/passkeys/revoke/options` accepts
 only its opaque UUID, revalidates the active session and owned inventory, and creates a five-minute
@@ -297,8 +304,8 @@ aggregate source count; it does not pair or verify accounts.
   Next.js's type-only reference, while lint policy forbids importing the absent runtime.
 
 These controls reduce current risk; they do not make Community claims authoritative or replace the
-remaining Phase 2 recovery, source/device controls, ingestion, retention, deletion-purge, and edge
-abuse-control gates.
+remaining Phase 2 recovery, source lifecycle and pairing controls, ingestion, retention,
+deletion-purge, and edge abuse-control gates.
 
 ## Test strategy
 
@@ -310,20 +317,21 @@ cookie ambiguity, state plus PKCE, no-extra-scope token exchange, encrypted purp
 fixed SQL, one-time challenge binding, exact RP/origin/type and UV verification,
 continuation-before-write ordering, profile-free database-state-free login options, atomic login
 completion, exact-handle deletion binding, atomic challenge-consume/delete settlement, cookie
-clearing, overload, logout, EN/RU rendering, native ceremonies, and generic failures without a live
-account or credential. Other HTTP-boundary cases cover entropy, opaque tokens, every problem
-mapping, closed URL parsing, bounded media negotiation, overload settlement, headers, contract
-validation, hostile reflective inputs, and non-reflection. Adapter tests cover TLS/environment
-bounds, non-reflective failures, pool lifecycle, every-checkout role/login/search-path/read-only
-probes, fixed SQL parameters, release/destruction behavior, and mapper integration without requiring
-or claiming a live deployment login. Pairing cases additionally cover exact HMAC derivation and
-rotation, protected configuration, fixed two-candidate SQL, read-write role probes, the shared
-strict proof, hostile input/result/dependency shapes, server IDs, admission/timing, generic
-failures, clearing, release, and close without a real key or connection. Canvas tests execute real
-render loops against a typed context stub, including animated and no-context paths. Visible-score
-tests cover current-week selection, exact credential-free fetch, closed public response mapping,
-success/fallback states, and empty standings. Preference tests cover valid settings, reduced motion,
-pausing, invalid/blocked storage, and cleanup.
+clearing, closed active-device inventory, hidden-profile revoke, overload, logout, EN/RU rendering,
+native ceremonies, and generic failures without a live account or credential. Other HTTP-boundary
+cases cover entropy, opaque tokens, every problem mapping, closed URL parsing, bounded media
+negotiation, overload settlement, headers, contract validation, hostile reflective inputs, and
+non-reflection. Adapter tests cover TLS/environment bounds, non-reflective failures, pool lifecycle,
+every-checkout role/login/search-path/read-only probes, fixed SQL parameters, release/destruction
+behavior, and mapper integration without requiring or claiming a live deployment login. Pairing
+cases additionally cover exact HMAC derivation and rotation, protected configuration, fixed
+two-candidate SQL, read-write role probes, the shared strict proof, hostile input/result/dependency
+shapes, server IDs, admission/timing, generic failures, clearing, release, and close without a real
+key or connection. Canvas tests execute real render loops against a typed context stub, including
+animated and no-context paths. Visible-score tests cover current-week selection, exact
+credential-free fetch, closed public response mapping, success/fallback states, and empty standings.
+Preference tests cover valid settings, reduced motion, pausing, invalid/blocked storage, and
+cleanup.
 
 Coverage thresholds apply to product components and libraries. Small framework entrypoints are
 excluded from unit coverage and exercised by `next build`; counting imports as unit coverage would

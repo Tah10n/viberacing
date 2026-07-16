@@ -119,6 +119,13 @@ failure rollback, recursive revoke on unlink, and protective outcomes under conc
 activation. It still relies on a future application service to verify the WebAuthn ceremony before
 challenge consumption.
 
+The local Web/Auth account slice now consumes the exact inventory and immediate-revoke boundary. It
+derives authority only from the possessed session, exposes at most 64 active devices with
+day-rounded metadata, submits only the selected opaque device ID, and returns generic failures.
+Revision 0016 preserves those protective controls while a profile is hidden without adding a schema
+field, role, or broader capability. Source reactivation and unlink still require their separate
+fresh WebAuthn step-up application paths.
+
 Revision 0005 adds credential-derived passkey login, session and step-up provenance, private
 multi-passkey inventory, bounded add/revoke, terminal revoke, last-key protection, monotonic stored
 sign state, and atomic rollback on audit/session conflicts. Two observed blocker-chain races prove a
@@ -148,8 +155,7 @@ Remaining application and protocol evidence includes:
   recovery Argon2id/pepper and generic-response behavior, and anonymous ceremony/recovery-lookup
   rate-limit and cleanup tests.
 - Application-level pairing code attempt/rate limits, displayed-transaction rendering, external
-  Ed25519 proof verification, device-revoke UI/route, key rotation, bounded cleanup, and plaintext
-  token log rejection.
+  Ed25519 proof verification, key rotation, bounded cleanup, and plaintext token log rejection.
 - Scope matrix proving device credentials cannot manage profile, devices, invites, sources,
   recovery, deletion, or admin.
 - Canonical-signature, body tamper, nonce, idempotency, cross-source, clock, and stolen-key tests.

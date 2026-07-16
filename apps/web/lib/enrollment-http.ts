@@ -24,6 +24,7 @@ const enrollmentCookiePaths = Object.freeze({
 
 export interface EnrollmentHttp {
   callback(request: Request): Promise<Response>;
+  deviceRevoke(request: Request): Promise<Response>;
   loginOptions(request: Request): Promise<Response>;
   loginVerify(request: Request): Promise<Response>;
   logout(request: Request): Promise<Response>;
@@ -97,6 +98,16 @@ function readProfileVisibilityForm(value: string): boolean | undefined {
   }
   const visibility = parameters.get("visibility");
   return visibility === "public" ? true : visibility === "hidden" ? false : undefined;
+}
+
+function readDeviceRevokeForm(value: string): string | undefined {
+  const parameters = new URLSearchParams(value);
+  const keys = [...parameters.keys()];
+  if (keys.length !== 1 || keys[0] !== "deviceId") {
+    return undefined;
+  }
+  const deviceId = parameters.get("deviceId");
+  return deviceId !== null && /^dev_[A-Za-z0-9_-]{22}$/.test(deviceId) ? deviceId : undefined;
 }
 
 async function boundedBody(request: Request, maximumBytes: number): Promise<string | undefined> {
@@ -262,6 +273,46 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
             enrollmentCookiePaths.session,
           ),
         ]);
+      } finally {
+        lease.release();
+      }
+    },
+    async deviceRevoke(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/devices/revoke") ||
+        !contentType(request, formContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return redirect(currentRuntime.config.publicOrigin, "/account?error=unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 64);
+        const deviceId = body === undefined ? undefined : readDeviceRevokeForm(body);
+        if (deviceId === undefined) {
+          return problem("invalid_request");
+        }
+        const sessionCookie = readCookie(
+          request.headers.get("cookie"),
+          enrollmentCookieNames.session,
+        );
+        if (sessionCookie === undefined) {
+          return redirect(currentRuntime.config.publicOrigin, "/login?error=unavailable");
+        }
+        const revoked = await currentRuntime.service.revokeDevice(sessionCookie, deviceId);
+        return redirect(
+          currentRuntime.config.publicOrigin,
+          revoked ? "/account" : "/account?error=unavailable",
+        );
       } finally {
         lease.release();
       }

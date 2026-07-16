@@ -15,6 +15,7 @@ import type {
   PasskeyInventoryItem,
   PasskeyLoginMaterial,
   ProfileVisibility,
+  SourceDeviceInventoryItem,
 } from "./enrollment-database";
 import {
   enrollmentPatterns,
@@ -64,6 +65,7 @@ const addStartBodyKeys = new Set(["label"]);
 const addBodyKeys = new Set(["authentication", "registration"]);
 const revokeTargetBodyKeys = new Set(["passkeyId"]);
 const profileDeletionStartBodyKeys = new Set(["handle"]);
+const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 
 export const enrollmentCookieNames = Object.freeze({
@@ -167,9 +169,13 @@ export interface EnrollmentService {
     body: unknown,
   ): Promise<boolean>;
   logout(sessionCookie: string | undefined): Promise<boolean>;
+  readActiveDeviceInventory(
+    sessionCookie: string,
+  ): Promise<readonly SourceDeviceInventoryItem[] | undefined>;
   readPasskeyInventory(sessionCookie: string): Promise<readonly PasskeyInventoryItem[] | undefined>;
   readProfileVisibility(sessionCookie: string): Promise<ProfileVisibility | undefined>;
   readSession(sessionCookie: string | undefined): EnrollmentSession | undefined;
+  revokeDevice(sessionCookie: string, deviceId: string): Promise<boolean>;
   setProfileVisibility(
     sessionCookie: string,
     publiclyVisible: boolean,
@@ -1415,6 +1421,32 @@ export function createEnrollmentService(
         sessionDigest?.fill(0);
       }
     },
+    async readActiveDeviceInventory(
+      sessionCookie: string,
+    ): Promise<readonly SourceDeviceInventoryItem[] | undefined> {
+      const session = readSession(sessionCookie);
+      if (!session?.passkeyRegistered) {
+        return undefined;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      try {
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return undefined;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        return await database.readActiveDeviceInventory({
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+      } catch {
+        return undefined;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+      }
+    },
     async readPasskeyInventory(
       sessionCookie: string,
     ): Promise<readonly PasskeyInventoryItem[] | undefined> {
@@ -1466,6 +1498,33 @@ export function createEnrollmentService(
       }
     },
     readSession,
+    async revokeDevice(sessionCookie: string, deviceId: string): Promise<boolean> {
+      const session = readSession(sessionCookie);
+      if (!session?.passkeyRegistered || !deviceIdPattern.test(deviceId)) {
+        return false;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      try {
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return false;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        return await database.revokeDevice({
+          auditEventId: randomUuid(),
+          deviceId,
+          requestId: createRequestId(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+      } catch {
+        return false;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+      }
+    },
     async setProfileVisibility(
       sessionCookie: string,
       publiclyVisible: boolean,

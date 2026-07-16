@@ -16,6 +16,7 @@ import type { JoinRequest } from "./enrollment-domain";
 import { createEnrollmentService } from "./enrollment-service";
 import type {
   EnrollmentDatabaseLoginCompletion,
+  EnrollmentDatabaseDeviceRevocation,
   EnrollmentDatabasePasskeyAddition,
   EnrollmentDatabasePasskeyAddChallenge,
   EnrollmentDatabasePasskeyChallenge,
@@ -27,6 +28,7 @@ import type {
   EnrollmentDatabaseProfileDeletionChallenge,
   EnrollmentDatabaseProfileVisibilityRequest,
   EnrollmentDatabaseProfileVisibilityUpdate,
+  EnrollmentDatabaseSourceDeviceInventoryRequest,
 } from "./pairing-database-pool";
 
 const now = new Date("2026-07-16T10:00:00.000Z");
@@ -57,6 +59,10 @@ function createFixture() {
   let loginCredentialLookup: Buffer | undefined;
   let inventorySessionDigest: Buffer | undefined;
   let inventorySessionDigestInput: Uint8Array | undefined;
+  let activeDeviceInventoryRead: EnrollmentDatabaseSourceDeviceInventoryRequest | undefined;
+  let activeDeviceInventoryDigestInput: Uint8Array | undefined;
+  let deviceRevocationWrite: EnrollmentDatabaseDeviceRevocation | undefined;
+  let deviceRevocationDigestInput: Uint8Array | undefined;
   let addChallengeWrite: EnrollmentDatabasePasskeyAddChallenge | undefined;
   let additionWrite: EnrollmentDatabasePasskeyAddition | undefined;
   let revokeChallengeWrite: EnrollmentDatabasePasskeyRevokeChallenge | undefined;
@@ -150,6 +156,29 @@ function createFixture() {
       };
       return Promise.resolve(true);
     }),
+    readActiveDeviceInventory: vi.fn((input: EnrollmentDatabaseSourceDeviceInventoryRequest) => {
+      activeDeviceInventoryDigestInput = input.sessionVerifierDigest;
+      activeDeviceInventoryRead = {
+        ...input,
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve([
+        {
+          devices: [
+            {
+              activatedOn: "2026-07-14",
+              architecture: "x86_64" as const,
+              connectorVersion: "1.2.3",
+              deviceId: `dev_${"A".repeat(22)}`,
+              label: "Studio PC",
+              osFamily: "windows" as const,
+            },
+          ],
+          sourceId: `src_${"B".repeat(22)}`,
+          state: "active" as const,
+        },
+      ]);
+    }),
     readPasskeyInventory: vi.fn((input: EnrollmentDatabasePasskeyInventoryRequest) => {
       inventorySessionDigest = Buffer.from(input.sessionVerifierDigest);
       inventorySessionDigestInput = input.sessionVerifierDigest;
@@ -187,6 +216,14 @@ function createFixture() {
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
       return Promise.resolve("public" as const);
+    }),
+    revokeDevice: vi.fn((input: EnrollmentDatabaseDeviceRevocation) => {
+      deviceRevocationDigestInput = input.sessionVerifierDigest;
+      deviceRevocationWrite = {
+        ...input,
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve(true);
     }),
     revokeSession: vi.fn(() => Promise.resolve(true)),
     setProfileVisibility: vi.fn((input: EnrollmentDatabaseProfileVisibilityUpdate) => {
@@ -263,6 +300,8 @@ function createFixture() {
     verifyPasskey,
   });
   return {
+    activeDeviceInventoryDigestInput: () => activeDeviceInventoryDigestInput,
+    activeDeviceInventoryRead: () => activeDeviceInventoryRead,
     addChallengeWrite: () => addChallengeWrite,
     additionWrite: () => additionWrite,
     authenticationChallenge,
@@ -275,6 +314,8 @@ function createFixture() {
     deletionChallengeWrite: () => deletionChallengeWrite,
     deletionProfileRefDigestInput: () => deletionProfileRefDigestInput,
     deletionWrite: () => deletionWrite,
+    deviceRevocationDigestInput: () => deviceRevocationDigestInput,
+    deviceRevocationWrite: () => deviceRevocationWrite,
     enrollmentWrite: () => enrollmentWrite,
     exchangeGithub,
     loginCredentialLookup: () => loginCredentialLookup,
@@ -475,6 +516,60 @@ describe("enrollment service", () => {
     expect(inventorySessionDigestInput()).toEqual(Buffer.alloc(32));
     await expect(service.readPasskeyInventory("invalid")).resolves.toBeUndefined();
     expect(database.readPasskeyInventory).toHaveBeenCalledOnce();
+  });
+
+  it("reads active devices and immediately revokes only one exact owned device", async () => {
+    const {
+      activeDeviceInventoryDigestInput,
+      activeDeviceInventoryRead,
+      cookieCodec,
+      database,
+      deviceRevocationDigestInput,
+      deviceRevocationWrite,
+      service,
+    } = createFixture();
+    const verifier = Buffer.alloc(32, 0x49);
+    const sessionId = "00000000-0000-4000-8000-000000000514";
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId,
+      sessionVerifier: verifier.toString("base64url"),
+      version: 1,
+    });
+    const deviceId = `dev_${"A".repeat(22)}`;
+
+    await expect(service.readActiveDeviceInventory(sessionCookie)).resolves.toEqual([
+      expect.objectContaining({
+        devices: [expect.objectContaining({ deviceId, label: "Studio PC" })],
+        state: "active",
+      }),
+    ]);
+    expect(activeDeviceInventoryRead()).toMatchObject({
+      sessionId,
+      sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
+    });
+    expect(activeDeviceInventoryDigestInput()).toEqual(Buffer.alloc(32));
+
+    await expect(service.revokeDevice(sessionCookie, "invalid")).resolves.toBe(false);
+    expect(database.revokeDevice).not.toHaveBeenCalled();
+    await expect(service.revokeDevice(sessionCookie, deviceId)).resolves.toBe(true);
+    expect(deviceRevocationWrite()).toMatchObject({
+      auditEventId: "00000000-0000-4000-8000-000000000502",
+      deviceId,
+      requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+      sessionId,
+      sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
+    });
+    expect(deviceRevocationDigestInput()).toEqual(Buffer.alloc(32));
+
+    await expect(service.readActiveDeviceInventory("invalid")).resolves.toBeUndefined();
+    await expect(service.revokeDevice("invalid", deviceId)).resolves.toBe(false);
+    expect(database.readActiveDeviceInventory).toHaveBeenCalledOnce();
+    expect(database.revokeDevice).toHaveBeenCalledOnce();
   });
 
   it("reads and changes only the possessed session's public profile visibility", async () => {
@@ -889,9 +984,11 @@ describe("enrollment service", () => {
       createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve(true)),
       createProfileDeletionChallenge: vi.fn(() => Promise.resolve(true)),
       enrollProfile: vi.fn(() => Promise.resolve(true)),
+      readActiveDeviceInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),
       readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
+      revokeDevice: vi.fn(() => Promise.resolve(true)),
       revokeSession: vi.fn(() => Promise.resolve(true)),
       setProfileVisibility: vi.fn(() => Promise.resolve("hidden" as const)),
     };

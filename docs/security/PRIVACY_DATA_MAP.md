@@ -8,14 +8,14 @@ factory, plus library-only connector protocol/parser boundaries, a synthetic one
 supervisor, an exact-body composer, isolated pairing/request signers, a pure Web pairing verifier,
 dormant pairing applications, a visible public-score consumer with a synthetic fallback, and bounded
 database/local Jobs pairing cleanup behind closed boundaries. A local invite/OAuth/initial-passkey
-enrollment, returning-passkey login, and private passkey-inventory slice now adds encrypted
-short-lived cookies, fixed Web/Auth database calls, an account page, and logout with
-injected/synthetic evidence, but there is no live OAuth app, authenticator-backed result, deployed
-application database, production service, operational connector, or real user data. This document
-remains the required inventory for implementation. A field may not be collected merely because it
-appears here: its schema, purpose, visibility, retention, deletion, and access tests must exist
-first. The implemented column-level mapping is documented in
-[`database/README.md`](../../database/README.md#data-and-privacy-map).
+enrollment, returning-passkey login, private passkey inventory, and private active-device inventory
+and revoke slice now add encrypted short-lived cookies, fixed Web/Auth database calls, an account
+page, and logout with injected/synthetic evidence, but there is no live OAuth app,
+authenticator-backed result, deployed application database, production service, operational
+connector, or real user data. This document remains the required inventory for implementation. A
+field may not be collected merely because it appears here: its schema, purpose, visibility,
+retention, deletion, and access tests must exist first. The implemented column-level mapping is
+documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
 
@@ -103,23 +103,29 @@ responses. Neither credential material nor profile ID enters account HTML. The s
 session can read only a closed `public`/`hidden` visibility value and submit that desired value in a
 same-origin form; the database derives the profile instead of accepting its ID. Hiding does not stop
 source sync. Revision 0015 adds no profile column or new retained field; it stores no form body, IP
-address, user agent, or score. The decoded master key is overwritten immediately after those purpose
-keys are derived. Add/revoke step-up is also one-time and at most five minutes; its consumed-row
-cleanup remains a launch requirement. The HTTP runtime exposes only the public origin and
-secure-cookie flag. The fixed GitHub user response parser accepts only a positive safe numeric `id`
-for return; the token and every other response field are discarded after the callback. Tests use
-reserved, synthetic values and injected GitHub/database/authenticator capabilities. No real-user
+address, user agent, or score. The same account read projects at most 64 active device credentials
+across at most 32 sources. HTML receives only source ordinal and state, bounded device label,
+platform, connector version, and a UTC-day-rounded activation date. Source IDs, profile IDs, public
+keys, internal key IDs, and exact timestamps remain server-only; only the owned device's opaque ID
+enters its authenticated hidden revoke form. Revision 0016 adds no column or retained field and
+preserves this inventory and immediate revoke while the profile is hidden. The Web slice does not
+log, cache, or persist the projection. The decoded master key is overwritten immediately after those
+purpose keys are derived. Add/revoke step-up is also one-time and at most five minutes; its
+consumed-row cleanup remains a launch requirement. The HTTP runtime exposes only the public origin
+and secure-cookie flag. The fixed GitHub user response parser accepts only a positive safe numeric
+`id` for return; the token and every other response field are discarded after the callback. Tests
+use reserved, synthetic values and injected GitHub/database/authenticator capabilities. No real-user
 retention or deployed subprocessor claim follows from this local boundary.
 
 Opaque sources deliberately contain no Codex account email or upstream account identifier. The
 implemented pairing database caps each profile at 32 lifetime source records and 64 active plus
 unexpired approved device authorities. These public safety ceilings do not replace lower
 deployment-private rate and fair-use controls, and exact per-source details remain non-public
-Account data. Revision 0004 adds no new personal-data column: its private inventory procedure
-returns only the requesting session profile's opaque source state and bounded device metadata.
-Lifecycle procedures retain the existing source/device rows, append only closed audit references,
-and never accept or expose account email, upstream account identity, exact usage, public keys, or
-internal key IDs.
+Account data. Revisions 0004 and 0016 add no new personal-data column: the private inventory
+procedure returns only the requesting session profile's opaque source state and bounded device
+metadata, including while that profile is hidden. Lifecycle procedures retain the existing
+source/device rows, append only closed audit references, and never accept or expose account email,
+upstream account identity, exact usage, public keys, or internal key IDs.
 
 Revision 0006 adds no email, support identity, recovery plaintext, IP address, or arbitrary
 metadata. Its lookup returns only one supplied opaque selector and the matching unused PHC, never a

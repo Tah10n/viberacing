@@ -212,6 +212,20 @@ describe("pairing database pool", () => {
       [{ deleted: true }],
       [{ visibility: "hidden" }],
       [{ revoked: true }],
+      [
+        {
+          activated_on: "2026-07-14",
+          architecture: "x86_64",
+          connector_version: "1.2.3",
+          device_id: `dev_${"A".repeat(22)}`,
+          device_label: "Studio PC",
+          device_state: "active",
+          os_family: "windows",
+          source_id: `src_${"B".repeat(22)}`,
+          source_state: "active",
+        },
+      ],
+      [{ revoked: true }],
     ];
     const liveQueries: { text: string; values: unknown[] }[] = [];
     const snapshots: { text: string; values: unknown[] }[] = [];
@@ -443,6 +457,26 @@ describe("pairing database pool", () => {
         sessionVerifierDigest: digest,
       }),
     ).resolves.toEqual([{ revoked: true }]);
+    await expect(
+      client.readActiveDeviceInventory({
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        device_id: `dev_${"A".repeat(22)}`,
+        device_label: "Studio PC",
+      }),
+    ]);
+    await expect(
+      client.revokeDevice({
+        auditEventId: "00000000-0000-4000-8000-000000000321",
+        deviceId: `dev_${"A".repeat(22)}`,
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([{ revoked: true }]);
 
     expect(snapshots.map(({ text }) => text)).toEqual([
       expect.stringContaining("enroll_profile"),
@@ -460,6 +494,8 @@ describe("pairing database pool", () => {
       expect.stringContaining("consume_passkey_challenge"),
       expect.stringContaining("set_profile_visibility"),
       expect.stringContaining("revoke_session"),
+      expect.stringContaining("read_source_inventory"),
+      expect.stringContaining("revoke_device"),
     ]);
     expect(snapshots[2]?.text).toContain("register_initial_passkey");
     expect(snapshots[2]?.text).toContain("rotate_session");
@@ -470,6 +506,11 @@ describe("pairing database pool", () => {
     expect(snapshots[10]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[12]?.text).toContain("request_profile_deletion");
     expect(snapshots[12]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[15]?.text).toContain("LIMIT 65");
+    expect(snapshots[15]?.text).toContain("device_state = 'active'");
+    expect(snapshots[15]?.text).not.toContain("public_key");
+    expect(snapshots[15]?.text).not.toContain("device_key_id");
+    expect(snapshots[16]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[4]?.values).toEqual([
       "00000000-0000-4000-8000-000000000310",
       digest,
@@ -560,6 +601,14 @@ describe("pairing database pool", () => {
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
     expect(snapshots[13]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest, false]);
+    expect(snapshots[15]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest]);
+    expect(snapshots[16]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      `dev_${"A".repeat(22)}`,
+      "00000000-0000-4000-8000-000000000321",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));
     expect(context).toEqual(Buffer.alloc(32, 0x52));
     expect(credential).toEqual(Buffer.alloc(32, 0x53));

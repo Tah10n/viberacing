@@ -28,6 +28,21 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createProfileDeletionChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
+    readActiveDeviceInventory: vi.fn(() =>
+      Promise.resolve([
+        {
+          activated_on: "2026-07-14",
+          architecture: "x86_64",
+          connector_version: "1.2.3",
+          device_id: `dev_${"A".repeat(22)}`,
+          device_label: "Studio PC",
+          device_state: "active",
+          os_family: "windows",
+          source_id: `src_${"B".repeat(22)}`,
+          source_state: "active",
+        },
+      ]),
+    ),
     readPasskeyInventory: vi.fn(() =>
       Promise.resolve([
         {
@@ -62,6 +77,7 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
       releases.push(destroy);
     },
     revokeEnrollmentSession: vi.fn(() => Promise.resolve([{ revoked: true }])),
+    revokeDevice: vi.fn(() => Promise.resolve([{ revoked: true }])),
     setProfileVisibility: vi.fn(() => Promise.resolve([{ visibility: "hidden" }])),
     verifyRuntimeBoundary: vi.fn(() =>
       Promise.resolve([
@@ -141,6 +157,27 @@ describe("enrollment database", () => {
       passkeyId: "00000000-0000-4000-8000-000000000406",
       signCount: 1,
     });
+    await expect(
+      database.readActiveDeviceInventory({
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).resolves.toEqual([
+      {
+        devices: [
+          {
+            activatedOn: "2026-07-14",
+            architecture: "x86_64",
+            connectorVersion: "1.2.3",
+            deviceId: `dev_${"A".repeat(22)}`,
+            label: "Studio PC",
+            osFamily: "windows",
+          },
+        ],
+        sourceId: `src_${"B".repeat(22)}`,
+        state: "active",
+      },
+    ]);
     await expect(
       database.readPasskeyInventory({
         sessionId: profile.sessionId,
@@ -281,6 +318,15 @@ describe("enrollment database", () => {
       }),
     ).resolves.toBe("hidden");
     await expect(
+      database.revokeDevice({
+        auditEventId: profile.auditEventId,
+        deviceId: `dev_${"A".repeat(22)}`,
+        requestId: profile.requestId,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).resolves.toBe(true);
+    await expect(
       database.revokeSession({
         auditEventId: profile.auditEventId,
         requestId: profile.requestId,
@@ -288,8 +334,10 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(15);
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(17);
     expect(releases).toEqual([
+      false,
+      false,
       false,
       false,
       false,
@@ -365,6 +413,31 @@ describe("enrollment database", () => {
       }),
     ).rejects.toMatchObject({ code: "result_invalid" });
     expect(malformedInventory.releases).toEqual([true]);
+
+    const malformedDeviceInventory = fixture({
+      readActiveDeviceInventory: () =>
+        Promise.resolve([
+          {
+            activated_on: "2026-07-14",
+            architecture: "x86_64",
+            connector_version: "1.2.3",
+            device_id: `dev_${"A".repeat(22)}`,
+            device_key_id: "00000000-0000-4000-8000-000000000499",
+            device_label: "Studio PC",
+            device_state: "active",
+            os_family: "windows",
+            source_id: `src_${"B".repeat(22)}`,
+            source_state: "active",
+          },
+        ]),
+    });
+    await expect(
+      malformedDeviceInventory.database.readActiveDeviceInventory({
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).rejects.toMatchObject({ code: "result_invalid" });
+    expect(malformedDeviceInventory.releases).toEqual([true]);
 
     const malformedVisibility = fixture({
       readProfileVisibility: () => Promise.resolve([{ visibility: "private" }]),

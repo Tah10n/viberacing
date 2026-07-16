@@ -160,10 +160,28 @@ describe("enrollment experience", () => {
     });
   });
 
-  it("shows only bounded passkey inventory fields on the account page", () => {
+  it("shows only bounded passkey and active-device fields on the account page", () => {
     const passkeyId = "00000000-0000-4000-8000-000000000511";
+    const deviceId = `dev_${"A".repeat(22)}`;
+    const sourceId = `src_${"B".repeat(22)}`;
     const markup = renderToStaticMarkup(
       <AccountExperience
+        activeDeviceInventory={[
+          {
+            devices: [
+              {
+                activatedOn: "2026-07-14",
+                architecture: "x86_64",
+                connectorVersion: "1.2.3",
+                deviceId,
+                label: "Studio PC",
+                osFamily: "windows",
+              },
+            ],
+            sourceId,
+            state: "active",
+          },
+        ]}
         handle="pixel_driver"
         locale="en"
         visibility="public"
@@ -186,6 +204,12 @@ describe("enrollment experience", () => {
       />,
     );
     expect(markup).toContain("Your passkeys");
+    expect(markup).toContain("Connected devices");
+    expect(markup).toContain("Studio PC");
+    expect(markup).toContain('action="/auth/devices/revoke"');
+    expect(markup).toContain(`name="deviceId" value="${deviceId}"`);
+    expect(markup).toContain('dateTime="2026-07-14"');
+    expect(markup).not.toContain(sourceId);
     expect(markup).toContain("Public profile");
     expect(markup).toContain("Delete profile");
     expect(markup).toContain('name="handle"');
@@ -202,6 +226,7 @@ describe("enrollment experience", () => {
     const hidden = renderToStaticMarkup(
       <AccountExperience
         actionUnavailable
+        activeDeviceInventory={[]}
         handle="pixel_driver"
         locale="ru"
         passkeys={[]}
@@ -214,6 +239,7 @@ describe("enrollment experience", () => {
 
     const unavailable = renderToStaticMarkup(
       <AccountExperience
+        activeDeviceInventory={undefined}
         handle="pixel_driver"
         locale="en"
         passkeys={undefined}
@@ -221,6 +247,7 @@ describe("enrollment experience", () => {
       />,
     );
     expect(unavailable).toContain("Profile visibility is temporarily unavailable");
+    expect(unavailable).toContain("Connected-device details are temporarily unavailable");
     expect(unavailable).not.toContain('action="/auth/profile/visibility"');
   });
 
@@ -241,6 +268,7 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
+        activeDeviceInventory={[]}
         handle="pixel_driver"
         locale="en"
         visibility="public"
@@ -306,6 +334,7 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
+        activeDeviceInventory={[]}
         handle="pixel_driver"
         locale="en"
         visibility="public"
@@ -367,7 +396,13 @@ describe("enrollment experience", () => {
       .mockResolvedValueOnce(new Response(null, { status: 401 }));
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
-      <AccountExperience handle="pixel_driver" locale="en" passkeys={[]} visibility="public" />,
+      <AccountExperience
+        activeDeviceInventory={[]}
+        handle="pixel_driver"
+        locale="en"
+        passkeys={[]}
+        visibility="public"
+      />,
     );
     const input = mounted.container.querySelector<HTMLInputElement>('input[name="handle"]');
     if (input === null) {
@@ -415,6 +450,7 @@ describe("enrollment experience", () => {
       renderToStaticMarkup(<JoinExperience />),
       renderToStaticMarkup(
         <AccountExperience
+          activeDeviceInventory={[]}
           handle="pixel_driver"
           locale="en"
           visibility="public"

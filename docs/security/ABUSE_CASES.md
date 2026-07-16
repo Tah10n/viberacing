@@ -158,9 +158,13 @@ material availability cost.
   settlement, and generic acknowledgement through a mock pool. The connector's isolated one-use
   signer now consumes an inaccessible device-bound capability, rejects a different device ID, signs
   only the exact prepared message, and shares a strictly verified synthetic signature with Ingest.
-  The separate pairing signer/verifier now proves only synthetic pending-key possession. OS key
-  generation/storage, end-to-end pairing, rotation, metrics, connector HTTP transport, live login,
-  and the live verifier-to-PostgreSQL path remain unimplemented.
+  The local account page now maps only the possessed session's active device credentials under the
+  64-authority ceiling and sends one opaque device ID through an exact same-origin revoke form.
+  PostgreSQL proves inventory and revoke remain available while public visibility is hidden;
+  cross-profile IDs and replay stay closed. The separate pairing signer/verifier now proves only
+  synthetic pending-key possession. OS key generation/storage, end-to-end pairing, rotation,
+  metrics, connector HTTP transport, live login, and the live verifier-to-PostgreSQL path remain
+  unimplemented.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity.
 

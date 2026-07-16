@@ -41,6 +41,12 @@ apply.
   `public`/`hidden` mapper. Hiding removes the profile from public reads but does not pause existing
   source sync; publishing makes it eligible for public reads again. Preserve idempotency, generic
   failures, no browser persistence, and the fixed Web/Auth database capability.
+- Active-device inventory must remain session-derived, server-rendered, and usable while the profile
+  is hidden. Project only the at-most-64 active credentials with bounded label/platform/version and
+  day-rounded activation; omit source IDs, internal key/profile IDs, public keys, and exact times
+  from HTML. The exact opaque device ID may enter only its authenticated hidden revoke form. Device
+  revoke remains an immediate, terminal, same-origin owned-device action with a generic result and
+  bounded audit reference.
 - Passkey revocation must target only an owned non-current active key from that inventory. Bind one
   fresh required-UV assertion to the exact active session, target, RP, origin, and five-minute
   challenge, then consume and revoke atomically. The opaque target ID may enter only the

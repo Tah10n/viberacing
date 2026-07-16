@@ -19,10 +19,11 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
     redirect("/login?error=unavailable");
   }
   const parameters = await searchParams;
-  const { passkeys, session, visibility } = account;
+  const { activeDeviceInventory, passkeys, session, visibility } = account;
   return (
     <AccountExperience
       actionUnavailable={parameters.error === "unavailable"}
+      activeDeviceInventory={activeDeviceInventory}
       handle={session.handle}
       locale={session.locale}
       passkeys={passkeys}
