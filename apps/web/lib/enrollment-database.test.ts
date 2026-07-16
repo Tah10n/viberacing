@@ -23,11 +23,14 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     ),
     completePasskeyRevocation: vi.fn(() => Promise.resolve([{ revoked: true }])),
     completeProfileDeletion: vi.fn(() => Promise.resolve([{ deleted: true }])),
+    completeSourceReactivation: vi.fn(() => Promise.resolve([{ reactivated: true }])),
     createPasskeyAddChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createProfileDeletionChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
+    createSourceReactivationChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
+    pauseSource: vi.fn(() => Promise.resolve([{ paused: true }])),
     readActiveDeviceInventory: vi.fn(() =>
       Promise.resolve([
         {
@@ -284,6 +287,41 @@ describe("enrollment database", () => {
       }),
     ).resolves.toBe(true);
     await expect(
+      database.pauseSource({
+        auditEventId: profile.auditEventId,
+        requestId: profile.requestId,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        sourceId: `src_${"A".repeat(22)}`,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      database.createSourceReactivationChallenge({
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000415",
+        contextDigest: new Uint8Array(32),
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        sourceId: `src_${"A".repeat(22)}`,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      database.completeSourceReactivation({
+        auditEventId: profile.auditEventId,
+        backupState: false,
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000415",
+        contextDigest: new Uint8Array(32),
+        observedSignCount: 4,
+        requestId: profile.requestId,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        sourceId: `src_${"A".repeat(22)}`,
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000406",
+      }),
+    ).resolves.toBe(true);
+    await expect(
       database.completePasskeyLogin({
         auditEventId: profile.auditEventId,
         backupState: false,
@@ -334,8 +372,11 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(17);
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(20);
     expect(releases).toEqual([
+      false,
+      false,
+      false,
       false,
       false,
       false,
@@ -488,6 +529,61 @@ describe("enrollment database", () => {
       }),
     ).rejects.toMatchObject({ code: "result_invalid" });
     expect(unorderedInventory.releases).toEqual([true]);
+  });
+
+  it("keeps empty owned sources visible and enforces the active-device ceiling", async () => {
+    const emptySource = fixture({
+      readActiveDeviceInventory: () =>
+        Promise.resolve([
+          {
+            activated_on: null,
+            architecture: null,
+            connector_version: null,
+            device_id: null,
+            device_label: null,
+            device_state: null,
+            os_family: null,
+            source_id: `src_${"A".repeat(22)}`,
+            source_state: "paused",
+          },
+        ]),
+    });
+    await expect(
+      emptySource.database.readActiveDeviceInventory({
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).resolves.toEqual([
+      {
+        devices: [],
+        sourceId: `src_${"A".repeat(22)}`,
+        state: "paused",
+      },
+    ]);
+
+    const overflow = fixture({
+      readActiveDeviceInventory: () =>
+        Promise.resolve(
+          Array.from({ length: 65 }, (_, index) => ({
+            activated_on: "2026-07-14",
+            architecture: "x86_64",
+            connector_version: "1.2.3",
+            device_id: `dev_${String(index).padStart(22, "0")}`,
+            device_label: `Device ${String(index).padStart(2, "0")}`,
+            device_state: "active",
+            os_family: "windows",
+            source_id: `src_${"B".repeat(22)}`,
+            source_state: "active",
+          })),
+        ),
+    });
+    await expect(
+      overflow.database.readActiveDeviceInventory({
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).rejects.toMatchObject({ code: "result_invalid" });
+    expect(overflow.releases).toEqual([true]);
   });
 
   it("contains connection and release failures without reflecting driver detail", async () => {

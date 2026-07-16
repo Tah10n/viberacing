@@ -66,6 +66,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Recovery-code selector and verifier                                         | Security                        | Web/Auth-generated; recover profile access                               | Web/Auth only; plaintext secret shown once to the user                                      | Opaque selector and Argon2id PHC; protected pepper stays outside DB                                                                 | PHC scrubbed on use; batch removed on regeneration, completion, or deletion; cleanup before launch                               |
 | Restricted recovery authority and registration binding                      | Security                        | Server; permit only exact replacement-passkey registration               | Web/Auth recovery procedure only                                                            | Keyed verifier plus challenge/context digests and terminal lifecycle                                                                | One-time, at most 10 minutes; terminal-row retention and cleanup are a launch decision required                                  |
 | Source ID, state, and source count                                          | Account; count is Public        | User-declared opaque CodexSource; isolate and explain aggregation        | User sees sources; public sees only contributing count for a season                         | `codex_sources`, season snapshot                                                                                                    | Source lifecycle plus historical public count until profile deletion                                                             |
+| Encrypted source-control token                                              | Security                        | Server; select one owned source without exposing its raw ID in HTML      | Authenticated account page and source-control requests only                                 | Transient AES-GCM ciphertext in HTML/form or JSON; no new database field                                                            | Bound to the exact active session and expires within 15 minutes; never logged or accepted as proof alone                         |
 | Device public key, private signing key, and public device ID                | Security                        | Connector; authenticate one source-bound device                          | Public key to Ingest/inventory; private key only to local signer                            | Public key/ID in `device_keys`; private key in reviewed OS store only, not implemented                                              | Pending key is Jobs-cleanup eligible at pairing expiry; active key follows revoke/unlink/delete                                  |
 | Device label                                                                | Account                         | User or safe generated default; distinguish devices                      | User profile only after activation; pairing service while pending                           | `device_keys` metadata                                                                                                              | Pending label is Jobs-cleanup eligible at pairing expiry; active label follows device lifecycle                                  |
 | Connector, Codex, and OS-family versions                                    | Security; Operational           | Connector; compatibility and incident diagnosis                          | Pairing service while pending; user inventory after activation                              | Device/sync metadata                                                                                                                | Pending metadata is Jobs-cleanup eligible at pairing expiry; active history needs launch policy                                  |
@@ -104,12 +105,16 @@ session can read only a closed `public`/`hidden` visibility value and submit tha
 same-origin form; the database derives the profile instead of accepting its ID. Hiding does not stop
 source sync. Revision 0015 adds no profile column or new retained field; it stores no form body, IP
 address, user agent, or score. The same account read projects at most 64 active device credentials
-across at most 32 sources. HTML receives only source ordinal and state, bounded device label,
-platform, connector version, and a UTC-day-rounded activation date. Source IDs, profile IDs, public
-keys, internal key IDs, and exact timestamps remain server-only; only the owned device's opaque ID
-enters its authenticated hidden revoke form. Revision 0016 adds no column or retained field and
-preserves this inventory and immediate revoke while the profile is hidden. The Web slice does not
-log, cache, or persist the projection. The decoded master key is overwritten immediately after those
+across at most 32 sources and preserves a source with no active device. HTML receives only source
+ordinal and state, bounded device label, platform, connector version, a UTC-day-rounded activation
+date, and an exact-shape encrypted source-control token. Raw source IDs, profile IDs, public keys,
+internal key IDs, and exact timestamps remain server-only; only the owned device's opaque ID and the
+encrypted source-control token enter their respective authenticated controls. Revision 0016 adds no
+column or retained field and preserves inventory/revoke while the profile is hidden. Revision 0017
+likewise adds no retained field and preserves pause/reactivation while hidden. The token expires
+within 15 minutes, is bound to the exact session, and is not proof without that session; the
+reactivation challenge is a separate five-minute HttpOnly continuation. The Web slice does not log,
+cache, or persist the projection. The decoded master key is overwritten immediately after those
 purpose keys are derived. Add/revoke step-up is also one-time and at most five minutes; its
 consumed-row cleanup remains a launch requirement. The HTTP runtime exposes only the public origin
 and secure-cookie flag. The fixed GitHub user response parser accepts only a positive safe numeric
@@ -121,7 +126,7 @@ Opaque sources deliberately contain no Codex account email or upstream account i
 implemented pairing database caps each profile at 32 lifetime source records and 64 active plus
 unexpired approved device authorities. These public safety ceilings do not replace lower
 deployment-private rate and fair-use controls, and exact per-source details remain non-public
-Account data. Revisions 0004 and 0016 add no new personal-data column: the private inventory
+Account data. Revisions 0004, 0016, and 0017 add no new personal-data column: the private inventory
 procedure returns only the requesting session profile's opaque source state and bounded device
 metadata, including while that profile is hidden. Lifecycle procedures retain the existing
 source/device rows, append only closed audit references, and never accept or expose account email,
@@ -439,6 +444,8 @@ model and requires an ADR, consent/notice analysis, data-map update, and public 
 ## User controls and deletion
 
 - **Pause collection:** source/device submissions are rejected while retained state is not changed.
+- **Reactivate collection:** only a paused source can resume after a fresh passkey assertion; this
+  does not publish a hidden profile or lift quarantine.
 - **Hide profile:** public reads and caches stop immediately without waiting for full deletion.
 - **Revoke device:** the key loses submission authority immediately; previous season attribution
   remains under policy.

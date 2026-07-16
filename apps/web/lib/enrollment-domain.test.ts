@@ -11,6 +11,7 @@ import {
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
   readProfileDeletionChallenge,
+  readSourceReactivationChallenge,
 } from "./enrollment-domain";
 
 const secret = Buffer.alloc(32, 0x42);
@@ -88,6 +89,10 @@ describe("enrollment domain", () => {
       ...challenge,
       handle: "pixel_driver",
     } as const;
+    const sourceReactivationChallenge = {
+      ...challenge,
+      sourceId: `src_${"A".repeat(22)}`,
+    } as const;
     const addChallenge = {
       authenticationChallenge: challenge.challenge,
       challengeId: challenge.challengeId,
@@ -105,12 +110,16 @@ describe("enrollment domain", () => {
     expect(readProfileDeletionChallenge(profileDeletionChallenge, now)).toEqual(
       profileDeletionChallenge,
     );
+    expect(readSourceReactivationChallenge(sourceReactivationChallenge, now)).toEqual(
+      sourceReactivationChallenge,
+    );
     expect(readPendingEnrollment({ ...pending, extra: true }, now)).toBeUndefined();
     expect(readEnrollmentSession({ ...session, expiresAt: now }, now)).toBeUndefined();
     expect(readPasskeyChallenge({ ...challenge, challenge: "bad" }, now)).toBeUndefined();
     expect(readPasskeyChallenge(revokeChallenge, now)).toBeUndefined();
     expect(readPasskeyChallenge(addChallenge, now)).toBeUndefined();
     expect(readPasskeyChallenge(profileDeletionChallenge, now)).toBeUndefined();
+    expect(readPasskeyChallenge(sourceReactivationChallenge, now)).toBeUndefined();
     expect(readPasskeyAddChallenge(challenge, now)).toBeUndefined();
     expect(
       readPasskeyAddChallenge(
@@ -132,6 +141,14 @@ describe("enrollment domain", () => {
     ).toBeUndefined();
     expect(
       readProfileDeletionChallenge({ ...profileDeletionChallenge, extra: true }, now),
+    ).toBeUndefined();
+    expect(readSourceReactivationChallenge(challenge, now)).toBeUndefined();
+    expect(readSourceReactivationChallenge(revokeChallenge, now)).toBeUndefined();
+    expect(
+      readSourceReactivationChallenge({ ...sourceReactivationChallenge, sourceId: "bad" }, now),
+    ).toBeUndefined();
+    expect(
+      readSourceReactivationChallenge({ ...sourceReactivationChallenge, extra: true }, now),
     ).toBeUndefined();
   });
 });

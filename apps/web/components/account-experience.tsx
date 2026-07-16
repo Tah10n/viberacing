@@ -2,19 +2,21 @@ import "server-only";
 
 import Link from "next/link";
 
-import type {
-  PasskeyInventoryItem,
-  ProfileVisibility,
-  SourceDeviceInventoryItem,
-} from "@/lib/enrollment-database";
+import type { PasskeyInventoryItem, ProfileVisibility } from "@/lib/enrollment-database";
+import type { AccountSourceDeviceInventoryItem } from "@/lib/enrollment-service";
 import type { Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
-import { PasskeyAddForm, PasskeyRevokeButton, ProfileDeletionForm } from "./passkey-setup";
+import {
+  PasskeyAddForm,
+  PasskeyRevokeButton,
+  ProfileDeletionForm,
+  SourceReactivationButton,
+} from "./passkey-setup";
 
 interface AccountExperienceProps {
   readonly actionUnavailable?: boolean;
-  readonly activeDeviceInventory: readonly SourceDeviceInventoryItem[] | undefined;
+  readonly activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
   readonly handle: string;
   readonly locale: Locale;
   readonly passkeys: readonly PasskeyInventoryItem[] | undefined;
@@ -84,7 +86,7 @@ export function AccountExperience({
           ) : (
             <ol className="passkey-list">
               {activeDeviceInventory.map((source, sourceIndex) => (
-                <li className="passkey-item" key={source.sourceId}>
+                <li className="passkey-item" key={source.sourceControl}>
                   <div className="passkey-item-heading">
                     <strong>
                       {copy.sourceLabel} {sourceIndex + 1}
@@ -99,31 +101,50 @@ export function AccountExperience({
                             : copy.sourceUnlinked}
                     </span>
                   </div>
-                  <ul className="passkey-list">
-                    {source.devices.map((device) => (
-                      <li className="passkey-item" key={device.deviceId}>
-                        <strong>{device.label}</strong>
-                        <p className="auth-status">
-                          {device.osFamily === "macos"
-                            ? "macOS"
-                            : device.osFamily === "windows"
-                              ? "Windows"
-                              : "Linux"}{" "}
-                          · {device.architecture} · {copy.deviceConnector} {device.connectorVersion}
-                        </p>
-                        <p className="auth-status">
-                          {copy.deviceConnected}{" "}
-                          <time dateTime={device.activatedOn}>{device.activatedOn}</time>
-                        </p>
-                        <form action="/auth/devices/revoke" method="post">
-                          <input name="deviceId" type="hidden" value={device.deviceId} />
-                          <button className="danger-action" type="submit">
-                            {copy.revokeDevice}
-                          </button>
-                        </form>
-                      </li>
-                    ))}
-                  </ul>
+                  {source.state === "active" ? (
+                    <form action="/auth/sources/pause" method="post">
+                      <input name="sourceControl" type="hidden" value={source.sourceControl} />
+                      <button className="secondary-action" type="submit">
+                        {copy.pauseSource}
+                      </button>
+                    </form>
+                  ) : source.state === "paused" ? (
+                    <SourceReactivationButton
+                      label={`${copy.sourceLabel} ${String(sourceIndex + 1)}`}
+                      locale={locale}
+                      sourceControl={source.sourceControl}
+                    />
+                  ) : null}
+                  {source.devices.length === 0 ? (
+                    <p className="auth-status">{copy.noSourceActiveDevices}</p>
+                  ) : (
+                    <ul className="passkey-list">
+                      {source.devices.map((device) => (
+                        <li className="passkey-item" key={device.deviceId}>
+                          <strong>{device.label}</strong>
+                          <p className="auth-status">
+                            {device.osFamily === "macos"
+                              ? "macOS"
+                              : device.osFamily === "windows"
+                                ? "Windows"
+                                : "Linux"}{" "}
+                            · {device.architecture} · {copy.deviceConnector}{" "}
+                            {device.connectorVersion}
+                          </p>
+                          <p className="auth-status">
+                            {copy.deviceConnected}{" "}
+                            <time dateTime={device.activatedOn}>{device.activatedOn}</time>
+                          </p>
+                          <form action="/auth/devices/revoke" method="post">
+                            <input name="deviceId" type="hidden" value={device.deviceId} />
+                            <button className="danger-action" type="submit">
+                              {copy.revokeDevice}
+                            </button>
+                          </form>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ol>

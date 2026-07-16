@@ -153,6 +153,20 @@ export function profileDeletionContextDigest(
     .digest();
 }
 
+export function sourceReactivationContextDigest(
+  sessionId: string,
+  sourceId: string,
+  rpId: string,
+  origin: string,
+): Buffer {
+  return createHash("sha256")
+    .update(
+      `viberacing-source-reactivation-v1\n${sessionId}\n${sourceId}\n${rpId}\n${origin}`,
+      "utf8",
+    )
+    .digest();
+}
+
 export function passkeyLoginCredentialId(response: unknown): Buffer | undefined {
   if (
     response === null ||

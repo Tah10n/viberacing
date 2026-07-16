@@ -96,6 +96,12 @@
       "name": "hidden_profile_device_controls",
       "path": "database/migrations/0016_hidden_profile_device_controls.sql",
       "sha256": "62d0d56e3a3331d0f51dbea639b21db60a6fdb83fff283e5d4620f8000abf7b6"
+    },
+    {
+      "revision": 17,
+      "name": "hidden_profile_source_pause_reactivation",
+      "path": "database/migrations/0017_hidden_profile_source_pause_reactivation.sql",
+      "sha256": "0034de57a30d831816f6dbe46204fb8a6b50db86cc484697e6ac6d8277be19bd"
     }
   ]
 }

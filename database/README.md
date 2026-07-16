@@ -2,23 +2,24 @@
 
 ## Status
 
-This directory contains sixteen SQL-first revisions for identity, passkey login and management,
+This directory contains seventeen SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
-implemented. A local invite/OAuth/initial-passkey, returning-passkey, session-scoped passkey and
-active-device inventory, and immediate device-revoke application now consumes only fixed Web/Auth
-capabilities with injected or synthetic dependencies. No authentication/HTTP pairing route, Argon2id
-recovery application, production credential, or deployed database consumes the remaining protected
-identity/ingest capabilities. A dormant Web/Auth boundary creates bounded pairing material through
-one fixed start call; a second composes keyed pairing lookup, strict Ed25519 possession proof, and
-exact activation through the same mock-tested fixed-query pool, but neither has a live login or
-transport. A local Ingest kernel verifies a bounded exact-body origin/device request, and a separate
-fixed-query adapter maps origin replay plus its output to three capabilities through a probed
-least-privileged pool. Mock tests do not call PostgreSQL or supply a working login. One local
-public-score route and one local one-shot Jobs runner wrap narrow capabilities without a working
-database login. The database-only ingest and Jobs-only ingest-retention, pairing-retention,
-open-season scoring, and terminal finalization procedures plus one Web-only public score projection
-are implemented; HTTP ingest, scheduled execution, audited corrections, and broader purge are not.
+implemented. A local invite/OAuth/initial-passkey, returning-passkey, session-scoped passkey,
+source/device inventory, source pause/reactivation, and immediate device-revoke application now
+consumes only fixed Web/Auth capabilities with injected or synthetic dependencies. No
+authentication/HTTP pairing route, Argon2id recovery application, production credential, or deployed
+database consumes the remaining protected identity/ingest capabilities. A dormant Web/Auth boundary
+creates bounded pairing material through one fixed start call; a second composes keyed pairing
+lookup, strict Ed25519 possession proof, and exact activation through the same mock-tested
+fixed-query pool, but neither has a live login or transport. A local Ingest kernel verifies a
+bounded exact-body origin/device request, and a separate fixed-query adapter maps origin replay plus
+its output to three capabilities through a probed least-privileged pool. Mock tests do not call
+PostgreSQL or supply a working login. One local public-score route and one local one-shot Jobs
+runner wrap narrow capabilities without a working database login. The database-only ingest and
+Jobs-only ingest-retention, pairing-retention, open-season scoring, and terminal finalization
+procedures plus one Web-only public score projection are implemented; HTTP ingest, scheduled
+execution, audited corrections, and broader purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -70,6 +71,8 @@ procedure; the current repository has no such application code.
   and idempotent `active`/`hidden` transition.
 - `migrations/0016_hidden_profile_device_controls.sql` preserves private source/device inventory and
   immediate owned-device revoke for an exact possessed session while public visibility is hidden.
+- `migrations/0017_hidden_profile_source_pause_reactivation.sql` preserves immediate source pause
+  and fresh-passkey paused-source reactivation for a possessed session while visibility is hidden.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -242,12 +245,13 @@ Runtime access must remain procedure-only and must have positive and negative in
   returns only its opaque source lifecycle plus bounded device metadata. Internal key IDs, public
   keys, profile IDs, account email, and exact usage are absent from the result.
 - `pause_source` and `revoke_device` are immediate protective actions. They accept no caller-chosen
-  profile, close on cross-profile IDs and replay, and append one bounded audit reference. Device
-  revoke remains available while public visibility is hidden. Pausing invalidates unused
-  source-bound challenges and cancels approved-but-not-activated pairings.
+  profile, close on cross-profile IDs and replay, and append one bounded audit reference. Both
+  remain available while public visibility is hidden. Pausing invalidates unused source-bound
+  challenges and cancels approved-but-not-activated pairings.
 - `create_source_action_challenge`, `reactivate_source`, and `unlink_source` bind a short-lived
-  source action to the exact active session, profile, purpose, source, and context. Reactivation is
-  limited to paused sources; normal user authority cannot lift quarantine. Unlink is terminal,
+  source action to the exact active or hidden session, profile, purpose, source, and context.
+  Reactivation is limited to paused sources and does not change profile visibility; normal user
+  authority cannot lift quarantine. Unlink remains limited to an active profile and is terminal,
   revokes every active device, cancels approved pairings, and invalidates unused source actions in
   the same transaction.
 - `read_device_verification_material` returns only the exact active device key ID, opaque bound
@@ -452,12 +456,23 @@ them in both `active` and `hidden` profile states. The PostgreSQL suite proves h
 one exact owned-device revoke while leaving public visibility hidden; cross-profile and replay
 denials remain unchanged.
 
+Revision 0017 adds no table, field, role, or new action. It permits the existing `pause_source`,
+`source_reactivation` challenge/consume, and `reactivate_source` capabilities for the same possessed
+session while its profile is hidden. The source must still be active to pause and `paused` to
+reactivate; reactivation leaves the profile hidden, cannot lift quarantine, and consumes the exact
+fresh source/session/context-bound proof in the same transaction as the state change. Unlink remains
+active-profile-only.
+
 The local account application consumes those capabilities through the same probed read-write pool.
-Its fixed query projects only active credentials, caps the result at 65 so the mapper can enforce
-the database's 64-authority ceiling, rounds activation to a UTC date, and maps at most 32 opaque
+Its fixed query projects active credentials plus one exact all-null device sentinel for each source
+without one, caps the result at 96 so the mapper can reject more than the maximum 95 rows implied by
+32 sources and 64 active devices, rounds activation to a UTC date, and maps at most 32 opaque
 sources. The page renders source ordinal/state plus bounded device label/platform/version, not the
 source ID, internal key/profile ID, public key, or exact time. Only the selected opaque device ID
-enters its same-origin revoke form.
+enters its same-origin revoke form. Source actions instead receive an exact-shape encrypted
+session-bound control token for at most 15 minutes. Pause is a bounded same-origin form;
+reactivation requires one fresh application-verified passkey assertion before an atomic
+consume-and-reactivate call. Both controls preserve hidden visibility.
 
 The local account application also consumes the existing `read_passkey_inventory` capability. Its
 fixed query and closed mapper retain at most 32 rows, require exactly one current active

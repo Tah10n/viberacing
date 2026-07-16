@@ -11,11 +11,12 @@ import {
 import type { EnrollmentConfig } from "./enrollment-config";
 import type { EnrollmentCookieCodec, EnrollmentRandomBytes } from "./enrollment-cookie";
 import type {
+  ActiveDeviceInventoryItem,
   EnrollmentDatabase,
   PasskeyInventoryItem,
   PasskeyLoginMaterial,
   ProfileVisibility,
-  SourceDeviceInventoryItem,
+  SourceState,
 } from "./enrollment-database";
 import {
   enrollmentPatterns,
@@ -25,6 +26,7 @@ import {
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
   readProfileDeletionChallenge,
+  readSourceReactivationChallenge,
   type EnrollmentSession,
   type JoinRequest,
   type PasskeyAddChallenge,
@@ -32,6 +34,7 @@ import {
   type PasskeyRevokeChallenge,
   type PendingEnrollment,
   type ProfileDeletionChallenge,
+  type SourceReactivationChallenge,
 } from "./enrollment-domain";
 import {
   createGithubOAuthMaterial,
@@ -48,6 +51,7 @@ import {
   passkeyLoginCredentialId,
   passkeyRevokeContextDigest,
   profileDeletionContextDigest,
+  sourceReactivationContextDigest,
   verifyInitialPasskey,
   verifyPasskeyLogin,
   type RegisteredPasskey,
@@ -58,6 +62,7 @@ const oauthLifetimeSeconds = 600;
 const passkeyLifetimeSeconds = 300;
 const pendingSessionLifetimeSeconds = 15 * 60;
 const activeSessionLifetimeSeconds = 30 * 24 * 60 * 60;
+const sourceControlLifetimeSeconds = 15 * 60;
 const base64Url32Pattern = /^[A-Za-z0-9_-]{43}$/;
 const registrationBodyKeys = new Set(["label", "response"]);
 const authenticationBodyKeys = new Set(["response"]);
@@ -66,6 +71,9 @@ const addBodyKeys = new Set(["authentication", "registration"]);
 const revokeTargetBodyKeys = new Set(["passkeyId"]);
 const profileDeletionStartBodyKeys = new Set(["handle"]);
 const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
+const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
+const sourceControlBodyKeys = new Set(["sourceControl"]);
+const sourceControlKeys = new Set(["expiresAt", "sessionId", "sourceId", "version"]);
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 
 export const enrollmentCookieNames = Object.freeze({
@@ -76,6 +84,7 @@ export const enrollmentCookieNames = Object.freeze({
   passkeyRevoke: "viberacing_passkey_revoke",
   profileDeletion: "viberacing_profile_deletion",
   session: "viberacing_session",
+  sourceReactivation: "viberacing_source_reactivation",
 });
 
 export interface EnrollmentStartDecision {
@@ -121,6 +130,17 @@ export interface ProfileDeletionOptionsDecision {
   readonly profileDeletionCookie: string;
 }
 
+export interface SourceReactivationOptionsDecision {
+  readonly options: Awaited<ReturnType<typeof createPasskeyLoginOptions>>;
+  readonly sourceReactivationCookie: string;
+}
+
+export interface AccountSourceDeviceInventoryItem {
+  readonly devices: readonly ActiveDeviceInventoryItem[];
+  readonly sourceControl: string;
+  readonly state: SourceState;
+}
+
 export interface EnrollmentService {
   beginGithub(join: JoinRequest): EnrollmentStartDecision | undefined;
   beginLogin(): Promise<PasskeyLoginOptionsDecision | undefined>;
@@ -137,6 +157,10 @@ export interface EnrollmentService {
     sessionCookie: string,
     body: unknown,
   ): Promise<ProfileDeletionOptionsDecision | undefined>;
+  beginSourceReactivation(
+    sessionCookie: string,
+    body: unknown,
+  ): Promise<SourceReactivationOptionsDecision | undefined>;
   cancelGithub(state: string, oauthCookie: string): boolean;
   completeGithub(
     code: string,
@@ -168,13 +192,19 @@ export interface EnrollmentService {
     profileDeletionCookie: string,
     body: unknown,
   ): Promise<boolean>;
+  completeSourceReactivation(
+    sessionCookie: string,
+    sourceReactivationCookie: string,
+    body: unknown,
+  ): Promise<boolean>;
   logout(sessionCookie: string | undefined): Promise<boolean>;
   readActiveDeviceInventory(
     sessionCookie: string,
-  ): Promise<readonly SourceDeviceInventoryItem[] | undefined>;
+  ): Promise<readonly AccountSourceDeviceInventoryItem[] | undefined>;
   readPasskeyInventory(sessionCookie: string): Promise<readonly PasskeyInventoryItem[] | undefined>;
   readProfileVisibility(sessionCookie: string): Promise<ProfileVisibility | undefined>;
   readSession(sessionCookie: string | undefined): EnrollmentSession | undefined;
+  pauseSource(sessionCookie: string, sourceControl: string): Promise<boolean>;
   revokeDevice(sessionCookie: string, deviceId: string): Promise<boolean>;
   setProfileVisibility(
     sessionCookie: string,
@@ -221,6 +251,17 @@ interface PasskeyRevokeTargetBody {
 
 interface ProfileDeletionStartBody {
   readonly handle: string;
+}
+
+interface SourceControlBody {
+  readonly sourceControl: string;
+}
+
+interface SourceControl {
+  readonly expiresAt: number;
+  readonly sessionId: string;
+  readonly sourceId: string;
+  readonly version: 1;
 }
 
 function nowSeconds(now: Date): number | undefined {
@@ -416,6 +457,61 @@ function readProfileDeletionStartBody(value: unknown): ProfileDeletionStartBody 
     return undefined;
   }
   return Object.freeze({ handle: record.handle });
+}
+
+function readSourceControlBody(value: unknown): SourceControlBody | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== sourceControlBodyKeys.size ||
+    keys.some((key) => !sourceControlBodyKeys.has(key)) ||
+    typeof record.sourceControl !== "string" ||
+    record.sourceControl.length < 1 ||
+    record.sourceControl.length > 512
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ sourceControl: record.sourceControl });
+}
+
+function readSourceControl(
+  value: unknown,
+  nowSeconds: number,
+  sessionId: string,
+): SourceControl | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== sourceControlKeys.size ||
+    keys.some((key) => !sourceControlKeys.has(key)) ||
+    record.version !== 1 ||
+    typeof record.sessionId !== "string" ||
+    record.sessionId !== sessionId ||
+    typeof record.sourceId !== "string" ||
+    !sourceIdPattern.test(record.sourceId) ||
+    !Number.isSafeInteger(record.expiresAt) ||
+    Number(record.expiresAt) <= nowSeconds ||
+    Number(record.expiresAt) > nowSeconds + sourceControlLifetimeSeconds
+  ) {
+    return undefined;
+  }
+  return Object.freeze(record as unknown as SourceControl);
 }
 
 function clearRegisteredPasskey(passkey: RegisteredPasskey | undefined): void {
@@ -777,6 +873,77 @@ export function createEnrollmentService(
           sessionVerifierDigest: sessionDigest,
         });
         return created ? Object.freeze({ options, profileDeletionCookie }) : undefined;
+      } catch {
+        return undefined;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+      }
+    },
+    async beginSourceReactivation(
+      sessionCookie: string,
+      body: unknown,
+    ): Promise<SourceReactivationOptionsDecision | undefined> {
+      const session = readSession(sessionCookie);
+      const target = readSourceControlBody(body);
+      const seconds = currentSeconds();
+      if (!session?.passkeyRegistered || target === undefined || seconds === undefined) {
+        return undefined;
+      }
+      const sourceControl = readSourceControl(
+        cookieCodec.open("passkey", target.sourceControl),
+        seconds,
+        session.sessionId,
+      );
+      if (sourceControl === undefined) {
+        return undefined;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return undefined;
+        }
+        const options = await createLoginOptions(config.webauthnRpId);
+        if (!base64Url32Pattern.test(options.challenge)) {
+          return undefined;
+        }
+        const challengeId = randomUuid();
+        if (!enrollmentPatterns.uuidV4.test(challengeId)) {
+          return undefined;
+        }
+        const expiresAt = seconds + passkeyLifetimeSeconds;
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        challengeDigest = passkeyChallengeDigest(options.challenge);
+        contextDigest = sourceReactivationContextDigest(
+          session.sessionId,
+          sourceControl.sourceId,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        const challenge: SourceReactivationChallenge = Object.freeze({
+          challenge: options.challenge,
+          challengeId,
+          expiresAt,
+          sourceId: sourceControl.sourceId,
+          version: 1,
+        });
+        const sourceReactivationCookie = cookieCodec.seal("passkey", challenge);
+        const created = await database.createSourceReactivationChallenge({
+          challengeDigest,
+          challengeId,
+          contextDigest,
+          expiresAt: new Date(expiresAt * 1000).toISOString(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+          sourceId: sourceControl.sourceId,
+        });
+        return created ? Object.freeze({ options, sourceReactivationCookie }) : undefined;
       } catch {
         return undefined;
       } finally {
@@ -1395,6 +1562,96 @@ export function createEnrollmentService(
         profileRefDigest?.fill(0);
       }
     },
+    async completeSourceReactivation(
+      sessionCookie: string,
+      sourceReactivationCookie: string,
+      body: unknown,
+    ): Promise<boolean> {
+      const session = readSession(sessionCookie);
+      const seconds = currentSeconds();
+      const authentication = readAuthenticationBody(body);
+      const challenge =
+        seconds === undefined
+          ? undefined
+          : readSourceReactivationChallenge(
+              cookieCodec.open("passkey", sourceReactivationCookie),
+              seconds,
+            );
+      if (
+        !session?.passkeyRegistered ||
+        seconds === undefined ||
+        authentication === undefined ||
+        challenge === undefined
+      ) {
+        return false;
+      }
+      let credentialId: Buffer | undefined;
+      let material: PasskeyLoginMaterial | undefined;
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        credentialId = passkeyLoginCredentialId(authentication.response);
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (credentialId === undefined || sessionVerifier === undefined) {
+          return false;
+        }
+        material = await database.readPasskeyLoginMaterial(credentialId);
+        if (material === undefined) {
+          return false;
+        }
+        const verified = await verifyLogin(
+          authentication.response,
+          challenge.challenge,
+          config.webauthnOrigin,
+          config.webauthnRpId,
+          {
+            backupEligible: material.backupEligible,
+            cosePublicKey: material.cosePublicKey,
+            credentialId,
+            signCount: material.signCount,
+          },
+        );
+        if (verified === undefined) {
+          return false;
+        }
+        const auditEventId = randomUuid();
+        if (!enrollmentPatterns.uuidV4.test(auditEventId)) {
+          return false;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        challengeDigest = passkeyChallengeDigest(challenge.challenge);
+        contextDigest = sourceReactivationContextDigest(
+          session.sessionId,
+          challenge.sourceId,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        return await database.completeSourceReactivation({
+          auditEventId,
+          backupState: verified.backupState,
+          challengeDigest,
+          challengeId: challenge.challengeId,
+          contextDigest,
+          observedSignCount: verified.signCount,
+          requestId: createRequestId(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+          sourceId: challenge.sourceId,
+          verifiedPasskeyId: material.passkeyId,
+        });
+      } catch {
+        return false;
+      } finally {
+        credentialId?.fill(0);
+        clearLoginMaterial(material);
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+      }
+    },
     async logout(sessionCookie: string | undefined): Promise<boolean> {
       const session = readSession(sessionCookie);
       if (session === undefined) {
@@ -1423,9 +1680,13 @@ export function createEnrollmentService(
     },
     async readActiveDeviceInventory(
       sessionCookie: string,
-    ): Promise<readonly SourceDeviceInventoryItem[] | undefined> {
+    ): Promise<readonly AccountSourceDeviceInventoryItem[] | undefined> {
       const session = readSession(sessionCookie);
       if (!session?.passkeyRegistered) {
+        return undefined;
+      }
+      const seconds = currentSeconds();
+      if (seconds === undefined) {
         return undefined;
       }
       let sessionVerifier: Buffer | undefined;
@@ -1436,10 +1697,25 @@ export function createEnrollmentService(
           return undefined;
         }
         sessionDigest = createHash("sha256").update(sessionVerifier).digest();
-        return await database.readActiveDeviceInventory({
+        const inventory = await database.readActiveDeviceInventory({
           sessionId: session.sessionId,
           sessionVerifierDigest: sessionDigest,
         });
+        const expiresAt = Math.min(session.expiresAt, seconds + sourceControlLifetimeSeconds);
+        return Object.freeze(
+          inventory.map((source) =>
+            Object.freeze({
+              devices: source.devices,
+              sourceControl: cookieCodec.seal("passkey", {
+                expiresAt,
+                sessionId: session.sessionId,
+                sourceId: source.sourceId,
+                version: 1,
+              } satisfies SourceControl),
+              state: source.state,
+            }),
+          ),
+        );
       } catch {
         return undefined;
       } finally {
@@ -1498,6 +1774,42 @@ export function createEnrollmentService(
       }
     },
     readSession,
+    async pauseSource(sessionCookie: string, sourceControlToken: string): Promise<boolean> {
+      const session = readSession(sessionCookie);
+      const seconds = currentSeconds();
+      if (!session?.passkeyRegistered || seconds === undefined) {
+        return false;
+      }
+      const sourceControl = readSourceControl(
+        cookieCodec.open("passkey", sourceControlToken),
+        seconds,
+        session.sessionId,
+      );
+      if (sourceControl === undefined) {
+        return false;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      try {
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return false;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        return await database.pauseSource({
+          auditEventId: randomUuid(),
+          requestId: createRequestId(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+          sourceId: sourceControl.sourceId,
+        });
+      } catch {
+        return false;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+      }
+    },
     async revokeDevice(sessionCookie: string, deviceId: string): Promise<boolean> {
       const session = readSession(sessionCookie);
       if (!session?.passkeyRegistered || !deviceIdPattern.test(deviceId)) {

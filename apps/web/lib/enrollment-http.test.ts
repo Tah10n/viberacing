@@ -88,6 +88,12 @@ function serviceFixture(): EnrollmentService {
         profileDeletionCookie: "opaque-profile-deletion",
       }),
     ),
+    beginSourceReactivation: vi.fn(() =>
+      Promise.resolve({
+        options: { challenge: Buffer.alloc(32, 9).toString("base64url") },
+        sourceReactivationCookie: "opaque-source-reactivation",
+      }),
+    ),
     cancelGithub: vi.fn(() => true),
     completeGithub: vi.fn(() => Promise.resolve({ sessionCookie: "opaque-session" })),
     completeLogin: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
@@ -95,11 +101,13 @@ function serviceFixture(): EnrollmentService {
     completePasskeyAdd: vi.fn(() => Promise.resolve(true)),
     completePasskeyRevoke: vi.fn(() => Promise.resolve(true)),
     completeProfileDeletion: vi.fn(() => Promise.resolve(true)),
+    completeSourceReactivation: vi.fn(() => Promise.resolve(true)),
     logout: vi.fn(() => Promise.resolve(true)),
     readActiveDeviceInventory: vi.fn(() => Promise.resolve(undefined)),
     readPasskeyInventory: vi.fn(() => Promise.resolve(undefined)),
     readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
     readSession: vi.fn(() => undefined),
+    pauseSource: vi.fn(() => Promise.resolve(true)),
     revokeDevice: vi.fn(() => Promise.resolve(true)),
     setProfileVisibility: vi.fn(() => Promise.resolve("hidden" as const)),
   };
@@ -400,6 +408,7 @@ describe("enrollment HTTP boundary", () => {
     expect(verification.status).toBe(204);
     expect(verification.headers.get("cache-control")).toBe("no-store");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_profile_deletion=");
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.completeProfileDeletion).toHaveBeenCalledWith(
       "opaque-session",
@@ -540,6 +549,79 @@ describe("enrollment HTTP boundary", () => {
     ).resolves.toMatchObject({ status: 400 });
   });
 
+  it("pauses one opaque source control and reactivates it only after fresh passkey proof", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const sourceControl = "opaque-source-control";
+    const paused = await http.sourcePause(
+      post(
+        "/auth/sources/pause",
+        new URLSearchParams({ sourceControl }).toString(),
+        "application/x-www-form-urlencoded",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(paused.status).toBe(303);
+    expect(paused.headers.get("location")).toBe(`${origin}/account`);
+    expect(service.pauseSource).toHaveBeenCalledWith("opaque-session", sourceControl);
+
+    const options = await http.sourceReactivationOptions(
+      post(
+        "/auth/sources/reactivate/options",
+        JSON.stringify({ sourceControl }),
+        "application/json",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(options.status).toBe(200);
+    expect(options.headers.get("set-cookie")).toContain(
+      "viberacing_source_reactivation=opaque-source-reactivation",
+    );
+    expect(options.headers.get("set-cookie")).toContain("Path=/auth/sources/reactivate");
+    expect(service.beginSourceReactivation).toHaveBeenCalledWith("opaque-session", {
+      sourceControl,
+    });
+
+    const verification = await http.sourceReactivationVerify(
+      post(
+        "/auth/sources/reactivate/verify",
+        JSON.stringify({ response: { id: "synthetic" } }),
+        "application/json",
+        "viberacing_session=opaque-session; viberacing_source_reactivation=opaque-source-reactivation",
+      ),
+    );
+    expect(verification.status).toBe(204);
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
+    expect(service.completeSourceReactivation).toHaveBeenCalledWith(
+      "opaque-session",
+      "opaque-source-reactivation",
+      { response: { id: "synthetic" } },
+    );
+
+    await expect(
+      http.sourcePause(
+        post(
+          "/auth/sources/pause",
+          `sourceControl=${sourceControl}&sourceControl=${sourceControl}`,
+          "application/x-www-form-urlencoded",
+          "viberacing_session=opaque-session",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 400 });
+    const crossOrigin = post(
+      "/auth/sources/reactivate/options",
+      JSON.stringify({ sourceControl }),
+      "application/json",
+      "viberacing_session=opaque-session",
+    );
+    crossOrigin.headers.set("origin", "https://attacker.example");
+    await expect(http.sourceReactivationOptions(crossOrigin)).resolves.toMatchObject({
+      status: 400,
+    });
+  });
+
   it("clears every browser credential on same-origin logout even when admission is busy", async () => {
     const admission = createEnrollmentAdmission(1);
     const held = admission.tryAcquire();
@@ -554,6 +636,7 @@ describe("enrollment HTTP boundary", () => {
     expect(response.headers.get("set-cookie")).toContain("viberacing_passkey_add=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_passkey_revoke=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_profile_deletion=");
+    expect(response.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.logout).not.toHaveBeenCalled();
 

@@ -211,23 +211,45 @@ const readPasskeyInventoryQuery = `SELECT
 FROM viberacing_api.read_passkey_inventory($1::uuid, $2::bytea) AS inventory
 ORDER BY (inventory.created_at AT TIME ZONE 'UTC')::date, inventory.passkey_id`;
 
-const readActiveDeviceInventoryQuery = `SELECT
-  inventory.source_id,
-  inventory.source_state,
-  inventory.device_id,
-  inventory.device_label,
-  inventory.connector_version,
-  inventory.os_family,
-  inventory.architecture,
-  inventory.device_state,
-  (inventory.activated_at AT TIME ZONE 'UTC')::date::text AS activated_on
-FROM viberacing_api.read_source_inventory($1::uuid, $2::bytea) AS inventory
-WHERE inventory.device_state = 'active'
-ORDER BY
-  inventory.source_id,
-  (inventory.activated_at AT TIME ZONE 'UTC')::date,
-  inventory.device_id
-LIMIT 65`;
+const readActiveDeviceInventoryQuery = `WITH inventory AS MATERIALIZED (
+  SELECT *
+  FROM viberacing_api.read_source_inventory($1::uuid, $2::bytea)
+), active_devices AS (
+  SELECT
+    inventory.source_id,
+    inventory.source_state,
+    inventory.device_id,
+    inventory.device_label,
+    inventory.connector_version,
+    inventory.os_family,
+    inventory.architecture,
+    inventory.device_state,
+    (inventory.activated_at AT TIME ZONE 'UTC')::date::text AS activated_on
+  FROM inventory
+  WHERE inventory.device_state = 'active'
+), sources_without_active_devices AS (
+  SELECT
+    inventory.source_id,
+    inventory.source_state,
+    NULL::text AS device_id,
+    NULL::text AS device_label,
+    NULL::text AS connector_version,
+    NULL::text AS os_family,
+    NULL::text AS architecture,
+    NULL::text AS device_state,
+    NULL::text AS activated_on
+  FROM inventory
+  GROUP BY inventory.source_id, inventory.source_state
+  HAVING pg_catalog.count(*) FILTER (WHERE inventory.device_state = 'active') = 0
+), bounded_inventory AS (
+  SELECT * FROM active_devices
+  UNION ALL
+  SELECT * FROM sources_without_active_devices
+)
+SELECT *
+FROM bounded_inventory
+ORDER BY source_id, activated_on NULLS FIRST, device_id NULLS FIRST
+LIMIT 96`;
 
 const revokeDeviceQuery = `WITH device_revocation AS MATERIALIZED (
   SELECT viberacing_api.revoke_device(
@@ -240,6 +262,63 @@ const revokeDeviceQuery = `WITH device_revocation AS MATERIALIZED (
 )
 SELECT pg_catalog.count(*) = 1 AS revoked
 FROM device_revocation`;
+
+const pauseSourceQuery = `WITH source_pause AS MATERIALIZED (
+  SELECT viberacing_api.pause_source(
+    $1::uuid,
+    $2::bytea,
+    $3::text,
+    $4::uuid,
+    $5::text
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS paused
+FROM source_pause`;
+
+const createSourceReactivationChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
+  SELECT viberacing_api.create_source_action_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::text,
+    'source_reactivation'::text,
+    $4::uuid,
+    $5::bytea,
+    $6::bytea,
+    $7::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS created
+FROM challenge_creation`;
+
+const completeSourceReactivationQuery = `WITH challenge_consumption AS MATERIALIZED (
+  SELECT viberacing_api.consume_passkey_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    'source_reactivation'::text,
+    $4::bytea,
+    $5::bytea,
+    $6::uuid,
+    $7::bigint,
+    $8::boolean
+  ) AS consumed
+), source_reactivation AS MATERIALIZED (
+  SELECT viberacing_api.reactivate_source(
+    $1::uuid,
+    $2::bytea,
+    $9::text,
+    $3::uuid,
+    $5::bytea,
+    $10::uuid,
+    $11::text
+  ) AS ignored
+  FROM challenge_consumption
+  WHERE consumed
+)
+SELECT
+  (SELECT consumed FROM challenge_consumption)
+  AND pg_catalog.count(*) = 1 AS reactivated
+FROM source_reactivation`;
 
 const readProfileVisibilityQuery = `SELECT visibility.visibility
 FROM viberacing_api.read_profile_visibility($1::uuid, $2::bytea) AS visibility`;
@@ -501,6 +580,38 @@ export interface EnrollmentDatabaseDeviceRevocation {
   readonly sessionVerifierDigest: Uint8Array;
 }
 
+export interface EnrollmentDatabaseSourcePause {
+  readonly auditEventId: string;
+  readonly requestId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly sourceId: string;
+}
+
+export interface EnrollmentDatabaseSourceReactivationChallenge {
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly expiresAt: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly sourceId: string;
+}
+
+export interface EnrollmentDatabaseSourceReactivation {
+  readonly auditEventId: string;
+  readonly backupState: boolean;
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly observedSignCount: number;
+  readonly requestId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly sourceId: string;
+  readonly verifiedPasskeyId: string;
+}
+
 export interface EnrollmentDatabaseProfileVisibilityRequest {
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
@@ -615,7 +726,11 @@ export interface EnrollmentDatabaseClient {
   createProfileDeletionChallenge(
     input: EnrollmentDatabaseProfileDeletionChallenge,
   ): Promise<unknown>;
+  createSourceReactivationChallenge(
+    input: EnrollmentDatabaseSourceReactivationChallenge,
+  ): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
+  pauseSource(input: EnrollmentDatabaseSourcePause): Promise<unknown>;
   readActiveDeviceInventory(
     input: EnrollmentDatabaseSourceDeviceInventoryRequest,
   ): Promise<unknown>;
@@ -624,6 +739,7 @@ export interface EnrollmentDatabaseClient {
   readProfileVisibility(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
   release(destroy?: boolean): void;
   revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<unknown>;
+  completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<unknown>;
   revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown>;
   setProfileVisibility(input: EnrollmentDatabaseProfileVisibilityUpdate): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
@@ -848,6 +964,32 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         profileRefDigest.fill(0);
       }
     },
+    async completeSourceReactivation(
+      input: EnrollmentDatabaseSourceReactivation,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(completeSourceReactivationQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.verifiedPasskeyId,
+          input.observedSignCount,
+          input.backupState,
+          input.sourceId,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
     async createPasskeyAddChallenge(
       input: EnrollmentDatabasePasskeyAddChallenge,
     ): Promise<unknown> {
@@ -931,6 +1073,28 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         contextDigest.fill(0);
       }
     },
+    async createSourceReactivationChallenge(
+      input: EnrollmentDatabaseSourceReactivationChallenge,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(createSourceReactivationChallengeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.sourceId,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.expiresAt,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
     async enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown> {
       const inviteVerifierDigest = Buffer.from(input.inviteVerifierDigest);
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
@@ -974,6 +1138,20 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         return await fixedQuery(readPasskeyLoginMaterialQuery, [credential]);
       } finally {
         credential.fill(0);
+      }
+    },
+    async pauseSource(input: EnrollmentDatabaseSourcePause): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(pauseSourceQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.sourceId,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
       }
     },
     async readActiveDeviceInventory(

@@ -21,6 +21,9 @@ cases, and privacy data map before changing this subtree.
 - Hiding a profile changes public visibility only. Its possessed session must retain private active
   device inventory and immediate owned-device revoke; do not reactivate public visibility as a
   workaround for a lifecycle action.
+- Source pause and passkey-protected reactivation must remain available to a possessed session while
+  its profile is hidden without changing that visibility. Reactivation is limited to `paused`, uses
+  one fresh consumed source-bound challenge, and must never lift `quarantined`.
 - Pairing creates only opaque user-declared sources. Preserve the public ceilings of 32 lifetime
   sources and 64 active plus unexpired approved device authorities per profile; lower deployable
   anti-abuse thresholds remain private configuration and must not enter fixtures or documentation.

@@ -3,14 +3,10 @@ import "server-only";
 import { headers } from "next/headers";
 
 import { readCookie } from "./enrollment-cookie";
-import type {
-  PasskeyInventoryItem,
-  ProfileVisibility,
-  SourceDeviceInventoryItem,
-} from "./enrollment-database";
+import type { PasskeyInventoryItem, ProfileVisibility } from "./enrollment-database";
 import type { EnrollmentSession } from "./enrollment-domain";
 import { getEnrollmentRuntime } from "./enrollment-runtime";
-import { enrollmentCookieNames } from "./enrollment-service";
+import { enrollmentCookieNames, type AccountSourceDeviceInventoryItem } from "./enrollment-service";
 
 export async function readEnrollmentPageSession(): Promise<EnrollmentSession | undefined> {
   try {
@@ -26,7 +22,7 @@ export async function readEnrollmentPageSession(): Promise<EnrollmentSession | u
 }
 
 export interface EnrollmentPageAccount {
-  readonly activeDeviceInventory: readonly SourceDeviceInventoryItem[] | undefined;
+  readonly activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
   readonly passkeys: readonly PasskeyInventoryItem[] | undefined;
   readonly session: EnrollmentSession;
   readonly visibility: ProfileVisibility | undefined;

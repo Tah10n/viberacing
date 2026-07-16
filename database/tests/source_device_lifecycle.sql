@@ -909,6 +909,70 @@ SELECT pg_temp.assert_true(
   'hidden profile retains private active-device inventory'
 );
 
+SELECT viberacing_api.pause_source(
+  '00000000-0000-4000-8000-000000004201',
+  pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+  'src_' || pg_catalog.repeat('P', 22),
+  '00000000-0000-4000-8000-000000004907',
+  'req_' || pg_catalog.repeat('I', 22)
+);
+
+SELECT viberacing_api.create_source_action_challenge(
+  '00000000-0000-4000-8000-000000004201',
+  pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+  'src_' || pg_catalog.repeat('P', 22),
+  'source_reactivation',
+  '00000000-0000-4000-8000-000000004607',
+  pg_catalog.decode(pg_catalog.repeat('97', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('a7', 32), 'hex'),
+  pg_catalog.statement_timestamp() + INTERVAL '4 minutes'
+);
+
+SELECT pg_temp.assert_true(
+  viberacing_api.consume_passkey_challenge(
+    '00000000-0000-4000-8000-000000004201',
+    pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+    '00000000-0000-4000-8000-000000004607',
+    'source_reactivation',
+    pg_catalog.decode(pg_catalog.repeat('97', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('a7', 32), 'hex'),
+    '00000000-0000-4000-8000-000000004301',
+    4,
+    false
+  ),
+  'hidden profile consumes one exact fresh source reactivation proof'
+);
+
+SELECT viberacing_api.reactivate_source(
+  '00000000-0000-4000-8000-000000004201',
+  pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+  'src_' || pg_catalog.repeat('P', 22),
+  '00000000-0000-4000-8000-000000004607',
+  pg_catalog.decode(pg_catalog.repeat('a7', 32), 'hex'),
+  '00000000-0000-4000-8000-000000004908',
+  'req_' || pg_catalog.repeat('J', 22)
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT visibility = 'hidden'
+    FROM viberacing_api.read_profile_visibility(
+      '00000000-0000-4000-8000-000000004201',
+      pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex')
+    )
+  )
+  AND (
+    SELECT source_state = 'active'
+    FROM viberacing_api.read_source_inventory(
+      '00000000-0000-4000-8000-000000004201',
+      pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex')
+    )
+    WHERE source_id = 'src_' || pg_catalog.repeat('P', 22)
+    LIMIT 1
+  ),
+  'source pause and fresh-passkey reactivation do not change hidden public visibility'
+);
+
 SELECT viberacing_api.revoke_device(
   '00000000-0000-4000-8000-000000004201',
   pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
@@ -989,7 +1053,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 6
+    SELECT pg_catalog.count(*) = 8
     FROM viberacing_private.audit_events
     WHERE profile_id = '00000000-0000-4000-8000-000000004101'
       AND event_type IN (

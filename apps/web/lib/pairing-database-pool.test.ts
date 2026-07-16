@@ -226,6 +226,9 @@ describe("pairing database pool", () => {
         },
       ],
       [{ revoked: true }],
+      [{ paused: true }],
+      [{ created: true }],
+      [{ reactivated: true }],
     ];
     const liveQueries: { text: string; values: unknown[] }[] = [];
     const snapshots: { text: string; values: unknown[] }[] = [];
@@ -477,6 +480,41 @@ describe("pairing database pool", () => {
         sessionVerifierDigest: digest,
       }),
     ).resolves.toEqual([{ revoked: true }]);
+    await expect(
+      client.pauseSource({
+        auditEventId: "00000000-0000-4000-8000-000000000322",
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+        sourceId: `src_${"B".repeat(22)}`,
+      }),
+    ).resolves.toEqual([{ paused: true }]);
+    await expect(
+      client.createSourceReactivationChallenge({
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000323",
+        contextDigest: context,
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+        sourceId: `src_${"B".repeat(22)}`,
+      }),
+    ).resolves.toEqual([{ created: true }]);
+    await expect(
+      client.completeSourceReactivation({
+        auditEventId: "00000000-0000-4000-8000-000000000324",
+        backupState: false,
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000323",
+        contextDigest: context,
+        observedSignCount: 5,
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+        sourceId: `src_${"B".repeat(22)}`,
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000306",
+      }),
+    ).resolves.toEqual([{ reactivated: true }]);
 
     expect(snapshots.map(({ text }) => text)).toEqual([
       expect.stringContaining("enroll_profile"),
@@ -496,6 +534,9 @@ describe("pairing database pool", () => {
       expect.stringContaining("revoke_session"),
       expect.stringContaining("read_source_inventory"),
       expect.stringContaining("revoke_device"),
+      expect.stringContaining("pause_source"),
+      expect.stringContaining("create_source_action_challenge"),
+      expect.stringContaining("reactivate_source"),
     ]);
     expect(snapshots[2]?.text).toContain("register_initial_passkey");
     expect(snapshots[2]?.text).toContain("rotate_session");
@@ -506,11 +547,16 @@ describe("pairing database pool", () => {
     expect(snapshots[10]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[12]?.text).toContain("request_profile_deletion");
     expect(snapshots[12]?.text).toContain("AS MATERIALIZED");
-    expect(snapshots[15]?.text).toContain("LIMIT 65");
+    expect(snapshots[15]?.text).toContain("LIMIT 96");
     expect(snapshots[15]?.text).toContain("device_state = 'active'");
+    expect(snapshots[15]?.text).toContain("sources_without_active_devices");
     expect(snapshots[15]?.text).not.toContain("public_key");
     expect(snapshots[15]?.text).not.toContain("device_key_id");
     expect(snapshots[16]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[17]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[18]?.text).toContain("'source_reactivation'::text");
+    expect(snapshots[19]?.text).toContain("consume_passkey_challenge");
+    expect(snapshots[19]?.text).toContain("reactivate_source");
     expect(snapshots[4]?.values).toEqual([
       "00000000-0000-4000-8000-000000000310",
       digest,
@@ -607,6 +653,35 @@ describe("pairing database pool", () => {
       digest,
       `dev_${"A".repeat(22)}`,
       "00000000-0000-4000-8000-000000000321",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
+    expect(snapshots[17]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      `src_${"B".repeat(22)}`,
+      "00000000-0000-4000-8000-000000000322",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
+    expect(snapshots[18]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      `src_${"B".repeat(22)}`,
+      "00000000-0000-4000-8000-000000000323",
+      digest,
+      context,
+      "2026-07-16T10:05:00.000Z",
+    ]);
+    expect(snapshots[19]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000312",
+      digest,
+      "00000000-0000-4000-8000-000000000323",
+      digest,
+      context,
+      "00000000-0000-4000-8000-000000000306",
+      5,
+      false,
+      `src_${"B".repeat(22)}`,
+      "00000000-0000-4000-8000-000000000324",
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));

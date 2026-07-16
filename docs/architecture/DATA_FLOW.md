@@ -3,41 +3,42 @@
 ## Status and notation
 
 Most sequences remain planned application contracts. The enrollment, returning-login, backup-key
-addition, non-current-passkey revocation, immediate profile-deletion-request, and active-device
-inventory/revoke sequences below plus the public score consumer are now locally implemented
-boundaries; none has live credentials, edge, purge-worker, or deployment evidence. Revisions 0001
-through 0016 provide private identity/source/device/pairing/audit/deletion/usage tables,
-deny-by-default roles, and a narrow database slice for invite issuance, enrollment, exact-session
-challenges, initial-passkey activation, passkey login and management, restricted recovery, session
-rotation/revocation, immediate deletion lock-down, source-bound pairing, source/device lifecycle
-controls, and Community ingest, bounded ingest- and pairing-retention cleanup, open-season scoring
-refresh, late-ingest closure, terminal season finalization, and a Web-only public score projection.
-One local public-score GET constructs the bounded adapter lazily after closed request admission. The
-visible home race now requests its current server-selected week from that exact same-origin route,
-validates the public fields, and retains a clearly labeled synthetic fallback on failure. One local
-one-shot Jobs runner can invoke exactly one of four fixed functions: either cleanup function,
-refresh, or finalization, but no broader recovery/step-up, deployed ingest endpoint,
-Argon2id/WebAuthn pairing approval, operational connector, purge worker, Jobs scheduler/monitor,
-audited correction, or deployed service executes the complete sequences. A library-only Rust
-connector foundation validates the bounded stable App Server initialization exchange and candidate
-`0.144.4` account/usage responses. A synthetic one-shot supervisor composes those states with fixed
-local process mechanics, while an exact-body composer and isolated one-use signer produce a
-synthetic signed envelope. A separate inaccessible pending-key and challenge signer plus a pure
-server-only Web verifier now agree on one exact pairing-possession message and synthetic signature.
-A dormant Web/Auth start application generates fresh IDs, token, challenge, 60-bit code, separate
-protected poll/code verifiers, and a nine-minute pending transaction from closed device metadata. A
-second application performs protected keyed poll lookup, mandates that proof, and invokes only exact
-atomic activation behind local admission/timing. All required connector capabilities have no public
-constructor, and there is no executable admission, real Codex execution, key generation/store,
-pairing-start client, browser/WebAuthn approval, pairing HTTP route, upload, or supported-version
-path. A local Ingest kernel now verifies the bounded exact-body origin/device request, while the
-separate adapter maps origin replay, device lookup, and submission through fixed calls. PostgreSQL
-now proves atomic origin replay consumption and bounded cleanup. A transport-free application now
-composes those exact local capabilities and validates only closed acknowledgement/problem decisions.
-A bounded local Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline
-policy, and serializes only revalidated contracts. There is no edge/live-database/deployment
-integration. No host/port/TLS entry point, deployment login, certificate, edge signer/direct-origin
-policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+addition, non-current-passkey revocation, immediate profile-deletion-request, source
+inventory/pause/reactivation, and active-device revoke sequences below plus the public score
+consumer are now locally implemented boundaries; none has live credentials, edge, purge-worker, or
+deployment evidence. Revisions 0001 through 0017 provide private
+identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
+database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
+activation, passkey login and management, restricted recovery, session rotation/revocation,
+immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
+ingest, bounded ingest- and pairing-retention cleanup, open-season scoring refresh, late-ingest
+closure, terminal season finalization, and a Web-only public score projection. One local
+public-score GET constructs the bounded adapter lazily after closed request admission. The visible
+home race now requests its current server-selected week from that exact same-origin route, validates
+the public fields, and retains a clearly labeled synthetic fallback on failure. One local one-shot
+Jobs runner can invoke exactly one of four fixed functions: either cleanup function, refresh, or
+finalization, but no broader recovery/step-up, deployed ingest endpoint, Argon2id/WebAuthn pairing
+approval, operational connector, purge worker, Jobs scheduler/monitor, audited correction, or
+deployed service executes the complete sequences. A library-only Rust connector foundation validates
+the bounded stable App Server initialization exchange and candidate `0.144.4` account/usage
+responses. A synthetic one-shot supervisor composes those states with fixed local process mechanics,
+while an exact-body composer and isolated one-use signer produce a synthetic signed envelope. A
+separate inaccessible pending-key and challenge signer plus a pure server-only Web verifier now
+agree on one exact pairing-possession message and synthetic signature. A dormant Web/Auth start
+application generates fresh IDs, token, challenge, 60-bit code, separate protected poll/code
+verifiers, and a nine-minute pending transaction from closed device metadata. A second application
+performs protected keyed poll lookup, mandates that proof, and invokes only exact atomic activation
+behind local admission/timing. All required connector capabilities have no public constructor, and
+there is no executable admission, real Codex execution, key generation/store, pairing-start client,
+browser/WebAuthn approval, pairing HTTP route, upload, or supported-version path. A local Ingest
+kernel now verifies the bounded exact-body origin/device request, while the separate adapter maps
+origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic
+origin replay consumption and bounded cleanup. A transport-free application now composes those exact
+local capabilities and validates only closed acknowledgement/problem decisions. A bounded local
+Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline policy, and
+serializes only revalidated contracts. There is no edge/live-database/deployment integration. No
+host/port/TLS entry point, deployment login, certificate, edge signer/direct-origin policy, or live
+route/Jobs evidence is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -276,7 +277,7 @@ sequenceDiagram
     User->>Browser: Select immediate protective action
     Web->>DB: Exact session plus owned source or device ID
     DB-->>Web: State change and bounded audit reference
-  else Reactivate or unlink source
+  else Reactivate source or plan unlink
     User->>Browser: Confirm exact source and action
     Web->>Authenticator: Fresh source-bound step-up
     Authenticator-->>Web: User-verified response
@@ -288,20 +289,23 @@ sequenceDiagram
 Revision 0004 implements the database lifecycle boundary. Inventory derives the profile from the
 possessed session and omits internal key IDs, public keys, profile IDs, exact usage, and account
 email. Revision 0016 preserves private inventory and immediate owned-device revoke while public
-visibility is hidden. The local account application now projects only active device credentials,
-enforces the 64-row ceiling, rounds activation to a day, renders source ordinal/state rather than
-its ID, and sends one exact opaque device ID only through its same-origin revoke form. Pause and
-device revoke are immediate session-authenticated protective actions. Reactivation works only from
-`paused`; a normal user cannot lift `quarantined`. Unlink accepts an exact fresh source-bound
-challenge, moves the source to terminal `unlinked`, revokes every active device, cancels approved
-pairings, and invalidates unused source challenges atomically.
+visibility is hidden. Revision 0017 does the same for pause and source reactivation without changing
+visibility. The local account application now projects at most 32 sources and 64 active device
+credentials, preserves a source with no active device, rounds activation to a day, and renders
+source ordinal/state rather than its ID. One exact opaque device ID may enter its same-origin revoke
+form. Source actions receive only a 15-minute encrypted token bound to the current session; raw
+source IDs stay server-only. Pause and device revoke are immediate session-authenticated protective
+actions. Reactivation works only from `paused` after a fresh required-UV assertion and one atomic
+consume/reactivate call; a normal user cannot lift `quarantined`. Unlink accepts an exact fresh
+source-bound challenge, moves the source to terminal `unlinked`, revokes every active device,
+cancels approved pairings, and invalidates unused source challenges atomically.
 
 The PostgreSQL runner releases pause against pairing approval and unlink against device activation
 on separate connections. Either ordering ends without approved authority on a paused source or an
-active device on an unlinked source. Inventory/revoke now have exact-session HTTP authorization,
-same-origin form enforcement, private no-store redirects, closed mapping, and generic failure.
-Pause, reactivation, unlink, their WebAuthn verification, and user notifications remain application
-work. Revision 0007 adds the database-side submission enforcement described below.
+active device on an unlinked source. Inventory, pause, reactivation, and revoke now have
+exact-session HTTP authorization, same-origin or exact-JSON enforcement, private no-store responses,
+closed mapping, and generic failure. Source unlink and user notifications remain application work.
+Revision 0007 adds the database-side submission enforcement described below.
 
 ## Local collection and signed synchronization
 

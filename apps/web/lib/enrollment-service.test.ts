@@ -28,6 +28,9 @@ import type {
   EnrollmentDatabaseProfileDeletionChallenge,
   EnrollmentDatabaseProfileVisibilityRequest,
   EnrollmentDatabaseProfileVisibilityUpdate,
+  EnrollmentDatabaseSourcePause,
+  EnrollmentDatabaseSourceReactivation,
+  EnrollmentDatabaseSourceReactivationChallenge,
   EnrollmentDatabaseSourceDeviceInventoryRequest,
 } from "./pairing-database-pool";
 
@@ -63,6 +66,9 @@ function createFixture() {
   let activeDeviceInventoryDigestInput: Uint8Array | undefined;
   let deviceRevocationWrite: EnrollmentDatabaseDeviceRevocation | undefined;
   let deviceRevocationDigestInput: Uint8Array | undefined;
+  let sourcePauseWrite: EnrollmentDatabaseSourcePause | undefined;
+  let sourceReactivationChallengeWrite: EnrollmentDatabaseSourceReactivationChallenge | undefined;
+  let sourceReactivationWrite: EnrollmentDatabaseSourceReactivation | undefined;
   let addChallengeWrite: EnrollmentDatabasePasskeyAddChallenge | undefined;
   let additionWrite: EnrollmentDatabasePasskeyAddition | undefined;
   let revokeChallengeWrite: EnrollmentDatabasePasskeyRevokeChallenge | undefined;
@@ -116,6 +122,15 @@ function createFixture() {
       };
       return Promise.resolve(true);
     }),
+    completeSourceReactivation: vi.fn((input: EnrollmentDatabaseSourceReactivation) => {
+      sourceReactivationWrite = {
+        ...input,
+        challengeDigest: Buffer.from(input.challengeDigest),
+        contextDigest: Buffer.from(input.contextDigest),
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve(true);
+    }),
     createPasskeyAddChallenge: vi.fn((input: EnrollmentDatabasePasskeyAddChallenge) => {
       addChallengeWrite = {
         ...input,
@@ -148,6 +163,17 @@ function createFixture() {
       };
       return Promise.resolve(true);
     }),
+    createSourceReactivationChallenge: vi.fn(
+      (input: EnrollmentDatabaseSourceReactivationChallenge) => {
+        sourceReactivationChallengeWrite = {
+          ...input,
+          challengeDigest: Buffer.from(input.challengeDigest),
+          contextDigest: Buffer.from(input.contextDigest),
+          sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+        };
+        return Promise.resolve(true);
+      },
+    ),
     enrollProfile: vi.fn((input: EnrollmentDatabaseProfile) => {
       enrollmentWrite = {
         ...input,
@@ -216,6 +242,13 @@ function createFixture() {
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
       return Promise.resolve("public" as const);
+    }),
+    pauseSource: vi.fn((input: EnrollmentDatabaseSourcePause) => {
+      sourcePauseWrite = {
+        ...input,
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
+      return Promise.resolve(true);
     }),
     revokeDevice: vi.fn((input: EnrollmentDatabaseDeviceRevocation) => {
       deviceRevocationDigestInput = input.sessionVerifierDigest;
@@ -326,6 +359,9 @@ function createFixture() {
     registrationChallenge,
     revocationWrite: () => revocationWrite,
     service,
+    sourcePauseWrite: () => sourcePauseWrite,
+    sourceReactivationChallengeWrite: () => sourceReactivationChallengeWrite,
+    sourceReactivationWrite: () => sourceReactivationWrite,
     verifyPasskey,
     verifyLogin,
     verifiedLoginCredential: () => verifiedLoginCredential,
@@ -570,6 +606,111 @@ describe("enrollment service", () => {
     await expect(service.revokeDevice("invalid", deviceId)).resolves.toBe(false);
     expect(database.readActiveDeviceInventory).toHaveBeenCalledOnce();
     expect(database.revokeDevice).toHaveBeenCalledOnce();
+  });
+
+  it("binds source pause and fresh-passkey reactivation to an opaque session control", async () => {
+    const {
+      cookieCodec,
+      database,
+      service,
+      sourcePauseWrite,
+      sourceReactivationChallengeWrite,
+      sourceReactivationWrite,
+      verifyLogin,
+    } = createFixture();
+    const verifier = Buffer.alloc(32, 0x4a);
+    const sessionId = "00000000-0000-4000-8000-000000000515";
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId,
+      sessionVerifier: verifier.toString("base64url"),
+      version: 1,
+    });
+    const inventory = await service.readActiveDeviceInventory(sessionCookie);
+    const sourceControl = inventory?.[0]?.sourceControl;
+    expect(sourceControl).toBeDefined();
+    expect(sourceControl).not.toContain("src_");
+    expect(Object.keys(inventory?.[0] ?? {})).toEqual(["devices", "sourceControl", "state"]);
+
+    await expect(service.pauseSource(sessionCookie, "invalid")).resolves.toBe(false);
+    await expect(service.pauseSource(sessionCookie, sourceControl ?? "")).resolves.toBe(true);
+    expect(sourcePauseWrite()).toMatchObject({
+      auditEventId: "00000000-0000-4000-8000-000000000502",
+      sessionId,
+      sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
+      sourceId: `src_${"B".repeat(22)}`,
+    });
+
+    const start = await service.beginSourceReactivation(sessionCookie, { sourceControl });
+    expect(start?.options.challenge).toHaveLength(43);
+    expect(sourceReactivationChallengeWrite()).toMatchObject({
+      challengeId: "00000000-0000-4000-8000-000000000503",
+      sessionId,
+      sourceId: `src_${"B".repeat(22)}`,
+    });
+    expect(sourceReactivationChallengeWrite()?.contextDigest).toEqual(
+      createHash("sha256")
+        .update(
+          `viberacing-source-reactivation-v1\n${sessionId}\nsrc_${"B".repeat(22)}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
+          "utf8",
+        )
+        .digest(),
+    );
+
+    const credentialId = Buffer.alloc(32, 0x74);
+    const response = {
+      id: credentialId.toString("base64url"),
+      rawId: credentialId.toString("base64url"),
+      response: {},
+      type: "public-key",
+    };
+    await expect(
+      service.completeSourceReactivation(sessionCookie, start?.sourceReactivationCookie ?? "", {
+        response,
+      }),
+    ).resolves.toBe(true);
+    expect(verifyLogin).toHaveBeenCalledOnce();
+    expect(sourceReactivationWrite()).toMatchObject({
+      auditEventId: "00000000-0000-4000-8000-000000000504",
+      challengeId: "00000000-0000-4000-8000-000000000503",
+      observedSignCount: 4,
+      sessionId,
+      sourceId: `src_${"B".repeat(22)}`,
+      verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
+    });
+
+    vi.mocked(database.completeSourceReactivation).mockResolvedValueOnce(false);
+    await expect(
+      service.completeSourceReactivation(sessionCookie, start?.sourceReactivationCookie ?? "", {
+        response,
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      service.beginSourceReactivation(sessionCookie, {
+        extra: true,
+        sourceControl,
+      }),
+    ).resolves.toBeUndefined();
+    const otherSessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId: "00000000-0000-4000-8000-000000000516",
+      sessionVerifier: verifier.toString("base64url"),
+      version: 1,
+    });
+    await expect(
+      service.beginSourceReactivation(otherSessionCookie, { sourceControl }),
+    ).resolves.toBeUndefined();
+    await expect(service.pauseSource(otherSessionCookie, sourceControl ?? "")).resolves.toBe(false);
+    expect(database.pauseSource).toHaveBeenCalledOnce();
+    expect(database.createSourceReactivationChallenge).toHaveBeenCalledOnce();
   });
 
   it("reads and changes only the possessed session's public profile visibility", async () => {
@@ -979,11 +1120,14 @@ describe("enrollment service", () => {
       ),
       completePasskeyRevocation: vi.fn(() => Promise.resolve(true)),
       completeProfileDeletion: vi.fn(() => Promise.resolve(true)),
+      completeSourceReactivation: vi.fn(() => Promise.resolve(true)),
       createPasskeyAddChallenge: vi.fn(() => Promise.resolve(true)),
       createPasskeyChallenge: vi.fn(() => Promise.resolve(true)),
       createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve(true)),
       createProfileDeletionChallenge: vi.fn(() => Promise.resolve(true)),
+      createSourceReactivationChallenge: vi.fn(() => Promise.resolve(true)),
       enrollProfile: vi.fn(() => Promise.resolve(true)),
+      pauseSource: vi.fn(() => Promise.resolve(true)),
       readActiveDeviceInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),

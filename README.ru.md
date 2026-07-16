@@ -18,8 +18,9 @@ same-origin public score route и переключаются на Community resu
 reduced-motion режим работают без реальных данных. Отдельный invite-only flow теперь локально
 соединяет GitHub OAuth со state и PKCE, зашифрованное краткоживущее продолжение, атомарное
 enrollment, обязательную регистрацию passkey, повторный discoverable-credential вход, session-scoped
-список ключей доступа, страницу активного профиля, hide/show публичного профиля, список активных
-устройств и их немедленный отзыв, добавление резервного passkey, защищённый отзыв не текущего
+список ключей доступа, страницу активного профиля, hide/show публичного профиля, список источников и
+устройств, немедленную паузу источника, восстановление paused-источника после свежей проверки
+passkey, немедленный отзыв устройства, добавление резервного passkey, защищённый отзыв не текущего
 passkey, запрос удаления профиля после точного ввода handle и свежей проверки passkey, а также
 logout. Репозиторий не предоставляет рабочий invite issuer, OAuth registration, реальные secrets,
 live OAuth/authenticator/database credentials, deletion purge worker, edge abuse controls или
@@ -141,7 +142,7 @@ admission, реальный запуск Codex, cross-platform evidence, source/
 key generation/store, pairing proof, signed upload, operational connector, live database connection,
 load evidence и deployment всё ещё отсутствуют.
 
-Также добавлены четырнадцать SQL migrations: 24 приватные
+Также добавлены семнадцать SQL migrations: 24 приватные
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
 deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая
 procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
@@ -152,46 +153,48 @@ passkeys, rotate/revoke сессии, немедленную блокировк�
 критических действий база сохраняет точный passkey step-up. Реализованы также защищённая
 passkey-проверкой замена recovery-кодов и отдельное краткоживущее право только на регистрацию нового
 passkey: обычная сессия создаётся лишь после успешной замены, а использованный PHC сразу удаляется.
-Локальный identity flow теперь проверяет initial WebAuthn registration и returning
-discoverable-credential login, а также fresh step-up для отзыва owned non-current passkey; verifier
-для остальных step-up действий и Argon2id recovery всё ещё отсутствует. Database-only scoring
-refresh уже суммирует distinct eligible sources одного профиля перед единым дневным лимитом,
-закрепляет immutable версию формулы за ISO-week season и сохраняет только derived
-score/rank/active-days/source-count без raw tokens и source IDs. Database-only finalization
-закрывает grace window через 48 часов после ISO-week по server time, сохраняет late snapshot только
-как quarantined evidence и делает terminal season неизменяемым, сохраняя profile-purge. Отдельная
-Web-only database projection возвращает только bounded active-profile score rows без raw values,
-private IDs и exact timestamps. Email и идентификатор Codex-аккаунта не читаются и не сохраняются.
-Response schema фиксирует тот же public allowlist, а server-only mapper, bounded Web PostgreSQL
-adapter и локальный score route проверяют форму, season/rank invariants, database role и contract до
-сериализации. Видимая гонка и таблица теперь запрашивают у этого route текущую server-selected
-неделю без credentials, проверяют только public поля и честно сохраняют synthetic fallback при
-недоступности. Локальные invite/OAuth/ initial-passkey/returning-login routes теперь существуют;
-login options хранят profile-free challenge только в encrypted cookie, а валидный assertion атомарно
-создаёт и тут же поглощает database challenge при выдаче сессии. Страница аккаунта по той же
-подтверждённой сессии показывает только названия ключей, active/revoked state, округлённую дату
-создания и отметку текущего authenticator; credential IDs и key material не рендерятся. Для owned
-non-current passkey страница отправляет только opaque ID, требует свежий user-verified assertion с
-привязкой к сессии и цели и вызывает атомарный consume-and-revoke; текущий или последний активный
-ключ удалить нельзя. Отдельный add-flow заранее валидирует и шифрует label, затем требует
-независимые assertion существующим ключом и регистрацию нового; один database statement атомарно
-consume-ит step-up и добавляет credential в пределах lifetime cap 32. Verifier для остальных step-up
-действий, recovery, WebAuthn pairing approval и edge rate limits для анонимного login и recovery
-lookup пока отсутствуют. Database-only Community ingest capability уже выдаёт минимальный материал
-активного устройства и принимает bounded source-bound snapshots с exact retry, nonce replay,
-monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure
-независимо удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots, сохраняя
-current source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup, scoring
-refresh или finalization через отдельный least-privileged config, single-client pool, проверку
-role/login/search path, fixed deadlines, prepared parameters, closed result validation и стабильный
-non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel, adapter и
-application объединены на synthetic/mock-pool evidence, а Fastify boundary отдельно проверена через
-injection/loopback с mock application. Полный HTTP-to-PostgreSQL path не проверен через реальный
-login. Deployed HTTP ingest route, pairing-possession verifier, operational connector,
-cleanup/scoring scheduler, live Ingest/Jobs login/TLS integration, monitoring backend, deployed
-public score read, audited correction flow, purge worker и deployed database ещё не реализованы,
-поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
-данных пока нет.
+Локальный identity flow теперь проверяет initial WebAuthn registration, returning
+discoverable-credential login, fresh step-up для отзыва owned non-current passkey и fresh passkey
+для reactivation paused-источника. Source ID не попадает в HTML: страница получает только
+зашифрованный привязанный к сессии control token на 15 минут. Pause выполняется сразу, reactivation
+доступна только для `paused` и не меняет public/hidden visibility; application verifier для unlink и
+Argon2id recovery всё ещё отсутствует. Database-only scoring refresh уже суммирует distinct eligible
+sources одного профиля перед единым дневным лимитом, закрепляет immutable версию формулы за ISO-week
+season и сохраняет только derived score/rank/active-days/source-count без raw tokens и source IDs.
+Database-only finalization закрывает grace window через 48 часов после ISO-week по server time,
+сохраняет late snapshot только как quarantined evidence и делает terminal season неизменяемым,
+сохраняя profile-purge. Отдельная Web-only database projection возвращает только bounded
+active-profile score rows без raw values, private IDs и exact timestamps. Email и идентификатор
+Codex-аккаунта не читаются и не сохраняются. Response schema фиксирует тот же public allowlist, а
+server-only mapper, bounded Web PostgreSQL adapter и локальный score route проверяют форму,
+season/rank invariants, database role и contract до сериализации. Видимая гонка и таблица теперь
+запрашивают у этого route текущую server-selected неделю без credentials, проверяют только public
+поля и честно сохраняют synthetic fallback при недоступности. Локальные invite/OAuth/
+initial-passkey/returning-login routes теперь существуют; login options хранят profile-free
+challenge только в encrypted cookie, а валидный assertion атомарно создаёт и тут же поглощает
+database challenge при выдаче сессии. Страница аккаунта по той же подтверждённой сессии показывает
+только названия ключей, active/revoked state, округлённую дату создания и отметку текущего
+authenticator; credential IDs и key material не рендерятся. Для owned non-current passkey страница
+отправляет только opaque ID, требует свежий user-verified assertion с привязкой к сессии и цели и
+вызывает атомарный consume-and-revoke; текущий или последний активный ключ удалить нельзя. Отдельный
+add-flow заранее валидирует и шифрует label, затем требует независимые assertion существующим ключом
+и регистрацию нового; один database statement атомарно consume-ит step-up и добавляет credential в
+пределах lifetime cap 32. Application verifier для source unlink, recovery, WebAuthn pairing
+approval и edge rate limits для анонимного login и recovery lookup пока отсутствуют. Database-only
+Community ingest capability уже выдаёт минимальный материал активного устройства и принимает bounded
+source-bound snapshots с exact retry, nonce replay, monotonic source/date, quarantine и
+lifecycle-race enforcement. Отдельная Jobs-only procedure независимо удаляет bounded batches
+истёкших origin nonces, device nonces и raw snapshots, сохраняя current source/day values. Локальный
+one-shot Jobs runner теперь вызывает только cleanup, scoring refresh или finalization через
+отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
+deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI output.
+Сама база не проверяет wire signature; локальные kernel, adapter и application объединены на
+synthetic/mock-pool evidence, а Fastify boundary отдельно проверена через injection/loopback с mock
+application. Полный HTTP-to-PostgreSQL path не проверен через реальный login. Deployed HTTP ingest
+route, pairing-possession verifier, operational connector, cleanup/scoring scheduler, live
+Ingest/Jobs login/TLS integration, monitoring backend, deployed public score read, audited
+correction flow, purge worker и deployed database ещё не реализованы, поэтому локальный enrollment
+ещё не является готовой production-авторизацией, а приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

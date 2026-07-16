@@ -120,11 +120,14 @@ activation. It still relies on a future application service to verify the WebAut
 challenge consumption.
 
 The local Web/Auth account slice now consumes the exact inventory and immediate-revoke boundary. It
-derives authority only from the possessed session, exposes at most 64 active devices with
-day-rounded metadata, submits only the selected opaque device ID, and returns generic failures.
+derives authority only from the possessed session, exposes at most 32 sources and 64 active devices
+with day-rounded metadata, submits only the selected opaque device ID, and returns generic failures.
 Revision 0016 preserves those protective controls while a profile is hidden without adding a schema
-field, role, or broader capability. Source reactivation and unlink still require their separate
-fresh WebAuthn step-up application paths.
+field, role, or broader capability. Revision 0017 similarly preserves pause and reactivation while
+hidden. The application sends no raw source ID to HTML: a 15-minute encrypted session-bound token
+selects the source. Pause is immediate; reactivation requires a fresh required-UV assertion bound to
+the session, source, RP ID, and origin before one atomic consume/reactivate statement. Source unlink
+still requires its separate application path.
 
 Revision 0005 adds credential-derived passkey login, session and step-up provenance, private
 multi-passkey inventory, bounded add/revoke, terminal revoke, last-key protection, monotonic stored

@@ -47,6 +47,10 @@ material availability cost.
   them Verified.
 - **Recovery:** Pause or unlink sources, recompute an open season, and use an audited correction
   only when policy permits.
+- **Current evidence:** The account page can pause an exact owned source immediately and reactivate
+  only a paused source after a fresh required-UV passkey assertion. Raw source IDs stay server-only;
+  the encrypted source-control token is session-bound and expires within 15 minutes. Quarantine
+  remains outside normal user authority, and source unlink is not yet an application control.
 - **Residual risk:** Duplicate declarations remain possible without a server-verifiable upstream
   account identifier.
 
@@ -269,12 +273,17 @@ material availability cost.
   duplicate credentials fail closed. The deletion path accepts only the session's exact typed handle
   before prompting, binds a five-minute fresh assertion to session/profile/handle/RP/origin, and
   uses one statement to consume the challenge with the existing atomic hide/revoke/unlink/enqueue
-  call. Other source/device step-up and recovery verification, aggregate edge rate policy, abandoned
-  consumed-state cleanup, live OAuth/authenticator/database integration, deletion purge execution,
-  and deployment remain absent. The account read additionally revalidates exact session possession
-  and accepts at most 32 closed, ordered rows with one current active authenticator; it renders no
-  credential ID, key, sign counter, exact activity timestamp, or profile ID. Only a revocable
-  target's opaque passkey ID enters the authenticated control and options request.
+  call. Source pause accepts only the encrypted session-bound control token through a same-origin
+  form. Reactivation binds a fresh required-UV assertion to the session, source, RP ID, and origin,
+  then atomically consumes the challenge and reactivates only `paused`; tests reject token
+  tampering, cross-session use, replay-shaped failure, quarantine, and malformed request shapes.
+  Both controls remain available while the profile is hidden without publishing it. Source unlink
+  application and recovery verification, aggregate edge rate policy, abandoned consumed-state
+  cleanup, live OAuth/authenticator/database integration, deletion purge execution, and deployment
+  remain absent. The account read additionally revalidates exact session possession and accepts at
+  most 32 closed, ordered rows with one current active authenticator; it renders no credential ID,
+  key, sign counter, exact activity timestamp, or profile ID. Only a revocable target's opaque
+  passkey ID enters the authenticated control and options request.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a

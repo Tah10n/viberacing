@@ -43,14 +43,15 @@ real-data result. A separate local enrollment slice now implements exact invite 
 OAuth state plus PKCE with no extra scope, purpose-separated encrypted cookies, atomic profile
 enrollment, required initial WebAuthn registration plus pending-session rotation, returning
 discoverable-credential passkey login, a session-scoped minimal passkey inventory, an account page,
-same-origin public-profile hide/show, a session-derived active-device inventory, immediate
-owned-device revoke, fresh backup-passkey addition, revocation of an owned non-current passkey, an
-exact-handle fresh-passkey profile-deletion request, and logout through the same probed read-write
-Web/Auth pool. Login options retain their profile-free challenge only in a purpose-separated cookie;
-valid proof atomically creates and consumes its database challenge while minting the session. It has
-only injected/synthetic evidence and no invite issuer UI, working OAuth or database credential,
-recovery, deletion purge worker, edge abuse controls, or deployment. A library-only Rust connector
-foundation now implements a bounded stable App Server JSONL handshake and a candidate-only `0.144.4`
+same-origin public-profile hide/show, a session-derived active-device inventory, immediate source
+pause, passkey-protected paused-source reactivation, immediate owned-device revoke, fresh
+backup-passkey addition, revocation of an owned non-current passkey, an exact-handle fresh-passkey
+profile-deletion request, and logout through the same probed read-write Web/Auth pool. Login options
+retain their profile-free challenge only in a purpose-separated cookie; valid proof atomically
+creates and consumes its database challenge while minting the session. It has only
+injected/synthetic evidence and no invite issuer UI, working OAuth or database credential, recovery,
+deletion purge worker, edge abuse controls, or deployment. A library-only Rust connector foundation
+now implements a bounded stable App Server JSONL handshake and a candidate-only `0.144.4`
 account/usage parser with checked schema/fixture evidence. A one-shot supervisor composes that
 sequence with fixed local pipes, arguments, deadlines, output budgets, ambient-environment clearing,
 and reap-before-success behavior, but its reviewed-launch capability has no public constructor. An

@@ -387,6 +387,81 @@ export function PasskeyRevokeButton({ label, locale, passkeyId }: PasskeyRevokeB
   );
 }
 
+interface SourceReactivationButtonProps {
+  readonly label: string;
+  readonly locale: Locale;
+  readonly sourceControl: string;
+}
+
+export function SourceReactivationButton({
+  label,
+  locale,
+  sourceControl,
+}: SourceReactivationButtonProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const copy = joinTranslations[locale];
+
+  async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy) {
+      return;
+    }
+    if (!browserSupportsWebAuthn()) {
+      setError(true);
+      return;
+    }
+    setBusy(true);
+    setError(false);
+    try {
+      const optionsResponse = await fetch("/auth/sources/reactivate/options", {
+        body: JSON.stringify({ sourceControl }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (!optionsResponse.ok) {
+        throw new Error("options unavailable");
+      }
+      const options = (await optionsResponse.json()) as PublicKeyCredentialRequestOptionsJSON;
+      const response = await startAuthentication({ optionsJSON: options });
+      const verification = await fetch("/auth/sources/reactivate/verify", {
+        body: JSON.stringify({ response }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (verification.status !== 204) {
+        throw new Error("verification failed");
+      }
+      window.location.assign("/account");
+    } catch {
+      setError(true);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="passkey-revoke" onSubmit={(event) => void submit(event)}>
+      <button
+        aria-label={`${copy.reactivateSource}: ${label}`}
+        className="secondary-action"
+        disabled={busy}
+        type="submit"
+      >
+        {busy ? copy.reactivatingSource : copy.reactivateSource}
+      </button>
+      <span aria-live="polite" className={error ? "auth-error" : "auth-status"}>
+        {error ? copy.genericError : ""}
+      </span>
+    </form>
+  );
+}
+
 interface ProfileDeletionFormProps {
   readonly handle: string;
   readonly locale: Locale;

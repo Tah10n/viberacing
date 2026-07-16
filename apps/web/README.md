@@ -9,10 +9,10 @@ and default product shell remain synthetic and unauthenticated, with no working 
 pairing approval/HTTP route, real user data, or deployment. A separate local Phase 2 slice now
 implements invite redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations,
 initial passkey registration, returning login, a session-scoped passkey inventory, an account page,
-public-profile hide/show, active-device inventory and revoke, fresh backup-passkey addition,
-revocation of an owned non-current passkey, an exact-handle fresh-passkey profile-deletion request,
-and logout. It fails closed without externally provisioned configuration and has no live-user or
-deployment evidence.
+public-profile hide/show, source inventory/pause/reactivation, active-device revoke, fresh
+backup-passkey addition, revocation of an owned non-current passkey, an exact-handle fresh-passkey
+profile-deletion request, and logout. It fails closed without externally provisioned configuration
+and has no live-user or deployment evidence.
 
 ## Run it
 
@@ -51,8 +51,8 @@ provides no valid invite or working credential. See `.env.example` and the local
 | `lib/public-http-problem.ts`                       | Generates opaque request IDs and closed public error responses   | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
 | `app/join`, `app/login`, `app/account`, `app/auth` | Routes enrollment, account controls, deletion, and logout        | Thin entrypoints; no recovery, pairing approval, or admin                          |
 | `components/account-experience.tsx`                | Renders visibility, devices, passkeys, deletion, and logout      | Closed state and opaque targets; no key/profile ID or exact time                   |
-| `lib/enrollment-http.ts`                           | Owns the fifteen local identity HTTP decisions                   | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
-| `lib/enrollment-service.ts`                        | Composes OAuth, login, devices, passkeys, visibility, deletion   | Server IDs/secrets only; fixed database capabilities; generic failure              |
+| `lib/enrollment-http.ts`                           | Owns the eighteen local identity HTTP decisions                  | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
+| `lib/enrollment-service.ts`                        | Composes OAuth, login, sources, devices, passkeys, and deletion  | Server IDs/secrets only; fixed database capabilities; generic failure              |
 | `lib/enrollment-cookie.ts`                         | Seals login, OAuth, passkey, and session continuations           | AES-GCM with purpose-separated keys, bounded expiry, HttpOnly, and narrow paths    |
 | `lib/github-oauth.ts`                              | Resolves one GitHub numeric user ID                              | State plus PKCE, no extra scope, fixed endpoints, token and other fields discarded |
 | `lib/passkey-registration.ts`                      | Creates and verifies registration and login ceremonies           | Exact RP/origin/type, required UV, fixed algorithms, and bounded output            |
@@ -164,14 +164,20 @@ purpose-keyed AES-256-GCM values with authenticated context, HttpOnly, SameSite=
 and the narrowest useful path; duplicate cookie names fail closed. Every response is `no-store` and
 `no-referrer`, and each local route admits at most four unsettled operations. The account page uses
 the exact possessed session to read at most 32 passkey rows, one closed `public`/`hidden` visibility
-value, and at most 64 active device credentials through fixed procedures. The device mapper accepts
-only owned opaque sources plus bounded labels, platform/version metadata, and UTC activation dates
-rounded to a day. It renders source ordinal/state rather than the source ID; internal key/profile
+value, at most 32 opaque sources, and at most 64 active device credentials through fixed procedures.
+The device mapper accepts an exact empty-source sentinel plus bounded labels, platform/version
+metadata, and UTC activation dates rounded to a day, so a source remains controllable after its last
+device is revoked. It renders source ordinal/state rather than the source ID; internal key/profile
 IDs, public keys, and exact lifecycle times never enter HTML. Only the exact opaque device ID enters
 its hidden same-origin revoke form. Revocation is terminal, immediately removes that device's future
 submission authority, preserves existing season attribution, and remains available while the profile
-is hidden. The passkey mapper requires one current active authenticator and renders only bounded
-labels, active/revoked state, UTC creation dates rounded to a day, and the current marker.
+is hidden. Source actions receive only an encrypted control token bound to the active session for at
+most 15 minutes; raw source IDs do not enter HTML or form data. A same-origin form pauses an active
+source immediately. Reactivation accepts only a paused source after a fresh required-UV assertion
+bound to the session, source, RP ID, and origin, then consumes the challenge and reactivates in one
+statement. Both actions remain available while hidden without changing visibility, and neither can
+lift quarantine. The passkey mapper requires one current active authenticator and renders only
+bounded labels, active/revoked state, UTC creation dates rounded to a day, and the current marker.
 Credential IDs, public keys, sign counters, exact activity timestamps, and profile IDs do not enter
 HTML. The visibility form is an exact same-origin, bounded POST backed by the same session verifier.
 Hiding immediately removes the profile from public score reads while existing source sync may
@@ -304,7 +310,7 @@ aggregate source count; it does not pair or verify accounts.
   Next.js's type-only reference, while lint policy forbids importing the absent runtime.
 
 These controls reduce current risk; they do not make Community claims authoritative or replace the
-remaining Phase 2 recovery, source lifecycle and pairing controls, ingestion, retention,
+remaining Phase 2 recovery, source unlink and pairing controls, ingestion, retention,
 deletion-purge, and edge abuse-control gates.
 
 ## Test strategy
@@ -317,7 +323,8 @@ cookie ambiguity, state plus PKCE, no-extra-scope token exchange, encrypted purp
 fixed SQL, one-time challenge binding, exact RP/origin/type and UV verification,
 continuation-before-write ordering, profile-free database-state-free login options, atomic login
 completion, exact-handle deletion binding, atomic challenge-consume/delete settlement, cookie
-clearing, closed active-device inventory, hidden-profile revoke, overload, logout, EN/RU rendering,
+clearing, closed source/device inventory, encrypted session-bound source targeting, hidden-profile
+pause/reactivation/revoke, cross-session and replay denial, overload, logout, EN/RU rendering,
 native ceremonies, and generic failures without a live account or credential. Other HTTP-boundary
 cases cover entropy, opaque tokens, every problem mapping, closed URL parsing, bounded media
 negotiation, overload settlement, headers, contract validation, hostile reflective inputs, and

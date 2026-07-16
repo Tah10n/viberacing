@@ -47,6 +47,12 @@ apply.
   from HTML. The exact opaque device ID may enter only its authenticated hidden revoke form. Device
   revoke remains an immediate, terminal, same-origin owned-device action with a generic result and
   bounded audit reference.
+- Source controls must remain session-derived and usable while the profile is hidden. Raw source IDs
+  must not enter HTML or form data; expose only an exact-shape encrypted control token bound to the
+  active session for at most 15 minutes. Keep sources visible even when they have no active device.
+  Pause is immediate. Reactivation is allowed only from `paused` after a fresh required-UV assertion
+  bound to the session, source, RP ID, and origin, followed by one atomic consume-and-reactivate
+  statement. Neither action may lift quarantine or change profile visibility.
 - Passkey revocation must target only an owned non-current active key from that inventory. Bind one
   fresh required-UV assertion to the exact active session, target, RP, origin, and five-minute
   challenge, then consume and revoke atomically. The opaque target ID may enter only the

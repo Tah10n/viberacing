@@ -22,6 +22,9 @@ import {
   type EnrollmentDatabaseProfileVisibilityRequest,
   type EnrollmentDatabaseProfileVisibilityUpdate,
   type EnrollmentDatabaseSessionRevocation,
+  type EnrollmentDatabaseSourcePause,
+  type EnrollmentDatabaseSourceReactivation,
+  type EnrollmentDatabaseSourceReactivationChallenge,
   type EnrollmentDatabaseSourceDeviceInventoryRequest,
   type PairingDatabasePoolSignalSink,
 } from "./pairing-database-pool";
@@ -84,13 +87,18 @@ export interface EnrollmentDatabase {
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile>;
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<boolean>;
   completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<boolean>;
+  completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<boolean>;
   createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<boolean>;
   createProfileDeletionChallenge(
     input: EnrollmentDatabaseProfileDeletionChallenge,
   ): Promise<boolean>;
+  createSourceReactivationChallenge(
+    input: EnrollmentDatabaseSourceReactivationChallenge,
+  ): Promise<boolean>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
+  pauseSource(input: EnrollmentDatabaseSourcePause): Promise<boolean>;
   readActiveDeviceInventory(
     input: EnrollmentDatabaseSourceDeviceInventoryRequest,
   ): Promise<readonly SourceDeviceInventoryItem[]>;
@@ -334,7 +342,7 @@ function exactPasskeyInventory(value: unknown): readonly PasskeyInventoryItem[] 
 }
 
 function exactActiveDeviceInventory(value: unknown): readonly SourceDeviceInventoryItem[] {
-  if (!Array.isArray(value) || value.length > 64) {
+  if (!Array.isArray(value) || value.length > 95) {
     fail("result_invalid");
   }
   const deviceIds = new Set<string>();
@@ -350,13 +358,12 @@ function exactActiveDeviceInventory(value: unknown): readonly SourceDeviceInvent
         state: SourceState;
       }
     | undefined;
+  let currentSourceHasEmptyMarker = false;
   for (const row of value as unknown[]) {
     if (!isRecord(row)) {
       fail("result_invalid");
     }
     const keys = Object.keys(row);
-    const labelLength =
-      typeof row.device_label === "string" ? Array.from(row.device_label).length : 0;
     if (
       keys.length !== activeDeviceInventoryColumns.size ||
       keys.some((key) => !activeDeviceInventoryColumns.has(key)) ||
@@ -365,7 +372,47 @@ function exactActiveDeviceInventory(value: unknown): readonly SourceDeviceInvent
       (row.source_state !== "active" &&
         row.source_state !== "paused" &&
         row.source_state !== "quarantined" &&
-        row.source_state !== "unlinked") ||
+        row.source_state !== "unlinked")
+    ) {
+      fail("result_invalid");
+    }
+    if (currentSource?.sourceId !== row.source_id) {
+      if (currentSource !== undefined && row.source_id <= currentSource.sourceId) {
+        fail("result_invalid");
+      }
+      currentSource = {
+        devices: [],
+        sourceId: row.source_id,
+        state: row.source_state,
+      };
+      currentSourceHasEmptyMarker = false;
+      sources.push(currentSource);
+      if (sources.length > 32) {
+        fail("result_invalid");
+      }
+    } else if (currentSource.state !== row.source_state) {
+      fail("result_invalid");
+    }
+    if (row.device_id === null) {
+      if (
+        currentSourceHasEmptyMarker ||
+        currentSource.devices.length !== 0 ||
+        row.device_label !== null ||
+        row.connector_version !== null ||
+        row.os_family !== null ||
+        row.architecture !== null ||
+        row.device_state !== null ||
+        row.activated_on !== null
+      ) {
+        fail("result_invalid");
+      }
+      currentSourceHasEmptyMarker = true;
+      continue;
+    }
+    const labelLength =
+      typeof row.device_label === "string" ? Array.from(row.device_label).length : 0;
+    if (
+      currentSourceHasEmptyMarker ||
       typeof row.device_id !== "string" ||
       !deviceIdPattern.test(row.device_id) ||
       deviceIds.has(row.device_id) ||
@@ -386,23 +433,10 @@ function exactActiveDeviceInventory(value: unknown): readonly SourceDeviceInvent
     ) {
       fail("result_invalid");
     }
-    if (currentSource?.sourceId !== row.source_id) {
-      if (currentSource !== undefined && row.source_id <= currentSource.sourceId) {
-        fail("result_invalid");
-      }
-      currentSource = {
-        devices: [],
-        sourceId: row.source_id,
-        state: row.source_state,
-      };
-      sources.push(currentSource);
-      if (sources.length > 32) {
-        fail("result_invalid");
-      }
-    } else if (currentSource.state !== row.source_state) {
+    deviceIds.add(row.device_id);
+    if (deviceIds.size > 64) {
       fail("result_invalid");
     }
-    deviceIds.add(row.device_id);
     currentSource.devices.push(
       Object.freeze({
         activatedOn: row.activated_on,
@@ -502,6 +536,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "deleted"),
       );
     },
+    completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<boolean> {
+      return execute(
+        (client) => client.completeSourceReactivation(input),
+        (value) => exactBooleanRow(value, "reactivated"),
+      );
+    },
     createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean> {
       return execute(
         (client) => client.createPasskeyAddChallenge(input),
@@ -530,10 +570,24 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "created"),
       );
     },
+    createSourceReactivationChallenge(
+      input: EnrollmentDatabaseSourceReactivationChallenge,
+    ): Promise<boolean> {
+      return execute(
+        (client) => client.createSourceReactivationChallenge(input),
+        (value) => exactBooleanRow(value, "created"),
+      );
+    },
     enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean> {
       return execute(
         (client) => client.enrollProfile(input),
         (value) => exactBooleanRow(value, "enrolled"),
+      );
+    },
+    pauseSource(input: EnrollmentDatabaseSourcePause): Promise<boolean> {
+      return execute(
+        (client) => client.pauseSource(input),
+        (value) => exactBooleanRow(value, "paused"),
       );
     },
     readActiveDeviceInventory(

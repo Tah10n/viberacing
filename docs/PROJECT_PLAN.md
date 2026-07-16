@@ -152,22 +152,24 @@ flowchart LR
   that exact session for a bounded, server-rendered passkey inventory without credential or key
   material and for an idempotent same-origin `public`/`hidden` profile control. Hiding affects
   public score reads without pausing source sync. The same account view now projects only the
-  profile's active device credentials under the 64-authority ceiling, rounds activation to a day,
-  hides source/internal identifiers, and can immediately revoke one exact owned device even while
-  public visibility is hidden. It can revoke an owned non-current active passkey only after a fresh
-  user-verified assertion bound to that session, target, RP, origin, and one atomically consumed
-  challenge. It can also add a backup key after independent existing-key assertion and registration
-  ceremonies whose validated label and challenges reach one atomic consume-and-add statement. Its
-  deletion control accepts the exact typed handle before a fresh assertion bound to
-  session/profile/handle/RP/origin, then atomically consumes that challenge while immediately hiding
-  the profile, revoking authority, unlinking sources, and queueing one opaque purge job. The purge
-  worker, cache invalidation, and restore replay remain separate gates. A dormant transport-free
-  pairing start boundary now owns fresh server IDs/token/challenge/code, separate protected
-  poll/code verifiers, closed device metadata, nine-minute expiry, and one fixed call through a
-  separate probed read-write pool wrapper. A second dormant boundary owns protected poll lookup,
-  strict possession proof, server-owned activation IDs, and fixed admission/timing. Pairing browser
-  approval, recovery and remaining source/device step-up, edge attempt policy, live
-  provider/database credentials, and deployment remain separate gates.
+  profile's at-most-32 sources and 64 active device credentials, preserves empty sources for
+  lifecycle control, rounds activation to a day, and hides source/internal identifiers. It can
+  immediately pause one source or revoke one exact owned device even while public visibility is
+  hidden. A paused source can be reactivated only after a fresh user-verified assertion bound to the
+  session, source, RP ID, and origin; raw source IDs never enter HTML. It can revoke an owned
+  non-current active passkey only after a fresh user-verified assertion bound to that session,
+  target, RP, origin, and one atomically consumed challenge. It can also add a backup key after
+  independent existing-key assertion and registration ceremonies whose validated label and
+  challenges reach one atomic consume-and-add statement. Its deletion control accepts the exact
+  typed handle before a fresh assertion bound to session/profile/handle/RP/origin, then atomically
+  consumes that challenge while immediately hiding the profile, revoking authority, unlinking
+  sources, and queueing one opaque purge job. The purge worker, cache invalidation, and restore
+  replay remain separate gates. A dormant transport-free pairing start boundary now owns fresh
+  server IDs/token/challenge/code, separate protected poll/code verifiers, closed device metadata,
+  nine-minute expiry, and one fixed call through a separate probed read-write pool wrapper. A second
+  dormant boundary owns protected poll lookup, strict possession proof, server-owned activation IDs,
+  and fixed admission/timing. Pairing browser approval, recovery, source unlink, edge attempt
+  policy, live provider/database credentials, and deployment remain separate gates.
 - Ingest: a small Fastify service with no OAuth, admin, signing, or deployment credentials. Its
   first local slices are a pure raw-request verification kernel and a bounded least-privileged
   PostgreSQL adapter, a protected exact two-key origin configuration reader, and an atomic
@@ -866,8 +868,8 @@ measurements exist.
 ### Phase 3 — Multi-source and lifecycle hardening
 
 - Add explicit new-source versus existing-source pairing.
-- Add aggregation, same-source device dedup, source count, pause/unlink, quarantine, retention, and
-  finalized-season immutability.
+- Complete source unlink, aggregation, same-source device dedup, source count, quarantine,
+  retention, and finalized-season immutability.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches.
 - Gate: source multiplication cannot exceed the profile score cap or gain privilege, and
   infrastructure limits survive load tests.

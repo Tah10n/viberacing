@@ -164,6 +164,7 @@ describe("enrollment experience", () => {
     const passkeyId = "00000000-0000-4000-8000-000000000511";
     const deviceId = `dev_${"A".repeat(22)}`;
     const sourceId = `src_${"B".repeat(22)}`;
+    const sourceControl = "opaque-source-control";
     const markup = renderToStaticMarkup(
       <AccountExperience
         activeDeviceInventory={[
@@ -178,7 +179,7 @@ describe("enrollment experience", () => {
                 osFamily: "windows",
               },
             ],
-            sourceId,
+            sourceControl,
             state: "active",
           },
         ]}
@@ -204,10 +205,12 @@ describe("enrollment experience", () => {
       />,
     );
     expect(markup).toContain("Your passkeys");
-    expect(markup).toContain("Connected devices");
+    expect(markup).toContain("Sources and connected devices");
     expect(markup).toContain("Studio PC");
     expect(markup).toContain('action="/auth/devices/revoke"');
     expect(markup).toContain(`name="deviceId" value="${deviceId}"`);
+    expect(markup).toContain(`name="sourceControl" value="${sourceControl}"`);
+    expect(markup).toContain('action="/auth/sources/pause"');
     expect(markup).toContain('dateTime="2026-07-14"');
     expect(markup).not.toContain(sourceId);
     expect(markup).toContain("Public profile");
@@ -226,7 +229,13 @@ describe("enrollment experience", () => {
     const hidden = renderToStaticMarkup(
       <AccountExperience
         actionUnavailable
-        activeDeviceInventory={[]}
+        activeDeviceInventory={[
+          {
+            devices: [],
+            sourceControl: "opaque-source-control",
+            state: "paused",
+          },
+        ]}
         handle="pixel_driver"
         locale="ru"
         passkeys={[]}
@@ -234,6 +243,8 @@ describe("enrollment experience", () => {
       />,
     );
     expect(hidden).toContain("Публичный профиль выключен");
+    expect(hidden).toContain("Возобновить источник");
+    expect(hidden).toContain("не осталось активных прав устройства");
     expect(hidden).toContain('type="hidden" name="visibility" value="public"');
     expect(hidden).toContain("Не удалось изменить аккаунт");
 
@@ -247,7 +258,7 @@ describe("enrollment experience", () => {
       />,
     );
     expect(unavailable).toContain("Profile visibility is temporarily unavailable");
-    expect(unavailable).toContain("Connected-device details are temporarily unavailable");
+    expect(unavailable).toContain("Source and device details are temporarily unavailable");
     expect(unavailable).not.toContain('action="/auth/profile/visibility"');
   });
 
@@ -378,6 +389,60 @@ describe("enrollment experience", () => {
     expect(JSON.parse(verificationBody)).toEqual({
       response: { id: "synthetic-login" },
     });
+    expect(mounted.container.textContent).toContain("could not be completed");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
+  it("uses only an opaque source control before fresh-passkey reactivation", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const sourceControl = "opaque-source-control";
+    const fetchMock = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ challenge: "synthetic" }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(
+      <AccountExperience
+        activeDeviceInventory={[
+          {
+            devices: [],
+            sourceControl,
+            state: "paused",
+          },
+        ]}
+        handle="pixel_driver"
+        locale="en"
+        passkeys={[]}
+        visibility="hidden"
+      />,
+    );
+    await act(async () => {
+      mounted.container
+        .querySelector(".passkey-revoke")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(webauthn.startAuthentication).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      "/auth/sources/reactivate/options",
+      "/auth/sources/reactivate/verify",
+    ]);
+    const optionsBody = fetchMock.mock.calls[0]?.[1].body;
+    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
+    expect(typeof optionsBody).toBe("string");
+    expect(typeof verificationBody).toBe("string");
+    if (typeof optionsBody !== "string" || typeof verificationBody !== "string") {
+      throw new Error("expected serialized source reactivation request bodies");
+    }
+    expect(JSON.parse(optionsBody)).toEqual({ sourceControl });
+    expect(JSON.parse(verificationBody)).toEqual({ response: { id: "synthetic-login" } });
+    expect(optionsBody).not.toContain("src_");
     expect(mounted.container.textContent).toContain("could not be completed");
     act(() => {
       mounted.root.unmount();
