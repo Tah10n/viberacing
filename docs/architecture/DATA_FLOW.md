@@ -15,32 +15,32 @@ ingest, bounded ingest- and pairing-retention cleanup, open-season scoring refre
 closure, terminal season finalization, and a Web-only public score projection. One local
 public-score GET constructs the bounded adapter lazily after closed request admission. The visible
 home race now requests its current server-selected week from that exact same-origin route, validates
-the public fields, and retains a clearly labeled synthetic fallback on failure. One local one-shot
-Jobs runner can invoke exactly one of four fixed functions: either cleanup function, refresh, or
-finalization, but no broader recovery/step-up, deployed ingest endpoint, Argon2id/WebAuthn pairing
-approval, operational connector, purge worker, Jobs scheduler/monitor, audited correction, or
-deployed service executes the complete sequences. A library-only Rust connector foundation validates
-the bounded stable App Server initialization exchange and candidate `0.144.4` account/usage
-responses. A synthetic one-shot supervisor composes those states with fixed local process mechanics,
-while an exact-body composer and isolated one-use signer produce a synthetic signed envelope. A
-separate inaccessible pending-key and challenge signer plus a pure server-only Web verifier now
-agree on one exact pairing-possession message and synthetic signature. A dormant Web/Auth start
-application generates fresh IDs, token, challenge, 60-bit code, separate protected poll/code
-verifiers, and a nine-minute pending transaction from closed device metadata. A second application
-performs protected keyed poll lookup, mandates that proof, and invokes only exact atomic activation
-behind local admission/timing. All required connector capabilities have no public constructor, and
-there is no executable admission, real Codex execution, key generation/store, pairing-start client,
-browser/WebAuthn approval, pairing HTTP route, upload, or supported-version path. A local Ingest
-kernel now verifies the bounded exact-body origin/device request, while the separate adapter maps
-origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic
-origin replay consumption and bounded cleanup. A transport-free application now composes those exact
-local capabilities and validates only closed acknowledgement/problem decisions. A bounded local
-Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline policy, and
-serializes only revalidated contracts. There is no edge/live-database/deployment integration. No
-host/port/TLS entry point, deployment login, certificate, edge signer/direct-origin policy, or live
-route/Jobs evidence is supplied. Data labels refer to the classifications in the
-[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
-and Prohibited.
+the public fields, lets one handle select a same-page summary from only those fields, and retains a
+clearly labeled synthetic fallback on failure. One local one-shot Jobs runner can invoke exactly one
+of four fixed functions: either cleanup function, refresh, or finalization, but no broader
+recovery/step-up, deployed ingest endpoint, Argon2id/WebAuthn pairing approval, operational
+connector, purge worker, Jobs scheduler/monitor, audited correction, or deployed service executes
+the complete sequences. A library-only Rust connector foundation validates the bounded stable App
+Server initialization exchange and candidate `0.144.4` account/usage responses. A synthetic one-shot
+supervisor composes those states with fixed local process mechanics, while an exact-body composer
+and isolated one-use signer produce a synthetic signed envelope. A separate inaccessible pending-key
+and challenge signer plus a pure server-only Web verifier now agree on one exact pairing-possession
+message and synthetic signature. A dormant Web/Auth start application generates fresh IDs, token,
+challenge, 60-bit code, separate protected poll/code verifiers, and a nine-minute pending
+transaction from closed device metadata. A second application performs protected keyed poll lookup,
+mandates that proof, and invokes only exact atomic activation behind local admission/timing. All
+required connector capabilities have no public constructor, and there is no executable admission,
+real Codex execution, key generation/store, pairing-start client, browser/WebAuthn approval, pairing
+HTTP route, upload, or supported-version path. A local Ingest kernel now verifies the bounded
+exact-body origin/device request, while the separate adapter maps origin replay, device lookup, and
+submission through fixed calls. PostgreSQL now proves atomic origin replay consumption and bounded
+cleanup. A transport-free application now composes those exact local capabilities and validates only
+closed acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
+no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
+certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
+refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public,
+Account, Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
 

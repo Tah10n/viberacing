@@ -123,6 +123,15 @@ export function RaceExperience({
   const canvasAnimated = motionEnabled && !racePaused;
   const participants =
     scoreState.source === "community" ? scoreState.participants : payload.participants;
+  const [selectedCommunityParticipantId, setSelectedCommunityParticipantId] = useState<
+    string | undefined
+  >();
+  const selectedCommunityParticipant =
+    scoreState.source === "community"
+      ? (scoreState.participants.find(
+          (participant) => participant.id === selectedCommunityParticipantId,
+        ) ?? scoreState.participants[0])
+      : undefined;
   const rankCounts = new Map<number, number>();
   for (const participant of participants) {
     rankCounts.set(participant.rank, (rankCounts.get(participant.rank) ?? 0) + 1);
@@ -318,18 +327,35 @@ export function RaceExperience({
               <tbody>
                 {participants.map((participant) => {
                   const sharedRank = (rankCounts.get(participant.rank) ?? 0) > 1;
+                  const selected =
+                    scoreState.source === "community"
+                      ? participant.id === selectedCommunityParticipant?.id
+                      : participant.id === "demo-driver";
                   return (
-                    <tr
-                      className={participant.id === "demo-driver" ? "current-driver" : undefined}
-                      key={participant.id}
-                    >
+                    <tr className={selected ? "current-driver" : undefined} key={participant.id}>
                       <td>
                         <span aria-hidden="true">#{participant.rank}</span>
                         <span className="sr-only">
                           {participant.rank}. {sharedRank ? translation.sharedRank : ""}
                         </span>
                       </td>
-                      <th scope="row">{participant.handle}</th>
+                      <th scope="row">
+                        {scoreState.source === "community" ? (
+                          <a
+                            aria-current={selected ? "true" : undefined}
+                            aria-label={`${translation.viewProfile}: ${participant.handle}`}
+                            className="profile-driver-link"
+                            href="#profile"
+                            onClick={() => {
+                              setSelectedCommunityParticipantId(participant.id);
+                            }}
+                          >
+                            {participant.handle}
+                          </a>
+                        ) : (
+                          participant.handle
+                        )}
+                      </th>
                       <td>
                         {scoreState.source === "community" ? (
                           translation.visualMarker
@@ -367,82 +393,161 @@ export function RaceExperience({
         <section aria-labelledby="profile-heading" className="profile-section" id="profile">
           <div className="section-heading-row">
             <div>
-              <p className="eyebrow">{translation.demoBadge}</p>
-              <h2 id="profile-heading">{translation.demoProfile}</h2>
+              <p className="eyebrow">
+                {scoreState.source === "community"
+                  ? translation.communityDataBadge
+                  : translation.demoBadge}
+              </p>
+              <h2 id="profile-heading">
+                {scoreState.source === "community"
+                  ? translation.communityProfile
+                  : translation.demoProfile}
+              </h2>
             </div>
-            <strong>{payload.profile.handle}</strong>
+            <strong aria-live="polite">
+              {scoreState.source === "community"
+                ? (selectedCommunityParticipant?.handle ?? "—")
+                : payload.profile.handle}
+            </strong>
           </div>
 
-          <div className="profile-grid">
-            <article className="score-panel">
-              <h3>{translation.score}</h3>
-              <strong className="large-score">
-                {formatScore(payload.profile.weeklyScore, locale)} {translation.points}
-              </strong>
-              <div className="daily-bars">
-                {payload.profile.dailyScores.map((score, index) => {
-                  const day = days[index] ?? String(index + 1);
-                  return (
-                    <label key={day}>
-                      <span>{day}</span>
-                      <progress
-                        aria-label={`${day}: ${formatScore(score, locale)} ${translation.points}`}
-                        max={1_000}
-                        value={score}
-                      />
-                      <small>{formatScore(score, locale)}</small>
-                    </label>
-                  );
-                })}
-              </div>
-            </article>
+          {scoreState.source === "community" && selectedCommunityParticipant === undefined ? (
+            <div className="profile-grid">
+              <article className="score-panel">
+                <p>{translation.noParticipants}</p>
+              </article>
+            </div>
+          ) : (
+            <div className="profile-grid">
+              <article className="score-panel">
+                <h3>{translation.score}</h3>
+                {selectedCommunityParticipant === undefined ? (
+                  <>
+                    <strong className="large-score">
+                      {formatScore(payload.profile.weeklyScore, locale)} {translation.points}
+                    </strong>
+                    <div className="daily-bars">
+                      {payload.profile.dailyScores.map((score, index) => {
+                        const day = days[index] ?? String(index + 1);
+                        return (
+                          <label key={day}>
+                            <span>{day}</span>
+                            <progress
+                              aria-label={`${day}: ${formatScore(score, locale)} ${translation.points}`}
+                              max={1_000}
+                              value={score}
+                            />
+                            <small>{formatScore(score, locale)}</small>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <strong className="large-score">
+                      {formatScore(selectedCommunityParticipant.weeklyScore, locale)}{" "}
+                      {translation.points}
+                    </strong>
+                    <dl className="stat-pair">
+                      <div>
+                        <dt>{translation.rank}</dt>
+                        <dd>#{selectedCommunityParticipant.rank}</dd>
+                      </div>
+                      <div>
+                        <dt>{translation.activeDays}</dt>
+                        <dd>{selectedCommunityParticipant.activeDays}/7</dd>
+                      </div>
+                      <div>
+                        <dt>{translation.streak}</dt>
+                        <dd>
+                          {selectedCommunityParticipant.streakDays === null
+                            ? translation.streakUnavailable
+                            : formatDayCount(selectedCommunityParticipant.streakDays, locale)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>{translation.freshness}</dt>
+                        <dd>
+                          {formatFreshness(selectedCommunityParticipant.freshnessDays, locale)}
+                        </dd>
+                      </div>
+                    </dl>
+                    <p>{translation.communityProfilePrivacy}</p>
+                  </>
+                )}
+              </article>
 
-            <article className="garage-panel">
-              <h3>{translation.carProposal}</h3>
-              <p className="recipe-code">{carRecipeKey(payload.profile.car)}</p>
-              <dl className="recipe-list">
-                <div>
-                  <dt>{translation.carBody}</dt>
-                  <dd>{formatCarPart(payload.profile.car.body, locale)}</dd>
-                </div>
-                <div>
-                  <dt>{translation.carPaint}</dt>
-                  <dd>{formatCarPart(payload.profile.car.paint, locale)}</dd>
-                </div>
-                <div>
-                  <dt>{translation.carTrim}</dt>
-                  <dd>{formatCarPart(payload.profile.car.trim, locale)}</dd>
-                </div>
-                <div>
-                  <dt>{translation.carSpoiler}</dt>
-                  <dd>{formatCarPart(payload.profile.car.spoiler, locale)}</dd>
-                </div>
-              </dl>
-            </article>
+              <article className="garage-panel">
+                {selectedCommunityParticipant === undefined ? (
+                  <>
+                    <h3>{translation.carProposal}</h3>
+                    <p className="recipe-code">{carRecipeKey(payload.profile.car)}</p>
+                    <dl className="recipe-list">
+                      <div>
+                        <dt>{translation.carBody}</dt>
+                        <dd>{formatCarPart(payload.profile.car.body, locale)}</dd>
+                      </div>
+                      <div>
+                        <dt>{translation.carPaint}</dt>
+                        <dd>{formatCarPart(payload.profile.car.paint, locale)}</dd>
+                      </div>
+                      <div>
+                        <dt>{translation.carTrim}</dt>
+                        <dd>{formatCarPart(payload.profile.car.trim, locale)}</dd>
+                      </div>
+                      <div>
+                        <dt>{translation.carSpoiler}</dt>
+                        <dd>{formatCarPart(payload.profile.car.spoiler, locale)}</dd>
+                      </div>
+                    </dl>
+                  </>
+                ) : (
+                  <>
+                    <h3>{translation.car}</h3>
+                    <p>
+                      <span
+                        className="car-swatch"
+                        data-paint={selectedCommunityParticipant.car.paint}
+                      >
+                        <span aria-hidden="true">■</span> {translation.visualMarker}
+                      </span>
+                    </p>
+                    <p>{translation.communityCarCopy}</p>
+                  </>
+                )}
+              </article>
 
-            <article className="source-panel">
-              <h3>{translation.sourceCount}</h3>
-              <dl className="stat-pair">
-                <div>
-                  <dt>{translation.sourceCount}</dt>
-                  <dd>{payload.profile.sourceCount}</dd>
-                </div>
-                <div>
-                  <dt>{translation.deviceCount}</dt>
-                  <dd>{payload.profile.deviceCount}</dd>
-                </div>
-              </dl>
-              <p>{translation.sourcesAggregated}</p>
-            </article>
+              <article className="source-panel">
+                <h3>{translation.sourceCount}</h3>
+                {selectedCommunityParticipant === undefined ? (
+                  <dl className="stat-pair">
+                    <div>
+                      <dt>{translation.sourceCount}</dt>
+                      <dd>{payload.profile.sourceCount}</dd>
+                    </div>
+                    <div>
+                      <dt>{translation.deviceCount}</dt>
+                      <dd>{payload.profile.deviceCount}</dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <strong className="large-score">
+                    {selectedCommunityParticipant.sourceCount}
+                  </strong>
+                )}
+                <p>{translation.sourcesAggregated}</p>
+              </article>
 
-            <article className="verified-panel">
-              <h3>{translation.verified}</h3>
-              <p>{translation.verifiedCopy}</p>
-              <button className="pixel-button" disabled type="button">
-                {translation.unavailable}
-              </button>
-            </article>
-          </div>
+              <article className="verified-panel">
+                <h3>{translation.verified}</h3>
+                <p>{translation.verifiedCopy}</p>
+                <button className="pixel-button" disabled type="button">
+                  {translation.unavailable}
+                </button>
+              </article>
+            </div>
+          )}
         </section>
 
         <section aria-label={translation.dataControl} className="method-grid">

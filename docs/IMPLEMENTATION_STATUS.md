@@ -14,9 +14,10 @@ source/device lifecycle, same-source deduplication, and bounded pairing-retentio
 started. A server-only public problem-response factory, closed query/OpenAPI operation, and locally
 implemented public-score GET now exist. The visible home race now requests the current
 server-selected Community week from that same-origin route, replaces only its race/leaderboard after
-closed browser-side validation, and retains a labeled synthetic fallback on failure. Local identity
-slices now implement exact same-origin bounded forms, GitHub OAuth state and S256 PKCE with no extra
-scope, purpose-separated encrypted HttpOnly continuations, atomic profile/session creation, required
+closed browser-side validation, lets a handle select a same-page summary from only those public
+fields, and retains a labeled synthetic fallback on failure. Local identity slices now implement
+exact same-origin bounded forms, GitHub OAuth state and S256 PKCE with no extra scope,
+purpose-separated encrypted HttpOnly continuations, atomic profile/session creation, required
 initial WebAuthn registration, returning discoverable-credential login, a session-scoped minimal
 passkey inventory, an active account page, immediate public-profile hide/show, source inventory and
 pause, fresh-passkey paused-source reactivation and terminal unlink, fresh backup-passkey addition,
@@ -315,9 +316,11 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   field set and constant Community/self-reported metadata, and replaces only the race and
   leaderboard. Fixed repository-owned cars are presentation fallback because CarRecipe is not in the
   response; streak and freshness remain unavailable. Invalid, oversized, non-JSON, failed, or
-  unavailable responses retain the clearly labeled synthetic preview. The demo garage stays
-  synthetic, and no retry, cookie, browser persistence, analytics, or third-party destination is
-  added.
+  unavailable responses retain the clearly labeled synthetic preview. A Community handle selects a
+  same-page summary containing only weekly score, rank, active days, source count, and an explicit
+  visual-marker car; daily detail, device counts, exact usage, and identifiers remain absent. The
+  fallback demo garage stays synthetic, and no retry, cookie, browser persistence, analytics, or
+  third-party destination is added.
 - An idempotent cluster-role bootstrap for separate `NOLOGIN`, non-owner Web, Ingest, Jobs, Admin,
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
@@ -613,9 +616,9 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   checking, coverage, and a production Next.js build on every deterministic CI run.
 - A manifest-driven production artifact gate with nine black-box cases and enforced limits for
   initial raw/gzip bytes, application/CSS gzip bytes, asset count, source maps, fonts, path safety,
-  and standalone output. The current initial route is 183,783 gzip bytes across eight assets;
-  application JavaScript remains within its separate 10,000-byte budget at 9,046 gzip bytes and CSS
-  remains within 5,000 bytes at 3,303 gzip bytes.
+  and standalone output. The current initial route is 184,278 gzip bytes across eight assets;
+  application JavaScript remains within its separate 10,000-byte budget at 9,509 gzip bytes and CSS
+  remains within 5,000 bytes at 3,335 gzip bytes.
 - A lock-integrity-bound metadata cache for platform-specific npm packages, ten license-checker
   regression cases, and two expiring reviewed overrides: one resolves Next.js to patched
   `postcss@8.5.19`, and one removes unused `sharp`/libvips code while Next.js image optimization

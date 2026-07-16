@@ -2,17 +2,18 @@
 
 This workspace is the Phase 1 product shell: a responsive pixel-art race, Community leaderboard, and
 demo profile with committed synthetic fallback data. It is suitable for local design, accessibility,
-localization, and scoring review. The visible race and leaderboard now request the current
-server-selected Community week from the exact same-origin public score route, validate the bounded
-response in the browser, and retain the labeled synthetic fallback on any failure. The demo garage
-and default product shell remain synthetic and unauthenticated, with no working database login,
-pairing approval/HTTP route, real user data, or deployment. A separate local Phase 2 slice now
-implements invite redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations,
-initial passkey registration, returning login, a session-scoped passkey inventory, an account page,
-public-profile hide/show, source inventory/pause/reactivation/unlink, active-device revoke, fresh
-backup-passkey addition, revocation of an owned non-current passkey, an exact-handle fresh-passkey
-profile-deletion request, and logout. It fails closed without externally provisioned configuration
-and has no live-user or deployment evidence.
+localization, and scoring review. The visible race, leaderboard, and selectable participant summary
+now request the current server-selected Community week from the exact same-origin public score
+route, validate the bounded response in the browser, and retain the labeled synthetic fallback on
+any failure. Community summaries omit daily detail, device counts, exact usage, and identifiers; the
+fallback demo garage and default product shell remain synthetic and unauthenticated, with no working
+database login, pairing approval/HTTP route, real user data, or deployment. A separate local Phase 2
+slice now implements invite redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly
+continuations, initial passkey registration, returning login, a session-scoped passkey inventory, an
+account page, public-profile hide/show, source inventory/pause/reactivation/unlink, active-device
+revoke, fresh backup-passkey addition, revocation of an owned non-current passkey, an exact-handle
+fresh-passkey profile-deletion request, and logout. It fails closed without externally provisioned
+configuration and has no live-user or deployment evidence.
 
 ## Run it
 
@@ -74,7 +75,7 @@ provides no valid invite or working credential. See `.env.example` and the local
 | `lib/public-origin.ts`                             | Strict parser for the canonical social-metadata origin           | Server-only; hosted origins require HTTPS DNS and no extra URL parts               |
 | `lib/car-recipe.ts`                                | Closed-enum car customization and fixed sprites                  | No arbitrary colors, markup, text, files, SVG, or URLs                             |
 | `components/pixel-race-canvas.tsx`                 | Deterministic code-native renderer                               | Draws fixed primitives only; semantic DOM description is mandatory                 |
-| `components/race-experience.tsx`                   | EN/RU interaction, table, profile, theme, and motion controls    | Local storage is restricted to non-personal preferences                            |
+| `components/race-experience.tsx`                   | EN/RU race, selectable summary, theme, and motion controls       | Community summary uses closed public fields; storage is non-personal preferences   |
 | `proxy.ts`                                         | Per-response nonce CSP                                           | Keep production CSP fail-closed and free of remote origins                         |
 | `next.config.ts`                                   | Static security headers and build isolation                      | Turbopack must remain pinned to this repository root                               |
 
@@ -265,11 +266,15 @@ composes both must enforce and verify one aggregate CPU, connection, and anonymo
 
 ## Public client data contract
 
-The browser may receive only:
+The validated Community page may receive only public handles plus bounded weekly score, rank,
+active-day count, source count, and season metadata. The UI derives an opaque presentation ID and
+fixed repository-owned visual-marker car; it receives no Community daily detail or device count.
 
-- opaque synthetic participant IDs and public handles;
-- bounded weekly score, rank, active-day count, streak display, and freshness for leaderboard rows;
-- the selected public profile's bounded daily scores;
+The synthetic fallback may additionally receive only:
+
+- opaque synthetic participant IDs and handles;
+- bounded weekly score, rank, active-day count, streak display, and freshness;
+- the synthetic demo profile's bounded daily scores;
 - aggregate source/device counts;
 - a validated enum-only `CarRecipe`.
 

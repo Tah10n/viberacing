@@ -609,6 +609,16 @@ tbody .current-driver > :first-child {
   font-weight: 900;
 }
 
+.profile-driver-link {
+  color: var(--accent-2);
+  text-underline-offset: 0.25rem;
+}
+
+.profile-driver-link[aria-current="true"] {
+  color: var(--text);
+  text-decoration-thickness: 0.2rem;
+}
+
 .car-swatch {
   display: inline-flex;
   align-items: center;

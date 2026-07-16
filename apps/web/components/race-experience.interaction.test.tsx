@@ -153,6 +153,18 @@ describe("RaceExperience interactions", () => {
                 sourceCount: 2,
                 weeklyScore: 6123,
               },
+              {
+                activeDays: 4,
+                displayPosition: 2,
+                handle: "second_driver",
+                rankPosition: 2,
+                scoreVersion: "community_v1",
+                seasonEnd: "2026-07-19",
+                seasonFinalized: false,
+                seasonStart: "2026-07-13",
+                sourceCount: 1,
+                weeklyScore: 4096,
+              },
             ],
             schemaVersion: 1,
             selfReported: true,
@@ -175,7 +187,24 @@ describe("RaceExperience interactions", () => {
     expect(mounted.container.textContent).toContain("visible_driver");
     expect(mounted.container.textContent).toContain("Visual marker");
     expect(mounted.container.textContent).not.toContain("neon_otter");
-    expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(2);
+    const profile = mounted.container.querySelector<HTMLElement>("#profile");
+    expect(profile?.textContent).toContain("Community profile");
+    expect(profile?.textContent).toContain("visible_driver");
+    expect(profile?.textContent).toContain("6,123 pts");
+    expect(profile?.querySelector(".daily-bars")).toBeNull();
+
+    const secondProfile = Array.from(
+      mounted.container.querySelectorAll<HTMLAnchorElement>(".profile-driver-link"),
+    ).find((link) => link.textContent === "second_driver");
+    expect(secondProfile).toBeDefined();
+    act(() => {
+      secondProfile?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(secondProfile?.getAttribute("aria-current")).toBe("true");
+    expect(profile?.textContent).toContain("second_driver");
+    expect(profile?.textContent).toContain("4,096 pts");
+    expect(profile?.textContent).toContain("#2");
     expect(fetchScore).toHaveBeenCalledWith(
       "/v1/community/scores?seasonStart=2026-07-13",
       expect.objectContaining({ credentials: "omit", method: "GET" }),
@@ -233,6 +262,7 @@ describe("RaceExperience interactions", () => {
 
     expect(mounted.container.textContent).toContain("No Community participants yet.");
     expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(mounted.container.querySelector("#profile")?.textContent).not.toContain("demo_driver");
 
     act(() => {
       mounted.root.unmount();

@@ -448,9 +448,11 @@ edge rate policy, shared cache, capacity result, or public-beta claim.
 
 The visible home race now uses that exact same-origin operation for its current server-selected
 Monday. It accepts only the bounded Public response, uses no credentials or browser persistence, and
-keeps a clearly labeled synthetic fallback on any invalid or unavailable result. CarRecipe, streak,
-freshness, authenticated profile detail, cache, live database integration, and deployment remain
-separate gates.
+keeps a clearly labeled synthetic fallback on any invalid or unavailable result. Selecting a
+Community handle now updates one same-page summary with only its weekly score, rank, active-day and
+source counts; the UI explicitly keeps daily detail, device counts, exact usage, and identifiers out
+of that surface. CarRecipe, streak, freshness, authenticated daily/profile detail, cache, live
+database integration, and deployment remain separate gates.
 
 ### ConnectorSyncV1
 

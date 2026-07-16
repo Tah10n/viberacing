@@ -20,7 +20,12 @@ const english = {
   communityDataBadge: "Community standings",
   communityDataSecurityNote:
     "Community standings contain only public derived scores. Cars are visual markers until profile recipes exist. This page uses no trackers, remote fonts, account credentials, or raw token totals.",
+  communityCarCopy:
+    "This car is a stable visual marker for the standings, not a published profile recipe.",
   communityNotice: "Community leaderboard",
+  communityProfile: "Community profile",
+  communityProfilePrivacy:
+    "Daily detail, exact token totals, device counts, and source identifiers stay private.",
   communityWeek: "Current Community week",
   currentWeek: "Current demo week",
   dailyActivity: "Daily score",
@@ -77,6 +82,7 @@ const english = {
   verifiedCopy: "Disabled until an authoritative verification boundary exists.",
   visualMarker: "Visual marker",
   viewLeaderboard: "View standings",
+  viewProfile: "View profile",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -96,7 +102,12 @@ const russian: Record<TranslationKey, string> = {
   communityDataBadge: "Рейтинг сообщества",
   communityDataSecurityNote:
     "В рейтинге сообщества отображаются только публичные производные баллы. Машины служат визуальными маркерами, пока нет рецептов профиля. Здесь нет трекеров, внешних шрифтов, данных входа и точных токенов.",
+  communityCarCopy:
+    "Эта машина — постоянный визуальный маркер в таблице, а не опубликованный рецепт профиля.",
   communityNotice: "Рейтинг сообщества",
+  communityProfile: "Профиль сообщества",
+  communityProfilePrivacy:
+    "Баллы по дням, точные токены, число устройств и идентификаторы источников остаются приватными.",
   communityWeek: "Текущая неделя сообщества",
   currentWeek: "Текущая демо-неделя",
   dailyActivity: "Баллы по дням",
@@ -154,6 +165,7 @@ const russian: Record<TranslationKey, string> = {
   verifiedCopy: "Отключена до появления авторитетного механизма проверки.",
   visualMarker: "Визуальный маркер",
   viewLeaderboard: "Смотреть таблицу",
+  viewProfile: "Открыть профиль",
 };
 
 export const translations: Readonly<Record<Locale, Readonly<Record<TranslationKey, string>>>> = {
