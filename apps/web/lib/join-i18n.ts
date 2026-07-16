@@ -97,6 +97,7 @@ const english = {
   unsupportedPasskey: "This browser or device does not support WebAuthn passkeys.",
   unlinkingSource: "Checking passkey…",
   unlinkSource: "Unlink source permanently",
+  viewPublicProfile: "View public profile",
 } as const;
 
 type JoinTranslationKey = keyof typeof english;
@@ -199,6 +200,7 @@ const russian: Record<JoinTranslationKey, string> = {
   unsupportedPasskey: "Этот браузер или устройство не поддерживает ключи доступа WebAuthn.",
   unlinkingSource: "Проверяем ключ…",
   unlinkSource: "Отключить источник навсегда",
+  viewPublicProfile: "Открыть публичный профиль",
 };
 
 export const joinTranslations: Record<Locale, Record<JoinTranslationKey, string>> = Object.freeze({

@@ -30,6 +30,10 @@ function installCanvasAndAnimation(): void {
     vi.fn(() => 1),
   );
   vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  Object.defineProperty(Element.prototype, "scrollIntoView", {
+    configurable: true,
+    value: vi.fn(),
+  });
 }
 
 function installMatchMedia(initialMatches: boolean): MediaController {
@@ -75,6 +79,7 @@ function installMatchMedia(initialMatches: boolean): MediaController {
 function mountExperience(
   communitySeasonStart?: string,
   accountSessionAvailable = false,
+  profileHandle?: string,
 ): MountedExperience {
   const container = document.createElement("div");
   document.body.append(container);
@@ -83,11 +88,12 @@ function mountExperience(
   act(() => {
     root.render(
       communitySeasonStart === undefined
-        ? createElement(RaceExperience, { accountSessionAvailable, payload })
+        ? createElement(RaceExperience, { accountSessionAvailable, payload, profileHandle })
         : createElement(RaceExperience, {
             accountSessionAvailable,
             communitySeasonStart,
             payload,
+            profileHandle,
           }),
     );
   });
@@ -103,6 +109,7 @@ function changeSelect(select: HTMLSelectElement, value: string): void {
 
 beforeEach(() => {
   localStorage.clear();
+  window.history.replaceState(null, "", "/");
   installCanvasAndAnimation();
 });
 
@@ -176,7 +183,7 @@ describe("RaceExperience interactions", () => {
     );
     vi.stubGlobal("fetch", fetchScore);
 
-    const mounted = mountExperience("2026-07-13");
+    const mounted = mountExperience("2026-07-13", false, "second_driver");
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
@@ -190,21 +197,31 @@ describe("RaceExperience interactions", () => {
     expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(2);
     const profile = mounted.container.querySelector<HTMLElement>("#profile");
     expect(profile?.textContent).toContain("Community profile");
-    expect(profile?.textContent).toContain("visible_driver");
-    expect(profile?.textContent).toContain("6,123 pts");
+    expect(profile?.textContent).toContain("second_driver");
+    expect(profile?.textContent).toContain("4,096 pts");
+    expect(profile?.textContent).toContain("#2");
     expect(profile?.querySelector(".daily-bars")).toBeNull();
 
     const secondProfile = Array.from(
       mounted.container.querySelectorAll<HTMLAnchorElement>(".profile-driver-link"),
     ).find((link) => link.textContent === "second_driver");
     expect(secondProfile).toBeDefined();
-    act(() => {
-      secondProfile?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
     expect(secondProfile?.getAttribute("aria-current")).toBe("true");
-    expect(profile?.textContent).toContain("second_driver");
-    expect(profile?.textContent).toContain("4,096 pts");
-    expect(profile?.textContent).toContain("#2");
+    expect(secondProfile?.getAttribute("href")).toBe("/?profile=second_driver#profile");
+
+    const firstProfile = Array.from(
+      mounted.container.querySelectorAll<HTMLAnchorElement>(".profile-driver-link"),
+    ).find((link) => link.textContent === "visible_driver");
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView");
+    act(() => {
+      firstProfile?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(firstProfile?.getAttribute("aria-current")).toBe("true");
+    expect(profile?.textContent).toContain("visible_driver");
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe(
+      "/?profile=visible_driver#profile",
+    );
+    expect(scrollIntoView).toHaveBeenCalled();
     expect(fetchScore).toHaveBeenCalledWith(
       "/v1/community/scores?seasonStart=2026-07-13",
       expect.objectContaining({ credentials: "omit", method: "GET" }),
@@ -212,6 +229,35 @@ describe("RaceExperience interactions", () => {
 
     act(() => {
       mounted.root.unmount();
+    });
+
+    const missing = mountExperience("2026-07-13", false, "missing_driver");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const missingProfile = missing.container.querySelector<HTMLElement>("#profile");
+    expect(missingProfile?.textContent).toContain("missing_driver");
+    expect(missingProfile?.textContent).toContain("not in the current top 32");
+    expect(missing.container.querySelector('[aria-current="true"]')).toBeNull();
+
+    act(() => {
+      missing.root.unmount();
+    });
+
+    const defaultProfile = mountExperience("2026-07-13");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(defaultProfile.container.querySelector("#profile")?.textContent).toContain(
+      "visible_driver",
+    );
+    expect(
+      defaultProfile.container.querySelector<HTMLAnchorElement>('[aria-current="true"]')
+        ?.textContent,
+    ).toBe("visible_driver");
+
+    act(() => {
+      defaultProfile.root.unmount();
     });
   });
 

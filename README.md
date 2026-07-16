@@ -15,16 +15,18 @@ without an account, connector, or database. It now also requests the current Com
 same-origin public score route and replaces the visible race and leaderboard only after a bounded
 response passes browser-side validation. A Community handle now selects a same-page public summary
 from that same validated field set; daily detail, device counts, exact usage, and identifiers remain
-absent. An unavailable route leaves the synthetic fallback visible; the demo garage remains
-synthetic. A separate invite-only join flow now composes GitHub OAuth with state and PKCE, one
-encrypted short-lived continuation, atomic profile enrollment, required WebAuthn registration,
-returning discoverable-credential login, a session-scoped passkey inventory, an active account page,
-immediate public-profile hide/show, source and active-device inventory, immediate source pause,
-fresh-passkey paused-source reactivation, device revoke, backup-passkey addition and fresh-passkey
-terminal source unlink, non-current-passkey revocation, an exact-handle fresh-passkey
-profile-deletion request, and logout. It is locally tested only: the repository supplies no invite
-issuer UI, OAuth registration, real secret, live OAuth/authenticator/database credentials, deletion
-purge worker, edge abuse controls, or live-user evidence.
+absent. Each selection has a canonical public-handle URL, and a signed-in public profile links to
+its current summary without adding a new API or browser storage. An unavailable route leaves the
+synthetic fallback visible; the demo garage remains synthetic. A separate invite-only join flow now
+composes GitHub OAuth with state and PKCE, one encrypted short-lived continuation, atomic profile
+enrollment, required WebAuthn registration, returning discoverable-credential login, a
+session-scoped passkey inventory, an active account page, immediate public-profile hide/show, source
+and active-device inventory, immediate source pause, fresh-passkey paused-source reactivation,
+device revoke, backup-passkey addition and fresh-passkey terminal source unlink, non-current-passkey
+revocation, an exact-handle fresh-passkey profile-deletion request, and logout. It is locally tested
+only: the repository supplies no invite issuer UI, OAuth registration, real secret, live
+OAuth/authenticator/database credentials, deletion purge worker, edge abuse controls, or live-user
+evidence.
 
 ## Trust model
 
@@ -204,12 +206,13 @@ active-profile score projection containing no raw values, private identifiers, o
 The score response component and Web PostgreSQL adapter preserve only that public allowlist through
 the local score route. The visible race, leaderboard, and selectable participant summary now consume
 its validated current-week response with a credential-free same-origin request and an explicit
-synthetic fallback. There is now a local invite/OAuth/initial-passkey enrollment, returning-passkey
-login, and fresh-passkey profile-deletion request flow, but there is still no recovery route,
-Argon2id recovery verifier, WebAuthn pairing approval, pairing start/poll HTTP route, deployed
-Ingest/score API, operational connector, cleanup/scoring scheduler, audited correction flow,
-asynchronous purge worker, live OAuth/authenticator/Ingest/Jobs database integration, or deployed
-database.
+synthetic fallback. Canonical `/?profile=handle#profile` links select only an exact public handle in
+that page, and a missing current top-32 row is not replaced with another participant. There is now a
+local invite/OAuth/initial-passkey enrollment, returning-passkey login, and fresh-passkey
+profile-deletion request flow, but there is still no recovery route, Argon2id recovery verifier,
+WebAuthn pairing approval, pairing start/poll HTTP route, deployed Ingest/score API, operational
+connector, cleanup/scoring scheduler, audited correction flow, asynchronous purge worker, live
+OAuth/authenticator/Ingest/Jobs database integration, or deployed database.
 
 ## Run and verify the synthetic prototype
 

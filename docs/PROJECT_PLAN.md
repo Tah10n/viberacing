@@ -451,8 +451,10 @@ Monday. It accepts only the bounded Public response, uses no credentials or brow
 keeps a clearly labeled synthetic fallback on any invalid or unavailable result. Selecting a
 Community handle now updates one same-page summary with only its weekly score, rank, active-day and
 source counts; the UI explicitly keeps daily detail, device counts, exact usage, and identifiers out
-of that surface. CarRecipe, streak, freshness, authenticated daily/profile detail, cache, live
-database integration, and deployment remain separate gates.
+of that surface. The exact public handle can be shared as `/?profile=handle#profile`; invalid or
+duplicate values are ignored, and a missing top-32 row is never substituted with another profile.
+CarRecipe, streak, freshness, authenticated daily/profile detail, cache, live database integration,
+and deployment remain separate gates.
 
 ### ConnectorSyncV1
 

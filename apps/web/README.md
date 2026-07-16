@@ -6,14 +6,18 @@ localization, and scoring review. The visible race, leaderboard, and selectable 
 now request the current server-selected Community week from the exact same-origin public score
 route, validate the bounded response in the browser, and retain the labeled synthetic fallback on
 any failure. Community summaries omit daily detail, device counts, exact usage, and identifiers; the
-fallback demo garage and default product shell remain synthetic and unauthenticated, with no working
-database login, pairing approval/HTTP route, real user data, or deployment. A separate local Phase 2
-slice now implements invite redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly
-continuations, initial passkey registration, returning login, a session-scoped passkey inventory, an
-account page, public-profile hide/show, source inventory/pause/reactivation/unlink, active-device
-revoke, fresh backup-passkey addition, revocation of an owned non-current passkey, an exact-handle
-fresh-passkey profile-deletion request, and logout. It fails closed without externally provisioned
-configuration and has no live-user or deployment evidence.
+selected handle is carried only in a canonical `/?profile=handle#profile` URL. Invalid or duplicate
+values are ignored, a missing current top-32 row is not replaced, and a public signed-in profile
+links to its current summary. An ordinary same-tab selection updates the summary and URL without a
+reload; modified clicks retain native link behavior. The fallback demo garage and default product
+shell remain synthetic and unauthenticated, with no working database login, pairing approval/HTTP
+route, real user data, or deployment. A separate local Phase 2 slice now implements invite
+redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations, initial passkey
+registration, returning login, a session-scoped passkey inventory, an account page, public-profile
+hide/show, source inventory/pause/reactivation/unlink, active-device revoke, fresh backup-passkey
+addition, revocation of an owned non-current passkey, an exact-handle fresh-passkey profile-deletion
+request, and logout. It fails closed without externally provisioned configuration and has no
+live-user or deployment evidence.
 
 ## Run it
 
@@ -268,7 +272,9 @@ composes both must enforce and verify one aggregate CPU, connection, and anonymo
 
 The validated Community page may receive only public handles plus bounded weekly score, rank,
 active-day count, source count, and season metadata. The UI derives an opaque presentation ID and
-fixed repository-owned visual-marker car; it receives no Community daily detail or device count.
+fixed repository-owned visual-marker car; it receives no Community daily detail or device count. The
+optional page query contains one already-public canonical handle only; it is neither sent to the
+score API nor persisted in browser storage.
 
 The synthetic fallback may additionally receive only:
 

@@ -15,12 +15,13 @@ started. A server-only public problem-response factory, closed query/OpenAPI ope
 implemented public-score GET now exist. The visible home race now requests the current
 server-selected Community week from that same-origin route, replaces only its race/leaderboard after
 closed browser-side validation, lets a handle select a same-page summary from only those public
-fields, and retains a labeled synthetic fallback on failure. Local identity slices now implement
-exact same-origin bounded forms, GitHub OAuth state and S256 PKCE with no extra scope,
-purpose-separated encrypted HttpOnly continuations, atomic profile/session creation, required
-initial WebAuthn registration, returning discoverable-credential login, a session-scoped minimal
-passkey inventory, an active account page, immediate public-profile hide/show, source inventory and
-pause, fresh-passkey paused-source reactivation and terminal unlink, fresh backup-passkey addition,
+fields, exposes that selection through a canonical public-handle URL and public-account link, and
+retains a labeled synthetic fallback on failure. Local identity slices now implement exact
+same-origin bounded forms, GitHub OAuth state and S256 PKCE with no extra scope, purpose-separated
+encrypted HttpOnly continuations, atomic profile/session creation, required initial WebAuthn
+registration, returning discoverable-credential login, a session-scoped minimal passkey inventory,
+an active account page, immediate public-profile hide/show, source inventory and pause,
+fresh-passkey paused-source reactivation and terminal unlink, fresh backup-passkey addition,
 revocation of an owned non-current passkey, a bounded active-device inventory with immediate
 owned-device revoke, an exact-handle fresh-passkey profile-deletion request, and database-backed
 logout. Login options retain the profile-free challenge only in a separate encrypted cookie; valid
@@ -319,8 +320,11 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   unavailable responses retain the clearly labeled synthetic preview. A Community handle selects a
   same-page summary containing only weekly score, rank, active days, source count, and an explicit
   visual-marker car; daily detail, device counts, exact usage, and identifiers remain absent. The
-  fallback demo garage stays synthetic, and no retry, cookie, browser persistence, analytics, or
-  third-party destination is added.
+  selection uses only one canonical `/?profile=handle#profile` URL value. A normal click updates the
+  summary and URL in place while modified clicks retain native behavior. Invalid/duplicate values
+  are ignored, a missing current top-32 row stays missing rather than selecting the leader, and only
+  a public account renders its own link. The fallback demo garage stays synthetic, and no retry,
+  cookie, browser persistence, analytics, or third-party destination is added.
 - An idempotent cluster-role bootstrap for separate `NOLOGIN`, non-owner Web, Ingest, Jobs, Admin,
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
@@ -606,9 +610,9 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   deployment without a real HTTPS DNS value remains forbidden. The separate enrollment slice stores
   account state only in encrypted HttpOnly cookies and reads its exact server-only configuration
   lazily; the default preview still needs none of it.
-- Five hundred one unit, component, interaction, security-header, localization, scoring,
+- Five hundred seven unit, component, interaction, security-header, localization, scoring,
   HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
-  coverage gate currently reports 87.69% statements, 86.35% branches, 95.86% functions, and 87.80%
+  coverage gate currently reports 87.70% statements, 86.49% branches, 95.89% functions, and 87.81%
   lines over product components and libraries; framework entrypoints are verified by the production
   build instead of artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift; contract, Ingest, and
@@ -616,8 +620,8 @@ version, real-user ingestion, end-to-end public ranking, or finalization schedul
   checking, coverage, and a production Next.js build on every deterministic CI run.
 - A manifest-driven production artifact gate with nine black-box cases and enforced limits for
   initial raw/gzip bytes, application/CSS gzip bytes, asset count, source maps, fonts, path safety,
-  and standalone output. The current initial route is 184,278 gzip bytes across eight assets;
-  application JavaScript remains within its separate 10,000-byte budget at 9,509 gzip bytes and CSS
+  and standalone output. The current initial route is 184,501 gzip bytes across eight assets;
+  application JavaScript remains within its separate 10,000-byte budget at 9,732 gzip bytes and CSS
   remains within 5,000 bytes at 3,335 gzip bytes.
 - A lock-integrity-bound metadata cache for platform-specific npm packages, ten license-checker
   regression cases, and two expiring reviewed overrides: one resolves Next.js to patched

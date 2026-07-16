@@ -218,6 +218,8 @@ describe("enrollment experience", () => {
     expect(markup).toContain("Delete profile");
     expect(markup).toContain('name="handle"');
     expect(markup).toContain("Eligible scores can appear in the Community race");
+    expect(markup).toContain('href="/?profile=pixel_driver#profile"');
+    expect(markup).toContain("View public profile");
     expect(markup).toContain('action="/auth/profile/visibility"');
     expect(markup).toContain('type="hidden" name="visibility" value="hidden"');
     expect(markup).toContain("Current session");
@@ -253,6 +255,7 @@ describe("enrollment experience", () => {
     expect(hidden.match(/aria-label="Отключить источник навсегда:/g)).toHaveLength(1);
     expect(hidden).toContain("не осталось активных прав устройства");
     expect(hidden).toContain('type="hidden" name="visibility" value="public"');
+    expect(hidden).not.toContain("Открыть публичный профиль");
     expect(hidden).toContain("Не удалось изменить аккаунт");
 
     const unavailable = renderToStaticMarkup(

@@ -4,6 +4,7 @@ import type { CommunityScorePageV1 } from "@viberacing/contracts";
 
 import {
   currentCommunitySeasonStart,
+  isPublicCommunityHandle,
   loadPublicCommunityRace,
   mapCommunityScorePageToRace,
 } from "./public-community-race";
@@ -60,6 +61,17 @@ describe("visible public Community race", () => {
 
   it("rejects an invalid clock", () => {
     expect(currentCommunitySeasonStart(new Date(Number.NaN))).toBeUndefined();
+  });
+
+  it.each([
+    ["pixel_driver", true],
+    ["abc", true],
+    ["ab", false],
+    ["Pixel_driver", false],
+    ["pixel/driver", false],
+    [["pixel_driver"], false],
+  ])("validates one canonical public profile handle", (value, expected) => {
+    expect(isPublicCommunityHandle(value)).toBe(expected);
   });
 
   it("maps only the validated requested season into public presentation fields", () => {

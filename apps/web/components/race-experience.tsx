@@ -29,6 +29,7 @@ interface RaceExperienceProps {
   readonly accountSessionAvailable?: boolean;
   readonly communitySeasonStart?: string;
   readonly payload: SyntheticRacePayload;
+  readonly profileHandle?: string | undefined;
 }
 
 const storageKeys = {
@@ -45,6 +46,7 @@ export function RaceExperience({
   accountSessionAvailable = false,
   communitySeasonStart,
   payload,
+  profileHandle,
 }: RaceExperienceProps) {
   const [locale, setLocale] = useState<Locale>("en");
   const [theme, setTheme] = useState<RaceThemeId>("neon-night");
@@ -53,6 +55,7 @@ export function RaceExperience({
   const [racePaused, setRacePaused] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [scoreState, setScoreState] = useState<ScoreState>({ source: "synthetic" });
+  const [selectedProfileHandle, setSelectedProfileHandle] = useState(profileHandle);
   const controlGroupId = useId();
   const translation = translations[locale];
 
@@ -118,19 +121,22 @@ export function RaceExperience({
     };
   }, [communitySeasonStart]);
 
+  useEffect(() => {
+    setSelectedProfileHandle(profileHandle);
+  }, [profileHandle]);
+
   const motionEnabled =
     motionPreference === "on" || (motionPreference === "system" && !systemReducedMotion);
   const canvasAnimated = motionEnabled && !racePaused;
   const participants =
     scoreState.source === "community" ? scoreState.participants : payload.participants;
-  const [selectedCommunityParticipantId, setSelectedCommunityParticipantId] = useState<
-    string | undefined
-  >();
   const selectedCommunityParticipant =
     scoreState.source === "community"
-      ? (scoreState.participants.find(
-          (participant) => participant.id === selectedCommunityParticipantId,
-        ) ?? scoreState.participants[0])
+      ? selectedProfileHandle === undefined
+        ? scoreState.participants[0]
+        : scoreState.participants.find(
+            (participant) => participant.handle === selectedProfileHandle,
+          )
       : undefined;
   const rankCounts = new Map<number, number>();
   for (const participant of participants) {
@@ -345,9 +351,25 @@ export function RaceExperience({
                             aria-current={selected ? "true" : undefined}
                             aria-label={`${translation.viewProfile}: ${participant.handle}`}
                             className="profile-driver-link"
-                            href="#profile"
-                            onClick={() => {
-                              setSelectedCommunityParticipantId(participant.id);
+                            href={`/?profile=${participant.handle}#profile`}
+                            onClick={(event) => {
+                              if (
+                                event.button !== 0 ||
+                                event.altKey ||
+                                event.ctrlKey ||
+                                event.metaKey ||
+                                event.shiftKey
+                              ) {
+                                return;
+                              }
+                              event.preventDefault();
+                              window.history.replaceState(
+                                window.history.state,
+                                "",
+                                event.currentTarget.href,
+                              );
+                              setSelectedProfileHandle(participant.handle);
+                              document.getElementById("profile")?.scrollIntoView();
                             }}
                           >
                             {participant.handle}
@@ -406,7 +428,7 @@ export function RaceExperience({
             </div>
             <strong aria-live="polite">
               {scoreState.source === "community"
-                ? (selectedCommunityParticipant?.handle ?? "—")
+                ? (selectedCommunityParticipant?.handle ?? selectedProfileHandle ?? "—")
                 : payload.profile.handle}
             </strong>
           </div>
@@ -414,7 +436,11 @@ export function RaceExperience({
           {scoreState.source === "community" && selectedCommunityParticipant === undefined ? (
             <div className="profile-grid">
               <article className="score-panel">
-                <p>{translation.noParticipants}</p>
+                <p>
+                  {scoreState.participants.length === 0
+                    ? translation.noParticipants
+                    : translation.profileNotRanked}
+                </p>
               </article>
             </div>
           ) : (

@@ -95,6 +95,10 @@ export function currentCommunitySeasonStart(now: Date): string | undefined {
   return validSeasonStart(seasonStart) ? seasonStart : undefined;
 }
 
+export function isPublicCommunityHandle(value: unknown): value is string {
+  return typeof value === "string" && handlePattern.test(value);
+}
+
 export function mapCommunityScorePageToRace(
   value: unknown,
   expectedSeasonStart: string,
@@ -139,8 +143,7 @@ export function mapCommunityScorePageToRace(
       if (
         !boundedInteger(activeDays, 0, 7) ||
         displayPosition !== index + 1 ||
-        typeof handle !== "string" ||
-        !handlePattern.test(handle) ||
+        !isPublicCommunityHandle(handle) ||
         !boundedInteger(rankPosition, 1, 32) ||
         typeof scoreVersion !== "string" ||
         !scoreVersionPattern.test(scoreVersion) ||

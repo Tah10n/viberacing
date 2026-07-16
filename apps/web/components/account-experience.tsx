@@ -60,6 +60,13 @@ export function AccountExperience({
               <p className="auth-status" role="status">
                 {visibility === "public" ? copy.profileVisible : copy.profileHidden}
               </p>
+              {visibility === "public" ? (
+                <p>
+                  <Link href={`/?profile=${encodeURIComponent(handle)}#profile`}>
+                    {copy.viewPublicProfile}
+                  </Link>
+                </p>
+              ) : null}
               <form action="/auth/profile/visibility" method="post">
                 <input
                   name="visibility"
