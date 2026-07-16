@@ -5,9 +5,9 @@
 The current repository contains a private SQL schema, synthetic PostgreSQL integration test, local
 Community sync verification kernel, mock-pool database adapter, and bounded local HTTP server
 factory, plus library-only connector protocol/parser boundaries, a synthetic one-shot process
-supervisor, an exact-body composer, and an isolated one-use signer behind capabilities with no
-public constructors, but no deployed application database, user accounts, production service,
-operational connector, or real user data. This document remains the required inventory for
+supervisor, an exact-body composer, isolated pairing/request signers, and a pure Web pairing
+verifier behind closed boundaries, but no deployed application database, user accounts, production
+service, operational connector, or real user data. This document remains the required inventory for
 implementation. A field may not be collected merely because it appears here: its schema, purpose,
 visibility, retention, deletion, and access tests must exist first. The implemented column-level
 mapping is documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
@@ -60,7 +60,8 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Device public key, private signing key, and public device ID               | Security                        | Connector; authenticate one source-bound device                        | Public key to Ingest/inventory; private key only to local signer          | Public key/ID in `device_keys`; private key in reviewed OS store only, not implemented                 | Until revoke/unlink/delete; private key removed on revoke; revoked ID retained only for bounded security need |
 | Device label                                                               | Account                         | User or safe generated default; distinguish devices                    | User profile only                                                         | `device_keys` metadata                                                                                 | Until edited/revoked/deleted; bounded plain text with warning not to enter personal data                      |
 | Connector, Codex, and OS-family versions                                   | Security; Operational           | Connector; compatibility and incident diagnosis                        | User device inventory and limited operations                              | Device/sync metadata                                                                                   | Current device state plus bounded compatibility history; launch decision required                             |
-| Pairing poll token, verifier, challenge, user code, and transaction        | Security                        | Server/connector; poll safely and bind browser approval to one key     | Pairing service, connector memory, and browser confirmation               | Plain poll token returned once; only keyed verifier/challenge persisted                                | Plaintext never logged/persisted; verifier, challenge, and code expire after completion or short timeout      |
+| Pairing poll token, verifier, challenge, user code, and transaction        | Security                        | Server/connector; poll safely and bind browser approval to one key     | Pairing service, connector memory, and browser confirmation               | Plain poll token returned once; only keyed verifier/challenge persisted                                | Token plaintext never logged/persisted; verifier, challenge, and code expire after completion/timeout         |
+| Pairing possession message and signature                                   | Security                        | Connector/Web verifier; prove one pending device holds its private key | Connector signer and pure Web verifier only                               | Transient process memory only; never persisted                                                         | Web copies overwritten after settlement; Rust proof lives until owner drop; never logged or retained          |
 | `codexReportedDate` and exact daily token value                            | Usage                           | Local stable App Server adapter; compute Community score               | Isolated Ingest and Jobs scoring/cleanup procedures; never public raw     | `usage_snapshot_entries`, `source_day_values`                                                          | Raw snapshot is Jobs-cleanup eligible after 30 days; current/history policy remains a launch decision         |
 | Connector `observedAt`, server `receivedAt`, device nonce, idempotency key | Security; Usage                 | Connector/server; replay, ordering, deadline, and retry safety         | Isolated Ingest and Jobs cleanup procedures; shared finalization policy   | `usage_snapshots`, `device_nonces`                                                                     | Nonce after 15 minutes and raw snapshot after 30 days; scheduler and production purge proof remain required   |
 | Edge origin HMAC key and key ID                                            | Security                        | Operator/edge/service; authenticate the only intended ingress          | Edge signer and Ingest verifier process memory only                       | Protected environment/secret manager; local reader implemented; never tracked, logged, or stored in DB | Rotate on exposure or policy change; remove retired key after bounded request window                          |
@@ -189,6 +190,16 @@ extended public vector contains only synthetic usage/identifiers, a public key, 
 private test seed is deterministically derived at runtime from an obvious fixed label. No current
 code can obtain a real context or key. OS-store custody, fresh entropy, clock handling, pairing,
 retries, and egress require separate mapping and review.
+
+ADR 0026 adds no data class, persistent field, or sink. The Rust kernel transiently receives the
+already mapped pending private key plus pairing ID/challenge, derives the already mapped public key,
+and returns only the existing ID/signature class. The Web kernel transiently copies the approved
+pairing ID/challenge/public key and submitted signature, reconstructs the exact possession message,
+returns one boolean, and overwrites its copies after settlement. Neither kernel has a poll token,
+user code, profile/source identifier, cookie, log, metric, cache, analytics event, database call,
+export, or network destination. The public vector is entirely synthetic and contains no private key
+or bearer value. Runtime buffer overwriting is defense in depth, not an erasure guarantee. A future
+route, diagnostic, database adapter, or retention sink requires a separate privacy review.
 
 Revision 0008 adds deletion evidence for only those raw nonce and snapshot rows: a Jobs-only
 procedure derives cutoff time on the server, deletes bounded expired batches, cascades raw entries,

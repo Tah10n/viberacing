@@ -242,7 +242,7 @@ fn valid_daily_usage(daily_usage: &DailyUsage) -> bool {
             .all(|pair| pair[0].codex_reported_date() < pair[1].codex_reported_date())
 }
 
-fn encode_base64url(input: &[u8]) -> String {
+pub(crate) fn encode_base64url(input: &[u8]) -> String {
     let mut output = String::with_capacity(input.len().saturating_mul(4).div_ceil(3));
     let mut chunks = input.chunks_exact(3);
     for chunk in &mut chunks {

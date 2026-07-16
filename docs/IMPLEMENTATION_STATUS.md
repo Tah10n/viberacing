@@ -35,14 +35,16 @@ entries into the exact bounded JSON body, SHA-256 digest, nonce encoding, and de
 message shared with the production Ingest verifier. An isolated one-use signer removes public
 unsigned access, consumes that value only with an inaccessible device-bound key capability, and
 returns the same body plus five exact signed header values. The shared synthetic vector is strictly
-verified across Rust and Ingest. It creates no context or real key, proves no pairing, and opens no
-network request. Candidate release, schema, fixture, synthetic-process, composer, and signer
-evidence does not populate the support matrix. Phase 0 hosted-publication controls remain blocked on
-real maintainer identities and GitHub configuration. No authentication route,
-OAuth/Argon2id/WebAuthn application flow, production secret-manager/edge key injection, Ingest
-host/port/TLS deployment entry point, production deployment, live Web/Jobs/Ingest database login/TLS
-integration, released or operational connector, supported Codex version, real-user ingestion,
-end-to-end public ranking, or finalization scheduler exists.
+verified across Rust and Ingest. A second inaccessible signer and pure Web verifier now agree on an
+exact synthetic pairing-possession proof without creating a transaction, handling a poll token, or
+calling activation. No boundary creates a context or real key or opens a network request. Candidate
+release, schema, fixture, synthetic-process, composer, pairing, and request-signer evidence does not
+populate the support matrix. Phase 0 hosted-publication controls remain blocked on real maintainer
+identities and GitHub configuration. No authentication route, OAuth/Argon2id/WebAuthn application
+flow, production secret-manager/edge key injection, Ingest host/port/TLS deployment entry point,
+production deployment, live Web/Jobs/Ingest database login/TLS integration, released or operational
+connector, supported Codex version, real-user ingestion, end-to-end public ranking, or finalization
+scheduler exists.
 
 ## Implemented and locally verified
 
@@ -129,19 +131,25 @@ end-to-end public ranking, or finalization scheduler exists.
   overload before and after the final response, non-reflection, missing executable, nonzero terminal
   status, and forced cleanup. The opaque launch capability has no public constructor: there is no
   executable discovery/path-ownership review, official-artifact execution, supported Codex version,
-  real device key generation/store, pairing proof, upload, network transport, CLI, installer, or
-  released binary. A separate candidate-only composer consumes the real parser output behind another
-  capability with no public constructor. It revalidates source/sync/device IDs, canonical UTC time,
-  and daily bounds; manually emits the exact seven-field body; computes the SHA-256 digest; and
-  builds the exact unpadded base64url, LF-separated device message. An isolated one-use signer
-  consumes that otherwise inaccessible value with a device-bound Ed25519 key capability, rejects an
-  exact device mismatch, signs only the fixed message, and returns the same body plus five header
-  values. Nine Rust sync cases plus one production-path Ingest case share and strictly verify an
-  exact synthetic body, public-key, and signature vector. Prepared/signed private byte buffers and
-  the upstream key are zeroed on drop. No source/device context provider, fresh entropy, clock, real
-  key generation/store, pairing proof, transport, retry, schedule, or support claim exists; the
-  compatibility matrix remains empty.
-- An ADR lifecycle/template and twenty-five accepted design decisions covering Community trust,
+  real device key generation/store, pairing client, upload, network transport, CLI, installer, or
+  released binary. A candidate pairing signer now consumes inaccessible pending-key/challenge
+  capabilities and signs one exact domain-separated transaction/challenge/public-key message. A
+  server-only Web kernel independently validates exact approved material and the canonical signature
+  under strict Ed25519 semantics. Five Rust and seven Web cases share the same synthetic key/vector,
+  reject changed or malformed inputs and zero material, and prove copy-before-await behavior. There
+  is still no poll-token verifier, pairing HTTP boundary, WebAuthn approval composition, database
+  adapter, activation call, or real key. A separate candidate-only composer consumes the real parser
+  output behind another capability with no public constructor. It revalidates source/sync/device
+  IDs, canonical UTC time, and daily bounds; manually emits the exact seven-field body; computes the
+  SHA-256 digest; and builds the exact unpadded base64url, LF-separated device message. An isolated
+  one-use signer consumes that otherwise inaccessible value with a device-bound Ed25519 key
+  capability, rejects an exact device mismatch, signs only the fixed message, and returns the same
+  body plus five header values. Nine Rust sync cases plus one production-path Ingest case share and
+  strictly verify an exact synthetic body, public-key, and signature vector. Prepared/signed private
+  byte buffers and the upstream key are zeroed on drop. No source/device context provider, fresh
+  entropy, clock, real key generation/store, end-to-end pairing, transport, retry, schedule, or
+  support claim exists; the compatibility matrix remains empty.
+- An ADR lifecycle/template and twenty-six accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -149,8 +157,8 @@ end-to-end public ranking, or finalization scheduler exists.
   least-privileged Ingest PostgreSQL adapter, protected origin-proof key configuration, persistent
   atomic origin replay, transport-free Community sync application composition, and the bounded local
   Fastify HTTP boundary, plus the fail-closed Codex handshake, candidate account/usage adapter, and
-  inaccessible bounded one-shot process supervisor, exact-body sync composer, and isolated one-use
-  device signing boundary.
+  inaccessible bounded one-shot process supervisor, exact-body sync composer, isolated one-use
+  device signing boundary, and bounded pairing-possession proof.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -165,10 +173,10 @@ end-to-end public ranking, or finalization scheduler exists.
   `GET /v1/community/scores?seasonStart=...` and `POST /v1/community/sync` operations. Their exact
   method-specific query/body, response/problem, admission, authentication-reference, `no-store`,
   `Vary: Accept`, generated request ID, and same-origin CORS policies are manifest-driven without
-  claiming deployment. The sync authentication policy participates in the generated source digest. A
-  manifest/schema/drift checker has 34 black-box cases covering generated operation/status/evidence
-  semantics, unsafe/duplicate/drifted operations, unknown fields, missing bounds, client-derived
-  score aliases, Community trust/problem/date drift, private response fields,
+  claiming deployment. Both inventoried authentication policies participate in the generated source
+  digest. A manifest/schema/drift checker has 39 black-box cases covering generated
+  operation/status/evidence semantics, unsafe/duplicate/drifted operations, unknown fields, missing
+  bounds, client-derived score aliases, Community trust/problem/date drift, private response fields,
   unlisted/path-traversing schemas, unsupported keywords, missing date deduplication, and stale
   generated output.
 - A dependency-free runtime contract validator with fail-closed reflection handling; strict
@@ -336,8 +344,11 @@ end-to-end public ranking, or finalization scheduler exists.
   challenge/context completion, terminal authority, deletion revoke, activated-device preservation,
   oversized/replay/role denial, atomic rollback, and fail-closed behavior at the lifetime-passkey
   provenance ceiling. These identity/pairing procedures do not perform OAuth, Argon2id, WebAuthn, or
-  pairing-possession Ed25519 cryptographic verification; those application boundaries remain absent.
-  The separate request-signature kernel does not approve or activate a pairing.
+  pairing-possession Ed25519 cryptographic verification. A separate pure Web kernel now performs
+  only the last check against caller-supplied approved material; no route, poll lookup, database
+  adapter, or activation composition can reach it. The database therefore still cannot prove its
+  caller ran the verifier, and the separate request-signature kernel does not approve or activate a
+  pairing.
 - Community ingest PostgreSQL scenarios prove exact activated device/source binding, minimal lookup,
   strict identifier/version/date/token/digest and 31-entry bounds, canonical millisecond time,
   server-time freshness, exact duplicate acknowledgement, mutated idempotency and nonce replay
@@ -441,9 +452,9 @@ end-to-end public ranking, or finalization scheduler exists.
   has no accounts, analytics, trackers, remote fonts, or runtime secrets. Its only environment
   setting is a strictly parsed, server-only public origin for absolute social metadata; hosted
   deployment without a real HTTPS DNS value remains forbidden.
-- Two hundred twenty-four unit, component, interaction, security-header, localization, scoring,
+- Two hundred thirty-two unit, component, interaction, security-header, localization, scoring,
   HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
-  coverage gate currently reports 99.01% statements, 95.98% branches, 100% functions, and 98.98%
+  coverage gate currently reports 98.94% statements, 96.32% branches, 100% functions, and 98.92%
   lines over product components and libraries; framework entrypoints are verified by the production
   build instead of artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift; contract, Ingest, and
@@ -499,13 +510,14 @@ defect found and corrected during review. The report names its local-only limita
 ## Not implemented yet
 
 Authentication application flows, OAuth/cookie/CSRF handling, recovery Argon2id/pepper and
-authentication-route generic HTTP response translation, WebAuthn cryptographic verification,
-anonymous login/pairing/recovery edge rate limits and cleanup, an Ingest host/port/TLS deployment
-entry point, trusted edge routing and direct-origin denial, live secret-manager/edge key injection,
-the Ingest live PostgreSQL login/TLS connection, distributed rate/backpressure controls and load
-evidence, scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring
-state, the Jobs scheduler/live login and application-to-PostgreSQL integration, audited corrections,
-deployed public-score delivery, purge workers, connector executable discovery/link/ownership and
+authentication-route generic HTTP response translation, WebAuthn cryptographic verification, pairing
+poll-token hashing/custody, HTTP admission, verification-to-activation composition, and anonymous
+login/pairing/recovery edge rate limits and cleanup, an Ingest host/port/TLS deployment entry point,
+trusted edge routing and direct-origin denial, live secret-manager/edge key injection, the Ingest
+live PostgreSQL login/TLS connection, distributed rate/backpressure controls and load evidence,
+scheduled execution/monitoring of ingest-retention cleanup, cleanup for other expiring state, the
+Jobs scheduler/live login and application-to-PostgreSQL integration, audited corrections, deployed
+public-score delivery, purge workers, connector executable discovery/link/ownership and
 artifact/version admission, live Codex and cross-platform process evidence, supported operational
 account/usage integration, secure device-key storage, upload/CLI/packaging, release signing,
 deployment, and public beta operations remain proposed. The local Ingest key reader, kernel,

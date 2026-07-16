@@ -159,6 +159,127 @@ function sameEntries(left, right) {
   return left.length === right.length && left.every((entry, index) => entry === right[index]);
 }
 
+function validatePairingPolicy(record) {
+  const { policy, relativePath } = record;
+  const expectedKeys = [
+    "activationPreconditions",
+    "algorithm",
+    "binaryEncoding",
+    "canonicalFields",
+    "canonicalMessageEncoding",
+    "canonicalMessageSeparator",
+    "canonicalMessageTrailingSeparator",
+    "challengeBytes",
+    "messagePrefix",
+    "pairingIdPattern",
+    "protocolId",
+    "publicKeyBytes",
+    "schemaVersion",
+    "signatureBytes",
+  ];
+  if (
+    !sameEntries(Object.keys(policy).sort(), expectedKeys) ||
+    policy.schemaVersion !== 1 ||
+    policy.protocolId !== "viberacing-device-pairing-possession-v1" ||
+    policy.algorithm !== "Ed25519" ||
+    policy.publicKeyBytes !== 32 ||
+    policy.challengeBytes !== 32 ||
+    policy.signatureBytes !== 64 ||
+    policy.binaryEncoding !== "base64url-unpadded" ||
+    policy.canonicalMessageEncoding !== "UTF-8" ||
+    policy.canonicalMessageSeparator !== "LF" ||
+    policy.canonicalMessageTrailingSeparator !== false ||
+    policy.messagePrefix !== "viberacing-pairing-possession-v1" ||
+    policy.pairingIdPattern !==
+      "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" ||
+    !Array.isArray(policy.canonicalFields) ||
+    !sameEntries(policy.canonicalFields, [
+      "messagePrefix",
+      "pairingId",
+      "pairingChallengeBase64Url",
+      "devicePublicKeyBase64Url",
+    ]) ||
+    !Array.isArray(policy.activationPreconditions) ||
+    !sameEntries(policy.activationPreconditions, [
+      "exact-poll-verifier-match",
+      "browser-approved-transaction",
+      "unexpired-pending-device-key",
+      "strict-possession-signature",
+    ])
+  ) {
+    report(relativePath, "pairing possession policy differs from the reviewed boundary");
+  }
+}
+
+function validatePairingVector() {
+  const relativePath = "contracts/v1/connector-pairing-possession.test-vector.json";
+  const absolutePath = resolve(root, relativePath);
+  if (!existsSync(absolutePath)) {
+    report(relativePath, "shared pairing possession vector is missing");
+    return;
+  }
+  const stats = lstatSync(absolutePath);
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    report(relativePath, "shared pairing possession vector must be a regular file");
+    return;
+  }
+  let vector;
+  try {
+    vector = JSON.parse(readFileSync(absolutePath, "utf8"));
+  } catch {
+    report(relativePath, "shared pairing possession vector must be valid JSON");
+    return;
+  }
+  const expectedKeys = [
+    "devicePublicKeyBase64Url",
+    "pairingChallengeBase64Url",
+    "pairingChallengeBytes",
+    "pairingId",
+    "possessionMessage",
+    "possessionSignatureBase64Url",
+    "protocolId",
+    "schemaVersion",
+  ];
+  const challenge = Buffer.from(Array.from({ length: 32 }, (_, index) => index));
+  const challengeBase64Url = challenge.toString("base64url");
+  const canonicalBase64Url = (value, expectedBytes) => {
+    const expectedCharacters = Math.ceil((expectedBytes * 8) / 6);
+    if (
+      typeof value !== "string" ||
+      value.length !== expectedCharacters ||
+      !/^[A-Za-z0-9_-]+$/.test(value)
+    ) {
+      return false;
+    }
+    const decoded = Buffer.from(value, "base64url");
+    return decoded.length === expectedBytes && decoded.toString("base64url") === value;
+  };
+  if (
+    !isObject(vector) ||
+    !sameEntries(Object.keys(vector).sort(), expectedKeys) ||
+    vector.schemaVersion !== 1 ||
+    vector.protocolId !== "viberacing-device-pairing-possession-v1" ||
+    typeof vector.pairingId !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      vector.pairingId,
+    ) ||
+    !Array.isArray(vector.pairingChallengeBytes) ||
+    !sameEntries(vector.pairingChallengeBytes, [...challenge]) ||
+    vector.pairingChallengeBase64Url !== challengeBase64Url ||
+    !canonicalBase64Url(vector.devicePublicKeyBase64Url, 32) ||
+    !canonicalBase64Url(vector.possessionSignatureBase64Url, 64) ||
+    vector.possessionMessage !==
+      [
+        "viberacing-pairing-possession-v1",
+        vector.pairingId,
+        challengeBase64Url,
+        vector.devicePublicKeyBase64Url,
+      ].join("\n")
+  ) {
+    report(relativePath, "shared pairing possession vector differs from the reviewed boundary");
+  }
+}
+
 function validatePrimitiveConstraints(schema, scope) {
   if (schema.const !== undefined) {
     const validConst =
@@ -353,21 +474,46 @@ try {
 }
 
 if (sources !== undefined) {
-  const { manifest, operations, records } = sources;
+  const { manifest, operations, policies, records } = sources;
   const manifestStats = lstatSync(resolve(root, "contracts", "v1", "manifest.json"));
   if (manifestStats.isSymbolicLink() || !manifestStats.isFile()) {
     report("contracts/v1/manifest.json", "manifest must be a regular non-symbolic-link file");
   }
   if (
     !isObject(manifest) ||
-    Object.keys(manifest).sort().join(",") !== "contractVersion,operations,schemaVersion,schemas" ||
+    Object.keys(manifest).sort().join(",") !==
+      "contractVersion,operations,policies,schemaVersion,schemas" ||
     manifest.schemaVersion !== 1 ||
     manifest.contractVersion !== "v1" ||
     !Array.isArray(manifest.schemas) ||
+    !Array.isArray(manifest.policies) ||
     !Array.isArray(manifest.operations)
   ) {
     report("contracts/v1/manifest.json", "manifest shape or version is invalid");
   }
+
+  if (
+    !sameEntries(
+      policies.map(({ entry }) => entry.file),
+      ["connector-pairing-authentication.json", "connector-sync-authentication.json"],
+    )
+  ) {
+    report("contracts/v1/manifest.json", "authentication policy inventory differs from review");
+  }
+  const listedPolicies = new Set(policies.map(({ entry }) => entry.file));
+  for (const record of policies) {
+    const stats = lstatSync(resolve(root, record.relativePath));
+    if (stats.isSymbolicLink() || !stats.isFile()) {
+      report(record.relativePath, "authentication policies must be regular files");
+    }
+    if (!isObject(record.entry) || Object.keys(record.entry).sort().join(",") !== "file,policyId") {
+      report("contracts/v1/manifest.json", "authentication policy entry is invalid");
+    }
+    if (record.entry.file === "connector-pairing-authentication.json") {
+      validatePairingPolicy(record);
+    }
+  }
+  validatePairingVector();
 
   let previousFile = "";
   const listedFiles = new Set();
@@ -632,6 +778,12 @@ if (sources !== undefined) {
     if (entry.name.endsWith(".schema.json") && !listedFiles.has(entry.name)) {
       report(`contracts/v1/${entry.name}`, "schema is not listed in the version manifest");
     }
+    if (
+      /^connector-[a-z0-9]+(?:-[a-z0-9]+)*-authentication\.json$/.test(entry.name) &&
+      !listedPolicies.has(entry.name)
+    ) {
+      report(`contracts/v1/${entry.name}`, "authentication policy is not listed in the manifest");
+    }
   }
 
   try {
@@ -663,5 +815,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Contract check passed (${String(sources.records.length)} schemas, ${String(sources.operations.length)} operations, 2 generated artifacts).`,
+  `Contract check passed (${String(sources.records.length)} schemas, ${String(sources.policies.length)} policies, ${String(sources.operations.length)} operations, 2 generated artifacts).`,
 );

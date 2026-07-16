@@ -3,9 +3,10 @@
 This workspace is the Phase 1 product shell: a responsive pixel-art race, Community leaderboard, and
 demo profile built entirely from committed synthetic fixtures. It is suitable for local design,
 accessibility, localization, and scoring review. It is not an authenticated product and does not
-read Codex or user accounts. Server-only score database, public problem-response, and local score
-route modules now exist, but no visible component calls that route and no working database login or
-deployment is supplied; the synthetic prototype still does not query a database.
+read Codex or user accounts. Server-only score database, public problem-response, local score route,
+and pure pairing-possession verification modules now exist, but no visible component calls those
+boundaries and no working database login, pairing route, or deployment is supplied; the synthetic
+prototype still does not query a database.
 
 ## Run it
 
@@ -34,6 +35,7 @@ for a hosted deployment; it is public configuration, not a secret. Focused check
 | `lib/public-community-score-route.ts`  | Parses and serializes the public score HTTP boundary           | Closed query/Accept, exact errors, admission, deadlines, and no CORS            |
 | `lib/public-score-admission.ts`        | Enforces the no-queue public-read concurrency ceiling          | Four active reads; lease held until adapter settlement                          |
 | `lib/public-http-problem.ts`           | Generates opaque request IDs and closed public error responses | Server-only; validates the contract; no inbound ID, CORS, detail, or cause      |
+| `lib/pairing-possession-verifier.ts`   | Strictly verifies one approved pending-device proof            | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence |
 | `lib/public-score-database-config.ts`  | Parses the dedicated Web login and TLS/pool contract           | Owner settings are separate; production is verify-full; errors reflect no value |
 | `lib/public-score-database-pool.ts`    | Wraps `pg` with narrow connect/query/release/close authority   | Four connections; bounded waits; stable idle-error signal only                  |
 | `lib/scoring.ts`                       | Bounded daily/weekly score and deterministic rank calculation  | Treat all future device input as untrusted and validate before calling          |
@@ -122,6 +124,10 @@ aggregate source count; it does not pair or verify accounts.
   secrets in the visible prototype. Its only consumed environment setting is an optional public
   metadata origin; a malformed value fails the build. The dormant score adapter reads its dedicated
   server settings only when explicitly constructed.
+- The dormant pairing kernel accepts only one exact plain-object material tuple, copies the fixed
+  challenge/public-key bytes, reconstructs the versioned message, and uses strict Ed25519 semantics.
+  It returns only a generic boolean and has no route, poll-token reader, database call, log, or
+  activation authority.
 - Product rendering uses local HTML/CSS/canvas code. The social preview is a documented,
   metadata-sanitized project-generated PNG; no remote visual source is loaded. The optional Next.js
   `sharp` graph is removed while image optimization is unused. A `never`-typed declaration covers
@@ -132,7 +138,7 @@ replace the Phase 2 authentication, ingestion, retention, deletion, and abuse-co
 
 ## Test strategy
 
-Vitest runs business-logic, data-boundary, HTTP-route/problem, admission,
+Vitest runs business-logic, data-boundary, HTTP-route/problem, admission, pairing cryptography,
 database-config/pool/store, component, interaction, CSP/header, localization, and axe-core
 accessibility tests. HTTP-boundary cases cover entropy, opaque tokens, every problem mapping, closed
 URL parsing, bounded media negotiation, overload settlement, headers, contract validation, hostile

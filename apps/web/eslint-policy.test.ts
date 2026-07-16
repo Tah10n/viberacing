@@ -24,4 +24,30 @@ describe("frontend lint policy", () => {
     );
     expect(restrictions).toHaveLength(5);
   }, 15_000);
+
+  it("confines every Ed25519 access shape to the reviewed server module", async () => {
+    const eslint = new ESLint({ cwd: import.meta.dirname });
+    const [result] = await eslint.lintText(
+      [
+        'import { verifyAsync } from "@noble/ed25519";',
+        'const lazy = import("@noble/ed25519");',
+        'export { verifyAsync as verify } from "@noble/ed25519";',
+        'export * from "@noble/ed25519";',
+        'const legacy = require("@noble/ed25519");',
+        "void [verifyAsync, lazy, legacy];",
+      ].join("\n"),
+      { filePath: resolve(import.meta.dirname, "lib", "scoring.ts") },
+    );
+
+    const restrictedImports = result?.messages.filter(
+      ({ message, ruleId }) =>
+        ruleId === "no-restricted-imports" && message.includes("Only pairing-possession-verifier"),
+    );
+    const restrictedSyntax = result?.messages.filter(
+      ({ message, ruleId }) =>
+        ruleId === "no-restricted-syntax" && message.includes("Web Ed25519 verification"),
+    );
+    expect(restrictedImports).toHaveLength(3);
+    expect(restrictedSyntax).toHaveLength(2);
+  }, 15_000);
 });

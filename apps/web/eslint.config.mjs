@@ -66,11 +66,36 @@ export default defineConfig([
           message:
             "Sharp is intentionally unavailable while Next.js image optimization is disabled.",
         },
+        {
+          selector: "ImportExpression[source.value='@noble/ed25519']",
+          message: "Web Ed25519 verification must not use dynamic imports.",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value='@noble/ed25519']",
+          message: "Web Ed25519 verification must not use CommonJS access.",
+        },
       ],
       "react-hooks/exhaustive-deps": "error",
       "react-hooks/rules-of-hooks": "error",
     },
     settings: { next: { rootDir: "." } },
+  },
+  {
+    files: ["**/*.{js,jsx,mjs,cjs,ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}", "lib/pairing-possession-verifier.ts", "tests/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@noble/ed25519",
+              message: "Only pairing-possession-verifier.ts may own Web Ed25519 verification.",
+            },
+          ],
+        },
+      ],
+    },
   },
   {
     files: ["components/**/*.{ts,tsx}"],
@@ -84,6 +109,12 @@ export default defineConfig([
               group: ["@/lib/race-data"],
               message:
                 "Client components must receive a projected public DTO and cannot import raw synthetic activity.",
+            },
+          ],
+          paths: [
+            {
+              name: "@noble/ed25519",
+              message: "Client components must not import server-side cryptography.",
             },
           ],
         },

@@ -45,9 +45,11 @@ ambient-environment clearing, and reap-before-success behavior, but its reviewed
 has no public constructor. An exact-body composer now consumes that minimized usage behind a second
 inaccessible reviewed context and fixes the versioned JSON/digest/LF message. An isolated one-use
 signer consumes that otherwise inaccessible material with a device-bound key capability that also
-has no public constructor, returning only the same body and five exact signed header values. There
-is no executable discovery/admission, live Codex launch path, supported version, source/device
-context provider, key generation/store, pairing proof, upload, CLI, or release. Do not claim that
+has no public constructor, returning only the same body and five exact signed header values. A
+separate inaccessible pending-key/challenge signer and pure server-only Web verifier now agree on
+one exact synthetic pairing-possession proof. There is no executable discovery/admission, live Codex
+launch path, supported version, source/device context provider, key generation/store, pairing
+transaction/poll/approval/activation composition, upload, CLI, or release. Do not claim that
 deployed browser/session HTTP authentication, OAuth/Argon2id/WebAuthn application verification,
 real-user ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
 correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
@@ -62,15 +64,16 @@ implementation and verification are present in the working tree.
 - `scripts/` contains repository verification and black-box policy tests.
 - `config/` contains reviewed external-host and dependency-license policy; do not widen either
   allowlist as a workaround for a failing check.
-- `apps/web/` contains the synthetic Next.js frontend, local public-score route/adapter, and nested
-  agent guidance. Read `apps/web/AGENTS.md` before editing it.
+- `apps/web/` contains the synthetic Next.js frontend, local public-score route/adapter, pure
+  pairing-possession verifier, and nested agent guidance. Read `apps/web/AGENTS.md` before editing
+  it.
 - `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
   least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL
   adapter, transport-free application composition, confined HTTP server factory, and nested security
   guidance. Read `apps/ingest/AGENTS.md` before editing it.
-- `contracts/v1/` contains canonical public JSON Schemas; `contracts/generated/` contains
-  drift-checked derivatives.
+- `contracts/v1/` contains canonical public JSON Schemas and authentication policies;
+  `contracts/generated/` contains drift-checked derivatives.
 - `compat/codex/` contains candidate/supported exact-version App Server evidence. Candidate
   manifests must remain outside the public support matrix.
 - `packages/contracts/` contains generated TypeScript types plus the bounded runtime validator and
@@ -79,8 +82,8 @@ implementation and verification are present in the working tree.
   persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
 - `crates/connector/` contains the bounded App Server JSONL handshake, candidate exact-version
   account/usage parser, inaccessible one-shot child supervisor, synthetic process fixture,
-  exact-body sync composer, isolated one-use signer, and nested connector security guidance. Read
-  `crates/connector/AGENTS.md` before editing it.
+  exact-body sync composer, isolated pairing/sync signers, and nested connector security guidance.
+  Read `crates/connector/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
 - The Ingest host/port/TLS deployment entry point, authentication application code, and operational
@@ -100,8 +103,9 @@ implementation and verification are present in the working tree.
   structure.
 - `pnpm run check:codex-compatibility` validates canonical exact-version manifests, extract/fixture
   digests, fixed stable methods, safe paths, evidence inventory, and candidate/matrix separation.
-- `pnpm run check:contracts` validates bounded JSON Schema structure, the connector writable-field
-  allowlist, generated TypeScript/OpenAPI drift, and version-manifest integrity.
+- `pnpm run check:contracts` validates bounded JSON Schema structure, authentication-policy
+  inventory, the connector writable-field allowlist, generated TypeScript/OpenAPI drift, and
+  version-manifest integrity.
 - `pnpm run check:history` scans every reachable ref, commit message, historical path, text blob,
   and printable binary metadata; it refuses shallow history.
 - `pnpm run check:external-links` enforces HTTPS and the reviewed host policy without network

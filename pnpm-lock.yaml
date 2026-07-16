@@ -98,6 +98,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@noble/ed25519':
+        specifier: 3.1.0
+        version: 3.1.0
       '@viberacing/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

@@ -7,13 +7,16 @@ revision 0011 provides a database-only score projection. A local pure Ingest ker
 authenticates and parses the exact bounded sync request, a separate local adapter constrains its
 PostgreSQL mapping, and a transport-free application boundary composes them into validated
 result/problem decisions. A separate bounded Fastify server factory now preserves the exact raw
-request and serializes only those validated decisions. The candidate Rust connector now composes
-exact unsigned body/device-message material behind an inaccessible context and signs it only behind
-another inaccessible one-use key capability. One synthetic
+request and serializes only those validated decisions. The candidate Rust connector now signs one
+exact pairing-possession message behind inaccessible pending-key/challenge capabilities, then
+separately composes exact unsigned body/device-message material and signs it behind an inaccessible
+source-bound key capability. A server-only Web kernel strictly verifies the pairing proof against
+the exact approved database material. One synthetic
 [`test vector`](v1/connector-sync-device-request.test-vector.json) proves its body, digest, nonce,
-message, public key, and signature against production Ingest code. No operational connector, real
-key generation/store, pairing proof, deployed endpoint, working database credential, edge signer,
-host/port/TLS entry point, or composed live flow exists.
+message, public key, and signature against production Ingest code; a second vector proves the exact
+Rust/Web pairing message and signature. No operational connector, real key generation/store, pairing
+HTTP client/route, poll-token verifier, activation composition, deployed endpoint, working database
+credential, edge signer, host/port/TLS entry point, or composed live flow exists.
 
 ## Canonical version 1 schemas
 
@@ -35,6 +38,15 @@ host/port/TLS entry point, or composed live flow exists.
   body, rejects duplicate headers and decoded JSON keys, consumes a fresh origin nonce before body
   parsing or device lookup, validates `ConnectorSyncV1`, and verifies the source-bound signature
   under strict RFC 8032/FIPS semantics.
+- [`connector-pairing-authentication.json`](v1/connector-pairing-authentication.json) fixes the
+  domain-separated pairing-possession message over one canonical version-4 transaction ID, exact
+  32-byte server challenge, and exact pending Ed25519 public key. It also records that exact poll
+  possession, browser approval, unexpired pending-key state, and strict signature verification are
+  all required before activation; the local pure verifier implements only the last check.
+- [`connector-pairing-possession.test-vector.json`](v1/connector-pairing-possession.test-vector.json)
+  fixes one synthetic pairing ID/challenge, exact message, public key, and signature shared by the
+  Rust signer and Web verifier. It deliberately reuses the sync vector's synthetic public key and
+  contains no private key or bearer token.
 - [`connector-sync-device-request.test-vector.json`](v1/connector-sync-device-request.test-vector.json)
   fixes one synthetic exact body, SHA-256 digest, 16-byte nonce encoding, and canonical device
   message plus a synthetic public key/signature for cross-language Rust/Ingest verification. It
@@ -48,9 +60,10 @@ host/port/TLS entry point, or composed live flow exists.
   status/title/retry mapping, validates the complete body, and emits `no-store`
   `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
 - [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
-  type/export names, and the locally implemented `GET /v1/community/scores` and
-  `POST /v1/community/sync` operations with method-specific query/body, response, problem, no-queue,
-  authentication, cache, same-origin CORS, and repository-status policies.
+  type/export names, closed authentication-policy inventory, and the locally implemented
+  `GET /v1/community/scores` and `POST /v1/community/sync` operations with method-specific
+  query/body, response, problem, no-queue, authentication, cache, same-origin CORS, and
+  repository-status policies.
 
 Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
 timestamp is bounded. Reviewed date-range and ISO-weekday extensions make the score season boundary
@@ -73,8 +86,8 @@ trust fields exist only in the response component and never become writable conn
 - [`packages/contracts/src/generated.ts`](../packages/contracts/src/generated.ts), containing
   readonly TypeScript shapes, embedded schemas, source digest, and validator wrappers.
 
-`pnpm run check:contracts` regenerates both artifacts in memory and fails on drift. Do not edit a
-generated file to make a check pass.
+`pnpm run check:contracts` regenerates both artifacts in memory and fails on schema, operation, or
+policy-source drift. Do not edit a generated file to make a check pass.
 
 ## Change rules
 

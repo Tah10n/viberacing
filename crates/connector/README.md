@@ -1,11 +1,11 @@
-# Vibe Racing connector protocol, candidate adapter, supervisor, composer, and signer
+# Vibe Racing connector protocol, candidate adapter, supervisor, pairing, and sync signers
 
 This Rust crate contains the fail-closed local Codex App Server initialization boundary and one
 candidate-only account/usage adapter for the exact `0.144.4` schema extract. It also contains a
 bounded one-shot child supervisor behind a reviewed-launch capability with no public constructor. It
-also contains an exact-body Community sync composer and isolated one-use Ed25519 signer behind two
-more inaccessible reviewed capabilities. It is a library foundation, not a runnable, supported, or
-released connector.
+also contains an isolated pairing-possession signer plus an exact-body Community sync composer and
+request signer behind inaccessible reviewed capabilities. It is a library foundation, not a
+runnable, supported, or released connector.
 
 The implemented surface is deliberately narrow:
 
@@ -36,17 +36,23 @@ The implemented surface is deliberately narrow:
 - one consumed device-bound key capability, exact device-ID equality, Ed25519 signing of only that
   prepared message, and an exact body-plus-five-header signed envelope; and
 - key/body/message drop zeroization plus cross-language verification of the synthetic public key and
-  signature, including rejection of a one-byte message mutation.
+  signature, including rejection of a one-byte message mutation;
+- the exact four-field LF-separated pairing-possession message with no trailing separator, binding
+  one canonical version-4 pairing ID, exact 32-byte server challenge, and the public key derived
+  from the consumed pending private-key capability; and
+- a one-use proof exposing only the pairing ID and canonical signature, checked against a second
+  synthetic Rust/Web vector that uses the same public key as the sync vector.
 
-`ReviewedCodexLaunch`, `ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public
-constructors. There is no executable discovery, link/ownership review, artifact or version
-admission, live Codex launch path, source/device context provider, trusted clock, entropy source,
-WebSocket or network transport, generic JSON-RPC method, key generation/store, pairing proof,
-upload, retry loop, scheduler, CLI, installer, or release artifact. The checked-in
-[`0.144.4` candidate evidence](../../compat/codex/0.144.4/manifest.json) is development evidence
-only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty until
-official-artifact, executable-admission, platform, privacy, packaging, and release evidence all
-pass.
+`ReviewedCodexLaunch`, `PendingDevicePairingSigningKey`, `ReviewedPairingChallenge`,
+`ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public constructors. There is
+no executable discovery, link/ownership review, artifact or version admission, live Codex launch
+path, source/device context provider, trusted clock, entropy source, WebSocket or network transport,
+generic JSON-RPC method, key generation/store, pairing transaction client, poll-token custody,
+browser approval, activation request, upload, retry loop, scheduler, CLI, installer, or release
+artifact. The checked-in [`0.144.4` candidate evidence](../../compat/codex/0.144.4/manifest.json) is
+development evidence only. The [compatibility matrix](../../docs/reference/codex-compatibility.md)
+remains empty until official-artifact, executable-admission, platform, privacy, packaging, and
+release evidence all pass.
 
 Run the focused gate from the repository root:
 

@@ -7,7 +7,11 @@ Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
 });
 
 afterEach(() => {
-  document.body.replaceChildren();
-  document.documentElement.lang = "en";
-  localStorage.clear();
+  if (typeof document !== "undefined") {
+    document.body.replaceChildren();
+    document.documentElement.lang = "en";
+  }
+  if (typeof localStorage !== "undefined") {
+    localStorage.clear();
+  }
 });

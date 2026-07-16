@@ -11,24 +11,26 @@ ingest, bounded ingest-retention cleanup, open-season scoring refresh, late-inge
 season finalization, and a Web-only public score projection. One local public-score GET constructs
 the bounded adapter lazily after closed request admission. One local one-shot Jobs runner can invoke
 only cleanup, refresh, or finalization, but no browser/session authentication or deployed ingest
-endpoint, OAuth callback, Argon2id/WebAuthn or pairing-possession application verifier, operational
-connector, purge worker, Jobs scheduler/monitor, audited correction, or deployed service executes
-the complete sequences. A library-only Rust connector foundation validates the bounded stable App
-Server initialization exchange and candidate `0.144.4` account/usage responses. A synthetic one-shot
+endpoint, OAuth callback, Argon2id/WebAuthn or composed pairing application, operational connector,
+purge worker, Jobs scheduler/monitor, audited correction, or deployed service executes the complete
+sequences. A library-only Rust connector foundation validates the bounded stable App Server
+initialization exchange and candidate `0.144.4` account/usage responses. A synthetic one-shot
 supervisor composes those states with fixed local process mechanics, while an exact-body composer
-and isolated one-use signer produce a synthetic signed envelope. All three required capabilities
-have no public constructor, and there is no executable admission, real Codex execution, key
-generation/store, pairing proof, upload, or supported-version path. A local Ingest kernel now
-verifies the bounded exact-body origin/device request, while the separate adapter maps origin
-replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic origin
-replay consumption and bounded cleanup. A transport-free application now composes those exact local
-capabilities and validates only closed acknowledgement/problem decisions. A bounded local Fastify
-factory preserves exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes
-only revalidated contracts. There is no edge/live-database/deployment integration. No host/port/TLS
-entry point, deployment login, certificate, edge signer/direct-origin policy, or live route/Jobs
-evidence is supplied. Data labels refer to the classifications in the
-[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
-and Prohibited.
+and isolated one-use signer produce a synthetic signed envelope. A separate inaccessible pending-key
+and challenge signer plus a pure server-only Web verifier now agree on one exact pairing-possession
+message and synthetic signature. All required connector capabilities have no public constructor, and
+there is no executable admission, real Codex execution, key generation/store, pairing transaction
+client, poll-token lookup, WebAuthn approval, verification-to-activation composition, upload, or
+supported-version path. A local Ingest kernel now verifies the bounded exact-body origin/device
+request, while the separate adapter maps origin replay, device lookup, and submission through fixed
+calls. PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
+application now composes those exact local capabilities and validates only closed
+acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
+no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
+certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
+refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public,
+Account, Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -332,8 +334,10 @@ reviewed source/device/time/nonce inputs. It emits the exact bounded `ConnectorS
 SHA-256 digest, unpadded base64url nonce, and LF-separated device message verified by Ingest. ADR
 0025 removes public unsigned access and consumes that value only with an inaccessible, device-bound,
 one-use Ed25519 key capability; the returned envelope contains the same body and five exact header
-values. The library cannot create either context, generate or load a real key, prove pairing,
-schedule, or upload, and the support matrix stays empty.
+values. ADR 0026 adds a separate inaccessible pending-key/challenge signer and pure Web verifier for
+one exact synthetic pairing-possession proof. No boundary can create a transaction, handle a poll
+token, compose WebAuthn approval with activation, create either operational context, generate or
+load a real key, schedule, or upload, and the support matrix stays empty.
 
 The operational connector layers, edge signer, direct-origin denial, host/port/TLS Ingest deployment
 entry point, live secret-manager/edge key injection, live PostgreSQL login/TLS connection,

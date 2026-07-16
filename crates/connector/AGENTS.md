@@ -22,13 +22,17 @@ changing it.
   source binding, fresh entropy, canonical time, and replay behavior. The composer/signer boundary
   must not grow a context provider, key generator/store, pairing client, scheduler, or network
   client implicitly.
+- Pairing possession must match `connector-pairing-authentication.json` byte for byte. Keep the
+  pending key/challenge capabilities inaccessible, sign only the fixed domain-separated message, and
+  do not add poll-token custody, browser approval, activation, or key storage to that module.
 - A generated schema proves only the exact Codex CLI version that generated it. Do not mark a
   version supported until its checked-in fixtures and fail-closed compatibility tests pass.
 - Candidate schema/parser evidence is not support. Keep the public matrix empty until the manifest
   has no blockers and executable admission, official-artifact, platform, privacy-egress, packaging,
   and release evidence all pass.
-- Keep executable admission, credential generation/storage, pairing, upload, and desktop UI outside
-  a parser/composer/signer change unless the task explicitly includes that boundary.
+- Keep executable admission, credential generation/storage, pairing transaction/activation, upload,
+  and desktop UI outside a parser/composer/signer change unless the task explicitly includes that
+  boundary.
 
 Run `cargo test --workspace --all-targets --all-features --locked` while developing. Before handoff,
 run the root `pnpm run verify` gate.

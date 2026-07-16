@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "viberacing-device-pairing-possession-v1",
+  "algorithm": "Ed25519",
+  "publicKeyBytes": 32,
+  "challengeBytes": 32,
+  "signatureBytes": 64,
+  "binaryEncoding": "base64url-unpadded",
+  "canonicalMessageEncoding": "UTF-8",
+  "canonicalMessageSeparator": "LF",
+  "canonicalMessageTrailingSeparator": false,
+  "messagePrefix": "viberacing-pairing-possession-v1",
+  "pairingIdPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+  "canonicalFields": [
+    "messagePrefix",
+    "pairingId",
+    "pairingChallengeBase64Url",
+    "devicePublicKeyBase64Url"
+  ],
+  "activationPreconditions": [
+    "exact-poll-verifier-match",
+    "browser-approved-transaction",
+    "unexpired-pending-device-key",
+    "strict-possession-signature"
+  ]
+}

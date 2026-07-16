@@ -416,6 +416,26 @@ try {
     /contract operation 2 references invalid schemas/,
   );
   await expectFailure(
+    "unknown-authentication-policy",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.operations[1].authenticationContract = "connector-missing-authentication.json";
+      writeJson(path, manifest);
+    },
+    /contract operation 2 references an unknown policy/,
+  );
+  await expectFailure(
+    "duplicate-authentication-policy-id",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.policies[1].policyId = manifest.policies[0].policyId;
+      writeJson(path, manifest);
+    },
+    /contains a duplicate policy ID/,
+  );
+  await expectFailure(
     "unsafe-implementation-status",
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
@@ -470,6 +490,32 @@ try {
     /generated contract artifact has drifted/,
   );
   await expectFailure(
+    "pairing-policy-semantic-drift",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "connector-pairing-authentication.json");
+      const policy = JSON.parse(readFileSync(path, "utf8"));
+      policy.canonicalMessageTrailingSeparator = true;
+      writeJson(path, policy);
+      return writeGeneratedArtifacts(root);
+    },
+    /pairing possession policy differs from the reviewed boundary/,
+  );
+  await expectFailure(
+    "pairing-vector-message-drift",
+    (root) => {
+      const path = resolve(
+        root,
+        "contracts",
+        "v1",
+        "connector-pairing-possession.test-vector.json",
+      );
+      const vector = JSON.parse(readFileSync(path, "utf8"));
+      vector.possessionMessage += "\n";
+      writeJson(path, vector);
+    },
+    /shared pairing possession vector differs from the reviewed boundary/,
+  );
+  await expectFailure(
     "generated-drift",
     (root) => {
       const path = resolve(root, "packages", "contracts", "src", "generated.ts");
@@ -486,6 +532,16 @@ try {
       );
     },
     /schema is not listed/,
+  );
+  await expectFailure(
+    "unlisted-authentication-policy",
+    (root) => {
+      cpSync(
+        resolve(root, "contracts", "v1", "connector-pairing-authentication.json"),
+        resolve(root, "contracts", "v1", "connector-shadow-authentication.json"),
+      );
+    },
+    /authentication policy is not listed in the manifest/,
   );
   await expectFailure(
     "unsafe-manifest-path",

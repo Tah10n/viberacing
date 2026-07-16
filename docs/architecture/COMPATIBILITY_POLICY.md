@@ -61,9 +61,11 @@ has no public constructor. A second inaccessible reviewed context now permits ex
 `ConnectorSyncV1` body, SHA-256 digest, nonce, and device-message composition from that candidate
 output. An isolated one-use signer consumes that otherwise inaccessible material only with a third
 inaccessible device-bound key capability and returns the same body plus five signed header values.
-The library still cannot discover or admit an executable, construct any capability, execute the
-selected official artifact, generate/load a real key, prove pairing, upload, negotiate support, or
-alter the empty matrix. ADRs 0021 through 0025 record those distinctions.
+An inaccessible pending-key/challenge signer and pure Web verifier now agree on the exact pairing
+possession message, but no transaction or activation path can construct or reach them. The library
+still cannot discover or admit an executable, construct any operational capability, execute the
+selected official artifact, generate/load a real key, complete pairing, upload, negotiate support,
+or alter the empty matrix. ADRs 0021 through 0026 record those distinctions.
 
 Generated schema output is exact to the Codex version that produced it. The repository commits only
 reviewed relevant schema extracts and synthetic fixtures, not account data or a developer's local

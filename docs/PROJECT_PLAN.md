@@ -219,8 +219,10 @@ create a matrix row. ADR 0024 adds an inaccessible reviewed source/device/time/n
 minimized daily usage produces one exact bounded `ConnectorSyncV1` body, SHA-256 digest, and
 LF-separated device message. ADR 0025 removes public access to that unsigned material and adds an
 isolated one-use signer behind an equally inaccessible device-bound key capability. A shared
-Rust/Ingest vector proves exact body, public-key, and signature agreement, while context
-construction, key generation/storage, pairing proof, transport, retry, scheduling, and support
+Rust/Ingest vector proves exact body, public-key, and signature agreement. ADR 0026 adds a second
+domain-separated pairing-possession policy, inaccessible pending-key/challenge signer, and pure
+strict Web verifier with a shared synthetic vector. Context construction, key generation/storage,
+pairing transaction/poll/approval/activation composition, transport, retry, scheduling, and support
 remain absent.
 
 ### Date semantics

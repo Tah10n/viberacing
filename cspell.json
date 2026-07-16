@@ -28,6 +28,7 @@
     "Email",
     "Base64",
     "HexValues",
+    "/\"(?:pairingChallengeBase64Url|devicePublicKeyBase64Url|possessionSignatureBase64Url)\"\\s*:\\s*\"[A-Za-z0-9_-]+\"/g",
     "/\\bsha256:[a-f0-9]+\\b/gi",
     "/\\b[0-9a-f]{40}\\b/gi"
   ],

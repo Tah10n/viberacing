@@ -2,7 +2,8 @@
 //!
 //! This crate implements the stable initialization exchange, a candidate-only account/usage
 //! adapter for one exact schema extract, a bounded one-shot child supervisor, and an exact-body
-//! Community sync composer and isolated one-use signer. All operational inputs remain behind
+//! pairing-possession signer, Community sync composer, and isolated one-use request signer. All
+//! operational inputs remain behind
 //! capabilities with no public constructor. The crate does not discover or admit a Codex
 //! executable, generate or load device keys, upload usage, expose a generic JSON-RPC client, or
 //! claim compatibility with any Codex release.
@@ -15,12 +16,18 @@ use std::fmt;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 
 mod codex_0_144_4;
+mod pairing;
 mod process;
 mod sync;
 
 pub use codex_0_144_4::{
     CandidateCodex01444AccountUsage, DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES,
     MAX_SYNC_TOKEN_VALUE,
+};
+pub use pairing::{
+    CandidatePairingPossessionV1Signer, PAIRING_CHALLENGE_BYTES, PAIRING_POSSESSION_MESSAGE_PREFIX,
+    PairingPossessionProof, PairingPossessionSigningError, PendingDevicePairingSigningKey,
+    ReviewedPairingChallenge,
 };
 pub use process::{
     APP_SERVER_EXIT_GRACE, APP_SERVER_LIFETIME, APP_SERVER_RESPONSE_TIMEOUT,

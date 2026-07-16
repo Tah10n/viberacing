@@ -6,11 +6,12 @@ This is the planned runtime architecture. The current repository contains a test
 foundation, one local public-score route, one local one-shot Jobs runner, and local Ingest
 request-verification, PostgreSQL-adapter, application-composition, and bounded HTTP-server
 boundaries, plus library-only connector initialization and candidate `0.144.4` account/usage parser
-boundaries, a synthetic one-shot supervisor, an exact-body sync composer, and an isolated one-use
-signer behind capabilities with no public constructors, but no deployed application service,
-operational connector, supported Codex version, Cloudflare/Railway deployment, or production
-database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
-diagrams describe required runtime boundaries, not deployed evidence.
+boundaries, a synthetic one-shot supervisor, an exact-body sync composer, isolated pairing/sync
+signers, and a pure Web pairing verifier behind closed boundaries, but no deployed application
+service, operational connector, supported Codex version, Cloudflare/Railway deployment, or
+production database. Component status is tracked in
+[implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
+not deployed evidence.
 
 ## System context
 
@@ -113,8 +114,10 @@ adapter, and ADR 0023 composes both through a fixed, deadline/output-bounded, re
 synthetic child supervisor. ADR 0024 adds a second inaccessible reviewed context and exact
 sync-body/digest/device-message composition shared with the Ingest verifier. ADR 0025 adds an
 isolated one-use signer behind a third inaccessible device-bound key capability and returns only the
-same body plus five signed header values. No capability has a public constructor, so executable
-discovery/admission, official-artifact execution, context creation, key generation/storage, pairing,
+same body plus five signed header values. ADR 0026 adds an inaccessible pending-key/challenge signer
+and pure strict Web verifier for one exact pairing-possession message. No connector capability has a
+public constructor, so executable discovery/admission, official-artifact execution, context
+creation, key generation/storage, pairing transaction/poll/approval/activation composition,
 scheduling, upload, CLI, and release responsibilities remain absent. The host/port/TLS deployment
 entry point, live secret-manager/edge key injection, working deployment login/certificate, composed
 live end-to-end flow, distributed rate/backpressure and capacity evidence, Cloudflare/Railway path,

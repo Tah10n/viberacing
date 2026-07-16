@@ -208,7 +208,10 @@
       "name": "@noble/ed25519",
       "version": "3.1.0",
       "license": "MIT",
-      "direct": [{ "workspace": "apps/ingest", "scope": "runtime" }]
+      "direct": [
+        { "workspace": "apps/ingest", "scope": "runtime" },
+        { "workspace": "apps/web", "scope": "runtime" }
+      ]
     },
     { "name": "@nodelib/fs.scandir", "version": "2.1.5", "license": "MIT", "direct": [] },
     { "name": "@nodelib/fs.stat", "version": "2.0.5", "license": "MIT", "direct": [] },

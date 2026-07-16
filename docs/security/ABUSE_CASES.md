@@ -113,6 +113,14 @@ material availability cost.
   pending public key, short-lived user code and challenge, bounded attempts, exact key/transaction
   display, authenticated GitHub session, fresh passkey approval, and Ed25519 possession proof. The
   poll token alone cannot approve or activate a device.
+- **Current evidence:** Revision 0003 proves immutable key/challenge/poll-verifier binding, exact
+  browser-approved state, wrong-poll denial, one-time activation, and lifecycle races at the SQL
+  boundary. ADR 0026 adds one exact domain-separated transaction/challenge/public-key message, an
+  inaccessible Rust signer, and a strict pure Web verifier. Their shared synthetic vector rejects
+  changed IDs/challenges/keys/signatures, malformed shapes/encodings, zero material, and caller
+  mutation. No poll-token HTTP parser, keyed digest, rate limit, WebAuthn composition, database
+  adapter, generic response/timing policy, or real activation path exists, so pairing remains
+  unavailable.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the
@@ -142,7 +150,8 @@ material availability cost.
   settlement, and generic acknowledgement through a mock pool. The connector's isolated one-use
   signer now consumes an inaccessible device-bound capability, rejects a different device ID, signs
   only the exact prepared message, and shares a strictly verified synthetic signature with Ingest.
-  OS key generation/storage, pairing proof, rotation, metrics, connector HTTP transport, live login,
+  The separate pairing signer/verifier now proves only synthetic pending-key possession. OS key
+  generation/storage, end-to-end pairing, rotation, metrics, connector HTTP transport, live login,
   and the live verifier-to-PostgreSQL path remain unimplemented.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity.
@@ -189,9 +198,10 @@ material availability cost.
   signer removes public unsigned access, rejects a key capability bound to another device, signs
   only the fixed message, and returns the same body plus five header values without opening a
   network path. The operational connector still requires a user-scoped install, resolved trusted
-  binary path, link/ownership and artifact/version admission, reviewed construction of all three
-  capabilities, OS key generation/storage, pairing proof, safe diagnostics, platform evidence, and
-  the existing egress allowlist.
+  binary path, link/ownership and artifact/version admission, reviewed construction of every
+  capability, OS key generation/storage, complete pairing transaction/activation, safe diagnostics,
+  platform evidence, and the existing egress allowlist. The isolated synthetic pairing proof does
+  not satisfy those operational controls.
 - **Detection:** Local safe diagnostics for selected binary/version, bounded failure reason, and
   child cleanup verification without uploading content.
 - **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified

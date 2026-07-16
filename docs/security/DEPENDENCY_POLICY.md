@@ -8,7 +8,7 @@ checks when they are clear and maintainable.
 
 Mature frameworks and analysis tools are used only where their maintained behavior materially
 reduces project risk. The current deliberate set includes Next.js and React for the web runtime,
-`@noble/ed25519` for one strict server-side device-signature check, `pg` for three narrow
+`@noble/ed25519` for two strict server-side device-signature checks, `pg` for three narrow
 server-side PostgreSQL adapters, Fastify for one confined Ingest HTTP server factory, and CSpell,
 TypeScript, ESLint, Vitest, jsdom, and axe-core for offline verification. Every direct package is
 exact-pinned, installs without lifecycle scripts, and is represented with its complete transitive
@@ -42,12 +42,15 @@ advisories.
 `@noble/ed25519@3.1.0` is the only current application cryptography dependency. A local probe showed
 that Node's native OpenSSL-backed verifier accepted an all-zero Ed25519 public key and signature, so
 platform verification alone did not provide the strict point policy required by VR-DEVICE-001. The
-package is confined to the private Ingest workspace and one `verifyAsync` call with `zip215: false`;
-it has no dependency, optional dependency, native build, install lifecycle script, browser
-inclusion, network capability, or public API exposure. Its exact registry integrity, MIT license,
-canonical repository/release, maintenance and security-review history, and adversarial zero-key
-regression were reviewed under ADR 0015. Replacing or updating it requires the same review and proof
-of strict behavior on every supported runtime; permissive native fallback is prohibited.
+package is confined to one reviewed `verifyAsync` call with `zip215: false` in each private Ingest
+and Web service workspace. The Web declaration added by ADR 0026 reuses the exact existing lock
+record and transitive-empty graph; lint confines it to the server-only pairing verifier, and the
+Next.js production build proves it does not enter a client chunk. The package has no dependency,
+optional dependency, native build, install lifecycle script, network capability, or public API
+exposure. Its exact registry integrity, MIT license, canonical repository/release, maintenance and
+security-review history, and adversarial zero-key regressions were reviewed under ADRs 0015
+and 0026. Replacing or updating it requires the same review and proof of strict behavior on every
+supported runtime; permissive native fallback is prohibited.
 
 `pg@8.22.0` is the only application PostgreSQL client. It is confined to fixed pool-wrapper files
 inside the private Web, Jobs, and Ingest workspaces; each workspace lint policy rejects static,

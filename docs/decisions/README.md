@@ -34,6 +34,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0023](0023-bounded-candidate-app-server-supervisor.md)        | Bounded candidate App Server process supervisor                     | Accepted; synthetic only; admission pending         |
 | [0024](0024-bounded-candidate-community-sync-composer.md)      | Bounded candidate Community sync composer                           | Accepted; unsigned composition boundary             |
 | [0025](0025-bounded-candidate-device-signing-boundary.md)      | Bounded candidate device signing boundary                           | Accepted; key store and transport pending           |
+| [0026](0026-bounded-pairing-possession-proof.md)               | Bounded pairing possession proof                                    | Accepted; pure kernels; application pending         |
 
 ## Lifecycle
 

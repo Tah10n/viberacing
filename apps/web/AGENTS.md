@@ -27,6 +27,10 @@ apply.
 - The score route must continue to reject duplicate/unknown query parameters, validate
   `CommunityScoreQueryV1`, negotiate `Accept`, acquire bounded admission before database work, keep
   it until that work settles, and preserve ADR 0013's no-store/same-origin response matrix.
+- Keep pairing possession in the server-only pure verifier. It may accept only the exact approved
+  material tuple and versioned message, use strict Ed25519 semantics, and return no reflected
+  detail. Do not add a route, poll-token lookup, activation call, or WebAuthn claim without their
+  complete admission/rate/timing/database composition and negative tests.
 
 ## Commands
 

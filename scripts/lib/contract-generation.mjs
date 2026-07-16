@@ -5,7 +5,7 @@ import { format } from "prettier";
 
 const manifestRelativePath = "contracts/v1/manifest.json";
 const schemaFilePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*\.schema\.json$/;
-const policyFilePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*\.json$/;
+const policyFilePattern = /^connector-[a-z0-9]+(?:-[a-z0-9]+)*\.json$/;
 const operationKeys =
   "admissionPolicy,authenticationContract,cacheControl,corsPolicy,implementationStatus,method,operationId,path,problemSchema,problemStatuses,queryPolicy,querySchema,requestBodyPolicy,requestSchema,responseSchema,summary";
 const problemResponseDescriptions = new Map([
@@ -50,12 +50,16 @@ export function readContractSources(root) {
     manifest === null ||
     typeof manifest !== "object" ||
     Array.isArray(manifest) ||
-    Object.keys(manifest).sort().join(",") !== "contractVersion,operations,schemaVersion,schemas" ||
+    Object.keys(manifest).sort().join(",") !==
+      "contractVersion,operations,policies,schemaVersion,schemas" ||
     manifest.schemaVersion !== 1 ||
     manifest.contractVersion !== "v1" ||
     !Array.isArray(manifest.schemas) ||
     manifest.schemas.length === 0 ||
     manifest.schemas.length > 32 ||
+    !Array.isArray(manifest.policies) ||
+    manifest.policies.length === 0 ||
+    manifest.policies.length > 32 ||
     !Array.isArray(manifest.operations) ||
     manifest.operations.length === 0 ||
     manifest.operations.length > 32
@@ -92,9 +96,48 @@ export function readContractSources(root) {
     exportNames.add(record.entry.exportName);
   }
 
+  let previousPolicyFile = "";
+  const policyIds = new Set();
+  const policyByFile = new Map();
+  const policies = manifest.policies.map((entry, index) => {
+    if (
+      entry === null ||
+      typeof entry !== "object" ||
+      Array.isArray(entry) ||
+      Object.keys(entry).sort().join(",") !== "file,policyId" ||
+      !policyFilePattern.test(entry.file ?? "") ||
+      !/^viberacing-[a-z0-9]+(?:-[a-z0-9]+)*-v1$/.test(entry.policyId ?? "")
+    ) {
+      throw new Error(`contract policy ${String(index + 1)} has unsafe names or shape`);
+    }
+    if (previousPolicyFile !== "" && previousPolicyFile.localeCompare(entry.file) >= 0) {
+      throw new Error(`${manifestRelativePath} policies must be uniquely sorted by file`);
+    }
+    if (policyIds.has(entry.policyId)) {
+      throw new Error(`${manifestRelativePath} contains a duplicate policy ID`);
+    }
+    const relativePath = `contracts/v1/${entry.file}`;
+    const absolutePath = resolve(root, relativePath);
+    assertRegularSource(absolutePath, relativePath);
+    const text = normalizedText(absolutePath);
+    const policy = parseJson(absolutePath, relativePath);
+    if (
+      policy === null ||
+      typeof policy !== "object" ||
+      Array.isArray(policy) ||
+      policy.protocolId !== entry.policyId
+    ) {
+      throw new Error(`${relativePath} has an invalid identity or shape`);
+    }
+    const record = { entry, policy, relativePath, text };
+    previousPolicyFile = entry.file;
+    policyIds.add(entry.policyId);
+    policyByFile.set(entry.file, record);
+    return record;
+  });
+
   let previousOperationKey = "";
   const operationIds = new Set();
-  const operationPolicyTexts = new Map();
   const operations = manifest.operations.map((entry, index) => {
     const schemaReferencePattern = /^[A-Z][A-Za-z0-9]*V1$/;
     const isGet = entry?.method === "get";
@@ -190,16 +233,11 @@ export function readContractSources(root) {
       throw new Error(`contract operation ${String(index + 1)} references invalid schemas`);
     }
 
-    if (entry.authenticationContract !== "none") {
-      const relativePath = `contracts/v1/${entry.authenticationContract}`;
-      const absolutePath = resolve(root, relativePath);
-      assertRegularSource(absolutePath, relativePath);
-      const text = normalizedText(absolutePath);
-      const policy = parseJson(absolutePath, relativePath);
-      if (policy === null || typeof policy !== "object" || Array.isArray(policy)) {
-        throw new Error(`${relativePath} has an invalid shape`);
-      }
-      operationPolicyTexts.set(relativePath, text);
+    if (
+      entry.authenticationContract !== "none" &&
+      !policyByFile.has(entry.authenticationContract)
+    ) {
+      throw new Error(`contract operation ${String(index + 1)} references an unknown policy`);
     }
     return { entry, problemRecord, queryRecord, requestRecord };
   });
@@ -209,16 +247,15 @@ export function readContractSources(root) {
   for (const record of records) {
     digest.update(`${record.relativePath}\0${record.text}\0`, "utf8");
   }
-  for (const [relativePath, policyText] of [...operationPolicyTexts].sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    digest.update(`${relativePath}\0${policyText}\0`, "utf8");
+  for (const policy of policies) {
+    digest.update(`${policy.relativePath}\0${policy.text}\0`, "utf8");
   }
 
   return {
     digest: `sha256:${digest.digest("hex")}`,
     manifest,
     operations,
+    policies,
     records,
   };
 }
