@@ -72,6 +72,7 @@ function serviceFixture(): EnrollmentService {
     completeLogin: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskey: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     logout: vi.fn(() => Promise.resolve(true)),
+    readPasskeyInventory: vi.fn(() => Promise.resolve(undefined)),
     readSession: vi.fn(() => undefined),
   };
 }

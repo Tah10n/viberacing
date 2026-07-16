@@ -22,6 +22,24 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     ),
     createPasskeyChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
+    readPasskeyInventory: vi.fn(() =>
+      Promise.resolve([
+        {
+          created_on: "2026-07-15",
+          current_authenticator: true,
+          label: "Primary passkey",
+          passkey_id: "00000000-0000-4000-8000-000000000406",
+          state: "active",
+        },
+        {
+          created_on: "2026-07-16",
+          current_authenticator: false,
+          label: "Retired key",
+          passkey_id: "00000000-0000-4000-8000-000000000407",
+          state: "revoked",
+        },
+      ]),
+    ),
     readPasskeyLoginMaterial: vi.fn(() =>
       Promise.resolve([
         {
@@ -116,6 +134,27 @@ describe("enrollment database", () => {
       signCount: 1,
     });
     await expect(
+      database.readPasskeyInventory({
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).resolves.toEqual([
+      {
+        createdOn: "2026-07-15",
+        currentAuthenticator: true,
+        label: "Primary passkey",
+        passkeyId: "00000000-0000-4000-8000-000000000406",
+        state: "active",
+      },
+      {
+        createdOn: "2026-07-16",
+        currentAuthenticator: false,
+        label: "Retired key",
+        passkeyId: "00000000-0000-4000-8000-000000000407",
+        state: "revoked",
+      },
+    ]);
+    await expect(
       database.completePasskeyLogin({
         auditEventId: profile.auditEventId,
         backupState: false,
@@ -144,8 +183,8 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(6);
-    expect(releases).toEqual([false, false, false, false, false, false]);
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(7);
+    expect(releases).toEqual([false, false, false, false, false, false, false]);
   });
 
   it("destroys a checkout after boundary, query, or result failure", async () => {
@@ -185,6 +224,53 @@ describe("enrollment database", () => {
       malformedMaterial.database.readPasskeyLoginMaterial(new Uint8Array(32)),
     ).rejects.toMatchObject({ code: "result_invalid" });
     expect(malformedMaterial.releases).toEqual([true]);
+
+    const malformedInventory = fixture({
+      readPasskeyInventory: () =>
+        Promise.resolve([
+          {
+            created_on: "2026-07-15",
+            current_authenticator: false,
+            label: "Primary passkey",
+            passkey_id: "00000000-0000-4000-8000-000000000406",
+            state: "active",
+          },
+        ]),
+    });
+    await expect(
+      malformedInventory.database.readPasskeyInventory({
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).rejects.toMatchObject({ code: "result_invalid" });
+    expect(malformedInventory.releases).toEqual([true]);
+
+    const unorderedInventory = fixture({
+      readPasskeyInventory: () =>
+        Promise.resolve([
+          {
+            created_on: "2026-07-15",
+            current_authenticator: false,
+            label: "Later key",
+            passkey_id: "00000000-0000-4000-8000-000000000407",
+            state: "active",
+          },
+          {
+            created_on: "2026-07-15",
+            current_authenticator: true,
+            label: "Current key",
+            passkey_id: "00000000-0000-4000-8000-000000000406",
+            state: "active",
+          },
+        ]),
+    });
+    await expect(
+      unorderedInventory.database.readPasskeyInventory({
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).rejects.toMatchObject({ code: "result_invalid" });
+    expect(unorderedInventory.releases).toEqual([true]);
   });
 
   it("contains connection and release failures without reflecting driver detail", async () => {

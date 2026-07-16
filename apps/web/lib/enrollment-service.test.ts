@@ -17,6 +17,7 @@ import { createEnrollmentService } from "./enrollment-service";
 import type {
   EnrollmentDatabaseLoginCompletion,
   EnrollmentDatabasePasskeyChallenge,
+  EnrollmentDatabasePasskeyInventoryRequest,
   EnrollmentDatabaseProfile,
 } from "./pairing-database-pool";
 
@@ -46,6 +47,8 @@ function createFixture() {
   let challengeSessionDigestInput: Uint8Array | undefined;
   let loginCompletion: EnrollmentDatabaseLoginCompletion | undefined;
   let loginCredentialLookup: Buffer | undefined;
+  let inventorySessionDigest: Buffer | undefined;
+  let inventorySessionDigestInput: Uint8Array | undefined;
   let verifiedLoginCredential: Buffer | undefined;
   const database: EnrollmentDatabase = {
     completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
@@ -69,6 +72,19 @@ function createFixture() {
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
       return Promise.resolve(true);
+    }),
+    readPasskeyInventory: vi.fn((input: EnrollmentDatabasePasskeyInventoryRequest) => {
+      inventorySessionDigest = Buffer.from(input.sessionVerifierDigest);
+      inventorySessionDigestInput = input.sessionVerifierDigest;
+      return Promise.resolve([
+        {
+          createdOn: "2026-07-15",
+          currentAuthenticator: true,
+          label: "Primary passkey",
+          passkeyId: "00000000-0000-4000-8000-000000000511",
+          state: "active" as const,
+        },
+      ]);
     }),
     readPasskeyLoginMaterial: vi.fn((credentialId: Uint8Array) => {
       loginCredentialLookup = Buffer.from(credentialId);
@@ -121,9 +137,12 @@ function createFixture() {
     },
   );
   let randomFill = 0x21;
+  const cookieCodec = createEnrollmentCookieCodec(config.cookieKey, (size) =>
+    Buffer.alloc(size, 0x21),
+  );
   const service = createEnrollmentService({
     config,
-    cookieCodec: createEnrollmentCookieCodec(config.cookieKey, (size) => Buffer.alloc(size, 0x21)),
+    cookieCodec,
     createLoginOptions,
     createOptions,
     createRequestId: () => "req_AAAAAAAAAAAAAAAAAAAAAA",
@@ -138,6 +157,7 @@ function createFixture() {
   return {
     challengeSessionDigest: () => challengeSessionDigest,
     challengeSessionDigestInput: () => challengeSessionDigestInput,
+    cookieCodec,
     createOptions,
     createLoginOptions,
     database,
@@ -145,6 +165,8 @@ function createFixture() {
     exchangeGithub,
     loginCredentialLookup: () => loginCredentialLookup,
     loginCompletion: () => loginCompletion,
+    inventorySessionDigest: () => inventorySessionDigest,
+    inventorySessionDigestInput: () => inventorySessionDigestInput,
     service,
     verifyPasskey,
     verifyLogin,
@@ -298,6 +320,37 @@ describe("enrollment service", () => {
     });
   });
 
+  it("reads only the exact active session's bounded passkey inventory", async () => {
+    const { cookieCodec, database, inventorySessionDigest, inventorySessionDigestInput, service } =
+      createFixture();
+    const verifier = Buffer.alloc(32, 0x45);
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId: "00000000-0000-4000-8000-000000000512",
+      sessionVerifier: verifier.toString("base64url"),
+      version: 1,
+    });
+
+    await expect(service.readPasskeyInventory(sessionCookie)).resolves.toEqual([
+      expect.objectContaining({
+        currentAuthenticator: true,
+        label: "Primary passkey",
+        state: "active",
+      }),
+    ]);
+    expect(database.readPasskeyInventory).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "00000000-0000-4000-8000-000000000512" }),
+    );
+    expect(inventorySessionDigest()).toEqual(createHash("sha256").update(verifier).digest());
+    expect(inventorySessionDigestInput()).toEqual(Buffer.alloc(32));
+    await expect(service.readPasskeyInventory("invalid")).resolves.toBeUndefined();
+    expect(database.readPasskeyInventory).toHaveBeenCalledOnce();
+  });
+
   it("revokes a minted login session when its browser cookie cannot be sealed", async () => {
     const fixture = createFixture();
     const credentialId = Buffer.alloc(32, 0x74);
@@ -430,6 +483,7 @@ describe("enrollment service", () => {
       ),
       createPasskeyChallenge: vi.fn(() => Promise.resolve(true)),
       enrollProfile: vi.fn(() => Promise.resolve(true)),
+      readPasskeyInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),
       revokeSession: vi.fn(() => Promise.resolve(true)),
     };

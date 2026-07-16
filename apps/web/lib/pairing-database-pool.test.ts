@@ -194,6 +194,15 @@ describe("pairing database pool", () => {
           profile_id: "00000000-0000-4000-8000-000000000302",
         },
       ],
+      [
+        {
+          created_on: "2026-07-15",
+          current_authenticator: true,
+          label: "Primary passkey",
+          passkey_id: "00000000-0000-4000-8000-000000000306",
+          state: "active",
+        },
+      ],
       [{ revoked: true }],
     ];
     const liveQueries: { text: string; values: unknown[] }[] = [];
@@ -308,6 +317,20 @@ describe("pairing database pool", () => {
       },
     ]);
     await expect(
+      client.readPasskeyInventory({
+        sessionId: "00000000-0000-4000-8000-000000000312",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([
+      {
+        created_on: "2026-07-15",
+        current_authenticator: true,
+        label: "Primary passkey",
+        passkey_id: "00000000-0000-4000-8000-000000000306",
+        state: "active",
+      },
+    ]);
+    await expect(
       client.revokeEnrollmentSession({
         auditEventId: "00000000-0000-4000-8000-000000000307",
         requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
@@ -322,6 +345,7 @@ describe("pairing database pool", () => {
       expect.stringContaining("consume_auth_challenge"),
       expect.stringContaining("read_passkey_verification_material"),
       expect.stringContaining("complete_passkey_login_session"),
+      expect.stringContaining("read_passkey_inventory"),
       expect.stringContaining("revoke_session"),
     ]);
     expect(snapshots[2]?.text).toContain("register_initial_passkey");
@@ -342,6 +366,7 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000311",
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
+    expect(snapshots[5]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));
     expect(context).toEqual(Buffer.alloc(32, 0x52));
     expect(credential).toEqual(Buffer.alloc(32, 0x53));

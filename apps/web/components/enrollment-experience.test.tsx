@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { joinTranslations } from "@/lib/join-i18n";
 
+import { AccountExperience } from "./account-experience";
 import { JoinExperience } from "./join-experience";
 import { PasskeyLogin, PasskeySetup } from "./passkey-setup";
 
@@ -159,11 +160,57 @@ describe("enrollment experience", () => {
     });
   });
 
+  it("shows only bounded passkey inventory fields on the account page", () => {
+    const passkeyId = "00000000-0000-4000-8000-000000000511";
+    const markup = renderToStaticMarkup(
+      <AccountExperience
+        handle="pixel_driver"
+        locale="en"
+        passkeys={[
+          {
+            createdOn: "2026-07-15",
+            currentAuthenticator: true,
+            label: "Primary passkey",
+            passkeyId,
+            state: "active",
+          },
+          {
+            createdOn: "2026-07-16",
+            currentAuthenticator: false,
+            label: "Retired key",
+            passkeyId: "00000000-0000-4000-8000-000000000512",
+            state: "revoked",
+          },
+        ]}
+      />,
+    );
+    expect(markup).toContain("Your passkeys");
+    expect(markup).toContain("Current session");
+    expect(markup).toContain("Revoked");
+    expect(markup).toContain('dateTime="2026-07-15"');
+    expect(markup).not.toContain(passkeyId);
+  });
+
   it("renders semantic join and passkey forms without automated violations", async () => {
     document.documentElement.lang = "en";
     document.title = "Vibe Racing enrollment test";
     for (const markup of [
       renderToStaticMarkup(<JoinExperience />),
+      renderToStaticMarkup(
+        <AccountExperience
+          handle="pixel_driver"
+          locale="en"
+          passkeys={[
+            {
+              createdOn: "2026-07-15",
+              currentAuthenticator: true,
+              label: "Primary passkey",
+              passkeyId: "00000000-0000-4000-8000-000000000511",
+              state: "active",
+            },
+          ]}
+        />,
+      ),
       renderToStaticMarkup(<PasskeyLogin />),
       renderToStaticMarkup(<PasskeySetup handle="pixel_driver" locale="en" />),
     ]) {

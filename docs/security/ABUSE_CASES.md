@@ -255,7 +255,10 @@ material availability cost.
   RP, type, UV, replay-shaped failures, cookie ambiguity, overload, continuation-before-write
   ordering, database-free login options, atomic completion, and compensation. Recovery/step-up
   verification, aggregate edge rate policy, abandoned consumed-state cleanup, live
-  OAuth/authenticator/database integration, and deployment remain absent.
+  OAuth/authenticator/database integration, and deployment remain absent. The account read
+  additionally revalidates exact session possession and accepts at most 32 closed, ordered rows with
+  one current active authenticator; it renders no credential ID, key, sign counter, exact activity
+  timestamp, or profile ID.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a

@@ -10,7 +10,11 @@ import {
 
 import type { EnrollmentConfig } from "./enrollment-config";
 import type { EnrollmentCookieCodec, EnrollmentRandomBytes } from "./enrollment-cookie";
-import type { EnrollmentDatabase, PasskeyLoginMaterial } from "./enrollment-database";
+import type {
+  EnrollmentDatabase,
+  PasskeyInventoryItem,
+  PasskeyLoginMaterial,
+} from "./enrollment-database";
 import {
   enrollmentPatterns,
   readEnrollmentSession,
@@ -103,6 +107,7 @@ export interface EnrollmentService {
     body: unknown,
   ): Promise<PasskeyCompletionDecision | undefined>;
   logout(sessionCookie: string | undefined): Promise<boolean>;
+  readPasskeyInventory(sessionCookie: string): Promise<readonly PasskeyInventoryItem[] | undefined>;
   readSession(sessionCookie: string | undefined): EnrollmentSession | undefined;
 }
 
@@ -704,6 +709,32 @@ export function createEnrollmentService(
         });
       } catch {
         return false;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+      }
+    },
+    async readPasskeyInventory(
+      sessionCookie: string,
+    ): Promise<readonly PasskeyInventoryItem[] | undefined> {
+      const session = readSession(sessionCookie);
+      if (!session?.passkeyRegistered) {
+        return undefined;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      try {
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return undefined;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        return await database.readPasskeyInventory({
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+      } catch {
+        return undefined;
       } finally {
         sessionVerifier?.fill(0);
         sessionDigest?.fill(0);

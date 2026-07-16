@@ -202,6 +202,15 @@ FROM viberacing_api.complete_passkey_login_session(
   $13::text
 ) AS completed`;
 
+const readPasskeyInventoryQuery = `SELECT
+  inventory.passkey_id::text AS passkey_id,
+  inventory.label AS label,
+  inventory.state AS state,
+  (inventory.created_at AT TIME ZONE 'UTC')::date::text AS created_on,
+  inventory.current_authenticator AS current_authenticator
+FROM viberacing_api.read_passkey_inventory($1::uuid, $2::bytea) AS inventory
+ORDER BY (inventory.created_at AT TIME ZONE 'UTC')::date, inventory.passkey_id`;
+
 export interface PairingDatabaseActivation {
   readonly auditEventId: string;
   readonly deviceId: string;
@@ -294,6 +303,11 @@ export interface EnrollmentDatabaseLoginCompletion {
   readonly sessionVerifierDigest: Uint8Array;
 }
 
+export interface EnrollmentDatabasePasskeyInventoryRequest {
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+}
+
 export type PairingDatabasePoolSignal = "idle_client_error";
 export type PairingDatabasePoolSignalSink = (
   signal: PairingDatabasePoolSignal,
@@ -314,6 +328,7 @@ export interface EnrollmentDatabaseClient {
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
+  readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown>;
   release(destroy?: boolean): void;
   revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown>;
@@ -515,6 +530,17 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         return await fixedQuery(readPasskeyLoginMaterialQuery, [credential]);
       } finally {
         credential.fill(0);
+      }
+    },
+    async readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(readPasskeyInventoryQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
       }
     },
     release(destroy = false): void {

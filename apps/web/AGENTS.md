@@ -34,6 +34,9 @@ apply.
   identity only from an exact active credential after application verification, and atomically
   create/consume its challenge with the passkey-provenance session. Keep server WebAuthn imports in
   `passkey-registration.ts` and browser WebAuthn imports in `passkey-setup.tsx` only.
+- Account passkey inventory must remain session-derived and server-rendered. Preserve the 32-row
+  cap, exact closed mapper, one current active authenticator, rounded creation date, and omission of
+  credential IDs, public keys, sign counters, exact activity timestamps, and profile IDs from HTML.
 - Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
   correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
   CORS/auth/retry semantics to the common problem-response boundary.

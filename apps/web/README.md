@@ -8,8 +8,9 @@ response in the browser, and retain the labeled synthetic fallback on any failur
 and default product shell remain synthetic and unauthenticated, with no working database login,
 pairing approval/HTTP route, real user data, or deployment. A separate local Phase 2 slice now
 implements invite redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations,
-initial passkey registration, an account page, and logout. It fails closed without externally
-provisioned configuration and has no live-user or deployment evidence.
+initial passkey registration, returning login, a session-scoped passkey inventory, an account page,
+and logout. It fails closed without externally provisioned configuration and has no live-user or
+deployment evidence.
 
 ## Run it
 
@@ -47,8 +48,9 @@ provides no valid invite or working credential. See `.env.example` and the local
 | `lib/public-score-admission.ts`                    | Enforces the no-queue public-read concurrency ceiling            | Four active reads; lease held until adapter settlement                             |
 | `lib/public-http-problem.ts`                       | Generates opaque request IDs and closed public error responses   | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
 | `app/join`, `app/login`, `app/account`, `app/auth` | Presents and routes enrollment plus returning login              | Thin entrypoints; no recovery, pairing approval, or admin                          |
+| `components/account-experience.tsx`                | Renders private passkey inventory and logout                     | Server-only; no credential/key/profile ID or exact activity timestamp in HTML      |
 | `lib/enrollment-http.ts`                           | Owns the seven local identity HTTP decisions                     | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
-| `lib/enrollment-service.ts`                        | Composes OAuth, registration, returning login, and logout        | Server IDs/secrets only; fixed database capability; generic failure                |
+| `lib/enrollment-service.ts`                        | Composes OAuth, registration, login, inventory, and logout       | Server IDs/secrets only; fixed database capabilities; generic failure              |
 | `lib/enrollment-cookie.ts`                         | Seals login, OAuth, passkey, and session continuations           | AES-GCM with purpose-separated keys, bounded expiry, HttpOnly, and narrow paths    |
 | `lib/github-oauth.ts`                              | Resolves one GitHub numeric user ID                              | State plus PKCE, no extra scope, fixed endpoints, token and other fields discarded |
 | `lib/passkey-registration.ts`                      | Creates and verifies registration and login ceremonies           | Exact RP/origin/type, required UV, fixed algorithms, and bounded output            |
@@ -158,14 +160,18 @@ application work. Admission is acquired before the first body read and held thro
 settlement; rejected or overloaded requests cancel their body without a queue. Cookies are
 purpose-keyed AES-256-GCM values with authenticated context, HttpOnly, SameSite=Lax, HTTPS `Secure`,
 and the narrowest useful path; duplicate cookie names fail closed. Every response is `no-store` and
-`no-referrer`, and each local route admits at most four unsettled operations. The account page
-renders only the sealed session's public handle; every state-changing operation still requires the
-database verifier and session state.
+`no-referrer`, and each local route admits at most four unsettled operations. The account page uses
+the exact possessed session to read at most 32 passkey rows through the existing fixed procedure.
+Its mapper requires one current active authenticator and renders only bounded labels, active/revoked
+state, UTC creation dates rounded to a day, and the current marker. Credential IDs, public keys,
+sign counters, exact activity timestamps, and profile IDs do not enter HTML. A failed inventory read
+shows one generic unavailable message while logout remains usable; every state-changing operation
+still requires database verification.
 
-This is not a launch-ready authentication system. There is no invite-issuance UI, recovery, profile
-controls beyond logout, aggregate/distributed edge rate policy, cleanup for abandoned enrollment
-state, live OAuth/authenticator/database-login evidence, monitoring, or deployment. The tracked
-environment values are non-working placeholders.
+This is not a launch-ready authentication system. There is no invite-issuance UI, recovery, passkey
+add/revoke or other profile mutation beyond logout, aggregate/distributed edge rate policy, cleanup
+for abandoned enrollment state, live OAuth/authenticator/database-login evidence, monitoring, or
+deployment. The tracked environment values are non-working placeholders.
 
 ## Pairing start and activation boundaries
 
@@ -261,7 +267,7 @@ gates.
 ## Test strategy
 
 Vitest runs business-logic, data-boundary, HTTP-route/problem, admission, pairing cryptography and
-activation composition, invite/OAuth/session/passkey enrollment and returning login,
+activation composition, invite/OAuth/session/passkey enrollment, returning login and inventory,
 database-config/pool/store, component, interaction, CSP/header, localization, and axe-core
 accessibility tests. Enrollment cases cover exact form/JSON bodies, streaming limits, origin and
 cookie ambiguity, state plus PKCE, no-extra-scope token exchange, encrypted purpose separation,

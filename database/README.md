@@ -5,20 +5,20 @@
 This directory contains fourteen SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
-implemented. A local invite/OAuth/initial-passkey and returning-passkey application now consumes
-only fixed Web/Auth capabilities with injected or synthetic dependencies. No authentication/HTTP
-pairing route, Argon2id recovery application, production credential, or deployed database consumes
-the remaining protected identity/ingest capabilities. A dormant Web/Auth boundary creates bounded
-pairing material through one fixed start call; a second composes keyed pairing lookup, strict
-Ed25519 possession proof, and exact activation through the same mock-tested fixed-query pool, but
-neither has a live login or transport. A local Ingest kernel verifies a bounded exact-body
-origin/device request, and a separate fixed-query adapter maps origin replay plus its output to
-three capabilities through a probed least-privileged pool. Mock tests do not call PostgreSQL or
-supply a working login. One local public-score route and one local one-shot Jobs runner wrap narrow
-capabilities without a working database login. The database-only ingest and Jobs-only
-ingest-retention, pairing-retention, open-season scoring, and terminal finalization procedures plus
-one Web-only public score projection are implemented; HTTP ingest, scheduled execution, audited
-corrections, and broader purge are not.
+implemented. A local invite/OAuth/initial-passkey, returning-passkey, and session-scoped inventory
+application now consumes only fixed Web/Auth capabilities with injected or synthetic dependencies.
+No authentication/HTTP pairing route, Argon2id recovery application, production credential, or
+deployed database consumes the remaining protected identity/ingest capabilities. A dormant Web/Auth
+boundary creates bounded pairing material through one fixed start call; a second composes keyed
+pairing lookup, strict Ed25519 possession proof, and exact activation through the same mock-tested
+fixed-query pool, but neither has a live login or transport. A local Ingest kernel verifies a
+bounded exact-body origin/device request, and a separate fixed-query adapter maps origin replay plus
+its output to three capabilities through a probed least-privileged pool. Mock tests do not call
+PostgreSQL or supply a working login. One local public-score route and one local one-shot Jobs
+runner wrap narrow capabilities without a working database login. The database-only ingest and
+Jobs-only ingest-retention, pairing-retention, open-season scoring, and terminal finalization
+procedures plus one Web-only public score projection are implemented; HTTP ingest, scheduled
+execution, audited corrections, and broader purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -430,6 +430,12 @@ session. It returns only profile ID, public handle, and locale so Web/Auth can s
 session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
 28 cross-capability denials. Consumed ceremony cleanup, a deployment login, edge attempt policy,
 monitoring, and live authenticator/database integration remain open.
+
+The local account application also consumes the existing `read_passkey_inventory` capability. Its
+fixed query and closed mapper retain at most 32 rows, require exactly one current active
+authenticator, round creation time to a UTC date, and pass only label, active/revoked state, and
+that current marker into server-rendered HTML. Credential IDs, public keys, sign counters, exact
+activity timestamps, and profile IDs remain outside the page.
 
 The recovery-code string in the integration fixture is an intentionally weak, obviously synthetic
 PHC-format sample used only to test the database constraint. Production work factors and peppers

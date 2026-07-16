@@ -8,13 +8,14 @@ factory, plus library-only connector protocol/parser boundaries, a synthetic one
 supervisor, an exact-body composer, isolated pairing/request signers, a pure Web pairing verifier,
 dormant pairing applications, a visible public-score consumer with a synthetic fallback, and bounded
 database/local Jobs pairing cleanup behind closed boundaries. A local invite/OAuth/initial-passkey
-enrollment and returning-passkey login slice now adds encrypted short-lived cookies, fixed Web/Auth
-database calls, an account page, and logout with injected/synthetic evidence, but there is no live
-OAuth app, authenticator-backed result, deployed application database, production service,
-operational connector, or real user data. This document remains the required inventory for
-implementation. A field may not be collected merely because it appears here: its schema, purpose,
-visibility, retention, deletion, and access tests must exist first. The implemented column-level
-mapping is documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
+enrollment, returning-passkey login, and private passkey-inventory slice now adds encrypted
+short-lived cookies, fixed Web/Auth database calls, an account page, and logout with
+injected/synthetic evidence, but there is no live OAuth app, authenticator-backed result, deployed
+application database, production service, operational connector, or real user data. This document
+remains the required inventory for implementation. A field may not be collected merely because it
+appears here: its schema, purpose, visibility, retention, deletion, and access tests must exist
+first. The implemented column-level mapping is documented in
+[`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
 
@@ -89,12 +90,15 @@ database call, response, log, cache, or client storage. Its encrypted cookies co
 fields named above and use separate derived keys and paths for login, OAuth, passkey, and session
 purposes. Returning-login options create no database state and the encrypted challenge contains no
 profile identifier; only a valid exact WebAuthn proof reaches the atomic database completion call.
-The decoded master key is overwritten immediately after those purpose keys are derived, and the HTTP
-runtime exposes only the public origin and secure-cookie flag. The fixed GitHub user response parser
-accepts only a positive safe numeric `id` for return; the token and every other response field are
-discarded after the callback. Tests use reserved, synthetic values and injected
-GitHub/database/authenticator capabilities. No real-user retention or deployed subprocessor claim
-follows from this local boundary.
+The authenticated account read rounds passkey creation to a UTC date and renders only bounded
+labels, active/revoked state, and the current-authenticator marker; credential IDs, public keys,
+sign counters, exact activity timestamps, and profile IDs stay outside HTML. The decoded master key
+is overwritten immediately after those purpose keys are derived, and the HTTP runtime exposes only
+the public origin and secure-cookie flag. The fixed GitHub user response parser accepts only a
+positive safe numeric `id` for return; the token and every other response field are discarded after
+the callback. Tests use reserved, synthetic values and injected GitHub/database/authenticator
+capabilities. No real-user retention or deployed subprocessor claim follows from this local
+boundary.
 
 Opaque sources deliberately contain no Codex account email or upstream account identifier. The
 implemented pairing database caps each profile at 32 lifetime source records and 64 active plus

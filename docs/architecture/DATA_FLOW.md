@@ -108,6 +108,11 @@ sequenceDiagram
   DB-->>Web: Credential-derived profile ID, handle, and locale
   Web-->>Browser: Private no-store authenticated response
 
+  Browser->>Web: Open account with encrypted session
+  Web->>DB: Read bounded session-derived passkey inventory
+  DB-->>Web: Labels, lifecycle state, rounded creation dates, current marker
+  Web-->>Browser: Server-rendered private list without credential or key material
+
   User->>Browser: Add or revoke a passkey
   Web->>DB: Create exact action/target-bound step-up challenge
   Web->>Authenticator: Request fresh assertion
@@ -123,6 +128,12 @@ and consumes the cookie-bound challenge in the session transaction. The database
 WebAuthn cryptography or protect an Internet endpoint from request floods; edge/service limits and
 bounded cleanup of consumed ceremonies are mandatory before deployment. Recovery is a separate
 restricted-authority flow, not a normal login shortcut.
+
+The local account page now composes the existing session-derived inventory read. Its closed mapper
+accepts at most 32 ordered rows with exactly one current active authenticator and renders only the
+bounded label, active/revoked state, UTC creation date, and current marker. Opaque passkey IDs
+remain server-side keys; credential IDs, public keys, sign counters, exact activity timestamps, and
+profile IDs never enter the page.
 
 ## Recovery-code rotation and passkey replacement
 

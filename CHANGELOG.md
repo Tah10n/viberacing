@@ -174,6 +174,10 @@ Versioning where its guarantees are applicable.
   just-minted session; the route adds no anonymous database state before valid proof. Distributed
   attempt limits, live OAuth/authenticator/database credentials, recovery, monitoring, and
   deployment remain separate gates.
+- The authenticated account page now reads a session-scoped passkey inventory through one existing
+  fixed Web/Auth capability and renders only label, active/revoked state, rounded creation date, and
+  the current-authenticator marker. Invalid, cross-profile, empty, oversized, duplicate, unordered,
+  or open database rows fail closed; an unavailable inventory leaves logout usable.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

@@ -9,6 +9,7 @@ import {
   type EnrollmentDatabaseInitialPasskey,
   type EnrollmentDatabaseLoginCompletion,
   type EnrollmentDatabasePasskeyChallenge,
+  type EnrollmentDatabasePasskeyInventoryRequest,
   type EnrollmentDatabasePool,
   type EnrollmentDatabaseProfile,
   type EnrollmentDatabaseSessionRevocation,
@@ -25,6 +26,15 @@ const loginMaterialColumns = new Set([
   "sign_count",
 ]);
 const loginProfileColumns = new Set(["handle", "locale", "profile_id"]);
+const passkeyInventoryColumns = new Set([
+  "created_on",
+  "current_authenticator",
+  "label",
+  "passkey_id",
+  "state",
+]);
+const canonicalDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 
 export type EnrollmentDatabaseErrorCode =
   | "connection_release_failed"
@@ -49,6 +59,9 @@ export interface EnrollmentDatabase {
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
+  readPasskeyInventory(
+    input: EnrollmentDatabasePasskeyInventoryRequest,
+  ): Promise<readonly PasskeyInventoryItem[]>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined>;
   revokeSession(input: EnrollmentDatabaseSessionRevocation): Promise<boolean>;
 }
@@ -65,6 +78,14 @@ export interface PasskeyLoginProfile {
   readonly handle: string;
   readonly locale: "en" | "ru";
   readonly profileId: string;
+}
+
+export interface PasskeyInventoryItem {
+  readonly createdOn: string;
+  readonly currentAuthenticator: boolean;
+  readonly label: string;
+  readonly passkeyId: string;
+  readonly state: "active" | "revoked";
 }
 
 export interface ConfiguredEnrollmentDatabase extends EnrollmentDatabase {
@@ -172,6 +193,69 @@ function exactLoginProfile(value: unknown): PasskeyLoginProfile {
   return Object.freeze({ handle: row.handle, locale: row.locale, profileId: row.profile_id });
 }
 
+function canonicalDate(value: unknown): value is string {
+  if (typeof value !== "string" || !canonicalDatePattern.test(value)) {
+    return false;
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+}
+
+function exactPasskeyInventory(value: unknown): readonly PasskeyInventoryItem[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 32) {
+    fail("result_invalid");
+  }
+  const passkeyIds = new Set<string>();
+  let currentCount = 0;
+  let previousSortKey: string | undefined;
+  const result = value.map((row: unknown) => {
+    if (!isRecord(row)) {
+      fail("result_invalid");
+    }
+    const keys = Object.keys(row);
+    const labelLength = typeof row.label === "string" ? Array.from(row.label).length : 0;
+    if (
+      keys.length !== passkeyInventoryColumns.size ||
+      keys.some((key) => !passkeyInventoryColumns.has(key)) ||
+      typeof row.passkey_id !== "string" ||
+      !enrollmentPatterns.uuidV4.test(row.passkey_id) ||
+      passkeyIds.has(row.passkey_id) ||
+      typeof row.label !== "string" ||
+      labelLength < 1 ||
+      labelLength > 64 ||
+      row.label !== row.label.trim() ||
+      row.label !== row.label.normalize("NFC") ||
+      unsafeLabelPattern.test(row.label) ||
+      (row.state !== "active" && row.state !== "revoked") ||
+      !canonicalDate(row.created_on) ||
+      typeof row.current_authenticator !== "boolean" ||
+      (row.current_authenticator && row.state !== "active")
+    ) {
+      fail("result_invalid");
+    }
+    const sortKey = `${row.created_on}\n${row.passkey_id}`;
+    if (previousSortKey !== undefined && sortKey <= previousSortKey) {
+      fail("result_invalid");
+    }
+    passkeyIds.add(row.passkey_id);
+    previousSortKey = sortKey;
+    if (row.current_authenticator) {
+      currentCount += 1;
+    }
+    return Object.freeze({
+      createdOn: row.created_on,
+      currentAuthenticator: row.current_authenticator,
+      label: row.label,
+      passkeyId: row.passkey_id,
+      state: row.state,
+    });
+  });
+  if (currentCount !== 1) {
+    fail("result_invalid");
+  }
+  return Object.freeze(result);
+}
+
 function verifyRuntimeBoundary(value: unknown): void {
   if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
     fail("runtime_boundary_mismatch");
@@ -242,6 +326,11 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (client) => client.enrollProfile(input),
         (value) => exactBooleanRow(value, "enrolled"),
       );
+    },
+    readPasskeyInventory(
+      input: EnrollmentDatabasePasskeyInventoryRequest,
+    ): Promise<readonly PasskeyInventoryItem[]> {
+      return execute((client) => client.readPasskeyInventory(input), exactPasskeyInventory);
     },
     readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined> {
       return execute((client) => client.readPasskeyLoginMaterial(credentialId), exactLoginMaterial);

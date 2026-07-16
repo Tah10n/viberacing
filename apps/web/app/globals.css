@@ -179,6 +179,51 @@ a {
   font-weight: 900;
 }
 
+.account-security {
+  margin-block: 2rem;
+  padding-block-start: 1.5rem;
+  border-top: 2px solid rgb(247 242 255 / 35%);
+}
+
+.account-security h2 {
+  margin-block: 0 0.5rem;
+  color: #55f7ff;
+}
+
+.passkey-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.passkey-item {
+  padding: 0.9rem;
+  border: 2px solid rgb(247 242 255 / 45%);
+  background: #130b2e;
+}
+
+.passkey-item-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.passkey-state {
+  padding: 0.2rem 0.45rem;
+  background: #ffe66d;
+  color: #11131a;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.passkey-item .auth-status {
+  margin-block-end: 0;
+}
+
 .auth-card .primary-action,
 .auth-card .secondary-action {
   min-height: 3rem;
