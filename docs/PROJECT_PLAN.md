@@ -174,12 +174,12 @@ flowchart LR
   handle before a fresh assertion bound to session/profile/handle/RP/origin, then atomically
   consumes that challenge while immediately hiding the profile, revoking authority, unlinking
   sources, and queueing one opaque purge job. The purge worker, cache invalidation, and restore
-  replay remain separate gates. A dormant transport-free pairing start boundary now owns fresh
-  server IDs/token/challenge/code, separate protected poll/code verifiers, closed device metadata,
+  replay remain separate gates. A transport-free pairing start boundary now owns fresh server
+  IDs/token/challenge/code, separate protected poll/code verifiers, closed device metadata,
   nine-minute expiry, and one fixed call through a separate probed read-write pool wrapper. A second
-  dormant boundary owns protected poll lookup, strict possession proof, server-owned activation IDs,
-  and fixed admission/timing. The local `/connect` slice now supplies the intervening browser step:
-  exact-session code lookup with a database-backed attempt window, bounded device/fingerprint
+  activation boundary owns protected poll lookup, strict possession proof, server-owned activation
+  IDs, and fixed admission/timing. The local `/connect` slice now supplies the intervening browser
+  step: exact-session code lookup with a database-backed attempt window, bounded device/fingerprint
   review, and fresh-passkey atomic new-source approval. Existing-source choice, distributed
   recovery/anonymous edge attempt policy, abandoned-state cleanup and notification, live
   provider/database credentials, and deployment remain separate gates.
@@ -263,24 +263,28 @@ LF-separated device message. ADR 0025 removes public access to that unsigned mat
 isolated one-use signer behind an equally inaccessible device-bound key capability. A shared
 Rust/Ingest vector proves exact body, public-key, and signature agreement. ADR 0026 adds a second
 domain-separated pairing-possession policy, inaccessible pending-key/challenge signer, and pure
-strict Web verifier with a shared synthetic vector. Context construction, key generation/storage,
-connector transport, retry, scheduling, and support remain absent. A separate local Web/Auth slice
-now implements browser approval for a signed-in passkey session, but does not construct connector
-context or activate a device. ADR 0027 adds the dormant server-side half of the final activation
-step: exact 32-byte poll tokens become primary/secondary HMAC-SHA-256 verifier candidates, one
-probed read-write Web pool selects at most one approved transaction, the strict proof is mandatory,
-and only server-owned IDs reach the atomic procedure. Its four-call admission and 250-millisecond
-floor are local process safeguards, not an anonymous route or distributed client-rate policy. ADR
-0028 adds the dormant server-side start half: closed public-key/device metadata enters, fresh server
-IDs, a 32-byte poll token and challenge, separate primary poll/code HMAC verifiers, a 60-bit human
-code, and a nine-minute expiry reach only the fixed `start_pairing` procedure. Malformed admitted
-input performs fixed-shape local work but no database write. This still provides no public start
-request/response contract, connector client, anonymous route, or distributed abuse control. Revision
-0021 separately gives the authenticated browser approval lookup a session-bound distributed attempt
-window and a closed primary/secondary code probe; it does not protect an anonymous start route.
-Revision 0013 and ADR 0029 add only the separate Jobs-side physical cleanup: at most 1000 expired
-non-activated transactions and exact pending keys per call, with activated and live state preserved.
-No scheduler or retention cadence exists.
+strict Web verifier with a shared synthetic vector. A separate local Web/Auth slice implements
+browser approval for a signed-in passkey session. ADR 0027 adds the server-side half of the final
+activation step: exact 32-byte poll tokens become primary/secondary HMAC-SHA-256 verifier
+candidates, one probed read-write Web pool selects at most one approved transaction, the strict
+proof is mandatory, and only server-owned IDs reach the atomic procedure. Its four-call admission
+and 250-millisecond floor are local process safeguards, not an anonymous route or distributed
+client-rate policy. ADR 0028 adds the transport-free server-side start half: closed
+public-key/device metadata enters, fresh server IDs, a 32-byte poll token and challenge, separate
+primary poll/code HMAC verifiers, a 60-bit human code, and a nine-minute expiry reach only the fixed
+`start_pairing` procedure. Malformed admitted input performs fixed-shape local work but no database
+write. Revision 0021 separately gives the authenticated browser approval lookup a session-bound
+distributed attempt window and a closed primary/secondary code probe. Revision 0013 and ADR 0029 add
+the separate Jobs-side physical cleanup: at most 1000 expired non-activated transactions and exact
+pending keys per call, with activated and live state preserved. ADR 0030 now closes the local
+connection journey with four versioned start/poll request/response contracts, exact no-store POST
+routes, one aggregate four-call application boundary, revision 0022's fixed global-and-64-bucket
+distributed rate windows, and a one-command Rust client. The client uses OS randomness, native
+credential storage without a plaintext fallback, HTTPS with platform trust (or loopback HTTP for
+development), bounded bodies/time/retries, exact possession proof, resumable prepared/pending/active
+state, and non-reflective output. This evidence is still local and synthetic: there is no live Web
+login/database result, edge capacity policy, cross-platform execution matrix, released binary, Codex
+admission, sync context, upload, scheduler, or support claim.
 
 ### Date semantics
 
@@ -410,12 +414,18 @@ event.
    and exactly one source.
 
 The poll token is short-lived, one-time, and insufficient to approve or activate a device without
-the browser step-up and key-possession proof. Its plaintext is returned once and is never persisted
-or logged. There is no long-lived bearer credential. Each later sync request signs a canonical
-method, path, body hash, device ID, nonce, timestamp, and idempotency key.
+the browser step-up and key-possession proof. The server stores only its keyed verifier; the
+connector persists the plaintext only inside its native OS credential record while the transaction
+is pending, then clears it on activation or local expiry. It is never logged or printed. There is no
+long-lived bearer credential. Each later sync request signs a canonical method, path, body hash,
+device ID, nonce, timestamp, and idempotency key.
 
 Nonce records expire after the replay window. Idempotency records have bounded retention. Neither
 table can grow without cleanup.
+
+Steps 3 through 8 now have one local executable path with synthetic/injected HTTP evidence and
+isolated PostgreSQL evidence. Step 2, a live authenticator/database/TLS path, cross-platform runtime
+results, release provenance, and later signed sync remain separate gates.
 
 ### Local connector safety
 

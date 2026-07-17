@@ -16,6 +16,7 @@ import { pairingUserCodePattern } from "./pairing-user-code-verifier";
 
 const validRequest = {
   architecture: "x86_64",
+  clientIdBase64Url: Buffer.alloc(16, 0x77).toString("base64url"),
   connectorVersion: "0.0.0-test",
   deviceLabel: "Synthetic device",
   devicePublicKeyBase64Url: pairingVector.devicePublicKeyBase64Url,
@@ -59,11 +60,11 @@ function harness(
     readonly admission?: { tryAcquire(): unknown };
     readonly codeCandidate?: ReturnType<typeof codeCandidate>;
     readonly codeError?: Error;
+    readonly databaseResult?: unknown;
     readonly databaseError?: Error;
     readonly pollCandidate?: ReturnType<typeof pollCandidate>;
     readonly pollError?: Error;
     readonly settleError?: Error;
-    readonly started?: boolean;
   } = {},
 ): {
   readonly codeCandidate: ReturnType<typeof codeCandidate>;
@@ -95,17 +96,18 @@ function harness(
     expect(typeof code === "string" && pairingUserCodePattern.test(code)).toBe(true);
     return selectedCodeCandidate.value;
   });
-  const startDatabase = vi.fn((attempt: unknown): Promise<boolean> => {
+  const startDatabase = vi.fn((attempt: unknown): Promise<unknown> => {
     const typed = attempt as PairingStartDatabaseAttempt;
     startSnapshots.push({
       ...typed,
+      clientIdentityDigest: Buffer.from(typed.clientIdentityDigest),
       pairingChallenge: Buffer.from(typed.pairingChallenge),
       pollVerifierDigest: Buffer.from(typed.pollVerifierDigest),
       publicKey: Buffer.from(typed.publicKey),
       userCodeDigest: Buffer.from(typed.userCodeDigest),
     });
     return options.databaseError === undefined
-      ? Promise.resolve(options.started ?? true)
+      ? Promise.resolve(options.databaseResult ?? "created")
       : Promise.reject(options.databaseError);
   });
   const startTiming = vi.fn(() => 100);
@@ -118,6 +120,9 @@ function harness(
       admission: options.admission ?? createPairingStartAdmission(1),
       database: { start: startDatabase },
       pollVerifier: { derive: derivePoll },
+      ratePolicy: {
+        limits: () => ({ bucketLimit: 20, globalLimit: 200, windowSeconds: 60 }),
+      },
       timing: { settle, start: startTiming },
       userCodeVerifier: { derive: deriveCode },
     },
@@ -168,7 +173,12 @@ describe("pairing start application", () => {
       expiresAt: decision.expiresAt,
       osFamily: validRequest.osFamily,
       pairingId: decision.pairingId,
+      rateBucketLimit: 20,
+      rateGlobalLimit: 200,
+      rateWindowSeconds: 60,
     });
+    expect(testHarness.startSnapshots[0]?.clientIdentityDigest).toHaveLength(32);
+    expect(testHarness.startSnapshots[0]?.clientIdentityDigest).not.toEqual(Buffer.alloc(32));
     expect(testHarness.startSnapshots[0]?.deviceKeyId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
@@ -192,6 +202,7 @@ describe("pairing start application", () => {
     null,
     {},
     { ...validRequest, extra: true },
+    { ...validRequest, clientIdBase64Url: "A".repeat(21) },
     { ...validRequest, devicePublicKeyBase64Url: "A".repeat(43) },
     { ...validRequest, deviceLabel: " Synthetic device" },
     { ...validRequest, deviceLabel: "A".repeat(129) },
@@ -250,7 +261,7 @@ describe("pairing start application", () => {
     });
     const poll = pollCandidate();
     const code = codeCandidate();
-    const startDatabase = vi.fn(() => Promise.resolve(false));
+    const startDatabase = vi.fn(() => Promise.resolve("rate_limited"));
     const derivePoll = vi.fn(() => poll.value);
     const deriveCode = vi.fn(() => code.value);
     const settle = vi.fn(() => settlement);
@@ -258,6 +269,9 @@ describe("pairing start application", () => {
       admission: createPairingStartAdmission(1),
       database: { start: startDatabase },
       pollVerifier: { derive: derivePoll },
+      ratePolicy: {
+        limits: () => ({ bucketLimit: 20, globalLimit: 200, windowSeconds: 60 }),
+      },
       timing: { settle, start: () => 100 },
       userCodeVerifier: { derive: deriveCode },
     });
@@ -271,7 +285,7 @@ describe("pairing start application", () => {
     expect(second).toMatchObject({ outcome: "not_created" });
     expect(startDatabase).toHaveBeenCalledOnce();
     finishSettlement?.();
-    await expect(first).resolves.toMatchObject({ outcome: "not_created" });
+    await expect(first).resolves.toMatchObject({ outcome: "rate_limited" });
   });
 
   it.each([
@@ -309,7 +323,18 @@ describe("pairing start application", () => {
     expect(JSON.stringify(decision)).not.toContain("private failure");
   });
 
-  it("rejects a non-boolean database result", async () => {
+  it("returns an explicit rate decision without exposing policy thresholds", async () => {
+    const testHarness = harness({ databaseResult: "rate_limited" });
+
+    const decision = await createPairingStartApplication(testHarness.dependencies).execute(
+      validRequest,
+    );
+
+    expect(decision).toMatchObject({ outcome: "rate_limited" });
+    expect(Reflect.ownKeys(decision).sort()).toEqual(["outcome", "requestId"]);
+  });
+
+  it("rejects an unknown database result", async () => {
     const testHarness = harness();
     const dependencies = {
       ...testHarness.dependencies,
@@ -326,8 +351,11 @@ describe("pairing start application", () => {
     {},
     {
       admission: createPairingStartAdmission(),
-      database: { start: () => Promise.resolve(false) },
+      database: { start: () => Promise.resolve("rate_limited") },
       pollVerifier: { derive: () => pollCandidate().value },
+      ratePolicy: {
+        limits: () => ({ bucketLimit: 20, globalLimit: 200, windowSeconds: 60 }),
+      },
       timing: { settle: () => Promise.resolve(), start: () => 0 },
       userCodeVerifier: { derive: () => codeCandidate().value },
       extra: true,
@@ -348,9 +376,15 @@ describe("pairing start application", () => {
       VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL: Buffer.alloc(32, 0x55).toString(
         "base64url",
       ),
+      VIBERACING_WEB_PAIRING_POLL_BUCKET_LIMIT: "20",
+      VIBERACING_WEB_PAIRING_POLL_GLOBAL_LIMIT: "200",
       VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL: Buffer.alloc(32, 0x44).toString(
         "base64url",
       ),
+      VIBERACING_WEB_PAIRING_POLL_WINDOW_SECONDS: "60",
+      VIBERACING_WEB_PAIRING_START_BUCKET_LIMIT: "10",
+      VIBERACING_WEB_PAIRING_START_GLOBAL_LIMIT: "100",
+      VIBERACING_WEB_PAIRING_START_WINDOW_SECONDS: "60",
     });
 
     expect(Object.isFrozen(application)).toBe(true);

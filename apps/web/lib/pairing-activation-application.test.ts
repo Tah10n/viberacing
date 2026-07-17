@@ -14,6 +14,7 @@ import {
 import type { PairingActivationDatabaseAttempt } from "./pairing-activation-database";
 
 const pollToken = Buffer.alloc(32, 0x33).toString("base64url");
+const clientIdBase64Url = Buffer.alloc(16, 0x44).toString("base64url");
 
 function candidate(
   options: {
@@ -53,9 +54,9 @@ function candidate(
 function harness(
   options: {
     readonly activateError?: Error;
-    readonly activated?: boolean;
     readonly admission?: { tryAcquire(): unknown };
     readonly candidate?: ReturnType<typeof candidate>;
+    readonly databaseResult?: unknown;
     readonly deriveError?: Error;
     readonly settleError?: Error;
   } = {},
@@ -70,10 +71,11 @@ function harness(
 } {
   const attemptSnapshots: PairingActivationDatabaseAttempt[] = [];
   const proofCandidate = options.candidate ?? candidate();
-  const activate = vi.fn((attempt: unknown): Promise<boolean> => {
+  const activate = vi.fn((attempt: unknown): Promise<unknown> => {
     const typed = attempt as PairingActivationDatabaseAttempt;
     attemptSnapshots.push({
       ...typed,
+      clientIdentityDigest: Buffer.from(typed.clientIdentityDigest),
       pollVerifierDigests: [
         Buffer.from(typed.pollVerifierDigests[0]),
         Buffer.from(typed.pollVerifierDigests[1]),
@@ -82,7 +84,16 @@ function harness(
     if (options.activateError !== undefined) {
       return Promise.reject(options.activateError);
     }
-    return Promise.resolve(options.activated ?? true);
+    return Promise.resolve(
+      options.databaseResult ??
+        (typed.allowActivation
+          ? {
+              deviceId: typed.deviceId,
+              outcome: "activated",
+              sourceId: "src_BBBBBBBBBBBBBBBBBBBBBB",
+            }
+          : { outcome: "pending" }),
+    );
   });
   const derive = vi.fn((token: unknown) => {
     if (options.deriveError !== undefined) {
@@ -106,6 +117,9 @@ function harness(
       admission: options.admission ?? createPairingActivationAdmission(1),
       database: { activate },
       pollVerifier: { derive },
+      ratePolicy: {
+        limits: () => ({ bucketLimit: 120, globalLimit: 1200, windowSeconds: 60 }),
+      },
       timing: { settle, start },
     },
     derive,
@@ -120,6 +134,7 @@ describe("pairing activation application", () => {
     const application = createPairingActivationApplication(testHarness.dependencies);
 
     const decision = await application.execute({
+      clientIdBase64Url,
       pollToken,
       possessionSignature: pairingVector.possessionSignatureBase64Url,
     });
@@ -129,13 +144,24 @@ describe("pairing activation application", () => {
     expect(decision.outcome === "activated" ? decision.deviceId : undefined).toMatch(
       /^dev_[A-Za-z0-9_-]{22}$/,
     );
-    expect(Reflect.ownKeys(decision).sort()).toEqual(["deviceId", "outcome", "requestId"]);
+    expect(decision.outcome === "activated" ? decision.sourceId : undefined).toBe(
+      "src_BBBBBBBBBBBBBBBBBBBBBB",
+    );
+    expect(Reflect.ownKeys(decision).sort()).toEqual([
+      "deviceId",
+      "outcome",
+      "requestId",
+      "sourceId",
+    ]);
     expect(Object.isFrozen(decision)).toBe(true);
     expect(testHarness.attemptSnapshots).toHaveLength(1);
     expect(testHarness.attemptSnapshots[0]).toMatchObject({
       allowActivation: true,
       deviceId: decision.outcome === "activated" ? decision.deviceId : undefined,
       requestId: decision.requestId,
+      rateBucketLimit: 120,
+      rateGlobalLimit: 1200,
+      rateWindowSeconds: 60,
       secondaryCandidateActive: true,
       signatureBase64Url: pairingVector.possessionSignatureBase64Url,
     });
@@ -146,6 +172,8 @@ describe("pairing activation application", () => {
       Buffer.alloc(32, 0x11),
       Buffer.alloc(32, 0x22),
     ]);
+    expect(testHarness.attemptSnapshots[0]?.clientIdentityDigest).toHaveLength(32);
+    expect(testHarness.attemptSnapshots[0]?.clientIdentityDigest).not.toEqual(Buffer.alloc(32));
     expect(testHarness.candidate.clear).toHaveBeenCalledOnce();
     expect(testHarness.candidate.value.digests).toEqual([Buffer.alloc(32), Buffer.alloc(32)]);
     expect(testHarness.start).toHaveBeenCalledOnce();
@@ -156,21 +184,35 @@ describe("pairing activation application", () => {
   it.each([
     null,
     {},
-    { pollToken, possessionSignature: pairingVector.possessionSignatureBase64Url, extra: true },
-    { pollToken, possessionSignature: `${pairingVector.possessionSignatureBase64Url}=` },
+    {
+      clientIdBase64Url,
+      pollToken,
+      possessionSignature: pairingVector.possessionSignatureBase64Url,
+      extra: true,
+    },
+    {
+      clientIdBase64Url,
+      pollToken,
+      possessionSignature: `${pairingVector.possessionSignatureBase64Url}=`,
+    },
+    {
+      clientIdBase64Url: "A".repeat(21),
+      pollToken,
+      possessionSignature: pairingVector.possessionSignatureBase64Url,
+    },
   ])(
     "keeps malformed input on the same dependency path but makes it ineligible: %o",
     async (input) => {
-      const testHarness = harness({ activated: true });
+      const testHarness = harness();
       const application = createPairingActivationApplication(testHarness.dependencies);
 
       const decision = await application.execute(input);
 
-      expect(decision).toMatchObject({ outcome: "not_activated" });
+      expect(decision).toMatchObject({ outcome: "pending" });
       expect(Reflect.ownKeys(decision).sort()).toEqual(["outcome", "requestId"]);
       expect(testHarness.activate).toHaveBeenCalledOnce();
       expect(testHarness.attemptSnapshots[0]?.allowActivation).toBe(false);
-      expect(testHarness.attemptSnapshots[0]?.signatureBase64Url).toBe("A".repeat(86));
+      expect(testHarness.attemptSnapshots[0]?.signatureBase64Url).toMatch(/^[A-Za-z0-9_-]{86}$/);
       expect(testHarness.candidate.clear).toHaveBeenCalledOnce();
       expect(testHarness.settle).toHaveBeenCalledOnce();
     },
@@ -181,6 +223,7 @@ describe("pairing activation application", () => {
     const application = createPairingActivationApplication(testHarness.dependencies);
 
     const decision = await application.execute({
+      clientIdBase64Url,
       pollToken,
       possessionSignature: pairingVector.possessionSignatureBase64Url,
     });
@@ -198,17 +241,21 @@ describe("pairing activation application", () => {
       finishSettlement = resolve;
     });
     const proofCandidate = candidate();
-    const activate = vi.fn(() => Promise.resolve(false));
+    const activate = vi.fn(() => Promise.resolve({ outcome: "pending" }));
     const derive = vi.fn(() => proofCandidate.value);
     const settle = vi.fn(() => settlement);
     const application = createPairingActivationApplication({
       admission: createPairingActivationAdmission(1),
       database: { activate },
       pollVerifier: { derive },
+      ratePolicy: {
+        limits: () => ({ bucketLimit: 120, globalLimit: 1200, windowSeconds: 60 }),
+      },
       timing: { settle, start: () => 100 },
     });
 
     const first = application.execute({
+      clientIdBase64Url,
       pollToken,
       possessionSignature: pairingVector.possessionSignatureBase64Url,
     });
@@ -216,6 +263,7 @@ describe("pairing activation application", () => {
       expect(settle).toHaveBeenCalledOnce();
     });
     const second = await application.execute({
+      clientIdBase64Url,
       pollToken,
       possessionSignature: pairingVector.possessionSignatureBase64Url,
     });
@@ -224,7 +272,7 @@ describe("pairing activation application", () => {
     expect(derive).toHaveBeenCalledOnce();
     expect(activate).toHaveBeenCalledOnce();
     finishSettlement?.();
-    await expect(first).resolves.toMatchObject({ outcome: "not_activated" });
+    await expect(first).resolves.toMatchObject({ outcome: "pending" });
   });
 
   it.each([
@@ -261,6 +309,7 @@ describe("pairing activation application", () => {
     const application = createPairingActivationApplication(testHarness.dependencies);
 
     const decision = await application.execute({
+      clientIdBase64Url,
       pollToken,
       possessionSignature: pairingVector.possessionSignatureBase64Url,
     });
@@ -270,13 +319,41 @@ describe("pairing activation application", () => {
     expect(JSON.stringify(decision)).not.toContain("private failure");
   });
 
+  it("returns an explicit rate decision without exposing thresholds", async () => {
+    const testHarness = harness({ databaseResult: { outcome: "rate_limited" } });
+
+    const decision = await createPairingActivationApplication(testHarness.dependencies).execute({
+      clientIdBase64Url,
+      pollToken,
+      possessionSignature: pairingVector.possessionSignatureBase64Url,
+    });
+
+    expect(decision).toMatchObject({ outcome: "rate_limited" });
+    expect(Reflect.ownKeys(decision).sort()).toEqual(["outcome", "requestId"]);
+  });
+
+  it("contains an unknown database result", async () => {
+    const testHarness = harness({ databaseResult: true });
+
+    await expect(
+      createPairingActivationApplication(testHarness.dependencies).execute({
+        clientIdBase64Url,
+        pollToken,
+        possessionSignature: pairingVector.possessionSignatureBase64Url,
+      }),
+    ).resolves.toMatchObject({ outcome: "not_activated" });
+  });
+
   it.each([
     null,
     {},
     {
       admission: createPairingActivationAdmission(),
-      database: { activate: () => Promise.resolve(false) },
+      database: { activate: () => Promise.resolve({ outcome: "pending" }) },
       pollVerifier: { derive: () => candidate().value },
+      ratePolicy: {
+        limits: () => ({ bucketLimit: 120, globalLimit: 1200, windowSeconds: 60 }),
+      },
       timing: { settle: () => Promise.resolve(), start: () => 0 },
       extra: true,
     },
@@ -298,6 +375,12 @@ describe("pairing activation application", () => {
       VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL: Buffer.alloc(32, 0x44).toString(
         "base64url",
       ),
+      VIBERACING_WEB_PAIRING_POLL_BUCKET_LIMIT: "120",
+      VIBERACING_WEB_PAIRING_POLL_GLOBAL_LIMIT: "1200",
+      VIBERACING_WEB_PAIRING_POLL_WINDOW_SECONDS: "60",
+      VIBERACING_WEB_PAIRING_START_BUCKET_LIMIT: "12",
+      VIBERACING_WEB_PAIRING_START_GLOBAL_LIMIT: "120",
+      VIBERACING_WEB_PAIRING_START_WINDOW_SECONDS: "60",
     });
 
     expect(Object.isFrozen(application)).toBe(true);

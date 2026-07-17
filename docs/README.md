@@ -32,10 +32,9 @@ remain safe to publish verbatim.
   external artifact/license evidence.
 - [Connector protocol, candidate adapter, supervisor, pairing, and sync signers](../crates/connector/README.md)
   — bounded local App Server handshake, exact `0.144.4` account/usage parser, synthetic one-shot
-  process evidence, exact sync material, and isolated one-use Ed25519 signing behind inaccessible
-  capabilities plus a strict pure Web pairing verifier, dormant start/activation composition, and
-  local browser approval; no key generation/store, connector transport, upload, supported release,
-  or operational connector.
+  process evidence, inaccessible sync material/signing, and a local pairing-only `connect` command
+  with native OS key custody and exact Web start/poll routes; no operational Codex launch, upload,
+  supported release, or sync connector.
 - [Asset provenance](reference/ASSET_PROVENANCE.md) — generation/source records, integrity digests,
   metadata sanitation, accessibility text, and release-review status for non-code visuals.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary

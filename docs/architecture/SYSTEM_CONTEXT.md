@@ -10,11 +10,12 @@ cookies, local recovery-code replacement-passkey sign-in, and logout, one local 
 runner, and local Ingest request-verification, PostgreSQL-adapter, application-composition, and
 bounded HTTP-server boundaries, plus library-only connector initialization and candidate `0.144.4`
 account/usage parser boundaries, a synthetic one-shot supervisor, an exact-body sync composer,
-isolated pairing/sync signers, and a pure Web pairing verifier behind closed boundaries, but no
-deployed application service, operational connector, supported Codex version, distributed recovery
-perimeter/cleanup, Cloudflare/Railway deployment, live OAuth or database login, or production
-database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
-diagrams describe required runtime boundaries, not deployed evidence.
+isolated pairing/sync signers, a pure Web pairing verifier, and one local pairing-only connector
+command with native OS key custody and exact start/poll routes. It still has no deployed application
+service, operational sync connector, supported Codex version, distributed recovery perimeter,
+Cloudflare/Railway deployment, live OAuth or database login, or production database. Component
+status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
+required runtime boundaries, not deployed evidence.
 
 ## System context
 
@@ -123,14 +124,16 @@ inaccessible pending-key/challenge signer and pure strict Web verifier for one e
 pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed atomic
 activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
 material and one fixed database call; ADR 0029 supplies bounded Jobs-only physical cleanup after
-expiry. A separate local `/connect` flow now supplies session-rate-limited pending-code review and
-fresh-passkey new-source approval. No connector capability has a public constructor, so executable
-discovery/admission, official-artifact execution, context creation, key generation/store, connector
-pairing client and start/poll transport, scheduling, upload, CLI, and release responsibilities
-remain absent. The host/port/TLS deployment entry point, live secret-manager/edge key injection,
-working deployment login/certificate, composed live end-to-end flow, distributed rate/backpressure
-and capacity evidence, Cloudflare/Railway path, operational connector, Jobs scheduler/monitoring,
-public cache, and audited correction authority shown in the design remain planned.
+expiry. A separate local `/connect` flow supplies session-rate-limited pending-code review and
+fresh-passkey new-source approval. ADR 0030 now exposes only the pairing journey through one Rust
+`connect` command, exact local start/poll routes, fixed-storage database admission, and native OS
+credential custody. App Server launch and sync capabilities still have no public constructor, so
+executable Codex discovery/admission, official-artifact execution, sync context creation,
+scheduling, upload, and release remain absent. The host/port/TLS deployment entry point, live
+secret-manager/edge key injection, working deployment login/certificate, composed live end-to-end
+flow, edge/capacity evidence, Cloudflare/Railway path, operational sync connector, Jobs
+scheduler/monitoring, public cache, and audited correction authority shown in the design remain
+planned.
 
 ## Component responsibilities
 

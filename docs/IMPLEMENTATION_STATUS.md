@@ -55,17 +55,22 @@ isolated one-use signer removes public unsigned access, consumes that value only
 inaccessible device-bound key capability, and returns the same body plus five exact signed header
 values. The shared synthetic vector is strictly verified across Rust and Ingest. A second
 inaccessible signer and pure Web verifier now agree on an exact synthetic pairing-possession proof.
-A dormant transport-free Web/Auth start application now generates fresh server identifiers, 32-byte
+A transport-free Web/Auth start application now generates fresh server identifiers, 32-byte
 poll/challenge material, a 60-bit human code, separate protected poll/code verifiers, and a
 nine-minute pending transaction from closed device metadata through one fixed call on the probed
-read-write Web pool. A second dormant application derives two fixed-shape HMAC poll-verifier
+read-write Web pool. A second activation application derives two fixed-shape HMAC poll-verifier
 candidates, selects at most one approved row, runs that strict proof, and alone invokes exact atomic
 activation with server-owned identifiers behind four-call admission and a 250-millisecond settlement
-floor. Neither creates browser approval, an HTTP request, a real key, or a live database connection.
-Candidate release, schema, fixture, synthetic-process, composer, pairing, and request-signer
-evidence does not populate the support matrix. Phase 0 hosted-publication controls remain blocked on
-real maintainer identities and GitHub configuration. No pairing-approval application flow,
-production-ready distributed recovery perimeter or cleanup, production secret-manager/edge key
+floor. The authenticated `/connect` flow supplies browser approval. Two closed local POST routes now
+compose both applications behind one shared four-call admission boundary, versioned request/response
+validation, generic problems, and revision 0022's fixed global-and-64-bucket distributed rate
+windows. A bounded Rust `connect` command generates a key and client rate ID with the OS CSPRNG,
+persists resumable state only in a native credential store, and performs the exact start/proof/poll
+sequence. No live database connection, real-user end-to-end result, released artifact, or deployment
+is claimed. Candidate release, schema, fixture, synthetic-process, composer, pairing, and
+request-signer evidence does not populate the support matrix. Phase 0 hosted-publication controls
+remain blocked on real maintainer identities and GitHub configuration. No production-ready anonymous
+edge perimeter, distributed recovery perimeter or cleanup, production secret-manager/edge key
 injection, Ingest host/port/TLS deployment entry point, production deployment, live Web/Jobs/Ingest
 database login/TLS integration, released or operational connector, supported Codex version,
 real-user ingestion, end-to-end public ranking, or finalization scheduler exists.
@@ -94,10 +99,10 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
 - An offline external-link gate with 12 reviewed hosts, HTTPS/credential/port/query/address rules,
   no dormant host permissions, and eight black-box cases. A separate online mode pins public DNS
   results, sends no credentials, follows no redirects, and is excluded from deterministic PR CI.
-- A deterministic dependency inventory covering 522 locked npm packages, thirty Cargo dependencies,
-  two pinned GitHub Actions, and one pinned local-development container. License expressions,
-  installed manifests, every root/workspace importer, dependency scopes, direct notices, and
-  external-artifact usage are checked with ten black-box cases.
+- A deterministic dependency inventory covering 522 locked npm packages, 209 Cargo packages, two
+  pinned GitHub Actions, and one pinned local-development container. License expressions, installed
+  manifests, every root/workspace importer, dependency scopes, direct notices, and external-artifact
+  usage are checked with ten black-box cases.
 - Positive and negative workflow-policy tests for action pins, permissions, secrets, shell
   interpolation, timeouts, complete-history checkout, checkout credentials, and forbidden triggers.
 - A secretless, read-only GitHub Actions CI definition and bounded weekly Dependabot configuration.
@@ -155,15 +160,16 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   overload before and after the final response, non-reflection, missing executable, nonzero terminal
   status, and forced cleanup. The opaque launch capability has no public constructor: there is no
   executable discovery/path-ownership review, official-artifact execution, supported Codex version,
-  real device key generation/store, pairing client, upload, network transport, CLI, installer, or
-  released binary. A candidate pairing signer now consumes inaccessible pending-key/challenge
-  capabilities and signs one exact domain-separated transaction/challenge/public-key message. A
-  server-only Web kernel independently validates exact approved material and the canonical signature
-  under strict Ed25519 semantics. Five Rust and seven Web cases share the same synthetic key/vector,
-  reject changed or malformed inputs and zero material, and prove copy-before-await behavior. There
-  is now a protected primary/secondary poll-token verifier plus closed local start and activation
-  database/application compositions, but still no pairing HTTP boundary, WebAuthn approval,
-  connector pairing client, live database login, or real key. A separate candidate-only composer
+  upload, sync network transport, installer, or released binary. A candidate pairing signer now
+  consumes inaccessible pending-key/challenge capabilities and signs one exact domain-separated
+  transaction/challenge/public-key message. A server-only Web kernel independently validates exact
+  approved material and the canonical signature under strict Ed25519 semantics. Five Rust and seven
+  Web cases share the same synthetic key/vector, reject changed or malformed inputs and zero
+  material, and prove copy-before-await behavior. There is now a protected primary/secondary
+  poll-token verifier plus closed local start and activation database/application compositions. The
+  signed-in `/connect` path supplies WebAuthn approval, and the versioned HTTP routes plus
+  native-store Rust client complete a local pairing path. There is still no live database login,
+  deployed edge, cross-platform result, or released connector. A separate candidate-only composer
   consumes the real parser output behind another capability with no public constructor. It
   revalidates source/sync/device IDs, canonical UTC time, and daily bounds; manually emits the exact
   seven-field body; computes the SHA-256 digest; and builds the exact unpadded base64url,
@@ -171,11 +177,12 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   with a device-bound Ed25519 key capability, rejects an exact device mismatch, signs only the fixed
   message, and returns the same body plus five header values. Nine Rust sync cases plus one
   production-path Ingest case share and strictly verify an exact synthetic body, public-key, and
-  signature vector. Prepared/signed private byte buffers and the upstream key are zeroed on drop. No
-  source/device context provider, fresh entropy, clock, real key generation/store, end-to-end
-  pairing, transport, retry, schedule, or support claim exists; the compatibility matrix remains
-  empty.
-- An ADR lifecycle/template and twenty-eight accepted design decisions covering Community trust,
+  signature vector. Prepared/signed private byte buffers and the upstream key are zeroed on drop.
+  The pairing command supplies fresh OS entropy, a bounded local clock/retry policy, native key
+  custody, and exact pairing transport only; no source/device sync context provider, operational
+  upload, schedule, packaging, release, or support claim exists, and the compatibility matrix
+  remains empty.
+- An ADR lifecycle/template and thirty accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -184,26 +191,27 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   atomic origin replay, transport-free Community sync application composition, and the bounded local
   Fastify HTTP boundary, plus the fail-closed Codex handshake, candidate account/usage adapter, and
   inaccessible bounded one-shot process supervisor, exact-body sync composer, isolated one-use
-  device signing boundary, bounded pairing-possession proof, bounded pairing activation composition,
-  and bounded pairing start composition.
+  device signing boundary, bounded pairing-possession proof, bounded pairing activation/start
+  compositions, bounded pairing cleanup, and bounded connector pairing transport/native key custody.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
-- Five canonical JSON Schema 2020-12 contracts for a bounded Community connector sync, a
-  non-sensitive sync acknowledgement, stable problem details, a one-field public score season query,
-  and a response-only top-32 Community score page with constant trust metadata. Every object is
-  closed; scalar and collection values are bounded; reviewed date-range/ISO-weekday extensions make
-  the score calendar executable; connector input has an executable writable-field allowlist that
-  excludes identity, trust, rank, score, season, moderation, credentials, and prohibited data.
+- Nine canonical JSON Schema 2020-12 contracts for bounded Community connector sync and pairing
+  start/poll requests and responses, a non-sensitive sync acknowledgement, stable problem details, a
+  one-field public score season query, and a response-only top-32 Community score page with constant
+  trust metadata. Every object is closed; scalar and collection values are bounded; reviewed
+  date-range/ISO-weekday extensions make the score calendar executable; connector input has an
+  executable writable-field allowlist that excludes identity, trust, rank, score, season,
+  moderation, credentials, and prohibited data.
 - Deterministically generated readonly TypeScript types, embedded validator wrappers, source digest,
-  and an OpenAPI 3.1 document with explicitly `implemented-local`
-  `GET /v1/community/scores?seasonStart=...` and `POST /v1/community/sync` operations. Their exact
-  method-specific query/body, response/problem, admission, authentication-reference, `no-store`,
-  `Vary: Accept`, generated request ID, and same-origin CORS policies are manifest-driven without
-  claiming deployment. Both inventoried authentication policies participate in the generated source
-  digest. A manifest/schema/drift checker has 39 black-box cases covering generated
-  operation/status/evidence semantics, unsafe/duplicate/drifted operations, unknown fields, missing
-  bounds, client-derived score aliases, Community trust/problem/date drift, private response fields,
+  and an OpenAPI 3.1 document with four explicitly `implemented-local` Community score/sync and
+  connector pairing start/poll operations. Their exact method-specific query/body, response/problem,
+  admission, authentication-reference, `no-store`, `Vary: Accept`, generated request ID, and
+  same-origin CORS policies are manifest-driven without claiming deployment. All three inventoried
+  authentication/transport policies participate in the generated source digest. A
+  manifest/schema/drift checker has 39 black-box cases covering generated operation/status/evidence
+  semantics, unsafe/duplicate/drifted operations, unknown fields, missing bounds, client-derived
+  score aliases, Community trust/problem/date drift, private response fields,
   unlisted/path-traversing schemas, unsupported keywords, missing date deduplication, and stale
   generated output.
 - A dependency-free runtime contract validator with fail-closed reflection handling; strict
@@ -564,9 +572,9 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   weekly/season metadata, rejects raw or inconsistent fields, and renders no score while hidden.
   EN/RU component tests cover score, hidden, and unavailable states. There is no client fetch,
   browser storage, working database credential, or live-user evidence.
-- A second dormant server-only Web pairing adapter reuses the same environment-owned narrow Web/Auth
-  login through a separate four-connection read-write pool. The start application accepts only a
-  closed canonical public-key/label/version/OS/architecture request, generates fresh pairing and
+- A second server-only Web pairing adapter reuses the same environment-owned narrow Web/Auth login
+  through a separate four-connection read-write pool. The start application accepts only a closed
+  canonical public-key/label/version/OS/architecture request, generates fresh pairing and
   pending-key UUIDs, a 32-byte poll token/challenge, a 12-symbol 60-bit code, and a nine-minute
   expiry, derives separate primary poll/code HMAC digests, and invokes only the fixed start
   procedure. The human-code primary/optional-secondary keys must also differ from every poll key.
@@ -577,13 +585,26 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   the high-level adapter runs the strict ADR 0026 proof and alone invokes the exact activation
   procedure with a server-generated `dev_` ID, audit UUID, and common `req_` ID. Each transport-free
   application admits four unsettled attempts, holds each through a 250-millisecond floor, and
-  returns only its frozen success shape or generic failure plus a request ID. The Web suite now
-  contains 547 tests; pairing coverage includes material/code bounds, HMAC vectors/rotation and key
-  separation, hostile configuration/input/result shapes, fixed start/lookup/activation queries,
-  driver confinement, role drift, strict proof selection, IDs, admission/timing, generic failure,
-  clearing, release, and close. The separate browser approval route and session-bound database
-  attempt window do not add a connector client, start/poll transport, anonymous distributed rate
-  limit, live login/TLS connection, cleanup schedule, capacity evidence, real key, or deployment.
+  returns only its frozen success shape or generic failure plus a request ID. Pairing coverage
+  includes material/code bounds, HMAC vectors/rotation and key separation, hostile
+  configuration/input/result shapes, fixed start/lookup/activation queries, driver confinement, role
+  drift, strict proof selection, IDs, admission/timing, generic failure, clearing, release, and
+  close. The same Web workspace now adds exact start/poll body/header routes, one aggregate service,
+  domain-separated anonymous client digests, mandatory deployment-private global/bucket/window
+  limits, and retry-safe activation result reads that require a fresh valid possession proof before
+  returning the existing binding. Revision 0022 retains only 130 fixed aggregate counter rows and
+  never the client ID or digest. These local boundaries still do not prove a live login/TLS
+  connection, edge capacity, cleanup schedule, monitoring, or deployment.
+- A one-command Rust connector binary accepts only a canonical HTTPS origin or explicit loopback
+  HTTP development origin and a bounded label. It disables proxies and redirects, uses platform TLS
+  verification, bounds request/response/time, generates an Ed25519 key and 16-byte anonymous client
+  ID through the OS CSPRNG, and stores one fixed versioned prepared/pending/active record only in
+  the native credential store. It persists before displaying authority, resumes pending polling,
+  signs the exact ADR 0026 message, clears pending material after activation/expiry, and never
+  prints key, token, challenge, source, or device IDs. Rust tests cover
+  command/origin/record/response and start-to-active behavior under format/check/Clippy. There is no
+  cross-platform runtime result, real HTTP/Web/database pairing result, key rotation/uninstall
+  command, package, signed release, Codex launch, sync upload, or support claim.
 - A private TypeScript Jobs workspace now accepts exactly either fixed 1000-row ingest/pairing
   cleanup command or one canonical Monday refresh/finalization command. It revalidates closed plain
   job data, reads only redacted `VIBERACING_JOBS_DATABASE_*` configuration, permits cleartext only
@@ -672,9 +693,9 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0021 from the checksum manifest,
-passed 24-table state/ownership/RLS assertions, twenty-three observed lock-wait races, eight
-relation-denial checks, twenty-eight cross-capability denials, and the identity, passkey, recovery,
+reached `healthy`, validated and applied revisions 0001 through 0022 from the checksum manifest,
+passed 25-table state/ownership/RLS assertions, twenty-three observed lock-wait races, twelve
+relation-denial checks, thirty-one cross-capability denials, and the identity, passkey, recovery,
 pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention,
 pairing-retention, scoring, finalization, and public score scenarios, then removed its portless
 container, network, and ephemeral storage.
@@ -706,30 +727,30 @@ defect found and corrected during review. The report names its local-only limita
 
 ## Not implemented yet
 
-Invite issuance UI, connector pairing client and start/poll routes, client-identity and distributed
-anonymous admission/rate/deadline policy, anonymous login/pairing/recovery edge limits, recovery
-notification, cleanup for abandoned enrollment/recovery challenges and consumed login ceremonies, an
-Ingest host/port/TLS deployment entry point, trusted edge routing and direct-origin denial, live
+Invite issuance UI, trusted anonymous login/pairing/recovery edge limits, recovery notification,
+cleanup for abandoned enrollment/recovery challenges and consumed login ceremonies, an Ingest
+host/port/TLS deployment entry point, trusted edge routing and direct-origin denial, live
 secret-manager/edge key injection, the Ingest live PostgreSQL login/TLS connection, distributed
 rate/backpressure controls and load evidence, scheduled execution/monitoring of ingest- and
 pairing-retention cleanup, cleanup for other expiring state, the Jobs scheduler/live login and
 application-to-PostgreSQL integration, audited corrections, deployed public-score delivery, purge
 workers, connector executable discovery/link/ownership and artifact/version admission, live Codex
-and cross-platform process evidence, supported operational account/usage integration, secure
-device-key storage, upload/CLI/packaging, release signing, deployment, and public beta operations
-remain proposed. The local Ingest key reader, kernel, adapter, application composer, and Fastify
-server now prove bounded protected configuration, raw-envelope/JSON/HTTP framing, origin-proof,
-contract, strict Ed25519 device, least-privileged pool, fixed-query, orchestration,
-no-queue/deadline policy, and result/problem serialization behavior, but not those deployed edge,
-live persistence, capacity, or operational boundaries. A bounded database score projection,
-versioned response-only schema, fail-closed server mapper, bounded PostgreSQL adapter, and local
-HTTP route now exist, including URL/media parsing, admission/deadline policy, store translation, and
-final serialization. Cache/invalidation, CarRecipe, streak/freshness, profile detail, client-rate
-and production-capacity controls, monitoring backend, deployment login, certificate, edge policy,
-and live adapter integration do not. The visible web scoring and ranking experience now consumes a
-validated current-week response from the local route when its separately provisioned database login
-works, but local defaults and every unavailable/error path remain clearly synthetic. No working
-database/OAuth login, deployed data, cache, or end-to-end real-user ranking evidence exists.
+and cross-platform process evidence, supported operational account/usage integration, source/device
+sync context, signed upload, credential rotation/uninstall, packaging, release signing, deployment,
+and public beta operations remain proposed. The local Ingest key reader, kernel, adapter,
+application composer, and Fastify server now prove bounded protected configuration,
+raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
+pool, fixed-query, orchestration, no-queue/deadline policy, and result/problem serialization
+behavior, but not those deployed edge, live persistence, capacity, or operational boundaries. A
+bounded database score projection, versioned response-only schema, fail-closed server mapper,
+bounded PostgreSQL adapter, and local HTTP route now exist, including URL/media parsing,
+admission/deadline policy, store translation, and final serialization. Cache/invalidation,
+CarRecipe, streak/freshness, profile detail, client-rate and production-capacity controls,
+monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
+The visible web scoring and ranking experience now consumes a validated current-week response from
+the local route when its separately provisioned database login works, but local defaults and every
+unavailable/error path remain clearly synthetic. No working database/OAuth login, deployed data,
+cache, or end-to-end real-user ranking evidence exists.
 
 ## Evidence commands
 

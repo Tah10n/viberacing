@@ -449,6 +449,444 @@
         "x-viberacing-request-contract": { "$ref": "#/components/schemas/ConnectorSyncV1" },
         "x-viberacing-status": "implemented-local"
       }
+    },
+    "/v1/connector/pairing/poll": {
+      "post": {
+        "operationId": "postConnectorPairingPollV1",
+        "summary": "Poll and complete one approved connector pairing",
+        "description": "Implemented and verified in this repository. Its presence here does not prove deployment.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConnectorPairingPollV1" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful bounded response.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectorPairingPollResultV1" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              },
+              "Allow": {
+                "description": "The only method accepted by this operation path.",
+                "schema": { "type": "string", "const": "POST" }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "406": {
+            "description": "Not acceptable.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          }
+        },
+        "x-viberacing-admission-policy": "no-queue-4",
+        "x-viberacing-authentication-contract": "contracts/v1/connector-pairing-transport.json",
+        "x-viberacing-cache-policy": "no-store",
+        "x-viberacing-cors-policy": "same-origin",
+        "x-viberacing-query-contract": "none",
+        "x-viberacing-query-policy": "none",
+        "x-viberacing-request-body-policy": "exact-raw-json-1024",
+        "x-viberacing-request-contract": { "$ref": "#/components/schemas/ConnectorPairingPollV1" },
+        "x-viberacing-status": "implemented-local"
+      }
+    },
+    "/v1/connector/pairing/start": {
+      "post": {
+        "operationId": "postConnectorPairingStartV1",
+        "summary": "Start one bounded connector pairing transaction",
+        "description": "Implemented and verified in this repository. Its presence here does not prove deployment.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConnectorPairingStartV1" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful bounded response.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectorPairingStartResultV1" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              },
+              "Allow": {
+                "description": "The only method accepted by this operation path.",
+                "schema": { "type": "string", "const": "POST" }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "406": {
+            "description": "Not acceptable.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          }
+        },
+        "x-viberacing-admission-policy": "no-queue-4",
+        "x-viberacing-authentication-contract": "contracts/v1/connector-pairing-transport.json",
+        "x-viberacing-cache-policy": "no-store",
+        "x-viberacing-cors-policy": "same-origin",
+        "x-viberacing-query-contract": "none",
+        "x-viberacing-query-policy": "none",
+        "x-viberacing-request-body-policy": "exact-raw-json-1024",
+        "x-viberacing-request-contract": { "$ref": "#/components/schemas/ConnectorPairingStartV1" },
+        "x-viberacing-status": "implemented-local"
+      }
     }
   },
   "components": {
@@ -544,6 +982,170 @@
             "x-viberacing-dateMinimum": "1999-12-27",
             "x-viberacing-dateMaximum": "2099-12-28",
             "x-viberacing-isoWeekday": 1
+          }
+        }
+      },
+      "ConnectorPairingPollResultV1": {
+        "title": "ConnectorPairingPollResultV1",
+        "description": "Generic pending response or the single activated source/device binding available to the polling connector.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schemaVersion", "requestId", "deviceBindings"],
+        "properties": {
+          "schemaVersion": { "type": "integer", "const": 1, "minimum": 1, "maximum": 1 },
+          "requestId": {
+            "type": "string",
+            "minLength": 26,
+            "maxLength": 26,
+            "pattern": "^req_[A-Za-z0-9_-]{22}$"
+          },
+          "deviceBindings": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sourceId", "deviceId"],
+              "properties": {
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^src_[A-Za-z0-9_-]{22}$"
+                },
+                "deviceId": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^dev_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ConnectorPairingPollV1": {
+        "title": "ConnectorPairingPollV1",
+        "description": "Closed polling request that presents one short-lived token and the exact pending-key possession signature.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schemaVersion", "pollToken", "possessionSignature"],
+        "properties": {
+          "schemaVersion": { "type": "integer", "const": 1, "minimum": 1, "maximum": 1 },
+          "pollToken": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 43,
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          },
+          "possessionSignature": {
+            "type": "string",
+            "minLength": 86,
+            "maxLength": 86,
+            "pattern": "^[A-Za-z0-9_-]{86}$"
+          }
+        }
+      },
+      "ConnectorPairingStartResultV1": {
+        "title": "ConnectorPairingStartResultV1",
+        "description": "One-time short-lived pairing material returned only after a pending transaction is committed.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "requestId",
+          "pairingId",
+          "pollToken",
+          "pairingChallengeBase64Url",
+          "userCode",
+          "expiresAt"
+        ],
+        "properties": {
+          "schemaVersion": { "type": "integer", "const": 1, "minimum": 1, "maximum": 1 },
+          "requestId": {
+            "type": "string",
+            "minLength": 26,
+            "maxLength": 26,
+            "pattern": "^req_[A-Za-z0-9_-]{22}$"
+          },
+          "pairingId": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36,
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "pollToken": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 43,
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          },
+          "pairingChallengeBase64Url": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 43,
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          },
+          "userCode": {
+            "type": "string",
+            "minLength": 14,
+            "maxLength": 14,
+            "pattern": "^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "minLength": 24,
+            "maxLength": 24,
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          }
+        }
+      },
+      "ConnectorPairingStartV1": {
+        "title": "ConnectorPairingStartV1",
+        "description": "Closed anonymous request that starts one short-lived connector pairing transaction without account, usage, or credential data.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "devicePublicKeyBase64Url",
+          "deviceLabel",
+          "connectorVersion",
+          "osFamily",
+          "architecture"
+        ],
+        "properties": {
+          "schemaVersion": { "type": "integer", "const": 1, "minimum": 1, "maximum": 1 },
+          "devicePublicKeyBase64Url": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 43,
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          },
+          "deviceLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$"
+          },
+          "connectorVersion": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 64,
+            "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+(?:[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
+          },
+          "osFamily": {
+            "type": "string",
+            "enum": ["linux", "macos", "windows"],
+            "minLength": 5,
+            "maxLength": 7
+          },
+          "architecture": {
+            "type": "string",
+            "enum": ["aarch64", "x86_64"],
+            "minLength": 6,
+            "maxLength": 7
           }
         }
       },
@@ -702,6 +1304,6 @@
       }
     }
   },
-  "x-viberacing-contract-source": "sha256:9fb3697acf2995d269df6fec3441cfc7cef074f47990ae06319199257077172f",
+  "x-viberacing-contract-source": "sha256:33b02f060b8c595f7809124bc38f5e1babe9636b3563b54868f5e338d0cddcd2",
   "x-viberacing-status": "implemented-local"
 }

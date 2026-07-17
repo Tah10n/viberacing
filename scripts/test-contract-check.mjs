@@ -20,6 +20,14 @@ const implementedLocalEvidencePaths = [
   "apps/ingest/src/community-sync-http-server.ts",
   "apps/web/app/v1/community/scores/route.test.ts",
   "apps/web/app/v1/community/scores/route.ts",
+  "apps/web/app/v1/connector/pairing/poll/route.test.ts",
+  "apps/web/app/v1/connector/pairing/poll/route.ts",
+  "apps/web/app/v1/connector/pairing/start/route.test.ts",
+  "apps/web/app/v1/connector/pairing/start/route.ts",
+  "apps/web/lib/pairing-http.test.ts",
+  "apps/web/lib/pairing-http.ts",
+  "apps/web/lib/pairing-rate-policy.test.ts",
+  "apps/web/lib/pairing-rate-policy.ts",
   "apps/web/lib/public-community-score-route.test.ts",
   "apps/web/lib/public-community-score-route.ts",
   "apps/web/lib/public-score-admission.test.ts",
@@ -77,7 +85,12 @@ async function expectGeneratedPublicOperations(name) {
   );
   assert.equal(document["x-viberacing-status"], "implemented-local");
   assert.equal(Object.hasOwn(document, "servers"), false);
-  assert.deepEqual(Object.keys(document.paths), ["/v1/community/scores", "/v1/community/sync"]);
+  assert.deepEqual(Object.keys(document.paths), [
+    "/v1/community/scores",
+    "/v1/community/sync",
+    "/v1/connector/pairing/poll",
+    "/v1/connector/pairing/start",
+  ]);
 
   const operation = document.paths["/v1/community/scores"].get;
   assert.equal(operation.operationId, "getCommunityScoresV1");
@@ -164,6 +177,51 @@ async function expectGeneratedPublicOperations(name) {
     assert.deepEqual(syncOperation.responses[status].content["application/problem+json"].schema, {
       $ref: "#/components/schemas/ProblemDetailsV1",
     });
+  }
+
+  for (const [path, operationId, requestSchema, responseSchema] of [
+    [
+      "/v1/connector/pairing/poll",
+      "postConnectorPairingPollV1",
+      "ConnectorPairingPollV1",
+      "ConnectorPairingPollResultV1",
+    ],
+    [
+      "/v1/connector/pairing/start",
+      "postConnectorPairingStartV1",
+      "ConnectorPairingStartV1",
+      "ConnectorPairingStartResultV1",
+    ],
+  ]) {
+    const pairingOperation = document.paths[path].post;
+    assert.equal(pairingOperation.operationId, operationId);
+    assert.equal(pairingOperation["x-viberacing-status"], "implemented-local");
+    assert.equal(pairingOperation["x-viberacing-admission-policy"], "no-queue-4");
+    assert.equal(
+      pairingOperation["x-viberacing-authentication-contract"],
+      "contracts/v1/connector-pairing-transport.json",
+    );
+    assert.equal(pairingOperation["x-viberacing-request-body-policy"], "exact-raw-json-1024");
+    assert.deepEqual(pairingOperation.requestBody.content["application/json"].schema, {
+      $ref: `#/components/schemas/${requestSchema}`,
+    });
+    assert.deepEqual(Object.keys(pairingOperation.responses), [
+      "200",
+      "400",
+      "405",
+      "406",
+      "429",
+      "500",
+      "503",
+    ]);
+    assert.deepEqual(pairingOperation.responses["200"].content["application/json"].schema, {
+      $ref: `#/components/schemas/${responseSchema}`,
+    });
+    assert.equal(pairingOperation.responses["405"].headers.Allow.schema.const, "POST");
+    for (const response of Object.values(pairingOperation.responses)) {
+      assert.equal(response.headers["Cache-Control"].schema.const, "no-store");
+      assert.equal(Object.hasOwn(response.headers, "Access-Control-Allow-Origin"), false);
+    }
   }
 }
 

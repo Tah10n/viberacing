@@ -76,12 +76,12 @@ adds fixed local launch mechanics and synthetic timeout/overload/cleanup evidenc
 the inaccessible `ReviewedCodexLaunch` capability. A composer now consumes the normalized output
 only behind an equally inaccessible `ReviewedCommunitySyncContext` and fixes the exact sync body,
 SHA-256 digest, nonce encoding, and device message. An isolated one-use signer consumes that closed
-material only with an inaccessible device-bound key capability. A separate pending-key/challenge
-signer and pure Web verifier agree on one synthetic pairing-possession proof. No library boundary
-discovers a binary, resolves its links/ownership, constructs any operational capability, verifies or
-executes the selected release artifact, generates/loads a real key, completes a pairing transaction,
-uploads data, admits a release, or creates a connector artifact. Every matrix row still requires the
-complete admission evidence above.
+material only with an inaccessible device-bound key capability. A separate pairing-only command can
+generate a native-store device key and complete the local start/approve/poll transaction, but it
+does not admit or run Codex. No library boundary discovers a binary, resolves its links/ownership,
+constructs the operational App Server or sync capability, verifies or executes the selected release
+artifact, uploads data, admits a release, or creates a supported connector artifact. Every matrix
+row still requires the complete admission evidence above.
 
 ## Planned stable surface
 

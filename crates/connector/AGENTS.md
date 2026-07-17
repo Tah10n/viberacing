@@ -11,27 +11,29 @@ changing it.
   out-of-order, and over-budget messages without reflecting their content into errors or logs.
 - Emit only reviewed method names and fixed-shape parameters. Never add a generic arbitrary-method
   escape hatch.
-- Use local stdio only. Do not add WebSocket, TCP, remote URL, shell interpolation, inherited secret
-  access, or direct network transport.
+- Keep App Server communication on local stdio only. The separate pairing command may call only the
+  two versioned HTTPS paths (or explicit loopback HTTP), with proxies and redirects disabled; do not
+  add WebSocket, generic TCP/URL methods, shell interpolation, or inherited secret access.
 - Never read, retain, log, or transmit prompts, conversations, repositories, Codex credentials,
   account email, or App Server paths.
 - Treat exact sync bodies, daily usage, nonces, and device-signature messages as private security
   material. Keep their types non-reflective, bind signatures to returned bytes, and match the
   versioned Ingest authentication policy and shared synthetic vector exactly.
 - Keep source/device/time/nonce context construction inaccessible until a reviewed boundary owns
-  source binding, fresh entropy, canonical time, and replay behavior. The composer/signer boundary
-  must not grow a context provider, key generator/store, pairing client, scheduler, or network
-  client implicitly.
+  source binding, canonical time, and replay behavior. The composer/signer boundary must not grow a
+  sync context provider, scheduler, upload client, or Codex network client implicitly. Pairing key
+  generation/storage remains confined to the one-command native-store boundary.
 - Pairing possession must match `connector-pairing-authentication.json` byte for byte. Keep the
-  pending key/challenge capabilities inaccessible, sign only the fixed domain-separated message, and
-  do not add poll-token custody, browser approval, activation, or key storage to that module.
+  pending key/challenge capabilities inaccessible outside the crate, sign only the fixed
+  domain-separated message, and keep poll-token custody, HTTP, and native storage in `connect.rs`;
+  browser approval remains server-side.
 - A generated schema proves only the exact Codex CLI version that generated it. Do not mark a
   version supported until its checked-in fixtures and fail-closed compatibility tests pass.
 - Candidate schema/parser evidence is not support. Keep the public matrix empty until the manifest
   has no blockers and executable admission, official-artifact, platform, privacy-egress, packaging,
   and release evidence all pass.
-- Keep executable admission, credential generation/storage, pairing transaction/activation, upload,
-  and desktop UI outside a parser/composer/signer change unless the task explicitly includes that
+- Keep executable admission, sync upload, credential rotation/uninstall, packaging, and desktop UI
+  outside a parser/composer/signer or pairing-client change unless the task explicitly includes that
   boundary.
 
 Run `cargo test --workspace --all-targets --all-features --locked` while developing. Before handoff,

@@ -7,7 +7,7 @@ addition, non-current-passkey revocation, recovery-code rotation/replacement-pas
 immediate profile-deletion-request, source inventory/pause/reactivation/unlink, active-device
 revoke, and pairing-approval sequences below plus the public score consumer are now locally
 implemented boundaries; none has live credentials, distributed edge policy, purge-worker, or
-deployment evidence. Revisions 0001 through 0021 provide private
+deployment evidence. Revisions 0001 through 0022 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
@@ -26,26 +26,27 @@ correction, or deployed service executes the complete sequences. A library-only 
 foundation validates the bounded stable App Server initialization exchange and candidate `0.144.4`
 account/usage responses. A synthetic one-shot supervisor composes those states with fixed local
 process mechanics, while an exact-body composer and isolated one-use signer produce a synthetic
-signed envelope. A separate inaccessible pending-key and challenge signer plus a pure server-only
-Web verifier now agree on one exact pairing-possession message and synthetic signature. A dormant
-Web/Auth start application generates fresh IDs, token, challenge, 60-bit code, separate protected
-poll/code verifiers, and a nine-minute pending transaction from closed device metadata. A second
-application performs protected keyed poll lookup, mandates that proof, and invokes only exact atomic
-activation behind local admission/timing. Between them, the local signed-in `/connect` flow counts
-pending-code attempts on the exact session, renders bounded device evidence plus the full public-key
-fingerprint, and consumes a fresh WebAuthn assertion into atomic new-source approval. All required
-connector capabilities have no public constructor, and there is no executable admission, real Codex
-execution, key generation/store, pairing-start client, pairing start/poll HTTP route, upload, or
-supported-version path. A local Ingest kernel now verifies the bounded exact-body origin/device
-request, while the separate adapter maps origin replay, device lookup, and submission through fixed
-calls. PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
-application now composes those exact local capabilities and validates only closed
-acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
-evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
-no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
-certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
-refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public,
-Account, Security, Usage, Operational, and Prohibited.
+signed envelope. A separate pending-key and challenge signer plus a pure server-only Web verifier
+agree on one exact pairing-possession message. The Web/Auth start application generates fresh IDs,
+token, challenge, 60-bit code, separate protected poll/code verifiers, and a nine-minute pending
+transaction from closed device metadata. A second application performs protected keyed poll lookup,
+mandates that proof, and invokes only exact atomic activation behind local admission/timing. The
+local signed-in `/connect` flow counts pending-code attempts on the exact session, renders bounded
+device evidence plus the full public-key fingerprint, and consumes a fresh WebAuthn assertion into
+atomic new-source approval. ADR 0030 adds exact start/poll HTTP routes, fixed-storage aggregate
+admission, and one pairing-only Rust command that creates and retains its device key only in a
+native OS credential store. App Server launch and sync capabilities remain inaccessible: there is no
+real Codex execution, supported-version admission, upload, scheduling, or released connector. A
+local Ingest kernel now verifies the bounded exact-body origin/device request, while the separate
+adapter maps origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves
+atomic origin replay consumption and bounded cleanup. A transport-free application now composes
+those exact local capabilities and validates only closed acknowledgement/problem decisions. A
+bounded local Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline
+policy, and serializes only revalidated contracts. There is no edge/live-database/deployment
+integration. No host/port/TLS entry point, deployment login, certificate, edge signer/direct-origin
+policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
+and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -279,11 +280,14 @@ each structurally valid lookup outcome, and only server-generated device/audit/r
 activation behind four-call admission and a settlement floor. PostgreSQL scenarios cover competing
 profiles, wrong poll possession, replay, immutable binding, 32 lifetime sources, and 64
 active/unexpired-approved device authorities per profile. Revision 0013 and ADR 0029 now add bounded
-physical cleanup for expired non-activated pairings and their pending keys. Browser/HTTP/WebAuthn
-approval, connector transport, distributed edge rate limits, live login, and cleanup scheduling
-remain planned. ADR 0015's later device-request verifier does not consume or activate this pairing
-transaction. The ceiling and first-winner assertions use separate PostgreSQL connections held behind
-a real row lock before simultaneous release.
+physical cleanup for expired non-activated pairings and their pending keys. ADR 0030 closes the
+local journey with generated start/poll contracts, exact no-store HTTP framing, one shared four-call
+service, revision 0022's fixed global-and-bucket database admission, and a pairing-only Rust client
+with native OS key custody. Live Web/database credentials, edge enforcement and capacity evidence,
+cleanup scheduling, cross-platform runtime evidence, packaging, and deployment remain planned. ADR
+0015's later device-request verifier does not consume or activate this pairing transaction. The
+ceiling and first-winner assertions use separate PostgreSQL connections held behind a real row lock
+before simultaneous release.
 
 ## Source and device lifecycle
 
@@ -436,14 +440,14 @@ reviewed source/device/time/nonce inputs. It emits the exact bounded `ConnectorS
 SHA-256 digest, unpadded base64url nonce, and LF-separated device message verified by Ingest. ADR
 0025 removes public unsigned access and consumes that value only with an inaccessible, device-bound,
 one-use Ed25519 key capability; the returned envelope contains the same body and five exact header
-values. ADR 0026 adds a separate inaccessible pending-key/challenge signer and pure Web verifier for
-one exact synthetic pairing-possession proof. ADR 0027 adds a dormant protected poll-verifier, fixed
-approved-material lookup, strict proof-to-activation adapter, and local admission/timing
-composition. ADR 0028 adds a dormant closed pairing-start composition with fresh material, separate
-keyed poll/code verifiers, and one fixed database call. Those dormant applications cannot perform
-browser/WebAuthn approval or open the connector start/poll HTTP path. The separate local `/connect`
-route performs only approval; no boundary can create either operational connector context, generate
-or load a real key, schedule, or upload, and the support matrix stays empty.
+values. ADR 0026 adds a separate pending-key/challenge signer and pure Web verifier for one exact
+pairing-possession proof. ADR 0027 adds protected poll verification, fixed approved-material lookup,
+strict proof-to-activation mapping, and local admission/timing composition. ADR 0028 adds closed
+pairing-start composition with fresh material, separate keyed poll/code verifiers, and one fixed
+database call. ADR 0030 opens only those pairing applications through exact HTTP routes and a
+pairing-only native-store connector command; the local `/connect` route performs the browser/passkey
+approval. No public boundary can construct the operational Codex launch or sync context, schedule,
+or upload, and the support matrix stays empty.
 
 The operational connector layers, edge signer, direct-origin denial, host/port/TLS Ingest deployment
 entry point, live secret-manager/edge key injection, live PostgreSQL login/TLS connection,

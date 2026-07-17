@@ -16,8 +16,15 @@ const config = resolvePairingDatabaseConfig({
 });
 
 describe("pairing database pool", () => {
-  it("exposes only fixed probe, start, two-candidate lookup, activation, release, and close", async () => {
-    const returnedRows = [[{ role_ok: true }], [], [{ activated: true }], [{ started: true }]];
+  it("exposes only fixed pairing probe, rate, status, proof, activation, and start statements", async () => {
+    const returnedRows = [
+      [{ role_ok: true }],
+      [{ admitted: true }],
+      [],
+      [],
+      [{ activated: true }],
+      [{ started: true }],
+    ];
     const liveQueries: { text: string; values: unknown[] }[] = [];
     const querySnapshots: { text: string; values: unknown[] }[] = [];
     const releases: boolean[] = [];
@@ -60,8 +67,19 @@ describe("pairing database pool", () => {
     const codeDigest = Buffer.alloc(32, 0x44);
     const challenge = Buffer.alloc(32, 0x55);
     const publicKey = Buffer.alloc(32, 0x66);
+    const clientIdentityDigest = Buffer.alloc(32, 0x77);
 
     await expect(client.verifyRuntimeBoundary()).resolves.toEqual([{ role_ok: true }]);
+    await expect(
+      client.admitPairingTransportRequest?.({
+        bucketLimit: 20,
+        clientIdentityDigest,
+        globalLimit: 200,
+        operation: "poll",
+        windowSeconds: 60,
+      }),
+    ).resolves.toEqual([{ admitted: true }]);
+    await expect(client.pollPairingStatus?.([firstDigest, secondDigest])).resolves.toEqual([]);
     await expect(client.readVerificationMaterial([firstDigest, secondDigest])).resolves.toEqual([]);
     await expect(
       client.activatePairing({
@@ -91,25 +109,29 @@ describe("pairing database pool", () => {
     client.release(true);
     await pool.close();
 
-    expect(querySnapshots).toHaveLength(4);
+    expect(querySnapshots).toHaveLength(6);
     expect(querySnapshots[0]?.text).toContain("CURRENT_USER = 'viberacing_web'");
     expect(querySnapshots[0]?.text).toContain("default_transaction_read_only') = 'off'");
     expect(querySnapshots[0]?.values).toEqual([]);
-    expect(querySnapshots[1]?.text).toContain("VALUES");
-    expect(querySnapshots[1]?.text).toContain("read_pairing_verification_material");
-    expect(querySnapshots[1]?.values).toEqual([firstDigest, secondDigest]);
-    expect(querySnapshots[2]?.text).toContain("activate_pairing");
-    expect(querySnapshots[2]?.text).toContain("AS MATERIALIZED");
-    expect(querySnapshots[2]?.values).toEqual([
+    expect(querySnapshots[1]?.text).toContain("admit_pairing_transport_request");
+    expect(querySnapshots[1]?.values).toEqual(["poll", clientIdentityDigest, 200, 20, 60]);
+    expect(querySnapshots[2]?.text).toContain("poll_pairing_status");
+    expect(querySnapshots[2]?.values).toEqual([firstDigest, secondDigest]);
+    expect(querySnapshots[3]?.text).toContain("VALUES");
+    expect(querySnapshots[3]?.text).toContain("read_pairing_verification_material");
+    expect(querySnapshots[3]?.values).toEqual([firstDigest, secondDigest]);
+    expect(querySnapshots[4]?.text).toContain("activate_pairing");
+    expect(querySnapshots[4]?.text).toContain("AS MATERIALIZED");
+    expect(querySnapshots[4]?.values).toEqual([
       activationDigest,
       "00000000-0000-4000-8000-000000000026",
       "dev_AAAAAAAAAAAAAAAAAAAAAA",
       "00000000-0000-4000-8000-000000000027",
       "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
-    expect(querySnapshots[3]?.text).toContain("start_pairing");
-    expect(querySnapshots[3]?.text).toContain("AS MATERIALIZED");
-    expect(querySnapshots[3]?.values).toEqual([
+    expect(querySnapshots[5]?.text).toContain("start_pairing");
+    expect(querySnapshots[5]?.text).toContain("AS MATERIALIZED");
+    expect(querySnapshots[5]?.values).toEqual([
       "00000000-0000-4000-8000-000000000029",
       activationDigest,
       codeDigest,
@@ -128,14 +150,17 @@ describe("pairing database pool", () => {
     expect(codeDigest).toEqual(Buffer.alloc(32, 0x44));
     expect(challenge).toEqual(Buffer.alloc(32, 0x55));
     expect(publicKey).toEqual(Buffer.alloc(32, 0x66));
-    expect(liveQueries[1]?.values).toEqual([Buffer.alloc(32), Buffer.alloc(32)]);
-    expect(liveQueries[2]?.values[0]).toEqual(Buffer.alloc(32));
-    expect(liveQueries[3]?.values.slice(1, 4)).toEqual([
+    expect(clientIdentityDigest).toEqual(Buffer.alloc(32, 0x77));
+    expect(liveQueries[1]?.values[1]).toEqual(Buffer.alloc(32));
+    expect(liveQueries[2]?.values).toEqual([Buffer.alloc(32), Buffer.alloc(32)]);
+    expect(liveQueries[3]?.values).toEqual([Buffer.alloc(32), Buffer.alloc(32)]);
+    expect(liveQueries[4]?.values[0]).toEqual(Buffer.alloc(32));
+    expect(liveQueries[5]?.values.slice(1, 4)).toEqual([
       Buffer.alloc(32),
       Buffer.alloc(32),
       Buffer.alloc(32),
     ]);
-    expect(liveQueries[3]?.values[5]).toEqual(Buffer.alloc(32));
+    expect(liveQueries[5]?.values[5]).toEqual(Buffer.alloc(32));
     expect(releases).toEqual([false, true]);
     expect(ended).toBe(true);
     expect(Object.isFrozen(client)).toBe(true);

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/connector-pairing-start.schema.json",
+  "title": "ConnectorPairingStartV1",
+  "description": "Closed anonymous request that starts one short-lived connector pairing transaction without account, usage, or credential data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "devicePublicKeyBase64Url",
+    "deviceLabel",
+    "connectorVersion",
+    "osFamily",
+    "architecture"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "minimum": 1,
+      "maximum": 1
+    },
+    "devicePublicKeyBase64Url": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 43,
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "deviceLabel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$"
+    },
+    "connectorVersion": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 64,
+      "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+(?:[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
+    },
+    "osFamily": {
+      "type": "string",
+      "enum": ["linux", "macos", "windows"],
+      "minLength": 5,
+      "maxLength": 7
+    },
+    "architecture": {
+      "type": "string",
+      "enum": ["aarch64", "x86_64"],
+      "minLength": 6,
+      "maxLength": 7
+    }
+  }
+}

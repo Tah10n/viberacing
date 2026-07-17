@@ -3,7 +3,7 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and twenty-one checksum-ledgered database migrations. Repository verification uses synthetic data
+and twenty-two checksum-ledgered database migrations. Repository verification uses synthetic data
 and injected capabilities only. It has procedure-only identity, passkey login/management, restricted
 recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
 retention cleanup, scoring, terminal finalization, and public score-projection procedures. A local
@@ -27,29 +27,32 @@ local Codex installation. A second inaccessible reviewed context lets a composer
 minimized usage into the exact bounded sync JSON, SHA-256 digest, nonce encoding, and device message
 checked by Ingest. An isolated one-use signer consumes that closed value only with a third
 inaccessible device-bound key capability. A separate inaccessible pending-key/challenge signer and
-pure Web verifier agree on an exact synthetic pairing-possession proof. Two dormant Web/Auth
+pure Web verifier agree on an exact synthetic pairing-possession proof. Two transport-free Web/Auth
 applications create bounded pending material and later handle protected poll-verifier derivation, a
 fixed approved-row lookup through a separately probed read-write pool, that strict proof, and exact
 atomic activation with server-owned IDs behind local admission/timing. They cannot perform pairing
 browser or WebAuthn approval themselves; the separate `/connect` flow supplies only that intervening
-step. No boundary can generate/load a real key or make a connector pairing request; no supported
-version, source/device provider, key store, connector pairing client, or upload exists. A local
-Ingest kernel bounds and authenticates a synthetic exact-body sync request, and a separate adapter
-constrains origin replay, database lookup, and submission mapping with mock-pool evidence. A
-transport-free application composes those exact boundaries, generates a server request ID, and
-validates the acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic
-replay and cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies
-no-queue and deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS
-launch entry point. There is no working database login/certificate, live end-to-end PostgreSQL flow,
-edge path, connector process, supported adapter, or deployment. A bounded local one-shot Jobs
-process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or
-deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are implemented
-and unit/build-tested, but this repository supplies no working deployment login or TLS certificate.
-A successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries,
-SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
-isolation; it does not prove a live adapter, deployed API, or production flow. The Ingest server
-tests bind only ephemeral loopback sockets and use synthetic requests; no development command
-exposes it to the LAN or Internet.
+step. Two exact local POST routes now compose those applications behind fixed distributed
+global/client-bucket admission, and a one-command Rust client generates a device key through the OS
+CSPRNG, stores resumable pairing state in the native credential store, and performs the exact
+start/poll proof. No supported Codex version, source/device sync provider, upload, cross-platform
+result, package, release, or deployment exists. A local Ingest kernel bounds and authenticates a
+synthetic exact-body sync request, and a separate adapter constrains origin replay, database lookup,
+and submission mapping with mock-pool evidence. A transport-free application composes those exact
+boundaries, generates a server request ID, and validates the acknowledgement/problem decision;
+isolated PostgreSQL tests separately prove atomic replay and cleanup. A bounded local Fastify
+factory now preserves exact raw HTTP evidence, applies no-queue and deadline policy, and serializes
+only revalidated contracts, but it has no host/port/TLS launch entry point. There is no working
+database login/certificate, live end-to-end PostgreSQL flow, edge path, connector process, supported
+adapter, or deployment. A bounded local one-shot Jobs process now wraps only
+cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A bounded
+server-only Web PostgreSQL adapter and local public-score GET are implemented and unit/build-tested,
+but this repository supplies no working deployment login or TLS certificate. A successful setup
+proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
+session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
+does not prove a live adapter, deployed API, or production flow. The Ingest server tests bind only
+ephemeral loopback sockets and use synthetic requests; no development command exposes it to the LAN
+or Internet.
 
 ## Prerequisites
 
@@ -205,15 +208,15 @@ metadata. Without it, development uses loopback and production builds use a rese
 origin that is not suitable for deployment. A real hosted build must receive its public HTTPS DNS
 origin through the deployment environment.
 
-The server-only score, enrollment, and dormant pairing adapters use only
-`VIBERACING_WEB_DATABASE_*`. Their tracked user/password are deliberately non-working placeholders
-and are checked against accidental reuse of the `DATABASE_*` compose owner. Local integration
-requires a separately provisioned login whose only membership is `viberacing_web`; login creation
-remains environment-owned and is not automated here. `disable` requires explicit
-`NODE_ENV=development` or `test` plus loopback. Every other environment requires `verify-full`, a
-certificate-valid multi-label DNS hostname, and TLS 1.2 or later. The synthetic page and build never
-construct either adapter, so they need none of these settings. The join form also renders without
-configuration; its server actions fail closed until the complete enrollment environment exists.
+The server-only score, enrollment, and local pairing adapters use only `VIBERACING_WEB_DATABASE_*`.
+Their tracked user/password are deliberately non-working placeholders and are checked against
+accidental reuse of the `DATABASE_*` compose owner. Local integration requires a separately
+provisioned login whose only membership is `viberacing_web`; login creation remains
+environment-owned and is not automated here. `disable` requires explicit `NODE_ENV=development` or
+`test` plus loopback. Every other environment requires `verify-full`, a certificate-valid
+multi-label DNS hostname, and TLS 1.2 or later. The synthetic page and build never construct either
+adapter, so they need none of these settings. The join form also renders without configuration; its
+server actions fail closed until the complete enrollment environment exists.
 
 Local enrollment additionally requires a dedicated GitHub OAuth app whose callback is exactly
 `/auth/github/callback` on the configured `localhost` origin, valid `GITHUB_CLIENT_ID` and
@@ -234,14 +237,39 @@ issued invite whose stored digest matches its 256-bit secret; this repository in
 no issuer shortcut or sample valid invite. Never reuse these values between development, staging,
 and production.
 
-Constructing the dormant start/activation pairing applications additionally requires a fresh,
-distinct 32-byte canonical base64url value in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL`;
-the code key above is shared only as protected configuration, never as a returned container. The
-tracked values are intentionally invalid. During a bounded rotation only, each previous primary may
-be supplied under its corresponding `VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL` or
+Constructing the start/activation pairing service additionally requires a fresh, distinct 32-byte
+canonical base64url value in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL`; the code key above
+is shared only as protected configuration, never as a returned container. The tracked values are
+intentionally invalid. During a bounded rotation only, each previous primary may be supplied under
+its corresponding `VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL` or
 `VIBERACING_WEB_PAIRING_CODE_SECONDARY_KEY_BASE64URL`; all configured poll/code values must remain
 pairwise distinct. Remove a secondary after every transaction created under that key has passed the
 ten-minute database lifetime. Never track, print, or reuse real keys.
+
+The anonymous pairing routes also require six deployment-private decimal settings:
+`VIBERACING_WEB_PAIRING_START_GLOBAL_LIMIT`, `VIBERACING_WEB_PAIRING_START_BUCKET_LIMIT`,
+`VIBERACING_WEB_PAIRING_START_WINDOW_SECONDS`, `VIBERACING_WEB_PAIRING_POLL_GLOBAL_LIMIT`,
+`VIBERACING_WEB_PAIRING_POLL_BUCKET_LIMIT`, and `VIBERACING_WEB_PAIRING_POLL_WINDOW_SECONDS`. Bucket
+limits must not exceed their operation-global limit; windows are one through 3600 seconds and global
+limits are at most 1,000,000. The tracked values are deliberately non-working placeholders. Review
+real values privately against capacity; do not commit them.
+
+### Inspect the local connector command
+
+```text
+cargo run -p viberacing-connector -- --help
+```
+
+After the complete Web/Auth database environment is configured, the local command shape is:
+
+```text
+cargo run -p viberacing-connector -- connect --origin <loopback-origin> --label "Local device"
+```
+
+This writes a real device credential to the current user's native OS credential store before the
+network start. Run only one connect process for an origin/label and do not use production or shared
+credentials in local development. The repository does not ship a valid invite, Web login, pairing
+HMAC key, database login, or released connector, so the command is not an end-to-end setup shortcut.
 
 The one-shot Jobs runner independently uses only `VIBERACING_JOBS_DATABASE_*`. Its tracked
 user/password are separate non-working placeholders, and configuration checks reject reuse of the
@@ -269,7 +297,7 @@ docker compose ps
 The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
 index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
 stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
-this persistent service automatically; revisions 0001 through 0021 are currently exercised by the
+this persistent service automatically; revisions 0001 through 0022 are currently exercised by the
 isolated integration runner only.
 
 Stop the service without deleting its volume:

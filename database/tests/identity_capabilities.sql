@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 48
+    SELECT pg_catalog.count(*) = 49
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 7
+    SELECT pg_catalog.count(*) = 8
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -68,6 +68,7 @@ SELECT pg_temp.assert_true(
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.proname IN (
         'consume_origin_nonce',
+        'admit_pairing_transport_request',
         'cleanup_expired_ingest_state',
         'cleanup_expired_pairing_state',
         'read_pairing_for_approval_limited',
@@ -115,16 +116,19 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 1
+    SELECT pg_catalog.count(*) = 2
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=5s']::text[]
       )
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
-      AND procedure.proname = 'consume_origin_nonce'
+      AND procedure.proname IN (
+        'consume_origin_nonce',
+        'admit_pairing_transport_request'
+      )
   ),
-  'origin replay consumption has a database-enforced statement deadline'
+  'origin replay and pairing admission have database-enforced statement deadlines'
 );
 
 SELECT pg_temp.assert_true(

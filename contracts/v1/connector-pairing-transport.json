@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "viberacing-connector-pairing-transport-v1",
+  "methods": {
+    "start": "POST /v1/connector/pairing/start",
+    "poll": "POST /v1/connector/pairing/poll"
+  },
+  "mediaType": "application/json",
+  "requestBodyBytes": 1024,
+  "responseBodyBytes": 2048,
+  "clientIdHeader": "x-viberacing-client-id",
+  "clientIdBytes": 16,
+  "clientIdEncoding": "base64url-unpadded",
+  "clientIdAuthority": "anonymous-rate-shaping-only",
+  "distributedRatePolicy": "global-and-64-fixed-client-buckets",
+  "localConcurrency": 4,
+  "databaseStatementDeadlineMilliseconds": 5000,
+  "databaseQueryDeadlineMilliseconds": 6000,
+  "cacheControl": "no-store",
+  "corsPolicy": "same-origin-no-cors-headers",
+  "possessionPolicy": "connector-pairing-authentication.json"
+}

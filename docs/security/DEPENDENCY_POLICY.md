@@ -127,41 +127,47 @@ The Rust compiler is pinned in `rust-toolchain.toml`; the workspace uses a commi
 Once a crate exists, the root Rust gate automatically runs formatting, all-target/all-feature
 checking, tests, and Clippy with warnings denied.
 
-The connector protocol foundation directly pins `serde@1.0.228` without derive and
-`serde_json@1.0.150` for its closed JSON boundaries. Exact-body composition pins `sha2@0.11.0` with
-default features disabled for one SHA-256 digest over the returned body bytes. Isolated device
-signing pins `ed25519-dalek@3.0.0` with default features disabled and only `zeroize` enabled. The
-project does not implement cryptographic primitives, expose generic hashing/signing APIs, or enable
-Dalek allocation, batch, digest, fast-table, hazmat, legacy-compatibility, PKCS8/PEM, random-key,
-Serde, or prehash features.
+The connector directly pins `serde@1.0.228` and `serde_json@1.0.150` for closed JSON boundaries,
+with derive enabled only for the closed pairing request and response records. Exact-body composition
+pins `sha2@0.11.0` with default features disabled for SHA-256, and isolated signing pins
+`ed25519-dalek@3.0.0` with default features disabled and only `zeroize` enabled. The repository does
+not implement cryptographic primitives or expose generic hashing, signing, or serialization APIs.
 
-Cargo.lock records thirty non-workspace packages. The enabled Windows runtime tree contains
-twenty-three: the prior fourteen JSON/digest records plus ed25519-dalek, curve25519-dalek,
-curve25519-dalek-derive, ed25519, signature, subtle, zeroize, rustc_version, and semver. The
-complete cross-target graph additionally records the five Serde derive/proc-macro packages retained
-by impossible `cfg(any())` metadata, target-specific libc through CPU-feature detection, and
-target-specific Fiat-Crypto. All thirty records use reviewed permissive expressions; the Dalek slice
-adds BSD-3-Clause, `Apache-2.0 OR MIT`, `MIT/Apache-2.0`, and `MIT OR Apache-2.0 OR BSD-1-Clause`
-declarations to the exact Cargo allowlist.
+The executable pairing slice adds three exact direct dependencies after necessity review:
 
-All exact registry provenance, checksums, active feature edges, upstream unsafe surface, and build
-scripts were reviewed. The Ed25519 graph is pure Rust and reuses the existing SHA-2 0.11 graph. Its
-only active build script reads the pinned compiler and Cargo target capabilities to select a local
-curve backend; it neither downloads nor links a bundled native library. Reviewed upstream unsafe is
-confined to curve constants/SIMD intrinsics, generated dispatch glue, constant-time helpers, and
-zeroization's volatile memory operations. Repository-owned connector code remains
-`#![forbid(unsafe_code)]`. No new record provides a runtime network client, credential reader,
-serializer, key generator, persistent store, or transport.
+- `getrandom@0.4.3` obtains the private key and anonymous rate identifier from the operating-system
+  CSPRNG;
+- `keyring@3.6.3`, with only `windows-native`, `apple-native`, `sync-secret-service`, and
+  `crypto-rust`, stores the fixed connector record in Windows Credential Manager, macOS Keychain, or
+  Linux Secret Service without a repository plaintext fallback;
+- `ureq@3.2.0`, with only `rustls` and `platform-verifier`, performs the two fixed blocking pairing
+  requests. Repository code disables proxies and redirects, restricts non-TLS origins to loopback,
+  and exposes no general network client.
 
-The maintained upstream 3.0.0 release was more than 24 hours old on review, supports the pinned Rust
-toolchain, and avoids a duplicate legacy digest graph. Exact OSV queries on 2026-07-15 reported no
-known advisory for any of the ten added lock records. The historical ed25519-dalek keypair-oracle
-advisory affects pre-2.0 versions and does not affect 3.0.0; the historical SHA-2 0.9.7
-miscomputation advisory is patched from 0.9.8 and does not affect 0.11.0. This is point-in-time
-evidence, not a permanent safety claim. SHA-2 must be removed with the composer and Dalek with the
-signer, or each must be re-reviewed on update or crypto-provider change. Automated
-RustSec/cargo-deny release enforcement, SBOM, and binary audit remain required before connector
-distribution.
+The enabled `x86_64-pc-windows-msvc` connector graph contains 58 non-workspace packages. The full
+cross-target lock graph contains 209 registry packages because the selected keyring features retain
+the mutually exclusive Windows, macOS, and Linux native backends and their build-time dependencies.
+Both counts are derived from locked Cargo metadata, and the machine-readable inventory remains
+authoritative. Every recorded license expression is in the exact reviewed permissive allowlist;
+adding a new expression still requires review rather than inventory regeneration as a workaround.
+
+The direct crate versions, registry checksums, enabled features, target branches, native-store
+backends, TLS verifier, and transitive lockfile expansion were reviewed. The active Windows graph
+includes Rustls/ring TLS, Windows credential APIs, proc macros, and local build scripts; the
+complete graph also includes platform-specific native bindings for macOS and Linux. Build and
+proc-macro code runs only during compilation. Repository-owned connector code remains
+`#![forbid(unsafe_code)]`, but that lint does not make transitive native or unsafe implementation
+disappear. Clean-machine builds and runtime credential-store tests on every supported platform
+remain release gates.
+
+An exact OSV batch query on 2026-07-17 reported no known advisory for all 209 locked registry
+packages. The historical ed25519-dalek keypair-oracle advisory affects pre-2.0 versions and does not
+affect 3.0.0; the historical SHA-2 0.9.7 miscomputation advisory is patched from 0.9.8 and does not
+affect 0.11.0. This is point-in-time evidence, not a permanent safety claim. Every dependency must
+be removed with its capability or re-reviewed on update, feature change, TLS/crypto-provider change,
+or supported-platform change. Automated RustSec/cargo-deny release enforcement, cross-platform
+binary and credential-store testing, SBOM generation, notice bundling, and binary audit remain
+required before connector distribution.
 
 The Node CI job performs the public-file scan first, installs the pinned minimal Rust toolchain, and
 runs `cargo fetch --locked` before deterministic repository verification. Fetch resolves only the

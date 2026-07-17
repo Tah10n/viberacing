@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   PairingDatabaseClient,
   PairingDatabasePool,
+  PairingDatabaseRateAdmission,
   PairingDatabaseStart,
 } from "./pairing-database-pool";
 import {
@@ -32,6 +33,7 @@ function validAttempt(
 ): PairingStartDatabaseAttempt {
   return {
     architecture: "x86_64",
+    clientIdentityDigest: Buffer.alloc(32, 0x66),
     connectorVersion: "0.0.0-test",
     deviceKeyId: "00000000-0000-4000-8000-000000000028",
     deviceLabel: "Synthetic device",
@@ -41,12 +43,17 @@ function validAttempt(
     pairingId: "00000000-0000-4000-8000-000000000029",
     pollVerifierDigest: Buffer.alloc(32, 0x11),
     publicKey: Buffer.alloc(32, 0x44),
+    rateBucketLimit: 20,
+    rateGlobalLimit: 200,
+    rateWindowSeconds: 60,
     userCodeDigest: Buffer.alloc(32, 0x22),
     ...overrides,
   };
 }
 
 interface HarnessOptions {
+  readonly admissionError?: Error;
+  readonly admissionResult?: unknown;
   readonly boundary?: unknown;
   readonly closeError?: Error;
   readonly connectError?: Error;
@@ -60,15 +67,30 @@ function harness(options: HarnessOptions = {}): {
   readonly connect: ReturnType<typeof vi.fn>;
   readonly events: string[];
   readonly pool: PairingDatabasePool;
+  readonly rateReferences: PairingDatabaseRateAdmission[];
+  readonly rateSnapshots: PairingDatabaseRateAdmission[];
   readonly releases: boolean[];
   readonly startReferences: PairingDatabaseStart[];
   readonly startSnapshots: PairingDatabaseStart[];
 } {
   const events: string[] = [];
   const releases: boolean[] = [];
+  const rateReferences: PairingDatabaseRateAdmission[] = [];
+  const rateSnapshots: PairingDatabaseRateAdmission[] = [];
   const startReferences: PairingDatabaseStart[] = [];
   const startSnapshots: PairingDatabaseStart[] = [];
   const client: PairingDatabaseClient = {
+    admitPairingTransportRequest(input): Promise<unknown> {
+      events.push("admit");
+      rateReferences.push(input);
+      rateSnapshots.push({
+        ...input,
+        clientIdentityDigest: Buffer.from(input.clientIdentityDigest),
+      });
+      return options.admissionError === undefined
+        ? Promise.resolve(options.admissionResult ?? [{ admitted: true }])
+        : Promise.reject(options.admissionError);
+    },
     activatePairing(): Promise<never> {
       return Promise.reject(new Error("unexpected activation"));
     },
@@ -114,6 +136,8 @@ function harness(options: HarnessOptions = {}): {
     connect,
     events,
     pool: { close, connect },
+    rateReferences,
+    rateSnapshots,
     releases,
     startReferences,
     startSnapshots,
@@ -145,19 +169,55 @@ describe("pairing start database", () => {
     const database = createPairingStartDatabase(testHarness.pool);
     const attempt = validAttempt();
 
-    await expect(database.start(attempt)).resolves.toBe(true);
+    await expect(database.start(attempt)).resolves.toBe("created");
 
-    expect(testHarness.events).toEqual(["boundary", "start", "release:false"]);
-    expect(testHarness.startSnapshots).toEqual([attempt]);
+    expect(testHarness.events).toEqual(["boundary", "admit", "start", "release:false"]);
+    expect(testHarness.rateSnapshots).toEqual([
+      {
+        bucketLimit: 20,
+        clientIdentityDigest: Buffer.alloc(32, 0x66),
+        globalLimit: 200,
+        operation: "start",
+        windowSeconds: 60,
+      },
+    ]);
+    expect(testHarness.startSnapshots).toEqual([
+      {
+        architecture: attempt.architecture,
+        connectorVersion: attempt.connectorVersion,
+        deviceKeyId: attempt.deviceKeyId,
+        deviceLabel: attempt.deviceLabel,
+        expiresAt: attempt.expiresAt,
+        osFamily: attempt.osFamily,
+        pairingChallenge: attempt.pairingChallenge,
+        pairingId: attempt.pairingId,
+        pollVerifierDigest: attempt.pollVerifierDigest,
+        publicKey: attempt.publicKey,
+        userCodeDigest: attempt.userCodeDigest,
+      },
+    ]);
     expect(testHarness.startReferences[0]?.pairingChallenge).toEqual(Buffer.alloc(32));
+    expect(testHarness.rateReferences[0]?.clientIdentityDigest).toEqual(Buffer.alloc(32));
     expect(testHarness.startReferences[0]?.pollVerifierDigest).toEqual(Buffer.alloc(32));
     expect(testHarness.startReferences[0]?.publicKey).toEqual(Buffer.alloc(32));
     expect(testHarness.startReferences[0]?.userCodeDigest).toEqual(Buffer.alloc(32));
     expect(attempt.pairingChallenge).toEqual(Buffer.alloc(32, 0x33));
+    expect(attempt.clientIdentityDigest).toEqual(Buffer.alloc(32, 0x66));
     expect(attempt.pollVerifierDigest).toEqual(Buffer.alloc(32, 0x11));
     expect(attempt.publicKey).toEqual(Buffer.alloc(32, 0x44));
     expect(attempt.userCodeDigest).toEqual(Buffer.alloc(32, 0x22));
     expect(Object.isFrozen(database)).toBe(true);
+  });
+
+  it("returns a bounded rate decision without starting a transaction", async () => {
+    const testHarness = harness({ admissionResult: [{ admitted: false }] });
+
+    await expect(createPairingStartDatabase(testHarness.pool).start(validAttempt())).resolves.toBe(
+      "rate_limited",
+    );
+
+    expect(testHarness.events).toEqual(["boundary", "admit", "release:false"]);
+    expect(testHarness.startSnapshots).toEqual([]);
   });
 
   it.each([
@@ -168,6 +228,10 @@ describe("pairing start database", () => {
     {
       code: "result_invalid" as const,
       options: { startResult: [{ started: false }] },
+    },
+    {
+      code: "result_invalid" as const,
+      options: { admissionResult: [{ admitted: "yes" }] },
     },
     {
       code: "result_invalid" as const,
@@ -199,6 +263,13 @@ describe("pairing start database", () => {
     );
     expect(queryFailure.releases).toEqual([true]);
 
+    const admissionFailure = harness({ admissionError: new Error(privateValue) });
+    await expectDatabaseError(
+      createPairingStartDatabase(admissionFailure.pool).start(validAttempt()),
+      "query_failed",
+    );
+    expect(admissionFailure.releases).toEqual([true]);
+
     const releaseFailure = harness({ releaseError: new Error(privateValue) });
     await expectDatabaseError(
       createPairingStartDatabase(releaseFailure.pool).start(validAttempt()),
@@ -213,6 +284,7 @@ describe("pairing start database", () => {
     { ...validAttempt(), pairingId: "not-a-uuid" },
     { ...validAttempt(), deviceKeyId: "00000000-0000-0000-0000-000000000000" },
     { ...validAttempt(), pollVerifierDigest: Buffer.alloc(31) },
+    { ...validAttempt(), clientIdentityDigest: Buffer.alloc(31) },
     { ...validAttempt(), userCodeDigest: Buffer.alloc(33) },
     { ...validAttempt(), pairingChallenge: Buffer.alloc(31) },
     { ...validAttempt(), publicKey: Buffer.alloc(32) },
@@ -225,6 +297,11 @@ describe("pairing start database", () => {
     { ...validAttempt(), osFamily: "other" },
     { ...validAttempt(), architecture: "other" },
     { ...validAttempt(), expiresAt: "2026-07-16T08:00:00Z" },
+    { ...validAttempt(), rateBucketLimit: 0 },
+    { ...validAttempt(), rateBucketLimit: 201 },
+    { ...validAttempt(), rateGlobalLimit: 1_000_001 },
+    { ...validAttempt(), rateWindowSeconds: 0 },
+    { ...validAttempt(), rateWindowSeconds: 3_601 },
   ])("rejects malformed input before checkout: %o", async (attempt) => {
     const testHarness = harness();
 

@@ -74,6 +74,31 @@ const expectedFields = new Map([
     ["schemaVersion", "trustTier", "selfReported", "participants"],
   ],
   ["community-score-query.schema.json", ["seasonStart"]],
+  ["connector-pairing-poll-result.schema.json", ["schemaVersion", "requestId", "deviceBindings"]],
+  ["connector-pairing-poll.schema.json", ["schemaVersion", "pollToken", "possessionSignature"]],
+  [
+    "connector-pairing-start-result.schema.json",
+    [
+      "schemaVersion",
+      "requestId",
+      "pairingId",
+      "pollToken",
+      "pairingChallengeBase64Url",
+      "userCode",
+      "expiresAt",
+    ],
+  ],
+  [
+    "connector-pairing-start.schema.json",
+    [
+      "schemaVersion",
+      "devicePublicKeyBase64Url",
+      "deviceLabel",
+      "connectorVersion",
+      "osFamily",
+      "architecture",
+    ],
+  ],
   [
     "connector-sync.schema.json",
     [
@@ -145,6 +170,28 @@ const implementedLocalEvidencePaths = new Map([
       "apps/ingest/src/community-sync-http-server.ts",
     ],
   ],
+  [
+    "postConnectorPairingPollV1",
+    [
+      "apps/web/app/v1/connector/pairing/poll/route.test.ts",
+      "apps/web/app/v1/connector/pairing/poll/route.ts",
+      "apps/web/lib/pairing-http.test.ts",
+      "apps/web/lib/pairing-http.ts",
+      "apps/web/lib/pairing-rate-policy.test.ts",
+      "apps/web/lib/pairing-rate-policy.ts",
+    ],
+  ],
+  [
+    "postConnectorPairingStartV1",
+    [
+      "apps/web/app/v1/connector/pairing/start/route.test.ts",
+      "apps/web/app/v1/connector/pairing/start/route.ts",
+      "apps/web/lib/pairing-http.test.ts",
+      "apps/web/lib/pairing-http.ts",
+      "apps/web/lib/pairing-rate-policy.test.ts",
+      "apps/web/lib/pairing-rate-policy.ts",
+    ],
+  ],
 ]);
 
 function report(scope, message) {
@@ -208,6 +255,54 @@ function validatePairingPolicy(record) {
     ])
   ) {
     report(relativePath, "pairing possession policy differs from the reviewed boundary");
+  }
+}
+
+function validatePairingTransportPolicy(record) {
+  const { policy, relativePath } = record;
+  const expectedKeys = [
+    "cacheControl",
+    "clientIdAuthority",
+    "clientIdBytes",
+    "clientIdEncoding",
+    "clientIdHeader",
+    "corsPolicy",
+    "databaseQueryDeadlineMilliseconds",
+    "databaseStatementDeadlineMilliseconds",
+    "distributedRatePolicy",
+    "localConcurrency",
+    "mediaType",
+    "methods",
+    "possessionPolicy",
+    "protocolId",
+    "requestBodyBytes",
+    "responseBodyBytes",
+    "schemaVersion",
+  ];
+  if (
+    !sameEntries(Object.keys(policy).sort(), expectedKeys) ||
+    policy.schemaVersion !== 1 ||
+    policy.protocolId !== "viberacing-connector-pairing-transport-v1" ||
+    !isObject(policy.methods) ||
+    !sameEntries(Object.keys(policy.methods).sort(), ["poll", "start"]) ||
+    policy.methods.start !== "POST /v1/connector/pairing/start" ||
+    policy.methods.poll !== "POST /v1/connector/pairing/poll" ||
+    policy.mediaType !== "application/json" ||
+    policy.requestBodyBytes !== 1024 ||
+    policy.responseBodyBytes !== 2048 ||
+    policy.clientIdHeader !== "x-viberacing-client-id" ||
+    policy.clientIdBytes !== 16 ||
+    policy.clientIdEncoding !== "base64url-unpadded" ||
+    policy.clientIdAuthority !== "anonymous-rate-shaping-only" ||
+    policy.distributedRatePolicy !== "global-and-64-fixed-client-buckets" ||
+    policy.localConcurrency !== 4 ||
+    policy.databaseStatementDeadlineMilliseconds !== 5000 ||
+    policy.databaseQueryDeadlineMilliseconds !== 6000 ||
+    policy.cacheControl !== "no-store" ||
+    policy.corsPolicy !== "same-origin-no-cors-headers" ||
+    policy.possessionPolicy !== "connector-pairing-authentication.json"
+  ) {
+    report(relativePath, "pairing transport policy differs from the reviewed boundary");
   }
 }
 
@@ -495,7 +590,11 @@ if (sources !== undefined) {
   if (
     !sameEntries(
       policies.map(({ entry }) => entry.file),
-      ["connector-pairing-authentication.json", "connector-sync-authentication.json"],
+      [
+        "connector-pairing-authentication.json",
+        "connector-pairing-transport.json",
+        "connector-sync-authentication.json",
+      ],
     )
   ) {
     report("contracts/v1/manifest.json", "authentication policy inventory differs from review");
@@ -511,6 +610,8 @@ if (sources !== undefined) {
     }
     if (record.entry.file === "connector-pairing-authentication.json") {
       validatePairingPolicy(record);
+    } else if (record.entry.file === "connector-pairing-transport.json") {
+      validatePairingTransportPolicy(record);
     }
   }
   validatePairingVector();
@@ -695,7 +796,7 @@ if (sources !== undefined) {
 
   const publicScoreOperation = operations[0];
   if (
-    operations.length !== 2 ||
+    operations.length !== 4 ||
     publicScoreOperation?.entry.method !== "get" ||
     publicScoreOperation.entry.path !== "/v1/community/scores" ||
     publicScoreOperation.entry.operationId !== "getCommunityScoresV1" ||
@@ -721,7 +822,7 @@ if (sources !== undefined) {
 
   const communitySyncOperation = operations[1];
   if (
-    operations.length !== 2 ||
+    operations.length !== 4 ||
     communitySyncOperation?.entry.method !== "post" ||
     communitySyncOperation.entry.path !== "/v1/community/sync" ||
     communitySyncOperation.entry.operationId !== "postCommunitySyncV1" ||
@@ -746,6 +847,50 @@ if (sources !== undefined) {
       "contracts/v1/manifest.json",
       "Community sync operation differs from the reviewed HTTP contract",
     );
+  }
+
+  const pairingPollOperation = operations[2];
+  if (
+    pairingPollOperation?.entry.method !== "post" ||
+    pairingPollOperation.entry.path !== "/v1/connector/pairing/poll" ||
+    pairingPollOperation.entry.operationId !== "postConnectorPairingPollV1" ||
+    pairingPollOperation.entry.implementationStatus !== "implemented-local" ||
+    pairingPollOperation.entry.summary !== "Poll and complete one approved connector pairing" ||
+    pairingPollOperation.entry.admissionPolicy !== "no-queue-4" ||
+    pairingPollOperation.entry.authenticationContract !== "connector-pairing-transport.json" ||
+    pairingPollOperation.entry.querySchema !== "none" ||
+    pairingPollOperation.entry.requestSchema !== "ConnectorPairingPollV1" ||
+    pairingPollOperation.entry.responseSchema !== "ConnectorPairingPollResultV1" ||
+    pairingPollOperation.entry.problemSchema !== "ProblemDetailsV1" ||
+    !sameEntries(pairingPollOperation.entry.problemStatuses, [400, 405, 406, 429, 500, 503]) ||
+    pairingPollOperation.entry.queryPolicy !== "none" ||
+    pairingPollOperation.entry.requestBodyPolicy !== "exact-raw-json-1024" ||
+    pairingPollOperation.entry.cacheControl !== "no-store" ||
+    pairingPollOperation.entry.corsPolicy !== "same-origin"
+  ) {
+    report("contracts/v1/manifest.json", "pairing poll operation differs from review");
+  }
+
+  const pairingStartOperation = operations[3];
+  if (
+    pairingStartOperation?.entry.method !== "post" ||
+    pairingStartOperation.entry.path !== "/v1/connector/pairing/start" ||
+    pairingStartOperation.entry.operationId !== "postConnectorPairingStartV1" ||
+    pairingStartOperation.entry.implementationStatus !== "implemented-local" ||
+    pairingStartOperation.entry.summary !== "Start one bounded connector pairing transaction" ||
+    pairingStartOperation.entry.admissionPolicy !== "no-queue-4" ||
+    pairingStartOperation.entry.authenticationContract !== "connector-pairing-transport.json" ||
+    pairingStartOperation.entry.querySchema !== "none" ||
+    pairingStartOperation.entry.requestSchema !== "ConnectorPairingStartV1" ||
+    pairingStartOperation.entry.responseSchema !== "ConnectorPairingStartResultV1" ||
+    pairingStartOperation.entry.problemSchema !== "ProblemDetailsV1" ||
+    !sameEntries(pairingStartOperation.entry.problemStatuses, [400, 405, 406, 429, 500, 503]) ||
+    pairingStartOperation.entry.queryPolicy !== "none" ||
+    pairingStartOperation.entry.requestBodyPolicy !== "exact-raw-json-1024" ||
+    pairingStartOperation.entry.cacheControl !== "no-store" ||
+    pairingStartOperation.entry.corsPolicy !== "same-origin"
+  ) {
+    report("contracts/v1/manifest.json", "pairing start operation differs from review");
   }
 
   for (const operation of operations) {

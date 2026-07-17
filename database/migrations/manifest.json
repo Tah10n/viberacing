@@ -126,6 +126,12 @@
       "name": "pairing_approval_attempt_policy",
       "path": "database/migrations/0021_pairing_approval_attempt_policy.sql",
       "sha256": "66f80b30175937c1a78afbe8e82e9a7fc03dbacf958c2b302e3430ff304d56c5"
+    },
+    {
+      "revision": 22,
+      "name": "pairing_transport_rate_policy",
+      "path": "database/migrations/0022_pairing_transport_rate_policy.sql",
+      "sha256": "fd3556c427ff4a6dff34ba9815d48ba7ec1ebc9833bd2202fe6741844865d6eb"
     }
   ]
 }

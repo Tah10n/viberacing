@@ -64,21 +64,25 @@ consumes that minimized usage behind a second inaccessible reviewed context and 
 JSON/digest/LF message. An isolated one-use signer consumes that otherwise inaccessible material
 with a device-bound key capability that also has no public constructor, returning only the same body
 and five exact signed header values. A separate inaccessible pending-key/challenge signer and pure
-server-only Web verifier now agree on one exact synthetic pairing-possession proof. A dormant
-transport-free Web/Auth start application creates nine-minute pending transactions from closed
-device metadata with fresh server IDs, poll tokens, challenges, 60-bit human codes, and separate
-protected poll/code verifiers through the fixed read-write Web pool. A second dormant application
-performs protected poll lookup, runs the strict proof, and alone invokes exact activation with
-server-owned IDs behind fixed admission and timing. A local signed-in `/connect` flow now counts
-pending-code attempts on the exact session, renders bounded device metadata plus a full public-key
-fingerprint, and requires a separate fresh passkey assertion before atomic new-source approval.
-There is no executable discovery/admission, live Codex launch path, supported version, source/device
-context provider, key generation/store, connector pairing start/poll route or client, upload, CLI,
-or release. Do not claim that deployed browser/session HTTP authentication, production-ready
-recovery or remaining unimplemented critical-action verification, real-user ingestion, an
-operational connector, a Jobs scheduler or deployed public-race read, season correction, scheduled
-or broader cleanup, deployment, or a hosted security control exists until its implementation and
-verification are present in the working tree.
+server-only Web verifier now agree on one exact synthetic pairing-possession proof. A transport-free
+Web/Auth start application creates nine-minute pending transactions from closed device metadata with
+fresh server IDs, poll tokens, challenges, 60-bit human codes, and separate protected poll/code
+verifiers through the fixed read-write Web pool. A second activation application performs protected
+poll lookup, runs the strict proof, and alone invokes exact activation with server-owned IDs behind
+fixed admission and timing. A local signed-in `/connect` flow now counts pending-code attempts on
+the exact session, renders bounded device metadata plus a full public-key fingerprint, and requires
+a separate fresh passkey assertion before atomic new-source approval. A closed local start/poll HTTP
+boundary now shares four-call admission, applies a fixed-storage global-and-64-bucket PostgreSQL
+rate policy, and serializes only the versioned contracts. A bounded Rust `connect` command generates
+one Ed25519 key through the OS CSPRNG, stores its versioned state only in the native credential
+store, resumes polling, and persists the activated binding without printing bearer or key material.
+There is still no executable discovery/admission, live Codex launch path, supported version,
+source/device sync context provider, upload, packaging, release, cross-platform execution result,
+live pairing database/login result, edge deployment, or capacity evidence. Do not claim that
+deployed browser/session HTTP authentication, production-ready recovery or remaining unimplemented
+critical-action verification, real-user ingestion, an operational connector, a Jobs scheduler or
+deployed public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted
+security control exists until its implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -91,9 +95,9 @@ verification are present in the working tree.
   allowlist as a workaround for a failing check.
 - `apps/web/` contains the synthetic Next.js frontend, local public-score route/adapter, bounded
   invite/OAuth/initial-passkey enrollment, returning-passkey login, private account controls, and
-  passkey-protected recovery-code rotation and replacement-passkey sign-in, plus the pure
-  pairing-possession verifier, dormant pairing activation application/adapter, and nested agent
-  guidance. Read `apps/web/AGENTS.md` before editing it.
+  passkey-protected recovery-code rotation and replacement-passkey sign-in, plus the pure pairing-
+  possession verifier, local pairing start/poll routes and applications, and nested agent guidance.
+  Read `apps/web/AGENTS.md` before editing it.
 - `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
   least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL
@@ -109,8 +113,9 @@ verification are present in the working tree.
   persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
 - `crates/connector/` contains the bounded App Server JSONL handshake, candidate exact-version
   account/usage parser, inaccessible one-shot child supervisor, synthetic process fixture,
-  exact-body sync composer, isolated pairing/sync signers, and nested connector security guidance.
-  Read `crates/connector/AGENTS.md` before editing it.
+  exact-body sync composer, isolated pairing/sync signers, the pairing-only native-store `connect`
+  command, and nested connector security guidance. Read `crates/connector/AGENTS.md` before editing
+  it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
 - The Ingest host/port/TLS deployment entry point, distributed recovery perimeter and cleanup, and

@@ -8,17 +8,17 @@ authenticates and parses the exact bounded sync request, a separate local adapte
 PostgreSQL mapping, and a transport-free application boundary composes them into validated
 result/problem decisions. A separate bounded Fastify server factory now preserves the exact raw
 request and serializes only those validated decisions. The candidate Rust connector now signs one
-exact pairing-possession message behind inaccessible pending-key/challenge capabilities, then
-separately composes exact unsigned body/device-message material and signs it behind an inaccessible
-source-bound key capability. A server-only Web kernel strictly verifies the pairing proof against
-the exact approved database material. One synthetic
+exact pairing-possession message, then separately composes exact unsigned body/device-message
+material and signs it behind an inaccessible source-bound key capability. A server-only Web kernel
+strictly verifies the pairing proof against the exact approved database material. One synthetic
 [`test vector`](v1/connector-sync-device-request.test-vector.json) proves its body, digest, nonce,
 message, public key, and signature against production Ingest code; a second vector proves the exact
-Rust/Web pairing message and signature. Separate dormant Web/Auth boundaries now compose a locally
-generated nine-minute pairing start, protected keyed poll lookup, that strict proof, and atomic
-activation. No operational connector, real key generation/store, pairing approval, public pairing
-request/response contract or HTTP client/route, deployed endpoint, working database credential, edge
-signer, host/port/TLS entry point, or composed live flow exists.
+Rust/Web pairing message and signature. Local Web/Auth boundaries now compose a generated nine-
+minute pairing start, protected keyed poll lookup, strict proof, and atomic activation through exact
+versioned routes. A pairing-only Rust command generates and retains its real key in the native OS
+credential store. No operational Codex launch, sync-capable connector, signed upload, deployed
+endpoint, working database credential, edge signer, host/port/TLS entry point, or composed live flow
+exists.
 
 ## Canonical version 1 schemas
 
@@ -45,6 +45,20 @@ signer, host/port/TLS entry point, or composed live flow exists.
   32-byte server challenge, and exact pending Ed25519 public key. It also records that exact poll
   possession, browser approval, unexpired pending-key state, and strict signature verification are
   all required before activation; the local pure verifier implements only the last check.
+- [`ConnectorPairingStartV1`](v1/connector-pairing-start.schema.json) accepts one closed anonymous
+  public-key and bounded device-metadata request. It contains no account, usage, poll secret,
+  source, or device binding.
+- [`ConnectorPairingStartResultV1`](v1/connector-pairing-start-result.schema.json) returns the one-
+  time poll token, possession challenge, short user code, expiry, and server request ID only after
+  the pending transaction is committed.
+- [`ConnectorPairingPollV1`](v1/connector-pairing-poll.schema.json) accepts the short-lived poll
+  token plus the exact Ed25519 possession signature and no caller-selected identity or binding.
+- [`ConnectorPairingPollResultV1`](v1/connector-pairing-poll-result.schema.json) returns either an
+  empty pending array or exactly one activated source/device binding. Generic problem responses
+  cover invalid, expired, rejected, and unavailable states without reflecting private reasons.
+- [`connector-pairing-transport.json`](v1/connector-pairing-transport.json) fixes the two POST
+  paths, body budgets, anonymous client-ID header, four-call local admission, fixed
+  global-and-64-bucket database shaping, no-store policy, and same-origin/no-CORS response boundary.
 - [`connector-pairing-possession.test-vector.json`](v1/connector-pairing-possession.test-vector.json)
   fixes one synthetic pairing ID/challenge, exact message, public key, and signature shared by the
   Rust signer and Web verifier. It deliberately reuses the sync vector's synthetic public key and
@@ -62,10 +76,10 @@ signer, host/port/TLS entry point, or composed live flow exists.
   status/title/retry mapping, validates the complete body, and emits `no-store`
   `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
 - [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
-  type/export names, closed authentication-policy inventory, and the locally implemented
-  `GET /v1/community/scores` and `POST /v1/community/sync` operations with method-specific
-  query/body, response, problem, no-queue, authentication, cache, same-origin CORS, and
-  repository-status policies.
+  type/export names, closed authentication-policy inventory, and the locally implemented four
+  locally implemented operations: `GET /v1/community/scores`, `POST /v1/community/sync`, and the two
+  pairing start/poll POST routes, with method-specific query/body, response, problem, no-queue,
+  authentication, cache, same-origin CORS, and repository-status policies.
 
 Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
 timestamp is bounded. Reviewed date-range and ISO-weekday extensions make the score season boundary
@@ -83,7 +97,7 @@ trust fields exist only in the response component and never become writable conn
 
 `node scripts/generate-contracts.mjs` deterministically creates:
 
-- [`openapi.v1.json`](generated/openapi.v1.json), which documents the two locally implemented HTTP
+- [`openapi.v1.json`](generated/openapi.v1.json), which documents the four locally implemented HTTP
   operations and explicitly states that repository implementation does not prove deployment;
 - [`packages/contracts/src/generated.ts`](../packages/contracts/src/generated.ts), containing
   readonly TypeScript shapes, embedded schemas, source digest, and validator wrappers.

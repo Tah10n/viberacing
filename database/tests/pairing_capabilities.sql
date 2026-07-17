@@ -596,6 +596,21 @@ SELECT pg_temp.assert_true(
   'activated poll returns only the connector source and device identifiers'
 );
 
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.bool_and(
+        pairing_id = '00000000-0000-4000-8000-000000001001'
+        AND pairing_challenge = pg_catalog.decode(pg_catalog.repeat('13', 32), 'hex')
+        AND public_key = pg_catalog.decode(pg_catalog.repeat('14', 32), 'hex')
+      )
+    FROM viberacing_api.read_pairing_verification_material(
+      pg_catalog.decode(pg_catalog.repeat('11', 32), 'hex')
+    )
+  ),
+  'activated retry retains unexpired material for a fresh possession proof'
+);
+
 SELECT pg_temp.expect_operation_failure(
   $sql$
     SELECT viberacing_api.activate_pairing(

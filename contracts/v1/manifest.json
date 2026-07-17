@@ -7,6 +7,10 @@
       "policyId": "viberacing-device-pairing-possession-v1"
     },
     {
+      "file": "connector-pairing-transport.json",
+      "policyId": "viberacing-connector-pairing-transport-v1"
+    },
+    {
       "file": "connector-sync-authentication.json",
       "policyId": "viberacing-community-sync-auth-v1"
     }
@@ -21,6 +25,26 @@
       "file": "community-score-query.schema.json",
       "exportName": "communityScoreQueryV1",
       "typeName": "CommunityScoreQueryV1"
+    },
+    {
+      "file": "connector-pairing-poll-result.schema.json",
+      "exportName": "connectorPairingPollResultV1",
+      "typeName": "ConnectorPairingPollResultV1"
+    },
+    {
+      "file": "connector-pairing-poll.schema.json",
+      "exportName": "connectorPairingPollV1",
+      "typeName": "ConnectorPairingPollV1"
+    },
+    {
+      "file": "connector-pairing-start-result.schema.json",
+      "exportName": "connectorPairingStartResultV1",
+      "typeName": "ConnectorPairingStartResultV1"
+    },
+    {
+      "file": "connector-pairing-start.schema.json",
+      "exportName": "connectorPairingStartV1",
+      "typeName": "ConnectorPairingStartV1"
     },
     {
       "file": "connector-sync-result.schema.json",
@@ -74,6 +98,42 @@
       "requestSchema": "ConnectorSyncV1",
       "responseSchema": "ConnectorSyncResultV1",
       "summary": "Submit one bounded Community usage snapshot"
+    },
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "connector-pairing-transport.json",
+      "cacheControl": "no-store",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "implemented-local",
+      "method": "post",
+      "operationId": "postConnectorPairingPollV1",
+      "path": "/v1/connector/pairing/poll",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 405, 406, 429, 500, 503],
+      "queryPolicy": "none",
+      "querySchema": "none",
+      "requestBodyPolicy": "exact-raw-json-1024",
+      "requestSchema": "ConnectorPairingPollV1",
+      "responseSchema": "ConnectorPairingPollResultV1",
+      "summary": "Poll and complete one approved connector pairing"
+    },
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "connector-pairing-transport.json",
+      "cacheControl": "no-store",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "implemented-local",
+      "method": "post",
+      "operationId": "postConnectorPairingStartV1",
+      "path": "/v1/connector/pairing/start",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 405, 406, 429, 500, 503],
+      "queryPolicy": "none",
+      "querySchema": "none",
+      "requestBodyPolicy": "exact-raw-json-1024",
+      "requestSchema": "ConnectorPairingStartV1",
+      "responseSchema": "ConnectorPairingStartResultV1",
+      "summary": "Start one bounded connector pairing transaction"
     }
   ]
 }

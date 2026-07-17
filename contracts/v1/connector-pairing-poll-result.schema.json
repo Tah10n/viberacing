@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/connector-pairing-poll-result.schema.json",
+  "title": "ConnectorPairingPollResultV1",
+  "description": "Generic pending response or the single activated source/device binding available to the polling connector.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "requestId", "deviceBindings"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "minimum": 1,
+      "maximum": 1
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26,
+      "pattern": "^req_[A-Za-z0-9_-]{22}$"
+    },
+    "deviceBindings": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sourceId", "deviceId"],
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "minLength": 26,
+            "maxLength": 26,
+            "pattern": "^src_[A-Za-z0-9_-]{22}$"
+          },
+          "deviceId": {
+            "type": "string",
+            "minLength": 26,
+            "maxLength": 26,
+            "pattern": "^dev_[A-Za-z0-9_-]{22}$"
+          }
+        }
+      }
+    }
+  }
+}

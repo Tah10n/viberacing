@@ -143,12 +143,20 @@ reap-before-success cleanup. У reviewed-launch capability нет публичн
 device-signature message. Изолированный one-use signer потребляет этот закрытый материал вместе с
 таким же недоступным device-bound Ed25519 key capability и возвращает только то же body и пять
 точных header values. Общий synthetic vector проверяет exact public key/signature между Rust и
-production Ingest verifier. Поэтому executable discovery, link/path ownership и artifact/version
-admission, реальный запуск Codex, cross-platform evidence, source/device context provider, secure
-key generation/store, pairing proof, signed upload, operational connector, live database connection,
-load evidence и deployment всё ещё отсутствуют.
+production Ingest verifier. Отдельные pairing signer и Web verifier согласованы по точному
+domain-separated possession message. Локальная signed-in страница `/connect` принимает короткий код,
+показывает ограниченные metadata и полный fingerprint публичного ключа, а перед атомарным одобрением
+нового opaque source требует свежий passkey assertion. Два закрытых локальных POST route открывают
+versioned pairing start/poll contracts через общий лимит в четыре вызова, фиксированную глобальную и
+64-bucket PostgreSQL rate policy, ограниченные body и generic `no-store` ответы. Локальная
+Rust-команда `connect` получает Ed25519 key и анонимный rate ID из OS CSPRNG, сохраняет
+prepared/pending/active record только в нативном credential store, доказывает владение ключом и
+возобновляет прерванный poll, не печатая key, token, challenge, source или device ID. Всё ещё нет
+executable discovery и artifact/version admission, реального запуска Codex, cross-platform runtime
+evidence, source/device sync context provider, signed upload, live database connection, capacity
+evidence, packaging, release, operational sync connector и deployment.
 
-Также добавлены восемнадцать SQL migrations: 24 приватные
+Также добавлены двадцать две SQL migrations: 25 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
 deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая
 procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
@@ -188,23 +196,23 @@ non-current passkey страница отправляет только opaque ID
 независимые assertion существующим ключом и регистрацию нового; один database statement атомарно
 consume-ит step-up и добавляет credential в пределах lifetime cap 32. Application verifier для
 ротации кодов восстановления теперь после свежего passkey assertion создаёт десять кодов, атомарно
-сохраняет только защищённые verifier values и показывает plaintext один раз. Проверка recovery-кода,
-replacement-passkey flow, WebAuthn pairing approval и edge rate limits для анонимного login и
-recovery lookup пока отсутствуют. Database-only Community ingest capability уже выдаёт минимальный
-материал активного устройства и принимает bounded source-bound snapshots с exact retry, nonce
-replay, monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only
-procedure независимо удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots,
-сохраняя current source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup,
-scoring refresh или finalization через отдельный least-privileged config, single-client pool,
-проверку role/login/search path, fixed deadlines, prepared parameters, closed result validation и
-стабильный non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel,
-adapter и application объединены на synthetic/mock-pool evidence, а Fastify boundary отдельно
-проверена через injection/loopback с mock application. Полный HTTP-to-PostgreSQL path не проверен
-через реальный login. Deployed HTTP ingest route, pairing-possession verifier, operational
-connector, cleanup/scoring scheduler, live Ingest/Jobs login/TLS integration, monitoring backend,
-deployed public score read, audited correction flow, purge worker и deployed database ещё не
-реализованы, поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма
-реальных данных пока нет.
+сохраняет только защищённые verifier values и показывает plaintext один раз. Локальные recovery-code
+sign-in, replacement-passkey и WebAuthn pairing approval реализованы только с injected/synthetic
+evidence; live authenticator/database integration, edge rate/capacity controls и deployment всё ещё
+отсутствуют. Database-only Community ingest capability уже выдаёт минимальный материал активного
+устройства и принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic
+source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure независимо
+удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots, сохраняя current
+source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup, scoring refresh
+или finalization через отдельный least-privileged config, single-client pool, проверку
+role/login/search path, fixed deadlines, prepared parameters, closed result validation и стабильный
+non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel, adapter и
+application объединены на synthetic/mock-pool evidence, а Fastify boundary отдельно проверена через
+injection/loopback с mock application. Полный HTTP-to-PostgreSQL path не проверен через реальный
+login. Deployed HTTP ingest route, operational sync connector, cleanup/scoring scheduler, live
+Ingest/Jobs login/TLS integration, monitoring backend, deployed public score read, audited
+correction flow, purge worker и deployed database ещё не реализованы, поэтому локальный enrollment
+ещё не является готовой production-авторизацией, а приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

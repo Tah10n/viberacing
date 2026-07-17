@@ -16,6 +16,12 @@ import {
 } from "./pairing-start-database";
 import { createPairingStartMaterial, type PairingStartMaterial } from "./pairing-start-material";
 import { createPairingStartTiming, type PairingStartTiming } from "./pairing-start-timing";
+import {
+  derivePairingClientIdentity,
+  resolvePairingRatePolicy,
+  type PairingRateLimits,
+  type PairingRatePolicy,
+} from "./pairing-rate-policy";
 import { pairingPublicKeyBytes } from "./pairing-possession-verifier";
 import {
   createConfiguredPairingPollVerifier,
@@ -33,6 +39,7 @@ import { createPublicRequestId } from "./public-http-problem";
 
 const requestKeys = new Set([
   "architecture",
+  "clientIdBase64Url",
   "connectorVersion",
   "deviceLabel",
   "devicePublicKeyBase64Url",
@@ -42,6 +49,7 @@ const dependencyKeys = new Set([
   "admission",
   "database",
   "pollVerifier",
+  "ratePolicy",
   "timing",
   "userCodeVerifier",
 ]);
@@ -81,6 +89,10 @@ export type PairingStartDecision =
   | Readonly<{
       outcome: "not_created";
       requestId: string;
+    }>
+  | Readonly<{
+      outcome: "rate_limited";
+      requestId: string;
     }>;
 
 export interface PairingStartApplication {
@@ -95,6 +107,7 @@ export interface PairingStartApplicationDependencies {
   readonly admission: PairingStartAdmission;
   readonly database: PairingStartDatabase;
   readonly pollVerifier: PairingPollVerifier;
+  readonly ratePolicy: PairingRatePolicy;
   readonly timing: PairingStartTiming;
   readonly userCodeVerifier: PairingUserCodeVerifier;
 }
@@ -102,6 +115,7 @@ export interface PairingStartApplicationDependencies {
 interface NormalizedDependencies {
   readonly deriveCode: PairingUserCodeVerifier["derive"];
   readonly derivePoll: PairingPollVerifier["derive"];
+  readonly limits: PairingRatePolicy["limits"];
   readonly settle: PairingStartTiming["settle"];
   readonly startDatabase: PairingStartDatabase["start"];
   readonly startTiming: PairingStartTiming["start"];
@@ -111,6 +125,7 @@ interface NormalizedDependencies {
 interface NormalizedRequest {
   readonly accepted: boolean;
   readonly architecture: string;
+  readonly clientIdentityDigest: Buffer;
   readonly connectorVersion: string;
   readonly deviceLabel: string;
   readonly osFamily: string;
@@ -164,6 +179,7 @@ function readDependencies(value: unknown): NormalizedDependencies {
     const admission = ownDataValue(value, "admission");
     const database = ownDataValue(value, "database");
     const pollVerifier = ownDataValue(value, "pollVerifier");
+    const ratePolicy = ownDataValue(value, "ratePolicy");
     const timing = ownDataValue(value, "timing");
     const userCodeVerifier = ownDataValue(value, "userCodeVerifier");
     if (
@@ -173,6 +189,8 @@ function readDependencies(value: unknown): NormalizedDependencies {
       typeof database !== "object" ||
       pollVerifier === null ||
       typeof pollVerifier !== "object" ||
+      ratePolicy === null ||
+      typeof ratePolicy !== "object" ||
       timing === null ||
       typeof timing !== "object" ||
       userCodeVerifier === null ||
@@ -183,6 +201,7 @@ function readDependencies(value: unknown): NormalizedDependencies {
     const tryAcquire = ownDataValue(admission, "tryAcquire");
     const startDatabase = ownDataValue(database, "start");
     const derivePoll = ownDataValue(pollVerifier, "derive");
+    const limits = ownDataValue(ratePolicy, "limits");
     const settle = ownDataValue(timing, "settle");
     const startTiming = ownDataValue(timing, "start");
     const deriveCode = ownDataValue(userCodeVerifier, "derive");
@@ -190,6 +209,7 @@ function readDependencies(value: unknown): NormalizedDependencies {
       typeof tryAcquire !== "function" ||
       typeof startDatabase !== "function" ||
       typeof derivePoll !== "function" ||
+      typeof limits !== "function" ||
       typeof settle !== "function" ||
       typeof startTiming !== "function" ||
       typeof deriveCode !== "function"
@@ -199,6 +219,7 @@ function readDependencies(value: unknown): NormalizedDependencies {
     return Object.freeze({
       deriveCode: (deriveCode as PairingUserCodeVerifier["derive"]).bind(userCodeVerifier),
       derivePoll: (derivePoll as PairingPollVerifier["derive"]).bind(pollVerifier),
+      limits: (limits as PairingRatePolicy["limits"]).bind(ratePolicy),
       settle: (settle as PairingStartTiming["settle"]).bind(timing),
       startDatabase: (startDatabase as PairingStartDatabase["start"]).bind(database),
       startTiming: (startTiming as PairingStartTiming["start"]).bind(timing),
@@ -261,12 +282,14 @@ function validVersion(value: unknown): value is string {
 }
 
 function readRequest(value: unknown): NormalizedRequest {
+  let clientIdentity = derivePairingClientIdentity(undefined);
   let publicKey: Buffer | undefined;
   try {
     if (!isPlainRecord(value) || !hasExactKeys(value, requestKeys)) {
       return {
         accepted: false,
         architecture: "x86_64",
+        clientIdentityDigest: clientIdentity.digest,
         connectorVersion: "0.0.0-invalid",
         deviceLabel: "Invalid device",
         osFamily: "linux",
@@ -274,6 +297,8 @@ function readRequest(value: unknown): NormalizedRequest {
       };
     }
     const architecture = ownDataValue(value, "architecture");
+    clientIdentity.digest.fill(0);
+    clientIdentity = derivePairingClientIdentity(ownDataValue(value, "clientIdBase64Url"));
     const connectorVersion = ownDataValue(value, "connectorVersion");
     const deviceLabel = ownDataValue(value, "deviceLabel");
     const osFamily = ownDataValue(value, "osFamily");
@@ -281,6 +306,7 @@ function readRequest(value: unknown): NormalizedRequest {
     const accepted =
       typeof architecture === "string" &&
       architectures.has(architecture) &&
+      clientIdentity.accepted &&
       validVersion(connectorVersion) &&
       validLabel(deviceLabel) &&
       typeof osFamily === "string" &&
@@ -289,21 +315,63 @@ function readRequest(value: unknown): NormalizedRequest {
     return {
       accepted,
       architecture: accepted ? architecture : "x86_64",
+      clientIdentityDigest: clientIdentity.digest,
       connectorVersion: accepted ? connectorVersion : "0.0.0-invalid",
       deviceLabel: accepted ? deviceLabel : "Invalid device",
       osFamily: accepted ? osFamily : "linux",
       publicKey: publicKey ?? Buffer.alloc(pairingPublicKeyBytes),
     };
   } catch {
+    clientIdentity.digest.fill(0);
+    clientIdentity = derivePairingClientIdentity(undefined);
     publicKey?.fill(0);
     return {
       accepted: false,
       architecture: "x86_64",
+      clientIdentityDigest: clientIdentity.digest,
       connectorVersion: "0.0.0-invalid",
       deviceLabel: "Invalid device",
       osFamily: "linux",
       publicKey: Buffer.alloc(pairingPublicKeyBytes),
     };
+  }
+}
+
+function readRateLimits(value: unknown): PairingRateLimits | undefined {
+  try {
+    if (!isPlainRecord(value)) {
+      return undefined;
+    }
+    const keys = Reflect.ownKeys(value);
+    if (
+      keys.length !== 3 ||
+      !keys.includes("bucketLimit") ||
+      !keys.includes("globalLimit") ||
+      !keys.includes("windowSeconds")
+    ) {
+      return undefined;
+    }
+    const bucketLimit = ownDataValue(value, "bucketLimit");
+    const globalLimit = ownDataValue(value, "globalLimit");
+    const windowSeconds = ownDataValue(value, "windowSeconds");
+    if (
+      typeof bucketLimit !== "number" ||
+      !Number.isSafeInteger(bucketLimit) ||
+      bucketLimit < 1 ||
+      typeof globalLimit !== "number" ||
+      !Number.isSafeInteger(globalLimit) ||
+      globalLimit < bucketLimit ||
+      globalLimit > 1_000_000 ||
+      typeof windowSeconds !== "number" ||
+      !Number.isSafeInteger(windowSeconds) ||
+      windowSeconds < 1 ||
+      windowSeconds > 3_600
+    ) {
+      return undefined;
+    }
+    return Object.freeze({ bucketLimit, globalLimit, windowSeconds });
+  } catch {
+    return undefined;
   }
 }
 
@@ -438,6 +506,10 @@ function failureDecision(requestId: string): PairingStartDecision {
   return Object.freeze({ outcome: "not_created" as const, requestId });
 }
 
+function rateLimitedDecision(requestId: string): PairingStartDecision {
+  return Object.freeze({ outcome: "rate_limited" as const, requestId });
+}
+
 function successDecision(requestId: string, material: PairingStartMaterial): PairingStartDecision {
   return Object.freeze({
     expiresAt: material.expiresAt,
@@ -481,6 +553,7 @@ export function createPairingStartApplication(dependencies: unknown): PairingSta
       let pollCandidates: NormalizedPollCandidates | undefined;
       let codeCandidates: NormalizedCodeCandidates | undefined;
       let created = false;
+      let rateLimited = false;
       let settled = false;
       try {
         material = createPairingStartMaterial();
@@ -491,8 +564,13 @@ export function createPairingStartApplication(dependencies: unknown): PairingSta
           pollCandidates?.tokenAccepted === true &&
           codeCandidates?.codeAccepted === true;
         if (allowCreation && pollCandidates !== undefined && codeCandidates !== undefined) {
+          const rateLimits = readRateLimits(resolved.limits("start"));
+          if (rateLimits === undefined) {
+            throw new PairingStartApplicationError("dependency_invalid");
+          }
           const attempt: PairingStartDatabaseAttempt = {
             architecture: request.architecture,
+            clientIdentityDigest: request.clientIdentityDigest,
             connectorVersion: request.connectorVersion,
             deviceKeyId: material.deviceKeyId,
             deviceLabel: request.deviceLabel,
@@ -502,10 +580,14 @@ export function createPairingStartApplication(dependencies: unknown): PairingSta
             pairingId: material.pairingId,
             pollVerifierDigest: pollCandidates.digests[0],
             publicKey: request.publicKey,
+            rateBucketLimit: rateLimits.bucketLimit,
+            rateGlobalLimit: rateLimits.globalLimit,
+            rateWindowSeconds: rateLimits.windowSeconds,
             userCodeDigest: codeCandidates.digests[0],
           };
           const databaseResult: unknown = await resolved.startDatabase(attempt);
-          created = databaseResult === true;
+          created = databaseResult === "created";
+          rateLimited = databaseResult === "rate_limited";
         }
       } catch {
         created = false;
@@ -515,6 +597,7 @@ export function createPairingStartApplication(dependencies: unknown): PairingSta
           (): void => codeCandidates?.clear(),
           (): void => material?.clear(),
           (): void => {
+            request.clientIdentityDigest.fill(0);
             request.publicKey.fill(0);
           },
         ];
@@ -523,6 +606,7 @@ export function createPairingStartApplication(dependencies: unknown): PairingSta
             clear();
           } catch {
             created = false;
+            rateLimited = false;
           }
         }
         try {
@@ -530,15 +614,18 @@ export function createPairingStartApplication(dependencies: unknown): PairingSta
           settled = true;
         } catch {
           created = false;
+          rateLimited = false;
         }
         if (!releaseLease(lease)) {
           created = false;
+          rateLimited = false;
         }
       }
 
-      return created && settled && material !== undefined
-        ? successDecision(requestId, material)
-        : failureDecision(requestId);
+      if (created && settled && material !== undefined) {
+        return successDecision(requestId, material);
+      }
+      return rateLimited && settled ? rateLimitedDecision(requestId) : failureDecision(requestId);
     },
   });
 }
@@ -557,6 +644,7 @@ export async function createConfiguredPairingStartApplication(
       admission: createPairingStartAdmission(),
       database,
       pollVerifier,
+      ratePolicy: resolvePairingRatePolicy(environment),
       timing: createPairingStartTiming(),
       userCodeVerifier,
     });

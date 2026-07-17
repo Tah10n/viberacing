@@ -14,11 +14,18 @@ import {
   type PairingActivationDatabase,
   type PairingActivationDatabaseAttempt,
   type PairingActivationDatabasePoolSignalSink,
+  type PairingActivationDatabaseResult,
 } from "./pairing-activation-database";
 import {
   createPairingActivationTiming,
   type PairingActivationTiming,
 } from "./pairing-activation-timing";
+import {
+  derivePairingClientIdentity,
+  resolvePairingRatePolicy,
+  type PairingRateLimits,
+  type PairingRatePolicy,
+} from "./pairing-rate-policy";
 import { createPublicRequestId } from "./public-http-problem";
 import { pairingSignatureBytes } from "./pairing-possession-verifier";
 import {
@@ -28,11 +35,12 @@ import {
   type PairingPollVerifierCandidates,
 } from "./pairing-poll-verifier";
 
-const requestKeys = new Set(["pollToken", "possessionSignature"]);
-const dependencyKeys = new Set(["admission", "database", "pollVerifier", "timing"]);
+const requestKeys = new Set(["clientIdBase64Url", "pollToken", "possessionSignature"]);
+const dependencyKeys = new Set(["admission", "database", "pollVerifier", "ratePolicy", "timing"]);
 const candidateKeys = new Set(["clear", "digests", "secondaryActive", "tokenAccepted"]);
 const requestIdPattern = /^req_[A-Za-z0-9_-]{22}$/;
 const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
+const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
 const auditEventIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const base64UrlPattern = /^[A-Za-z0-9_-]+$/;
 const identifierEntropyBytes = 16;
@@ -55,9 +63,10 @@ export type PairingActivationDecision =
       deviceId: string;
       outcome: "activated";
       requestId: string;
+      sourceId: string;
     }>
   | Readonly<{
-      outcome: "not_activated";
+      outcome: "not_activated" | "pending" | "rate_limited";
       requestId: string;
     }>;
 
@@ -73,18 +82,21 @@ export interface PairingActivationApplicationDependencies {
   readonly admission: PairingActivationAdmission;
   readonly database: PairingActivationDatabase;
   readonly pollVerifier: PairingPollVerifier;
+  readonly ratePolicy: PairingRatePolicy;
   readonly timing: PairingActivationTiming;
 }
 
 interface NormalizedDependencies {
   readonly activate: PairingActivationDatabase["activate"];
   readonly derive: PairingPollVerifier["derive"];
+  readonly limits: PairingRatePolicy["limits"];
   readonly settle: PairingActivationTiming["settle"];
   readonly start: PairingActivationTiming["start"];
   readonly tryAcquire: PairingActivationAdmission["tryAcquire"];
 }
 
 interface NormalizedRequest {
+  readonly clientIdentityDigest: Buffer;
   readonly pollToken: unknown;
   readonly shapeAccepted: boolean;
   readonly signature: string;
@@ -133,6 +145,7 @@ function readDependencies(value: unknown): NormalizedDependencies {
     const admission = ownDataValue(value, "admission");
     const database = ownDataValue(value, "database");
     const pollVerifier = ownDataValue(value, "pollVerifier");
+    const ratePolicy = ownDataValue(value, "ratePolicy");
     const timing = ownDataValue(value, "timing");
     if (
       admission === null ||
@@ -141,6 +154,8 @@ function readDependencies(value: unknown): NormalizedDependencies {
       typeof database !== "object" ||
       pollVerifier === null ||
       typeof pollVerifier !== "object" ||
+      ratePolicy === null ||
+      typeof ratePolicy !== "object" ||
       timing === null ||
       typeof timing !== "object"
     ) {
@@ -149,12 +164,14 @@ function readDependencies(value: unknown): NormalizedDependencies {
     const tryAcquire = ownDataValue(admission, "tryAcquire");
     const activate = ownDataValue(database, "activate");
     const derive = ownDataValue(pollVerifier, "derive");
+    const limits = ownDataValue(ratePolicy, "limits");
     const settle = ownDataValue(timing, "settle");
     const start = ownDataValue(timing, "start");
     if (
       typeof tryAcquire !== "function" ||
       typeof activate !== "function" ||
       typeof derive !== "function" ||
+      typeof limits !== "function" ||
       typeof settle !== "function" ||
       typeof start !== "function"
     ) {
@@ -163,11 +180,13 @@ function readDependencies(value: unknown): NormalizedDependencies {
     const typedTryAcquire = tryAcquire as PairingActivationAdmission["tryAcquire"];
     const typedActivate = activate as PairingActivationDatabase["activate"];
     const typedDerive = derive as PairingPollVerifier["derive"];
+    const typedLimits = limits as PairingRatePolicy["limits"];
     const typedSettle = settle as PairingActivationTiming["settle"];
     const typedStart = start as PairingActivationTiming["start"];
     return Object.freeze({
       activate: typedActivate.bind(database),
       derive: typedDerive.bind(pollVerifier),
+      limits: typedLimits.bind(ratePolicy),
       settle: typedSettle.bind(timing),
       start: typedStart.bind(timing),
       tryAcquire: typedTryAcquire.bind(admission),
@@ -203,29 +222,75 @@ function normalizeSignature(value: unknown): { accepted: boolean; value: string 
 }
 
 function readRequest(value: unknown): NormalizedRequest {
+  let clientIdentity = derivePairingClientIdentity(undefined);
   try {
     if (!isPlainRecord(value) || !hasExactKeys(value, requestKeys)) {
       return {
+        clientIdentityDigest: clientIdentity.digest,
         pollToken: undefined,
         shapeAccepted: false,
         signature: dummySignatureBase64Url,
         signatureAccepted: false,
       };
     }
+    clientIdentity.digest.fill(0);
+    clientIdentity = derivePairingClientIdentity(ownDataValue(value, "clientIdBase64Url"));
     const signature = normalizeSignature(ownDataValue(value, "possessionSignature"));
     return {
+      clientIdentityDigest: clientIdentity.digest,
       pollToken: ownDataValue(value, "pollToken"),
-      shapeAccepted: true,
+      shapeAccepted: clientIdentity.accepted,
       signature: signature.value,
       signatureAccepted: signature.accepted,
     };
   } catch {
+    clientIdentity.digest.fill(0);
+    clientIdentity = derivePairingClientIdentity(undefined);
     return {
+      clientIdentityDigest: clientIdentity.digest,
       pollToken: undefined,
       shapeAccepted: false,
       signature: dummySignatureBase64Url,
       signatureAccepted: false,
     };
+  }
+}
+
+function readRateLimits(value: unknown): PairingRateLimits | undefined {
+  try {
+    if (!isPlainRecord(value)) {
+      return undefined;
+    }
+    const keys = Reflect.ownKeys(value);
+    if (
+      keys.length !== 3 ||
+      !keys.includes("bucketLimit") ||
+      !keys.includes("globalLimit") ||
+      !keys.includes("windowSeconds")
+    ) {
+      return undefined;
+    }
+    const bucketLimit = ownDataValue(value, "bucketLimit");
+    const globalLimit = ownDataValue(value, "globalLimit");
+    const windowSeconds = ownDataValue(value, "windowSeconds");
+    if (
+      typeof bucketLimit !== "number" ||
+      !Number.isSafeInteger(bucketLimit) ||
+      bucketLimit < 1 ||
+      typeof globalLimit !== "number" ||
+      !Number.isSafeInteger(globalLimit) ||
+      globalLimit < bucketLimit ||
+      globalLimit > 1_000_000 ||
+      typeof windowSeconds !== "number" ||
+      !Number.isSafeInteger(windowSeconds) ||
+      windowSeconds < 1 ||
+      windowSeconds > 3_600
+    ) {
+      return undefined;
+    }
+    return Object.freeze({ bucketLimit, globalLimit, windowSeconds });
+  } catch {
+    return undefined;
   }
 }
 
@@ -341,8 +406,45 @@ function failureDecision(requestId: string): PairingActivationDecision {
   return Object.freeze({ outcome: "not_activated" as const, requestId });
 }
 
-function successDecision(requestId: string, deviceId: string): PairingActivationDecision {
-  return Object.freeze({ deviceId, outcome: "activated" as const, requestId });
+function pendingDecision(requestId: string): PairingActivationDecision {
+  return Object.freeze({ outcome: "pending" as const, requestId });
+}
+
+function rateLimitedDecision(requestId: string): PairingActivationDecision {
+  return Object.freeze({ outcome: "rate_limited" as const, requestId });
+}
+
+function successDecision(
+  requestId: string,
+  deviceId: string,
+  sourceId: string,
+): PairingActivationDecision {
+  return Object.freeze({ deviceId, outcome: "activated" as const, requestId, sourceId });
+}
+
+function readDatabaseDecision(value: unknown): PairingActivationDatabaseResult | undefined {
+  try {
+    if (!isPlainRecord(value)) {
+      return undefined;
+    }
+    const outcome = ownDataValue(value, "outcome");
+    if (outcome === "pending" || outcome === "rate_limited") {
+      return Reflect.ownKeys(value).length === 1 ? Object.freeze({ outcome }) : undefined;
+    }
+    if (outcome !== "activated" || Reflect.ownKeys(value).length !== 3) {
+      return undefined;
+    }
+    const deviceId = ownDataValue(value, "deviceId");
+    const sourceId = ownDataValue(value, "sourceId");
+    return typeof deviceId === "string" &&
+      deviceIdPattern.test(deviceId) &&
+      typeof sourceId === "string" &&
+      sourceIdPattern.test(sourceId)
+      ? Object.freeze({ deviceId, outcome, sourceId })
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function readLease(value: unknown): PairingActivationAdmissionLease | undefined {
@@ -397,50 +499,67 @@ export function createPairingActivationApplication(
 
       const request = readRequest(requestInput);
       let candidates: NormalizedCandidates | undefined;
-      let activated = false;
-      let deviceId: string | undefined;
+      let databaseDecision: Awaited<ReturnType<PairingActivationDatabase["activate"]>> | undefined;
       let settled = false;
       try {
-        deviceId = createDeviceId();
+        const deviceId = createDeviceId();
         const auditEventId = createAuditEventId();
         candidates = readCandidates(resolved.derive(request.pollToken));
         if (candidates !== undefined) {
+          const rateLimits = readRateLimits(resolved.limits("poll"));
+          if (rateLimits === undefined) {
+            throw new PairingActivationApplicationError("dependency_invalid");
+          }
           const allowActivation =
             request.shapeAccepted && request.signatureAccepted && candidates.tokenAccepted;
           const attempt: PairingActivationDatabaseAttempt = {
             allowActivation,
             auditEventId,
+            clientIdentityDigest: request.clientIdentityDigest,
             deviceId,
             pollVerifierDigests: candidates.digests,
+            rateBucketLimit: rateLimits.bucketLimit,
+            rateGlobalLimit: rateLimits.globalLimit,
+            rateWindowSeconds: rateLimits.windowSeconds,
             requestId,
             secondaryCandidateActive: candidates.secondaryActive,
             signatureBase64Url: request.signature,
           };
-          const databaseActivated = await resolved.activate(attempt);
-          activated = allowActivation && databaseActivated;
+          databaseDecision = readDatabaseDecision(await resolved.activate(attempt));
         }
       } catch {
-        activated = false;
+        databaseDecision = undefined;
       } finally {
         try {
           candidates?.clear();
         } catch {
-          activated = false;
+          databaseDecision = undefined;
+        }
+        try {
+          request.clientIdentityDigest.fill(0);
+        } catch {
+          databaseDecision = undefined;
         }
         try {
           await resolved.settle(startedAt);
           settled = true;
         } catch {
-          activated = false;
+          databaseDecision = undefined;
         }
         if (!releaseLease(lease)) {
-          activated = false;
+          databaseDecision = undefined;
         }
       }
 
-      return activated && settled && deviceId !== undefined
-        ? successDecision(requestId, deviceId)
-        : failureDecision(requestId);
+      if (!settled || databaseDecision === undefined) {
+        return failureDecision(requestId);
+      }
+      if (databaseDecision.outcome === "activated") {
+        return successDecision(requestId, databaseDecision.deviceId, databaseDecision.sourceId);
+      }
+      return databaseDecision.outcome === "rate_limited"
+        ? rateLimitedDecision(requestId)
+        : pendingDecision(requestId);
     },
   });
 }
@@ -457,6 +576,7 @@ export async function createConfiguredPairingActivationApplication(
       admission: createPairingActivationAdmission(),
       database,
       pollVerifier,
+      ratePolicy: resolvePairingRatePolicy(environment),
       timing: createPairingActivationTiming(),
     });
     let closed = false;

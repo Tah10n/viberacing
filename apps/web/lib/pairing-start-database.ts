@@ -19,6 +19,7 @@ import { pairingUserCodeVerifierDigestBytes } from "./pairing-user-code-verifier
 
 const attemptKeys = new Set([
   "architecture",
+  "clientIdentityDigest",
   "connectorVersion",
   "deviceKeyId",
   "deviceLabel",
@@ -28,8 +29,12 @@ const attemptKeys = new Set([
   "pairingId",
   "pollVerifierDigest",
   "publicKey",
+  "rateBucketLimit",
+  "rateGlobalLimit",
+  "rateWindowSeconds",
   "userCodeDigest",
 ]);
+const admissionRowKeys = new Set(["admitted"]);
 const resultRowKeys = new Set(["started"]);
 const runtimeBoundaryColumns = [
   "role_ok",
@@ -69,6 +74,7 @@ export class PairingStartDatabaseError extends Error {
 
 export interface PairingStartDatabaseAttempt {
   readonly architecture: string;
+  readonly clientIdentityDigest: Uint8Array;
   readonly connectorVersion: string;
   readonly deviceKeyId: string;
   readonly deviceLabel: string;
@@ -78,11 +84,16 @@ export interface PairingStartDatabaseAttempt {
   readonly pairingId: string;
   readonly pollVerifierDigest: Uint8Array;
   readonly publicKey: Uint8Array;
+  readonly rateBucketLimit: number;
+  readonly rateGlobalLimit: number;
+  readonly rateWindowSeconds: number;
   readonly userCodeDigest: Uint8Array;
 }
 
+export type PairingStartDatabaseResult = "created" | "rate_limited";
+
 export interface PairingStartDatabase {
-  start(attempt: unknown): Promise<boolean>;
+  start(attempt: unknown): Promise<PairingStartDatabaseResult>;
 }
 
 export interface ConfiguredPairingStartDatabase extends PairingStartDatabase {
@@ -91,8 +102,13 @@ export interface ConfiguredPairingStartDatabase extends PairingStartDatabase {
 
 interface ValidatedAttempt extends Omit<
   PairingStartDatabaseAttempt,
-  "pairingChallenge" | "pollVerifierDigest" | "publicKey" | "userCodeDigest"
+  | "clientIdentityDigest"
+  | "pairingChallenge"
+  | "pollVerifierDigest"
+  | "publicKey"
+  | "userCodeDigest"
 > {
+  readonly clientIdentityDigest: Buffer;
   readonly pairingChallenge: Buffer;
   readonly pollVerifierDigest: Buffer;
   readonly publicKey: Buffer;
@@ -182,6 +198,7 @@ function nonzero(value: Buffer): boolean {
 }
 
 function clearAttempt(attempt: ValidatedAttempt | undefined): void {
+  attempt?.clientIdentityDigest.fill(0);
   attempt?.pairingChallenge.fill(0);
   attempt?.pollVerifierDigest.fill(0);
   attempt?.publicKey.fill(0);
@@ -189,6 +206,7 @@ function clearAttempt(attempt: ValidatedAttempt | undefined): void {
 }
 
 function readAttempt(value: unknown): ValidatedAttempt {
+  let clientIdentityDigest: Buffer | undefined;
   let pairingChallenge: Buffer | undefined;
   let pollVerifierDigest: Buffer | undefined;
   let publicKey: Buffer | undefined;
@@ -198,6 +216,7 @@ function readAttempt(value: unknown): ValidatedAttempt {
       fail("input_invalid");
     }
     const architecture = ownDataValue(value, "architecture");
+    clientIdentityDigest = copyExactBytes(ownDataValue(value, "clientIdentityDigest"), 32);
     const connectorVersion = ownDataValue(value, "connectorVersion");
     const deviceKeyId = ownDataValue(value, "deviceKeyId");
     const deviceLabel = ownDataValue(value, "deviceLabel");
@@ -213,6 +232,9 @@ function readAttempt(value: unknown): ValidatedAttempt {
       pairingPollVerifierDigestBytes,
     );
     publicKey = copyExactBytes(ownDataValue(value, "publicKey"), pairingPublicKeyBytes);
+    const rateBucketLimit = ownDataValue(value, "rateBucketLimit");
+    const rateGlobalLimit = ownDataValue(value, "rateGlobalLimit");
+    const rateWindowSeconds = ownDataValue(value, "rateWindowSeconds");
     userCodeDigest = copyExactBytes(
       ownDataValue(value, "userCodeDigest"),
       pairingUserCodeVerifierDigestBytes,
@@ -220,6 +242,7 @@ function readAttempt(value: unknown): ValidatedAttempt {
     if (
       typeof architecture !== "string" ||
       !architectures.has(architecture) ||
+      clientIdentityDigest === undefined ||
       !validVersion(connectorVersion) ||
       typeof deviceKeyId !== "string" ||
       !pairingIdPattern.test(deviceKeyId) ||
@@ -233,12 +256,24 @@ function readAttempt(value: unknown): ValidatedAttempt {
       pollVerifierDigest === undefined ||
       publicKey === undefined ||
       !nonzero(publicKey) ||
+      !Number.isSafeInteger(rateBucketLimit) ||
+      typeof rateBucketLimit !== "number" ||
+      rateBucketLimit < 1 ||
+      !Number.isSafeInteger(rateGlobalLimit) ||
+      typeof rateGlobalLimit !== "number" ||
+      rateGlobalLimit < rateBucketLimit ||
+      rateGlobalLimit > 1_000_000 ||
+      !Number.isSafeInteger(rateWindowSeconds) ||
+      typeof rateWindowSeconds !== "number" ||
+      rateWindowSeconds < 1 ||
+      rateWindowSeconds > 3_600 ||
       userCodeDigest === undefined
     ) {
       fail("input_invalid");
     }
     return Object.freeze({
       architecture,
+      clientIdentityDigest,
       connectorVersion,
       deviceKeyId,
       deviceLabel,
@@ -248,9 +283,13 @@ function readAttempt(value: unknown): ValidatedAttempt {
       pairingId,
       pollVerifierDigest,
       publicKey,
+      rateBucketLimit,
+      rateGlobalLimit,
+      rateWindowSeconds,
       userCodeDigest,
     });
   } catch (error) {
+    clientIdentityDigest?.fill(0);
     pairingChallenge?.fill(0);
     pollVerifierDigest?.fill(0);
     publicKey?.fill(0);
@@ -259,6 +298,28 @@ function readAttempt(value: unknown): ValidatedAttempt {
       throw error;
     }
     fail("input_invalid");
+  }
+}
+
+function readAdmissionResult(value: unknown): boolean {
+  try {
+    if (!validSingleRowArray(value)) {
+      fail("result_invalid");
+    }
+    const row = ownDataValue(value, "0");
+    if (!isPlainRecord(row) || !hasExactKeys(row, admissionRowKeys)) {
+      fail("result_invalid");
+    }
+    const admitted = ownDataValue(row, "admitted");
+    if (typeof admitted !== "boolean") {
+      fail("result_invalid");
+    }
+    return admitted;
+  } catch (error) {
+    if (error instanceof PairingStartDatabaseError) {
+      throw error;
+    }
+    return fail("result_invalid");
   }
 }
 
@@ -315,7 +376,7 @@ function releaseClient(client: PairingDatabaseClient, destroy: boolean): void {
 
 export function createPairingStartDatabase(pool: PairingDatabasePool): PairingStartDatabase {
   return Object.freeze({
-    async start(attemptInput: unknown): Promise<boolean> {
+    async start(attemptInput: unknown): Promise<PairingStartDatabaseResult> {
       const attempt = readAttempt(attemptInput);
       let client: PairingDatabaseClient;
       try {
@@ -327,16 +388,49 @@ export function createPairingStartDatabase(pool: PairingDatabasePool): PairingSt
 
       let destroyClient = true;
       let pendingError: PairingStartDatabaseErrorCode | undefined;
-      let started = false;
+      let result: PairingStartDatabaseResult = "rate_limited";
       try {
         if (!validRuntimeBoundary(await client.verifyRuntimeBoundary())) {
           fail("runtime_boundary_mismatch");
         }
-        if (!validStartResult(await client.startPairing(attempt))) {
-          fail("result_invalid");
+        if (typeof client.admitPairingTransportRequest !== "function") {
+          fail("runtime_boundary_mismatch");
         }
-        started = true;
-        destroyClient = false;
+        const admitted = readAdmissionResult(
+          await client.admitPairingTransportRequest({
+            bucketLimit: attempt.rateBucketLimit,
+            clientIdentityDigest: attempt.clientIdentityDigest,
+            globalLimit: attempt.rateGlobalLimit,
+            operation: "start",
+            windowSeconds: attempt.rateWindowSeconds,
+          }),
+        );
+        if (!admitted) {
+          destroyClient = false;
+          result = "rate_limited";
+        } else {
+          if (
+            !validStartResult(
+              await client.startPairing({
+                architecture: attempt.architecture,
+                connectorVersion: attempt.connectorVersion,
+                deviceKeyId: attempt.deviceKeyId,
+                deviceLabel: attempt.deviceLabel,
+                expiresAt: attempt.expiresAt,
+                osFamily: attempt.osFamily,
+                pairingChallenge: attempt.pairingChallenge,
+                pairingId: attempt.pairingId,
+                pollVerifierDigest: attempt.pollVerifierDigest,
+                publicKey: attempt.publicKey,
+                userCodeDigest: attempt.userCodeDigest,
+              }),
+            )
+          ) {
+            fail("result_invalid");
+          }
+          result = "created";
+          destroyClient = false;
+        }
       } catch (error) {
         pendingError = error instanceof PairingStartDatabaseError ? error.code : "query_failed";
       } finally {
@@ -347,7 +441,7 @@ export function createPairingStartDatabase(pool: PairingDatabasePool): PairingSt
       if (pendingError !== undefined) {
         fail(pendingError);
       }
-      return started;
+      return result;
     },
   });
 }

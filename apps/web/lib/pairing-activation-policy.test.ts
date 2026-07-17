@@ -35,12 +35,15 @@ describe("pairing activation module policy", () => {
       "lib/enrollment-database.ts",
       "lib/pairing-activation-database.ts",
       "lib/pairing-start-database.ts",
+      "lib/pairing-transport-service.ts",
     ]);
     expect(productionModulesReferencing("pairing-activation-database")).toEqual([
       "lib/pairing-activation-application.ts",
+      "lib/pairing-transport-service.ts",
     ]);
     expect(productionModulesReferencing("pairing-start-database")).toEqual([
       "lib/pairing-start-application.ts",
+      "lib/pairing-transport-service.ts",
     ]);
   });
 });

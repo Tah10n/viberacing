@@ -1,6 +1,7 @@
 [package]
 name = "viberacing-connector"
 description = "Fail-closed Codex App Server protocol boundary for Vibe Racing"
+default-run = "viberacing-connector"
 publish = false
 readme = "README.md"
 authors.workspace = true
@@ -11,12 +12,22 @@ version.workspace = true
 
 [dependencies]
 ed25519-dalek = { version = "=3.0.0", default-features = false, features = ["zeroize"] }
-serde = { version = "=1.0.228", default-features = false, features = ["std"] }
+getrandom = "=0.4.3"
+keyring = { version = "=3.6.3", default-features = false, features = ["apple-native", "crypto-rust", "sync-secret-service", "windows-native"] }
+serde = { version = "=1.0.228", default-features = false, features = ["derive", "std"] }
 serde_json = { version = "=1.0.150", default-features = false, features = ["std"] }
 sha2 = { version = "=0.11.0", default-features = false }
+ureq = { version = "=3.2.0", default-features = false, features = ["platform-verifier", "rustls"] }
 
 [features]
 process-test-fixture = []
+
+[[bin]]
+name = "viberacing-connector"
+path = "src/main.rs"
+test = false
+bench = false
+doc = false
 
 [[bin]]
 name = "viberacing-connector-process-fixture"

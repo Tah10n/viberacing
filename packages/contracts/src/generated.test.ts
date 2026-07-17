@@ -7,6 +7,10 @@ import {
   connectorSyncV1Schema,
   validateCommunityScorePageV1,
   validateCommunityScoreQueryV1,
+  validateConnectorPairingPollResultV1,
+  validateConnectorPairingPollV1,
+  validateConnectorPairingStartResultV1,
+  validateConnectorPairingStartV1,
   validateConnectorSyncResultV1,
   validateConnectorSyncV1,
   validateProblemDetailsV1,
@@ -163,6 +167,95 @@ describe("generated connector sync contract", () => {
       });
       expect(JSON.stringify(result.issues)).not.toContain("rawPrompt");
     }
+  });
+});
+
+describe("generated connector pairing transport contracts", () => {
+  it("accepts the exact start and poll request/result shapes", () => {
+    expect(
+      validateConnectorPairingStartV1({
+        schemaVersion: 1,
+        devicePublicKeyBase64Url: "A".repeat(43),
+        deviceLabel: "Synthetic device",
+        connectorVersion: "0.0.0-test",
+        osFamily: "windows",
+        architecture: "x86_64",
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateConnectorPairingStartResultV1({
+        schemaVersion: 1,
+        requestId: "req_0123456789ABCDEFGHIJKL",
+        pairingId: "00000000-0000-4000-8000-000000000401",
+        pollToken: "A".repeat(43),
+        pairingChallengeBase64Url: "A".repeat(43),
+        userCode: "ABCD-EFGH-JKLM",
+        expiresAt: "2026-07-17T06:09:00.000Z",
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateConnectorPairingPollV1({
+        schemaVersion: 1,
+        pollToken: "A".repeat(43),
+        possessionSignature: "A".repeat(86),
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateConnectorPairingPollResultV1({
+        schemaVersion: 1,
+        requestId: "req_0123456789ABCDEFGHIJKL",
+        deviceBindings: [
+          {
+            sourceId: "src_0123456789ABCDEFGHIJKL",
+            deviceId: "dev_0123456789ABCDEFGHIJKL",
+          },
+        ],
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateConnectorPairingPollResultV1({
+        schemaVersion: 1,
+        requestId: "req_0123456789ABCDEFGHIJKL",
+        deviceBindings: [],
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("rejects unknown fields, malformed proof material, and multiple bindings", () => {
+    expect(
+      validateConnectorPairingStartV1({
+        schemaVersion: 1,
+        devicePublicKeyBase64Url: "A".repeat(43),
+        deviceLabel: "Synthetic device",
+        connectorVersion: "0.0.0-test",
+        osFamily: "windows",
+        architecture: "x86_64",
+        accountEmail: "private@example.invalid",
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateConnectorPairingPollV1({
+        schemaVersion: 1,
+        pollToken: "short",
+        possessionSignature: "invalid",
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateConnectorPairingPollResultV1({
+        schemaVersion: 1,
+        requestId: "req_0123456789ABCDEFGHIJKL",
+        deviceBindings: [
+          {
+            sourceId: "src_0123456789ABCDEFGHIJKL",
+            deviceId: "dev_0123456789ABCDEFGHIJKL",
+          },
+          {
+            sourceId: "src_ABCDEFGHIJKL0123456789",
+            deviceId: "dev_ABCDEFGHIJKL0123456789",
+          },
+        ],
+      }).ok,
+    ).toBe(false);
   });
 });
 

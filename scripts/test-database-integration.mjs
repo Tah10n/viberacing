@@ -431,6 +431,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/pairing_capabilities.sql"), "utf8"),
     },
     {
+      label: "pairing transport rate scenarios",
+      sql: readFileSync(resolve(root, "database/tests/pairing_transport_rate.sql"), "utf8"),
+    },
+    {
       label: "source and device lifecycle scenarios",
       sql: readFileSync(resolve(root, "database/tests/source_device_lifecycle.sql"), "utf8"),
     },
@@ -1563,6 +1567,11 @@ SELECT viberacing_api.complete_passkey_login(
     );
     expectDenied(
       role,
+      "SELECT count(*) FROM viberacing_private.pairing_request_windows;",
+      `${role} private pairing rate read`,
+    );
+    expectDenied(
+      role,
       "CREATE TABLE viberacing_api.forbidden (value integer);",
       `${role} API schema mutation`,
     );
@@ -1660,6 +1669,19 @@ SELECT viberacing_api.complete_passkey_login(
     );`,
     "admin pairing start",
   );
+  for (const role of ["viberacing_ingest", "viberacing_jobs", "viberacing_admin"]) {
+    expectDenied(
+      role,
+      `SELECT viberacing_api.admit_pairing_transport_request(
+        'start',
+        pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex'),
+        100,
+        10,
+        60
+      );`,
+      `${role} pairing transport admission`,
+    );
+  }
   expectDenied(
     "viberacing_ingest",
     `SELECT viberacing_api.pause_source(
@@ -1742,7 +1764,7 @@ SELECT viberacing_api.complete_passkey_login(
   }
 
   console.log(
-    "Database integration passed (24 schema tables, 23 observed lock-wait races, 8 relation-denial and 28 cross-capability checks).",
+    "Database integration passed (25 schema tables, 23 observed lock-wait races, 12 relation-denial and 31 cross-capability checks).",
   );
 } finally {
   if (started) {

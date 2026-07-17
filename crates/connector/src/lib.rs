@@ -1,12 +1,12 @@
 //! Fail-closed protocol primitives for the local Codex App Server stdio boundary.
 //!
 //! This crate implements the stable initialization exchange, a candidate-only account/usage
-//! adapter for one exact schema extract, a bounded one-shot child supervisor, and an exact-body
-//! pairing-possession signer, Community sync composer, and isolated one-use request signer. All
-//! operational inputs remain behind
-//! capabilities with no public constructor. The crate does not discover or admit a Codex
-//! executable, generate or load device keys, upload usage, expose a generic JSON-RPC client, or
-//! claim compatibility with any Codex release.
+//! adapter for one exact schema extract, a bounded one-shot child supervisor, an exact-body
+//! pairing-possession signer, Community sync composer, and isolated one-use request signer. It also
+//! exposes one bounded `connect` command that creates a device key in the operating-system
+//! credential store and completes the versioned pairing start/poll exchange. It does not discover
+//! or admit a Codex executable, upload usage, expose a generic JSON-RPC or HTTP client, or claim
+//! compatibility with any Codex release.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -16,6 +16,7 @@ use std::fmt;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 
 mod codex_0_144_4;
+mod connect;
 mod pairing;
 mod process;
 mod sync;
@@ -24,6 +25,7 @@ pub use codex_0_144_4::{
     CandidateCodex01444AccountUsage, DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES,
     MAX_SYNC_TOKEN_VALUE,
 };
+pub use connect::{ConnectorCliError, run_connector_cli};
 pub use pairing::{
     CandidatePairingPossessionV1Signer, PAIRING_CHALLENGE_BYTES, PAIRING_POSSESSION_MESSAGE_PREFIX,
     PairingPossessionProof, PairingPossessionSigningError, PendingDevicePairingSigningKey,

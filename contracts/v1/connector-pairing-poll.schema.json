@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/connector-pairing-poll.schema.json",
+  "title": "ConnectorPairingPollV1",
+  "description": "Closed polling request that presents one short-lived token and the exact pending-key possession signature.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "pollToken", "possessionSignature"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "minimum": 1,
+      "maximum": 1
+    },
+    "pollToken": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 43,
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "possessionSignature": {
+      "type": "string",
+      "minLength": 86,
+      "maxLength": 86,
+      "pattern": "^[A-Za-z0-9_-]{86}$"
+    }
+  }
+}

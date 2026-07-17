@@ -65,7 +65,8 @@ deliberately non-working placeholders. See `.env.example` and the local-developm
 | `lib/public-community-score-route.ts`                                            | Parses and serializes the public score HTTP boundary                     | Closed query/Accept, exact errors, admission, deadlines, and no CORS               |
 | `lib/public-score-admission.ts`                                                  | Enforces the no-queue public-read concurrency ceiling                    | Four active reads; lease held until adapter settlement                             |
 | `lib/public-http-problem.ts`                                                     | Generates opaque request IDs and closed public error responses           | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
-| `app/join`, `app/login`, `app/recover`, `app/account`, `app/connect`, `app/auth` | Routes enrollment, recovery, account, pairing approval, deletion, logout | Thin entrypoints; no connector start/poll or admin                                 |
+| `app/join`, `app/login`, `app/recover`, `app/account`, `app/connect`, `app/auth` | Routes enrollment, recovery, account, pairing approval, deletion, logout | Thin session/browser entrypoints; no admin                                         |
+| `app/v1/connector/pairing`                                                       | Routes anonymous connector pairing start/poll                            | Exact POST only; delegates to the closed shared HTTP boundary                      |
 | `components/account-experience.tsx`                                              | Renders visibility, devices, passkeys, recovery codes, deletion          | Closed state and opaque targets; plaintext codes exist only after explicit action  |
 | `lib/enrollment-http.ts`                                                         | Owns the local identity and pairing-approval HTTP decisions              | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
 | `lib/enrollment-service.ts`                                                      | Composes OAuth, login, account security, pairing, and deletion           | Server IDs/secrets only; fixed database capabilities; generic failure              |
@@ -79,10 +80,13 @@ deliberately non-working placeholders. See `.env.example` and the local-developm
 | `lib/pairing-user-code-verifier.ts`                                              | Derives fixed human-code verifier candidates under separate keys         | Primary plus optional secondary; cross-purpose key reuse is rejected               |
 | `lib/pairing-start-material.ts`                                                  | Generates bounded pending-transaction material                           | Server IDs, 32-byte token/challenge, 60-bit code, and nine-minute expiry           |
 | `lib/pairing-start-database.ts`                                                  | Owns exact pending-pairing creation                                      | Closed metadata and generated fields only; destructive release on failure          |
-| `lib/pairing-start-application.ts`                                               | Composes dormant transport-free start policy                             | Four admitted calls, 250 ms floor, generic failure, no HTTP or approval authority  |
+| `lib/pairing-start-application.ts`                                               | Composes transport-free start policy                                     | Four admitted calls, 250 ms floor, generic failure, no approval authority          |
 | `lib/pairing-activation-database.ts`                                             | Owns approved lookup, strict proof, and exact activation                 | Fixed procedures only; server IDs only; destructive release on boundary failure    |
-| `lib/pairing-activation-application.ts`                                          | Composes dormant transport-free activation policy                        | Four admitted calls, 250 ms floor, generic failure, no HTTP or browser authority   |
+| `lib/pairing-activation-application.ts`                                          | Composes transport-free activation policy                                | Four admitted calls, 250 ms floor, generic failure, no browser authority           |
 | `lib/pairing-database-config.ts`                                                 | Derives a separate read-write pool from the Web/Auth login               | Same strict TLS/deadlines; explicit role/search-path/read-write probe              |
+| `lib/pairing-rate-policy.ts`                                                     | Validates anonymous client IDs and mandatory rate configuration          | Domain-separated digest; raw ID cleared; operation-global plus fixed bucket limits |
+| `lib/pairing-transport-service.ts`                                               | Owns one start/poll application composition                              | One pool/key set/rate policy and aggregate four-call admission                     |
+| `lib/pairing-http.ts`                                                            | Parses and serializes the connector pairing HTTP contract                | Exact path/media/body/header; no-store/no-CORS; generic bounded problems           |
 | `lib/pairing-database-pool.ts`                                                   | Wraps `pg` with fixed pairing start/approval/activation calls            | No generic query; copies/clears byte parameters; stable idle-error signal          |
 | `lib/public-score-database-config.ts`                                            | Parses the dedicated Web login and TLS/pool contract                     | Owner settings are separate; production is verify-full; errors reflect no value    |
 | `lib/public-score-database-pool.ts`                                              | Wraps `pg` with narrow connect/query/release/close authority             | Four connections; bounded waits; stable idle-error signal only                     |
@@ -281,15 +285,16 @@ challenge and approves the pairing atomically. The raw code and public key are n
 browser cookie, log, cache, local storage, or client state after lookup. Existing-source selection
 remains Phase 3 work.
 
-This is local application and synthetic PostgreSQL evidence. It does not provide a connector client,
-pairing start/poll endpoint, real key custody, live authenticator/database login, anonymous edge
-rate policy, capacity evidence, monitoring, or deployment.
+This is local application and synthetic PostgreSQL evidence. The separate Rust workspace now
+provides a native-store connector client and the Web workspace provides start/poll endpoints, but
+there is no live authenticator/database/TLS result, trusted edge policy, cross-platform client
+result, capacity evidence, monitoring, release, or deployment.
 
-## Pairing start and activation boundaries
+## Pairing start, poll, and activation boundaries
 
-The dormant pairing applications reuse the same environment-owned Web/Auth login settings through
-the dedicated `viberacing-web-pairing` pool wrapper with explicit read-write state. They require
-fresh canonical 32-byte primary poll and human-code HMAC keys in
+The pairing applications reuse the same environment-owned Web/Auth login settings through the
+dedicated `viberacing-web-pairing` pool wrapper with explicit read-write state. They require fresh
+canonical 32-byte primary poll and human-code HMAC keys in
 `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL` and
 `VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL`. Each accepts a distinct optional secondary key
 only for bounded rotation overlap. All configured values across both namespaces must be pairwise
@@ -308,22 +313,28 @@ point and possession checks remain in the later proof/activation boundary.
 
 An admitted activation accepts exactly `pollToken` and `possessionSignature`, derives two
 fixed-shape HMAC-SHA-256 candidates, probes the effective Web role/login/search-path/read-write
-state, and uses one fixed query to select at most one approved unexpired transaction. For every
-structurally valid lookup outcome, the high-level adapter runs the strict possession verifier and
-alone calls exact SQL activation with a generated `dev_` ID, audit UUID, and common `req_` ID. The
-SQL procedure atomically rechecks expiry, approval, pending-key, profile, and source binding. Four
-in-flight leases held through a 250-millisecond floor bound steady-state local work to at most 16
-minimum-path completions per second; short windows may still be bursty, and every non-success
-returns only `not_activated` plus the request ID.
+state, and uses fixed queries to select at most one unexpired approved or activated transaction. For
+every structurally valid lookup outcome, the high-level adapter runs the strict possession verifier
+before either returning an existing binding or calling exact SQL activation with a generated `dev_`
+ID, audit UUID, and common `req_` ID. The SQL procedure atomically rechecks expiry, approval,
+pending-key, profile, and source binding. Four in-flight leases held through a 250-millisecond floor
+bound steady-state local work to at most 16 minimum-path completions per second; short windows may
+still be bursty, and every non-success returns only `not_activated` plus the request ID.
 
-Each application uses four in-flight leases held through a 250-millisecond floor. These are not HTTP
-endpoints or complete abuse controls. The browser approval above does not construct either dormant
-application. There is no connector client, start/poll body/header parser or response schema,
-distributed anonymous client rate limit, live login/TLS connection, capacity evidence, monitoring,
-cleanup schedule, or deployment. The synthetic home page and build do not construct either
-application. Their configured factories own independent admission counters and pool instances; a
-future host that composes both must enforce and verify one aggregate CPU, connection, and
-anonymous-attempt budget.
+The two exact POST routes validate the generated start/poll request contracts before lazily
+constructing one shared service. That service owns one pool, poll/code verifier set, rate policy,
+and aggregate four-call admission boundary. The HTTP layer caps requests at 1024 bytes and responses
+at 2048 bytes, rejects queries, duplicate decoded keys, unknown/nested fields, content encoding,
+unsupported media/Accept values, and noncanonical client IDs, and emits only revalidated success or
+generic problem bodies with `no-store`, no referrer, and no CORS headers.
+
+Every accepted request increments one operation-global and one of 64 client buckets through the
+fixed revision 0022 PostgreSQL function before start/activation work. The raw 16-byte client ID and
+its SHA-256 digest are never stored; only 130 preallocated operation/bucket windows exist. Mandatory
+deployment-private limits cover start/poll global, bucket, and window values. This is a distributed
+service-instance control, not strong client identity or a trusted edge/IP capacity perimeter. There
+is still no live login/TLS connection, capacity evidence, monitoring, cleanup schedule, or
+deployment. The synthetic home page and build do not construct the service.
 
 ## Public client data contract
 
@@ -371,9 +382,10 @@ aggregate source count; it does not pair or verify accounts.
   their dedicated server boundaries lazily.
 - The pure pairing kernel accepts only one exact plain-object material tuple, copies the fixed
   challenge/public-key bytes, reconstructs the versioned message, and uses strict Ed25519 semantics.
-  It returns only a generic boolean. The separate dormant application owns protected poll lookup,
+  It returns only a generic boolean. The separate activation application owns protected poll lookup,
   fixed database calls, proof-before-activation ordering, local admission/timing, and generic
-  decisions; neither boundary has a route, log, client identity, or browser authority.
+  decisions. The local start/poll routes expose only their bounded aggregate service; neither
+  transport-free application has browser authority or accepts client-owned activation identifiers.
 - Product rendering uses local HTML/CSS/canvas code. The social preview is a documented,
   metadata-sanitized project-generated PNG; no remote visual source is loaded. The optional Next.js
   `sharp` graph is removed while image optimization is unused. A `never`-typed declaration covers

@@ -22,15 +22,14 @@ pub struct PendingDevicePairingSigningKey {
     signing_key: SigningKey,
 }
 
-#[cfg(test)]
 impl PendingDevicePairingSigningKey {
-    fn for_test(mut secret_key: [u8; ed25519_dalek::SECRET_KEY_LENGTH]) -> Self {
+    pub(crate) fn from_secret_key(mut secret_key: [u8; ed25519_dalek::SECRET_KEY_LENGTH]) -> Self {
         let signing_key = SigningKey::from_bytes(&secret_key);
         secret_key.fill(0);
         Self { signing_key }
     }
 
-    fn verifying_key_bytes(&self) -> [u8; ed25519_dalek::PUBLIC_KEY_LENGTH] {
+    pub(crate) fn verifying_key_bytes(&self) -> [u8; ed25519_dalek::PUBLIC_KEY_LENGTH] {
         self.signing_key.verifying_key().to_bytes()
     }
 }
@@ -51,9 +50,11 @@ impl Drop for ReviewedPairingChallenge {
     }
 }
 
-#[cfg(test)]
 impl ReviewedPairingChallenge {
-    fn for_test(pairing_id: &str, challenge: [u8; PAIRING_CHALLENGE_BYTES]) -> Self {
+    pub(crate) fn from_reviewed_response(
+        pairing_id: &str,
+        challenge: [u8; PAIRING_CHALLENGE_BYTES],
+    ) -> Self {
         Self {
             pairing_id: pairing_id.to_owned(),
             challenge,
@@ -153,7 +154,7 @@ impl CandidatePairingPossessionV1Signer {
     }
 }
 
-fn valid_pairing_id(value: &str) -> bool {
+pub(crate) fn valid_pairing_id(value: &str) -> bool {
     let bytes = value.as_bytes();
     bytes.len() == 36
         && bytes[8] == b'-'
@@ -187,7 +188,7 @@ mod tests {
         let digest = Sha256::digest(TEST_SIGNING_KEY_LABEL);
         let mut secret_key = [0_u8; ed25519_dalek::SECRET_KEY_LENGTH];
         secret_key.copy_from_slice(&digest);
-        PendingDevicePairingSigningKey::for_test(secret_key)
+        PendingDevicePairingSigningKey::from_secret_key(secret_key)
     }
 
     fn shared_test_vector() -> Value {
@@ -203,7 +204,7 @@ mod tests {
         let public_key = encode_base64url(&key.verifying_key_bytes());
         let proof = CandidatePairingPossessionV1Signer::sign(
             key,
-            ReviewedPairingChallenge::for_test(PAIRING_ID, sequential_challenge()),
+            ReviewedPairingChallenge::from_reviewed_response(PAIRING_ID, sequential_challenge()),
         )
         .expect("canonical synthetic pairing challenge must sign");
         let vector = shared_test_vector();
@@ -266,7 +267,7 @@ mod tests {
         ] {
             let error = CandidatePairingPossessionV1Signer::sign(
                 test_signing_key(),
-                ReviewedPairingChallenge::for_test(invalid, sequential_challenge()),
+                ReviewedPairingChallenge::from_reviewed_response(invalid, sequential_challenge()),
             )
             .err()
             .expect("invalid pairing identifier must fail closed");
@@ -280,22 +281,22 @@ mod tests {
     fn binds_the_exact_challenge_and_public_key() {
         let first = CandidatePairingPossessionV1Signer::sign(
             test_signing_key(),
-            ReviewedPairingChallenge::for_test(PAIRING_ID, sequential_challenge()),
+            ReviewedPairingChallenge::from_reviewed_response(PAIRING_ID, sequential_challenge()),
         )
         .expect("first challenge must sign");
         let mut changed_challenge = sequential_challenge();
         changed_challenge[31] ^= 1;
         let second = CandidatePairingPossessionV1Signer::sign(
             test_signing_key(),
-            ReviewedPairingChallenge::for_test(PAIRING_ID, changed_challenge),
+            ReviewedPairingChallenge::from_reviewed_response(PAIRING_ID, changed_challenge),
         )
         .expect("changed challenge must sign independently");
         let other_secret = Sha256::digest(b"viberacing-test-only-other-pairing-key-v1");
         let mut other_key_bytes = [0_u8; ed25519_dalek::SECRET_KEY_LENGTH];
         other_key_bytes.copy_from_slice(&other_secret);
         let third = CandidatePairingPossessionV1Signer::sign(
-            PendingDevicePairingSigningKey::for_test(other_key_bytes),
-            ReviewedPairingChallenge::for_test(PAIRING_ID, sequential_challenge()),
+            PendingDevicePairingSigningKey::from_secret_key(other_key_bytes),
+            ReviewedPairingChallenge::from_reviewed_response(PAIRING_ID, sequential_challenge()),
         )
         .expect("other key must sign independently");
 

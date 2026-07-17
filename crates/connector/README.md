@@ -1,11 +1,12 @@
-# Vibe Racing connector protocol, candidate adapter, supervisor, pairing, and sync signers
+# Vibe Racing connector and bounded protocol foundation
 
 This Rust crate contains the fail-closed local Codex App Server initialization boundary and one
 candidate-only account/usage adapter for the exact `0.144.4` schema extract. It also contains a
-bounded one-shot child supervisor behind a reviewed-launch capability with no public constructor. It
-also contains an isolated pairing-possession signer plus an exact-body Community sync composer and
-request signer behind inaccessible reviewed capabilities. It is a library foundation, not a
-runnable, supported, or released connector.
+bounded one-shot child supervisor behind a reviewed-launch capability with no public constructor, an
+isolated pairing-possession signer, and an exact-body Community sync composer/request signer behind
+inaccessible reviewed capabilities. One runnable `connect` command now completes only the versioned
+pairing start/poll journey with native OS key custody. It is not a supported, packaged, or released
+sync connector.
 
 The implemented surface is deliberately narrow:
 
@@ -41,18 +42,42 @@ The implemented surface is deliberately narrow:
   one canonical version-4 pairing ID, exact 32-byte server challenge, and the public key derived
   from the consumed pending private-key capability; and
 - a one-use proof exposing only the pairing ID and canonical signature, checked against a second
-  synthetic Rust/Web vector that uses the same public key as the sync vector.
+  synthetic Rust/Web vector that uses the same public key as the sync vector;
+- one exact `connect --origin <origin> --label <label>` command with HTTPS-only remote origins,
+  explicit loopback HTTP development support, disabled proxies/redirects, platform certificate
+  verification, 1024/2048-byte request/response ceilings, and fixed ten/five-second request/connect
+  deadlines;
+- OS CSPRNG generation of one Ed25519 key plus a non-authoritative 16-byte rate ID, stored in a
+  fixed versioned binary record through Windows Credential Manager, macOS Keychain, or Linux Secret
+  Service with no plaintext or supported-platform mock fallback;
+- prepared/pending/active persistence that saves before authority is displayed, resumes an
+  interrupted poll, retries every two seconds for at most eight local minutes, and saves activation
+  before success output; and
+- output limited to the exact `/connect` URL, human code, generic progress, and success without key,
+  token, challenge, source, or device identifiers.
 
 `ReviewedCodexLaunch`, `PendingDevicePairingSigningKey`, `ReviewedPairingChallenge`,
-`ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public constructors. There is
-no executable discovery, link/ownership review, artifact or version admission, live Codex launch
-path, source/device context provider, trusted clock, entropy source, WebSocket or network transport,
-generic JSON-RPC method, key generation/store, pairing transaction client, poll-token custody,
-browser approval, activation request, upload, retry loop, scheduler, CLI, installer, or release
-artifact. The checked-in [`0.144.4` candidate evidence](../../compat/codex/0.144.4/manifest.json) is
-development evidence only. The [compatibility matrix](../../docs/reference/codex-compatibility.md)
-remains empty until official-artifact, executable-admission, platform, privacy, packaging, and
-release evidence all pass.
+`ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public constructors; only the
+private pairing command can construct the two pairing capabilities from its validated native-store
+record and server response. There is no executable discovery, link/ownership review, artifact or
+version admission, live Codex launch path, source/device sync context provider, WebSocket transport,
+generic JSON-RPC or HTTP method, usage upload, scheduler, installer, credential rotation/uninstall,
+package, or release artifact. Browser approval remains the separate Web/Auth boundary. The
+checked-in [`0.144.4` candidate evidence](../../compat/codex/0.144.4/manifest.json) is development
+evidence only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty
+until official-artifact, executable-admission, platform, privacy, packaging, and release evidence
+all pass.
+
+The local command shape is:
+
+```text
+viberacing-connector connect --origin <https-origin> --label <device-label>
+```
+
+Plain HTTP with `localhost`, `127.0.0.1`, or `::1` is accepted only for explicit local development.
+Running the command creates a real local keyring entry even when the server later fails; use one
+connect process at a time. No checked-in default server, credential, code, or released binary
+exists.
 
 Run the focused gate from the repository root:
 

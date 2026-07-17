@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains twenty-one SQL-first revisions for identity, passkey login and management,
+This directory contains twenty-two SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
 implemented. A local invite/OAuth/initial-passkey, returning-passkey, session-scoped passkey,
@@ -10,18 +10,18 @@ source/device inventory, source pause/reactivation/unlink, and immediate device-
 now consumes only fixed Web/Auth capabilities with injected or synthetic dependencies. The same
 local boundary also performs bounded recovery-code Argon2id verification and replacement WebAuthn
 verification before fixed recovery calls. It now also performs session-rate-limited browser pairing
-review and fresh-passkey new-source approval. No pairing start/poll HTTP route, production
-credential, or deployed database consumes the remaining protected identity/ingest capabilities. A
-dormant Web/Auth boundary creates bounded pairing material through one fixed start call; a second
-composes keyed pairing lookup, strict Ed25519 possession proof, and exact activation through the
-same mock-tested fixed-query pool, but neither has a live login or transport. A local Ingest kernel
-verifies a bounded exact-body origin/device request, and a separate fixed-query adapter maps origin
-replay plus its output to three capabilities through a probed least-privileged pool. Mock tests do
-not call PostgreSQL or supply a working login. One local public-score route and one local one-shot
-Jobs runner wrap narrow capabilities without a working database login. The database-only ingest and
-Jobs-only ingest-retention, pairing-retention, open-season scoring, and terminal finalization
-procedures plus Web-only public and exact-session private score projections are implemented; HTTP
-ingest, scheduled execution, audited corrections, and broader purge are not.
+review and fresh-passkey new-source approval. Closed local start/poll routes now consume the pairing
+applications through the same protected Web capability; no production credential or deployed
+database consumes them. A Web/Auth boundary creates bounded pairing material through one fixed start
+call; a second composes keyed pairing lookup, strict Ed25519 possession proof, and exact activation
+through the same mock-tested fixed-query pool, but neither has a live login or transport. A local
+Ingest kernel verifies a bounded exact-body origin/device request, and a separate fixed-query
+adapter maps origin replay plus its output to three capabilities through a probed least-privileged
+pool. Mock tests do not call PostgreSQL or supply a working login. One local public-score route and
+one local one-shot Jobs runner wrap narrow capabilities without a working database login. The
+database-only ingest and Jobs-only ingest-retention, pairing-retention, open-season scoring, and
+terminal finalization procedures plus Web-only public and exact-session private score projections
+are implemented; HTTP ingest, scheduled execution, audited corrections, and broader purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -29,7 +29,7 @@ table access. Profile-scoped procedures derive identity from an exact active ses
 Web/Auth to perform OAuth and WebAuthn cryptographic verification before invoking the matching
 procedure. The local identity slice does so for enrollment, login, passkey, recovery, profile,
 device, source, and pairing-approval controls with injected/synthetic evidence. Pairing start/poll
-transport and live credentials remain absent.
+transport is locally implemented, but live credentials and deployment remain absent.
 
 ## Layout
 
@@ -86,6 +86,9 @@ transport and live credentials remain absent.
 - `migrations/0021_pairing_approval_attempt_policy.sql` adds a session-bound distributed attempt
   window, replaces Web access to the unbounded pairing lookup with one fixed two-key candidate
   lookup, and keeps deployment policy values outside tracked configuration.
+- `migrations/0022_pairing_transport_rate_policy.sql` adds 130 fixed global/client-bucket window
+  rows and one Web-only anonymous start/poll admission function without retaining a client ID or
+  digest.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -263,8 +266,10 @@ Runtime access must remain procedure-only and must have positive and negative in
   profile. The first valid approval wins; after that, another profile cannot take over or rebind the
   transaction.
 - `read_pairing_verification_material`, `activate_pairing`, and `poll_pairing_status` expose only
-  the minimum material needed for external Ed25519 proof verification and poll possession.
-  Activation atomically binds the exact pending key to the approved source and one public device ID.
+  the minimum material needed for external Ed25519 proof verification and poll possession. An
+  unexpired activated transaction retains the same read-only material so a lost success response can
+  be retried only after another valid possession proof. Activation atomically binds the exact
+  pending key to the approved source and one public device ID.
 - `read_source_inventory` derives the profile from the exact possessed active or hidden session and
   returns only its opaque source lifecycle plus bounded device metadata. Internal key IDs, public
   keys, profile IDs, account email, and exact usage are absent from the result.
@@ -467,7 +472,7 @@ credential against the encrypted challenge continuation, one fixed function crea
 that five-minute profile-free challenge in the same transaction as the existing credential-derived
 session. It returns only profile ID, public handle, and locale so Web/Auth can seal its existing
 session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
-28 cross-capability denials. Consumed ceremony cleanup, a deployment login, edge attempt policy,
+31 cross-capability denials. Consumed ceremony cleanup, a deployment login, edge attempt policy,
 monitoring, and live authenticator/database integration remain open.
 
 Revision 0015 adds no table, preference field, or broader role. It maps the existing active/hidden

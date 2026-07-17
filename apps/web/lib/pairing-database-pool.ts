@@ -44,6 +44,30 @@ const runtimeBoundaryQuery = `SELECT
   pg_catalog.current_setting('search_path') = 'pg_catalog,pg_temp' AS search_path_ok,
   pg_catalog.current_setting('default_transaction_read_only') = 'off' AS read_write_ok`;
 
+const admitPairingTransportRequestQuery = `SELECT
+  viberacing_api.admit_pairing_transport_request(
+    $1::text,
+    $2::bytea,
+    $3::integer,
+    $4::integer,
+    $5::integer
+  ) AS admitted`;
+
+const pairingStatusQuery = `SELECT
+  candidate.candidate_index,
+  status.pairing_state,
+  status.source_id,
+  status.device_id
+FROM (
+  VALUES
+    (1, $1::bytea),
+    (2, $2::bytea)
+) AS candidate(candidate_index, poll_verifier_digest)
+CROSS JOIN LATERAL viberacing_api.poll_pairing_status(
+  candidate.poll_verifier_digest
+) AS status
+ORDER BY candidate.candidate_index`;
+
 const verificationMaterialQuery = `SELECT
   candidate.candidate_index,
   material.pairing_id::text AS pairing_id,
@@ -716,6 +740,14 @@ export interface PairingDatabaseStart {
   readonly userCodeDigest: Uint8Array;
 }
 
+export interface PairingDatabaseRateAdmission {
+  readonly bucketLimit: number;
+  readonly clientIdentityDigest: Uint8Array;
+  readonly globalLimit: number;
+  readonly operation: "poll" | "start";
+  readonly windowSeconds: number;
+}
+
 export interface EnrollmentDatabaseProfile {
   readonly auditEventId: string;
   readonly githubUserId: number;
@@ -1027,7 +1059,9 @@ export type PairingDatabasePoolSignalSink = (
 ) => Promise<void> | void;
 
 export interface PairingDatabaseClient {
+  admitPairingTransportRequest?(input: PairingDatabaseRateAdmission): Promise<unknown>;
   activatePairing(input: PairingDatabaseActivation): Promise<unknown>;
+  pollPairingStatus?(pollVerifierDigests: readonly [Uint8Array, Uint8Array]): Promise<unknown>;
   readVerificationMaterial(
     pollVerifierDigests: readonly [Uint8Array, Uint8Array],
   ): Promise<unknown>;
@@ -1136,6 +1170,20 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
   }
 
   return Object.freeze({
+    async admitPairingTransportRequest(input: PairingDatabaseRateAdmission): Promise<unknown> {
+      const clientIdentityDigest = Buffer.from(input.clientIdentityDigest);
+      try {
+        return await fixedQuery(admitPairingTransportRequestQuery, [
+          input.operation,
+          clientIdentityDigest,
+          input.globalLimit,
+          input.bucketLimit,
+          input.windowSeconds,
+        ]);
+      } finally {
+        clientIdentityDigest.fill(0);
+      }
+    },
     async activatePairing(input: PairingDatabaseActivation): Promise<unknown> {
       const digest = Buffer.from(input.pollVerifierDigest);
       try {
@@ -1637,6 +1685,18 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
       } finally {
         inviteVerifierDigest.fill(0);
         sessionVerifierDigest.fill(0);
+      }
+    },
+    async pollPairingStatus(
+      pollVerifierDigests: readonly [Uint8Array, Uint8Array],
+    ): Promise<unknown> {
+      const first = Buffer.from(pollVerifierDigests[0]);
+      const second = Buffer.from(pollVerifierDigests[1]);
+      try {
+        return await fixedQuery(pairingStatusQuery, [first, second]);
+      } finally {
+        first.fill(0);
+        second.fill(0);
       }
     },
     async readVerificationMaterial(

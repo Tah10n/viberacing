@@ -134,10 +134,13 @@ material availability cost.
   `/connect` flow add exact-session primary/secondary code lookup, a persisted attempt window shared
   across Web instances, bounded device/fingerprint rendering, explicit fresh-passkey approval, and
   one atomic new-source action. Malformed and non-matching codes return the same generic decision.
-  Pairing remains externally unavailable: there is no connector client or start/poll route,
-  anonymous distributed client-rate policy, live login, cleanup schedule, or real key. Revision 0013
-  adds a separate Jobs-only 1-to-1000 cleanup for expired `pending`, `approved`, and `cancelled`
-  transactions plus their exact still-pending keys; activated bindings and live rows are excluded.
+  ADR 0030 adds exact bounded start/poll routes, one shared four-call service, a native-store Rust
+  client, and revision 0022's fixed operation-global plus 64-bucket rate windows. The client ID is
+  self-asserted rate shaping only; rotating it still consumes the global row and creates no database
+  row. Revision 0013 adds a separate Jobs-only 1-to-1000 cleanup for expired `pending`, `approved`,
+  and `cancelled` transactions plus their exact still-pending keys; activated bindings and live rows
+  are excluded. Live login/TLS integration, trusted edge controls, capacity evidence, cleanup
+  scheduling, cross-platform execution, and release remain absent.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the
@@ -171,9 +174,11 @@ material availability cost.
   64-authority ceiling and sends one opaque device ID through an exact same-origin revoke form.
   PostgreSQL proves inventory and revoke remain available while public visibility is hidden;
   cross-profile IDs and replay stay closed. The separate pairing signer/verifier now proves only
-  synthetic pending-key possession. OS key generation/storage, end-to-end pairing, rotation,
-  metrics, connector HTTP transport, live login, and the live verifier-to-PostgreSQL path remain
-  unimplemented.
+  synthetic pending-key possession. The bounded connector now generates the pairing key from the OS
+  CSPRNG, stores one versioned record only in the native credential store, and clears pending bearer
+  material after local activation/expiry. Exact HTTP start/poll and retry-safe activation are
+  locally tested. Key rotation/uninstall, metrics, cross-platform runtime evidence, live login,
+  release, and the live verifier-to-PostgreSQL path remain unimplemented.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity.
 
@@ -217,12 +222,13 @@ material availability cost.
   inaccessible reviewed context, revalidates every body and unsigned device-header input it owns,
   and fixes the exact JSON/digest/device-message bytes shared with Ingest. An isolated one-use
   signer removes public unsigned access, rejects a key capability bound to another device, signs
-  only the fixed message, and returns the same body plus five header values without opening a
+  only the fixed message, and returns the same body plus five header values without opening a sync
   network path. The operational connector still requires a user-scoped install, resolved trusted
   binary path, link/ownership and artifact/version admission, reviewed construction of every
-  capability, OS key generation/storage, complete pairing transaction/activation, safe diagnostics,
-  platform evidence, and the existing egress allowlist. The isolated synthetic pairing proof does
-  not satisfy those operational controls.
+  capability, safe diagnostics, platform evidence, and the existing sync egress allowlist. The
+  separate pairing command now supplies OS key generation/native custody and only the two exact
+  bounded start/poll paths; it does not satisfy Codex admission, upload, packaging, or release
+  controls.
 - **Detection:** Local safe diagnostics for selected binary/version, bounded failure reason, and
   child cleanup verification without uploading content.
 - **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified
@@ -461,7 +467,7 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 28 cross-capability denials.
+  and usage/scoring-table reads or API-schema mutation, and proves 31 cross-capability denials.
   Ingest has exactly three reviewed functions; Jobs has exactly four reviewed functions: bounded
   ingest-retention cleanup, bounded pairing-retention cleanup, open-season scoring refresh, and
   terminal season finalization. Web alone receives the bounded public score function; Ingest, Jobs,
@@ -612,24 +618,29 @@ material availability cost.
   distributed or client-identity rate limits. The transport-free pairing-start application bounds
   labels, metadata, keys, entropy, and HMAC work, admits four unsettled attempts without a queue,
   holds each lease through a 250-millisecond floor, and makes no database call for malformed input.
-  This is not a distributed or client-identity rate limit. Physical pairing cleanup now exists as a
-  separate local capability, but scheduling and distributed controls are still pending. The local
-  Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client deadlines, two fixed
-  1000-row cleanup commands, canonical season validation, closed one-row results, and destructive
-  release on failure. The kernel itself has no socket/ stream authority. The separate Ingest adapter
-  adds a four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime
-  recycling, exact one-row origin consume, zero-or-one device lookup, and one-row submission
-  results, with destructive release on failure. The transport-free application generates request
-  correlation before verification, submits only after verification, waits for settlement, and
-  contains dependency failures without a retry loop. The local Fastify boundary caps the raw body at
-  8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests
-  per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
-  keep-alive, admits four unsettled application calls without a queue, holds each lease through
-  settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and partial
-  requests; injection tests cover overload and response policy. There is no live identity/database
-  integration, distributed rate/backpressure policy, monitoring, or combined capacity evidence.
-  Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and production load
-  evidence remain unimplemented.
+  Revision 0022 now adds one Web-only fixed-storage admission before start/poll database work: every
+  request locks/increments one operation-global row and one of 64 digest-selected buckets under a
+  five-second deadline. Counts saturate, windows reset in place, and neither raw client ID nor
+  digest is retained. The shared service retains the four-call no-queue ceiling across both
+  operations. This is distributed across Web instances using one database, but the self-asserted ID
+  is not a trusted edge/IP identity and still needs capacity evidence. Physical pairing cleanup
+  exists as a separate local capability, but scheduling and edge controls are still pending. The
+  local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client deadlines, two
+  fixed 1000-row cleanup commands, canonical season validation, closed one-row results, and
+  destructive release on failure. The kernel itself has no socket/ stream authority. The separate
+  Ingest adapter adds a four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines,
+  idle/lifetime recycling, exact one-row origin consume, zero-or-one device lookup, and one-row
+  submission results, with destructive release on failure. The transport-free application generates
+  request correlation before verification, submits only after verification, waits for settlement,
+  and contains dependency failures without a retry loop. The local Fastify boundary caps the raw
+  body at 8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and
+  requests per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a
+  five-second keep-alive, admits four unsettled application calls without a queue, holds each lease
+  through settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and
+  partial requests; injection tests cover overload and response policy. There is no live
+  identity/database integration, distributed rate/backpressure policy, monitoring, or combined
+  capacity evidence. Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and
+  production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

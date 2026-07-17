@@ -96,7 +96,7 @@ apply.
   it until that work settles, and preserve ADR 0013's no-store/same-origin response matrix.
 - Keep pairing possession in the server-only pure verifier. It may accept only the exact approved
   material tuple and versioned message, use strict Ed25519 semantics, and return no reflected
-  detail. The dormant activation application may call activation only through the closed ADR 0027
+  detail. The activation application may call activation only through the closed ADR 0027
   composition.
 - Pairing start may accept only ADR 0028's closed public-key/label/version/OS/architecture request.
   Server code owns all IDs, token, challenge, code, digests, and expiry; poll and human-code HMAC
@@ -108,10 +108,12 @@ apply.
   no WebAuthn ceremony until the user confirms. Bind the fresh assertion to the session, pairing,
   server-generated new source, RP, and origin; consume and approve in one fixed statement. Keep the
   raw code/key out of cookies, logs, cache, and persistence, and keep errors generic.
-- Do not add a connector client or pairing start/poll route without complete transport admission,
-  distributed anonymous rate/deadline policy, contracts, and negative tests. Do not describe the
-  local identity slices as production-ready recovery, deployed authentication, live-user evidence,
-  or completed device activation.
+- Keep pairing start/poll on the two exact versioned POST routes. Validate framing, client ID, and
+  generated contracts before constructing the shared four-call service; retain one global plus one
+  fixed client-bucket PostgreSQL admission per request, generic problems, bounded bodies/deadlines,
+  no-store, and no CORS. Never store the raw client ID or digest or call it authentication. Do not
+  describe the local identity slices as production-ready recovery, deployed authentication,
+  live-user evidence, or deployed device activation.
 
 ## Commands
 

@@ -45,13 +45,14 @@ dependency.
 | [Vitest](https://github.com/vitest-dev/vitest)                              | Unit and component test runner           | MIT              |
 | [YAML](https://eemeli.org/yaml/)                                            | Safe parsing of repository YAML policy   | ISC              |
 
-The connector directly pins Serde and serde_json without derive features, RustCrypto SHA-2 with
-default features disabled, and Dalek Ed25519 with only zeroization enabled. Its active Windows
-non-workspace runtime graph contains twenty-three crates. Cargo.lock also records five
-`cfg(any())`-only Serde derive-chain packages plus target-specific libc and Fiat-Crypto, for thirty
-records total. The exact machine inventory remains authoritative. `compose.yaml` references an
-official PostgreSQL image for disposable local development; the image is pulled separately and is
-not redistributed in this source tree.
+The connector directly pins Serde and serde_json for closed JSON records, RustCrypto SHA-2 with
+default features disabled, Dalek Ed25519 with only zeroization enabled, getrandom for operating-
+system entropy, keyring with the selected Windows/macOS/Linux native-store backends, and ureq with
+Rustls plus the platform certificate verifier. Its active `x86_64-pc-windows-msvc` graph contains 58
+non-workspace packages; the full cross-target Cargo lock graph contains 209 registry packages,
+including mutually exclusive native-store branches. The exact machine inventory remains
+authoritative. `compose.yaml` references an official PostgreSQL image for disposable local
+development; the image is pulled separately and is not redistributed in this source tree.
 
 The machine-readable [dependency inventory](docs/reference/dependency-inventory.json) records every
 locked npm package, every future non-workspace Cargo package, and reviewed external CI/container

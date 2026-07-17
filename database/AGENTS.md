@@ -33,6 +33,9 @@ cases, and privacy data map before changing this subtree.
 - Pairing creates only opaque user-declared sources. Preserve the public ceilings of 32 lifetime
   sources and 64 active plus unexpired approved device authorities per profile; lower deployable
   anti-abuse thresholds remain private configuration and must not enter fixtures or documentation.
+- Anonymous pairing transport admission must keep its fixed 130-row global/bucket matrix, global-
+  then-bucket lock order, saturating counts, and Web-only function. Never persist a client ID or
+  digest or replace fixed buckets with attacker-created rows.
 - Do not weaken forced RLS, state constraints, digest/length checks, or role denials to simplify
   application code.
 
