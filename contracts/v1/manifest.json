@@ -22,6 +22,11 @@
       "typeName": "CarRecipeV1"
     },
     {
+      "file": "community-race-page.schema.json",
+      "exportName": "communityRacePageV1",
+      "typeName": "CommunityRacePageV1"
+    },
+    {
       "file": "community-score-page.schema.json",
       "exportName": "communityScorePageV1",
       "typeName": "CommunityScorePageV1"
@@ -68,6 +73,24 @@
     }
   ],
   "operations": [
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "none",
+      "cacheControl": "no-store",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "implemented-local",
+      "method": "get",
+      "operationId": "getCommunityRaceV1",
+      "path": "/v1/community/race",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 406, 429, 500, 503],
+      "queryPolicy": "closed-single-value",
+      "querySchema": "CommunityScoreQueryV1",
+      "requestBodyPolicy": "none",
+      "requestSchema": "none",
+      "responseSchema": "CommunityRacePageV1",
+      "summary": "Read one bounded Community race page"
+    },
     {
       "admissionPolicy": "no-queue-4",
       "authenticationContract": "none",

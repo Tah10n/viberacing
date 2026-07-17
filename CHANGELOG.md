@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and thirty-six accepted ADRs.
+  fail-closed compatibility policy and matrix, and thirty-seven accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -29,9 +29,10 @@ Versioning where its guarantees are applicable.
   generated validation; deterministic part/trail snapshots; code-native three-theme account
   previews; forced-RLS active/proposal tables; exact-session Web-only propose/read/approve/reject
   functions; opaque session-bound decisions; same-origin account forms; and a separate Jobs-only,
-  maximum-1000, oldest-first expired-proposal cleanup under a private mutex. This local slice has no
-  agent/connector ingress, public active-recipe projection, cleanup schedule, live credential, or
-  deployment.
+  maximum-1000, oldest-first expired-proposal cleanup under a private mutex. A separate compatible
+  public race response projects only the current approved recipe of an active profile; proposal
+  state stays private. This local slice has no agent/connector ingress, cleanup schedule, live
+  credential, or deployment.
 - Strict frontend lint/type/build gates plus unit, interaction, accessibility, CSP/header, scoring,
   localization, and data-boundary tests with enforced coverage thresholds.
 - Integrity-bound cross-platform npm license metadata and an expiring reviewed override for the
@@ -65,6 +66,12 @@ Versioning where its guarantees are applicable.
   non-GET methods through an exact 405, admits four active reads without a queue, holds admission
   through adapter deadlines and settlement, revalidates success output, and translates only generic
   failures. It claims no client-rate policy, working database credential, or deployment.
+- A separate closed `CommunityRacePageV1` and local `GET /v1/community/race` operation that preserve
+  the stable score component and add only one optional exact `CarRecipeV1`. Revision 0027 joins only
+  the current approved recipe after active-profile score filtering; Web-only execution, an exact
+  eleven-column mapper/store, shared no-queue route policy, independent browser validation, lazy
+  client loading, and repository-owned absence fallback are tested without exposing proposal state
+  or claiming a live credential, cache, edge policy, capacity result, monitoring, or deployment.
 - Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
   drift gates and black-box regression coverage.
 - A private pure Ingest workspace plus canonical language-neutral authentication policy for one
@@ -273,12 +280,13 @@ Versioning where its guarantees are applicable.
 - Jobs-only immutable Community season finalization after an exact 48-hour server-time grace period,
   with whole-payload late quarantine, terminal no-data seasons, idempotent retry, bounded calendar
   support, and no implied scheduler, correction capability, or public read surface.
-- A private local one-shot Jobs workspace for exactly six fixed authentication/ingest/pairing
-  cleanup, primary profile purge, open-season refresh, or terminal-finalization capabilities, with
-  strict command/object/result parsing, a distinct redacted database namespace, one-client pool,
-  fixed deadlines, an exact role/login/capability/search-path probe, prepared procedure calls,
-  destructive failure release, stable non-reflective CLI output, production build, and 132 tests at
-  100% coverage. It adds no scheduler, live credential, monitoring, retry loop, or deployment claim.
+- A private local one-shot Jobs workspace for exactly seven fixed authentication/CarRecipe-proposal/
+  ingest/pairing cleanup, primary profile purge, open-season refresh, or terminal-finalization
+  capabilities, with strict command/object/result parsing, a distinct redacted database namespace,
+  one-client pool, fixed deadlines, an exact role/login/capability/search-path probe, prepared
+  procedure calls, destructive failure release, stable non-reflective CLI output, production build,
+  and 144 tests at 100% coverage. It adds no scheduler, live credential, monitoring, retry loop, or
+  deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.

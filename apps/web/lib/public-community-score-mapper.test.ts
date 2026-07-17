@@ -2,8 +2,10 @@ import { validateCommunityScorePageV1 } from "@viberacing/contracts";
 import { describe, expect, it } from "vitest";
 
 import {
+  mapPublicCommunityRaceRows,
   mapPublicCommunityScoreRows,
   PublicCommunityScoreMappingError,
+  publicCommunityRacePageSize,
   publicCommunityScorePageSize,
   type PublicCommunityScoreMappingErrorCode,
 } from "./public-community-score-mapper";
@@ -19,6 +21,10 @@ interface ProjectionRow {
   readonly season_start: string;
   readonly source_count: number;
   readonly weekly_score: number;
+}
+
+interface RaceProjectionRow extends ProjectionRow {
+  readonly car_recipe: unknown;
 }
 
 const baseRow: ProjectionRow = {
@@ -49,9 +55,19 @@ function secondRow(overrides: Partial<ProjectionRow> = {}): ProjectionRow {
   });
 }
 
-function expectMappingError(value: unknown, code: PublicCommunityScoreMappingErrorCode): void {
+function raceRow(
+  overrides: Partial<ProjectionRow> & { readonly car_recipe?: unknown } = {},
+): RaceProjectionRow {
+  return { ...row(overrides), car_recipe: overrides.car_recipe ?? null };
+}
+
+function expectMappingError(
+  value: unknown,
+  code: PublicCommunityScoreMappingErrorCode,
+  mapper: (input: unknown) => unknown = mapPublicCommunityScoreRows,
+): void {
   try {
-    mapPublicCommunityScoreRows(value);
+    mapper(value);
   } catch (error) {
     expect(error).toBeInstanceOf(PublicCommunityScoreMappingError);
     expect(error).toMatchObject({
@@ -282,5 +298,70 @@ describe("public Community score mapper", () => {
       return;
     }
     throw new Error("expected revoked projection to fail");
+  });
+
+  it("maps the separate race projection with an optional frozen canonical CarRecipe", () => {
+    const recipe = {
+      schemaVersion: 1,
+      chassis: "formula",
+      nose: "wedge",
+      cockpit: "canopy",
+      wing: "high",
+      wheels: "slick",
+      palette: "magenta",
+      trail: "spark",
+      seed: 101,
+    } as const;
+    const page = mapPublicCommunityRaceRows([
+      raceRow({ car_recipe: recipe }),
+      raceRow({
+        handle: "beta-driver",
+        weekly_score: 400,
+        active_days: 4,
+        rank_position: 2,
+        display_position: 2,
+      }),
+    ]);
+
+    expect(page.participants).toEqual([
+      expect.objectContaining({ handle: "alpha-driver", carRecipe: recipe }),
+      expect.objectContaining({ handle: "beta-driver" }),
+    ]);
+    expect(Object.hasOwn(page.participants[1] ?? {}, "carRecipe")).toBe(false);
+    expect(Object.isFrozen(page)).toBe(true);
+    expect(Object.isFrozen(page.participants[0]?.carRecipe)).toBe(true);
+    expect(publicCommunityRacePageSize).toBe(publicCommunityScorePageSize);
+  });
+
+  it("requires the exact race projection column and canonical recipe allowlists", () => {
+    const validRecipe = {
+      schemaVersion: 1,
+      chassis: "roadster",
+      nose: "classic",
+      cockpit: "open",
+      wing: "none",
+      wheels: "street",
+      palette: "mint",
+      trail: "grid",
+      seed: 202,
+    };
+    expectMappingError([row()], "invalid_projection", mapPublicCommunityRaceRows);
+    expectMappingError(
+      [{ ...raceRow({ car_recipe: validRecipe }), private_profile_id: "private" }],
+      "invalid_projection",
+      mapPublicCommunityRaceRows,
+    );
+    for (const car_recipe of [
+      { ...validRecipe, assetUrl: "https://invalid.example/car.svg" },
+      { ...validRecipe, palette: "#ffffff" },
+      { ...validRecipe, seed: 65_536 },
+      undefined,
+    ]) {
+      expectMappingError(
+        [{ ...raceRow({ car_recipe: validRecipe }), car_recipe }],
+        car_recipe === undefined ? "invalid_projection" : "contract_mismatch",
+        mapPublicCommunityRaceRows,
+      );
+    }
   });
 });

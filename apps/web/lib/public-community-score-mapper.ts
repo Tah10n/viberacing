@@ -1,12 +1,15 @@
 import "server-only";
 
 import {
+  communityRacePageV1Schema,
   communityScorePageV1Schema,
+  type CommunityRacePageV1,
   type CommunityScorePageV1,
+  validateCommunityRacePageV1,
   validateCommunityScorePageV1,
 } from "@viberacing/contracts";
 
-const projectionColumns = [
+const scoreProjectionColumns = [
   "season_start",
   "season_end",
   "score_version",
@@ -18,11 +21,15 @@ const projectionColumns = [
   "rank_position",
   "display_position",
 ] as const;
-const projectionColumnSet = new Set<string>(projectionColumns);
+const raceProjectionColumns = [...scoreProjectionColumns, "car_recipe"] as const;
+const scoreProjectionColumnSet = new Set<string>(scoreProjectionColumns);
+const raceProjectionColumnSet = new Set<string>(raceProjectionColumns);
 const millisecondsPerDay = 24 * 60 * 60 * 1_000;
 
 export const publicCommunityScorePageSize =
   communityScorePageV1Schema.properties.participants.maxItems;
+export const publicCommunityRacePageSize =
+  communityRacePageV1Schema.properties.participants.maxItems;
 
 export type PublicCommunityScoreMappingErrorCode =
   "contract_mismatch" | "invalid_projection" | "page_limit_exceeded" | "projection_invariant";
@@ -49,7 +56,21 @@ function dataValue(object: object, key: string): unknown {
   return descriptor.value as unknown;
 }
 
-function readProjectionRow(value: unknown): Record<(typeof projectionColumns)[number], unknown> {
+interface ProjectionRow {
+  readonly active_days: unknown;
+  readonly car_recipe?: unknown;
+  readonly display_position: unknown;
+  readonly handle: unknown;
+  readonly rank_position: unknown;
+  readonly score_version: unknown;
+  readonly season_end: unknown;
+  readonly season_finalized: unknown;
+  readonly season_start: unknown;
+  readonly source_count: unknown;
+  readonly weekly_score: unknown;
+}
+
+function readProjectionRow(value: unknown, includeCarRecipe: boolean): ProjectionRow {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail("invalid_projection");
   }
@@ -58,14 +79,16 @@ function readProjectionRow(value: unknown): Record<(typeof projectionColumns)[nu
     fail("invalid_projection");
   }
   const keys = Reflect.ownKeys(value);
+  const columns = includeCarRecipe ? raceProjectionColumns : scoreProjectionColumns;
+  const columnSet = includeCarRecipe ? raceProjectionColumnSet : scoreProjectionColumnSet;
   if (
-    keys.length !== projectionColumns.length ||
-    keys.some((key) => typeof key !== "string" || !projectionColumnSet.has(key))
+    keys.length !== columns.length ||
+    keys.some((key) => typeof key !== "string" || !columnSet.has(key))
   ) {
     fail("invalid_projection");
   }
 
-  return {
+  const row: ProjectionRow = {
     season_start: dataValue(value, "season_start"),
     season_end: dataValue(value, "season_end"),
     score_version: dataValue(value, "score_version"),
@@ -77,17 +100,18 @@ function readProjectionRow(value: unknown): Record<(typeof projectionColumns)[nu
     rank_position: dataValue(value, "rank_position"),
     display_position: dataValue(value, "display_position"),
   };
+  return includeCarRecipe ? { ...row, car_recipe: dataValue(value, "car_recipe") } : row;
 }
 
 function isCanonicalArrayIndex(key: PropertyKey, length: number): boolean {
   return typeof key === "string" && /^(?:0|[1-9][0-9]*)$/.test(key) && Number(key) < length;
 }
 
-function readProjectionRows(value: unknown): readonly unknown[] {
+function readProjectionRows(value: unknown, maximumPageSize: number): readonly unknown[] {
   if (!Array.isArray(value)) {
     fail("invalid_projection");
   }
-  if (value.length > publicCommunityScorePageSize) {
+  if (value.length > maximumPageSize) {
     fail("page_limit_exceeded");
   }
   const prototype: unknown = Object.getPrototypeOf(value);
@@ -120,7 +144,7 @@ function hasValidSeasonWindow(seasonStart: string, seasonEnd: string): boolean {
   );
 }
 
-function assertProjectionInvariants(page: CommunityScorePageV1): void {
+function assertProjectionInvariants(page: CommunityScorePageV1 | CommunityRacePageV1): void {
   const first = page.participants[0];
   if (first === undefined) {
     return;
@@ -163,22 +187,43 @@ function assertProjectionInvariants(page: CommunityScorePageV1): void {
   }
 }
 
-function mapProjection(value: unknown): CommunityScorePageV1 {
-  const participants = readProjectionRows(value).map((row) => {
-    const source = readProjectionRow(row);
-    return {
-      seasonStart: source.season_start,
-      seasonEnd: source.season_end,
-      scoreVersion: source.score_version,
-      seasonFinalized: source.season_finalized,
-      handle: source.handle,
-      weeklyScore: source.weekly_score,
-      activeDays: source.active_days,
-      sourceCount: source.source_count,
-      rankPosition: source.rank_position,
-      displayPosition: source.display_position,
-    };
-  });
+function mapParticipant(source: ProjectionRow) {
+  return {
+    seasonStart: source.season_start,
+    seasonEnd: source.season_end,
+    scoreVersion: source.score_version,
+    seasonFinalized: source.season_finalized,
+    handle: source.handle,
+    weeklyScore: source.weekly_score,
+    activeDays: source.active_days,
+    sourceCount: source.source_count,
+    rankPosition: source.rank_position,
+    displayPosition: source.display_position,
+  };
+}
+
+function freezeProjection<T extends CommunityRacePageV1 | CommunityScorePageV1>(
+  page: T,
+  freezeRecipes: boolean,
+): T {
+  assertProjectionInvariants(page);
+  for (const participant of page.participants) {
+    if (freezeRecipes) {
+      const recipe = Object.getOwnPropertyDescriptor(participant, "carRecipe")?.value as unknown;
+      if (recipe !== null && typeof recipe === "object") {
+        Object.freeze(recipe);
+      }
+    }
+    Object.freeze(participant);
+  }
+  Object.freeze(page.participants);
+  return Object.freeze(page);
+}
+
+function mapScoreProjection(value: unknown): CommunityScorePageV1 {
+  const participants = readProjectionRows(value, publicCommunityScorePageSize).map((row) =>
+    mapParticipant(readProjectionRow(row, false)),
+  );
   const result = validateCommunityScorePageV1({
     schemaVersion: 1,
     trustTier: "community",
@@ -188,18 +233,47 @@ function mapProjection(value: unknown): CommunityScorePageV1 {
   if (!result.ok) {
     fail("contract_mismatch");
   }
+  return freezeProjection(result.value, false);
+}
 
-  assertProjectionInvariants(result.value);
-  for (const participant of result.value.participants) {
-    Object.freeze(participant);
+function mapRaceProjection(value: unknown): CommunityRacePageV1 {
+  const participants = readProjectionRows(value, publicCommunityRacePageSize).map((row) => {
+    const source = readProjectionRow(row, true);
+    const participant = mapParticipant(source);
+    if (source.car_recipe === null) {
+      return participant;
+    }
+    if (source.car_recipe === undefined) {
+      fail("invalid_projection");
+    }
+    return { ...participant, carRecipe: source.car_recipe };
+  });
+  const result = validateCommunityRacePageV1({
+    schemaVersion: 1,
+    trustTier: "community",
+    selfReported: true,
+    participants,
+  });
+  if (!result.ok) {
+    fail("contract_mismatch");
   }
-  Object.freeze(result.value.participants);
-  return Object.freeze(result.value);
+  return freezeProjection(result.value, true);
 }
 
 export function mapPublicCommunityScoreRows(value: unknown): CommunityScorePageV1 {
   try {
-    return mapProjection(value);
+    return mapScoreProjection(value);
+  } catch (error) {
+    if (error instanceof PublicCommunityScoreMappingError) {
+      throw error;
+    }
+    fail("invalid_projection");
+  }
+}
+
+export function mapPublicCommunityRaceRows(value: unknown): CommunityRacePageV1 {
+  try {
+    return mapRaceProjection(value);
   } catch (error) {
     if (error instanceof PublicCommunityScoreMappingError) {
       throw error;

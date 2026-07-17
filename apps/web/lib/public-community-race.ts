@@ -1,7 +1,7 @@
 import type { CarRecipe } from "./car-recipe";
 import type { PublicRaceParticipant } from "./race-types";
 
-const scorePath = "/v1/community/scores";
+const scorePath = "/v1/community/race";
 const maximumResponseCharacters = 32_768;
 const minimumSeasonStart = "1999-12-27";
 const maximumSeasonStart = "2099-12-28";
@@ -18,6 +18,20 @@ const participantKeys = [
   "sourceCount",
   "weeklyScore",
 ] as const;
+const participantKeysWithCarRecipe = [...participantKeys, "carRecipe"] as const;
+const carRecipeKeys = [
+  "schemaVersion",
+  "chassis",
+  "nose",
+  "cockpit",
+  "wing",
+  "wheels",
+  "palette",
+  "trail",
+  "seed",
+] as const;
+const carRecipeEnums =
+  /^(?:formula|rally|roadster)\0(?:classic|scoop|wedge)\0(?:canopy|open|rally)\0(?:high|low|none)\0(?:all-terrain|slick|street)\0(?:magenta|mint|redline|sunburst|turbo-blue)\0(?:grid|none|spark)$/;
 const handlePattern = /^[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]$/;
 const scoreVersionPattern = /^[a-z][a-z0-9_]{2,31}$/;
 
@@ -101,6 +115,31 @@ function boundedInteger(value: unknown, minimum: number, maximum: number): value
   );
 }
 
+function readCarRecipe(value: unknown): CarRecipe | undefined {
+  if (!isPlainObject(value) || !hasExactDataKeys(value, carRecipeKeys)) {
+    return undefined;
+  }
+  const recipe = value as { readonly [Key in keyof CarRecipe]: unknown };
+  const enums = [
+    recipe.chassis,
+    recipe.nose,
+    recipe.cockpit,
+    recipe.wing,
+    recipe.wheels,
+    recipe.palette,
+    recipe.trail,
+  ];
+  if (
+    recipe.schemaVersion !== 1 ||
+    enums.some((part) => typeof part !== "string") ||
+    !carRecipeEnums.test(enums.join("\0")) ||
+    !boundedInteger(recipe.seed, 0, 65_535)
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ ...recipe }) as CarRecipe;
+}
+
 function validSeasonStart(value: unknown): value is string {
   if (
     typeof value !== "string" ||
@@ -139,7 +178,7 @@ export function isPublicCommunityHandle(value: unknown): value is string {
   return typeof value === "string" && handlePattern.test(value);
 }
 
-export function mapCommunityScorePageToRace(
+export function mapCommunityRacePageToRace(
   value: unknown,
   expectedSeasonStart: string,
 ): readonly PublicRaceParticipant[] | undefined {
@@ -167,7 +206,11 @@ export function mapCommunityScorePageToRace(
     const participants: PublicRaceParticipant[] = [];
     for (let index = 0; index < rows.length; index += 1) {
       const row = dataValue(rows, String(index));
-      if (!isPlainObject(row) || !hasExactDataKeys(row, participantKeys)) {
+      if (!isPlainObject(row)) {
+        return undefined;
+      }
+      const hasCarRecipe = hasExactDataKeys(row, participantKeysWithCarRecipe);
+      if (!hasCarRecipe && !hasExactDataKeys(row, participantKeys)) {
         return undefined;
       }
       const activeDays = dataValue(row, "activeDays");
@@ -195,7 +238,12 @@ export function mapCommunityScorePageToRace(
       ) {
         return undefined;
       }
-      const car = fallbackCars[index % fallbackCars.length] ?? fallbackCars[0];
+      const car = hasCarRecipe
+        ? readCarRecipe(dataValue(row, "carRecipe"))
+        : (fallbackCars[index % fallbackCars.length] ?? fallbackCars[0]);
+      if (car === undefined) {
+        return undefined;
+      }
       participants.push(
         Object.freeze({
           activeDays,
@@ -243,7 +291,7 @@ export async function loadPublicCommunityRace(
     if (body.length > maximumResponseCharacters) {
       return undefined;
     }
-    return mapCommunityScorePageToRace(JSON.parse(body) as unknown, seasonStart);
+    return mapCommunityRacePageToRace(JSON.parse(body) as unknown, seasonStart);
   } catch {
     return undefined;
   }

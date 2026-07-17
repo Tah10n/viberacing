@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 56
+    SELECT pg_catalog.count(*) = 57
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -147,16 +147,19 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 1
+    SELECT pg_catalog.count(*) = 2
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=5s']::text[]
       )
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
-      AND procedure.proname = 'list_public_community_scores'
+      AND procedure.proname IN (
+        'list_public_community_race',
+        'list_public_community_scores'
+      )
   ),
-  'the bounded public score projection has a database-enforced statement deadline'
+  'the bounded public score and race projections have database-enforced statement deadlines'
 );
 
 SELECT pg_temp.assert_true(
@@ -212,7 +215,7 @@ SELECT pg_temp.assert_true(
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
   ),
-  'web can execute only the reviewed identity and public score flows'
+  'web can execute only the reviewed identity and public Community projection flows'
 );
 
 SELECT pg_temp.assert_true(

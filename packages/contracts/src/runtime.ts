@@ -6,6 +6,7 @@ export interface ContractSchema {
   readonly "x-viberacing-dateMaximum"?: string;
   readonly "x-viberacing-dateMinimum"?: string;
   readonly "x-viberacing-isoWeekday"?: number;
+  readonly "x-viberacing-optionalProperties"?: readonly string[];
   readonly "x-viberacing-uniqueBy"?: string;
   readonly additionalProperties?: false;
   readonly const?: boolean | number | string;

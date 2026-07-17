@@ -14,7 +14,6 @@ import {
   translations,
   type Locale,
 } from "@/lib/i18n";
-import { loadPublicCommunityRace } from "@/lib/public-community-race";
 import type { PublicRaceParticipant, SyntheticRacePayload } from "@/lib/race-types";
 import { isRaceThemeId, raceThemeIds, type RaceThemeId } from "@/lib/theme";
 
@@ -108,14 +107,25 @@ export function RaceExperience({
       return undefined;
     }
     const controller = new AbortController();
-    void loadPublicCommunityRace(communitySeasonStart, controller.signal).then((participants) => {
-      if (controller.signal.aborted) {
-        return;
-      }
-      setScoreState(
-        participants === undefined ? { source: "fallback" } : { participants, source: "community" },
-      );
-    });
+    void import("@/lib/public-community-race")
+      .then(({ loadPublicCommunityRace }) =>
+        loadPublicCommunityRace(communitySeasonStart, controller.signal),
+      )
+      .then((participants) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setScoreState(
+          participants === undefined
+            ? { source: "fallback" }
+            : { participants, source: "community" },
+        );
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setScoreState({ source: "fallback" });
+        }
+      });
     return () => {
       controller.abort();
     };

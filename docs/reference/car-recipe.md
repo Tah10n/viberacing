@@ -4,9 +4,9 @@
 
 `CarRecipeV1` is implemented locally as a language-neutral JSON Schema, generated TypeScript type
 and validator, deterministic three-theme renderer, exact-session PostgreSQL proposal/approval
-boundary, signed-in account editor, and bounded Jobs-only expired-proposal cleanup. This is
-synthetic/local evidence. No connector or agent can submit a proposal, no public response projects
-the active recipe, and no cleanup schedule or deployment is claimed.
+boundary, signed-in account editor, bounded Jobs-only expired-proposal cleanup, and separate
+compatible public race projection. This is synthetic/local evidence. No connector or agent can
+submit a proposal, and no cleanup schedule or deployment is claimed.
 
 ## Closed shape
 
@@ -58,9 +58,11 @@ declared as public OpenAPI operations.
 5. Approval consumes an encrypted session-bound control, atomically replaces the active recipe, and
    deletes the pending row. Rejection deletes only that pending row.
 
-The raw proposal ID and profile ID never enter HTML. The active recipe remains private to the
-account until a separate public profile/score projection is designed and reviewed. Expired rows are
-unusable immediately and eligible for bounded physical cleanup, but no scheduler invokes it.
+The raw proposal ID and profile ID never enter HTML. A separate `CommunityRacePageV1` may expose
+only the current approved exact recipe for an `active` profile. It contains no proposal identity,
+state, timestamp, private ID, or account authority, and the stable score response remains unchanged.
+An absent recipe uses a repository-owned presentation fallback. Expired proposal rows are unusable
+immediately and eligible for bounded physical cleanup, but no scheduler invokes it.
 
 ## Rendering and assets
 
@@ -85,5 +87,6 @@ meaning; a breaking visual change uses a new recipe version or an explicit revie
   monitoring, and deployment review.
 
 See [ADR 0005](../decisions/0005-enum-only-car-recipe.md),
-[ADR 0035](../decisions/0035-bounded-session-car-recipe-proposal.md), security invariant
+[ADR 0035](../decisions/0035-bounded-session-car-recipe-proposal.md),
+[ADR 0037](../decisions/0037-bounded-public-community-race-projection.md), security invariant
 `VR-CAR-001`, and `VR-ABUSE-CAR-INJECTION`.

@@ -1,21 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { CommunityScorePageV1 } from "@viberacing/contracts";
+import type { CommunityRacePageV1 } from "@viberacing/contracts";
 
 import {
   currentCommunitySeasonStart,
   isPublicCommunityHandle,
   loadPublicCommunityRace,
-  mapCommunityScorePageToRace,
+  mapCommunityRacePageToRace,
 } from "./public-community-race";
 
 const seasonStart = "2026-07-13";
+const activeRecipe = {
+  schemaVersion: 1,
+  chassis: "formula",
+  nose: "wedge",
+  cockpit: "canopy",
+  wing: "high",
+  wheels: "slick",
+  palette: "magenta",
+  trail: "spark",
+  seed: 101,
+} as const;
 const validPage = {
   participants: [
     {
       activeDays: 7,
       displayPosition: 1,
       handle: "community_one",
+      carRecipe: activeRecipe,
       rankPosition: 1,
       scoreVersion: "community_v1",
       seasonEnd: "2026-07-19",
@@ -40,7 +52,7 @@ const validPage = {
   schemaVersion: 1,
   selfReported: true,
   trustTier: "community",
-} as const satisfies CommunityScorePageV1;
+} as const satisfies CommunityRacePageV1;
 
 function scoreResponse(value: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(value), {
@@ -75,9 +87,10 @@ describe("visible public Community race", () => {
   });
 
   it("maps only the validated requested season into public presentation fields", () => {
-    const participants = mapCommunityScorePageToRace(validPage, seasonStart);
+    const participants = mapCommunityRacePageToRace(validPage, seasonStart);
     expect(participants).toEqual([
       expect.objectContaining({
+        car: activeRecipe,
         freshnessDays: null,
         handle: "community_one",
         id: "community-1",
@@ -92,6 +105,8 @@ describe("visible public Community race", () => {
     ]);
     expect(Object.isFrozen(participants)).toBe(true);
     expect(Object.isFrozen(participants?.[0])).toBe(true);
+    expect(Object.isFrozen(participants?.[0]?.car)).toBe(true);
+    expect(participants?.[1]?.car).not.toEqual(activeRecipe);
     expect(JSON.stringify(participants)).not.toMatch(/(?:token|sourceId|profileId|github)/i);
   });
 
@@ -111,14 +126,35 @@ describe("visible public Community race", () => {
       },
       seasonStart,
     ],
-  ])("fails closed for invalid or mismatched score pages", (page, expectedSeason) => {
-    expect(mapCommunityScorePageToRace(page, expectedSeason)).toBeUndefined();
+    [
+      {
+        ...validPage,
+        participants: [
+          {
+            ...validPage.participants[0],
+            carRecipe: { ...activeRecipe, assetUrl: "https://invalid.example/car.svg" },
+          },
+        ],
+      },
+      seasonStart,
+    ],
+    [
+      {
+        ...validPage,
+        participants: [
+          { ...validPage.participants[0], carRecipe: { ...activeRecipe, palette: "#ffffff" } },
+        ],
+      },
+      seasonStart,
+    ],
+  ])("fails closed for invalid or mismatched race pages", (page, expectedSeason) => {
+    expect(mapCommunityRacePageToRace(page, expectedSeason)).toBeUndefined();
   });
 
   it("reads the exact same-origin endpoint without credentials or caching", async () => {
     const controller = new AbortController();
     const fetchScore = vi.fn((input: string, init: RequestInit) => {
-      expect(input).toBe("/v1/community/scores?seasonStart=2026-07-13");
+      expect(input).toBe("/v1/community/race?seasonStart=2026-07-13");
       expect(init).toMatchObject({
         cache: "no-store",
         credentials: "omit",

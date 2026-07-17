@@ -495,15 +495,22 @@ and four-request no-queue admission. The lease remains held through the adapter'
 connect/query/statement deadlines. This local evidence is not a deployment, live database login,
 edge rate policy, shared cache, capacity result, or public-beta claim.
 
-The visible home race now uses that exact same-origin operation for its current server-selected
-Monday. It accepts only the bounded Public response, uses no credentials or browser persistence, and
-keeps a clearly labeled synthetic fallback on any invalid or unavailable result. Selecting a
-Community handle now updates one same-page summary with only its weekly score, rank, active-day and
-source counts; the UI explicitly keeps daily detail, device counts, exact usage, and identifiers out
-of that surface. The exact public handle can be shared as `/?profile=handle#profile`; invalid or
-duplicate values are ignored, and a missing top-32 row is never substituted with another profile.
-Public active-CarRecipe projection, streak, freshness, authenticated daily/profile detail, cache,
-live database integration, and deployment remain separate gates.
+A second compatible read contract is `GET /v1/community/race?seasonStart=YYYY-MM-DD`. ADR 0037
+preserves the complete stable score component and adds only one optional exact current `CarRecipeV1`
+to each otherwise identical row. Revision 0027 projects that recipe only after current
+active-profile filtering. Proposal identity, state, timestamps, and private identifiers remain
+absent; a recipe is current presentation state, not an immutable historical season snapshot.
+
+The visible home race now uses the separate same-origin race operation for its current
+server-selected Monday. It accepts only the bounded Public response, loads its compact independent
+validator after hydration, uses no credentials or browser persistence, and keeps a clearly labeled
+synthetic fallback on any invalid or unavailable result. A participant without an active recipe uses
+a repository-owned visual fallback. Selecting a Community handle updates one same-page summary with
+only its weekly score, rank, active-day and source counts; the UI explicitly keeps daily detail,
+device counts, exact usage, proposal state, and identifiers out of that surface. The exact public
+handle can be shared as `/?profile=handle#profile`; invalid or duplicate values are ignored, and a
+missing top-32 row is never substituted with another profile. Streak, freshness, authenticated
+daily/profile detail, cache, live database integration, and deployment remain separate gates.
 
 ### ConnectorSyncV1
 
@@ -947,10 +954,10 @@ measurements exist.
 ### Phase 4 — Agent car proposal
 
 - The canonical version 1 schema, deterministic renderer, asset record, exact-session PostgreSQL
-  proposal/approval state, and signed-in three-theme account preview are implemented locally. The
-  actual agent/connector ingress, public active-recipe projection, cleanup scheduling and deployed
-  retention evidence, edge policy, live database result, monitoring, capacity evidence, packaging,
-  and deployment remain gates.
+  proposal/approval state, signed-in three-theme account preview, and separate compatible public
+  active-recipe race projection are implemented locally. The actual agent/connector ingress, cleanup
+  scheduling and deployed retention evidence, edge policy, live database result, monitoring,
+  capacity evidence, packaging, and deployment remain gates.
 - Add versioned CarRecipe, bounded proposal API, browser preview and approval, theme rendering,
   asset provenance, and snapshot tests.
 - Package the fixed-command end-user connector workflow only after the CLI is stable.

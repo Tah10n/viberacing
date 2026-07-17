@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
+import { isDeepStrictEqual } from "node:util";
 
 import { buildGeneratedArtifacts, readContractSources } from "./lib/contract-generation.mjs";
 
@@ -35,6 +36,7 @@ const schemaKeys = new Set([
   "required",
   "title",
   "type",
+  "x-viberacing-optionalProperties",
   "x-viberacing-uniqueBy",
 ]);
 const schemaTypes = new Set(["array", "boolean", "integer", "object", "string"]);
@@ -72,6 +74,10 @@ const expectedFields = new Map([
   [
     "car-recipe.schema.json",
     ["schemaVersion", "chassis", "nose", "cockpit", "wing", "wheels", "palette", "trail", "seed"],
+  ],
+  [
+    "community-race-page.schema.json",
+    ["schemaVersion", "trustTier", "selfReported", "participants"],
   ],
   [
     "community-score-page.schema.json",
@@ -151,6 +157,21 @@ const publicProblemTitles = [
   "Validation failed",
 ];
 const implementedLocalEvidencePaths = new Map([
+  [
+    "getCommunityRaceV1",
+    [
+      "apps/web/app/v1/community/race/route.test.ts",
+      "apps/web/app/v1/community/race/route.ts",
+      "apps/web/lib/public-community-race.test.ts",
+      "apps/web/lib/public-community-race.ts",
+      "apps/web/lib/public-community-score-mapper.test.ts",
+      "apps/web/lib/public-community-score-mapper.ts",
+      "apps/web/lib/public-community-score-route.test.ts",
+      "apps/web/lib/public-community-score-route.ts",
+      "apps/web/lib/public-community-score-store.test.ts",
+      "apps/web/lib/public-community-score-store.ts",
+    ],
+  ],
   [
     "getCommunityScoresV1",
     [
@@ -463,6 +484,9 @@ function validateSchemaNode(schema, scope, depth, state) {
   if (hasDateExtension && schema.type !== "string") {
     report(scope, "date extensions are supported only on date strings");
   }
+  if (schema["x-viberacing-optionalProperties"] !== undefined && schema.type !== "object") {
+    report(scope, "optional properties are supported only on closed objects");
+  }
 
   if (schema.type === "object") {
     if (schema.additionalProperties !== false) {
@@ -476,8 +500,28 @@ function validateSchemaNode(schema, scope, depth, state) {
     if (properties.length === 0 || properties.length > 32) {
       report(scope, "object schemas must contain 1 to 32 properties");
     }
-    if (!Array.isArray(schema.required) || !sameEntries(schema.required, properties)) {
-      report(scope, "every property must be required in the same reviewed order");
+    const optionalProperties = schema["x-viberacing-optionalProperties"];
+    if (optionalProperties === undefined) {
+      if (!Array.isArray(schema.required) || !sameEntries(schema.required, properties)) {
+        report(scope, "every property must be required in the same reviewed order");
+      }
+    } else {
+      const optionalPropertyList = Array.isArray(optionalProperties) ? optionalProperties : [];
+      const optionalPropertySet = new Set(optionalPropertyList);
+      const reviewedOptionalOrder = properties.filter((name) => optionalPropertySet.has(name));
+      if (
+        !Array.isArray(optionalProperties) ||
+        optionalProperties.length === 0 ||
+        optionalProperties.length > 8 ||
+        optionalPropertySet.size !== optionalProperties.length ||
+        !sameEntries(optionalPropertyList, reviewedOptionalOrder)
+      ) {
+        report(scope, "optional properties must be a bounded ordered subset of object fields");
+      }
+      const requiredProperties = properties.filter((name) => !optionalPropertySet.has(name));
+      if (!Array.isArray(schema.required) || !sameEntries(schema.required, requiredProperties)) {
+        report(scope, "required properties must exclude only the reviewed optional fields");
+      }
     }
     for (const [name, propertySchema] of Object.entries(schema.properties)) {
       if (!/^[a-z][A-Za-z0-9]*$/.test(name)) {
@@ -689,38 +733,91 @@ if (sources !== undefined) {
         report(scope, "daily entries must remain unique by codexReportedDate");
       }
     }
-    if (entry.file === "community-score-page.schema.json") {
+    if (
+      entry.file === "community-race-page.schema.json" ||
+      entry.file === "community-score-page.schema.json"
+    ) {
+      const isRacePage = entry.file === "community-race-page.schema.json";
       const participantArray = schema?.properties?.participants;
       const participantProperties = participantArray?.items?.properties ?? {};
       const participantFields = Object.keys(participantProperties);
+      const requiredParticipantFields = [
+        "seasonStart",
+        "seasonEnd",
+        "scoreVersion",
+        "seasonFinalized",
+        "handle",
+        "weeklyScore",
+        "activeDays",
+        "sourceCount",
+        "rankPosition",
+        "displayPosition",
+      ];
+      const expectedParticipantFields = isRacePage
+        ? [
+            "seasonStart",
+            "seasonEnd",
+            "scoreVersion",
+            "seasonFinalized",
+            "handle",
+            "carRecipe",
+            "weeklyScore",
+            "activeDays",
+            "sourceCount",
+            "rankPosition",
+            "displayPosition",
+          ]
+        : requiredParticipantFields;
       if (
         schema?.properties?.trustTier?.const !== "community" ||
         schema?.properties?.selfReported?.const !== true
       ) {
-        report(scope, "Community score trust metadata must remain explicit and constant");
+        report(
+          scope,
+          isRacePage
+            ? "Community race trust metadata must remain explicit and constant"
+            : "Community score trust metadata must remain explicit and constant",
+        );
       }
       if (
         participantArray?.minItems !== 0 ||
         participantArray?.maxItems !== 32 ||
         participantArray?.["x-viberacing-uniqueBy"] !== "displayPosition"
       ) {
-        report(scope, "Community score participants must remain a bounded unique display page");
+        report(
+          scope,
+          isRacePage
+            ? "Community race participants must remain a bounded unique display page"
+            : "Community score participants must remain a bounded unique display page",
+        );
       }
       if (
-        !sameEntries(participantFields, [
-          "seasonStart",
-          "seasonEnd",
-          "scoreVersion",
-          "seasonFinalized",
-          "handle",
-          "weeklyScore",
-          "activeDays",
-          "sourceCount",
-          "rankPosition",
-          "displayPosition",
-        ])
+        !sameEntries(participantFields, expectedParticipantFields) ||
+        !sameEntries(participantArray?.items?.required ?? [], requiredParticipantFields)
       ) {
-        report(scope, "Community score participant fields differ from the public allowlist");
+        report(
+          scope,
+          isRacePage
+            ? "Community race participant fields differ from the public allowlist"
+            : "Community score participant fields differ from the public allowlist",
+        );
+      }
+      if (isRacePage) {
+        const carRecipeSchema = records.find(
+          (candidate) => candidate.entry.file === "car-recipe.schema.json",
+        )?.schema;
+        const canonicalCarRecipeShape = {
+          type: carRecipeSchema?.type,
+          additionalProperties: carRecipeSchema?.additionalProperties,
+          required: carRecipeSchema?.required,
+          properties: carRecipeSchema?.properties,
+        };
+        if (
+          participantArray?.items?.required?.includes("carRecipe") ||
+          !isDeepStrictEqual(participantProperties.carRecipe, canonicalCarRecipeShape)
+        ) {
+          report(scope, "Community race CarRecipe differs from the canonical optional recipe");
+        }
       }
       const exactIntegerBounds = [
         ["weeklyScore", 0, 7000],
@@ -753,7 +850,12 @@ if (sources !== undefined) {
         participantProperties.seasonEnd?.["x-viberacing-dateMaximum"] !== "2100-01-03" ||
         participantProperties.seasonEnd?.["x-viberacing-isoWeekday"] !== 7
       ) {
-        report(scope, "Community score participant bounds differ from the reviewed projection");
+        report(
+          scope,
+          isRacePage
+            ? "Community race participant bounds differ from the reviewed projection"
+            : "Community score participant bounds differ from the reviewed projection",
+        );
       }
     }
     if (entry.file === "community-score-query.schema.json") {
@@ -821,9 +923,35 @@ if (sources !== undefined) {
     }
   }
 
-  const publicScoreOperation = operations[0];
+  const publicRaceOperation = operations[0];
   if (
-    operations.length !== 4 ||
+    operations.length !== 5 ||
+    publicRaceOperation?.entry.method !== "get" ||
+    publicRaceOperation.entry.path !== "/v1/community/race" ||
+    publicRaceOperation.entry.operationId !== "getCommunityRaceV1" ||
+    publicRaceOperation.entry.implementationStatus !== "implemented-local" ||
+    publicRaceOperation.entry.summary !== "Read one bounded Community race page" ||
+    publicRaceOperation.entry.admissionPolicy !== "no-queue-4" ||
+    publicRaceOperation.entry.authenticationContract !== "none" ||
+    publicRaceOperation.entry.querySchema !== "CommunityScoreQueryV1" ||
+    publicRaceOperation.entry.requestSchema !== "none" ||
+    publicRaceOperation.entry.responseSchema !== "CommunityRacePageV1" ||
+    publicRaceOperation.entry.problemSchema !== "ProblemDetailsV1" ||
+    !sameEntries(publicRaceOperation.entry.problemStatuses, [400, 406, 429, 500, 503]) ||
+    publicRaceOperation.entry.queryPolicy !== "closed-single-value" ||
+    publicRaceOperation.entry.requestBodyPolicy !== "none" ||
+    publicRaceOperation.entry.cacheControl !== "no-store" ||
+    publicRaceOperation.entry.corsPolicy !== "same-origin"
+  ) {
+    report(
+      "contracts/v1/manifest.json",
+      "public Community race operation differs from the reviewed HTTP contract",
+    );
+  }
+
+  const publicScoreOperation = operations[1];
+  if (
+    operations.length !== 5 ||
     publicScoreOperation?.entry.method !== "get" ||
     publicScoreOperation.entry.path !== "/v1/community/scores" ||
     publicScoreOperation.entry.operationId !== "getCommunityScoresV1" ||
@@ -847,9 +975,9 @@ if (sources !== undefined) {
     );
   }
 
-  const communitySyncOperation = operations[1];
+  const communitySyncOperation = operations[2];
   if (
-    operations.length !== 4 ||
+    operations.length !== 5 ||
     communitySyncOperation?.entry.method !== "post" ||
     communitySyncOperation.entry.path !== "/v1/community/sync" ||
     communitySyncOperation.entry.operationId !== "postCommunitySyncV1" ||
@@ -876,7 +1004,7 @@ if (sources !== undefined) {
     );
   }
 
-  const pairingPollOperation = operations[2];
+  const pairingPollOperation = operations[3];
   if (
     pairingPollOperation?.entry.method !== "post" ||
     pairingPollOperation.entry.path !== "/v1/connector/pairing/poll" ||
@@ -898,7 +1026,7 @@ if (sources !== undefined) {
     report("contracts/v1/manifest.json", "pairing poll operation differs from review");
   }
 
-  const pairingStartOperation = operations[3];
+  const pairingStartOperation = operations[4];
   if (
     pairingStartOperation?.entry.method !== "post" ||
     pairingStartOperation.entry.path !== "/v1/connector/pairing/start" ||

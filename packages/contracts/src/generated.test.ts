@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import * as publicApi from "./index";
 import {
+  communityRacePageV1Schema,
   communityScorePageV1Schema,
   communityScoreQueryV1Schema,
   connectorSyncV1Schema,
   validateCarRecipeV1,
+  validateCommunityRacePageV1,
   validateCommunityScorePageV1,
   validateCommunityScoreQueryV1,
   validateConnectorPairingPollResultV1,
@@ -50,6 +52,17 @@ function validScorePage() {
         displayPosition: 1,
       },
     ],
+  };
+}
+
+function validRacePage() {
+  const scorePage = validScorePage();
+  return {
+    ...scorePage,
+    participants: scorePage.participants.map((participant) => ({
+      ...participant,
+      carRecipe: validCarRecipe(),
+    })),
   };
 }
 
@@ -602,5 +615,80 @@ describe("generated Community score response contract", () => {
         participants: [participant, { ...participant, handle: "other_driver" }],
       }),
     ).toContain("duplicate_item_key");
+  });
+});
+
+describe("generated Community race response contract", () => {
+  it("accepts a canonical active recipe and preserves an absent recipe", () => {
+    const input = validRacePage();
+    const result = validateCommunityRacePageV1(input);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toBe(input);
+      expect(result.value.participants[0]?.carRecipe?.palette).toBe("magenta");
+    }
+
+    const participant = input.participants[0];
+    if (!participant) {
+      throw new Error("valid race fixture is missing its participant");
+    }
+    const { carRecipe, ...participantWithoutRecipe } = participant;
+    expect(carRecipe).toEqual(validCarRecipe());
+    expect(
+      validateCommunityRacePageV1({
+        ...input,
+        participants: [participantWithoutRecipe],
+      }).ok,
+    ).toBe(true);
+    expect(Object.isFrozen(communityRacePageV1Schema)).toBe(true);
+    expect(
+      Object.isFrozen(
+        communityRacePageV1Schema.properties.participants.items.properties.carRecipe.properties,
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects arbitrary recipe content, proposal state, malformed recipes, and private fields", () => {
+    const input = validRacePage();
+    const participant = input.participants[0];
+    if (!participant) {
+      throw new Error("valid race fixture is missing its participant");
+    }
+    for (const carRecipe of [
+      { ...validCarRecipe(), assetUrl: "https://invalid.example/car.svg" },
+      { ...validCarRecipe(), palette: "#ffffff" },
+      { ...validCarRecipe(), proposalId: "private-proposal" },
+      { ...validCarRecipe(), seed: 65_536 },
+      null,
+    ]) {
+      expect(
+        validateCommunityRacePageV1({
+          ...input,
+          participants: [{ ...participant, carRecipe }],
+        }).ok,
+      ).toBe(false);
+    }
+
+    expect(
+      validateCommunityRacePageV1({
+        ...input,
+        participants: [{ ...participant, proposal: validCarRecipe() }],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it("does not silently widen the stable score response component", () => {
+    const scorePage = validScorePage();
+    const participant = scorePage.participants[0];
+    if (!participant) {
+      throw new Error("valid score fixture is missing its participant");
+    }
+    expect(
+      validateCommunityScorePageV1({
+        ...scorePage,
+        participants: [{ ...participant, carRecipe: validCarRecipe() }],
+      }).ok,
+    ).toBe(false);
   });
 });

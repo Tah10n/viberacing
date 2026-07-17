@@ -107,6 +107,25 @@ function changeSelect(select: HTMLSelectElement, value: string): void {
   });
 }
 
+async function settleCommunityRequest(
+  container: HTMLElement,
+  expectedSource: "community" | "fallback" = "community",
+): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const settled =
+      expectedSource === "community"
+        ? container.querySelector<HTMLElement>(".race-app")?.dataset.scoreSource === "community"
+        : container.querySelector(".demo-badge")?.textContent === "Synthetic fallback";
+    if (settled) {
+      return;
+    }
+  }
+  throw new Error("Community request did not settle");
+}
+
 beforeEach(() => {
   localStorage.clear();
   window.history.replaceState(null, "", "/");
@@ -162,6 +181,17 @@ describe("RaceExperience interactions", () => {
               },
               {
                 activeDays: 4,
+                carRecipe: {
+                  schemaVersion: 1,
+                  chassis: "rally",
+                  nose: "scoop",
+                  cockpit: "rally",
+                  wing: "low",
+                  wheels: "all-terrain",
+                  palette: "redline",
+                  trail: "grid",
+                  seed: 202,
+                },
                 displayPosition: 2,
                 handle: "second_driver",
                 rankPosition: 2,
@@ -184,9 +214,7 @@ describe("RaceExperience interactions", () => {
     vi.stubGlobal("fetch", fetchScore);
 
     const mounted = mountExperience("2026-07-13", false, "second_driver");
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settleCommunityRequest(mounted.container);
 
     const app = mounted.container.querySelector<HTMLElement>(".race-app");
     expect(app?.dataset.scoreSource).toBe("community");
@@ -201,6 +229,7 @@ describe("RaceExperience interactions", () => {
     expect(profile?.textContent).toContain("4,096 pts");
     expect(profile?.textContent).toContain("#2");
     expect(profile?.querySelector(".daily-bars")).toBeNull();
+    expect(profile?.querySelector('.car-swatch[data-paint="redline"]')).not.toBeNull();
 
     const secondProfile = Array.from(
       mounted.container.querySelectorAll<HTMLAnchorElement>(".profile-driver-link"),
@@ -223,7 +252,7 @@ describe("RaceExperience interactions", () => {
     );
     expect(scrollIntoView).toHaveBeenCalled();
     expect(fetchScore).toHaveBeenCalledWith(
-      "/v1/community/scores?seasonStart=2026-07-13",
+      "/v1/community/race?seasonStart=2026-07-13",
       expect.objectContaining({ credentials: "omit", method: "GET" }),
     );
 
@@ -232,9 +261,7 @@ describe("RaceExperience interactions", () => {
     });
 
     const missing = mountExperience("2026-07-13", false, "missing_driver");
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settleCommunityRequest(missing.container);
     const missingProfile = missing.container.querySelector<HTMLElement>("#profile");
     expect(missingProfile?.textContent).toContain("missing_driver");
     expect(missingProfile?.textContent).toContain("not in the current top 32");
@@ -245,9 +272,7 @@ describe("RaceExperience interactions", () => {
     });
 
     const defaultProfile = mountExperience("2026-07-13");
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settleCommunityRequest(defaultProfile.container);
     expect(defaultProfile.container.querySelector("#profile")?.textContent).toContain(
       "visible_driver",
     );
@@ -269,9 +294,7 @@ describe("RaceExperience interactions", () => {
     );
 
     const mounted = mountExperience("2026-07-13");
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settleCommunityRequest(mounted.container, "fallback");
 
     expect(mounted.container.textContent).toContain("Synthetic fallback");
     expect(mounted.container.textContent).toContain("neon_otter");
@@ -302,9 +325,7 @@ describe("RaceExperience interactions", () => {
     );
 
     const mounted = mountExperience("2026-07-13");
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settleCommunityRequest(mounted.container);
 
     expect(mounted.container.textContent).toContain("No Community participants yet.");
     expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(1);

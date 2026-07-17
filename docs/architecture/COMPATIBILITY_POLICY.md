@@ -30,13 +30,18 @@ through 65535. The schema validator, PostgreSQL checks, animated renderer, and s
 three-theme preview agree on those values. A stored version 1 recipe must retain that visual
 meaning; adding an axis, widening a value to free-form content, or reinterpreting an enum is a new
 version and reviewed migration, not an additive implementation detail. The current internal account
-forms do not create a public HTTP compatibility promise, and the active recipe is not in the public
-score response.
+forms do not create a public HTTP compatibility promise. The active recipe remains absent from the
+closed stable `CommunityScorePageV1`; ADR 0037 adds a separate `CommunityRacePageV1` and
+`GET /v1/community/race` rather than weakening strict score clients. That response may omit
+`carRecipe`, but any present object must match exact version 1.
 
 Revision 0011's internal PostgreSQL score projection is not itself a public HTTP contract. ADR 0010
 defines a closed response-only v1 component and generated derivatives, while ADR 0013 now adds the
 local path, request validation, exact mapping, response headers, no-store policy, and compatibility
-evidence. Deployment, edge behavior, and any future cache remain separate compatibility surfaces.
+evidence. Deployment, edge behavior, and any future cache remain separate compatibility surfaces. A
+new recipe field/version, proposal metadata, or historical snapshot semantics require another
+reviewed component/version and migration path; they are not additive changes to either closed v1
+response.
 
 ## Codex App Server contract
 

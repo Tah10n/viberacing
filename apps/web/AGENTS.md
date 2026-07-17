@@ -17,9 +17,10 @@ apply.
   persistence, exact possessed-session profile derivation, one pending proposal, the maximum 24-hour
   logical expiry, purpose-separated encrypted decision control, raw proposal/profile ID omission
   from HTML, explicit approve/reject, and atomic activation. Device credentials cannot administer a
-  recipe. Physical expired-row cleanup is a separate bounded Jobs capability; do not claim a
-  schedule, agent ingress, public active-recipe projection, a live login, or deployment until
-  separate evidence exists.
+  recipe. Physical expired-row cleanup is a separate bounded Jobs capability. The public race
+  projection may expose only the exact current active recipe for an `active` profile; keep proposal
+  identity, state, and timestamps private and the stable score contract unchanged. Do not claim a
+  cleanup schedule, agent ingress, live login, or deployment until separate evidence exists.
 - Browser persistence is limited to locale, theme, and motion. Do not add trackers, analytics,
   fingerprinting, or account state to local storage.
 - Preserve per-navigation nonce CSP and repository-root build isolation. Do not add a CSP origin,

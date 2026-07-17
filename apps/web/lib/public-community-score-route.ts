@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  validateCommunityRacePageV1,
   validateCommunityScorePageV1,
   validateCommunityScoreQueryV1,
   type CommunityScoreQueryV1,
@@ -24,7 +25,8 @@ import {
 } from "./public-http-problem";
 import type { PublicScoreAdmission } from "./public-score-admission";
 
-const routePath = "/v1/community/scores";
+const raceRoutePath = "/v1/community/race";
+const scoreRoutePath = "/v1/community/scores";
 const queryPrefix = "?seasonStart=";
 const maximumUrlLength = 2_048;
 const maximumQueryLength = 128;
@@ -46,11 +48,18 @@ export const publicCommunityScoreRoutePolicy = Object.freeze({
   queryTimeoutMs: publicScoreDatabaseQueryTimeoutMs,
   statementTimeoutMs: publicScoreDatabaseStatementTimeoutMs,
 });
+export const publicCommunityRaceRoutePolicy = publicCommunityScoreRoutePolicy;
 
 export interface PublicCommunityScoreRouteDependencies {
   readonly admission: PublicScoreAdmission;
   readonly createRequestId: () => PublicRequestId;
   readonly readScores: (seasonStart: string) => Promise<unknown>;
+}
+
+export interface PublicCommunityRaceRouteDependencies {
+  readonly admission: PublicScoreAdmission;
+  readonly createRequestId: () => PublicRequestId;
+  readonly readRace: (seasonStart: string) => Promise<unknown>;
 }
 
 export interface PublicCommunityScoreRoute {
@@ -199,8 +208,9 @@ export function acceptsPublicCommunityScoreJson(accept: string | null): boolean 
   return ranges?.some((range) => rangeAcceptsJson(trimOptionalWhitespace(range))) ?? false;
 }
 
-export function parsePublicCommunityScoreQuery(
+function parsePublicCommunityQuery(
   request: Request,
+  expectedPath: string,
 ): CommunityScoreQueryV1 | undefined {
   try {
     const contentLength = request.headers.get("content-length");
@@ -221,7 +231,7 @@ export function parsePublicCommunityScoreQuery(
       url.username !== "" ||
       url.password !== "" ||
       url.hash !== "" ||
-      url.pathname !== routePath ||
+      url.pathname !== expectedPath ||
       url.search.length > maximumQueryLength ||
       !url.search.startsWith(queryPrefix) ||
       url.search.includes("&")
@@ -243,6 +253,16 @@ export function parsePublicCommunityScoreQuery(
   } catch {
     return undefined;
   }
+}
+
+export function parsePublicCommunityScoreQuery(
+  request: Request,
+): CommunityScoreQueryV1 | undefined {
+  return parsePublicCommunityQuery(request, scoreRoutePath);
+}
+
+export function parsePublicCommunityRaceQuery(request: Request): CommunityScoreQueryV1 | undefined {
+  return parsePublicCommunityQuery(request, raceRoutePath);
 }
 
 function problemResponse(
@@ -272,8 +292,18 @@ function dependencyProblem(error: unknown): PublicProblemKind {
   return "internal_error";
 }
 
-export function createPublicCommunityScoreRoute(
-  dependencies: PublicCommunityScoreRouteDependencies,
+interface PublicCommunityRouteComposition {
+  readonly admission: PublicScoreAdmission;
+  readonly createRequestId: () => PublicRequestId;
+  readonly parseQuery: (request: Request) => CommunityScoreQueryV1 | undefined;
+  readonly readPage: (seasonStart: string) => Promise<unknown>;
+  readonly validatePage: (
+    value: unknown,
+  ) => { readonly ok: false } | { readonly ok: true; readonly value: unknown };
+}
+
+function createPublicCommunityRoute(
+  dependencies: PublicCommunityRouteComposition,
 ): PublicCommunityScoreRoute {
   return Object.freeze({
     async get(request: Request): Promise<Response> {
@@ -281,7 +311,7 @@ export function createPublicCommunityScoreRoute(
       if (request.method !== "GET") {
         return problemResponse("method_not_allowed", requestId, true);
       }
-      const query = parsePublicCommunityScoreQuery(request);
+      const query = dependencies.parseQuery(request);
       if (query === undefined) {
         return problemResponse("invalid_request", requestId);
       }
@@ -299,8 +329,8 @@ export function createPublicCommunityScoreRoute(
         return problemResponse("temporarily_unavailable", requestId);
       }
       try {
-        const page = await dependencies.readScores(query.seasonStart);
-        const validation = validateCommunityScorePageV1(page);
+        const page = await dependencies.readPage(query.seasonStart);
+        const validation = dependencies.validatePage(page);
         if (!validation.ok) {
           return problemResponse("internal_error", requestId);
         }
@@ -322,5 +352,29 @@ export function createPublicCommunityScoreRoute(
     methodNotAllowed(): Response {
       return problemResponse("method_not_allowed", dependencies.createRequestId(), true);
     },
+  });
+}
+
+export function createPublicCommunityScoreRoute(
+  dependencies: PublicCommunityScoreRouteDependencies,
+): PublicCommunityScoreRoute {
+  return createPublicCommunityRoute({
+    admission: dependencies.admission,
+    createRequestId: dependencies.createRequestId,
+    parseQuery: parsePublicCommunityScoreQuery,
+    readPage: dependencies.readScores,
+    validatePage: validateCommunityScorePageV1,
+  });
+}
+
+export function createPublicCommunityRaceRoute(
+  dependencies: PublicCommunityRaceRouteDependencies,
+): PublicCommunityScoreRoute {
+  return createPublicCommunityRoute({
+    admission: dependencies.admission,
+    createRequestId: dependencies.createRequestId,
+    parseQuery: parsePublicCommunityRaceQuery,
+    readPage: dependencies.readRace,
+    validatePage: validateCommunityRacePageV1,
   });
 }

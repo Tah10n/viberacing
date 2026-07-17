@@ -13,20 +13,22 @@ Vibe Racing — открытый пиксельный недельный рей�
 
 Сайт можно запустить локально без аккаунта, connector и базы: в этом случае он показывает явно
 помеченное синтетическое превью. Видимая гонка и таблица теперь также запрашивают текущую неделю у
-same-origin public score route и переключаются на Community results только после проверки ответа;
-при ошибке остаётся синтетический fallback. Демо-профиль, три темы, русский/английский интерфейс и
-reduced-motion режим работают без реальных данных. Отдельный invite-only flow теперь локально
-соединяет GitHub OAuth со state и PKCE, зашифрованное краткоживущее продолжение, атомарное
-enrollment, обязательную регистрацию passkey, повторный discoverable-credential вход, session-scoped
-список ключей доступа, страницу активного профиля, hide/show публичного профиля, список источников и
-устройств, немедленную паузу источника, восстановление paused-источника после свежей проверки
-passkey, необратимое отключение источника со свежей проверкой passkey, немедленный отзыв устройства,
-добавление резервного passkey, защищённый отзыв не текущего passkey, запрос удаления профиля после
-точного ввода handle и свежей проверки passkey, ротацию кодов восстановления с одноразовым показом
-после свежей проверки passkey, а также logout. Репозиторий не предоставляет рабочий invite issuer,
-вход по коду восстановления или замену passkey, OAuth registration, реальные secrets, live
-OAuth/authenticator/database credentials, scheduled deletion purge, cache/backup/tombstone handling,
-restore replay, edge abuse controls или evidence с реальным пользователем.
+same-origin public race route и переключаются на Community results только после проверки ответа.
+Ответ может содержать текущий approved enum-only автомобиль; при его отсутствии браузер использует
+repository-owned presentation fallback. При ошибке остаётся синтетический fallback. Демо-профиль,
+три темы, русский/английский интерфейс и reduced-motion режим работают без реальных данных.
+Отдельный invite-only flow теперь локально соединяет GitHub OAuth со state и PKCE, зашифрованное
+краткоживущее продолжение, атомарное enrollment, обязательную регистрацию passkey, повторный
+discoverable-credential вход, session-scoped список ключей доступа, страницу активного профиля,
+hide/show публичного профиля, список источников и устройств, немедленную паузу источника,
+восстановление paused-источника после свежей проверки passkey, необратимое отключение источника со
+свежей проверкой passkey, немедленный отзыв устройства, добавление резервного passkey, защищённый
+отзыв не текущего passkey, запрос удаления профиля после точного ввода handle и свежей проверки
+passkey, ротацию кодов восстановления с одноразовым показом после свежей проверки passkey, а также
+logout. Репозиторий не предоставляет рабочий invite issuer, вход по коду восстановления или замену
+passkey, OAuth registration, реальные secrets, live OAuth/authenticator/database credentials,
+scheduled deletion purge, cache/backup/tombstone handling, restore replay, edge abuse controls или
+evidence с реальным пользователем.
 
 Страница аккаунта теперь также рендерит семь derived-баллов по дням текущей Community-недели и
 bounded summary через один объединённый server-side visibility/score checkout. Hidden-профиль не
@@ -97,81 +99,81 @@ pnpm run dev:web
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.
 
-В репозитории уже есть десять закрытых JSON Schemas, генерируемые TypeScript validators и локально
-реализованные OpenAPI GET и POST: sync request/result, bounded problem details, запрос одного
-Community season и response-only top-32 Community score page с неизменяемыми
-`community`/`selfReported` trust fields. Server-only fail-closed mapper преобразует в этот response
-только точную десятиколоночную SQL projection и отклоняет malformed, inconsistent, oversized или
-contract-invalid результаты. Bounded server-only PostgreSQL adapter использует отдельный
-least-privileged Web login contract, certificate-verified production transport, four-connection
-pool, проверку role/read-only state при каждом checkout, фиксированные deadlines и один
-parameterized top-32 procedure call. Server-only HTTP problem factory генерирует opaque 128-bit
-request IDs и закрытые contract-validated no-store error responses. Thin server-only route проверяет
-точный query, GET-only method/`Accept`, no-queue admission на четыре запроса, adapter deadlines,
-store-error translation и финальный response contract. Это локальная реализация, а не deployment:
-cache, deployment login/TLS integration, edge rate policy, operational connector и приём реальной
-статистики ещё отсутствуют. Отдельное чистое Ingest kernel теперь копирует и ограничивает точные raw
-body/headers Community sync, до JSON и device lookup проверяет body-bound origin HMAC с одноразовым
-nonce, отклоняет дубликаты headers/decoded JSON keys и превышение parser budgets, валидирует sync
-contract и строго проверяет source-bound Ed25519 request. Оно возвращает только frozen
-database-ready allowlist. Отдельный bounded Ingest PostgreSQL adapter повторно проверяет этот
-allowlist, копирует binary/array parameters, при каждом checkout проверяет точный least-privileged
-Ingest login/role и вызывает только fixed origin-replay consume, device lookup или submission через
-four-client pool с deadlines. Без TLS разрешён только loopback development/test, в остальных случаях
-обязательна certificate verification. Focused tests используют mock pools. Локальная protected
-factory теперь требует точную primary origin-HMAC пару и допускает только одну полную distinct
-rotation-пару из namespaced configuration; наружу она возвращает только verifier, а реальных key и
-secret-manager binding в репозитории нет. Forced-RLS PostgreSQL table хранит только origin key ID,
-domain-separated nonce digest и millisecond expiry; Ingest-only function атомарно consume-ит tuple,
-а observed race доказывает одного победителя. Transport-free application boundary теперь генерирует
-server-owned request ID, связывает этот replay/device/submission adapter с точным verifier,
-дожидается settlement базы и возвращает только валидированный acknowledgement либо generic problem
-decision. Отдельная локальная Fastify server factory сохраняет точные raw body/header evidence для
-`POST /v1/community/sync`, не доверяет proxy headers и входящему request ID, без очереди допускает
-четыре application call, ограничивает parser/headers/connections и задаёт 5/33/34-second
-request/handler/connection deadlines, после чего сериализует только повторно проверенные `no-store`
-success/problem contracts. Отдельный локальный host теперь запускает именно эту factory только в
-loopback development/test либо с явным Railway-edge production contract, закрывает частично
-созданные boundary и ограниченно обрабатывает SIGINT/SIGTERM. Его 121 test и built-entrypoint check
-не доказывают Railway, внешний TLS, edge route, live credentials или deployment. Отдельный opt-in
-integration test собирает emitted host, создаёт синтетический выделенный Ingest login в одноразовом
-PostgreSQL, отправляет независимо подписанные loopback HTTP requests и проверяет accepted,
-duplicate, persistent replay, revoked device, response headers и точные сохранённые строки до
-полного cleanup. Он не доказывает deployment credential/certificate, protected secret delivery,
-внешний edge route, real-user data или capacity. Live protected key injection, edge signer,
-direct-origin denial, distributed rate policy и monitoring всё ещё отсутствуют. Library-only Rust
-foundation теперь выполняет фиксированный stable handshake и только после него — candidate `0.144.5`
-account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает email/plan/summary и возвращает не
-более 31 отсортированной строгой date/token записи. В репозитории есть exact release metadata,
-schema digests, minimal extracts, fixtures и drift/matrix checker. Windows x86_64
-development-команда допускает только точные size и SHA-256 официального artifact; repository tests
-не запускают пользовательский Codex account, а support matrix остаётся пустой. One-shot supervisor
-проверяет точную sequence на target-built synthetic child: фиксированный `app-server` argument,
-local pipes, очищенное ambient environment, bounded stdout/stderr/time, отклонение late output и
-reap-before-success cleanup. Reviewed-launch capability остаётся приватной для exact admission.
-Второй недоступный reviewed context теперь позволяет candidate composer превратить минимизированные
-записи в точные `ConnectorSyncV1` JSON, SHA-256 digest, unpadded base64url nonce и LF-separated
-device-signature message. Изолированный one-use signer потребляет этот закрытый материал вместе с
-таким же недоступным device-bound Ed25519 key capability и возвращает только то же body и пять
-точных header values. Общий synthetic vector проверяет exact public key/signature между Rust и
-production Ingest verifier. Отдельные pairing signer и Web verifier согласованы по точному
-domain-separated possession message. Локальная signed-in страница `/connect` принимает короткий код,
-показывает ограниченные metadata и полный fingerprint публичного ключа, явно выбирает новый или
-активный существующий opaque source без раскрытия его raw ID, а перед атомарным одобрением точного
-выбора требует свежий passkey assertion. Два закрытых локальных POST route открывают versioned
-pairing start/poll contracts через общий лимит в четыре вызова, фиксированную глобальную и 64-bucket
-PostgreSQL rate policy, ограниченные body и generic `no-store` ответы. Локальная Rust-команда
-`connect` получает Ed25519 key и анонимный rate ID из OS CSPRNG, сохраняет prepared/pending/active
-record только в нативном credential store, доказывает владение ключом и возобновляет прерванный
-poll, не печатая key, token, challenge, source или device ID. Отдельная Windows x86_64 команда
-`sync` canonicalize-ит и hash-проверяет один exact `0.144.5` executable, запускает его в новом
-пустом working directory, создаёт свежие request time/ID/nonce из active record, один раз отправляет
-точное signed body на фиксированный sync path и принимает только closed acknowledgement. Она не ищет
-binary автоматически, не повторяет ambiguous POST и не отправляет edge origin proof. Всё ещё нет
-macOS/Linux admission, live database connection, capacity evidence, packaging, release,
-поддерживаемого sync connector и deployment.
+В репозитории уже есть одиннадцать закрытых JSON Schemas, генерируемые TypeScript validators и
+локально реализованные OpenAPI GET и POST: sync request/result, bounded problem details, запрос
+одного Community season, response-only top-32 Community score page и отдельный совместимый race page
+с optional exact `CarRecipeV1`. Score contract и route остаются неизменными. Server-only fail-closed
+mappers принимают только точные десяти- или одиннадцатиколоночные SQL projections и отклоняют
+malformed, inconsistent, oversized или contract-invalid результаты. Bounded server-only PostgreSQL
+adapter использует отдельный least-privileged Web login contract, certificate-verified production
+transport, four-connection pool, проверку role/read-only state при каждом checkout, фиксированные
+deadlines и один parameterized top-32 procedure call. Server-only HTTP problem factory генерирует
+opaque 128-bit request IDs и закрытые contract-validated no-store error responses. Thin server-only
+route проверяет точный query, GET-only method/`Accept`, no-queue admission на четыре запроса,
+adapter deadlines, store-error translation и финальный response contract. Это локальная реализация,
+а не deployment: cache, deployment login/TLS integration, edge rate policy, operational connector и
+приём реальной статистики ещё отсутствуют. Отдельное чистое Ingest kernel теперь копирует и
+ограничивает точные raw body/headers Community sync, до JSON и device lookup проверяет body-bound
+origin HMAC с одноразовым nonce, отклоняет дубликаты headers/decoded JSON keys и превышение parser
+budgets, валидирует sync contract и строго проверяет source-bound Ed25519 request. Оно возвращает
+только frozen database-ready allowlist. Отдельный bounded Ingest PostgreSQL adapter повторно
+проверяет этот allowlist, копирует binary/array parameters, при каждом checkout проверяет точный
+least-privileged Ingest login/role и вызывает только fixed origin-replay consume, device lookup или
+submission через four-client pool с deadlines. Без TLS разрешён только loopback development/test, в
+остальных случаях обязательна certificate verification. Focused tests используют mock pools.
+Локальная protected factory теперь требует точную primary origin-HMAC пару и допускает только одну
+полную distinct rotation-пару из namespaced configuration; наружу она возвращает только verifier, а
+реальных key и secret-manager binding в репозитории нет. Forced-RLS PostgreSQL table хранит только
+origin key ID, domain-separated nonce digest и millisecond expiry; Ingest-only function атомарно
+consume-ит tuple, а observed race доказывает одного победителя. Transport-free application boundary
+теперь генерирует server-owned request ID, связывает этот replay/device/submission adapter с точным
+verifier, дожидается settlement базы и возвращает только валидированный acknowledgement либо generic
+problem decision. Отдельная локальная Fastify server factory сохраняет точные raw body/header
+evidence для `POST /v1/community/sync`, не доверяет proxy headers и входящему request ID, без
+очереди допускает четыре application call, ограничивает parser/headers/connections и задаёт
+5/33/34-second request/handler/connection deadlines, после чего сериализует только повторно
+проверенные `no-store` success/problem contracts. Отдельный локальный host теперь запускает именно
+эту factory только в loopback development/test либо с явным Railway-edge production contract,
+закрывает частично созданные boundary и ограниченно обрабатывает SIGINT/SIGTERM. Его 121 test и
+built-entrypoint check не доказывают Railway, внешний TLS, edge route, live credentials или
+deployment. Отдельный opt-in integration test собирает emitted host, создаёт синтетический
+выделенный Ingest login в одноразовом PostgreSQL, отправляет независимо подписанные loopback HTTP
+requests и проверяет accepted, duplicate, persistent replay, revoked device, response headers и
+точные сохранённые строки до полного cleanup. Он не доказывает deployment credential/certificate,
+protected secret delivery, внешний edge route, real-user data или capacity. Live protected key
+injection, edge signer, direct-origin denial, distributed rate policy и monitoring всё ещё
+отсутствуют. Library-only Rust foundation теперь выполняет фиксированный stable handshake и только
+после него — candidate `0.144.5` account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает
+email/plan/summary и возвращает не более 31 отсортированной строгой date/token записи. В репозитории
+есть exact release metadata, schema digests, minimal extracts, fixtures и drift/matrix checker.
+Windows x86_64 development-команда допускает только точные size и SHA-256 официального artifact;
+repository tests не запускают пользовательский Codex account, а support matrix остаётся пустой.
+One-shot supervisor проверяет точную sequence на target-built synthetic child: фиксированный
+`app-server` argument, local pipes, очищенное ambient environment, bounded stdout/stderr/time,
+отклонение late output и reap-before-success cleanup. Reviewed-launch capability остаётся приватной
+для exact admission. Второй недоступный reviewed context теперь позволяет candidate composer
+превратить минимизированные записи в точные `ConnectorSyncV1` JSON, SHA-256 digest, unpadded
+base64url nonce и LF-separated device-signature message. Изолированный one-use signer потребляет
+этот закрытый материал вместе с таким же недоступным device-bound Ed25519 key capability и
+возвращает только то же body и пять точных header values. Общий synthetic vector проверяет exact
+public key/signature между Rust и production Ingest verifier. Отдельные pairing signer и Web
+verifier согласованы по точному domain-separated possession message. Локальная signed-in страница
+`/connect` принимает короткий код, показывает ограниченные metadata и полный fingerprint публичного
+ключа, явно выбирает новый или активный существующий opaque source без раскрытия его raw ID, а перед
+атомарным одобрением точного выбора требует свежий passkey assertion. Два закрытых локальных POST
+route открывают versioned pairing start/poll contracts через общий лимит в четыре вызова,
+фиксированную глобальную и 64-bucket PostgreSQL rate policy, ограниченные body и generic `no-store`
+ответы. Локальная Rust-команда `connect` получает Ed25519 key и анонимный rate ID из OS CSPRNG,
+сохраняет prepared/pending/active record только в нативном credential store, доказывает владение
+ключом и возобновляет прерванный poll, не печатая key, token, challenge, source или device ID.
+Отдельная Windows x86_64 команда `sync` canonicalize-ит и hash-проверяет один exact `0.144.5`
+executable, запускает его в новом пустом working directory, создаёт свежие request time/ID/nonce из
+active record, один раз отправляет точное signed body на фиксированный sync path и принимает только
+closed acknowledgement. Она не ищет binary автоматически, не повторяет ambiguous POST и не
+отправляет edge origin proof. Всё ещё нет macOS/Linux admission, live database connection, capacity
+evidence, packaging, release, поддерживаемого sync connector и deployment.
 
-Также добавлены двадцать шесть SQL migrations: 27 приватных
+Также добавлены двадцать семь SQL migrations: 27 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring/CarRecipe
 tables, deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL.
 Узкая procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
@@ -218,31 +220,32 @@ evidence; live authenticator/database integration, edge rate/capacity controls �
 его во всех трёх темах и требует явный зашифрованный session-bound approve или reject control.
 Approval атомарно заменяет active recipe; device, cross-profile и non-Web capabilities запрещены.
 Отдельная Jobs-only capability теперь bounded oldest-first batches физически удаляет expired
-proposal, сохраняя live proposals и active recipes. Active recipe пока не входит в public
-projection, а agent/connector ingress, schedule для cleanup, live credentials и deployment остаются
-отдельными воротами. Database-only Community ingest capability уже выдаёт минимальный материал
-активного устройства и принимает bounded source-bound snapshots с exact retry, nonce replay,
-monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure
-независимо удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots, сохраняя
-current source/day values. Ещё две отдельные Jobs-only процедуры удаляют bounded expired pairing
-state и истёкшие auth challenges/restricted recovery authorities, сохраняя live ceremonies, unused
-recovery codes, sessions, passkeys и audit evidence. Ещё одна Jobs-only procedure удаляет не более
-1000 expired CarRecipe proposals за вызов под отдельным private mutex и не затрагивает active
-recipes. Отдельная Jobs-only procedure теперь атомарно удаляет до 10 due `deletion_pending`
-профилей, сначала снимает restrictive pairing references, terminally settles opaque job и не создаёт
-неподтверждённый tombstone. Локальный one-shot Jobs runner вызывает только одну из семи fixed
-capabilities: auth/CarRecipe-proposal/ingest/pairing cleanup, primary profile purge, scoring refresh
-или finalization через отдельный least-privileged config, single-client pool, проверку
-role/login/search path, fixed deadlines, prepared parameters, closed result validation и стабильный
-non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel, adapter и
-application объединены на synthetic/mock-pool evidence. Отдельный opt-in loopback scenario теперь
-проводит независимо подписанный HTTP request через emitted host и одноразовый least-privileged
-PostgreSQL login, включая duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed
-HTTP ingest route, operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs
-login/TLS integration, monitoring backend, deployed public score read, audited correction flow,
-cache/backup/tombstone purge, restore replay и scheduled deletion execution ещё не реализованы,
-поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
-данных пока нет.
+proposal, сохраняя live proposals и active recipes. Отдельный совместимый public race contract
+показывает только текущий approved recipe активного профиля; proposal identity, state и timestamps
+остаются private, а стабильный score response не меняется. Agent/connector ingress, schedule для
+cleanup, live credentials и deployment остаются отдельными воротами. Database-only Community ingest
+capability уже выдаёт минимальный материал активного устройства и принимает bounded source-bound
+snapshots с exact retry, nonce replay, monotonic source/date, quarantine и lifecycle-race
+enforcement. Отдельная Jobs-only procedure независимо удаляет bounded batches истёкших origin
+nonces, device nonces и raw snapshots, сохраняя current source/day values. Ещё две отдельные
+Jobs-only процедуры удаляют bounded expired pairing state и истёкшие auth challenges/restricted
+recovery authorities, сохраняя live ceremonies, unused recovery codes, sessions, passkeys и audit
+evidence. Ещё одна Jobs-only procedure удаляет не более 1000 expired CarRecipe proposals за вызов
+под отдельным private mutex и не затрагивает active recipes. Отдельная Jobs-only procedure теперь
+атомарно удаляет до 10 due `deletion_pending` профилей, сначала снимает restrictive pairing
+references, terminally settles opaque job и не создаёт неподтверждённый tombstone. Локальный
+one-shot Jobs runner вызывает только одну из семи fixed capabilities:
+auth/CarRecipe-proposal/ingest/pairing cleanup, primary profile purge, scoring refresh или
+finalization через отдельный least-privileged config, single-client pool, проверку role/login/search
+path, fixed deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI
+output. Сама база не проверяет wire signature; локальные kernel, adapter и application объединены на
+synthetic/mock-pool evidence. Отдельный opt-in loopback scenario теперь проводит независимо
+подписанный HTTP request через emitted host и одноразовый least-privileged PostgreSQL login, включая
+duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed HTTP ingest route,
+operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs login/TLS integration,
+monitoring backend, deployed public score read, audited correction flow, cache/backup/tombstone
+purge, restore replay и scheduled deletion execution ещё не реализованы, поэтому локальный
+enrollment ещё не является готовой production-авторизацией, а приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

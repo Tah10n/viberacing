@@ -1,16 +1,17 @@
 # Public protocol contracts
 
 This directory is the language-neutral source of truth for Vibe Racing wire shapes. The current
-files establish request and response boundaries plus locally implemented public score and sync
-operations; revision 0007 maps the bounded Community sync into a database-only procedure and
-revision 0011 provides a database-only score projection. A local pure Ingest kernel now
-authenticates and parses the exact bounded sync request, a separate local adapter constrains its
-PostgreSQL mapping, and a transport-free application boundary composes them into validated
-result/problem decisions. A separate bounded Fastify server factory now preserves the exact raw
-request and serializes only those validated decisions. The candidate Rust connector now signs one
-exact pairing-possession message, then separately composes exact unsigned body/device-message
-material and signs it behind an inaccessible source-bound key capability. A server-only Web kernel
-strictly verifies the pairing proof against the exact approved database material. One synthetic
+files establish request and response boundaries plus locally implemented public score, race, and
+sync operations; revision 0007 maps the bounded Community sync into a database-only procedure,
+revision 0011 provides a database-only score projection, and revision 0027 adds a compatible
+active-recipe race projection. A local pure Ingest kernel now authenticates and parses the exact
+bounded sync request, a separate local adapter constrains its PostgreSQL mapping, and a
+transport-free application boundary composes them into validated result/problem decisions. A
+separate bounded Fastify server factory now preserves the exact raw request and serializes only
+those validated decisions. The candidate Rust connector now signs one exact pairing-possession
+message, then separately composes exact unsigned body/device-message material and signs it behind an
+inaccessible source-bound key capability. A server-only Web kernel strictly verifies the pairing
+proof against the exact approved database material. One synthetic
 [`test vector`](v1/connector-sync-device-request.test-vector.json) proves its body, digest, nonce,
 message, public key, and signature against production Ingest code; a second vector proves the exact
 Rust/Web pairing message and signature. Local Web/Auth boundaries now compose a generated nine-
@@ -39,6 +40,11 @@ production credentials, real-user input, or capacity.
   reviewed revision 0011 fields, and permits an empty result without private-state disclosure. It
   contains no profile/source/device ID, raw or daily usage, exact timestamp, car, streak, freshness,
   profile detail, cursor, or caller-controlled sorting/filtering.
+- [`CommunityRacePageV1`](v1/community-race-page.schema.json) preserves the same trust metadata,
+  page bound, ten score fields, and ordering while allowing exactly one optional canonical
+  `CarRecipeV1` per participant. Its absence means no approved active recipe. Proposal identity,
+  state, timestamps, private IDs, daily/raw usage, and arbitrary content remain forbidden. The
+  stable `CommunityScorePageV1` remains unchanged and rejects this additional field.
 - [`CommunityScoreQueryV1`](v1/community-score-query.schema.json) accepts exactly one inclusive
   Monday `seasonStart` from `1999-12-27` through `2099-12-28`. The Web URL parser rejects duplicate,
   missing, encoded-name, and unknown parameters before applying the generated value validator.
@@ -88,10 +94,10 @@ production credentials, real-user input, or capacity.
   status/title/retry mapping, validates the complete body, and emits `no-store`
   `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
 - [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
-  type/export names, closed authentication-policy inventory, and the locally implemented four
-  operations: `GET /v1/community/scores`, `POST /v1/community/sync`, and the two pairing start/poll
-  POST routes, with method-specific query/body, response, problem, no-queue, authentication, cache,
-  same-origin CORS, and repository-status policies.
+  type/export names, closed authentication-policy inventory, and the locally implemented five
+  operations: `GET /v1/community/race`, `GET /v1/community/scores`, `POST /v1/community/sync`, and
+  the two pairing start/poll POST routes, with method-specific query/body, response, problem,
+  no-queue, authentication, cache, same-origin CORS, and repository-status policies.
 
 Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
 timestamp is bounded. Reviewed date-range and ISO-weekday extensions make the score season boundary
@@ -109,7 +115,7 @@ trust fields exist only in the response component and never become writable conn
 
 `node scripts/generate-contracts.mjs` deterministically creates:
 
-- [`openapi.v1.json`](generated/openapi.v1.json), which documents the four locally implemented HTTP
+- [`openapi.v1.json`](generated/openapi.v1.json), which documents the five locally implemented HTTP
   operations and explicitly states that repository implementation does not prove deployment;
 - [`packages/contracts/src/generated.ts`](../packages/contracts/src/generated.ts), containing
   readonly TypeScript shapes, embedded schemas, source digest, and validator wrappers.

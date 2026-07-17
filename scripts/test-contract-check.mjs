@@ -19,6 +19,8 @@ const implementedLocalEvidencePaths = [
   "apps/ingest/src/community-sync-http-server.test.ts",
   "apps/ingest/src/community-sync-http-server.ts",
   "scripts/test-ingest-postgres-integration.mjs",
+  "apps/web/app/v1/community/race/route.test.ts",
+  "apps/web/app/v1/community/race/route.ts",
   "apps/web/app/v1/community/scores/route.test.ts",
   "apps/web/app/v1/community/scores/route.ts",
   "apps/web/app/v1/connector/pairing/poll/route.test.ts",
@@ -29,8 +31,14 @@ const implementedLocalEvidencePaths = [
   "apps/web/lib/pairing-http.ts",
   "apps/web/lib/pairing-rate-policy.test.ts",
   "apps/web/lib/pairing-rate-policy.ts",
+  "apps/web/lib/public-community-race.test.ts",
+  "apps/web/lib/public-community-race.ts",
+  "apps/web/lib/public-community-score-mapper.test.ts",
+  "apps/web/lib/public-community-score-mapper.ts",
   "apps/web/lib/public-community-score-route.test.ts",
   "apps/web/lib/public-community-score-route.ts",
+  "apps/web/lib/public-community-score-store.test.ts",
+  "apps/web/lib/public-community-score-store.ts",
   "apps/web/lib/public-score-admission.test.ts",
   "apps/web/lib/public-score-admission.ts",
 ];
@@ -87,11 +95,23 @@ async function expectGeneratedPublicOperations(name) {
   assert.equal(document["x-viberacing-status"], "implemented-local");
   assert.equal(Object.hasOwn(document, "servers"), false);
   assert.deepEqual(Object.keys(document.paths), [
+    "/v1/community/race",
     "/v1/community/scores",
     "/v1/community/sync",
     "/v1/connector/pairing/poll",
     "/v1/connector/pairing/start",
   ]);
+
+  const raceOperation = document.paths["/v1/community/race"].get;
+  assert.equal(raceOperation.operationId, "getCommunityRaceV1");
+  assert.equal(raceOperation["x-viberacing-status"], "implemented-local");
+  assert.equal(raceOperation["x-viberacing-authentication-contract"], "none");
+  assert.deepEqual(raceOperation["x-viberacing-query-contract"], {
+    $ref: "#/components/schemas/CommunityScoreQueryV1",
+  });
+  assert.deepEqual(raceOperation.responses["200"].content["application/json"].schema, {
+    $ref: "#/components/schemas/CommunityRacePageV1",
+  });
 
   const operation = document.paths["/v1/community/scores"].get;
   assert.equal(operation.operationId, "getCommunityScoresV1");
@@ -333,6 +353,37 @@ try {
     /Community score participant fields differ from the public allowlist/,
   );
   await expectFailure(
+    "community-race-required-recipe",
+    (root) => {
+      const { path, schema } = readSchema(root, "community-race-page.schema.json");
+      schema.properties.participants.items.required.push("carRecipe");
+      writeJson(path, schema);
+    },
+    /Community race participant fields differ from the public allowlist/,
+  );
+  await expectFailure(
+    "community-race-recipe-drift",
+    (root) => {
+      const { path, schema } = readSchema(root, "community-race-page.schema.json");
+      schema.properties.participants.items.properties.carRecipe.properties.palette.enum.push(
+        "arbitrary-color",
+      );
+      writeJson(path, schema);
+    },
+    /Community race CarRecipe differs from the canonical optional recipe/,
+  );
+  await expectFailure(
+    "optional-properties-on-scalar",
+    (root) => {
+      const { path, schema } = readSchema(root, "community-race-page.schema.json");
+      schema.properties.participants.items.properties.handle["x-viberacing-optionalProperties"] = [
+        "value",
+      ];
+      writeJson(path, schema);
+    },
+    /optional properties are supported only on closed objects/,
+  );
+  await expectFailure(
     "community-score-bound-drift",
     (root) => {
       const { path, schema } = readSchema(root, "community-score-page.schema.json");
@@ -387,10 +438,20 @@ try {
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[0].path = "/v1/community/results";
+      manifest.operations[1].path = "/v1/community/results";
       writeJson(path, manifest);
     },
     /public Community score operation differs from the reviewed HTTP contract/,
+  );
+  await expectFailure(
+    "race-operation-contract-drift",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.operations[0].responseSchema = "CommunityScorePageV1";
+      writeJson(path, manifest);
+    },
+    /public Community race operation differs from the reviewed HTTP contract/,
   );
   await expectFailure(
     "unsafe-operation-path",
@@ -459,30 +520,30 @@ try {
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[1].requestBodyPolicy = "unbounded-json";
+      manifest.operations[2].requestBodyPolicy = "unbounded-json";
       writeJson(path, manifest);
     },
-    /contract operation 2 has unsafe names or shape/,
+    /contract operation 3 has unsafe names or shape/,
   );
   await expectFailure(
     "unknown-request-schema",
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[1].requestSchema = "MissingRequestV1";
+      manifest.operations[2].requestSchema = "MissingRequestV1";
       writeJson(path, manifest);
     },
-    /contract operation 2 references invalid schemas/,
+    /contract operation 3 references invalid schemas/,
   );
   await expectFailure(
     "unknown-authentication-policy",
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[1].authenticationContract = "connector-missing-authentication.json";
+      manifest.operations[2].authenticationContract = "connector-missing-authentication.json";
       writeJson(path, manifest);
     },
-    /contract operation 2 references an unknown policy/,
+    /contract operation 3 references an unknown policy/,
   );
   await expectFailure(
     "duplicate-authentication-policy-id",
@@ -512,6 +573,13 @@ try {
     /implemented-local contract evidence is missing/,
   );
   await expectFailure(
+    "missing-race-implementation-evidence",
+    (root) => {
+      rmSync(resolve(root, "apps", "web", "app", "v1", "community", "race", "route.ts"));
+    },
+    /implemented-local contract evidence is missing/,
+  );
+  await expectFailure(
     "missing-sync-implementation-evidence",
     (root) => {
       rmSync(resolve(root, "apps", "ingest", "src", "community-sync-http-server.ts"));
@@ -530,7 +598,7 @@ try {
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[0].problemStatuses = [400, 405, 406, 429, 500, 503];
+      manifest.operations[1].problemStatuses = [400, 405, 406, 429, 500, 503];
       writeJson(path, manifest);
     },
     /public Community score operation differs from the reviewed HTTP contract/,
@@ -540,7 +608,7 @@ try {
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[1].problemStatuses = [400, 401, 405, 406, 422, 429, 500, 503];
+      manifest.operations[2].problemStatuses = [400, 401, 405, 406, 422, 429, 500, 503];
       writeJson(path, manifest);
     },
     /Community sync operation differs from the reviewed HTTP contract/,

@@ -99,6 +99,56 @@ VALUES
     NULL
   );
 
+INSERT INTO viberacing_private.profile_car_recipes (
+  profile_id,
+  schema_version,
+  chassis,
+  nose,
+  cockpit,
+  wing,
+  wheels,
+  palette,
+  trail,
+  seed
+)
+VALUES
+  (
+    '00000000-0000-4000-8000-000000018101',
+    1,
+    'formula',
+    'wedge',
+    'canopy',
+    'high',
+    'slick',
+    'magenta',
+    'spark',
+    101
+  ),
+  (
+    '00000000-0000-4000-8000-000000018103',
+    1,
+    'rally',
+    'scoop',
+    'rally',
+    'high',
+    'all-terrain',
+    'turbo-blue',
+    'spark',
+    303
+  ),
+  (
+    '00000000-0000-4000-8000-000000018104',
+    1,
+    'roadster',
+    'classic',
+    'open',
+    'low',
+    'street',
+    'sunburst',
+    'grid',
+    404
+  );
+
 INSERT INTO viberacing_private.seasons (
   season_start,
   season_end,
@@ -264,6 +314,86 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
+    SELECT pg_catalog.count(*) = 3
+    FROM viberacing_api.list_public_community_race(
+      pg_temp.public_score_date(0),
+      100
+    )
+  )
+  AND (
+    SELECT car_recipe = pg_catalog.jsonb_build_object(
+      'schemaVersion', 1,
+      'chassis', 'formula',
+      'nose', 'wedge',
+      'cockpit', 'canopy',
+      'wing', 'high',
+      'wheels', 'slick',
+      'palette', 'magenta',
+      'trail', 'spark',
+      'seed', 101
+    )
+    FROM viberacing_api.list_public_community_race(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'public_alpha'
+  )
+  AND (
+    SELECT car_recipe IS NULL
+    FROM viberacing_api.list_public_community_race(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'public_beta'
+  )
+  AND (
+    SELECT car_recipe ->> 'palette' = 'turbo-blue'
+      AND (car_recipe ->> 'seed')::integer = 303
+    FROM viberacing_api.list_public_community_race(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'public_gamma'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM viberacing_api.list_public_community_race(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'hidden_driver'
+  ),
+  'the race projection adds only an active public recipe and preserves recipe absence'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.array_agg(DISTINCT output_key.key ORDER BY output_key.key) = ARRAY[
+      'active_days',
+      'car_recipe',
+      'display_position',
+      'handle',
+      'rank_position',
+      'score_version',
+      'season_end',
+      'season_finalized',
+      'season_start',
+      'source_count',
+      'weekly_score'
+    ]::text[]
+    FROM viberacing_api.list_public_community_race(
+      pg_temp.public_score_date(0),
+      100
+    ) AS race_record
+    CROSS JOIN LATERAL pg_catalog.jsonb_object_keys(
+      pg_catalog.to_jsonb(race_record)
+    ) AS output_key(key)
+  ),
+  'the race projection contains only the reviewed public field allowlist'
+);
+
+SELECT pg_temp.assert_true(
+  (
     SELECT pg_catalog.count(*) = 2
     FROM viberacing_api.list_public_community_scores(
       pg_temp.public_score_date(0),
@@ -326,6 +456,27 @@ SELECT pg_temp.assert_true(
     )
   ),
   'hide takes effect at read time and public ranks close without a hidden-profile gap'
+);
+
+SELECT pg_temp.assert_true(
+  NOT EXISTS (
+    SELECT 1
+    FROM viberacing_api.list_public_community_race(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'public_alpha'
+  )
+  AND (
+    SELECT pg_catalog.count(*) = 2
+      AND pg_catalog.min(display_position) = 1
+      AND pg_catalog.max(display_position) = 2
+    FROM viberacing_api.list_public_community_race(
+      pg_temp.public_score_date(0),
+      100
+    )
+  ),
+  'the race projection removes a hidden profile and its active recipe at read time'
 );
 
 SET LOCAL ROLE viberacing_owner;
@@ -477,6 +628,17 @@ SELECT pg_temp.expect_operation_failure(
     FROM viberacing_api.list_public_community_scores(pg_temp.public_score_date(0), 101)
   $sql$,
   'a result limit above the public ceiling fails closed'
+);
+SELECT pg_temp.expect_operation_failure(
+  $sql$SELECT * FROM viberacing_api.list_public_community_race(NULL, 100)$sql$,
+  'a null race season fails closed through the score boundary'
+);
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT *
+    FROM viberacing_api.list_public_community_race(pg_temp.public_score_date(0), 101)
+  $sql$,
+  'a race result limit above the public ceiling fails closed through the score boundary'
 );
 
 ROLLBACK;

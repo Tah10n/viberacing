@@ -1,10 +1,13 @@
-import type { CommunityScorePageV1 } from "@viberacing/contracts";
+import type { CommunityRacePageV1, CommunityScorePageV1 } from "@viberacing/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import {
   acceptsPublicCommunityScoreJson,
+  createPublicCommunityRaceRoute,
   createPublicCommunityScoreRoute,
+  parsePublicCommunityRaceQuery,
   parsePublicCommunityScoreQuery,
+  publicCommunityRaceRoutePolicy,
   publicCommunityScoreRoutePolicy,
 } from "./public-community-score-route";
 import { PublicCommunityScoreStoreError } from "./public-community-score-store";
@@ -13,6 +16,7 @@ import { createPublicRequestId } from "./public-http-problem";
 import { createPublicScoreAdmission } from "./public-score-admission";
 
 const routeUrl = "https://viberacing.invalid/v1/community/scores";
+const raceRouteUrl = "https://viberacing.invalid/v1/community/race";
 const validQuery = "?seasonStart=2026-07-13";
 const emptyPage: CommunityScorePageV1 = Object.freeze({
   schemaVersion: 1,
@@ -25,11 +29,23 @@ function request(query = validQuery, headers?: HeadersInit): Request {
   return new Request(`${routeUrl}${query}`, headers === undefined ? undefined : { headers });
 }
 
+function raceRequest(query = validQuery, headers?: HeadersInit): Request {
+  return new Request(`${raceRouteUrl}${query}`, headers === undefined ? undefined : { headers });
+}
+
 function createRoute(readScores: (seasonStart: string) => Promise<unknown>, admissionLimit = 4) {
   return createPublicCommunityScoreRoute({
     admission: createPublicScoreAdmission(admissionLimit),
     createRequestId: createPublicRequestId,
     readScores,
+  });
+}
+
+function createRaceRoute(readRace: (seasonStart: string) => Promise<unknown>, admissionLimit = 4) {
+  return createPublicCommunityRaceRoute({
+    admission: createPublicScoreAdmission(admissionLimit),
+    createRequestId: createPublicRequestId,
+    readRace,
   });
 }
 
@@ -401,5 +417,89 @@ describe("public Community score route", () => {
       statementTimeoutMs: 5_000,
     });
     expect(Object.isFrozen(publicCommunityScoreRoutePolicy)).toBe(true);
+  });
+});
+
+describe("public Community race route", () => {
+  const recipe = {
+    schemaVersion: 1,
+    chassis: "formula",
+    nose: "wedge",
+    cockpit: "canopy",
+    wing: "high",
+    wheels: "slick",
+    palette: "magenta",
+    trail: "spark",
+    seed: 101,
+  } as const;
+  const racePage: CommunityRacePageV1 = {
+    schemaVersion: 1,
+    trustTier: "community",
+    selfReported: true,
+    participants: [
+      {
+        seasonStart: "2026-07-13",
+        seasonEnd: "2026-07-19",
+        scoreVersion: "community_v1",
+        seasonFinalized: false,
+        handle: "community_one",
+        carRecipe: recipe,
+        weeklyScore: 6400,
+        activeDays: 7,
+        sourceCount: 2,
+        rankPosition: 1,
+        displayPosition: 1,
+      },
+    ],
+  };
+
+  it("keeps the new and stable score paths exact and independent", () => {
+    expect(parsePublicCommunityRaceQuery(raceRequest())).toEqual({ seasonStart: "2026-07-13" });
+    expect(parsePublicCommunityRaceQuery(request())).toBeUndefined();
+    expect(parsePublicCommunityScoreQuery(raceRequest())).toBeUndefined();
+  });
+
+  it("returns one validated no-store race page with the optional active recipe", async () => {
+    const readRace = vi.fn(() => Promise.resolve(racePage));
+    const response = await createRaceRoute(readRace).get(raceRequest());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    await expect(response.json()).resolves.toEqual(racePage);
+    expect(readRace).toHaveBeenCalledWith("2026-07-13");
+  });
+
+  it("rejects arbitrary recipe content and keeps the stable score response closed", async () => {
+    const invalidRacePage = {
+      ...racePage,
+      participants: [
+        {
+          ...racePage.participants[0],
+          carRecipe: { ...recipe, assetUrl: "private-value-that-must-not-be-reflected" },
+        },
+      ],
+    };
+    const invalidRaceResponse = await createRaceRoute(() => Promise.resolve(invalidRacePage)).get(
+      raceRequest(),
+    );
+    const stableScoreResponse = await createRoute(() => Promise.resolve(racePage)).get(request());
+
+    for (const response of [invalidRaceResponse, stableScoreResponse]) {
+      const text = await response.text();
+      expect(response.status).toBe(500);
+      expect(text).toContain('"errorCode":"internal_error"');
+      expect(text).not.toContain("private-value-that-must-not-be-reflected");
+    }
+  });
+
+  it("shares the reviewed no-queue and database deadline policy", () => {
+    expect(publicCommunityRaceRoutePolicy).toBe(publicCommunityScoreRoutePolicy);
+    expect(publicCommunityRaceRoutePolicy).toEqual({
+      admissionLimit: 4,
+      connectionTimeoutMs: 2_000,
+      queryTimeoutMs: 6_000,
+      statementTimeoutMs: 5_000,
+    });
   });
 });

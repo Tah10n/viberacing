@@ -368,16 +368,19 @@ material availability cost.
   self-reported trust metadata, and rejects unknown/private fields. Its server-only mapper requires
   the exact SQL column set and never reflects projected values in mapping errors. The server-only
   adapter selects only those columns with a fixed top-32 parameterized call and reflects no input,
-  row, SQL, configuration, or driver error. The local GET closes one public Monday season query,
-  body/method/media handling, no-store/same-origin semantics, admission, generic errors, and final
-  response validation. The visible browser consumer renders only those public fields, omits
-  unavailable streak/freshness, uses fixed project-owned presentation cars, sends no credentials,
-  and falls back to explicitly synthetic rows after any invalid or unavailable response. Revision
-  0015 lets only the exact possessed session read and set the closed `public`/`hidden` state; the
-  same-origin form carries no profile ID and repeated state is a no-op. Because the public read
-  already filters current state, a committed hide removes the profile from the next no-store
-  response while source sync may continue. Deployment, enumeration controls, rounded freshness,
-  cache purge, edge rate policy, and monitoring are still unimplemented.
+  row, SQL, configuration, or driver error. The stable local GET closes one public Monday season
+  query, body/method/media handling, no-store/same-origin semantics, admission, generic errors, and
+  final response validation. Revision 0027 and `CommunityRacePageV1` add a separate compatible route
+  that repeats those fields and may include only one exact current active enum recipe; proposal
+  state and timestamps remain private. The visible browser consumer lazily validates the complete
+  race response, omits unavailable streak/freshness, uses fixed project-owned presentation cars for
+  recipe absence, sends no credentials, and falls back to explicitly synthetic rows after any
+  invalid or unavailable response. Revision 0015 lets only the exact possessed session read and set
+  the closed `public`/`hidden` state; the same-origin form carries no profile ID and repeated state
+  is a no-op. Because the public read already filters current state, a committed hide removes the
+  profile from the next no-store response while source sync may continue. Deployment, enumeration
+  controls, rounded freshness, cache purge, edge rate policy, and monitoring are still
+  unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 
@@ -407,8 +410,10 @@ material availability cost.
   preview, explicit user approval, exact-session PostgreSQL authority, opaque decision control,
   forced RLS, and deterministic snapshots.
 - **Current evidence:** Contract, HTTP/service, mapper/pool, renderer, role-denial, IDOR, replay,
-  replacement, approval/rejection, hidden-profile, and profile-purge tests pass locally. There is no
-  agent/connector proposal ingress or public active-recipe projection.
+  replacement, approval/rejection, hidden-profile, profile-purge, and separate public race tests
+  pass locally. The stable score response rejects `carRecipe`; the race response rejects malformed
+  or arbitrary nested content and exposes no proposal state. There is no agent/connector proposal
+  ingress.
 - **Detection:** Schema rejection metrics, generated-asset drift, provenance and license review;
   operational metrics and alerting are still pending.
 - **Recovery:** Reject or disable the recipe/version, restore a safe default, and remove invalid
@@ -486,22 +491,23 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 37 cross-capability denials.
+  and usage/scoring-table reads or API-schema mutation, and proves 40 cross-capability denials.
   Ingest has exactly three reviewed functions; Jobs has exactly seven reviewed functions: bounded
   authentication-, CarRecipe-proposal-, ingest-, and pairing-retention cleanup, primary profile
   deletion, open-season scoring refresh, and terminal season finalization. Web alone receives the
-  bounded public score function; Ingest, Jobs, and Admin are explicitly denied. The Web adapter uses
-  one dedicated pool, a fixed parameterized function call, and checks effective role, distinct
-  non-privileged login, exact Web-only membership, database capability, search path, and read-only
-  state before every pooled read. Failed sessions are destroyed and raw driver errors are not
-  forwarded. The local Jobs adapter independently checks an exact Jobs-only login/membership,
-  CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the seven prepared
-  function calls. Its pool maximum is one, input/result shapes are closed, failed clients are
-  destroyed, and CLI output reflects no configuration, command, SQL, count, or error detail. The
-  local Ingest adapter independently caps its pool at four, probes the exact Ingest login/role and
-  safe search path before each capability, exposes only fixed parameterized origin replay, device
-  lookup, and submission calls, reconstructs and revalidates inputs, copies mutable values, accepts
-  only closed rows, and destroys failed clients without forwarding driver/configuration details.
+  bounded public score and separate race functions; Ingest, Jobs, and Admin are explicitly denied.
+  The Web adapter uses one dedicated pool, fixed parameterized function calls, and checks effective
+  role, distinct non-privileged login, exact Web-only membership, database capability, search path,
+  and read-only state before every pooled read. Failed sessions are destroyed and raw driver errors
+  are not forwarded. The local Jobs adapter independently checks an exact Jobs-only
+  login/membership, CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the
+  seven prepared function calls. Its pool maximum is one, input/result shapes are closed, failed
+  clients are destroyed, and CLI output reflects no configuration, command, SQL, count, or error
+  detail. The local Ingest adapter independently caps its pool at four, probes the exact Ingest
+  login/role and safe search path before each capability, exposes only fixed parameterized origin
+  replay, device lookup, and submission calls, reconstructs and revalidates inputs, copies mutable
+  values, accepts only closed rows, and destroys failed clients without forwarding
+  driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Web and Jobs deployment login/TLS integration and live adapters have not been
   exercised. Ingest now has a disposable synthetic least-privileged loopback login and full HTTP

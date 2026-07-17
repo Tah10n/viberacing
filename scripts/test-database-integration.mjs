@@ -1922,10 +1922,15 @@ SELECT viberacing_api.complete_passkey_login(
       "SELECT * FROM viberacing_api.list_public_community_scores('2026-07-06', 10);",
       `${role} public Community score projection`,
     );
+    expectDenied(
+      role,
+      "SELECT * FROM viberacing_api.list_public_community_race('2026-07-06', 10);",
+      `${role} public Community race projection`,
+    );
   }
 
   console.log(
-    "Database integration passed (27 schema tables, 28 observed lock-wait races, 12 relation-denial and 37 cross-capability checks).",
+    "Database integration passed (27 schema tables, 28 observed lock-wait races, 12 relation-denial and 40 cross-capability checks).",
   );
 } finally {
   if (started) {

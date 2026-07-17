@@ -156,6 +156,12 @@
       "name": "car_recipe_proposal_cleanup",
       "path": "database/migrations/0026_car_recipe_proposal_cleanup.sql",
       "sha256": "fc2dd335b573631b41e0585e673ee89a173f76709dd15b66d8d8fdf7b16d7c88"
+    },
+    {
+      "revision": 27,
+      "name": "community_public_race_read",
+      "path": "database/migrations/0027_community_public_race_read.sql",
+      "sha256": "b9ddb07d1d8641b6f79f4ed67482bebaa711c744927da2430e7434f593259b89"
     }
   ]
 }

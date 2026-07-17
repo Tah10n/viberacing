@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createCloseablePublicCommunityScoreStore,
   createConfiguredPublicCommunityScoreStore,
+  createPublicCommunityRaceStore,
   createPublicCommunityScoreStore,
   PublicCommunityScoreStoreError,
   type PublicCommunityScoreStoreErrorCode,
@@ -155,6 +156,46 @@ describe("public Community score store", () => {
 
     expect(testHarness.connect).toHaveBeenCalledTimes(2);
     expect(testHarness.calls.filter(({ text }) => text.includes("CURRENT_USER"))).toHaveLength(2);
+    expect(testHarness.releases).toEqual([false, false]);
+  });
+
+  it("maps the separate fixed race query without widening the stable score query", async () => {
+    const recipe = {
+      schemaVersion: 1,
+      chassis: "formula",
+      nose: "wedge",
+      cockpit: "canopy",
+      wing: "high",
+      wheels: "slick",
+      palette: "magenta",
+      trail: "spark",
+      seed: 101,
+    } as const;
+    const testHarness = harness([
+      runtimeBoundary(),
+      [{ ...baseProjectionRow, car_recipe: recipe }],
+      runtimeBoundary(),
+      [{ ...baseProjectionRow, car_recipe: null }],
+    ]);
+    const store = createPublicCommunityRaceStore(testHarness.pool);
+
+    const withRecipe = await store.read("2026-07-13");
+    expect(withRecipe).toMatchObject({
+      participants: [{ handle: "alpha-driver", carRecipe: recipe }],
+    });
+    const withoutRecipe = await store.read("2026-07-13");
+    expect(withoutRecipe).toMatchObject({
+      participants: [{ handle: "alpha-driver" }],
+    });
+    expect(Object.hasOwn(withoutRecipe.participants[0] ?? {}, "carRecipe")).toBe(false);
+
+    const raceCalls = testHarness.calls.filter(({ text }) =>
+      text.includes("list_public_community_race"),
+    );
+    expect(raceCalls).toHaveLength(2);
+    expect(raceCalls[0]?.values).toEqual(["2026-07-13", 32]);
+    expect(raceCalls[0]?.text).toContain("race.car_recipe AS car_recipe");
+    expect(raceCalls[0]?.text).not.toContain("list_public_community_scores");
     expect(testHarness.releases).toEqual([false, false]);
   });
 

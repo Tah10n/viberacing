@@ -3,7 +3,7 @@
 ## Status
 
 This is the planned runtime architecture. The current repository contains a tested SQL persistence
-foundation, one local public-score route with a visible validated browser consumer and synthetic
+foundation, local public score/race routes with a visible validated race consumer and synthetic
 fallback, local invite/OAuth/initial-passkey enrollment, returning-passkey login, exact-session
 public-profile visibility, and private passkey-inventory/add/revocation slices with encrypted
 cookies, local recovery-code replacement-passkey sign-in, and logout, one local one-shot Jobs runner
@@ -103,14 +103,16 @@ adds its response-only top-32 contract. A server-only Web mapper now enforces th
 shape and its cross-row invariants before returning a validated frozen contract. ADR 0011 adds a
 bounded server-only PostgreSQL pool/config/store boundary around that read, including strict
 production TLS, fixed deadlines/query, and per-checkout effective-role and least-privileged-login
-verification. ADR 0013 adds a locally implemented request/admission/response route around it. These
-capabilities have role, contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a
-local one-shot Jobs adapter/CLI; ADRs 0029, 0032, and 0034 extend it to exactly three cleanup, one
-primary purge, one refresh, and one finalization command with the same role/login probe, one-client
-pool, and fixed deadlines. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and
-JSON parser, verifies a replay-consumed body-bound origin proof before parsing, validates the sync
-contract, and verifies the exact source-bound device request under strict Ed25519 semantics. ADR
-0016 adds a fixed-query four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest
+verification. ADR 0013 adds a locally implemented request/admission/response route around it. ADR
+0037 and revision 0027 add a separate compatible response, route, and query that preserve the score
+contract and optionally project only the current active recipe. These capabilities have role,
+contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a local one-shot Jobs
+adapter/CLI; ADRs 0029, 0032, 0034, and 0036 extend it to exactly four cleanup, one primary purge,
+one refresh, and one finalization command with the same role/login probe, one-client pool, and fixed
+deadlines. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and JSON parser,
+verifies a replay-consumed body-bound origin proof before parsing, validates the sync contract, and
+verifies the exact source-bound device request under strict Ed25519 semantics. ADR 0016 adds a
+fixed-query four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest
 role/login/search-path verification, closed device/submission mappers, copied parameters, and
 destructive failure release. ADR 0017 adds an exact primary/secondary origin-key reader and
 config-backed verifier factory without exposing a reusable key container. ADR 0018 adds persistent
@@ -152,19 +154,19 @@ authority shown in the design remain planned.
 
 ## Component responsibilities
 
-| Component        | Owns                                                                                                                          | Must not own                                                                                      | Primary trust boundary |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------- |
-| Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                                           | Raw device key, connector execution, admin authority, private cache mixing                        | TB-01 and TB-02        |
-| Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                       | Profile authorization, score derivation, database credentials                                     | TB-01 and TB-06        |
-| Web/Auth         | Public score read, OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion initiation | Device private key, direct usage submission, schema ownership                                     | TB-02, TB-07, TB-08    |
-| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision           | OAuth, admin, invites, passkey/recovery, migrations, final score authority                        | TB-05, TB-06, TB-07    |
-| Ingest host      | Closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                                | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials     | TB-06 and TB-07        |
-| Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                  | Interactive auth, public request handling, schema ownership                                       | TB-07 and TB-11        |
-| PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                      | Public routing, connector trust, release credentials                                              | TB-07                  |
-| Rust connector   | Local App Server lifecycle, compatibility adapter, local key, canonical signing, safe scheduling                              | Website commands, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
-| Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                      | Normal user session reuse, shared identities, routine exact-usage access                          | TB-08                  |
-| CI               | Evaluate untrusted source without secrets; produce read-only evidence                                                         | Deployment, signing, package publication from pull requests                                       | TB-09                  |
-| Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                        | Unreviewed pull-request execution, long-lived broad credentials                                   | TB-10                  |
+| Component        | Owns                                                                                                                     | Must not own                                                                                      | Primary trust boundary |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | ---------------------- |
+| Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                                      | Raw device key, connector execution, admin authority, private cache mixing                        | TB-01 and TB-02        |
+| Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                  | Profile authorization, score derivation, database credentials                                     | TB-01 and TB-06        |
+| Web/Auth         | Public score/race reads, OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion | Device private key, direct usage submission, schema ownership                                     | TB-02, TB-07, TB-08    |
+| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision      | OAuth, admin, invites, passkey/recovery, migrations, final score authority                        | TB-05, TB-06, TB-07    |
+| Ingest host      | Closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                           | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials     | TB-06 and TB-07        |
+| Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                             | Interactive auth, public request handling, schema ownership                                       | TB-07 and TB-11        |
+| PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                 | Public routing, connector trust, release credentials                                              | TB-07                  |
+| Rust connector   | Local App Server lifecycle, compatibility adapter, local key, canonical signing, safe scheduling                         | Website commands, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
+| Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                 | Normal user session reuse, shared identities, routine exact-usage access                          | TB-08                  |
+| CI               | Evaluate untrusted source without secrets; produce read-only evidence                                                    | Deployment, signing, package publication from pull requests                                       | TB-09                  |
+| Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                   | Unreviewed pull-request execution, long-lived broad credentials                                   | TB-10                  |
 
 Trust-boundary IDs are defined in the [threat model](../security/THREAT_MODEL.md).
 
@@ -191,7 +193,9 @@ freshness projection, moderation state, and deletion state are server-derived.
 The current `CarRecipeV1` proposal is browser-only: Web derives the profile from an exact possessed
 session, creates proposal identity/expiry, and exposes only an encrypted session-bound decision
 control. PostgreSQL owns the atomic pending-to-active transition. A device cannot administer a car,
-and there is no agent/connector proposal ingress or public active-recipe projection yet.
+and there is no agent/connector proposal ingress. The separate public race projection can expose
+only the exact current approved recipe for an `active` profile; proposal identity, state, and
+timestamps remain private, and the stable score response remains unchanged.
 
 The [privacy data map](../security/PRIVACY_DATA_MAP.md) defines field classification and retention.
 The [data-flow document](DATA_FLOW.md) defines enrollment, pairing, synchronization, public read,

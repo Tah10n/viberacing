@@ -60,10 +60,10 @@ deliberately non-working placeholders. See `.env.example` and the local-developm
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
 | `app/page.tsx`                                                                   | Selects the current week and builds the synthetic fallback               | Must pass only public labels and presentation data into the client tree            |
 | `lib/race-data.ts`                                                               | Clearly synthetic raw activity fixtures and payload projection           | Marked `server-only`; never replace with exports or real account data              |
-| `lib/public-community-race.ts`                                                   | Loads and maps the current public score page for visible racing          | Exact same-origin GET; no credentials/cache; closed fields and synthetic fallback  |
-| `lib/public-community-score-mapper.ts`                                           | Validates and maps the exact SQL score projection                        | Server-only, exact allowlist, top-32, and fail-closed                              |
-| `lib/public-community-score-store.ts`                                            | Executes the fixed public-score procedure and mapper                     | Canonical Monday only; verifies every checkout; route constructs it lazily         |
-| `lib/public-community-score-route.ts`                                            | Parses and serializes the public score HTTP boundary                     | Closed query/Accept, exact errors, admission, deadlines, and no CORS               |
+| `lib/public-community-race.ts`                                                   | Loads and independently maps the current public race page                | Lazy exact same-origin GET; no credentials/cache; closed recipe and fallback       |
+| `lib/public-community-score-mapper.ts`                                           | Validates the exact SQL score and race projections                       | Server-only, exact ten/eleven columns, top-32, and fail-closed                     |
+| `lib/public-community-score-store.ts`                                            | Executes the fixed public-score and race procedures                      | Canonical Monday only; verifies every checkout; routes construct lazily            |
+| `lib/public-community-score-route.ts`                                            | Parses and serializes both public GET boundaries                         | Exact paths/query/Accept, generic errors, admission, deadlines, and no CORS        |
 | `lib/public-score-admission.ts`                                                  | Enforces the no-queue public-read concurrency ceiling                    | Four active reads; lease held until adapter settlement                             |
 | `lib/public-http-problem.ts`                                                     | Generates opaque request IDs and closed public error responses           | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
 | `app/join`, `app/login`, `app/recover`, `app/account`, `app/connect`, `app/auth` | Routes enrollment, recovery, account, pairing approval, deletion, logout | Thin session/browser entrypoints; no admin                                         |
@@ -110,12 +110,14 @@ API. It owns all eleven `ProblemDetailsV1` status/title/retry mappings, validate
 and emits `application/problem+json`, `Cache-Control: no-store`, and the matching `x-request-id`. It
 emits no CORS header, cookie, detail, exception cause, hostname, SQL, or submitted value.
 
-The local `GET /v1/community/scores` route generates one token at entry, rejects a body and every
-missing/duplicate/unknown/non-canonical query, validates `CommunityScoreQueryV1`, performs bounded
-`Accept` negotiation, and acquires one of four no-queue admission leases before constructing the
-store. It holds the lease until the adapter promise settles, validates the final page again before
-JSON serialization, and adds `Vary: Accept` without CORS. Every other Next.js route method receives
-the closed 405 response and `Allow: GET`.
+The local `GET /v1/community/scores` and `GET /v1/community/race` routes share one closed boundary
+but hardwire independent response validators and fixed database calls. Each generates one token at
+entry, rejects a body and every wrong path or missing/duplicate/unknown/non-canonical query,
+validates `CommunityScoreQueryV1`, performs bounded `Accept` negotiation, and acquires one of four
+no-queue admission leases before constructing its store. The lease remains held until the adapter
+promise settles. The route validates the final page again before JSON serialization and adds
+`Vary: Accept` without CORS. Every other Next.js route method receives the closed 405 response and
+`Allow: GET`; the stable score response never accepts `carRecipe`.
 
 The route has no outer `Promise.race` that could return while database work continued. Its deadline
 policy is the adapter's enforced two-second connection timeout, six-second query timeout, and
@@ -125,14 +127,16 @@ invariant failure maps to a generic 500. The documented 429 remains reserved: no
 is claimed. No raw URL/header, SQL, driver error, configuration value, or row value is logged or
 reflected.
 
-The generated contract marks the route `implemented-local` with one bounded Monday `seasonStart`,
+The generated contract marks both routes `implemented-local` with one bounded Monday `seasonStart`,
 `no-store`, `Vary: Accept`, same-origin/no-CORS semantics, and closed 200/400/406/429/500/503
-responses. There is no deployment, live login/certificate evidence, shared cache, edge rate policy,
-or deployed consumer; the local home page consumer keeps its synthetic fallback on every failure.
+responses. The race response preserves the ten score fields and optionally adds one exact current
+`CarRecipeV1`; proposal state never enters either route. There is no deployment, live
+login/certificate evidence, shared cache, edge rate policy, or deployed consumer. The local home
+page loads the race client only after hydration and keeps its synthetic fallback on every failure.
 
 ## Score database adapter configuration
 
-The adapter is constructed lazily only when the visible client reaches the exact score route; an
+The adapter is constructed lazily only when a client reaches an exact score or race route; an
 invalid or absent configuration returns the generic unavailable response and the page keeps its
 synthetic fallback. Importing or building the page does not connect. The adapter uses only the
 `VIBERACING_WEB_DATABASE_*` settings documented in `.env.example`. The separate `DATABASE_*` values
@@ -279,10 +283,13 @@ exact proposal or removes only the rejected proposal.
 
 Both active and pending recipes are server-rendered as semantic code-native indexed pixels in Neon
 Night, Classic Grand Prix, and Cyber Rally. The public animated race uses the same deterministic
-recipe rules, while the contract validator stays server-side and outside the initial browser bundle.
-A separate bounded Jobs-only capability can physically remove expired proposals locally. There is no
-cleanup schedule or deployed cadence, connector/agent proposal ingress, public active-recipe
-projection, distributed edge policy, live credential, monitoring, capacity result, or deployment.
+recipe rules. Its separate race response may include only the current approved recipe of an active
+profile; the browser loads a compact independent exact-shape validator after hydration, and the
+generic contract runtime stays outside the initial bundle. Proposal identity, state, and timestamps
+remain private, while absence uses the existing repository-owned car. A separate bounded Jobs-only
+capability can physically remove expired proposals locally. There is no cleanup schedule or deployed
+cadence, connector/agent proposal ingress, distributed edge policy, live credential, monitoring,
+capacity result, or deployment.
 
 This is not a launch-ready authentication system. There is no invite-issuance UI, passkey profile
 mutation beyond the listed controls, aggregate/distributed edge rate policy, cleanup or notification
@@ -364,10 +371,11 @@ deployment. The synthetic home page and build do not construct the service.
 ## Public client data contract
 
 The validated Community page may receive only public handles plus bounded weekly score, rank,
-active-day count, source count, and season metadata. The UI derives an opaque presentation ID and
-fixed repository-owned visual-marker car; it receives no Community daily detail or device count. The
+active-day count, source count, season metadata, and an optional exact active `CarRecipeV1`. The UI
+derives an opaque presentation ID and uses a fixed repository-owned visual-marker car when that
+recipe is absent; it receives no proposal state, Community daily detail, or device count. The
 optional page query contains one already-public canonical handle only; it is neither sent to the
-score API nor persisted in browser storage.
+race API nor persisted in browser storage.
 
 The synthetic fallback may additionally receive only:
 

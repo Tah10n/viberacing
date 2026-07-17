@@ -19,32 +19,33 @@ Read these files before changing the project:
     state.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync,
-Community score query/response, and CarRecipe contracts, locally implemented OpenAPI GET and POST
-operations, a bounded server-only PostgreSQL score adapter/mapper, a closed public problem-response
-factory and request/admission route, and procedure-only identity, passkey, restricted-recovery,
-pairing, source/device lifecycle, Community usage-ingest, Jobs-only ingest/pairing/auth/CarRecipe-
-proposal retention, primary profile deletion, session-owned CarRecipe proposal/approval, and
-open-season Community scoring plus terminal finalization and bounded public score-projection
-database slices. A local one-shot Jobs runner now invokes only those seven reviewed maintenance
-functions through a probed least-privileged login contract. A local Ingest kernel bounds the raw
-sync envelope and parser, verifies an injected replay-consumed origin proof, validates the sync
-contract, and strictly verifies the source-bound device request. A protected local reader supplies
-one mandatory and one optional rotation proof key from exact namespaced configuration without
-returning a reusable key container. A separate bounded Ingest PostgreSQL adapter wraps only reviewed
-origin replay, device lookup, and submission procedures through a probed least-privileged login
-contract. A forced-RLS origin replay tuple and separate Jobs ingest/pairing/auth/CarRecipe-proposal
-cleanup capabilities have isolated PostgreSQL evidence. A transport-free Ingest application boundary
-now composes those exact capabilities, generates one server request ID, and returns only a validated
-sync acknowledgement or generic problem decision. A confined Fastify server factory now preserves
-raw body/header evidence, applies no-queue/deadline policy, and serializes only revalidated sync
-contracts. A separate local Ingest host now binds that exact composition under closed loopback or
-Railway-edge configuration, cleans up every partial startup, and handles SIGINT/SIGTERM under a
-fixed deadline without reflective output. An opt-in synthetic loopback integration now builds that
-host, creates a disposable least-privileged Ingest login in one ephemeral PostgreSQL container,
-sends independently signed HTTP requests, and proves accepted, duplicate, persistent origin-replay,
-revoked-device, response-contract, and exact persistence behavior before removing the container. The
-public score route now has a visible current-week browser consumer with an explicit validated
-synthetic fallback. These local boundaries still have no deployment proof key or secret-manager
+Community score query/response, compatible race response, and CarRecipe contracts, locally
+implemented OpenAPI GET and POST operations, bounded server-only PostgreSQL score/race
+adapters/mappers, a closed public problem-response factory and request/admission route, and
+procedure-only identity, passkey, restricted-recovery, pairing, source/device lifecycle, Community
+usage-ingest, Jobs-only ingest/pairing/auth/CarRecipe- proposal retention, primary profile deletion,
+session-owned CarRecipe proposal/approval, and open-season Community scoring plus terminal
+finalization and bounded public score-projection database slices. A local one-shot Jobs runner now
+invokes only those seven reviewed maintenance functions through a probed least-privileged login
+contract. A local Ingest kernel bounds the raw sync envelope and parser, verifies an injected
+replay-consumed origin proof, validates the sync contract, and strictly verifies the source-bound
+device request. A protected local reader supplies one mandatory and one optional rotation proof key
+from exact namespaced configuration without returning a reusable key container. A separate bounded
+Ingest PostgreSQL adapter wraps only reviewed origin replay, device lookup, and submission
+procedures through a probed least-privileged login contract. A forced-RLS origin replay tuple and
+separate Jobs ingest/pairing/auth/CarRecipe-proposal cleanup capabilities have isolated PostgreSQL
+evidence. A transport-free Ingest application boundary now composes those exact capabilities,
+generates one server request ID, and returns only a validated sync acknowledgement or generic
+problem decision. A confined Fastify server factory now preserves raw body/header evidence, applies
+no-queue/deadline policy, and serializes only revalidated sync contracts. A separate local Ingest
+host now binds that exact composition under closed loopback or Railway-edge configuration, cleans up
+every partial startup, and handles SIGINT/SIGTERM under a fixed deadline without reflective output.
+An opt-in synthetic loopback integration now builds that host, creates a disposable least-privileged
+Ingest login in one ephemeral PostgreSQL container, sends independently signed HTTP requests, and
+proves accepted, duplicate, persistent origin-replay, revoked-device, response-contract, and exact
+persistence behavior before removing the container. The public race route now has a visible
+current-week browser consumer with an explicit validated synthetic fallback; the stable score route
+remains unchanged. These local boundaries still have no deployment proof key or secret-manager
 binding, externally verified TLS/edge route, deployment database credential, capacity evidence,
 deployment, or real-data result. A separate local enrollment slice now implements exact invite
 parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted cookies,
@@ -62,46 +63,46 @@ verification under a protected pepper, creates only a five-minute restricted aut
 replacement WebAuthn ceremony, and returns a normal session only after atomic completion. It has an
 exact-session CarRecipe editor that validates one closed version 1 object, stores at most one
 24-hour private proposal, previews active/pending recipes in all three themes, and activates or
-rejects only through an encrypted session-bound control. It has no agent/connector proposal ingress
-or public active-recipe projection. A separate bounded Jobs-only capability physically removes
-expired proposals locally, but has no schedule, live login, monitoring, or deployment. The
-enrollment slice has only injected/synthetic evidence and no invite issuer UI, working OAuth or
-database credential, distributed recovery attempt controls, cleanup/deletion scheduling or
-notification, cache/backup/tombstone purge, restore replay, edge abuse controls, or deployment.
-Bounded expired authentication/CarRecipe-proposal cleanup and primary profile deletion exist
-locally, but have no schedule or deployed retention evidence. A library-only Rust connector
-foundation now implements a bounded stable App Server JSONL handshake and a candidate-only `0.144.5`
-account/usage parser with checked schema/fixture evidence. A one-shot supervisor composes that
-sequence with fixed local pipes, arguments, deadlines, output budgets, ambient-environment clearing,
-and reap-before-success behavior, but its reviewed-launch capability has no public constructor. An
-exact-body composer now consumes that minimized usage behind a second inaccessible reviewed context
-and fixes the versioned JSON/digest/LF message. An isolated one-use signer consumes that otherwise
-inaccessible material with a device-bound key capability that also has no public constructor,
-returning only the same body and five exact signed header values. A separate inaccessible
-pending-key/challenge signer and pure server-only Web verifier now agree on one exact synthetic
-pairing-possession proof. A transport-free Web/Auth start application creates nine-minute pending
-transactions from closed device metadata with fresh server IDs, poll tokens, challenges, 60-bit
-human codes, and separate protected poll/code verifiers through the fixed read-write Web pool. A
-second activation application performs protected poll lookup, runs the strict proof, and alone
-invokes exact activation with server-owned IDs behind fixed admission and timing. A local signed-in
-`/connect` flow now counts pending-code attempts on the exact session, renders bounded device
-metadata plus a full public-key fingerprint, offers a new source or an active owned source through
-an encrypted session-bound control, and requires a separate fresh passkey assertion before atomic
-new/existing-source approval. A closed local start/poll HTTP boundary now shares four-call
-admission, applies a fixed-storage global-and-64-bucket PostgreSQL rate policy, and serializes only
-the versioned contracts. A bounded Rust `connect` command generates one Ed25519 key through the OS
-CSPRNG, stores its versioned state only in the native credential store, resumes polling, and
-persists the activated binding without printing bearer or key material. A separate Windows x86_64
-development `sync` command can construct the private launch/context/key capabilities only after
-explicit exact `0.144.5` artifact and active-record admission, then sends one fixed signed request
-and validates one closed acknowledgement without retry or edge-origin headers. There is still no
-automatic executable discovery, supported version, macOS/Linux admission, clean-machine real-account
-result, packaging, release, live pairing result, deployment Ingest credential/TLS result, edge
-deployment, or capacity evidence. Do not claim that deployed browser/session HTTP authentication,
-production-ready recovery or remaining unimplemented critical-action verification, real-user
-ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
-correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
-implementation and verification are present in the working tree.
+rejects only through an encrypted session-bound control. It has no agent/connector proposal ingress.
+A separate compatible race projection exposes only an active profile's current approved recipe;
+proposal state stays private. A separate bounded Jobs-only capability physically removes expired
+proposals locally, but has no schedule, live login, monitoring, or deployment. The enrollment slice
+has only injected/synthetic evidence and no invite issuer UI, working OAuth or database credential,
+distributed recovery attempt controls, cleanup/deletion scheduling or notification,
+cache/backup/tombstone purge, restore replay, edge abuse controls, or deployment. Bounded expired
+authentication/CarRecipe-proposal cleanup and primary profile deletion exist locally, but have no
+schedule or deployed retention evidence. A library-only Rust connector foundation now implements a
+bounded stable App Server JSONL handshake and a candidate-only `0.144.5` account/usage parser with
+checked schema/fixture evidence. A one-shot supervisor composes that sequence with fixed local
+pipes, arguments, deadlines, output budgets, ambient-environment clearing, and reap-before-success
+behavior, but its reviewed-launch capability has no public constructor. An exact-body composer now
+consumes that minimized usage behind a second inaccessible reviewed context and fixes the versioned
+JSON/digest/LF message. An isolated one-use signer consumes that otherwise inaccessible material
+with a device-bound key capability that also has no public constructor, returning only the same body
+and five exact signed header values. A separate inaccessible pending-key/challenge signer and pure
+server-only Web verifier now agree on one exact synthetic pairing-possession proof. A transport-free
+Web/Auth start application creates nine-minute pending transactions from closed device metadata with
+fresh server IDs, poll tokens, challenges, 60-bit human codes, and separate protected poll/code
+verifiers through the fixed read-write Web pool. A second activation application performs protected
+poll lookup, runs the strict proof, and alone invokes exact activation with server-owned IDs behind
+fixed admission and timing. A local signed-in `/connect` flow now counts pending-code attempts on
+the exact session, renders bounded device metadata plus a full public-key fingerprint, offers a new
+source or an active owned source through an encrypted session-bound control, and requires a separate
+fresh passkey assertion before atomic new/existing-source approval. A closed local start/poll HTTP
+boundary now shares four-call admission, applies a fixed-storage global-and-64-bucket PostgreSQL
+rate policy, and serializes only the versioned contracts. A bounded Rust `connect` command generates
+one Ed25519 key through the OS CSPRNG, stores its versioned state only in the native credential
+store, resumes polling, and persists the activated binding without printing bearer or key material.
+A separate Windows x86_64 development `sync` command can construct the private launch/context/key
+capabilities only after explicit exact `0.144.5` artifact and active-record admission, then sends
+one fixed signed request and validates one closed acknowledgement without retry or edge-origin
+headers. There is still no automatic executable discovery, supported version, macOS/Linux admission,
+clean-machine real-account result, packaging, release, live pairing result, deployment Ingest
+credential/TLS result, edge deployment, or capacity evidence. Do not claim that deployed
+browser/session HTTP authentication, production-ready recovery or remaining unimplemented
+critical-action verification, real-user ingestion, an operational connector, a Jobs scheduler or
+deployed public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted
+security control exists until its implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -112,11 +113,11 @@ implementation and verification are present in the working tree.
 - `scripts/` contains repository verification and black-box policy tests.
 - `config/` contains reviewed external-host and dependency-license policy; do not widen either
   allowlist as a workaround for a failing check.
-- `apps/web/` contains the synthetic Next.js frontend, local public-score route/adapter, bounded
-  invite/OAuth/initial-passkey enrollment, returning-passkey login, private account controls, and
-  passkey-protected recovery-code rotation and replacement-passkey sign-in, plus the pure pairing-
-  possession verifier, local pairing start/poll routes and applications, and nested agent guidance.
-  Read `apps/web/AGENTS.md` before editing it.
+- `apps/web/` contains the synthetic Next.js frontend, local public score/race routes and adapters,
+  bounded invite/OAuth/initial-passkey enrollment, returning-passkey login, private account
+  controls, and passkey-protected recovery-code rotation and replacement-passkey sign-in, plus the
+  pure pairing- possession verifier, local pairing start/poll routes and applications, and nested
+  agent guidance. Read `apps/web/AGENTS.md` before editing it.
 - `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
   least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL

@@ -1,9 +1,11 @@
 import "server-only";
 
-import type { CommunityScorePageV1 } from "@viberacing/contracts";
+import type { CommunityRacePageV1, CommunityScorePageV1 } from "@viberacing/contracts";
 
 import {
+  mapPublicCommunityRaceRows,
   mapPublicCommunityScoreRows,
+  publicCommunityRacePageSize,
   publicCommunityScorePageSize,
 } from "./public-community-score-mapper";
 import { resolvePublicScoreDatabaseConfig } from "./public-score-database-config";
@@ -76,6 +78,21 @@ const publicScoreQuery = `SELECT
 FROM viberacing_api.list_public_community_scores($1::date, $2::integer) AS score
 ORDER BY score.display_position`;
 
+const publicRaceQuery = `SELECT
+  race.season_start::text AS season_start,
+  race.season_end::text AS season_end,
+  race.score_version AS score_version,
+  race.season_finalized AS season_finalized,
+  race.handle AS handle,
+  race.weekly_score AS weekly_score,
+  race.active_days AS active_days,
+  race.source_count AS source_count,
+  race.rank_position AS rank_position,
+  race.display_position AS display_position,
+  race.car_recipe AS car_recipe
+FROM viberacing_api.list_public_community_race($1::date, $2::integer) AS race
+ORDER BY race.display_position`;
+
 export type PublicCommunityScoreStoreErrorCode =
   | "connection_release_failed"
   | "connection_unavailable"
@@ -100,6 +117,14 @@ export interface PublicCommunityScoreStore {
 }
 
 export interface ConfiguredPublicCommunityScoreStore extends PublicCommunityScoreStore {
+  close(): Promise<void>;
+}
+
+export interface PublicCommunityRaceStore {
+  readonly read: (seasonStart: unknown) => Promise<CommunityRacePageV1>;
+}
+
+export interface ConfiguredPublicCommunityRaceStore extends PublicCommunityRaceStore {
   close(): Promise<void>;
 }
 
@@ -174,7 +199,12 @@ function releaseClient(client: PublicScoreDatabaseClient, destroy: boolean): voi
   }
 }
 
-async function readRows(pool: PublicScoreDatabasePool, seasonStart: string): Promise<unknown> {
+async function readRows(
+  pool: PublicScoreDatabasePool,
+  seasonStart: string,
+  query: string,
+  pageSize: number,
+): Promise<unknown> {
   let client: PublicScoreDatabaseClient;
   try {
     client = await pool.connect();
@@ -190,7 +220,7 @@ async function readRows(pool: PublicScoreDatabasePool, seasonStart: string): Pro
     if (!validRuntimeBoundary(runtimeBoundary)) {
       fail("runtime_boundary_mismatch");
     }
-    rows = await client.query(publicScoreQuery, [seasonStart, publicCommunityScorePageSize]);
+    rows = await client.query(query, [seasonStart, pageSize]);
     destroyClient = false;
   } catch (error) {
     pendingError = error instanceof PublicCommunityScoreStoreError ? error.code : "query_failed";
@@ -211,9 +241,32 @@ export function createPublicCommunityScoreStore(
       if (!validSeasonStart(seasonStart)) {
         fail("invalid_season");
       }
-      const rows = await readRows(pool, seasonStart);
+      const rows = await readRows(
+        pool,
+        seasonStart,
+        publicScoreQuery,
+        publicCommunityScorePageSize,
+      );
       try {
         return mapPublicCommunityScoreRows(rows);
+      } catch {
+        fail("projection_rejected");
+      }
+    },
+  });
+}
+
+export function createPublicCommunityRaceStore(
+  pool: PublicScoreDatabasePool,
+): PublicCommunityRaceStore {
+  return Object.freeze({
+    async read(seasonStart: unknown): Promise<CommunityRacePageV1> {
+      if (!validSeasonStart(seasonStart)) {
+        fail("invalid_season");
+      }
+      const rows = await readRows(pool, seasonStart, publicRaceQuery, publicCommunityRacePageSize);
+      try {
+        return mapPublicCommunityRaceRows(rows);
       } catch {
         fail("projection_rejected");
       }
@@ -237,6 +290,22 @@ export function createCloseablePublicCommunityScoreStore(
   });
 }
 
+export function createCloseablePublicCommunityRaceStore(
+  pool: PublicScoreDatabasePool,
+): ConfiguredPublicCommunityRaceStore {
+  const store = createPublicCommunityRaceStore(pool);
+  return Object.freeze({
+    async close(): Promise<void> {
+      try {
+        await pool.close();
+      } catch {
+        fail("pool_close_failed");
+      }
+    },
+    read: store.read,
+  });
+}
+
 export function createConfiguredPublicCommunityScoreStore(
   environment: Readonly<Record<string, string | undefined>> = process.env,
   signalSink?: PublicScoreDatabasePoolSignalSink,
@@ -246,4 +315,15 @@ export function createConfiguredPublicCommunityScoreStore(
     signalSink,
   );
   return createCloseablePublicCommunityScoreStore(pool);
+}
+
+export function createConfiguredPublicCommunityRaceStore(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+  signalSink?: PublicScoreDatabasePoolSignalSink,
+): ConfiguredPublicCommunityRaceStore {
+  const pool = createPublicScoreDatabasePool(
+    resolvePublicScoreDatabaseConfig(environment),
+    signalSink,
+  );
+  return createCloseablePublicCommunityRaceStore(pool);
 }

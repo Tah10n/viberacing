@@ -45,6 +45,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0034](0034-bounded-profile-deletion-purge.md)                 | Bounded primary profile deletion purge                              | Accepted; database and local command; schedule pending |
 | [0035](0035-bounded-session-car-recipe-proposal.md)            | Bounded session-owned CarRecipe proposal and approval               | Accepted; local Web/DB slice; agent path pending       |
 | [0036](0036-bounded-car-recipe-proposal-cleanup.md)            | Bounded CarRecipe proposal retention cleanup                        | Accepted; database and local command; schedule pending |
+| [0037](0037-bounded-public-community-race-projection.md)       | Bounded public active-CarRecipe race projection                     | Accepted; local Web/DB slice; deployment pending       |
 
 ## Lifecycle
 

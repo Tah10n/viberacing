@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains twenty-six SQL-first revisions for identity, passkey login and management,
+This directory contains twenty-seven SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
 finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
 PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,
@@ -20,12 +20,12 @@ Ingest kernel verifies a bounded exact-body origin/device request, and a separat
 adapter maps origin replay plus its output to three capabilities through a probed least-privileged
 pool. Focused tests use mock pools. A separate opt-in integration creates a synthetic dedicated
 Ingest login, passes independently signed loopback HTTP through the emitted host, and verifies the
-exact database result. One local public-score route and one local one-shot Jobs runner wrap narrow
+exact database result. Local public score/race routes and one local one-shot Jobs runner wrap narrow
 capabilities without a working database login. The database-only ingest and Jobs-only
-ingest-retention, pairing-retention, authentication-retention, primary profile deletion, open-season
-scoring, and terminal finalization procedures plus Web-only public and exact-session private score
-projections are implemented; deployed HTTP ingest, scheduled execution, audited corrections,
-cache/backup/tombstone purge, and restore replay are not.
+ingest-retention, pairing-retention, authentication-retention, CarRecipe-proposal retention, primary
+profile deletion, open-season scoring, and terminal finalization procedures plus Web-only public
+score/race and exact-session private score projections are implemented; deployed HTTP ingest,
+scheduled execution, audited corrections, cache/backup/tombstone purge, and restore replay are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -34,9 +34,10 @@ Web/Auth to perform OAuth and WebAuthn cryptographic verification before invokin
 procedure. The local identity slice does so for enrollment, login, passkey, recovery, profile,
 device, source, pairing-approval, and CarRecipe proposal/decision controls with injected/synthetic
 evidence. Pairing start/poll transport is locally implemented, but live credentials and deployment
-remain absent. CarRecipe is not projected by the public score read, and no agent/connector proposal
-capability is present. Expired-proposal cleanup is implemented only as a bounded local Jobs
-capability with no schedule, live login, monitoring, or deployment.
+remain absent. The stable public score read remains car-free; a separate compatible race read can
+project only an active profile's current approved recipe. No agent/connector proposal capability is
+present. Expired-proposal cleanup is implemented only as a bounded local Jobs capability with no
+schedule, live login, monitoring, or deployment.
 
 ## Layout
 
@@ -106,6 +107,9 @@ capability with no schedule, live login, monitoring, or deployment.
   pending proposal per profile plus Web-only exact-session propose/read/approve/reject capabilities.
 - `migrations/0026_car_recipe_proposal_cleanup.sql` adds Jobs-only maximum-1000 physical deletion of
   expired pending recipes under a separate private mutex while preserving live and active recipes.
+- `migrations/0027_community_public_race_read.sql` adds a separate Web-only
+  score-plus-current-recipe projection while preserving the stable score function and every private
+  proposal field.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -210,14 +214,14 @@ capability with no schedule, live login, monitoring, or deployment.
 
 ## Capability model
 
-| Role                | Login | Private schema | API schema | Current executable capability                                      |
-| ------------------- | ----- | -------------- | ---------- | ------------------------------------------------------------------ |
-| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                             |
-| `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus public score read |
-| `viberacing_ingest` | No    | None           | Usage      | Origin replay, device verification, and Community sync only        |
-| `viberacing_jobs`   | No    | None           | Usage      | Three cleanup calls, profile purge, Community refresh/finalization |
-| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                       |
-| `PUBLIC`            | N/A   | None           | None       | None                                                               |
+| Role                | Login | Private schema | API schema | Current executable capability                                     |
+| ------------------- | ----- | -------------- | ---------- | ----------------------------------------------------------------- |
+| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                            |
+| `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus score/race reads |
+| `viberacing_ingest` | No    | None           | Usage      | Origin replay, device verification, and Community sync only       |
+| `viberacing_jobs`   | No    | None           | Usage      | Four cleanup calls, profile purge, Community refresh/finalization |
+| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                      |
+| `PUBLIC`            | N/A   | None           | None       | None                                                              |
 
 Deployment login principals are environment-owned secrets and are not declared here. Each service
 will receive one group role through protected infrastructure. Runtime roles are not members of the
@@ -358,13 +362,17 @@ Runtime access must remain procedure-only and must have positive and negative in
   bounded ISO season. It exposes only dates, score version/finalized state, handle, score, active
   days, source count, shared rank, and deterministic display position. Visibility filtering happens
   before public re-ranking; no identifier, raw value, daily detail, or exact timestamp is returned.
+- `list_public_community_race` is separately Web-only and preserves those score rows while adding at
+  most one exact current active recipe JSON object. It exposes no proposal identity, state,
+  timestamp, private ID, raw/daily usage, or arbitrary content. The stable score function is
+  unchanged.
 
 The public schema safety ceilings are 8 to 16 codes per replacement recovery batch, one active
 recovery authority per profile for at most ten minutes, 32 lifetime passkey records, 32 active
 unexpired browser sessions, 32 lifetime source records, 64 active plus unexpired approved device
-authorities per profile, and 100 rows per public score read. They bound retained credential growth,
-authority fan-out, and one response; they are not substitutes for lower deployment-specific fair-use
-limits, edge rate limits, cache design, capacity evidence, or bounded cleanup.
+authorities per profile, and 100 rows per public score or race read. They bound retained credential
+growth, authority fan-out, and one response; they are not substitutes for lower deployment-specific
+fair-use limits, edge rate limits, cache design, capacity evidence, or bounded cleanup.
 
 The application must call `complete_passkey_login` or `consume_passkey_challenge` only after it has
 verified the exact WebAuthn RP ID, origin, challenge, transaction context, signature, and
@@ -489,9 +497,9 @@ Ingest, Jobs, Admin, and `PUBLIC` are denied. Ranking still evaluates the visibl
 evidence. A separate server-only Web mapper now narrows an unknown adapter result to the canonical
 top-32 response and fails closed on projection drift. ADR 0011 adds a bounded `pg` adapter that
 verifies its Web-only deployment login/session before each fixed parameterized call, casts calendar
-dates to text, and applies that mapper. No HTTP route, cache/invalidation, car, streak, rounded
-freshness, profile detail, rate limit, deployment login/TLS integration, or live adapter connection
-is implemented.
+dates to text, and applies that mapper. ADR 0013 supplies the local score HTTP route; the stable
+score response remains car-free. No cache/invalidation, streak, rounded freshness, profile detail,
+rate limit, deployment login/TLS integration, or live adapter connection is implemented.
 
 Revision 0012 stores only the already mapped Security replay tuple: a closed origin key ID, the
 verifier's domain-separated 32-byte nonce digest, and millisecond expiry. It stores no raw nonce,
@@ -514,7 +522,7 @@ credential against the encrypted challenge continuation, one fixed function crea
 that five-minute profile-free challenge in the same transaction as the existing credential-derived
 session. It returns only profile ID, public handle, and locale so Web/Auth can seal its existing
 session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
-37 cross-capability denials. Physical cleanup after expiry is supplied by revision 0023; a
+40 cross-capability denials. Physical cleanup after expiry is supplied by revision 0023; a
 deployment login, edge attempt policy, monitoring, and live authenticator/database integration
 remain open.
 
@@ -576,9 +584,9 @@ IDs and expiries are server-created, one pending row replaces the previous pendi
 atomically inserts or replaces the active recipe and deletes the exact proposal, while rejection
 deletes only the exact proposal. Ingest, Jobs, Admin, `PUBLIC`, direct table reads, cross-profile
 controls, and replay are denied. Profile deletion cascades both recipe rows. Expiry prevents use
-after at most 24 hours. Revision 0026 supplies bounded physical deletion, while agent ingress,
-public projection, a cleanup schedule/cadence, live credentials, monitoring, capacity evidence, and
-deployment remain open.
+after at most 24 hours. Revision 0026 supplies bounded physical deletion, while agent ingress, a
+cleanup schedule/cadence, live credentials, monitoring, capacity evidence, and deployment remain
+open. Revision 0027 separately supplies only the bounded current public projection.
 
 Revision 0026 physically removes at most 1000 expired CarRecipe proposals per invocation. It
 captures server time only after its separate private Jobs mutex, selects oldest expiry/ID first,
@@ -587,6 +595,15 @@ returns only one bounded count. Active recipes and live proposals are never cand
 Admin, `PUBLIC`, and direct table access remain denied. The observed two-worker race proves
 serialization, exact expired-row progress, and live-row preservation only in isolated PostgreSQL; no
 scheduler, cadence, live Jobs login, monitoring, backup purge, capacity, or deployment is implied.
+
+Revision 0027 adds no table, retained field, or write authority. Its Web-only function calls the
+unchanged public score projection, resolves only the current `active` profile behind each visible
+handle, and left-joins its one approved recipe. It constructs one exact nine-field JSON object from
+database-constrained columns or returns SQL `NULL` for absence. Proposal rows, IDs, state,
+timestamps, raw/daily usage, and arbitrary content remain private. The function has the same
+five-second statement deadline and 100-row ceiling; Ingest, Jobs, Admin, and `PUBLIC` are denied.
+The projected recipe is current presentation state rather than a historical season snapshot. This
+local evidence proves no live Web login, cache, edge policy, load result, monitoring, or deployment.
 
 The local account application consumes those capabilities through the same probed read-write pool.
 Its combined overview query reads visibility and the current week's derived score with one checkout,
@@ -684,8 +701,8 @@ hard failure, not something the script silently broadens or repairs.
 - Integrate the bounded database adapter and local score route with a deployment-provisioned
   Web-only login and verified TLS, then add cache/invalidation, edge request shaping,
   query-plan/load evidence, monitoring, and deployment verification.
-- Define a separate complete race/profile contract when CarRecipe, streak, freshness, and profile
-  detail have real persistence and lifecycle evidence.
+- Extend the separate race/profile surface only after streak, freshness, and authenticated profile
+  detail have real persistence, privacy, compatibility, and lifecycle evidence.
 - Schedule and monitor the implemented auth-, CarRecipe-proposal-, ingest-, and pairing-retention
   procedures, and implement bounded cleanup for remaining sessions, jobs, passkey provenance,
   pairing rate windows, and tombstones. Expiry columns outside revisions 0008, 0012, 0013, 0023, and
