@@ -18,6 +18,7 @@
   "ignorePaths": [
     "cspell.json",
     "README.ru.md",
+    "contracts/v1/connector-car-proposal-device-request.test-vector.json",
     "contracts/v1/connector-sync-device-request.test-vector.json",
     "node_modules/**",
     ".pnpm-store/**",

@@ -4,9 +4,10 @@
 
 `CarRecipeV1` is implemented locally as a language-neutral JSON Schema, generated TypeScript type
 and validator, deterministic three-theme renderer, exact-session PostgreSQL proposal/approval
-boundary, signed-in account editor, bounded Jobs-only expired-proposal cleanup, and separate
-compatible public race projection. This is synthetic/local evidence. No connector or agent can
-submit a proposal, and no cleanup schedule or deployment is claimed.
+boundary, signed-in account editor, bounded device-authenticated proposal ingress, a fixed
+native-store connector command, Jobs-only expired-proposal cleanup, and separate compatible public
+race projection. This is synthetic/local evidence; no cleanup schedule, released connector, live
+credential, edge control, or deployment is claimed.
 
 ## Closed shape
 
@@ -44,14 +45,17 @@ content.
 
 The canonical source is
 [`contracts/v1/car-recipe.schema.json`](../../contracts/v1/car-recipe.schema.json). Generated
-TypeScript and OpenAPI components are drift-checked; the local authenticated form routes are not
-declared as public OpenAPI operations.
+TypeScript and OpenAPI components are drift-checked. The device-authenticated proposal POST is a
+closed local OpenAPI operation; the possessed-browser-session forms remain private application
+routes.
 
 ## Local lifecycle
 
-1. A passkey-registered signed-in user submits the nine exact fields from `/account`.
-2. Web validates the generated contract, derives authority from the active session, and creates a
-   server proposal ID with at most 24 hours of logical validity.
+1. Either a passkey-registered signed-in user submits the nine exact fields from `/account`, or the
+   fixed `propose-car` command submits the same exact object under a fresh source-bound device
+   signature. No prompt, conversation, profile ID, source ID, or proposal ID is accepted.
+2. Web validates the generated contract and derives authority from either the active session or an
+   active device on an active source. It creates the proposal ID and at-most-24-hour expiry.
 3. PostgreSQL stores at most one private pending proposal per profile behind forced RLS.
 4. The account page reads that proposal through the same session and renders it in Neon Night,
    Classic Grand Prix, and Cyber Rally.
@@ -81,12 +85,15 @@ meaning; a breaking visual change uses a new recipe version or an explicit revie
 - A recipe changes presentation only. It grants no score, rank, prize, authorization, or valuable
   privilege.
 - Community usage remains self-reported; a valid recipe says nothing about score truth.
-- Source-bound device credentials cannot propose, approve, reject, or activate a recipe.
-- The current proposal originates only from the signed-in browser. Future agent ingress must send
-  this exact closed object without conversation text and needs its own authentication, admission,
-  monitoring, and deployment review.
+- An active source-bound device may create or replace only its bound profile's pending exact recipe
+  through the dedicated signed route. It cannot read proposal state, approve, reject, activate, or
+  administer the profile; paused, quarantined, unlinked, and revoked authority is denied.
+- The fixed connector command accepts only explicit enum flags and a bounded seed, sends once
+  without retry, and returns a generic acknowledgement. Any future conversational agent must reduce
+  its result locally to this exact object; conversation text never enters the service.
 
 See [ADR 0005](../decisions/0005-enum-only-car-recipe.md),
 [ADR 0035](../decisions/0035-bounded-session-car-recipe-proposal.md),
 [ADR 0037](../decisions/0037-bounded-public-community-race-projection.md), security invariant
+[ADR 0038](../decisions/0038-bounded-device-car-recipe-proposal-ingress.md), security invariant
 `VR-CAR-001`, and `VR-ABUSE-CAR-INJECTION`.

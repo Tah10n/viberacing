@@ -11,21 +11,23 @@ separate bounded Fastify server factory now preserves the exact raw request and 
 those validated decisions. The candidate Rust connector now signs one exact pairing-possession
 message, then separately composes exact unsigned body/device-message material and signs it behind an
 inaccessible source-bound key capability. A server-only Web kernel strictly verifies the pairing
-proof against the exact approved database material. One synthetic
-[`test vector`](v1/connector-sync-device-request.test-vector.json) proves its body, digest, nonce,
-message, public key, and signature against production Ingest code; a second vector proves the exact
-Rust/Web pairing message and signature. Local Web/Auth boundaries now compose a generated nine-
-minute pairing start, protected keyed poll lookup, strict proof, and atomic activation through exact
-versioned routes. A pairing-only Rust command generates and retains its real key in the native OS
-credential store. No operational Codex launch, sync-capable connector, signed upload, deployed
-endpoint, working database credential, edge signer, trusted external TLS/edge route, or composed
-live flow exists. A separate local Ingest host can now bind the reviewed application/server
-composition under a closed loopback or explicitly declared Railway-edge listener contract; that
-local executable evidence does not establish any of those deployment claims. An opt-in synthetic
-integration now carries independently signed requests through the emitted host, a disposable
-least-privileged Ingest login, and the reviewed PostgreSQL procedures. It proves the closed response
-and persistence contract locally, not protected secret delivery, external TLS/edge routing,
-production credentials, real-user input, or capacity.
+proof against the exact approved database material. A separate proposal-only Rust/Web path now
+shares an exact `CarRecipeV1` body/device-signature vector and never grants activation authority.
+One synthetic [`test vector`](v1/connector-sync-device-request.test-vector.json) proves its body,
+digest, nonce, message, public key, and signature against production Ingest code; a second vector
+proves the exact Rust/Web pairing message and signature. Local Web/Auth boundaries now compose a
+generated nine- minute pairing start, protected keyed poll lookup, strict proof, and atomic
+activation through exact versioned routes. Local Rust commands retain the real key in the native OS
+credential store and exercise pairing, one exact candidate sync, and proposal-only signing. No
+released or supported connector, real-account Codex result, deployed endpoint, working database
+credential, edge signer, trusted external TLS/edge route, or composed live flow exists. A separate
+local Ingest host can now bind the reviewed application/server composition under a closed loopback
+or explicitly declared Railway-edge listener contract; that local executable evidence does not
+establish any of those deployment claims. An opt-in synthetic integration now carries independently
+signed requests through the emitted host, a disposable least-privileged Ingest login, and the
+reviewed PostgreSQL procedures. It proves the closed response and persistence contract locally, not
+protected secret delivery, external TLS/edge routing, production credentials, real-user input, or
+capacity.
 
 ## Canonical version 1 schemas
 
@@ -33,8 +35,16 @@ production credentials, real-user input, or capacity.
   the local deterministic renderer and session-owned proposal boundary. It fixes version 1,
   project-owned body/part/palette/trail enums, and an integer seed from 0 through 65535. It rejects
   arbitrary color, text, URL, path, file, markup, drawing command, conversation, and unknown fields.
-  It is generated as an OpenAPI component but the authenticated local proposal forms are not public
-  OpenAPI operations.
+  The dedicated device-authenticated proposal POST uses it as a request contract; authenticated
+  browser decision forms remain private application routes.
+- [`connector-car-proposal-authentication.json`](v1/connector-car-proposal-authentication.json)
+  fixes the 512-byte exact-body route, parser/header budgets, fresh 16-byte nonce, canonical time,
+  and domain-separated Ed25519 message. Web verifies it only against an active source-bound device.
+- [`connector-car-proposal-device-request.test-vector.json`](v1/connector-car-proposal-device-request.test-vector.json)
+  fixes one synthetic exact recipe body, digest, nonce, timestamp, public key, message, and
+  signature shared by Rust and Web. It contains no private key or real identifier.
+- [`ConnectorCarProposalResultV1`](v1/connector-car-proposal-result.schema.json) returns only one
+  generic accepted acknowledgement and request ID; it exposes no proposal/profile/source identity.
 - [`CommunityScorePageV1`](v1/community-score-page.schema.json) is a response-only top-32 score
   page. It fixes the trust tier to `community`, fixes `selfReported` to true, mirrors only the ten
   reviewed revision 0011 fields, and permits an empty result without private-state disclosure. It
@@ -94,10 +104,11 @@ production credentials, real-user input, or capacity.
   status/title/retry mapping, validates the complete body, and emits `no-store`
   `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
 - [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
-  type/export names, closed authentication-policy inventory, and the locally implemented five
+  type/export names, closed authentication-policy inventory, and the locally implemented six
   operations: `GET /v1/community/race`, `GET /v1/community/scores`, `POST /v1/community/sync`, and
-  the two pairing start/poll POST routes, with method-specific query/body, response, problem,
-  no-queue, authentication, cache, same-origin CORS, and repository-status policies.
+  `POST /v1/connector/cars/proposals` plus the two pairing start/poll POST routes, with
+  method-specific query/body, response, problem, no-queue, authentication, cache, same-origin CORS,
+  and repository-status policies.
 
 Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
 timestamp is bounded. Reviewed date-range and ISO-weekday extensions make the score season boundary
@@ -115,7 +126,7 @@ trust fields exist only in the response component and never become writable conn
 
 `node scripts/generate-contracts.mjs` deterministically creates:
 
-- [`openapi.v1.json`](generated/openapi.v1.json), which documents the five locally implemented HTTP
+- [`openapi.v1.json`](generated/openapi.v1.json), which documents the six locally implemented HTTP
   operations and explicitly states that repository implementation does not prove deployment;
 - [`packages/contracts/src/generated.ts`](../packages/contracts/src/generated.ts), containing
   readonly TypeScript shapes, embedded schemas, source digest, and validator wrappers.

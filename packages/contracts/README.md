@@ -27,9 +27,10 @@ consumers cannot substitute a runtime or network-provided schema.
 proposal persistence, while browser rendering imports only the generated type and the code-native
 renderer. `CommunityRacePageV1` and its validator cover the separate server response; the visible
 browser uses a smaller independent exact-shape check loaded only after hydration, so the generic
-schema interpreter and embedded schema do not enter the initial public race bundle. The
-authenticated proposal forms remain an internal same-origin Web boundary, not an additional public
-OpenAPI operation.
+schema interpreter and embedded schema do not enter the initial public race bundle. Authenticated
+browser decision forms remain an internal same-origin Web boundary. The separate
+device-authenticated proposal POST is a closed OpenAPI operation that accepts exactly `CarRecipeV1`
+and returns only `ConnectorCarProposalResultV1`.
 
 The runtime intentionally supports only the subset accepted by `scripts/check-contracts.mjs`. New
 JSON Schema keywords require implementation, negative tests, documentation, and security review;
@@ -52,8 +53,8 @@ generated-source drift.
 
 Generated code is committed so TypeScript and future Rust consumers can review an immutable source
 digest. The generated OpenAPI operations are marked `implemented-local`: the Web routes import and
-validate the Community query and score/race response components, while the Ingest service validates
-the sync, result, and problem components. An opt-in synthetic loopback integration exercises the
-emitted Ingest runtime with a disposable least-privileged PostgreSQL login. No deployment consumes a
-live credential, no protected edge route or secret delivery is proven, and no real usage data is
-accepted.
+validate the Community query, score/race responses, and device proposal result, while the Ingest
+service validates the sync, result, and problem components. An opt-in synthetic loopback integration
+exercises the emitted Ingest runtime with a disposable least-privileged PostgreSQL login. No
+deployment consumes a live credential, no protected edge route or secret delivery is proven, and no
+real usage data is accepted.

@@ -3,6 +3,10 @@
   "contractVersion": "v1",
   "policies": [
     {
+      "file": "connector-car-proposal-authentication.json",
+      "policyId": "viberacing-connector-car-proposal-auth-v1"
+    },
+    {
       "file": "connector-pairing-authentication.json",
       "policyId": "viberacing-device-pairing-possession-v1"
     },
@@ -35,6 +39,11 @@
       "file": "community-score-query.schema.json",
       "exportName": "communityScoreQueryV1",
       "typeName": "CommunityScoreQueryV1"
+    },
+    {
+      "file": "connector-car-proposal-result.schema.json",
+      "exportName": "connectorCarProposalResultV1",
+      "typeName": "ConnectorCarProposalResultV1"
     },
     {
       "file": "connector-pairing-poll-result.schema.json",
@@ -126,6 +135,24 @@
       "requestSchema": "ConnectorSyncV1",
       "responseSchema": "ConnectorSyncResultV1",
       "summary": "Submit one bounded Community usage snapshot"
+    },
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "connector-car-proposal-authentication.json",
+      "cacheControl": "no-store",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "implemented-local",
+      "method": "post",
+      "operationId": "postConnectorCarProposalV1",
+      "path": "/v1/connector/cars/proposals",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 401, 405, 406, 422, 429, 500, 503],
+      "queryPolicy": "none",
+      "querySchema": "none",
+      "requestBodyPolicy": "exact-raw-json-512",
+      "requestSchema": "CarRecipeV1",
+      "responseSchema": "ConnectorCarProposalResultV1",
+      "summary": "Submit one bounded device-authenticated car proposal"
     },
     {
       "admissionPolicy": "no-queue-4",

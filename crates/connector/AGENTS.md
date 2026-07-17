@@ -12,9 +12,9 @@ changing it.
 - Emit only reviewed method names and fixed-shape parameters. Never add a generic arbitrary-method
   escape hatch.
 - Keep App Server communication on local stdio only. Connector commands may call only the two
-  versioned pairing paths and the versioned Community sync path over HTTPS (or explicit loopback
-  HTTP), with proxies and redirects disabled; do not add WebSocket, generic TCP/URL methods, shell
-  interpolation, or inherited secret access.
+  versioned pairing paths, the versioned Community sync path, and the proposal-only CarRecipe path
+  over HTTPS (or explicit loopback HTTP), with proxies and redirects disabled; do not add WebSocket,
+  generic TCP/URL methods, shell interpolation, or inherited secret access.
 - Never read, retain, log, or transmit prompts, conversations, repositories, Codex credentials,
   account email, or App Server paths.
 - Treat exact sync bodies, daily usage, nonces, and device-signature messages as private security
@@ -24,6 +24,10 @@ changing it.
   which owns source binding, canonical time, and replay behavior. The composer/signer boundary must
   not grow a scheduler, generic upload client, or Codex network client. Pairing key
   generation/storage remains confined to the one-command native-store boundary.
+- Keep `propose-car` confined to explicit version 1 enum flags and a bounded seed. It may load only
+  an active native device record, sign the exact proposal-domain body message, send once without
+  retry, and accept only the generic acknowledgement. Never add prompts, conversation, arbitrary
+  JSON, proposal reads, approval, activation, or profile administration to this command.
 - Pairing possession must match `connector-pairing-authentication.json` byte for byte. Keep the
   pending key/challenge capabilities inaccessible outside the crate, sign only the fixed
   domain-separated message, and keep poll-token custody, HTTP, and native storage in `connect.rs`;

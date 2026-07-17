@@ -5,11 +5,13 @@ import {
   communityRacePageV1Schema,
   communityScorePageV1Schema,
   communityScoreQueryV1Schema,
+  connectorCarProposalResultV1Schema,
   connectorSyncV1Schema,
   validateCarRecipeV1,
   validateCommunityRacePageV1,
   validateCommunityScorePageV1,
   validateCommunityScoreQueryV1,
+  validateConnectorCarProposalResultV1,
   validateConnectorPairingPollResultV1,
   validateConnectorPairingPollV1,
   validateConnectorPairingStartResultV1,
@@ -317,6 +319,14 @@ describe("generated connector pairing transport contracts", () => {
 describe("generated response contracts", () => {
   it("accepts bounded sync acknowledgements and public problem details", () => {
     expect(
+      validateConnectorCarProposalResultV1({
+        schemaVersion: 1,
+        requestId: "req_0123456789ABCDEFGHIJKL",
+        outcome: "accepted",
+      }).ok,
+    ).toBe(true);
+    expect(Object.isFrozen(connectorCarProposalResultV1Schema)).toBe(true);
+    expect(
       validateConnectorSyncResultV1({
         schemaVersion: 1,
         requestId: "req_0123456789ABCDEFGHIJKL",
@@ -358,6 +368,21 @@ describe("generated response contracts", () => {
   });
 
   it("rejects internal reasons, invalid outcomes, status values, and oversized titles", () => {
+    expect(
+      validateConnectorCarProposalResultV1({
+        schemaVersion: 1,
+        requestId: "req_0123456789ABCDEFGHIJKL",
+        outcome: "accepted",
+        proposalId: "private-proposal",
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateConnectorCarProposalResultV1({
+        schemaVersion: 1,
+        requestId: "req_0123456789ABCDEFGHIJKL",
+        outcome: "pending",
+      }).ok,
+    ).toBe(false);
     const result = validateConnectorSyncResultV1({
       schemaVersion: 1,
       requestId: "req_0123456789ABCDEFGHIJKL",

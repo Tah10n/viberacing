@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains twenty-seven SQL-first revisions for identity, passkey login and management,
+This directory contains twenty-eight SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
 finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
 PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,
@@ -35,9 +35,10 @@ procedure. The local identity slice does so for enrollment, login, passkey, reco
 device, source, pairing-approval, and CarRecipe proposal/decision controls with injected/synthetic
 evidence. Pairing start/poll transport is locally implemented, but live credentials and deployment
 remain absent. The stable public score read remains car-free; a separate compatible race read can
-project only an active profile's current approved recipe. No agent/connector proposal capability is
-present. Expired-proposal cleanup is implemented only as a bounded local Jobs capability with no
-schedule, live login, monitoring, or deployment.
+project only an active profile's current approved recipe. A separate Web-only device proposal
+capability now admits an exact signed recipe from an active source-bound device without granting
+read/approve/reject/activate authority. Expired-proposal cleanup is implemented only as a bounded
+local Jobs capability with no schedule, live login, monitoring, or deployment.
 
 ## Layout
 
@@ -110,15 +111,18 @@ schedule, live login, monitoring, or deployment.
 - `migrations/0027_community_public_race_read.sql` adds a separate Web-only
   score-plus-current-recipe projection while preserving the stable score function and every private
   proposal field.
+- `migrations/0028_connector_car_proposal_ingress.sql` adds Web-only minimal active-device material
+  and exact device-proposal functions with profile/source/device revalidation and nonce replay
+  consumption; it adds no activation authority.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
   cross-profile denial, private derived-score read/hide/republish, visibility
   hide/publish/idempotency, expiry, replay, rollback, audit redaction, and synchronous deletion
   effects.
-- `tests/car_recipe_proposals.sql` exercises exact recipes, replacement, approval/replay, rejection,
-  hidden-profile access, cross-profile denial, malformed values, wrong session proof, and the
-  Web-only grant matrix.
+- `tests/car_recipe_proposals.sql` exercises exact browser and device recipes, replacement without
+  activation, approval/replay, rejection, hidden-profile access, paused-source and key/device
+  denial, malformed values, wrong session proof, and the Web-only grant matrix.
 - `tests/car_recipe_proposal_cleanup.sql` exercises oldest-first batch deletion, idempotency, live
   and active-state preservation, invalid bounds, missing mutex, and the Jobs-only grant matrix.
 - `tests/pairing_capabilities.sql` exercises session-bound attempt blocking/reset, key-rotation
@@ -167,6 +171,9 @@ schedule, live login, monitoring, or deployment.
 - `tests/ingest_concurrency_setup.sql` and `tests/ingest_concurrency_assertions.sql` prove
   concurrent exact retries create one snapshot, same-source devices converge on one monotonic
   current value, and source pause/device revoke serialize ahead of later submission.
+- `tests/car_recipe_device_proposal_concurrency_setup.sql` and
+  `tests/car_recipe_device_proposal_concurrency_assertions.sql` prove source pause serializes ahead
+  of a queued device proposal without leaving a proposal or replay nonce.
 - `tests/origin_replay_concurrency_setup.sql` and `tests/origin_replay_concurrency_assertions.sql`
   prove two ordered contenders for one locked expired tuple yield exactly one fresh consume and
   leave one live row.
@@ -584,9 +591,18 @@ IDs and expiries are server-created, one pending row replaces the previous pendi
 atomically inserts or replaces the active recipe and deletes the exact proposal, while rejection
 deletes only the exact proposal. Ingest, Jobs, Admin, `PUBLIC`, direct table reads, cross-profile
 controls, and replay are denied. Profile deletion cascades both recipe rows. Expiry prevents use
-after at most 24 hours. Revision 0026 supplies bounded physical deletion, while agent ingress, a
-cleanup schedule/cadence, live credentials, monitoring, capacity evidence, and deployment remain
-open. Revision 0027 separately supplies only the bounded current public projection.
+after at most 24 hours. Revision 0026 supplies bounded physical deletion, while cleanup
+schedule/cadence, live credentials, monitoring, capacity evidence, and deployment remain open.
+Revision 0027 separately supplies only the bounded current public projection.
+
+Revision 0028 adds no table or direct grant. Web may read only a device key ID/public key for an
+active device on an active source whose profile is active or hidden. Its proposal function locks and
+rechecks profile, source, and device, consumes a 32-byte domain-separated nonce digest for seven
+minutes, and creates or replaces the same single pending exact recipe with server-owned ID/time and
+24-hour expiry. It never changes the active recipe. Paused, quarantined, unlinked, revoked,
+mismatched, stale, future-skewed, replayed, Ingest, Jobs, Admin, and `PUBLIC` calls are denied. This
+includes an observed source-pause-versus-proposal lock race. Isolated PostgreSQL evidence proves no
+live Web login, wire signature, edge admission, schedule, monitoring, capacity, or deployment.
 
 Revision 0026 physically removes at most 1000 expired CarRecipe proposals per invocation. It
 captures server time only after its separate private Jobs mutex, selects oldest expiry/ID first,

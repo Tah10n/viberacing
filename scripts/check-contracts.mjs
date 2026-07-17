@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -84,6 +85,7 @@ const expectedFields = new Map([
     ["schemaVersion", "trustTier", "selfReported", "participants"],
   ],
   ["community-score-query.schema.json", ["seasonStart"]],
+  ["connector-car-proposal-result.schema.json", ["schemaVersion", "requestId", "outcome"]],
   ["connector-pairing-poll-result.schema.json", ["schemaVersion", "requestId", "deviceBindings"]],
   ["connector-pairing-poll.schema.json", ["schemaVersion", "pollToken", "possessionSignature"]],
   [
@@ -194,6 +196,32 @@ const implementedLocalEvidencePaths = new Map([
       "apps/ingest/src/community-sync-http-server.test.ts",
       "apps/ingest/src/community-sync-http-server.ts",
       "scripts/test-ingest-postgres-integration.mjs",
+    ],
+  ],
+  [
+    "postConnectorCarProposalV1",
+    [
+      "apps/web/app/v1/connector/cars/proposals/route.test.ts",
+      "apps/web/app/v1/connector/cars/proposals/route.ts",
+      "apps/web/lib/connector-car-proposal-admission.test.ts",
+      "apps/web/lib/connector-car-proposal-admission.ts",
+      "apps/web/lib/connector-car-proposal-application.test.ts",
+      "apps/web/lib/connector-car-proposal-application.ts",
+      "apps/web/lib/connector-car-proposal-database.test.ts",
+      "apps/web/lib/connector-car-proposal-database.ts",
+      "apps/web/lib/connector-car-proposal-http.test.ts",
+      "apps/web/lib/connector-car-proposal-http.ts",
+      "apps/web/lib/connector-car-proposal-service.test.ts",
+      "apps/web/lib/connector-car-proposal-service.ts",
+      "apps/web/lib/connector-car-proposal-verifier.test.ts",
+      "apps/web/lib/connector-car-proposal-verifier.ts",
+      "crates/connector/src/car_proposal.rs",
+      "crates/connector/src/connect/car_proposal_command.rs",
+      "database/migrations/0028_connector_car_proposal_ingress.sql",
+      "database/tests/car_recipe_device_proposal_concurrency_assertions.sql",
+      "database/tests/car_recipe_device_proposal_concurrency_setup.sql",
+      "database/tests/car_recipe_proposals.sql",
+      "scripts/test-database-integration.mjs",
     ],
   ],
   [
@@ -329,6 +357,178 @@ function validatePairingTransportPolicy(record) {
     policy.possessionPolicy !== "connector-pairing-authentication.json"
   ) {
     report(relativePath, "pairing transport policy differs from the reviewed boundary");
+  }
+}
+
+function validateCarProposalPolicy(record) {
+  const { policy, relativePath } = record;
+  const expectedKeys = [
+    "binaryEncoding",
+    "canonicalMessageEncoding",
+    "canonicalMessageSeparator",
+    "canonicalMessageTrailingSeparator",
+    "deviceSignature",
+    "digestEncoding",
+    "maximumBodyBytes",
+    "maximumDecodedJsonStringCodeUnits",
+    "maximumHeaderNameCharacters",
+    "maximumHeaderPairs",
+    "maximumHeaderValueCharacters",
+    "maximumJsonArrayItems",
+    "maximumJsonDepth",
+    "maximumJsonNodes",
+    "maximumJsonNumberCharacters",
+    "maximumJsonObjectMembers",
+    "mediaType",
+    "method",
+    "protocolId",
+    "requestFreshness",
+    "requestTarget",
+    "schemaVersion",
+  ];
+  const signature = policy.deviceSignature;
+  const freshness = policy.requestFreshness;
+  if (
+    !sameEntries(Object.keys(policy).sort(), expectedKeys) ||
+    policy.schemaVersion !== 1 ||
+    policy.protocolId !== "viberacing-connector-car-proposal-auth-v1" ||
+    policy.method !== "POST" ||
+    policy.requestTarget !== "/v1/connector/cars/proposals" ||
+    policy.mediaType !== "application/json" ||
+    policy.maximumBodyBytes !== 512 ||
+    policy.maximumHeaderPairs !== 32 ||
+    policy.maximumHeaderNameCharacters !== 64 ||
+    policy.maximumHeaderValueCharacters !== 256 ||
+    policy.maximumJsonDepth !== 2 ||
+    policy.maximumJsonNodes !== 10 ||
+    policy.maximumJsonObjectMembers !== 9 ||
+    policy.maximumJsonArrayItems !== 0 ||
+    policy.maximumJsonNumberCharacters !== 5 ||
+    policy.maximumDecodedJsonStringCodeUnits !== 16 ||
+    policy.canonicalMessageEncoding !== "UTF-8" ||
+    policy.canonicalMessageSeparator !== "LF" ||
+    policy.canonicalMessageTrailingSeparator !== false ||
+    policy.binaryEncoding !== "base64url-unpadded" ||
+    policy.digestEncoding !== "base64url-unpadded" ||
+    !isObject(freshness) ||
+    !sameEntries(Object.keys(freshness).sort(), [
+      "maximumAgeBoundary",
+      "maximumAgeMilliseconds",
+      "maximumFutureSkewBoundary",
+      "maximumFutureSkewMilliseconds",
+    ]) ||
+    freshness.maximumAgeMilliseconds !== 300_000 ||
+    freshness.maximumAgeBoundary !== "exclusive" ||
+    freshness.maximumFutureSkewMilliseconds !== 120_000 ||
+    freshness.maximumFutureSkewBoundary !== "inclusive" ||
+    !isObject(signature) ||
+    !sameEntries(Object.keys(signature).sort(), [
+      "algorithm",
+      "canonicalFields",
+      "deviceIdPattern",
+      "headers",
+      "messagePrefix",
+      "nonceBytes",
+      "publicKeyBytes",
+      "signatureBytes",
+    ]) ||
+    signature.messagePrefix !== "viberacing-car-proposal-request-v1" ||
+    signature.algorithm !== "Ed25519" ||
+    signature.publicKeyBytes !== 32 ||
+    signature.signatureBytes !== 64 ||
+    signature.nonceBytes !== 16 ||
+    signature.deviceIdPattern !== "^dev_[A-Za-z0-9_-]{22}$" ||
+    !isObject(signature.headers) ||
+    !isDeepStrictEqual(signature.headers, {
+      deviceId: "x-viberacing-device-id",
+      timestamp: "x-viberacing-device-timestamp",
+      nonce: "x-viberacing-device-nonce",
+      signature: "x-viberacing-device-signature",
+    }) ||
+    !sameEntries(signature.canonicalFields ?? [], [
+      "messagePrefix",
+      "method",
+      "requestTarget",
+      "bodyDigestBase64Url",
+      "deviceId",
+      "nonce",
+      "timestamp",
+    ])
+  ) {
+    report(relativePath, "connector car proposal policy differs from the reviewed boundary");
+  }
+}
+
+function validateCarProposalVector() {
+  const relativePath = "contracts/v1/connector-car-proposal-device-request.test-vector.json";
+  const absolutePath = resolve(root, relativePath);
+  if (!existsSync(absolutePath)) {
+    report(relativePath, "shared connector car proposal vector is missing");
+    return;
+  }
+  const stats = lstatSync(absolutePath);
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    report(relativePath, "shared connector car proposal vector must be a regular file");
+    return;
+  }
+  let vector;
+  try {
+    vector = JSON.parse(readFileSync(absolutePath, "utf8"));
+  } catch {
+    report(relativePath, "shared connector car proposal vector must be valid JSON");
+    return;
+  }
+  const expectedKeys = [
+    "body",
+    "bodyDigestBase64Url",
+    "deviceId",
+    "deviceNonceBase64Url",
+    "deviceNonceBytes",
+    "devicePublicKeyBase64Url",
+    "deviceSignatureBase64Url",
+    "deviceSignatureMessage",
+    "deviceTimestamp",
+    "schemaVersion",
+  ];
+  const nonce = Buffer.from(Array.from({ length: 16 }, (_, index) => index));
+  const canonicalBase64Url = (value, expectedBytes) => {
+    if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value)) {
+      return false;
+    }
+    const decoded = Buffer.from(value, "base64url");
+    return (
+      decoded.length === expectedBytes &&
+      decoded.toString("base64url") === value &&
+      value.length === Math.ceil((expectedBytes * 8) / 6)
+    );
+  };
+  const expectedBody =
+    '{"schemaVersion":1,"chassis":"formula","nose":"wedge","cockpit":"canopy","wing":"high","wheels":"slick","palette":"turbo-blue","trail":"spark","seed":4242}';
+  const expectedDigest = createHash("sha256").update(expectedBody).digest("base64url");
+  if (
+    !isObject(vector) ||
+    !sameEntries(Object.keys(vector).sort(), expectedKeys) ||
+    vector.schemaVersion !== 1 ||
+    vector.deviceId !== "dev_CCCCCCCCCCCCCCCCCCCCCC" ||
+    !sameEntries(vector.deviceNonceBytes ?? [], [...nonce]) ||
+    vector.deviceNonceBase64Url !== nonce.toString("base64url") ||
+    vector.deviceTimestamp !== "2026-07-15T12:34:56.789Z" ||
+    vector.body !== expectedBody ||
+    vector.bodyDigestBase64Url !== expectedDigest ||
+    !canonicalBase64Url(vector.devicePublicKeyBase64Url, 32) ||
+    !canonicalBase64Url(vector.deviceSignatureBase64Url, 64) ||
+    vector.deviceSignatureMessage !==
+      [
+        "viberacing-car-proposal-request-v1",
+        "POST",
+        "/v1/connector/cars/proposals",
+        expectedDigest,
+        vector.deviceId,
+        vector.deviceNonceBase64Url,
+        vector.deviceTimestamp,
+      ].join("\n")
+  ) {
+    report(relativePath, "shared connector car proposal vector differs from the reviewed boundary");
   }
 }
 
@@ -640,6 +840,7 @@ if (sources !== undefined) {
     !sameEntries(
       policies.map(({ entry }) => entry.file),
       [
+        "connector-car-proposal-authentication.json",
         "connector-pairing-authentication.json",
         "connector-pairing-transport.json",
         "connector-sync-authentication.json",
@@ -657,12 +858,15 @@ if (sources !== undefined) {
     if (!isObject(record.entry) || Object.keys(record.entry).sort().join(",") !== "file,policyId") {
       report("contracts/v1/manifest.json", "authentication policy entry is invalid");
     }
-    if (record.entry.file === "connector-pairing-authentication.json") {
+    if (record.entry.file === "connector-car-proposal-authentication.json") {
+      validateCarProposalPolicy(record);
+    } else if (record.entry.file === "connector-pairing-authentication.json") {
       validatePairingPolicy(record);
     } else if (record.entry.file === "connector-pairing-transport.json") {
       validatePairingTransportPolicy(record);
     }
   }
+  validateCarProposalVector();
   validatePairingVector();
 
   let previousFile = "";
@@ -894,6 +1098,24 @@ if (sources !== undefined) {
         report(scope, "CarRecipe version, enum set, or seed bounds differ from ADR 0005");
       }
     }
+    if (entry.file === "connector-car-proposal-result.schema.json") {
+      const outcome = schema?.properties?.outcome;
+      const requestId = schema?.properties?.requestId;
+      const schemaVersion = schema?.properties?.schemaVersion;
+      if (
+        schemaVersion?.const !== 1 ||
+        schemaVersion?.minimum !== 1 ||
+        schemaVersion?.maximum !== 1 ||
+        requestId?.minLength !== 26 ||
+        requestId?.maxLength !== 26 ||
+        requestId?.pattern !== "^req_[A-Za-z0-9_-]{22}$" ||
+        outcome?.const !== "accepted" ||
+        outcome?.minLength !== 8 ||
+        outcome?.maxLength !== 8
+      ) {
+        report(scope, "connector car proposal result differs from the generic acknowledgement");
+      }
+    }
     if (entry.file === "problem-details.schema.json") {
       const errorCode = schema?.properties?.errorCode;
       const requestId = schema?.properties?.requestId;
@@ -925,7 +1147,7 @@ if (sources !== undefined) {
 
   const publicRaceOperation = operations[0];
   if (
-    operations.length !== 5 ||
+    operations.length !== 6 ||
     publicRaceOperation?.entry.method !== "get" ||
     publicRaceOperation.entry.path !== "/v1/community/race" ||
     publicRaceOperation.entry.operationId !== "getCommunityRaceV1" ||
@@ -951,7 +1173,7 @@ if (sources !== undefined) {
 
   const publicScoreOperation = operations[1];
   if (
-    operations.length !== 5 ||
+    operations.length !== 6 ||
     publicScoreOperation?.entry.method !== "get" ||
     publicScoreOperation.entry.path !== "/v1/community/scores" ||
     publicScoreOperation.entry.operationId !== "getCommunityScoresV1" ||
@@ -977,7 +1199,7 @@ if (sources !== undefined) {
 
   const communitySyncOperation = operations[2];
   if (
-    operations.length !== 5 ||
+    operations.length !== 6 ||
     communitySyncOperation?.entry.method !== "post" ||
     communitySyncOperation.entry.path !== "/v1/community/sync" ||
     communitySyncOperation.entry.operationId !== "postCommunitySyncV1" ||
@@ -1004,7 +1226,33 @@ if (sources !== undefined) {
     );
   }
 
-  const pairingPollOperation = operations[3];
+  const carProposalOperation = operations[3];
+  if (
+    carProposalOperation?.entry.method !== "post" ||
+    carProposalOperation.entry.path !== "/v1/connector/cars/proposals" ||
+    carProposalOperation.entry.operationId !== "postConnectorCarProposalV1" ||
+    carProposalOperation.entry.implementationStatus !== "implemented-local" ||
+    carProposalOperation.entry.summary !== "Submit one bounded device-authenticated car proposal" ||
+    carProposalOperation.entry.admissionPolicy !== "no-queue-4" ||
+    carProposalOperation.entry.authenticationContract !==
+      "connector-car-proposal-authentication.json" ||
+    carProposalOperation.entry.querySchema !== "none" ||
+    carProposalOperation.entry.requestSchema !== "CarRecipeV1" ||
+    carProposalOperation.entry.responseSchema !== "ConnectorCarProposalResultV1" ||
+    carProposalOperation.entry.problemSchema !== "ProblemDetailsV1" ||
+    !sameEntries(
+      carProposalOperation.entry.problemStatuses,
+      [400, 401, 405, 406, 422, 429, 500, 503],
+    ) ||
+    carProposalOperation.entry.queryPolicy !== "none" ||
+    carProposalOperation.entry.requestBodyPolicy !== "exact-raw-json-512" ||
+    carProposalOperation.entry.cacheControl !== "no-store" ||
+    carProposalOperation.entry.corsPolicy !== "same-origin"
+  ) {
+    report("contracts/v1/manifest.json", "connector car proposal operation differs from review");
+  }
+
+  const pairingPollOperation = operations[4];
   if (
     pairingPollOperation?.entry.method !== "post" ||
     pairingPollOperation.entry.path !== "/v1/connector/pairing/poll" ||
@@ -1026,7 +1274,7 @@ if (sources !== undefined) {
     report("contracts/v1/manifest.json", "pairing poll operation differs from review");
   }
 
-  const pairingStartOperation = operations[4];
+  const pairingStartOperation = operations[5];
   if (
     pairingStartOperation?.entry.method !== "post" ||
     pairingStartOperation.entry.path !== "/v1/connector/pairing/start" ||

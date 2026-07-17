@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "viberacing-connector-car-proposal-auth-v1",
+  "method": "POST",
+  "requestTarget": "/v1/connector/cars/proposals",
+  "mediaType": "application/json",
+  "maximumBodyBytes": 512,
+  "maximumHeaderPairs": 32,
+  "maximumHeaderNameCharacters": 64,
+  "maximumHeaderValueCharacters": 256,
+  "maximumJsonDepth": 2,
+  "maximumJsonNodes": 10,
+  "maximumJsonObjectMembers": 9,
+  "maximumJsonArrayItems": 0,
+  "maximumJsonNumberCharacters": 5,
+  "maximumDecodedJsonStringCodeUnits": 16,
+  "canonicalMessageEncoding": "UTF-8",
+  "canonicalMessageSeparator": "LF",
+  "canonicalMessageTrailingSeparator": false,
+  "binaryEncoding": "base64url-unpadded",
+  "digestEncoding": "base64url-unpadded",
+  "requestFreshness": {
+    "maximumAgeMilliseconds": 300000,
+    "maximumAgeBoundary": "exclusive",
+    "maximumFutureSkewMilliseconds": 120000,
+    "maximumFutureSkewBoundary": "inclusive"
+  },
+  "deviceSignature": {
+    "messagePrefix": "viberacing-car-proposal-request-v1",
+    "algorithm": "Ed25519",
+    "publicKeyBytes": 32,
+    "signatureBytes": 64,
+    "nonceBytes": 16,
+    "deviceIdPattern": "^dev_[A-Za-z0-9_-]{22}$",
+    "headers": {
+      "deviceId": "x-viberacing-device-id",
+      "timestamp": "x-viberacing-device-timestamp",
+      "nonce": "x-viberacing-device-nonce",
+      "signature": "x-viberacing-device-signature"
+    },
+    "canonicalFields": [
+      "messagePrefix",
+      "method",
+      "requestTarget",
+      "bodyDigestBase64Url",
+      "deviceId",
+      "nonce",
+      "timestamp"
+    ]
+  }
+}

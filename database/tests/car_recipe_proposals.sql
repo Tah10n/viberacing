@@ -70,6 +70,57 @@ VALUES
     pg_catalog.statement_timestamp() + INTERVAL '1 hour'
   );
 
+INSERT INTO viberacing_private.codex_sources (source_id, profile_id, state)
+VALUES
+  (
+    'src_' || pg_catalog.repeat('A', 22),
+    '00000000-0000-4000-8000-000000026101',
+    'active'
+  ),
+  (
+    'src_' || pg_catalog.repeat('B', 22),
+    '00000000-0000-4000-8000-000000026102',
+    'active'
+  );
+
+INSERT INTO viberacing_private.device_keys (
+  device_key_id,
+  device_id,
+  source_id,
+  public_key,
+  label,
+  connector_version,
+  os_family,
+  architecture,
+  state,
+  activated_at
+)
+VALUES
+  (
+    '00000000-0000-4000-8000-000000026401',
+    'dev_' || pg_catalog.repeat('A', 22),
+    'src_' || pg_catalog.repeat('A', 22),
+    pg_catalog.decode(pg_catalog.repeat('b1', 32), 'hex'),
+    'Synthetic recipe device A',
+    '0.1.0',
+    'windows',
+    'x86_64',
+    'active',
+    pg_catalog.statement_timestamp()
+  ),
+  (
+    '00000000-0000-4000-8000-000000026402',
+    'dev_' || pg_catalog.repeat('B', 22),
+    'src_' || pg_catalog.repeat('B', 22),
+    pg_catalog.decode(pg_catalog.repeat('b2', 32), 'hex'),
+    'Synthetic recipe device B',
+    '0.1.0',
+    'linux',
+    'aarch64',
+    'active',
+    pg_catalog.statement_timestamp()
+  );
+
 SELECT pg_temp.assert_true(
   (
     SELECT pg_catalog.bool_and(
@@ -128,8 +179,18 @@ SELECT pg_temp.assert_true(
     'viberacing_web',
     'viberacing_api.reject_car_recipe(uuid,bytea,uuid)',
     'EXECUTE'
+  )
+  AND pg_catalog.has_function_privilege(
+    'viberacing_web',
+    'viberacing_api.read_car_proposal_device_material(text)',
+    'EXECUTE'
+  )
+  AND pg_catalog.has_function_privilege(
+    'viberacing_web',
+    'viberacing_api.propose_car_recipe_from_device(uuid,text,timestamptz,bytea,uuid,integer,text,text,text,text,text,text,text,integer)',
+    'EXECUTE'
   ),
-  'Web alone receives the four closed proposal capabilities'
+  'Web alone receives the six closed browser and device proposal capabilities'
 );
 
 SELECT pg_temp.assert_true(
@@ -141,16 +202,29 @@ SELECT pg_temp.assert_true(
         ('viberacing_api.propose_car_recipe(uuid,bytea,uuid,integer,text,text,text,text,text,text,text,integer,timestamptz)'),
         ('viberacing_api.read_car_recipe_state(uuid,bytea)'),
         ('viberacing_api.approve_car_recipe(uuid,bytea,uuid)'),
-        ('viberacing_api.reject_car_recipe(uuid,bytea,uuid)')
+        ('viberacing_api.reject_car_recipe(uuid,bytea,uuid)'),
+        ('viberacing_api.read_car_proposal_device_material(text)'),
+        ('viberacing_api.propose_car_recipe_from_device(uuid,text,timestamptz,bytea,uuid,integer,text,text,text,text,text,text,text,integer)')
     ) AS capability(signature)
     WHERE runtime_role.rolname IN ('viberacing_ingest', 'viberacing_jobs', 'viberacing_admin')
       AND pg_catalog.has_function_privilege(runtime_role.rolname, capability.signature, 'EXECUTE')
   ),
-  'device-facing Ingest, Jobs, and Admin cannot propose or activate a car'
+  'Ingest, Jobs, and Admin cannot read device proposal material, propose, or activate a car'
 );
 
 RESET ROLE;
 SET LOCAL ROLE viberacing_web;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT device_key_id = '00000000-0000-4000-8000-000000026401'
+      AND public_key = pg_catalog.decode(pg_catalog.repeat('b1', 32), 'hex')
+    FROM viberacing_api.read_car_proposal_device_material(
+      'dev_' || pg_catalog.repeat('A', 22)
+    )
+  ),
+  'the proposal ingress reads only exact active device verification material'
+);
 
 SELECT pg_temp.assert_true(
   viberacing_api.propose_car_recipe(
@@ -354,6 +428,127 @@ SELECT pg_temp.assert_true(
     pg_catalog.statement_timestamp() + INTERVAL '1 hour'
   ),
   'a hidden profile retains its private car proposal control'
+);
+
+SELECT pg_temp.assert_true(
+  viberacing_api.propose_car_recipe_from_device(
+    '00000000-0000-4000-8000-000000026401',
+    'dev_' || pg_catalog.repeat('A', 22),
+    pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+    pg_catalog.decode(pg_catalog.repeat('c1', 32), 'hex'),
+    '00000000-0000-4000-8000-000000026305',
+    1,
+    'rally',
+    'scoop',
+    'rally',
+    'high',
+    'all-terrain',
+    'mint',
+    'grid',
+    1234
+  ),
+  'an active source-bound device may replace only the private pending proposal of its profile'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT active_palette = 'magenta'
+      AND proposal_id = '00000000-0000-4000-8000-000000026305'
+      AND proposal_palette = 'mint'
+      AND proposal_seed = 1234
+      AND proposal_expires_at > pg_catalog.statement_timestamp() + INTERVAL '23 hours 59 minutes'
+    FROM viberacing_api.read_car_recipe_state(
+      '00000000-0000-4000-8000-000000026201',
+      pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex')
+    )
+  ),
+  'device ingress changes no active recipe and leaves the exact proposal for browser review'
+);
+
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT viberacing_api.propose_car_recipe_from_device(
+      '00000000-0000-4000-8000-000000026401',
+      'dev_' || pg_catalog.repeat('A', 22),
+      pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+      pg_catalog.decode(pg_catalog.repeat('c1', 32), 'hex'),
+      '00000000-0000-4000-8000-000000026306',
+      1,
+      'formula',
+      'classic',
+      'canopy',
+      'none',
+      'street',
+      'redline',
+      'none',
+      9
+    )
+  $sql$,
+  'a device proposal nonce cannot be replayed with another recipe'
+);
+
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT viberacing_api.propose_car_recipe_from_device(
+      '00000000-0000-4000-8000-000000026402',
+      'dev_' || pg_catalog.repeat('A', 22),
+      pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+      pg_catalog.decode(pg_catalog.repeat('c2', 32), 'hex'),
+      '00000000-0000-4000-8000-000000026306',
+      1,
+      'formula',
+      'classic',
+      'canopy',
+      'none',
+      'street',
+      'redline',
+      'none',
+      9
+    )
+  $sql$,
+  'a device identifier cannot be rebound to another device key or profile'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_owner;
+
+UPDATE viberacing_private.codex_sources
+SET state = 'paused'
+WHERE source_id = 'src_' || pg_catalog.repeat('A', 22);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_web;
+
+SELECT pg_temp.assert_true(
+  NOT EXISTS (
+    SELECT 1
+    FROM viberacing_api.read_car_proposal_device_material(
+      'dev_' || pg_catalog.repeat('A', 22)
+    )
+  ),
+  'a paused source exposes no device proposal verification material'
+);
+
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT viberacing_api.propose_car_recipe_from_device(
+      '00000000-0000-4000-8000-000000026401',
+      'dev_' || pg_catalog.repeat('A', 22),
+      pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+      pg_catalog.decode(pg_catalog.repeat('c3', 32), 'hex'),
+      '00000000-0000-4000-8000-000000026306',
+      1,
+      'formula',
+      'classic',
+      'canopy',
+      'none',
+      'street',
+      'redline',
+      'none',
+      9
+    )
+  $sql$,
+  'a paused source-bound device cannot create a proposal'
 );
 
 SELECT pg_temp.expect_operation_failure(

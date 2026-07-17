@@ -36,7 +36,9 @@ ceilings; deployment controls may be lower.
 
 Give each connector an Ed25519 device key stored in the operating-system credential store and bound
 to exactly one source. Device requests are canonical signed messages, not long-lived bearer tokens.
-Device authority can submit Community sync for its source and nothing else.
+Device authority can submit Community sync for its source and, under ADR 0038's separate signature
+domain, replace only the bound profile's pending enum-only CarRecipe proposal. It cannot inspect or
+activate that proposal or administer the profile.
 
 Bind the pending public key immutably when pairing starts. Return a high-entropy, short-lived poll
 token and transaction challenge once, persist only a keyed token verifier, and never log plaintext.

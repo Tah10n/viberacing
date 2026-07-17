@@ -105,7 +105,7 @@ documentation together. Rollback must not serialize a recipe through `CommunityS
 
 Current repository evidence covers:
 
-- eleven schemas, three policies, five local operations, generated TypeScript/OpenAPI drift, and 45
+- twelve schemas, four policies, six local operations, generated TypeScript/OpenAPI drift, and 49
   contract-checker regression cases;
 - canonical recipe acceptance, optional absence, arbitrary URL/color/proposal/private-field
   rejection, and proof that the stable score component still rejects `carRecipe`;
@@ -113,15 +113,15 @@ Current repository evidence covers:
   and the separate parameterized query;
 - exact score/race path parsing, response revalidation, no-store delivery, no-queue admission, and
   closed method handling;
-- 637 Web tests including the visible browser request and synthetic fallback behavior, plus a
+- 683 Web tests including the visible browser request and synthetic fallback behavior, plus a
   production build whose initial application chunk remains within budget at 8,750 gzip bytes; and
-- isolated PostgreSQL application of revisions 0001 through 0027, active/absent/hidden recipe
+- isolated PostgreSQL application of revisions 0001 through 0028, active/absent/hidden recipe
   projection, unchanged score allowlist, five-second deadline, Web-only execution, and 40
   cross-capability denials.
 
 There is still no live Web database credential, edge policy, cache, rate/load result, monitoring,
-real-user result, or deployment. The agent/connector proposal ingress and cleanup schedule also
-remain Phase 4 gates.
+real-user result, or deployment. ADR 0038 now supplies a separate local proposal-only device
+ingress; conversational-agent orchestration and the cleanup schedule remain Phase 4 gates.
 
 ## References
 
@@ -129,6 +129,7 @@ remain Phase 4 gates.
 - [Public score response contract](0010-community-score-response-contract.md)
 - [Public score HTTP contract](0013-public-community-score-http-contract.md)
 - [Session CarRecipe proposal](0035-bounded-session-car-recipe-proposal.md)
+- [Device CarRecipe proposal ingress](0038-bounded-device-car-recipe-proposal-ingress.md)
 - [Canonical CarRecipe reference](../reference/car-recipe.md)
 - [Project plan](../PROJECT_PLAN.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)

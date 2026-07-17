@@ -955,9 +955,11 @@ measurements exist.
 
 - The canonical version 1 schema, deterministic renderer, asset record, exact-session PostgreSQL
   proposal/approval state, signed-in three-theme account preview, and separate compatible public
-  active-recipe race projection are implemented locally. The actual agent/connector ingress, cleanup
-  scheduling and deployed retention evidence, edge policy, live database result, monitoring,
-  capacity evidence, packaging, and deployment remain gates.
+  active-recipe race projection are implemented locally. A separate bounded device-authenticated
+  Web/PostgreSQL ingress and fixed native-store `propose-car` command now submit only that exact
+  private recipe without activation authority. Conversational-agent orchestration, cleanup
+  scheduling and deployed retention evidence, distributed edge policy, live database result,
+  monitoring, capacity evidence, packaging, release, and deployment remain gates.
 - Add versioned CarRecipe, bounded proposal API, browser preview and approval, theme rendering,
   asset provenance, and snapshot tests.
 - Package the fixed-command end-user connector workflow only after the CLI is stable.

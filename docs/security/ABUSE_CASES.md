@@ -155,11 +155,12 @@ material availability cost.
 
 - **Attacker:** Malware or another local account able to extract credential-store material.
 - **Preconditions:** A registered device private key is compromised.
-- **Abuse:** Submit signed Community usage or replay requests as that device.
-- **Impact:** Source-level score manipulation and request cost until revocation; no profile
-  administration.
+- **Abuse:** Submit signed Community usage, replace a pending enum-only car proposal, or replay
+  requests as that device.
+- **Impact:** Source-level score manipulation, pending-presentation replacement, and request cost
+  until revocation; no recipe activation or profile administration.
 - **Controls:** OS credential store with no plaintext fallback, source-bound scope, nonce and
-  idempotency checks, version visibility, revoke, and rotation.
+  idempotency checks, proposal-only browser review, version visibility, revoke, and rotation.
 - **Detection:** Signature source, replay, platform/version, and unusual activity signals;
   user-visible device inventory.
 - **Recovery:** Immediate device revoke, optional source key rotation, quarantine affected
@@ -184,7 +185,10 @@ material availability cost.
   the emitted host and a disposable least-privileged PostgreSQL login, proving accepted/duplicate,
   persistent replay, revoked-device denial, and exact stored state. Key rotation/uninstall, metrics,
   cross-platform runtime evidence, deployment credentials/TLS, release, edge routing, and real-user
-  operation remain unimplemented.
+  operation remain unimplemented. ADR 0038 separately binds an exact enum recipe body, fresh
+  nonce/time, and device ID under another signature domain. Web performs dummy-key work for unknown
+  devices, and revision 0028 rechecks active profile/source/device state before replacing only the
+  pending recipe; browser approval remains mandatory.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity.
 
@@ -192,8 +196,8 @@ material availability cost.
 
 - **Attacker:** A malicious connector or holder of a stolen device key.
 - **Preconditions:** The service accepts device-authenticated requests.
-- **Abuse:** Attempt to add devices, issue invites, unlink sources, change recovery, approve a car,
-  delete a profile, or reach admin functions.
+- **Abuse:** Attempt to add devices, issue invites, unlink sources, change recovery, approve or
+  activate a car, delete a profile, or reach admin functions through proposal-only authority.
 - **Impact:** Account takeover or destructive cross-capability access.
 - **Controls:** Separate routes and principals, deny-by-default device scope, fresh user-session
   passkey step-up, database capability separation, and IDOR tests.
@@ -204,8 +208,12 @@ material availability cost.
   submission, has no direct table access, and is denied every current identity/lifecycle sample; the
   role matrix is exercised in real PostgreSQL. The pure verifier exposes only request verification
   and an allowlisted submission result; it owns no profile, pairing, recovery, passkey, admin, or
-  database capability. The confined HTTP server exposes only the sync POST plus closed route/method
-  failures, and the full synthetic loopback gate reaches only the three reviewed Ingest procedures.
+  database capability. ADR 0038 adds a separate Web route whose device authority reaches only
+  minimal key lookup and pending-recipe replacement; it returns no proposal ID/state and has no
+  approve/reject/activate call. The Web-role SQL function rechecks the active source-bound device,
+  while every non-Web role is denied. The confined Ingest HTTP server exposes only the sync POST
+  plus closed route/method failures, and the full synthetic loopback gate reaches only the three
+  reviewed Ingest procedures.
 - **Residual risk:** A future endpoint can accidentally reuse the wrong middleware; a scope matrix
   is required in CI.
 
@@ -412,8 +420,10 @@ material availability cost.
 - **Current evidence:** Contract, HTTP/service, mapper/pool, renderer, role-denial, IDOR, replay,
   replacement, approval/rejection, hidden-profile, profile-purge, and separate public race tests
   pass locally. The stable score response rejects `carRecipe`; the race response rejects malformed
-  or arbitrary nested content and exposes no proposal state. There is no agent/connector proposal
-  ingress.
+  or arbitrary nested content and exposes no proposal state. The dedicated device route and fixed
+  connector command share one exact body/signature vector, reject prompt/free-text/unknown fields,
+  stale or replayed proof, inactive authority, and can replace only pending state. Conversational-
+  agent orchestration is absent.
 - **Detection:** Schema rejection metrics, generated-asset drift, provenance and license review;
   operational metrics and alerting are still pending.
 - **Recovery:** Reject or disable the recipe/version, restore a safe default, and remove invalid

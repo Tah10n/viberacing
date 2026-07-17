@@ -14,8 +14,8 @@ identifier, expose a reusable proposal identifier, let a device activate a car, 
 conversation into stored input. The database also needs one atomic transition from private pending
 state to the active recipe.
 
-This slice is deliberately session-owned. It proves the browser and persistence boundary before a
-future connector or agent proposal path receives any authority.
+This slice is deliberately session-owned. It proves the browser and persistence decision boundary;
+ADR 0038 later adds a separate device-authenticated proposal-only origin without decision authority.
 
 ## Decision
 
@@ -52,16 +52,17 @@ neither arbitrary drawing input nor a schema runtime.
 
 - This implements security invariant `VR-CAR-001` and the local controls for
   `VR-ABUSE-CAR-INJECTION`.
-- A Web session can propose and approve only for its own derived profile. Device credentials have no
-  CarRecipe capability.
+- A Web session can propose and approve only for its own derived profile. Under ADR 0038 an active
+  source-bound device may only create or replace that profile's pending exact recipe; it cannot
+  inspect, approve, reject, or activate it.
 - A pending recipe is Account data. The active recipe is designed to be public, but no public score
   or profile projection returns it yet.
 - Expiry makes a proposal unusable after at most 24 hours. ADR 0036 now adds a separate bounded
   Jobs-only physical cleanup capability; replacement, explicit decision, or profile purge can also
   remove the row. No production schedule or retention cadence exists.
-- The proposal flow has no agent/connector ingress, kill-switch configuration, distributed edge rate
-  control, live Web/database credential, scheduled cleanup, monitoring, capacity evidence, or
-  deployment.
+- The browser proposal flow is now joined by ADR 0038's isolated local connector ingress. Neither
+  path has kill-switch configuration, distributed edge rate control, live Web/database credential,
+  scheduled cleanup, monitoring, capacity evidence, or deployment.
 
 ## Alternatives considered
 
@@ -106,3 +107,4 @@ version rather than reinterpreting stored version 1 rows.
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
 - [Car injection abuse case](../security/ABUSE_CASES.md#vr-abuse-car-injection-executable-or-remote-content-in-customization)
 - [ADR 0036](0036-bounded-car-recipe-proposal-cleanup.md)
+- [ADR 0038](0038-bounded-device-car-recipe-proposal-ingress.md)

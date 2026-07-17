@@ -10,10 +10,11 @@ cookies, local recovery-code replacement-passkey sign-in, and logout, one local 
 including bounded primary profile deletion, and local Ingest request-verification,
 PostgreSQL-adapter, application-composition, and bounded HTTP-server boundaries, plus library-only
 connector initialization and candidate `0.144.5` account/usage parser boundaries, a synthetic
-one-shot supervisor, an exact-body sync composer, isolated pairing/sync signers, a pure Web pairing
-verifier, one local connector command with native OS key custody and exact start/poll routes, and
-one explicit Windows candidate command that admits, collects, signs, and uploads a single sync. It
-also has one opt-in synthetic loopback integration through the emitted Ingest host and a disposable
+one-shot supervisor, an exact-body sync composer, isolated pairing/sync/proposal signers, pure Web
+pairing and proposal verifiers, one local connector command with native OS key custody and exact
+start/poll routes, one explicit Windows candidate command that admits, collects, signs, and uploads
+a single sync, and one fixed proposal-only command that starts no Codex process. It also has one
+opt-in synthetic loopback integration through the emitted Ingest host and a disposable
 least-privileged PostgreSQL login. It still has no deployed application service, operational sync
 connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway deployment,
 live OAuth or database login, or production database. Component status is tracked in
@@ -190,12 +191,14 @@ The browser and connector can propose only fields declared in versioned contract
 profile identity, accepted source binding, server receipt time, season, score, rank, streak,
 freshness projection, moderation state, and deletion state are server-derived.
 
-The current `CarRecipeV1` proposal is browser-only: Web derives the profile from an exact possessed
-session, creates proposal identity/expiry, and exposes only an encrypted session-bound decision
-control. PostgreSQL owns the atomic pending-to-active transition. A device cannot administer a car,
-and there is no agent/connector proposal ingress. The separate public race projection can expose
-only the exact current approved recipe for an `active` profile; proposal identity, state, and
-timestamps remain private, and the stable score response remains unchanged.
+The current `CarRecipeV1` proposal has two bounded origins. Web derives browser authority from an
+exact possessed session, while the dedicated signed route derives proposal-only authority from an
+active source-bound device. Web owns proposal identity/expiry and exposes an encrypted session-bound
+decision control only to the browser. PostgreSQL owns the atomic pending-to-active transition. A
+device can replace only the private pending recipe and cannot inspect, approve, reject, activate,
+publish, or administer it. The separate public race projection can expose only the exact current
+approved recipe for an `active` profile; proposal identity, state, and timestamps remain private,
+and the stable score response remains unchanged.
 
 The [privacy data map](../security/PRIVACY_DATA_MAP.md) defines field classification and retention.
 The [data-flow document](DATA_FLOW.md) defines enrollment, pairing, synchronization, public read,
@@ -210,7 +213,8 @@ when a diagram and prose appear to conflict.
   verification.
 - An Ingest compromise is contained by procedure-only database rights and no profile or admin
   credentials.
-- A connector compromise is contained to its bound Community source; device authority cannot manage
+- A connector compromise is contained to its bound Community source; it may submit Community usage
+  and replace the bound profile's pending enum-only car proposal, but cannot activate it or manage
   the profile.
 - A Web/Auth compromise does not automatically receive signing or migration ownership.
 - A failed Jobs run is idempotently repeatable; it cannot reopen a finalized season through client

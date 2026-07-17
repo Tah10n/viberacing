@@ -23,6 +23,8 @@ const implementedLocalEvidencePaths = [
   "apps/web/app/v1/community/race/route.ts",
   "apps/web/app/v1/community/scores/route.test.ts",
   "apps/web/app/v1/community/scores/route.ts",
+  "apps/web/app/v1/connector/cars/proposals/route.test.ts",
+  "apps/web/app/v1/connector/cars/proposals/route.ts",
   "apps/web/app/v1/connector/pairing/poll/route.test.ts",
   "apps/web/app/v1/connector/pairing/poll/route.ts",
   "apps/web/app/v1/connector/pairing/start/route.test.ts",
@@ -41,6 +43,25 @@ const implementedLocalEvidencePaths = [
   "apps/web/lib/public-community-score-store.ts",
   "apps/web/lib/public-score-admission.test.ts",
   "apps/web/lib/public-score-admission.ts",
+  "apps/web/lib/connector-car-proposal-admission.test.ts",
+  "apps/web/lib/connector-car-proposal-admission.ts",
+  "apps/web/lib/connector-car-proposal-application.test.ts",
+  "apps/web/lib/connector-car-proposal-application.ts",
+  "apps/web/lib/connector-car-proposal-database.test.ts",
+  "apps/web/lib/connector-car-proposal-database.ts",
+  "apps/web/lib/connector-car-proposal-http.test.ts",
+  "apps/web/lib/connector-car-proposal-http.ts",
+  "apps/web/lib/connector-car-proposal-service.test.ts",
+  "apps/web/lib/connector-car-proposal-service.ts",
+  "apps/web/lib/connector-car-proposal-verifier.test.ts",
+  "apps/web/lib/connector-car-proposal-verifier.ts",
+  "crates/connector/src/car_proposal.rs",
+  "crates/connector/src/connect/car_proposal_command.rs",
+  "database/migrations/0028_connector_car_proposal_ingress.sql",
+  "database/tests/car_recipe_device_proposal_concurrency_assertions.sql",
+  "database/tests/car_recipe_device_proposal_concurrency_setup.sql",
+  "database/tests/car_recipe_proposals.sql",
+  "scripts/test-database-integration.mjs",
 ];
 
 function writeJson(path, value) {
@@ -98,6 +119,7 @@ async function expectGeneratedPublicOperations(name) {
     "/v1/community/race",
     "/v1/community/scores",
     "/v1/community/sync",
+    "/v1/connector/cars/proposals",
     "/v1/connector/pairing/poll",
     "/v1/connector/pairing/start",
   ]);
@@ -198,6 +220,57 @@ async function expectGeneratedPublicOperations(name) {
     assert.deepEqual(syncOperation.responses[status].content["application/problem+json"].schema, {
       $ref: "#/components/schemas/ProblemDetailsV1",
     });
+  }
+
+  const proposalOperation = document.paths["/v1/connector/cars/proposals"].post;
+  assert.equal(proposalOperation.operationId, "postConnectorCarProposalV1");
+  assert.equal(proposalOperation["x-viberacing-status"], "implemented-local");
+  assert.equal(proposalOperation["x-viberacing-admission-policy"], "no-queue-4");
+  assert.equal(
+    proposalOperation["x-viberacing-authentication-contract"],
+    "contracts/v1/connector-car-proposal-authentication.json",
+  );
+  assert.equal(proposalOperation["x-viberacing-cache-policy"], "no-store");
+  assert.equal(proposalOperation["x-viberacing-cors-policy"], "same-origin");
+  assert.equal(proposalOperation["x-viberacing-query-contract"], "none");
+  assert.equal(proposalOperation["x-viberacing-query-policy"], "none");
+  assert.equal(proposalOperation["x-viberacing-request-body-policy"], "exact-raw-json-512");
+  assert.deepEqual(proposalOperation["x-viberacing-request-contract"], {
+    $ref: "#/components/schemas/CarRecipeV1",
+  });
+  assert.equal(Object.hasOwn(proposalOperation, "parameters"), false);
+  assert.equal(Object.hasOwn(proposalOperation, "security"), false);
+  assert.deepEqual(proposalOperation.requestBody.content["application/json"].schema, {
+    $ref: "#/components/schemas/CarRecipeV1",
+  });
+  assert.deepEqual(Object.keys(proposalOperation.responses), [
+    "200",
+    "400",
+    "401",
+    "405",
+    "406",
+    "422",
+    "429",
+    "500",
+    "503",
+  ]);
+  assert.deepEqual(proposalOperation.responses["200"].content["application/json"].schema, {
+    $ref: "#/components/schemas/ConnectorCarProposalResultV1",
+  });
+  assert.equal(proposalOperation.responses["405"].headers.Allow.schema.const, "POST");
+  for (const response of Object.values(proposalOperation.responses)) {
+    assert.equal(response.headers["Cache-Control"].schema.const, "no-store");
+    assert.equal(response.headers.Vary.schema.const, "Accept");
+    assert.equal(response.headers["x-request-id"].schema.pattern, "^req_[A-Za-z0-9_-]{22}$");
+    assert.equal(Object.hasOwn(response.headers, "Access-Control-Allow-Origin"), false);
+  }
+  for (const status of ["400", "401", "405", "406", "422", "429", "500", "503"]) {
+    assert.deepEqual(
+      proposalOperation.responses[status].content["application/problem+json"].schema,
+      {
+        $ref: "#/components/schemas/ProblemDetailsV1",
+      },
+    );
   }
 
   for (const [path, operationId, requestSchema, responseSchema] of [
@@ -594,6 +667,13 @@ try {
     /implemented-local contract evidence is missing/,
   );
   await expectFailure(
+    "missing-car-proposal-implementation-evidence",
+    (root) => {
+      rmSync(resolve(root, "crates", "connector", "src", "car_proposal.rs"));
+    },
+    /implemented-local contract evidence is missing/,
+  );
+  await expectFailure(
     "get-problem-status-drift",
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
@@ -612,6 +692,42 @@ try {
       writeJson(path, manifest);
     },
     /Community sync operation differs from the reviewed HTTP contract/,
+  );
+  await expectFailure(
+    "car-proposal-operation-drift",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.operations[3].problemStatuses = [400, 401, 405, 406, 429, 500, 503];
+      writeJson(path, manifest);
+    },
+    /connector car proposal operation differs from review/,
+  );
+  await expectFailure(
+    "car-proposal-policy-semantic-drift",
+    async (root) => {
+      const path = resolve(root, "contracts", "v1", "connector-car-proposal-authentication.json");
+      const policy = JSON.parse(readFileSync(path, "utf8"));
+      policy.requestFreshness.maximumAgeMilliseconds = 300_001;
+      writeJson(path, policy);
+      await writeGeneratedArtifacts(root);
+    },
+    /connector car proposal policy differs from the reviewed boundary/,
+  );
+  await expectFailure(
+    "car-proposal-vector-message-drift",
+    (root) => {
+      const path = resolve(
+        root,
+        "contracts",
+        "v1",
+        "connector-car-proposal-device-request.test-vector.json",
+      );
+      const vector = JSON.parse(readFileSync(path, "utf8"));
+      vector.deviceSignatureMessage += "\n";
+      writeJson(path, vector);
+    },
+    /shared connector car proposal vector differs from the reviewed boundary/,
   );
   await expectFailure(
     "authentication-contract-digest-drift",

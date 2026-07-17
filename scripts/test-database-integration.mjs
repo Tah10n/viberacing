@@ -229,7 +229,7 @@ async function runObservedRace(
   lockSql,
   readyMarker,
   contenderSql,
-  { orderedContenders = false, releaseDelayMilliseconds = 0 } = {},
+  { orderedContenders = false, releaseDelayMilliseconds = 0, releaseSql = "\nCOMMIT;\n" } = {},
 ) {
   raceSequence += 1;
   const racePrefix = `vr-race-${process.pid}-${raceSequence}`;
@@ -265,7 +265,7 @@ async function runObservedRace(
       await new Promise((resolvePromise) => setTimeout(resolvePromise, releaseDelayMilliseconds));
     }
     holderReleased = true;
-    lockHolder.closeInput("\nCOMMIT;\n");
+    lockHolder.closeInput(releaseSql);
 
     const [lockResult, contenderResults] = await Promise.all([
       lockHolder.completion,
@@ -277,12 +277,51 @@ async function runObservedRace(
     if (!holderReleased) {
       lockHolder.closeInput("\nROLLBACK;\n");
     }
-    await Promise.allSettled([
+    const settled = await Promise.allSettled([
       lockHolder.completion,
       ...contenders.map(({ completion }) => completion),
     ]);
     const detail = error instanceof Error ? error.message : "unknown observed-race failure";
-    throw new Error(`${label} failed: ${detail}`, { cause: error });
+    const contenderEvidence = settled
+      .slice(1)
+      .map((result, index) =>
+        result.status === "fulfilled"
+          ? `contender ${index + 1} status=${result.value.status}\n${result.value.stdout}\n${result.value.stderr}`
+          : `contender ${index + 1} rejected: ${String(result.reason)}`,
+      )
+      .join("\n");
+    throw new Error(
+      `${label} failed (holder released: ${holderReleased}): ${detail}` +
+        (contenderEvidence ? `\n${contenderEvidence}` : ""),
+      { cause: error },
+    );
+  }
+}
+
+async function expectHeldProtectiveActionDominates(
+  label,
+  lockSql,
+  readyMarker,
+  releaseSql,
+  competingSql,
+  diagnosticSql,
+) {
+  const [competingResult] = await runObservedRace(label, lockSql, readyMarker, [competingSql], {
+    releaseSql,
+  });
+  const competingClosed =
+    competingResult.status !== 0 &&
+    /operation cannot be completed/i.test(`${competingResult.stdout}\n${competingResult.stderr}`);
+  if (!competingClosed) {
+    const diagnosticResult = diagnosticSql ? psql(diagnosticSql) : null;
+    const diagnostics = diagnosticResult
+      ? `\ndiagnostics status=${diagnosticResult.status}\n${diagnosticResult.stdout}\n${diagnosticResult.stderr}`
+      : "";
+    throw new Error(
+      `${label} did not preserve the protective action:\n` +
+        `competing status=${competingResult.status}\n${competingResult.stdout}\n${competingResult.stderr}` +
+        diagnostics,
+    );
   }
 }
 
@@ -520,6 +559,13 @@ try {
       ),
     },
     {
+      label: "device CarRecipe proposal concurrency setup",
+      sql: readFileSync(
+        resolve(root, "database/tests/car_recipe_device_proposal_concurrency_setup.sql"),
+        "utf8",
+      ),
+    },
+    {
       label: "profile deletion purge concurrency setup",
       sql: readFileSync(
         resolve(root, "database/tests/profile_deletion_purge_concurrency_setup.sql"),
@@ -596,6 +642,81 @@ SELECT * FROM viberacing_api.cleanup_expired_car_recipe_proposals(1);`,
       ),
     ),
     "CarRecipe proposal cleanup concurrency assertions",
+  );
+
+  requireSuccess(
+    psql(`BEGIN;
+SET LOCAL ROLE viberacing_web;
+SELECT viberacing_api.propose_car_recipe_from_device(
+  '00000000-0000-4000-8000-000000028404',
+  'dev_' || pg_catalog.repeat('4', 22),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+  pg_catalog.decode(pg_catalog.repeat('c7', 32), 'hex'),
+  '00000000-0000-4000-8000-000000028305',
+  1,
+  'formula',
+  'wedge',
+  'canopy',
+  'high',
+  'slick',
+  'turbo-blue',
+  'spark',
+  4242
+);
+ROLLBACK;`),
+    "device CarRecipe proposal race preflight",
+  );
+
+  await expectHeldProtectiveActionDominates(
+    "source pause versus device CarRecipe proposal race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT profile_id
+FROM viberacing_private.profiles
+WHERE profile_id = '00000000-0000-4000-8000-000000028104'
+FOR UPDATE;
+\\echo car-proposal-pause-lock-ready`,
+    "car-proposal-pause-lock-ready",
+    `SET LOCAL ROLE viberacing_web;
+SELECT viberacing_api.pause_source(
+  '00000000-0000-4000-8000-000000028204',
+  pg_catalog.decode(pg_catalog.lpad('28204', 64, '0'), 'hex'),
+  'src_' || pg_catalog.repeat('4', 22),
+  '00000000-0000-4000-8000-000000028804',
+  'req_' || pg_catalog.repeat('4', 22)
+);
+COMMIT;`,
+    `SET ROLE viberacing_web;
+SELECT viberacing_api.propose_car_recipe_from_device(
+  '00000000-0000-4000-8000-000000028404',
+  'dev_' || pg_catalog.repeat('4', 22),
+  pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
+  pg_catalog.decode(pg_catalog.repeat('c8', 32), 'hex'),
+  '00000000-0000-4000-8000-000000028304',
+  1,
+  'formula',
+  'wedge',
+  'canopy',
+  'high',
+  'slick',
+  'turbo-blue',
+  'spark',
+  4242
+);`,
+    `SET ROLE viberacing_owner;
+SELECT state
+FROM viberacing_private.codex_sources
+WHERE source_id = 'src_' || pg_catalog.repeat('4', 22);`,
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/car_recipe_device_proposal_concurrency_assertions.sql"),
+        "utf8",
+      ),
+    ),
+    "device CarRecipe proposal concurrency assertions",
   );
 
   await expectConcurrentSuccesses(
@@ -1930,7 +2051,7 @@ SELECT viberacing_api.complete_passkey_login(
   }
 
   console.log(
-    "Database integration passed (27 schema tables, 28 observed lock-wait races, 12 relation-denial and 40 cross-capability checks).",
+    "Database integration passed (27 schema tables, 29 observed lock-wait races, 12 relation-denial and 40 cross-capability checks).",
   );
 } finally {
   if (started) {

@@ -16,12 +16,14 @@ use ureq::Agent;
 use ureq::http::Uri;
 use ureq::tls::{RootCerts, TlsConfig};
 
+use crate::car_proposal::CarRecipeSelection;
 use crate::pairing::{
     CandidatePairingPossessionV1Signer, PAIRING_CHALLENGE_BYTES, PendingDevicePairingSigningKey,
     ReviewedPairingChallenge, valid_pairing_id,
 };
 use crate::sync::encode_base64url;
 
+mod car_proposal_command;
 mod sync_command;
 
 const START_PATH: &str = "/v1/connector/pairing/start";
@@ -34,7 +36,7 @@ const KEYRING_SERVICE: &str = "viberacing.connector.pairing.v1";
 const KEYRING_ACCOUNT_PREFIX: &str = "device-";
 const ACCOUNT_DOMAIN: &[u8] = b"viberacing-connector-keyring-account-v1\0";
 const ORIGIN_DOMAIN: &[u8] = b"viberacing-connector-origin-v1\0";
-const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector sync --origin <https-origin> --label <device-label> --codex <absolute-path>";
+const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector sync --origin <https-origin> --label <device-label> --codex <absolute-path>\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
 const MAX_ORIGIN_BYTES: usize = 512;
 const MAX_LABEL_CHARACTERS: usize = 64;
 const MAX_REQUEST_BYTES: usize = 1024;
@@ -65,7 +67,7 @@ const RECORD_BYTES: usize = 264;
 /// Stable, non-reflective failures from the bounded connector command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConnectorCliError {
-    /// The command line does not match one of the two bounded commands.
+    /// The command line does not match one of the three bounded commands.
     InvalidArguments,
     /// The supplied server origin is not an HTTPS origin or permitted loopback HTTP origin.
     InvalidOrigin,
@@ -99,6 +101,12 @@ pub enum ConnectorCliError {
     SyncUnavailable,
     /// The synchronization acknowledgement was outside the closed response contract.
     InvalidSyncResponse,
+    /// The closed `CarRecipe` request could not be prepared safely.
+    ProposalPreparationUnavailable,
+    /// The proposal endpoint was unavailable or rejected the request.
+    ProposalUnavailable,
+    /// The proposal acknowledgement was outside the closed response contract.
+    InvalidProposalResponse,
     /// Connector output could not be written.
     OutputUnavailable,
 }
@@ -125,6 +133,9 @@ impl fmt::Display for ConnectorCliError {
             Self::SyncPreparationUnavailable => "usage could not be prepared safely",
             Self::SyncUnavailable => "the sync service is temporarily unavailable",
             Self::InvalidSyncResponse => "the sync service response is invalid",
+            Self::ProposalPreparationUnavailable => "the car proposal could not be prepared safely",
+            Self::ProposalUnavailable => "the car proposal service is temporarily unavailable",
+            Self::InvalidProposalResponse => "the car proposal response is invalid",
             Self::OutputUnavailable => "connector output is unavailable",
         })
     }
@@ -136,6 +147,7 @@ impl std::error::Error for ConnectorCliError {}
 ///
 /// `connect` creates or resumes one device credential. `sync` admits one exact Codex candidate,
 /// collects only bounded daily usage, signs it with that active credential, and submits it once.
+/// `propose-car` signs and submits one exact enum-only `CarRecipe` with the same active credential.
 ///
 /// # Errors
 ///
@@ -171,6 +183,21 @@ pub fn run_connector_cli() -> Result<(), ConnectorCliError> {
             let mut store = OsCredentialStore::new(&origin, &label)?;
             sync_command::run_sync(&origin, &codex_path, &mut store, &mut io::stdout().lock())
         }
+        ParsedCommand::ProposeCar {
+            label,
+            origin,
+            recipe,
+        } => {
+            let origin = Origin::parse(&origin)?;
+            validate_label(&label)?;
+            let mut store = OsCredentialStore::new(&origin, &label)?;
+            car_proposal_command::run_car_proposal(
+                &origin,
+                recipe,
+                &mut store,
+                &mut io::stdout().lock(),
+            )
+        }
     }
 }
 
@@ -185,6 +212,53 @@ enum ParsedCommand {
         label: String,
         origin: String,
     },
+    ProposeCar {
+        label: String,
+        origin: String,
+        recipe: CarRecipeSelection,
+    },
+}
+
+#[derive(Default)]
+struct PendingCarRecipeSelection {
+    chassis: Option<String>,
+    nose: Option<String>,
+    cockpit: Option<String>,
+    wing: Option<String>,
+    wheels: Option<String>,
+    palette: Option<String>,
+    trail: Option<String>,
+    seed: Option<u16>,
+}
+
+impl PendingCarRecipeSelection {
+    fn finish(self) -> Result<CarRecipeSelection, ConnectorCliError> {
+        CarRecipeSelection::from_exact_values(
+            self.chassis
+                .as_deref()
+                .ok_or(ConnectorCliError::InvalidArguments)?,
+            self.nose
+                .as_deref()
+                .ok_or(ConnectorCliError::InvalidArguments)?,
+            self.cockpit
+                .as_deref()
+                .ok_or(ConnectorCliError::InvalidArguments)?,
+            self.wing
+                .as_deref()
+                .ok_or(ConnectorCliError::InvalidArguments)?,
+            self.wheels
+                .as_deref()
+                .ok_or(ConnectorCliError::InvalidArguments)?,
+            self.palette
+                .as_deref()
+                .ok_or(ConnectorCliError::InvalidArguments)?,
+            self.trail
+                .as_deref()
+                .ok_or(ConnectorCliError::InvalidArguments)?,
+            self.seed.ok_or(ConnectorCliError::InvalidArguments)?,
+        )
+        .ok_or(ConnectorCliError::InvalidArguments)
+    }
 }
 
 fn parse_command(
@@ -202,13 +276,14 @@ fn parse_command(
         .first()
         .map(String::as_str)
         .ok_or(ConnectorCliError::InvalidArguments)?;
-    if !matches!(command, "connect" | "sync") {
+    if !matches!(command, "connect" | "sync" | "propose-car") {
         return Err(ConnectorCliError::InvalidArguments);
     }
 
     let mut origin = None;
     let mut label = None;
     let mut codex_path = None;
+    let mut pending_recipe = PendingCarRecipeSelection::default();
     let mut index = 1;
     while index < arguments.len() {
         let flag = arguments
@@ -222,6 +297,35 @@ fn parse_command(
             "--label" if label.is_none() => label = Some(value.clone()),
             "--codex" if command == "sync" && codex_path.is_none() && value.len() <= 1024 => {
                 codex_path = Some(PathBuf::from(value));
+            }
+            "--chassis" if command == "propose-car" && pending_recipe.chassis.is_none() => {
+                pending_recipe.chassis = Some(value.clone());
+            }
+            "--nose" if command == "propose-car" && pending_recipe.nose.is_none() => {
+                pending_recipe.nose = Some(value.clone());
+            }
+            "--cockpit" if command == "propose-car" && pending_recipe.cockpit.is_none() => {
+                pending_recipe.cockpit = Some(value.clone());
+            }
+            "--wing" if command == "propose-car" && pending_recipe.wing.is_none() => {
+                pending_recipe.wing = Some(value.clone());
+            }
+            "--wheels" if command == "propose-car" && pending_recipe.wheels.is_none() => {
+                pending_recipe.wheels = Some(value.clone());
+            }
+            "--palette" if command == "propose-car" && pending_recipe.palette.is_none() => {
+                pending_recipe.palette = Some(value.clone());
+            }
+            "--trail" if command == "propose-car" && pending_recipe.trail.is_none() => {
+                pending_recipe.trail = Some(value.clone());
+            }
+            "--seed" if command == "propose-car" && pending_recipe.seed.is_none() => {
+                let parsed = value
+                    .parse::<u16>()
+                    .ok()
+                    .filter(|parsed| parsed.to_string() == *value)
+                    .ok_or(ConnectorCliError::InvalidArguments)?;
+                pending_recipe.seed = Some(parsed);
             }
             _ => return Err(ConnectorCliError::InvalidArguments),
         }
@@ -237,6 +341,14 @@ fn parse_command(
             label,
             origin,
         }),
+        ("propose-car", Some(origin), Some(label), None) => {
+            let recipe = pending_recipe.finish()?;
+            Ok(ParsedCommand::ProposeCar {
+                label,
+                origin,
+                recipe,
+            })
+        }
         _ => Err(ConnectorCliError::InvalidArguments),
     }
 }
@@ -1227,6 +1339,31 @@ mod tests {
         ])
         .expect("exact sync arguments must parse");
         assert!(matches!(command, ParsedCommand::Sync { .. }));
+        let command = parse_command([
+            "propose-car".into(),
+            "--origin".into(),
+            "https://race.example".into(),
+            "--label".into(),
+            "Desktop".into(),
+            "--chassis".into(),
+            "formula".into(),
+            "--nose".into(),
+            "wedge".into(),
+            "--cockpit".into(),
+            "canopy".into(),
+            "--wing".into(),
+            "high".into(),
+            "--wheels".into(),
+            "slick".into(),
+            "--palette".into(),
+            "turbo-blue".into(),
+            "--trail".into(),
+            "spark".into(),
+            "--seed".into(),
+            "4242".into(),
+        ])
+        .expect("exact proposal arguments must parse");
+        assert!(matches!(command, ParsedCommand::ProposeCar { .. }));
         assert!(matches!(
             parse_command([
                 "connect".into(),
@@ -1237,6 +1374,32 @@ mod tests {
         ));
         assert!(matches!(
             parse_command(["sync".into()]),
+            Err(ConnectorCliError::InvalidArguments)
+        ));
+        assert!(matches!(
+            parse_command([
+                "propose-car".into(),
+                "--origin".into(),
+                "https://race.example".into(),
+                "--label".into(),
+                "Desktop".into(),
+                "--chassis".into(),
+                "formula".into(),
+                "--nose".into(),
+                "wedge".into(),
+                "--cockpit".into(),
+                "canopy".into(),
+                "--wing".into(),
+                "high".into(),
+                "--wheels".into(),
+                "slick".into(),
+                "--palette".into(),
+                "private-color".into(),
+                "--trail".into(),
+                "spark".into(),
+                "--seed".into(),
+                "0042".into(),
+            ]),
             Err(ConnectorCliError::InvalidArguments)
         ));
         assert!(matches!(

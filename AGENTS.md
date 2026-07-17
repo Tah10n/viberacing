@@ -63,46 +63,51 @@ verification under a protected pepper, creates only a five-minute restricted aut
 replacement WebAuthn ceremony, and returns a normal session only after atomic completion. It has an
 exact-session CarRecipe editor that validates one closed version 1 object, stores at most one
 24-hour private proposal, previews active/pending recipes in all three themes, and activates or
-rejects only through an encrypted session-bound control. It has no agent/connector proposal ingress.
-A separate compatible race projection exposes only an active profile's current approved recipe;
-proposal state stays private. A separate bounded Jobs-only capability physically removes expired
-proposals locally, but has no schedule, live login, monitoring, or deployment. The enrollment slice
-has only injected/synthetic evidence and no invite issuer UI, working OAuth or database credential,
-distributed recovery attempt controls, cleanup/deletion scheduling or notification,
-cache/backup/tombstone purge, restore replay, edge abuse controls, or deployment. Bounded expired
-authentication/CarRecipe-proposal cleanup and primary profile deletion exist locally, but have no
-schedule or deployed retention evidence. A library-only Rust connector foundation now implements a
-bounded stable App Server JSONL handshake and a candidate-only `0.144.5` account/usage parser with
-checked schema/fixture evidence. A one-shot supervisor composes that sequence with fixed local
-pipes, arguments, deadlines, output budgets, ambient-environment clearing, and reap-before-success
-behavior, but its reviewed-launch capability has no public constructor. An exact-body composer now
-consumes that minimized usage behind a second inaccessible reviewed context and fixes the versioned
-JSON/digest/LF message. An isolated one-use signer consumes that otherwise inaccessible material
-with a device-bound key capability that also has no public constructor, returning only the same body
-and five exact signed header values. A separate inaccessible pending-key/challenge signer and pure
-server-only Web verifier now agree on one exact synthetic pairing-possession proof. A transport-free
-Web/Auth start application creates nine-minute pending transactions from closed device metadata with
-fresh server IDs, poll tokens, challenges, 60-bit human codes, and separate protected poll/code
-verifiers through the fixed read-write Web pool. A second activation application performs protected
-poll lookup, runs the strict proof, and alone invokes exact activation with server-owned IDs behind
-fixed admission and timing. A local signed-in `/connect` flow now counts pending-code attempts on
-the exact session, renders bounded device metadata plus a full public-key fingerprint, offers a new
-source or an active owned source through an encrypted session-bound control, and requires a separate
-fresh passkey assertion before atomic new/existing-source approval. A closed local start/poll HTTP
-boundary now shares four-call admission, applies a fixed-storage global-and-64-bucket PostgreSQL
-rate policy, and serializes only the versioned contracts. A bounded Rust `connect` command generates
-one Ed25519 key through the OS CSPRNG, stores its versioned state only in the native credential
-store, resumes polling, and persists the activated binding without printing bearer or key material.
-A separate Windows x86_64 development `sync` command can construct the private launch/context/key
-capabilities only after explicit exact `0.144.5` artifact and active-record admission, then sends
-one fixed signed request and validates one closed acknowledgement without retry or edge-origin
-headers. There is still no automatic executable discovery, supported version, macOS/Linux admission,
-clean-machine real-account result, packaging, release, live pairing result, deployment Ingest
-credential/TLS result, edge deployment, or capacity evidence. Do not claim that deployed
-browser/session HTTP authentication, production-ready recovery or remaining unimplemented
-critical-action verification, real-user ingestion, an operational connector, a Jobs scheduler or
-deployed public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted
-security control exists until its implementation and verification are present in the working tree.
+rejects only through an encrypted session-bound control. A separate bounded device-authenticated
+route and fixed connector command can only create or replace that pending exact recipe for an active
+source-bound device; they cannot read, approve, reject, or activate it. A separate compatible race
+projection exposes only an active profile's current approved recipe; proposal state stays private. A
+separate bounded Jobs-only capability physically removes expired proposals locally, but has no
+schedule, live login, monitoring, or deployment. The enrollment slice has only injected/synthetic
+evidence and no invite issuer UI, working OAuth or database credential, distributed recovery attempt
+controls, cleanup/deletion scheduling or notification, cache/backup/tombstone purge, restore replay,
+edge abuse controls, or deployment. Bounded expired authentication/CarRecipe-proposal cleanup and
+primary profile deletion exist locally, but have no schedule or deployed retention evidence. A
+library-only Rust connector foundation now implements a bounded stable App Server JSONL handshake
+and a candidate-only `0.144.5` account/usage parser with checked schema/fixture evidence. A one-shot
+supervisor composes that sequence with fixed local pipes, arguments, deadlines, output budgets,
+ambient-environment clearing, and reap-before-success behavior, but its reviewed-launch capability
+has no public constructor. An exact-body composer now consumes that minimized usage behind a second
+inaccessible reviewed context and fixes the versioned JSON/digest/LF message. An isolated one-use
+signer consumes that otherwise inaccessible material with a device-bound key capability that also
+has no public constructor, returning only the same body and five exact signed header values. A
+separate inaccessible pending-key/challenge signer and pure server-only Web verifier now agree on
+one exact synthetic pairing-possession proof. A transport-free Web/Auth start application creates
+nine-minute pending transactions from closed device metadata with fresh server IDs, poll tokens,
+challenges, 60-bit human codes, and separate protected poll/code verifiers through the fixed
+read-write Web pool. A second activation application performs protected poll lookup, runs the strict
+proof, and alone invokes exact activation with server-owned IDs behind fixed admission and timing. A
+local signed-in `/connect` flow now counts pending-code attempts on the exact session, renders
+bounded device metadata plus a full public-key fingerprint, offers a new source or an active owned
+source through an encrypted session-bound control, and requires a separate fresh passkey assertion
+before atomic new/existing-source approval. A closed local start/poll HTTP boundary now shares
+four-call admission, applies a fixed-storage global-and-64-bucket PostgreSQL rate policy, and
+serializes only the versioned contracts. A bounded Rust `connect` command generates one Ed25519 key
+through the OS CSPRNG, stores its versioned state only in the native credential store, resumes
+polling, and persists the activated binding without printing bearer or key material. A separate
+Windows x86_64 development `sync` command can construct the private launch/context/key capabilities
+only after explicit exact `0.144.5` artifact and active-record admission, then sends one fixed
+signed request and validates one closed acknowledgement without retry or edge-origin headers. A
+separate fixed `propose-car` command starts no Codex process, accepts only exact enum flags and a
+bounded seed, signs one fresh proposal-domain request with the same active native key, sends once
+without retry, and validates only a generic acknowledgement. There is still no automatic executable
+discovery, supported version, macOS/Linux admission, clean-machine real-account result, packaging,
+release, live pairing result, deployment Ingest credential/TLS result, edge deployment, or capacity
+evidence. Do not claim that deployed browser/session HTTP authentication, production-ready recovery
+or remaining unimplemented critical-action verification, real-user ingestion, an operational
+connector, a Jobs scheduler or deployed public-race read, season correction, scheduled or broader
+cleanup, deployment, or a hosted security control exists until its implementation and verification
+are present in the working tree.
 
 ## Repository map
 
@@ -136,8 +141,8 @@ security control exists until its implementation and verification are present in
 - `crates/connector/` contains the bounded App Server JSONL handshake, candidate exact-version
   account/usage parser, inaccessible one-shot child supervisor, synthetic process fixture,
   exact-body sync composer, isolated pairing/sync signers, the native-store `connect` command, the
-  exact-candidate one-shot `sync` command, and nested connector security guidance. Read
-  `crates/connector/AGENTS.md` before editing it.
+  exact-candidate one-shot `sync` command, fixed proposal-only `propose-car` command, and nested
+  connector security guidance. Read `crates/connector/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
 - Trusted Ingest edge routing/external TLS deployment, the distributed recovery perimeter and

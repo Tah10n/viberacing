@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 57
+    SELECT pg_catalog.count(*) = 59
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 15
+    SELECT pg_catalog.count(*) = 17
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -75,6 +75,8 @@ SELECT pg_temp.assert_true(
         'cleanup_expired_pairing_state',
         'purge_profile_deletions',
         'propose_car_recipe',
+        'propose_car_recipe_from_device',
+        'read_car_proposal_device_material',
         'read_car_recipe_state',
         'approve_car_recipe',
         'reject_car_recipe',
@@ -126,7 +128,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 6
+    SELECT pg_catalog.count(*) = 8
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=5s']::text[]
       )
@@ -137,12 +139,14 @@ SELECT pg_temp.assert_true(
         'consume_origin_nonce',
         'admit_pairing_transport_request',
         'propose_car_recipe',
+        'propose_car_recipe_from_device',
+        'read_car_proposal_device_material',
         'read_car_recipe_state',
         'approve_car_recipe',
         'reject_car_recipe'
       )
   ),
-  'origin replay, pairing admission, and CarRecipe have database-enforced statement deadlines'
+  'origin replay, pairing admission, and browser/device CarRecipe have database-enforced statement deadlines'
 );
 
 SELECT pg_temp.assert_true(

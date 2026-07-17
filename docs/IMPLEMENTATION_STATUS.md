@@ -195,8 +195,13 @@ or finalization scheduler exists.
   refusal before connection. The pairing command supplies fresh OS entropy, a bounded local
   clock/retry policy, native key custody, and exact pairing transport. The separate sync command
   supplies only the local candidate context and one upload; no schedule, deployed egress, packaging,
-  release, or support claim exists, and the compatibility matrix remains empty.
-- An ADR lifecycle/template and thirty-seven accepted design decisions covering Community trust,
+  release, or support claim exists, and the compatibility matrix remains empty. A third fixed
+  `propose-car` command starts no Codex process: it accepts only explicit recipe enums and a
+  canonical bounded seed, loads the active native device key, creates a fresh nonce/time, signs the
+  proposal-specific exact body message, sends one no-retry fixed-path POST, and validates only a
+  generic acknowledgement. Four Rust proposal cases share the exact body/message/key/signature
+  vector with Web. No released connector, live endpoint, edge policy, or deployment is claimed.
+- An ADR lifecycle/template and thirty-eight accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -209,11 +214,11 @@ or finalization scheduler exists.
   compositions, bounded pairing cleanup, bounded connector pairing transport/native key custody,
   one-shot candidate Community sync, bounded authentication cleanup, the local Railway-shaped Ingest
   host, bounded primary deletion purge, the session-owned CarRecipe proposal boundary, and bounded
-  CarRecipe-proposal cleanup.
+  CarRecipe-proposal cleanup, public active-recipe projection, and bounded device proposal ingress.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
-- Eleven canonical JSON Schema 2020-12 contracts for bounded Community connector sync and pairing
+- Twelve canonical JSON Schema 2020-12 contracts for bounded Community connector sync and pairing
   start/poll requests and responses, a non-sensitive sync acknowledgement, stable problem details, a
   one-field public score season query, a response-only top-32 Community score page with constant
   trust metadata, a separate compatible race page with one optional exact recipe, plus the exact
@@ -223,14 +228,14 @@ or finalization scheduler exists.
   allowlist that excludes identity, trust, rank, score, season, moderation, credentials, and
   prohibited data.
 - Deterministically generated readonly TypeScript types, embedded validator wrappers, source digest,
-  and an OpenAPI 3.1 document with five explicitly `implemented-local` Community score/race/sync and
-  connector pairing start/poll operations. Their exact method-specific query/body, response/problem,
-  admission, authentication-reference, `no-store`, `Vary: Accept`, generated request ID, and
-  same-origin CORS policies are manifest-driven without claiming deployment. All three inventoried
-  authentication/transport policies participate in the generated source digest. A
-  manifest/schema/drift checker has 45 black-box cases covering generated operation/status/evidence
-  semantics, unsafe/duplicate/drifted operations, unknown fields, missing bounds, client-derived
-  score aliases, Community trust/problem/date drift, private response fields,
+  and an OpenAPI 3.1 document with six explicitly `implemented-local` Community score/race/sync,
+  device CarRecipe proposal, and connector pairing start/poll operations. Their exact
+  method-specific query/body, response/problem, admission, authentication-reference, `no-store`,
+  `Vary: Accept`, generated request ID, and same-origin CORS policies are manifest-driven without
+  claiming deployment. All four inventoried authentication/transport policies participate in the
+  generated source digest. A manifest/schema/drift checker has 49 black-box cases covering generated
+  operation/status/evidence semantics, unsafe/duplicate/drifted operations, unknown fields, missing
+  bounds, client-derived score aliases, Community trust/problem/date drift, private response fields,
   unlisted/path-traversing schemas, unsupported keywords, missing date deduplication, and stale
   generated output.
 - A dependency-free runtime contract validator with fail-closed reflection handling; strict
@@ -432,6 +437,12 @@ or finalization scheduler exists.
   rows. Expiry is logically enforced for at most 24 hours. Revision 0026 gives only Jobs a separate
   oldest-first, 1-to-1000 physical cleanup serialized by the sixth fixed mutex; it preserves live
   proposals and active recipes. No cleanup schedule or deployed retention evidence exists.
+- A separate Web-only device CarRecipe proposal database boundary. Revision 0028 exposes only
+  minimal active-device key material and one fixed proposal call to the probed Web role. It locks
+  and rechecks active/hidden profile, active source, and active device, consumes a seven-minute
+  domain-separated nonce digest, and creates or replaces the same pending server-owned 24-hour
+  recipe without touching the active row. Replay, stale/future time, key/device mismatch, paused or
+  terminal authority, and every non-Web role are denied in isolated PostgreSQL.
 - A separate Web-only Community race projection. Revision 0027 calls the unchanged score read,
   resolves only the current `active` profile behind each visible handle, and left-joins its one
   approved recipe into an exact JSON object. Absence remains SQL `NULL`; proposal rows, IDs, state,
@@ -767,8 +778,10 @@ or finalization scheduler exists.
   session. The raw proposal/profile IDs never enter HTML. Active and pending recipes are rendered as
   semantic code-native pixels in all three themes with deterministic snapshots. The schema runtime
   stays server-side. The separate public race response exposes only the current approved exact
-  recipe of an active profile; proposal state stays private and no agent/connector ingress, live
-  database credential, edge policy, monitoring, capacity result, or deployment is claimed.
+  recipe of an active profile; proposal state stays private. A separate exact-body signed device
+  route can create or replace only the pending recipe and cannot inspect or decide it. No
+  conversational-agent ingress, live database credential, edge policy, monitoring, capacity result,
+  released connector, or deployment is claimed.
 - Per-response nonce CSP, browser-isolation and capability headers, no remote image patterns,
   globally disabled Next.js image optimization, production HSTS, disabled framework branding, and an
   explicit Turbopack repository root that prevents parent-workspace inference.
@@ -778,7 +791,7 @@ or finalization scheduler exists.
   deployment without a real HTTPS DNS value remains forbidden. The separate enrollment slice stores
   account state only in encrypted HttpOnly cookies and reads its exact server-only configuration
   lazily; the default preview still needs none of it.
-- Six hundred thirty-seven unit, component, interaction, security-header, localization, scoring,
+- Six hundred eighty-three unit, component, interaction, security-header, localization, scoring,
   HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
   coverage gate currently reports 86.83% statements, 85.28% branches, 95.32% functions, and 86.94%
   lines over product components and libraries; framework entrypoints are verified by the production
@@ -804,7 +817,7 @@ The local Compose smoke test pulled the pinned index, reached `healthy`, exposed
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
 reached `healthy`, validated and applied revisions 0001 through 0027 from the checksum manifest,
-passed 27-table state/ownership/RLS assertions, twenty-eight observed lock-wait races, twelve
+passed 27-table state/ownership/RLS assertions, twenty-nine observed lock-wait races, twelve
 relation-denial checks, forty cross-capability denials, and the identity, passkey, recovery,
 pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention,
 pairing-retention, authentication-retention, primary-profile deletion, CarRecipe proposal/approval
@@ -856,13 +869,13 @@ loopback persistence path, but not those deployed edge, secret, TLS, capacity, o
 boundaries. Bounded database score and compatible active-recipe race projections, versioned
 response-only schemas, fail-closed server mappers, bounded PostgreSQL adapters, and local HTTP
 routes now exist, including URL/media parsing, admission/deadline policy, store translation, and
-final serialization. Cache/invalidation, agent/connector proposal ingress, streak/freshness, profile
-detail, client-rate and production-capacity controls, monitoring backend, deployment login,
-certificate, edge policy, and live adapter integration do not. The visible web scoring and ranking
-experience now consumes a validated current-week race response from the local route when its
-separately provisioned database login works, but local defaults and every unavailable/error path
-remain clearly synthetic. No working database/OAuth login, deployed data, cache, or end-to-end
-real-user ranking evidence exists.
+final serialization. Cache/invalidation, conversational-agent proposal orchestration, deployed
+device-proposal ingress, streak/freshness, profile detail, client-rate and production-capacity
+controls, monitoring backend, deployment login, certificate, edge policy, and live adapter
+integration do not. The visible web scoring and ranking experience now consumes a validated
+current-week race response from the local route when its separately provisioned database login
+works, but local defaults and every unavailable/error path remain clearly synthetic. No working
+database/OAuth login, deployed data, cache, or end-to-end real-user ranking evidence exists.
 
 ## Evidence commands
 

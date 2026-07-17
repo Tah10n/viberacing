@@ -40,12 +40,14 @@ existing opaque source. Existing choices use only encrypted session-bound contro
 stay server-only. ADR 0030 adds exact start/poll HTTP routes, fixed-storage aggregate admission, and
 one pairing-only Rust command that creates and retains its device key only in a native OS credential
 store. ADR 0031 adds a separate Windows candidate command that can construct the otherwise
-inaccessible launch/context/key capabilities only after exact artifact and active- record review,
-then performs one fixed signed upload. There is still no supported version, cross-platform result,
-scheduling, or released connector. A local Ingest kernel now verifies the bounded exact-body
-origin/device request, while the separate adapter maps origin replay, device lookup, and submission
-through fixed calls. PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A
-transport-free application now composes those exact local capabilities and validates only closed
+inaccessible launch/context/key capabilities only after exact artifact and active-record review,
+then performs one fixed signed upload. ADR 0038 adds a third fixed command that starts no Codex
+process and signs one exact enum-only CarRecipe for the dedicated Web/Auth proposal route. There is
+still no supported version, cross-platform sync result, scheduling, packaging, or released
+connector. A local Ingest kernel now verifies the bounded exact-body origin/device request, while
+the separate adapter maps origin replay, device lookup, and submission through fixed calls.
+PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
+application now composes those exact local capabilities and validates only closed
 acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
 evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. A
 separate local host now binds that exact composition under closed loopback or declared Railway-edge
@@ -531,17 +533,20 @@ cleanup, primary profile purge, refresh, or finalization—after a per-checkout 
 no scheduler, live login/certificate, application database integration, audited correction,
 tombstone/restore replay, freshness/streak projection, deployed route, or public cache exists.
 
-## Session-owned CarRecipe proposal and approval
+## CarRecipe proposal origins and browser approval
 
-The local account page is the only current proposal origin. It sends the nine exact `CarRecipeV1`
-fields; it sends no prompt, conversation, URL, file, arbitrary color, profile ID, or proposal ID.
-Web validates the generated contract, derives authority from a passkey-registered session, hashes
-and clears the verifier copy, and generates the proposal ID and at-most-24-hour expiry. Revision
-0025 derives the profile again from that exact proof and keeps at most one pending proposal.
+The local account page and the dedicated signed device route are the two current proposal origins.
+Both send the nine exact `CarRecipeV1` fields and no prompt, conversation, URL, file, arbitrary
+color, profile ID, source ID, or proposal ID. Browser authority comes from a passkey-registered
+session. Device authority comes only from an exact raw-body signature, fresh nonce/time, minimal
+active-device lookup, and an active source. Web generates the proposal ID and at-most-24-hour
+expiry. Revisions 0025 and 0028 derive the profile again from those separate proofs and keep the
+same at-most-one pending proposal.
 
 ```mermaid
 sequenceDiagram
   participant Browser
+  participant Connector
   participant Web as Web/Auth
   participant Validator as CarRecipeV1 validator
   participant DB as PostgreSQL API
@@ -551,6 +556,11 @@ sequenceDiagram
   Validator-->>Web: Frozen allowlisted recipe
   Web->>DB: propose(session proof, server proposal ID, recipe, expiry)
   DB-->>Web: Proposed or generic failure
+  Connector->>Web: POST exact recipe plus device signature
+  Web->>Validator: Validate exact body and signature
+  Web->>DB: propose(active device proof, nonce digest, server proposal ID, recipe)
+  DB-->>Web: Revalidated pending replacement or generic failure
+  Web-->>Connector: Generic accepted acknowledgement only
   Browser->>Web: GET account under same session
   Web->>DB: read state(session proof)
   DB-->>Web: Active plus at most one pending recipe
@@ -563,12 +573,14 @@ sequenceDiagram
 The encrypted decision control contains the proposal ID, session ID, and the lesser of the session
 or proposal expiry under the purpose-separated `car-proposal` key. The raw proposal and profile IDs
 do not enter HTML. Approval atomically inserts or replaces the active recipe and deletes the pending
-row; rejection deletes only the matching pending row. Device, Ingest, Jobs, Admin, direct-table,
-cross-profile, wrong-proof, and replay paths are denied. Profile deletion cascades both recipe rows.
+row; rejection deletes only the matching pending row. A device cannot read that state or invoke
+either decision. Ingest, Jobs, Admin, direct-table, cross-profile, wrong-proof, stale, inactive, and
+replay paths are denied. Profile deletion cascades both recipe rows.
 
-This flow does not yet accept an agent/connector proposal, project the active recipe publicly,
-physically clean an expired row on a schedule, or prove a live database login, edge control,
-monitoring, capacity, or deployment.
+This flow does not accept conversation text or provide conversational-agent orchestration. The
+active recipe is projected separately and locally; physical cleanup scheduling, live database login,
+distributed edge control, monitoring, capacity, released connector packaging, and deployment remain
+unproved.
 
 ## Public race read
 

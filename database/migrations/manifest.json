@@ -162,6 +162,12 @@
       "name": "community_public_race_read",
       "path": "database/migrations/0027_community_public_race_read.sql",
       "sha256": "b9ddb07d1d8641b6f79f4ed67482bebaa711c744927da2430e7434f593259b89"
+    },
+    {
+      "revision": 28,
+      "name": "connector_car_proposal_ingress",
+      "path": "database/migrations/0028_connector_car_proposal_ingress.sql",
+      "sha256": "f595b1097e0bf7ba584f12b1b5fd93529281ea8709c3a6e6174c1a11f0ef10b1"
     }
   ]
 }

@@ -1222,6 +1222,79 @@ describe("pairing database pool", () => {
     expect(releases).toEqual([false]);
   });
 
+  it("binds the exact device proposal SQL and wipes only the query-owned nonce digest", async () => {
+    const liveQueries: { text: string; values: unknown[] }[] = [];
+    const snapshots: { text: string; values: unknown[] }[] = [];
+    const driverClient = {
+      query(query: { text: string; values: unknown[] }): Promise<{ rows: unknown }> {
+        liveQueries.push(query);
+        snapshots.push({
+          text: query.text,
+          values: query.values.map((value) =>
+            Buffer.isBuffer(value) ? Buffer.from(value) : value,
+          ),
+        });
+        return Promise.resolve({ rows: [] });
+      },
+      release: vi.fn(),
+    };
+    const driverPool = {
+      connect: () => Promise.resolve(driverClient),
+      end: () => Promise.resolve(),
+      on() {
+        return this;
+      },
+    };
+    const pool = createPairingDatabasePool(config, undefined, () => driverPool);
+    const client = await pool.connect();
+    const nonceDigest = Buffer.alloc(32, 0x72);
+    const deviceId = "dev_AAAAAAAAAAAAAAAAAAAAAA";
+    const deviceKeyId = "00000000-0000-4000-8000-000000000801";
+
+    await client.readCarProposalDeviceMaterial(deviceId);
+    await client.proposeCarRecipeFromDevice({
+      deviceId,
+      deviceKeyId,
+      nonceDigest,
+      observedAt: "2026-07-17T12:34:56.789Z",
+      proposalId: "00000000-0000-4000-8000-000000000802",
+      recipe: {
+        schemaVersion: 1,
+        chassis: "formula",
+        nose: "wedge",
+        cockpit: "canopy",
+        wing: "high",
+        wheels: "slick",
+        palette: "turbo-blue",
+        trail: "spark",
+        seed: 4242,
+      },
+    });
+
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots[0]?.text).toContain("viberacing_api.read_car_proposal_device_material");
+    expect(snapshots[0]?.values).toEqual([deviceId]);
+    expect(snapshots[1]?.text).toContain("viberacing_api.propose_car_recipe_from_device");
+    expect(snapshots[1]?.values).toEqual([
+      deviceKeyId,
+      deviceId,
+      "2026-07-17T12:34:56.789Z",
+      Buffer.alloc(32, 0x72),
+      "00000000-0000-4000-8000-000000000802",
+      1,
+      "formula",
+      "wedge",
+      "canopy",
+      "high",
+      "slick",
+      "turbo-blue",
+      "spark",
+      4242,
+    ]);
+    expect(nonceDigest).toEqual(Buffer.alloc(32, 0x72));
+    expect(liveQueries[1]?.values[3]).toEqual(Buffer.alloc(32));
+  });
+
   it("contains synchronous and asynchronous monitoring failures", async () => {
     const listeners: ((error: Error) => void)[] = [];
     const driverPool = {

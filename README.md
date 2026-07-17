@@ -94,7 +94,7 @@ The governance documents and structured contribution forms are now present and p
 repository still has no GitHub remote, public maintainer registry, CODEOWNERS file, or verified
 private reporting channels; those hosted controls cannot be safely invented from local data.
 
-Phase 2/3/4 contract and persistence foundations are also present: eleven closed, bounded JSON
+Phase 2/3/4 contract and persistence foundations are also present: twelve closed, bounded JSON
 Schemas plus generated TypeScript validators and locally implemented OpenAPI GET and POST
 operations. They cover connector sync/result, problem details, a one-season Community score query, a
 response-only top-32 Community score page, and a separate compatible race page with an optional
@@ -210,42 +210,45 @@ existing-key assertion plus an independent registration ceremony, and atomically
 step-up while inserting the new credential under the 32-record lifetime cap. A local CarRecipe slice
 now validates one exact versioned enum-only recipe, stores at most one private 24-hour proposal per
 session-derived profile, previews it in all three themes, and requires an explicit encrypted
-session-bound approve or reject control. Approval atomically replaces the active recipe; device,
-cross-profile, and non-Web capabilities remain denied. A separate Jobs-only command now deletes
-bounded oldest-first batches of expired private proposals while preserving live and active recipes.
-A separate compatible public race contract now projects only the current approved recipe for an
-active profile; proposal identity, state, and timestamps stay private and the stable score response
-remains unchanged. Agent/connector ingress, cleanup scheduling, live credentials, and deployment
-remain pending. A database-only Community ingest capability now exposes minimal active-device
-verification material and accepts bounded source-bound snapshots with exact retry, nonce replay,
-monotonic source/date, quarantine, and lifecycle-race enforcement. A Jobs-only procedure deletes
-independently bounded batches of expired origin nonces, device nonces, and raw snapshots while
-preserving current source/day values. A separate Jobs-only procedure deletes bounded expired
-non-activated pairing transactions plus their still-pending keys, while preserving live and
-activated bindings. A third cleanup procedure independently deletes expired authentication
-challenges and restricted recovery authorities plus an exact still-present used code whose verifier
-was already scrubbed. It preserves live ceremonies, unused recovery codes, sessions, passkeys, and
-audit evidence, and serializes on profile locks against recovery transitions. The database does not
-verify a wire signature; the local kernel and adapter are composed locally and exercised together
-with a signed synthetic request. The opt-in loopback integration now carries an independently signed
-request through the emitted host and a disposable least-privileged PostgreSQL login, including
-duplicate, replay, revoke, response, and stored-state checks. Another Jobs-only procedure serializes
-an atomic refresh of one open ISO-week Community season: it sums distinct eligible sources before
-one profile daily cap, stores an immutable formula and season binding, shares rank on equal score
-and active days, and persists no raw token or source identifier in the score tables. Revision 0024
-adds a separate Jobs-only maximum-10 primary deletion procedure. It accepts only due queued/retry
-work linked to committed `deletion_pending` profiles, locks its fixed five-capability maintenance
-set in stable order, removes restrictive pairings and authority-free pending keys first, terminally
-settles the opaque job, and cascades identity, credentials, sources, devices, usage, and personal
-score rows atomically. It deliberately creates no unkeyed tombstone. Revision 0010 adds a public
-48-hour server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization
-procedure whose terminal metadata and score projection reject silent rewrites while profile purge
-can still remove personal rows. One local one-shot Jobs runner now wraps exactly one of seven fixed
-functions: authentication cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup,
-primary profile purge, refresh, or finalization. It uses a distinct least-privileged configuration
-namespace, one-client pool, per-checkout role/login/search-path probe, fixed deadlines and prepared
-parameters, closed result validation, destructive release after failure, and stable non-reflective
-CLI output. It has no scheduler, live login/certificate, monitoring backend, retry loop,
+session-bound approve or reject control. Approval atomically replaces the active recipe. A separate
+device-authenticated Web route and fixed `propose-car` command can only create or replace the same
+pending exact recipe for an active source-bound device; they cannot read, approve, reject, or
+activate it. Cross-profile and non-Web database capabilities remain denied. A separate Jobs-only
+command now deletes bounded oldest-first batches of expired private proposals while preserving live
+and active recipes. A separate compatible public race contract now projects only the current
+approved recipe for an active profile; proposal identity, state, and timestamps stay private and the
+stable score response remains unchanged. Conversational-agent ingress, cleanup scheduling, live
+credentials, released connector packaging, edge controls, and deployment remain pending. A
+database-only Community ingest capability now exposes minimal active-device verification material
+and accepts bounded source-bound snapshots with exact retry, nonce replay, monotonic source/date,
+quarantine, and lifecycle-race enforcement. A Jobs-only procedure deletes independently bounded
+batches of expired origin nonces, device nonces, and raw snapshots while preserving current
+source/day values. A separate Jobs-only procedure deletes bounded expired non-activated pairing
+transactions plus their still-pending keys, while preserving live and activated bindings. A third
+cleanup procedure independently deletes expired authentication challenges and restricted recovery
+authorities plus an exact still-present used code whose verifier was already scrubbed. It preserves
+live ceremonies, unused recovery codes, sessions, passkeys, and audit evidence, and serializes on
+profile locks against recovery transitions. The database does not verify a wire signature; the local
+kernel and adapter are composed locally and exercised together with a signed synthetic request. The
+opt-in loopback integration now carries an independently signed request through the emitted host and
+a disposable least-privileged PostgreSQL login, including duplicate, replay, revoke, response, and
+stored-state checks. Another Jobs-only procedure serializes an atomic refresh of one open ISO-week
+Community season: it sums distinct eligible sources before one profile daily cap, stores an
+immutable formula and season binding, shares rank on equal score and active days, and persists no
+raw token or source identifier in the score tables. Revision 0024 adds a separate Jobs-only
+maximum-10 primary deletion procedure. It accepts only due queued/retry work linked to committed
+`deletion_pending` profiles, locks its fixed five-capability maintenance set in stable order,
+removes restrictive pairings and authority-free pending keys first, terminally settles the opaque
+job, and cascades identity, credentials, sources, devices, usage, and personal score rows
+atomically. It deliberately creates no unkeyed tombstone. Revision 0010 adds a public 48-hour
+server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization procedure
+whose terminal metadata and score projection reject silent rewrites while profile purge can still
+remove personal rows. One local one-shot Jobs runner now wraps exactly one of seven fixed functions:
+authentication cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup, primary profile
+purge, refresh, or finalization. It uses a distinct least-privileged configuration namespace,
+one-client pool, per-checkout role/login/search-path probe, fixed deadlines and prepared parameters,
+closed result validation, destructive release after failure, and stable non-reflective CLI output.
+It has no scheduler, live login/certificate, monitoring backend, retry loop,
 application-to-PostgreSQL integration result, or deployment. Revision 0011 gives only the Web
 database role a bounded active-profile score projection containing no raw values, private
 identifiers, or exact timestamps. The score response component and Web PostgreSQL adapter preserve

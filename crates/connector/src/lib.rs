@@ -16,6 +16,7 @@ use std::fmt;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 
 mod admission;
+mod car_proposal;
 mod codex_0_144_5;
 mod connect;
 mod pairing;

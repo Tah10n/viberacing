@@ -25,7 +25,7 @@ describe("frontend lint policy", () => {
     expect(restrictions).toHaveLength(5);
   }, 30_000);
 
-  it("confines every Ed25519 access shape to the reviewed server module", async () => {
+  it("confines every Ed25519 access shape to reviewed server verifier modules", async () => {
     const eslint = new ESLint({ cwd: import.meta.dirname });
     const [result] = await eslint.lintText(
       [
@@ -41,7 +41,7 @@ describe("frontend lint policy", () => {
 
     const restrictedImports = result?.messages.filter(
       ({ message, ruleId }) =>
-        ruleId === "no-restricted-imports" && message.includes("Only pairing-possession-verifier"),
+        ruleId === "no-restricted-imports" && message.includes("reviewed server verifier modules"),
     );
     const restrictedSyntax = result?.messages.filter(
       ({ message, ruleId }) =>

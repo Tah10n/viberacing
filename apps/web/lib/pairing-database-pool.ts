@@ -507,6 +507,28 @@ const proposeCarRecipeQuery = `SELECT viberacing_api.propose_car_recipe(
   $13::timestamptz
 ) AS proposed`;
 
+const readCarProposalDeviceMaterialQuery = `SELECT
+  material.device_key_id::text AS device_key_id,
+  material.public_key
+FROM viberacing_api.read_car_proposal_device_material($1::text) AS material`;
+
+const proposeCarRecipeFromDeviceQuery = `SELECT viberacing_api.propose_car_recipe_from_device(
+  $1::uuid,
+  $2::text,
+  $3::timestamptz,
+  $4::bytea,
+  $5::uuid,
+  $6::integer,
+  $7::text,
+  $8::text,
+  $9::text,
+  $10::text,
+  $11::text,
+  $12::text,
+  $13::text,
+  $14::integer
+) AS proposed`;
+
 const readCarRecipeStateQuery = `SELECT
   state.active_schema_version,
   state.active_chassis,
@@ -990,6 +1012,15 @@ export interface EnrollmentDatabaseCarRecipeDecision extends EnrollmentDatabaseP
   readonly proposalId: string;
 }
 
+export interface ConnectorCarProposalDatabaseMutation {
+  readonly deviceId: string;
+  readonly deviceKeyId: string;
+  readonly nonceDigest: Uint8Array;
+  readonly observedAt: string;
+  readonly proposalId: string;
+  readonly recipe: CarRecipeV1;
+}
+
 export interface EnrollmentDatabaseProfileDeletionChallenge {
   readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
@@ -1190,6 +1221,13 @@ export interface EnrollmentDatabaseClient {
   verifyRuntimeBoundary(): Promise<unknown>;
 }
 
+export interface ConnectorCarProposalDatabaseClient {
+  proposeCarRecipeFromDevice(input: ConnectorCarProposalDatabaseMutation): Promise<unknown>;
+  readCarProposalDeviceMaterial(deviceId: string): Promise<unknown>;
+  release(destroy?: boolean): void;
+  verifyRuntimeBoundary(): Promise<unknown>;
+}
+
 export interface PairingDatabasePool {
   close(): Promise<void>;
   connect(): Promise<PairingDatabaseClient>;
@@ -1200,9 +1238,16 @@ export interface EnrollmentDatabasePool {
   connect(): Promise<EnrollmentDatabaseClient>;
 }
 
-export interface WebAuthDatabaseClient extends PairingDatabaseClient, EnrollmentDatabaseClient {}
+export interface ConnectorCarProposalDatabasePool {
+  close(): Promise<void>;
+  connect(): Promise<ConnectorCarProposalDatabaseClient>;
+}
 
-export interface WebAuthDatabasePool extends PairingDatabasePool, EnrollmentDatabasePool {
+export interface WebAuthDatabaseClient
+  extends PairingDatabaseClient, EnrollmentDatabaseClient, ConnectorCarProposalDatabaseClient {}
+
+export interface WebAuthDatabasePool
+  extends PairingDatabasePool, EnrollmentDatabasePool, ConnectorCarProposalDatabasePool {
   connect(): Promise<WebAuthDatabaseClient>;
 }
 
@@ -1865,6 +1910,31 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         sessionVerifierDigest.fill(0);
       }
     },
+    async proposeCarRecipeFromDevice(
+      input: ConnectorCarProposalDatabaseMutation,
+    ): Promise<unknown> {
+      const nonceDigest = Buffer.from(input.nonceDigest);
+      try {
+        return await fixedQuery(proposeCarRecipeFromDeviceQuery, [
+          input.deviceKeyId,
+          input.deviceId,
+          input.observedAt,
+          nonceDigest,
+          input.proposalId,
+          input.recipe.schemaVersion,
+          input.recipe.chassis,
+          input.recipe.nose,
+          input.recipe.cockpit,
+          input.recipe.wing,
+          input.recipe.wheels,
+          input.recipe.palette,
+          input.recipe.trail,
+          input.recipe.seed,
+        ]);
+      } finally {
+        nonceDigest.fill(0);
+      }
+    },
     async readActiveDeviceInventory(
       input: EnrollmentDatabaseSourceDeviceInventoryRequest,
     ): Promise<unknown> {
@@ -1897,6 +1967,9 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
       } finally {
         sessionVerifierDigest.fill(0);
       }
+    },
+    readCarProposalDeviceMaterial(deviceId: string): Promise<unknown> {
+      return fixedQuery(readCarProposalDeviceMaterialQuery, [deviceId]);
     },
     async readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);

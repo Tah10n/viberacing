@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "deviceId": "dev_CCCCCCCCCCCCCCCCCCCCCC",
+  "deviceNonceBytes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "deviceNonceBase64Url": "AAECAwQFBgcICQoLDA0ODw",
+  "deviceTimestamp": "2026-07-15T12:34:56.789Z",
+  "body": "{\"schemaVersion\":1,\"chassis\":\"formula\",\"nose\":\"wedge\",\"cockpit\":\"canopy\",\"wing\":\"high\",\"wheels\":\"slick\",\"palette\":\"turbo-blue\",\"trail\":\"spark\",\"seed\":4242}",
+  "bodyDigestBase64Url": "5PRFexYNZgkgSLiDnmAWyQMLeY66nF3LHfJhnTA76l8",
+  "deviceSignatureMessage": "viberacing-car-proposal-request-v1\nPOST\n/v1/connector/cars/proposals\n5PRFexYNZgkgSLiDnmAWyQMLeY66nF3LHfJhnTA76l8\ndev_CCCCCCCCCCCCCCCCCCCCCC\nAAECAwQFBgcICQoLDA0ODw\n2026-07-15T12:34:56.789Z",
+  "devicePublicKeyBase64Url": "9CmK9x_bL0OFX7PoJm34QnhUdpUWaiwEiDZ2lrUJaII",
+  "deviceSignatureBase64Url": "ldRrMZAiSSL7kp4pV15Vgwj8HS8NeIDjjD0Mz0utsHachWY5svcmmhewkrmO0nn1fwHExsOU17XoWyQu4UAEDQ"
+}

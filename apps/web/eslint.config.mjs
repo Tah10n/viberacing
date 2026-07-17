@@ -114,6 +114,7 @@ export default defineConfig([
       "lib/passkey-registration.ts",
       "lib/pairing-database-pool.ts",
       "lib/pairing-possession-verifier.ts",
+      "lib/connector-car-proposal-verifier.ts",
       "lib/public-score-database-pool.ts",
       "tests/**/*.ts",
     ],
@@ -124,7 +125,7 @@ export default defineConfig([
           paths: [
             {
               name: "@noble/ed25519",
-              message: "Only pairing-possession-verifier.ts may own Web Ed25519 verification.",
+              message: "Only reviewed server verifier modules may own Web Ed25519 verification.",
             },
             {
               name: "pg",
@@ -152,7 +153,7 @@ export default defineConfig([
           paths: [
             {
               name: "@noble/ed25519",
-              message: "Only pairing-possession-verifier.ts may own Web Ed25519 verification.",
+              message: "Only reviewed server verifier modules may own Web Ed25519 verification.",
             },
             {
               name: "pg",
@@ -168,7 +169,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["lib/pairing-possession-verifier.ts"],
+    files: ["lib/pairing-possession-verifier.ts", "lib/connector-car-proposal-verifier.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -192,7 +193,7 @@ export default defineConfig([
           paths: [
             {
               name: "@noble/ed25519",
-              message: "Only pairing-possession-verifier.ts may own Web Ed25519 verification.",
+              message: "Only reviewed server verifier modules may own Web Ed25519 verification.",
             },
           ],
         },

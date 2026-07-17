@@ -7,7 +7,8 @@ isolated pairing-possession signer, and an exact-body Community sync composer/re
 inaccessible reviewed capabilities. One runnable `connect` command completes the versioned pairing
 journey with native OS key custody. A second Windows x86_64 development command admits one exact
 Codex candidate, collects, signs, and uploads one bounded sync. It is not a supported, packaged, or
-released connector.
+released connector. A third fixed command signs one explicit enum-only CarRecipe proposal without
+starting Codex or receiving proposal decision authority.
 
 The implemented surface is deliberately narrow:
 
@@ -65,6 +66,16 @@ The implemented surface is deliberately narrow:
 - one fixed `/v1/community/sync` POST with proxies and redirects disabled, platform TLS, only the
   five device headers, an 8192-byte request, and a closed 1024-byte acknowledgement; and
 - no automatic retry after an ambiguous POST and only generic accepted, duplicate, or review output.
+- one exact `propose-car` command whose seven enum flags and canonical `0..65535` seed serialize to
+  `CarRecipeV1`, with no prompt, free text, profile/source/proposal ID, file, URL, or arbitrary
+  JSON;
+- fresh OS-random nonce and canonical millisecond UTC bound with the active device ID and exact
+  512-byte body digest under a proposal-specific Ed25519 domain separator;
+- one fixed `/v1/connector/cars/proposals` POST through the same proxy-free, redirect-free TLS
+  agent, no retry, a closed generic acknowledgement, and output containing no identifier or recipe
+  data; and
+- drop clearing for every owned proposal body, signature-message, raw-nonce, encoded-nonce, and
+  encoded-signature byte buffer.
 
 `ReviewedCodexLaunch`, `PendingDevicePairingSigningKey`, `ReviewedPairingChallenge`,
 `ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public constructors. The
@@ -82,13 +93,16 @@ The local command shapes are:
 ```text
 viberacing-connector connect --origin <https-origin> --label <device-label>
 viberacing-connector sync --origin <https-origin> --label <device-label> --codex <absolute-path>
+viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>
 ```
 
 Plain HTTP with `localhost`, `127.0.0.1`, or `::1` is accepted only for explicit local development.
 Running `connect` creates a real local keyring entry even when the server later fails; use one
 connect process at a time. `sync` is Windows x86_64 candidate development behavior: it reads the
 active native record, starts only the exact admitted artifact, and sends private daily usage once to
-the explicit origin. No checked-in default server, credential, code, or released binary exists.
+the explicit origin. `propose-car` uses the same active native record but starts no Codex process
+and can only create a private proposal for later browser review. No checked-in default server,
+credential, code, or released binary exists.
 
 Run the focused gate from the repository root:
 

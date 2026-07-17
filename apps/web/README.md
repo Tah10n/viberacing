@@ -96,6 +96,9 @@ deliberately non-working placeholders. See `.env.example` and the local-developm
 | `lib/public-origin.ts`                                                           | Strict parser for the canonical social-metadata origin                   | Server-only; hosted origins require HTTPS DNS and no extra URL parts               |
 | `lib/car-recipe.ts`                                                              | Versioned closed-enum renderer and code-native sprites                   | Client-safe type/render data only; no schema runtime or arbitrary content          |
 | `lib/car-proposal-service.ts`                                                    | Owns exact-session proposal/read/approve/reject composition              | Generated validation, hashed/cleared proof, server IDs, opaque decision control    |
+| `lib/connector-car-proposal-verifier.ts`                                         | Verifies one exact signed device proposal body                           | Strict Ed25519, freshness, dummy-key work, closed recipe, transient bytes          |
+| `lib/connector-car-proposal-database.ts`                                         | Maps proposal-only device authority to two fixed Web calls               | Per-checkout probe, active binding, copied/cleared key and nonce material          |
+| `lib/connector-car-proposal-http.ts`                                             | Owns the closed device proposal POST boundary                            | Exact path/body/headers, four-call no-queue admission, generic no-store result     |
 | `components/car-recipe-preview.tsx`                                              | Server-renders one exact recipe in all three themes                      | Semantic indexed pixels; no client script, inline user style, SVG, file, or URL    |
 | `components/pixel-race-canvas.tsx`                                               | Deterministic code-native renderer                                       | Draws fixed primitives only; semantic DOM description is mandatory                 |
 | `components/race-experience.tsx`                                                 | EN/RU race, selectable summary, theme, and motion controls               | Community summary uses closed public fields; storage is non-personal preferences   |
@@ -288,8 +291,11 @@ profile; the browser loads a compact independent exact-shape validator after hyd
 generic contract runtime stays outside the initial bundle. Proposal identity, state, and timestamps
 remain private, while absence uses the existing repository-owned car. A separate bounded Jobs-only
 capability can physically remove expired proposals locally. There is no cleanup schedule or deployed
-cadence, connector/agent proposal ingress, distributed edge policy, live credential, monitoring,
-capacity result, or deployment.
+cadence. A separate `POST /v1/connector/cars/proposals` boundary verifies a proposal-specific exact
+raw-body signature from an active source-bound device and can only replace the same pending recipe;
+it exposes no proposal state or approve/reject/activate capability. Conversational-agent
+orchestration, distributed edge policy, live credential, monitoring, capacity result, released
+connector, and deployment remain absent.
 
 This is not a launch-ready authentication system. There is no invite-issuance UI, passkey profile
 mutation beyond the listed controls, aggregate/distributed edge rate policy, cleanup or notification
