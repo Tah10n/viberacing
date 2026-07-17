@@ -1,8 +1,8 @@
-export * from "./generated";
+export * from "./generated.js";
 export type {
   ContractSchema,
   ValidationIssue,
   ValidationIssueCode,
   ValidationLimits,
   ValidationResult,
-} from "./runtime";
+} from "./runtime.js";

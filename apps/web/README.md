@@ -94,7 +94,9 @@ deliberately non-working placeholders. See `.env.example` and the local-developm
 | `lib/scoring.ts`                                                                 | Bounded daily/weekly score and deterministic rank calculation            | Treat all future device input as untrusted and validate before calling             |
 | `lib/race-types.ts`                                                              | Client-safe participant and demo-profile shape                           | Must not gain raw tokens or source/account identifiers                             |
 | `lib/public-origin.ts`                                                           | Strict parser for the canonical social-metadata origin                   | Server-only; hosted origins require HTTPS DNS and no extra URL parts               |
-| `lib/car-recipe.ts`                                                              | Closed-enum car customization and fixed sprites                          | No arbitrary colors, markup, text, files, SVG, or URLs                             |
+| `lib/car-recipe.ts`                                                              | Versioned closed-enum renderer and code-native sprites                   | Client-safe type/render data only; no schema runtime or arbitrary content          |
+| `lib/car-proposal-service.ts`                                                    | Owns exact-session proposal/read/approve/reject composition              | Generated validation, hashed/cleared proof, server IDs, opaque decision control    |
+| `components/car-recipe-preview.tsx`                                              | Server-renders one exact recipe in all three themes                      | Semantic indexed pixels; no client script, inline user style, SVG, file, or URL    |
 | `components/pixel-race-canvas.tsx`                                               | Deterministic code-native renderer                                       | Draws fixed primitives only; semantic DOM description is mandatory                 |
 | `components/race-experience.tsx`                                                 | EN/RU race, selectable summary, theme, and motion controls               | Community summary uses closed public fields; storage is non-personal preferences   |
 | `proxy.ts`                                                                       | Per-response nonce CSP                                                   | Keep production CSP fail-closed and free of remote origins                         |
@@ -261,13 +263,32 @@ then reaches one statement that consumes the challenge and calls the existing at
 capability: it hides the profile, revokes browser/passkey/device/recovery authority, unlinks
 sources, cancels approved pairing, and queues one opaque deletion job. Only success clears every
 local auth cookie and redirects home. This local slice does not execute the queued primary-data
-purge, clear a future public cache, or prove backup restore replay.
+purge itself; revision 0024 and the separate local Jobs command now do so in bounded transactions.
+The Web slice still does not schedule that command, clear a future public cache, or prove keyed
+tombstone, backup, or restore replay.
+
+The account CarRecipe editor is a separate local session-owned boundary. It submits exactly version
+1 plus seven closed enums and a 0-to-65535 seed to `POST /auth/cars/proposals` under a 512-byte
+same-origin form limit. `car-proposal-service.ts` revalidates the generated `CarRecipeV1`, hashes
+and clears the exact session verifier, creates the proposal ID and maximum-24-hour expiry
+server-side, and invokes only the four fixed revision 0025 calls. The account read returns an active
+recipe and at most one pending recipe; it seals the pending ID, current session ID, and bounded
+expiry in a purpose-separated encrypted control rather than putting the raw proposal ID in HTML.
+Explicit approve/reject forms consume that control. PostgreSQL atomically activates and removes the
+exact proposal or removes only the rejected proposal.
+
+Both active and pending recipes are server-rendered as semantic code-native indexed pixels in Neon
+Night, Classic Grand Prix, and Cyber Rally. The public animated race uses the same deterministic
+recipe rules, while the contract validator stays server-side and outside the initial browser bundle.
+A separate bounded Jobs-only capability can physically remove expired proposals locally. There is no
+cleanup schedule or deployed cadence, connector/agent proposal ingress, public active-recipe
+projection, distributed edge policy, live credential, monitoring, capacity result, or deployment.
 
 This is not a launch-ready authentication system. There is no invite-issuance UI, passkey profile
 mutation beyond the listed controls, aggregate/distributed edge rate policy, cleanup or notification
-for abandoned recovery/enrollment state, deletion purge worker, live OAuth, authenticator, or
-database-login evidence, monitoring, or deployment. The tracked environment values are non-working
-placeholders.
+for abandoned recovery/enrollment state, scheduled deletion execution, cache/backup/tombstone purge,
+restore replay, live OAuth, authenticator, or database-login evidence, monitoring, or deployment.
+The tracked environment values are non-working placeholders.
 
 ## Pairing browser approval
 

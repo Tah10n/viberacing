@@ -41,11 +41,17 @@ function outputDependencies(
 
 describe("Jobs command", () => {
   it.each([
+    [["cleanup-expired-auth-state"], { batchSize: 1_000, kind: "cleanup_expired_auth_state" }],
+    [
+      ["cleanup-expired-car-recipe-proposals"],
+      { batchSize: 1_000, kind: "cleanup_expired_car_recipe_proposals" },
+    ],
     [["cleanup-expired-ingest-state"], { batchSize: 1_000, kind: "cleanup_expired_ingest_state" }],
     [
       ["cleanup-expired-pairing-state"],
       { batchSize: 1_000, kind: "cleanup_expired_pairing_state" },
     ],
+    [["purge-profile-deletions"], { batchSize: 10, kind: "purge_profile_deletions" }],
     [
       ["refresh-community-season", "2026-07-13"],
       { kind: "refresh_community_season", seasonStart: "2026-07-13" },
@@ -64,8 +70,11 @@ describe("Jobs command", () => {
     null,
     {},
     [],
+    ["cleanup-expired-auth-state", "unexpected"],
+    ["cleanup-expired-car-recipe-proposals", "unexpected"],
     ["cleanup-expired-ingest-state", "unexpected"],
     ["cleanup-expired-pairing-state", "unexpected"],
+    ["purge-profile-deletions", "unexpected"],
     ["refresh-community-season", "2026-07-13", "unexpected"],
     ["refresh-community-season"],
     ["refresh-community-season", "2026-07-14"],

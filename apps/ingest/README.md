@@ -10,7 +10,9 @@ procedures. A transport-free application boundary composes those exact capabilit
 server-owned request ID before verification, waits for submission settlement, and returns only a
 validated `ConnectorSyncResultV1` or generic `ProblemDetailsV1` decision. A separate Fastify server
 factory now exposes that application through one bounded local HTTP operation without adding a
-deployment entry point.
+deployment entry point to this workspace. The separate `apps/ingest-host` workspace now consumes
+only those reviewed factories for closed listener configuration, one bind call, and bounded process
+shutdown.
 
 The language-neutral wire policy is
 [`contracts/v1/connector-sync-authentication.json`](../../contracts/v1/connector-sync-authentication.json).
@@ -22,8 +24,8 @@ The config-backed verifier factory requires an exact primary origin key ID and c
 base64url key through namespaced process configuration. It accepts a secondary ID/key only as one
 complete, distinct rotation pair. It returns only the verifier, clears its temporary decoded key
 buffers after the verifier copies them, and reports only generic bounded startup errors. The
-repository provides no actual key, checked-in environment example, secret-manager binding, or edge
-signer.
+repository provides no actual key, usable checked-in environment value, secret-manager binding, or
+edge signer.
 
 The verifier returns only a frozen, allowlisted submission record. The adapter strictly reconstructs
 the origin key ID, domain-separated nonce digest, and millisecond expiry, accepts only one boolean
@@ -57,15 +59,21 @@ The canonical manifest and generated OpenAPI describe this implemented-local POS
 public score GET. They bind the exact request/result/problem schemas, problem matrix, no-queue
 policy, and `connector-sync-authentication.json`; documentation does not imply deployment.
 
-The current tests use synthetic keys and mock pools; one signed request exercises the actual
+The focused tests use synthetic keys and mock pools; one signed request exercises the actual
 verifier and database adapter together, while the isolated PostgreSQL suite separately proves
 persistent atomic consume and cleanup races. Loopback socket tests prove malformed framing,
 duplicate-header evidence, and partial-request closure; injection tests prove the remaining route,
-overload, timeout policy, and serialization behavior. The 425-test Ingest suite has 100% statement,
-branch, function, and line coverage. There is still no live protected key injection, edge signer,
-direct-origin denial, trusted deployment route, host/port/TLS entry point, monitoring backend,
-working database login/certificate, live PostgreSQL connection, connector, load/capacity evidence,
-or deployment. It therefore does not prove real-user synchronization or production capacity.
+overload, timeout policy, and serialization behavior. The current 426-test Ingest suite has 100%
+statement, branch, function, and line coverage. This workspace still owns no listener or process
+lifecycle; the separate host's 121 local tests prove only its closed configuration, composition,
+bind, and shutdown behavior. A separate opt-in root integration builds the emitted host, creates a
+synthetic dedicated Ingest login in disposable PostgreSQL, sends independently composed signed
+loopback requests, and proves accepted, duplicate, persistent replay denial, revoked-device denial,
+closed response headers, four unique server request IDs, and exact stored state. There is still no
+deployment protected-key injection, edge signer, direct-origin denial, trusted external TLS route,
+monitoring backend, deployment database login/certificate, connector, load/capacity evidence, or
+deployment. These boundaries therefore do not prove real-user synchronization or production
+capacity.
 
 Run from the repository root:
 
@@ -74,4 +82,8 @@ pnpm run lint:ingest
 pnpm run typecheck:ingest
 pnpm run test:ingest:coverage
 pnpm run build:ingest
+pnpm run test:ingest:postgres-integration
 ```
+
+See [`apps/ingest-host/README.md`](../ingest-host/README.md) for the separate listener and process
+boundary.

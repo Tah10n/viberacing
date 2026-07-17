@@ -23,6 +23,17 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_JOBS_DATABASE_PORT", "54329"],
   ["VIBERACING_JOBS_DATABASE_TLS_MODE", "disable"],
   ["VIBERACING_JOBS_DATABASE_USER", "replace_with_local_jobs_login"],
+  ["VIBERACING_INGEST_DATABASE_HOST", "127.0.0.1"],
+  ["VIBERACING_INGEST_DATABASE_NAME", "viberacing_local"],
+  ["VIBERACING_INGEST_DATABASE_PASSWORD", "replace-with-local-ingest-password"],
+  ["VIBERACING_INGEST_DATABASE_PORT", "54329"],
+  ["VIBERACING_INGEST_DATABASE_TLS_MODE", "disable"],
+  ["VIBERACING_INGEST_DATABASE_USER", "replace_with_local_ingest_login"],
+  ["VIBERACING_INGEST_LISTENER_HOST", "127.0.0.1"],
+  ["VIBERACING_INGEST_LISTENER_PORT", "8788"],
+  ["VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL", "replace-with-random-32-byte-base64url-key"],
+  ["VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID", "edge_local"],
+  ["VIBERACING_INGEST_TLS_TERMINATION", "loopback-cleartext"],
   ["VIBERACING_WEB_DATABASE_HOST", "127.0.0.1"],
   ["VIBERACING_WEB_DATABASE_NAME", "viberacing_local"],
   ["VIBERACING_WEB_DATABASE_PASSWORD", "replace-with-local-web-password"],
@@ -186,19 +197,20 @@ export function validateWorkflow(path, workflow) {
       "rustup toolchain install 1.94.0 --profile minimal",
       "cargo fetch --locked",
       "pnpm run verify:node",
+      "pnpm run test:ingest:postgres-integration",
     ];
     const positions = requiredRuns.map((command) =>
       nodeSteps.findIndex((step) => isObject(step) && step.run === command),
     );
     if (positions.some((position) => position === -1)) {
       findings.push(
-        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, and run verify:node using exact commands",
+        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run verify:node, and run the Ingest PostgreSQL integration using exact commands",
       );
     } else if (
       !positions.every((position, index) => index === 0 || position > positions[index - 1])
     ) {
       findings.push(
-        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, and offline repository verification",
+        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, and the Ingest PostgreSQL integration",
       );
     }
   }
@@ -601,8 +613,17 @@ export function validateEnvExampleText(text) {
   if (values.get("VIBERACING_JOBS_DATABASE_USER") === values.get("DATABASE_USER")) {
     findings.push("Jobs database example credentials must not reuse the bootstrap owner");
   }
+  if (values.get("VIBERACING_INGEST_DATABASE_USER") === values.get("DATABASE_USER")) {
+    findings.push("Ingest database example credentials must not reuse the bootstrap owner");
+  }
   if (values.get("VIBERACING_JOBS_DATABASE_USER") === values.get("VIBERACING_WEB_DATABASE_USER")) {
     findings.push("Jobs and Web database examples must use distinct login principals");
+  }
+  if (
+    values.get("VIBERACING_INGEST_DATABASE_USER") === values.get("VIBERACING_WEB_DATABASE_USER") ||
+    values.get("VIBERACING_INGEST_DATABASE_USER") === values.get("VIBERACING_JOBS_DATABASE_USER")
+  ) {
+    findings.push("Ingest, Jobs, and Web database examples must use distinct login principals");
   }
   return findings;
 }

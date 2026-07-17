@@ -13,8 +13,17 @@ const runtimeBoundaryColumns = ["role_ok", "login_scope_ok", "search_path_ok"] a
 const runtimeBoundaryColumnSet = new Set<string>(runtimeBoundaryColumns);
 
 export const maximumCleanupBatchSize = 1_000;
+export const maximumProfileDeletionPurgeBatchSize = 10;
 
 export type CommunityMaintenanceJob =
+  | Readonly<{
+      batchSize: number;
+      kind: "cleanup_expired_auth_state";
+    }>
+  | Readonly<{
+      batchSize: number;
+      kind: "cleanup_expired_car_recipe_proposals";
+    }>
   | Readonly<{
       batchSize: number;
       kind: "cleanup_expired_ingest_state";
@@ -22,6 +31,10 @@ export type CommunityMaintenanceJob =
   | Readonly<{
       batchSize: number;
       kind: "cleanup_expired_pairing_state";
+    }>
+  | Readonly<{
+      batchSize: number;
+      kind: "purge_profile_deletions";
     }>
   | Readonly<{
       kind: "finalize_community_season";
@@ -34,6 +47,16 @@ export type CommunityMaintenanceJob =
 
 export type CommunityMaintenanceResult =
   | Readonly<{
+      deletedChallenges: number;
+      deletedRecoveryAuthorities: number;
+      deletedUsedRecoveryCodes: number;
+      kind: "cleanup_expired_auth_state";
+    }>
+  | Readonly<{
+      deletedProposals: number;
+      kind: "cleanup_expired_car_recipe_proposals";
+    }>
+  | Readonly<{
       deletedNonces: number;
       deletedOriginNonces: number;
       deletedSnapshots: number;
@@ -43,6 +66,10 @@ export type CommunityMaintenanceResult =
       deletedPairings: number;
       deletedPendingKeys: number;
       kind: "cleanup_expired_pairing_state";
+    }>
+  | Readonly<{
+      kind: "purge_profile_deletions";
+      purgedProfiles: number;
     }>
   | Readonly<{
       kind: "finalize_community_season";
@@ -131,7 +158,27 @@ function readJob(value: unknown): CommunityMaintenanceJob {
       fail("job_invalid");
     }
     const kind = ownDataValue(value, "kind");
-    if (kind === "cleanup_expired_ingest_state" || kind === "cleanup_expired_pairing_state") {
+    if (kind === "purge_profile_deletions") {
+      if (!hasExactKeys(value, new Set(["batchSize", "kind"]))) {
+        fail("job_invalid");
+      }
+      const batchSize = ownDataValue(value, "batchSize");
+      if (
+        typeof batchSize !== "number" ||
+        !Number.isSafeInteger(batchSize) ||
+        batchSize < 1 ||
+        batchSize > maximumProfileDeletionPurgeBatchSize
+      ) {
+        fail("job_invalid");
+      }
+      return Object.freeze({ batchSize, kind });
+    }
+    if (
+      kind === "cleanup_expired_auth_state" ||
+      kind === "cleanup_expired_car_recipe_proposals" ||
+      kind === "cleanup_expired_ingest_state" ||
+      kind === "cleanup_expired_pairing_state"
+    ) {
       if (!hasExactKeys(value, new Set(["batchSize", "kind"]))) {
         fail("job_invalid");
       }
@@ -207,6 +254,41 @@ function readCount(row: object, key: string, maximum: number): number {
 }
 
 function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaintenanceResult {
+  if (job.kind === "cleanup_expired_auth_state") {
+    const row = readSingleRow(
+      value,
+      new Set([
+        "deleted_challenges",
+        "deleted_recovery_authorities",
+        "deleted_used_recovery_codes",
+      ]),
+    );
+    const deletedChallenges = readCount(row, "deleted_challenges", job.batchSize);
+    const deletedRecoveryAuthorities = readCount(
+      row,
+      "deleted_recovery_authorities",
+      job.batchSize,
+    );
+    const deletedUsedRecoveryCodes = readCount(row, "deleted_used_recovery_codes", job.batchSize);
+    if (deletedUsedRecoveryCodes > deletedRecoveryAuthorities) {
+      fail("result_invalid");
+    }
+    return Object.freeze({
+      deletedChallenges,
+      deletedRecoveryAuthorities,
+      deletedUsedRecoveryCodes,
+      kind: job.kind,
+    });
+  }
+
+  if (job.kind === "cleanup_expired_car_recipe_proposals") {
+    const row = readSingleRow(value, new Set(["deleted_proposals"]));
+    return Object.freeze({
+      deletedProposals: readCount(row, "deleted_proposals", job.batchSize),
+      kind: job.kind,
+    });
+  }
+
   if (job.kind === "cleanup_expired_ingest_state") {
     const row = readSingleRow(
       value,
@@ -231,6 +313,14 @@ function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaint
       deletedPairings,
       deletedPendingKeys,
       kind: job.kind,
+    });
+  }
+
+  if (job.kind === "purge_profile_deletions") {
+    const row = readSingleRow(value, new Set(["purged_profiles"]));
+    return Object.freeze({
+      kind: job.kind,
+      purgedProfiles: readCount(row, "purged_profiles", job.batchSize),
     });
   }
 
@@ -262,11 +352,20 @@ function executeCapability(
   client: JobsDatabaseClient,
   job: CommunityMaintenanceJob,
 ): Promise<unknown> {
+  if (job.kind === "cleanup_expired_auth_state") {
+    return client.cleanupExpiredAuthState(job.batchSize);
+  }
+  if (job.kind === "cleanup_expired_car_recipe_proposals") {
+    return client.cleanupExpiredCarRecipeProposals(job.batchSize);
+  }
   if (job.kind === "cleanup_expired_ingest_state") {
     return client.cleanupExpiredIngestState(job.batchSize);
   }
   if (job.kind === "cleanup_expired_pairing_state") {
     return client.cleanupExpiredPairingState(job.batchSize);
+  }
+  if (job.kind === "purge_profile_deletions") {
+    return client.purgeProfileDeletions(job.batchSize);
   }
   if (job.kind === "refresh_community_season") {
     return client.refreshCommunitySeason(job.seasonStart);

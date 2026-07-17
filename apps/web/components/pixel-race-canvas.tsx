@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { buildCarSprite, carPalette, type SpritePixel } from "@/lib/car-recipe";
+import { buildCarSprite, buildCarTrail, carPalette, type SpritePixel } from "@/lib/car-recipe";
 import type { PublicRaceParticipant } from "@/lib/race-types";
 import { scoreProgress } from "@/lib/scoring";
 import { canvasThemes, type RaceThemeId } from "@/lib/theme";
@@ -82,8 +82,18 @@ function drawCar(
   y: number,
 ): void {
   const sprite = buildCarSprite(participant.car);
+  const trail = buildCarTrail(participant.car);
   const palette = carPalette(participant.car, theme);
   const pixelSize = 2;
+  context.fillStyle = palette.accent;
+  for (const pixel of trail) {
+    context.fillRect(
+      Math.round(x) + pixel.x * pixelSize,
+      Math.round(y) + pixel.y * pixelSize,
+      pixelSize,
+      pixelSize,
+    );
+  }
   for (const [rowIndex, row] of sprite.entries()) {
     for (const [columnIndex, pixel] of row.entries()) {
       const color = pixelColor(pixel, palette);

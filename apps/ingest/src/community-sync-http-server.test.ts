@@ -706,14 +706,20 @@ describe("Community sync raw listener behavior", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("preserves duplicate raw header evidence on an actual loopback socket", async () => {
+  it("replies after a normal stream close and contains a later client disconnect", async () => {
     let captured: unknown;
-    const server = buildServer(
-      application((request) => {
-        captured = request;
-        return Promise.resolve(successDecision());
-      }),
-    );
+    let deferResponse = false;
+    let resolveDeferred: ((decision: unknown) => void) | undefined;
+    const execute = vi.fn((request: unknown) => {
+      captured = request;
+      if (deferResponse) {
+        return new Promise<unknown>((resolve) => {
+          resolveDeferred = resolve;
+        });
+      }
+      return Promise.resolve(successDecision());
+    });
+    const server = buildServer(application(execute));
     const port = await listenOnLoopback(server);
     const body = "{}";
     const response = await exchangeRaw(
@@ -735,12 +741,57 @@ describe("Community sync raw listener behavior", () => {
     );
 
     expect(response).toContain("HTTP/1.1 200 OK");
+    expect(response).toContain("content-type: application/json; charset=utf-8");
+    expect(response).toContain('"outcome":"accepted"');
+    expect(response).toContain("x-request-id: req_AAAAAAAAAAAAAAAAAAAAAA");
     expect(rawHeaderValues(captured, "x-viberacing-origin-proof")).toEqual([
       "first-proof",
       "second-proof",
     ]);
     expect(rawHeaderValues(captured, "x-forwarded-for")).toEqual(["198.51.100.7"]);
     expect(response).not.toContain("req_ZZZZZZZZZZZZZZZZZZZZZZ");
+
+    deferResponse = true;
+    const disconnectedSocket = createConnection({ host: "127.0.0.1", port });
+    const disconnected = new Promise<void>((resolve) => {
+      disconnectedSocket.once("close", () => {
+        resolve();
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      disconnectedSocket.once("error", reject);
+      disconnectedSocket.once("connect", () => {
+        disconnectedSocket.write(
+          [
+            `POST ${communitySyncRequestTarget} HTTP/1.1`,
+            "Host: viberacing.invalid",
+            "Accept: application/json",
+            "Content-Type: application/json",
+            `Content-Length: ${String(Buffer.byteLength(body))}`,
+            "",
+            body,
+          ].join("\r\n"),
+          (error) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve();
+            }
+          },
+        );
+      });
+    });
+    await vi.waitFor(() => {
+      expect(execute).toHaveBeenCalledTimes(2);
+      expect(resolveDeferred).toBeTypeOf("function");
+    });
+    disconnectedSocket.destroy();
+    await disconnected;
+    resolveDeferred?.(successDecision());
+    deferResponse = false;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    await expect(server.inject(postOptions())).resolves.toMatchObject({ statusCode: 200 });
   });
 
   it("replaces malformed HTTP framing with a generic client error", async () => {

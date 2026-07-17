@@ -173,7 +173,8 @@ flowchart LR
   creation; a code alone never creates a session. The deletion control accepts the exact typed
   handle before a fresh assertion bound to session/profile/handle/RP/origin, then atomically
   consumes that challenge while immediately hiding the profile, revoking authority, unlinking
-  sources, and queueing one opaque purge job. The purge worker, cache invalidation, and restore
+  sources, and queueing one opaque purge job. A separate local Jobs command now performs bounded
+  atomic primary purge; scheduling, cache invalidation, tombstone policy, backup expiry, and restore
   replay remain separate gates. A transport-free pairing start boundary now owns fresh server
   IDs/token/challenge/code, separate protected poll/code verifiers, closed device metadata,
   nine-minute expiry, and one fixed call through a separate probed read-write pool wrapper. A second
@@ -182,8 +183,8 @@ flowchart LR
   step: exact-session code lookup with a database-backed attempt window, bounded device/fingerprint
   review, explicit new-source or active existing-source selection through an encrypted session-bound
   control, and fresh-passkey atomic approval. Distributed recovery/anonymous edge attempt policy,
-  abandoned-state cleanup and notification, live provider/database credentials, and deployment
-  remain separate gates.
+  expired-state cleanup scheduling and notification, live provider/database credentials, and
+  deployment remain separate gates.
 - Authenticated score view: the account server render reuses the exact possessed session and one
   combined Web/Auth pool checkout to read visibility plus the current Monday's existing seven
   derived daily scores and bounded summary. Hidden profiles return no score; raw usage, private
@@ -195,14 +196,20 @@ flowchart LR
   exact capabilities, generates one server request ID, waits for database settlement, and validates
   a closed acknowledgement or generic problem decision. A separate bounded Fastify factory now
   preserves exact raw HTTP evidence, enforces local parser/header/connection/deadline and four-call
-  no-queue policies, rejects proxy/request-ID trust, and serializes only revalidated contracts. The
-  host/port/TLS entry point, secret-manager/edge key injection, direct-origin denial, distributed
-  rate/backpressure controls, live login/certificate, capacity evidence, end-to-end integration, and
-  deployment remain separate gates.
+  no-queue policies, rejects proxy/request-ID trust, and serializes only revalidated contracts. A
+  separate local host now admits exact loopback cleartext or explicit `0.0.0.0:$PORT` production
+  behind a declared Railway-edge TLS boundary, composes only those reviewed factories, and bounds
+  partial-startup cleanup plus SIGINT/SIGTERM shutdown. One opt-in synthetic integration now builds
+  that emitted host, provisions only a disposable least-privileged Ingest login, sends independently
+  signed loopback requests, and proves accepted/duplicate/replay/revoke plus exact PostgreSQL state.
+  Trusted external TLS and edge routing, secret-manager/edge key injection, direct-origin denial,
+  distributed rate/backpressure controls, deployment login/certificate, capacity evidence, real-user
+  end-to-end integration, and deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
-  The first local runner now wraps only the reviewed ingest cleanup, pairing cleanup, Community
-  refresh, and finalization procedures; scheduling, deletion purge, monitoring, live credentials,
-  and deployment remain separate gates.
+  The local runner now wraps only the reviewed authentication/ingest/pairing cleanup, primary
+  profile purge, Community refresh, and finalization procedures; scheduling, monitoring, live
+  credentials, capacity, cache/backup/tombstone purge, restore replay, and deployment remain
+  separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.
@@ -397,9 +404,9 @@ event.
   then creates a passkey-bound session. Activated source-bound devices remain visible and explicitly
   revocable because they have no profile-admin scope.
 - Recovery lookup and verification require generic responses and timing, body/attempt bounds,
-  edge/service rate controls, protected deployment pepper, cleanup, and monitoring. Recovery
-  completion fails closed at the 32-lifetime-passkey provenance ceiling until bounded cleanup is
-  implemented.
+  edge/service rate controls, protected deployment pepper, scheduled cleanup, and monitoring.
+  Recovery completion fails closed at the 32-lifetime-passkey provenance ceiling until bounded
+  cleanup is implemented.
 
 ### Device authorization
 
@@ -495,8 +502,8 @@ Community handle now updates one same-page summary with only its weekly score, r
 source counts; the UI explicitly keeps daily detail, device counts, exact usage, and identifiers out
 of that surface. The exact public handle can be shared as `/?profile=handle#profile`; invalid or
 duplicate values are ignored, and a missing top-32 row is never substituted with another profile.
-CarRecipe, streak, freshness, authenticated daily/profile detail, cache, live database integration,
-and deployment remain separate gates.
+Public active-CarRecipe projection, streak, freshness, authenticated daily/profile detail, cache,
+live database integration, and deployment remain separate gates.
 
 ### ConnectorSyncV1
 
@@ -526,9 +533,14 @@ adapter mapping. ADR 0019 composes one configured database boundary with that ve
 server-owned request ID, waits for submission, and validates only the closed result/problem
 contracts. ADR 0020 adds the local exact Fastify POST boundary with copied raw bytes/headers,
 no-queue admission, fixed connection and deadline budgets, no proxy/request-ID trust, and closed
-contract serialization. It is not a host/port/TLS deployment entry point, live secret-manager/edge
-integration, working database login/TLS connection, connector, edge path, capacity result, or
-deployment.
+contract serialization. ADR 0033 adds a separate local executable host with exact loopback and
+Railway production declarations, buildable runtime package exports, one bind call, complete partial-
+startup cleanup, and a 36-second process shutdown deadline. That host is not live
+secret-manager/edge integration, a verified external TLS route, a deployment database login/TLS
+connection, direct-origin denial, a connector, capacity evidence, or deployment. A separate opt-in
+gate carries independently signed requests through the emitted loopback host and a synthetic
+dedicated login in disposable PostgreSQL, checking accepted, duplicate, replay, revoke, response,
+and exact persistence behavior. This local evidence does not satisfy any deployment gate above.
 
 ### Storage
 
@@ -632,8 +644,16 @@ silently resurrect a deleted profile; deletion markers are replayed after recove
 
 Expired pairing transactions and their authority-free pending keys now have a separate bounded
 Jobs-only deletion capability and local one-shot command. This is isolated SQL/application evidence,
-not a production retention schedule; all other expiry classes still require their own reviewed
-cleanup and public policy.
+not a production retention schedule. Expired authentication challenges and restricted recovery
+authorities now have a second bounded Jobs-only deletion capability; it also removes only an exact
+still-present used code whose verifier was already scrubbed and follows the recovery profile lock
+order. Revision 0024 adds a maximum-10 Jobs-only primary-profile purge: it serializes against every
+current maintenance capability, accepts only due queued/retry work for committed `deletion_pending`
+profiles, removes restrictive pairing references first, terminally settles the opaque job, and
+cascades primary identity/credential/source/device/usage/personal-score data in one transaction. It
+retains only the opaque terminal job and redacted audit reference. Remaining expiry classes, keyed
+tombstone policy, cache/backup purge, and restore replay still require their own reviewed
+implementation and public policy, and no implemented cleanup has a scheduler or deployed cadence.
 
 ## Administration and operations
 
@@ -926,6 +946,11 @@ measurements exist.
 
 ### Phase 4 — Agent car proposal
 
+- The canonical version 1 schema, deterministic renderer, asset record, exact-session PostgreSQL
+  proposal/approval state, and signed-in three-theme account preview are implemented locally. The
+  actual agent/connector ingress, public active-recipe projection, cleanup scheduling and deployed
+  retention evidence, edge policy, live database result, monitoring, capacity evidence, packaging,
+  and deployment remain gates.
 - Add versioned CarRecipe, bounded proposal API, browser preview and approval, theme rendering,
   asset provenance, and snapshot tests.
 - Package the fixed-command end-user connector workflow only after the CLI is stable.

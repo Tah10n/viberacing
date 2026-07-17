@@ -4,6 +4,8 @@ import { Buffer } from "node:buffer";
 
 import { Pool } from "pg";
 
+import type { CarRecipeV1 } from "@viberacing/contracts";
+
 import type { PairingDatabaseConfig } from "./pairing-database-config";
 
 const runtimeBoundaryQuery = `SELECT
@@ -489,6 +491,63 @@ const setProfileVisibilityQuery = `SELECT viberacing_api.set_profile_visibility(
   $3::boolean
 ) AS visibility`;
 
+const proposeCarRecipeQuery = `SELECT viberacing_api.propose_car_recipe(
+  $1::uuid,
+  $2::bytea,
+  $3::uuid,
+  $4::integer,
+  $5::text,
+  $6::text,
+  $7::text,
+  $8::text,
+  $9::text,
+  $10::text,
+  $11::text,
+  $12::integer,
+  $13::timestamptz
+) AS proposed`;
+
+const readCarRecipeStateQuery = `SELECT
+  state.active_schema_version,
+  state.active_chassis,
+  state.active_nose,
+  state.active_cockpit,
+  state.active_wing,
+  state.active_wheels,
+  state.active_palette,
+  state.active_trail,
+  state.active_seed,
+  state.proposal_id::text AS proposal_id,
+  state.proposal_schema_version,
+  state.proposal_chassis,
+  state.proposal_nose,
+  state.proposal_cockpit,
+  state.proposal_wing,
+  state.proposal_wheels,
+  state.proposal_palette,
+  state.proposal_trail,
+  state.proposal_seed,
+  CASE
+    WHEN state.proposal_expires_at IS NULL THEN NULL
+    ELSE pg_catalog.to_char(
+      state.proposal_expires_at AT TIME ZONE 'UTC',
+      'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+    )
+  END AS proposal_expires_at
+FROM viberacing_api.read_car_recipe_state($1::uuid, $2::bytea) AS state`;
+
+const approveCarRecipeQuery = `SELECT viberacing_api.approve_car_recipe(
+  $1::uuid,
+  $2::bytea,
+  $3::uuid
+) AS approved`;
+
+const rejectCarRecipeQuery = `SELECT viberacing_api.reject_car_recipe(
+  $1::uuid,
+  $2::bytea,
+  $3::uuid
+) AS rejected`;
+
 const createProfileDeletionChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
   SELECT viberacing_api.create_auth_challenge(
     $1::uuid,
@@ -921,6 +980,16 @@ export interface EnrollmentDatabaseProfileVisibilityUpdate extends EnrollmentDat
   readonly publiclyVisible: boolean;
 }
 
+export interface EnrollmentDatabaseCarRecipeProposal extends EnrollmentDatabaseProfileVisibilityRequest {
+  readonly expiresAt: string;
+  readonly proposalId: string;
+  readonly recipe: CarRecipeV1;
+}
+
+export interface EnrollmentDatabaseCarRecipeDecision extends EnrollmentDatabaseProfileVisibilityRequest {
+  readonly proposalId: string;
+}
+
 export interface EnrollmentDatabaseProfileDeletionChallenge {
   readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
@@ -1072,6 +1141,7 @@ export interface PairingDatabaseClient {
 }
 
 export interface EnrollmentDatabaseClient {
+  approveCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<unknown>;
   completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<unknown>;
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown>;
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<unknown>;
@@ -1100,7 +1170,9 @@ export interface EnrollmentDatabaseClient {
   createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
   pauseSource(input: EnrollmentDatabaseSourcePause): Promise<unknown>;
+  proposeCarRecipe(input: EnrollmentDatabaseCarRecipeProposal): Promise<unknown>;
   readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<unknown>;
+  readCarRecipeState(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
   readActiveDeviceInventory(
     input: EnrollmentDatabaseSourceDeviceInventoryRequest,
   ): Promise<unknown>;
@@ -1111,6 +1183,7 @@ export interface EnrollmentDatabaseClient {
   readProfileVisibility(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
   release(destroy?: boolean): void;
   revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<unknown>;
+  rejectCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<unknown>;
   revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown>;
   setProfileVisibility(input: EnrollmentDatabaseProfileVisibilityUpdate): Promise<unknown>;
   startRecovery(input: EnrollmentDatabaseRecoveryStart): Promise<unknown>;
@@ -1171,6 +1244,18 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
   }
 
   return Object.freeze({
+    async approveCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(approveCarRecipeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.proposalId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
+    },
     async admitPairingTransportRequest(input: PairingDatabaseRateAdmission): Promise<unknown> {
       const clientIdentityDigest = Buffer.from(input.clientIdentityDigest);
       try {
@@ -1758,6 +1843,28 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         sessionVerifierDigest.fill(0);
       }
     },
+    async proposeCarRecipe(input: EnrollmentDatabaseCarRecipeProposal): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(proposeCarRecipeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.proposalId,
+          input.recipe.schemaVersion,
+          input.recipe.chassis,
+          input.recipe.nose,
+          input.recipe.cockpit,
+          input.recipe.wing,
+          input.recipe.wheels,
+          input.recipe.palette,
+          input.recipe.trail,
+          input.recipe.seed,
+          input.expiresAt,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
+    },
     async readActiveDeviceInventory(
       input: EnrollmentDatabaseSourceDeviceInventoryRequest,
     ): Promise<unknown> {
@@ -1779,6 +1886,14 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           sessionVerifierDigest,
           input.seasonStart,
         ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
+    },
+    async readCarRecipeState(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(readCarRecipeStateQuery, [input.sessionId, sessionVerifierDigest]);
       } finally {
         sessionVerifierDigest.fill(0);
       }
@@ -1809,6 +1924,18 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
     },
     release(destroy = false): void {
       client.release(destroy);
+    },
+    async rejectCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(rejectCarRecipeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.proposalId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
     },
     async revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);

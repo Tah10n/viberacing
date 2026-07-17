@@ -6,50 +6,53 @@ Most sequences remain planned application contracts. The enrollment, returning-l
 addition, non-current-passkey revocation, recovery-code rotation/replacement-passkey sign-in,
 immediate profile-deletion-request, source inventory/pause/reactivation/unlink, active-device
 revoke, and pairing-approval sequences below plus the public score consumer are now locally
-implemented boundaries; none has live credentials, distributed edge policy, purge-worker, or
-deployment evidence. Revisions 0001 through 0022 provide private
+implemented boundaries; none has live credentials, distributed edge policy, scheduled purge, or
+deployment evidence. Revisions 0001 through 0026 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
 immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
-ingest, bounded ingest- and pairing-retention cleanup, open-season scoring refresh, late-ingest
-closure, terminal season finalization, and a Web-only public score projection. One local
-public-score GET constructs the bounded adapter lazily after closed request admission. The visible
-home race now requests its current server-selected week from that exact same-origin route, validates
-the public fields, lets one canonical public-handle URL select a same-page summary from only those
-fields, and retains a clearly labeled synthetic fallback on failure. A public signed-in account
-links to that URL; invalid, duplicate, and unranked selections grant no authority and add no score
-query field or browser persistence. One local one-shot Jobs runner can invoke exactly one of four
-fixed functions: either cleanup function, refresh, or finalization, but no broader recovery/step-up,
-deployed ingest endpoint, operational connector, purge worker, Jobs scheduler/monitor, audited
-correction, or deployed service executes the complete sequences. A library-only Rust connector
-foundation validates the bounded stable App Server initialization exchange and candidate `0.144.5`
-account/usage responses. A synthetic one-shot supervisor composes those states with fixed local
-process mechanics, while an exact-body composer and isolated one-use signer produce a synthetic
-signed envelope. A separate pending-key and challenge signer plus a pure server-only Web verifier
-agree on one exact pairing-possession message. The Web/Auth start application generates fresh IDs,
-token, challenge, 60-bit code, separate protected poll/code verifiers, and a nine-minute pending
-transaction from closed device metadata. A second application performs protected keyed poll lookup,
-mandates that proof, and invokes only exact atomic activation behind local admission/timing. The
-local signed-in `/connect` flow counts pending-code attempts on the exact session, renders bounded
-device evidence plus the full public-key fingerprint, and consumes a fresh WebAuthn assertion into
-atomic approval for an explicitly selected new or active existing opaque source. Existing choices
-use only encrypted session-bound controls; raw source IDs stay server-only. ADR 0030 adds exact
-start/poll HTTP routes, fixed-storage aggregate admission, and one pairing-only Rust command that
-creates and retains its device key only in a native OS credential store. ADR 0031 adds a separate
-Windows candidate command that can construct the otherwise inaccessible launch/context/key
-capabilities only after exact artifact and active- record review, then performs one fixed signed
-upload. There is still no supported version, cross-platform result, scheduling, or released
-connector. A local Ingest kernel now verifies the bounded exact-body origin/device request, while
-the separate adapter maps origin replay, device lookup, and submission through fixed calls.
-PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
-application now composes those exact local capabilities and validates only closed
-acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
-evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
-no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
-certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
-refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public,
-Account, Security, Usage, Operational, and Prohibited.
+ingest, bounded ingest-, pairing-, authentication-, and CarRecipe-proposal-retention cleanup,
+primary profile deletion, open-season scoring refresh, late-ingest closure, terminal season
+finalization, and a Web-only public score projection. One local public-score GET constructs the
+bounded adapter lazily after closed request admission. The visible home race now requests its
+current server-selected week from that exact same-origin route, validates the public fields, lets
+one canonical public-handle URL select a same-page summary from only those fields, and retains a
+clearly labeled synthetic fallback on failure. A public signed-in account links to that URL;
+invalid, duplicate, and unranked selections grant no authority and add no score query field or
+browser persistence. One local one-shot Jobs runner can invoke exactly one of seven fixed functions:
+any of the four cleanup functions, primary profile purge, refresh, or finalization, but no broader
+recovery/step-up, deployed ingest endpoint, operational connector, purge
+schedule/cache/backup/tombstone handling, Jobs monitor, audited correction, or deployed service
+executes the complete sequences. A library-only Rust connector foundation validates the bounded
+stable App Server initialization exchange and candidate `0.144.5` account/usage responses. A
+synthetic one-shot supervisor composes those states with fixed local process mechanics, while an
+exact-body composer and isolated one-use signer produce a synthetic signed envelope. A separate
+pending-key and challenge signer plus a pure server-only Web verifier agree on one exact
+pairing-possession message. The Web/Auth start application generates fresh IDs, token, challenge,
+60-bit code, separate protected poll/code verifiers, and a nine-minute pending transaction from
+closed device metadata. A second application performs protected keyed poll lookup, mandates that
+proof, and invokes only exact atomic activation behind local admission/timing. The local signed-in
+`/connect` flow counts pending-code attempts on the exact session, renders bounded device evidence
+plus the full public-key fingerprint, and consumes a fresh WebAuthn assertion into atomic approval
+for an explicitly selected new or active existing opaque source. Existing choices use only encrypted
+session-bound controls; raw source IDs stay server-only. ADR 0030 adds exact start/poll HTTP routes,
+fixed-storage aggregate admission, and one pairing-only Rust command that creates and retains its
+device key only in a native OS credential store. ADR 0031 adds a separate Windows candidate command
+that can construct the otherwise inaccessible launch/context/key capabilities only after exact
+artifact and active- record review, then performs one fixed signed upload. There is still no
+supported version, cross-platform result, scheduling, or released connector. A local Ingest kernel
+now verifies the bounded exact-body origin/device request, while the separate adapter maps origin
+replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic origin
+replay consumption and bounded cleanup. A transport-free application now composes those exact local
+capabilities and validates only closed acknowledgement/problem decisions. A bounded local Fastify
+factory preserves exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes
+only revalidated contracts. A separate local host now binds that exact composition under closed
+loopback or declared Railway-edge configuration and bounded process shutdown. There is no
+edge/live-database/deployment integration. No trusted external TLS route, deployment
+login/certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data
+labels refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md):
+Public, Account, Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -96,8 +99,8 @@ endpoints, streaming body limits, exact RP/origin/type/user-verification checks,
 calls. The pending session lasts at most 15 minutes; successful passkey registration atomically
 rotates it to a fresh 30-day passkey-bound session. The suite uses injected GitHub,
 authenticator-verifier, and database capabilities; there is no live OAuth app, invite issuer UI,
-real key/login, edge proof, aggregate/distributed attempt limit, abandoned-state cleanup, recovery
-sign-in, or deployment evidence.
+real key/login, edge proof, aggregate/distributed attempt limit, expired-state cleanup scheduling,
+recovery sign-in, or deployment evidence.
 
 ## Passkey login and credential management
 
@@ -152,9 +155,9 @@ The database exposes no profile identifier during credential lookup, stores no a
 fingerprint, preserves a monotonic maximum sign counter, and makes revoke terminal. The local
 options route creates no database state; after application proof verification revision 0014 stores
 and consumes the cookie-bound challenge in the session transaction. The database still cannot check
-WebAuthn cryptography or protect an Internet endpoint from request floods; edge/service limits and
-bounded cleanup of consumed ceremonies are mandatory before deployment. Recovery is a separate
-restricted-authority flow, not a normal login shortcut.
+WebAuthn cryptography or protect an Internet endpoint from request floods; bounded cleanup of
+expired ceremonies now exists, while edge/service limits and scheduled execution remain mandatory
+before deployment. Recovery is a separate restricted-authority flow, not a normal login shortcut.
 
 The local account page now composes the existing session-derived inventory read. Its closed mapper
 accepts at most 32 ordered rows with exactly one current active authenticator and renders only the
@@ -233,9 +236,9 @@ Code rotation and completion serialize on the profile row and take terminal time
 acquisition. Observed cross-connection tests prove rotation dominates a concurrent start with an old
 code and completion dominates a concurrent login with an old passkey. Completion fails closed at the
 32-lifetime-passkey provenance ceiling until bounded cleanup exists. The repository still lacks a
-distributed/edge anonymous attempt policy, abandoned and terminal-state cleanup, notifications,
-production secrets and timing values, live authenticator/database integration, monitoring, and
-deployment evidence; therefore the local recovery sign-in is not launch-ready.
+distributed/edge anonymous attempt policy, cleanup scheduling for expired authentication state,
+notifications, production secrets and timing values, live authenticator/database integration,
+monitoring, and deployment evidence; therefore the local recovery sign-in is not launch-ready.
 
 ## Device pairing and source choice
 
@@ -401,8 +404,8 @@ role, restricted login scope, and safe search path before any fixed parameterize
 lookup accepts only zero or one closed row. Submission reconstructs and revalidates the verifier
 allowlist, copies its values, creates a server UUID, and accepts only a coherent `accepted`,
 `duplicate`, or `quarantined` row. PostgreSQL remains authoritative for receipt time, replay,
-lifecycle, season closure, quarantine, and locks. Tests use mock pools; no database connection
-occurs.
+lifecycle, season closure, quarantine, and locks. Focused tests use mock pools; a separate opt-in
+integration exercises this adapter through one synthetic dedicated login in disposable PostgreSQL.
 
 ADR 0017 implements the protected local origin-key input to the verifier. One mandatory primary and
 one optional complete secondary rotation pair use exact namespaced process values, closed IDs, and
@@ -430,6 +433,20 @@ four unsettled application calls without a queue. It revalidates every applicati
 returns only generic `no-store` acknowledgement/problem contracts. Real loopback tests exercise
 malformed framing and partial sockets; injection tests exercise route, overload, and serialization.
 
+ADR 0033 adds only the local listener/process step around that reviewed composition. It accepts
+cleartext solely on exact loopback in development/test, requires exact `0.0.0.0:$PORT` plus an
+explicit external-TLS declaration in production, cleans partial startup, and bounds first-signal
+shutdown to 36 seconds. The declaration does not authenticate Railway, forwarded headers, or the
+Cloudflare route; the exact origin proof remains mandatory and live infrastructure evidence remains
+absent.
+
+The opt-in `test:ingest:postgres-integration` gate composes ADRs 0015 through 0020 and 0033 as one
+synthetic loopback path. It applies the reviewed migration ledger, creates only a disposable
+least-privileged Ingest login and synthetic source/device, sends independently signed HTTP, and
+checks accepted, duplicate, persistent origin-replay, revoked-device, response-contract, and exact
+persistence results before teardown. It supplies no external TLS, protected secret delivery,
+Cloudflare/Railway route, production credential, real-user result, or capacity evidence.
+
 ADR 0021 implements the first local App Server protocol step: a fixed capability-free `initialize`,
 one 16 KiB LF-only closed response, discarded initialization strings, and fixed `initialized`. ADR
 0022 adds a candidate `0.144.5` sequence after that handshake: fixed account/usage reads, ChatGPT
@@ -454,9 +471,9 @@ plus one active-record context/key construction and fixed-path upload. Only that
 command can construct the three sync capabilities; no boundary discovers a binary, schedules
 execution, or alters the empty support matrix.
 
-The released or scheduled connector layers, edge signer, direct-origin denial, host/port/TLS Ingest
-deployment entry point, live secret-manager/edge key injection, live PostgreSQL login/TLS
-connection, distributed rate/ backpressure controls, monitoring, and load evidence are still absent.
+The released or scheduled connector layers, edge signer, direct-origin denial, trusted external
+Ingest TLS/edge route, live secret-manager/edge key injection, deployment PostgreSQL login/TLS
+connection, distributed rate/backpressure controls, monitoring, and load evidence are still absent.
 Revisions 0008 and 0012 give Jobs a server-time, 1-to-1000 batch procedure for expired origin
 nonces, device nonces, and raw snapshots. It serializes callers, caps each class independently,
 cascades raw entries, preserves current source/day values, and clears only their deleted raw
@@ -471,6 +488,27 @@ for a later invocation and activated/live state remains. The local Jobs runner e
 fixed 1000-row cleanup command; no scheduler, live login, monitoring, or retention cadence invokes
 it automatically.
 
+Revision 0023 adds a third fixed 1000-row cleanup command for expired authentication challenges and
+an independently bounded set of expired restricted recovery authorities. It deletes only an exact
+still-present source code in used/scrubbed form, preserves live ceremonies and unused codes, and
+locks candidate profiles before authorities/codes to match recovery transitions. Worker and
+recovery-start races are observed locally; no scheduler, live login, monitor, backup purge, or
+retention cadence invokes it automatically.
+
+Revision 0024 adds a separate fixed maximum-10 primary-profile purge command. The database locks the
+its fixed five maintenance mutexes in stable order, selects only due queued/retry work, requires
+committed `deletion_pending` state, removes restrictive pairing references and authority-free
+pending keys, terminally settles the opaque job, then cascades the exact profile in one transaction.
+Two purge workers and purge versus authentication cleanup are observed serializing locally. No
+scheduler, live login, cache/backup purge, keyed tombstone, restore replay, monitor, capacity
+result, or retention cadence invokes or completes the broader deletion sequence.
+
+Revision 0026 adds a fourth fixed 1000-row cleanup command for expired CarRecipe proposals. It
+serializes workers through a separate private mutex, captures the cutoff after that lock, deletes
+oldest-first with `SKIP LOCKED`, and preserves every live proposal and active recipe. One observed
+two-worker race proves exact deletion and live-state preservation; no scheduler, live login,
+monitoring, backup-purge proof, or deployed cadence invokes it automatically.
+
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct
 sources before one profile daily cap, applies the immutable Community v1 formula, and writes derived
@@ -483,11 +521,51 @@ deadline, and terminal triggers reject silent metadata or score rewrites while a
 purge to remove personal rows. Ingest and Jobs share the canonical
 `season → profile → source → device` lock order. Revision 0011 gives only Web a bounded score-only
 read that filters current profile visibility before re-ranking and omits private identifiers, raw
-values, daily detail, and exact timestamps. ADRs 0014 and 0029 make the local one-shot Jobs process
-invoke exactly one of four reviewed functions—ingest cleanup, pairing cleanup, refresh, or
+values, daily detail, and exact timestamps. ADRs 0014, 0029, 0032, 0034, and 0036 make the local
+one-shot Jobs process invoke exactly one of seven reviewed functions—authentication cleanup,
+CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup, primary profile purge, refresh, or
 finalization—after a per-checkout least-privilege probe; no scheduler, live login/certificate,
-application database integration, audited correction, freshness/streak/car projection, deployed
-route, or public cache exists.
+application database integration, audited correction, tombstone/restore replay, freshness/streak/car
+projection, deployed route, or public cache exists.
+
+## Session-owned CarRecipe proposal and approval
+
+The local account page is the only current proposal origin. It sends the nine exact `CarRecipeV1`
+fields; it sends no prompt, conversation, URL, file, arbitrary color, profile ID, or proposal ID.
+Web validates the generated contract, derives authority from a passkey-registered session, hashes
+and clears the verifier copy, and generates the proposal ID and at-most-24-hour expiry. Revision
+0025 derives the profile again from that exact proof and keeps at most one pending proposal.
+
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant Web as Web/Auth
+  participant Validator as CarRecipeV1 validator
+  participant DB as PostgreSQL API
+
+  Browser->>Web: POST exact same-origin recipe form
+  Web->>Validator: Validate closed version 1 object
+  Validator-->>Web: Frozen allowlisted recipe
+  Web->>DB: propose(session proof, server proposal ID, recipe, expiry)
+  DB-->>Web: Proposed or generic failure
+  Browser->>Web: GET account under same session
+  Web->>DB: read state(session proof)
+  DB-->>Web: Active plus at most one pending recipe
+  Web-->>Browser: Three-theme preview plus encrypted decision control
+  Browser->>Web: POST approve or reject(control)
+  Web->>DB: Exact session and proposal decision
+  DB-->>Web: Atomic activation/removal or generic failure
+```
+
+The encrypted decision control contains the proposal ID, session ID, and the lesser of the session
+or proposal expiry under the purpose-separated `car-proposal` key. The raw proposal and profile IDs
+do not enter HTML. Approval atomically inserts or replaces the active recipe and deletes the pending
+row; rejection deletes only the matching pending row. Device, Ingest, Jobs, Admin, direct-table,
+cross-profile, wrong-proof, and replay paths are denied. Profile deletion cascades both recipe rows.
+
+This flow does not yet accept an agent/connector proposal, project the active recipe publicly,
+physically clean an expired row on a schedule, or prove a live database login, edge control,
+monitoring, capacity, or deployment.
 
 ## Public race read
 
@@ -559,8 +637,9 @@ sequenceDiagram
   Backup->>DB: On restore, replay deletion markers before opening service
 ```
 
-Hide and authority revocation are synchronous security actions; bulk purge is retryable. Failure of
-the asynchronous job does not make the profile public or the device valid again.
+Hide and authority revocation are synchronous security actions; the local atomic primary purge
+accepts due queued or retry work. Failure of a future scheduled invocation does not make the profile
+public or the device valid again.
 
 Revision 0002 implements the database transaction behind the immediate hide/revoke/enqueue step and
 proves its rollback behavior with synthetic PostgreSQL scenarios. Revision 0006 also revokes active
@@ -568,8 +647,10 @@ restricted recovery authority as the profile enters deletion, and revision 0007 
 deletion-pending profile at the usage procedure. The local Web/Auth endpoint now requires the exact
 active session and typed handle, binds a fresh required-UV assertion to the
 session/profile/handle/RP/origin context, atomically consumes the challenge with that existing
-transaction, and clears every browser auth cookie only after success. Cache purge, queued-job
-execution, tombstone policy, and backup replay are still planned.
+transaction, and clears every browser auth cookie only after success. Revision 0024 plus the local
+Jobs command now execute bounded primary purge and preserve only the opaque terminal job plus
+redacted audit linkage. Scheduling, public cache purge, keyed tombstone policy, backup expiry, and
+restore replay are still planned.
 
 ## Trusted release
 

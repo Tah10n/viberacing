@@ -15,6 +15,21 @@ const english = {
   alreadyRacing: "Already racing?",
   backToRace: "Back to the race",
   brand: "Vibe Racing",
+  carActiveCopy:
+    "This approved recipe is stored for your profile. Public race projection is a separate delivery gate.",
+  carActiveEmpty: "No profile car has been approved yet.",
+  carActiveTitle: "Approved car",
+  carApprove: "Approve this car",
+  carFormCopy:
+    "Create or replace one private proposal using only the reviewed part lists and a 0–65535 seed. No text, color, file, URL, or conversation content is accepted.",
+  carPreviewLabel: "Deterministic car preview",
+  carProposalCopy:
+    "A proposal remains private until you inspect all three theme previews and explicitly approve it.",
+  carProposalEmpty: "No proposal is waiting for approval.",
+  carProposalReject: "Reject proposal",
+  carProposalSubmit: "Create proposal",
+  carProposalTitle: "Car proposal",
+  carRecipeUnavailable: "Car recipe details are temporarily unavailable.",
   continueGithub: "Continue with GitHub",
   currentPasskey: "Current session",
   currentScoreCopy:
@@ -84,7 +99,7 @@ const english = {
   recoverySignInTitle: "Recover your profile",
   profileHidden: "Public profile is off. It will not appear in the Community race.",
   profileDeletionCopy:
-    "This permanently starts deletion. Your profile is hidden immediately and all sessions, passkeys, and connected-device access are revoked. Primary-data removal is queued; this local build does not run the purge worker yet.",
+    "This permanently starts deletion. Your profile is hidden immediately and all sessions, passkeys, and connected-device access are revoked. Primary-data removal is queued for a separate local Jobs command; this web build does not schedule it.",
   profileDeletionHandleHelp: "The handle must match exactly. A fresh passkey check follows.",
   profileDeletionHandleLabel: "Type your handle to confirm",
   profileDeletionMismatch: "Type your exact handle before continuing.",
@@ -144,6 +159,21 @@ const russian: Record<JoinTranslationKey, string> = {
   alreadyRacing: "Уже участвуете?",
   backToRace: "Вернуться к гонке",
   brand: "Vibe Racing",
+  carActiveCopy:
+    "Этот одобренный рецепт сохранён для профиля. Публикация машины в гонке остаётся отдельным этапом.",
+  carActiveEmpty: "Для профиля ещё не одобрена машина.",
+  carActiveTitle: "Одобренная машина",
+  carApprove: "Одобрить эту машину",
+  carFormCopy:
+    "Создайте или замените одно приватное предложение, используя только проверенные списки деталей и вариант 0–65535. Текст, произвольный цвет, файл, URL и содержимое диалога не принимаются.",
+  carPreviewLabel: "Детерминированное превью машины",
+  carProposalCopy:
+    "Предложение остаётся приватным, пока вы не проверите превью во всех трёх темах и явно не одобрите его.",
+  carProposalEmpty: "Нет предложения, ожидающего одобрения.",
+  carProposalReject: "Отклонить предложение",
+  carProposalSubmit: "Создать предложение",
+  carProposalTitle: "Предложение машины",
+  carRecipeUnavailable: "Сведения о рецепте машины временно недоступны.",
   continueGithub: "Продолжить через GitHub",
   currentPasskey: "Текущая сессия",
   currentScoreCopy:
@@ -214,7 +244,7 @@ const russian: Record<JoinTranslationKey, string> = {
   recoverySignInTitle: "Восстановление профиля",
   profileHidden: "Публичный профиль выключен и не появится в гонке сообщества.",
   profileDeletionCopy:
-    "Это необратимо запускает удаление. Профиль сразу скрывается, все сессии, ключи доступа и доступ подключённых устройств отзываются. Удаление основных данных ставится в очередь; локальная сборка пока не запускает задачу очистки.",
+    "Это необратимо запускает удаление. Профиль сразу скрывается, все сессии, ключи доступа и доступ подключённых устройств отзываются. Удаление основных данных ставится в очередь для отдельной локальной Jobs-команды; эта web-сборка не запускает её по расписанию.",
   profileDeletionHandleHelp:
     "Хэндл должен совпасть точно. Затем потребуется свежая проверка ключом доступа.",
   profileDeletionHandleLabel: "Введите свой хэндл для подтверждения",

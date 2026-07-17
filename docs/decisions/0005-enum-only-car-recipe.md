@@ -1,6 +1,6 @@
 # ADR 0005: Enum-only deterministic car customization
 
-- Status: Accepted (design; implementation pending)
+- Status: Accepted (version 1 and local browser proposal slice implemented)
 - Date: 2026-07-14
 - Decision owners: Contracts, Web, UI, and Pixel Assets
 - Supersedes: None
@@ -66,8 +66,17 @@ content.
 - Proposal/approval authorization tests prove devices and agents cannot activate a car.
 - Asset provenance, license, generated-drift, metadata, and trade-dress review gates pass.
 
+The local version 1 schema, TypeScript validator, deterministic renderer, three-theme account
+preview, exact-session proposal/read/approve/reject database functions, opaque decision control,
+bounded Jobs-only expired-proposal cleanup, and negative authorization/injection tests now implement
+this decision through ADRs 0035 and 0036. Agent or connector proposal ingress, public active-recipe
+projection, scheduled cleanup, operational metrics, trade-dress release review, and deployment
+remain pending.
+
 ## References
 
 - [Project plan CarRecipe section](../PROJECT_PLAN.md#carrecipe-and-pixel-assets)
 - [Privacy data map](../security/PRIVACY_DATA_MAP.md)
 - [Car injection abuse case](../security/ABUSE_CASES.md#vr-abuse-car-injection-executable-or-remote-content-in-customization)
+- [ADR 0035](0035-bounded-session-car-recipe-proposal.md)
+- [ADR 0036](0036-bounded-car-recipe-proposal-cleanup.md)

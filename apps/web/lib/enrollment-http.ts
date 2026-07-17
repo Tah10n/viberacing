@@ -13,6 +13,17 @@ import { createRecoveryTiming } from "./recovery-timing";
 const formContentTypePattern = /^application\/x-www-form-urlencoded(?:;\s*charset=utf-8)?$/i;
 const jsonContentTypePattern = /^application\/json(?:;\s*charset=utf-8)?$/i;
 const callbackCancellationKeys = new Set(["error", "error_description", "error_uri", "state"]);
+const carRecipeFormKeys = new Set([
+  "chassis",
+  "cockpit",
+  "nose",
+  "palette",
+  "schemaVersion",
+  "seed",
+  "trail",
+  "wheels",
+  "wing",
+]);
 const enrollmentCookiePaths = Object.freeze({
   login: "/auth/login",
   oauth: "/auth/github/callback",
@@ -30,6 +41,9 @@ const enrollmentCookiePaths = Object.freeze({
 
 export interface EnrollmentHttp {
   callback(request: Request): Promise<Response>;
+  carRecipeApprove(request: Request): Promise<Response>;
+  carRecipePropose(request: Request): Promise<Response>;
+  carRecipeReject(request: Request): Promise<Response>;
   deviceRevoke(request: Request): Promise<Response>;
   loginOptions(request: Request): Promise<Response>;
   loginVerify(request: Request): Promise<Response>;
@@ -137,6 +151,48 @@ function readSourcePauseForm(value: string): string | undefined {
   return sourceControl !== null && sourceControl.length >= 1 && sourceControl.length <= 512
     ? sourceControl
     : undefined;
+}
+
+function readCarRecipeForm(value: string): Readonly<Record<string, unknown>> | undefined {
+  const parameters = new URLSearchParams(value);
+  const keys = [...parameters.keys()];
+  if (
+    keys.length !== carRecipeFormKeys.size ||
+    new Set(keys).size !== keys.length ||
+    keys.some((key) => !carRecipeFormKeys.has(key))
+  ) {
+    return undefined;
+  }
+  const seedValue = parameters.get("seed");
+  if (
+    parameters.get("schemaVersion") !== "1" ||
+    seedValue === null ||
+    !/^\d{1,5}$/.test(seedValue) ||
+    Number(seedValue) > 65_535
+  ) {
+    return undefined;
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    chassis: parameters.get("chassis"),
+    nose: parameters.get("nose"),
+    cockpit: parameters.get("cockpit"),
+    wing: parameters.get("wing"),
+    wheels: parameters.get("wheels"),
+    palette: parameters.get("palette"),
+    trail: parameters.get("trail"),
+    seed: Number(seedValue),
+  });
+}
+
+function readCarProposalControlForm(value: string): string | undefined {
+  const parameters = new URLSearchParams(value);
+  const keys = [...parameters.keys()];
+  if (keys.length !== 1 || keys[0] !== "proposalControl") {
+    return undefined;
+  }
+  const control = parameters.get("proposalControl");
+  return control !== null && control.length >= 1 && control.length <= 1024 ? control : undefined;
 }
 
 async function boundedBody(request: Request, maximumBytes: number): Promise<string | undefined> {
@@ -247,6 +303,59 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
     }
   }
 
+  async function carRecipeDecision(
+    request: Request,
+    action: "approve" | "reject",
+  ): Promise<Response> {
+    const currentRuntime = runtime();
+    if (currentRuntime === undefined) {
+      discardBody(request);
+      return problem("temporarily_unavailable");
+    }
+    const expectedPath = `/auth/cars/proposals/${action}`;
+    if (
+      !exactOrigin(request, currentRuntime, expectedPath) ||
+      !contentType(request, formContentTypePattern)
+    ) {
+      discardBody(request);
+      return problem("invalid_request");
+    }
+    const lease = dependencies.admission.tryAcquire();
+    if (lease === undefined) {
+      discardBody(request);
+      return redirect(currentRuntime.config.publicOrigin, "/account?error=unavailable");
+    }
+    try {
+      const body = await boundedBody(request, 1200);
+      const proposalControl = body === undefined ? undefined : readCarProposalControlForm(body);
+      if (proposalControl === undefined) {
+        return problem("invalid_request");
+      }
+      const sessionCookie = readCookie(
+        request.headers.get("cookie"),
+        enrollmentCookieNames.session,
+      );
+      if (sessionCookie === undefined) {
+        return redirect(currentRuntime.config.publicOrigin, "/login?error=unavailable");
+      }
+      let completed = false;
+      try {
+        completed =
+          action === "approve"
+            ? await currentRuntime.carProposalService.approve(sessionCookie, proposalControl)
+            : await currentRuntime.carProposalService.reject(sessionCookie, proposalControl);
+      } catch {
+        completed = false;
+      }
+      return redirect(
+        currentRuntime.config.publicOrigin,
+        completed ? "/account" : "/account?error=unavailable",
+      );
+    } finally {
+      lease.release();
+    }
+  }
+
   return Object.freeze({
     async callback(request: Request): Promise<Response> {
       const currentRuntime = runtime();
@@ -305,6 +414,57 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
       } finally {
         lease.release();
       }
+    },
+    carRecipeApprove(request: Request): Promise<Response> {
+      return carRecipeDecision(request, "approve");
+    },
+    async carRecipePropose(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/cars/proposals") ||
+        !contentType(request, formContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return redirect(currentRuntime.config.publicOrigin, "/account?error=unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 512);
+        const recipe = body === undefined ? undefined : readCarRecipeForm(body);
+        if (recipe === undefined) {
+          return problem("invalid_request");
+        }
+        const sessionCookie = readCookie(
+          request.headers.get("cookie"),
+          enrollmentCookieNames.session,
+        );
+        if (sessionCookie === undefined) {
+          return redirect(currentRuntime.config.publicOrigin, "/login?error=unavailable");
+        }
+        let proposed = false;
+        try {
+          proposed = await currentRuntime.carProposalService.propose(sessionCookie, recipe);
+        } catch {
+          proposed = false;
+        }
+        return redirect(
+          currentRuntime.config.publicOrigin,
+          proposed ? "/account#car-proposal" : "/account?error=unavailable",
+        );
+      } finally {
+        lease.release();
+      }
+    },
+    carRecipeReject(request: Request): Promise<Response> {
+      return carRecipeDecision(request, "reject");
     },
     async deviceRevoke(request: Request): Promise<Response> {
       const currentRuntime = runtime();

@@ -6,7 +6,7 @@ import { PixelRaceCanvas } from "@/components/pixel-race-canvas";
 import { carRecipeKey } from "@/lib/car-recipe";
 import {
   dayLabels,
-  formatCarPart,
+  formatCarChassis,
   formatDayCount,
   formatFreshness,
   formatScore,
@@ -382,9 +382,9 @@ export function RaceExperience({
                         {scoreState.source === "community" ? (
                           translation.visualMarker
                         ) : (
-                          <span className="car-swatch" data-paint={participant.car.paint}>
+                          <span className="car-swatch" data-paint={participant.car.palette}>
                             <span aria-hidden="true">■</span>{" "}
-                            {formatCarPart(participant.car.body, locale)}
+                            {formatCarChassis(participant.car.chassis, locale)}
                           </span>
                         )}
                       </td>
@@ -509,24 +509,6 @@ export function RaceExperience({
                   <>
                     <h3>{translation.carProposal}</h3>
                     <p className="recipe-code">{carRecipeKey(payload.profile.car)}</p>
-                    <dl className="recipe-list">
-                      <div>
-                        <dt>{translation.carBody}</dt>
-                        <dd>{formatCarPart(payload.profile.car.body, locale)}</dd>
-                      </div>
-                      <div>
-                        <dt>{translation.carPaint}</dt>
-                        <dd>{formatCarPart(payload.profile.car.paint, locale)}</dd>
-                      </div>
-                      <div>
-                        <dt>{translation.carTrim}</dt>
-                        <dd>{formatCarPart(payload.profile.car.trim, locale)}</dd>
-                      </div>
-                      <div>
-                        <dt>{translation.carSpoiler}</dt>
-                        <dd>{formatCarPart(payload.profile.car.spoiler, locale)}</dd>
-                      </div>
-                    </dl>
                   </>
                 ) : (
                   <>
@@ -534,7 +516,7 @@ export function RaceExperience({
                     <p>
                       <span
                         className="car-swatch"
-                        data-paint={selectedCommunityParticipant.car.paint}
+                        data-paint={selectedCommunityParticipant.car.palette}
                       >
                         <span aria-hidden="true">■</span> {translation.visualMarker}
                       </span>

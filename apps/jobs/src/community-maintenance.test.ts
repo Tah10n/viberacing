@@ -22,27 +22,36 @@ const runtimeBoundary = [
 interface PoolFixture {
   readonly client: JobsDatabaseClient;
   readonly close: ReturnType<typeof vi.fn>;
+  readonly cleanupExpiredAuthState: ReturnType<typeof vi.fn>;
+  readonly cleanupExpiredCarRecipeProposals: ReturnType<typeof vi.fn>;
   readonly cleanupExpiredIngestState: ReturnType<typeof vi.fn>;
   readonly cleanupExpiredPairingState: ReturnType<typeof vi.fn>;
   readonly connect: ReturnType<typeof vi.fn>;
   readonly finalizeCommunitySeason: ReturnType<typeof vi.fn>;
   readonly pool: JobsDatabasePool;
+  readonly purgeProfileDeletions: ReturnType<typeof vi.fn>;
   readonly release: ReturnType<typeof vi.fn>;
   readonly refreshCommunitySeason: ReturnType<typeof vi.fn>;
   readonly verifyRuntimeBoundary: ReturnType<typeof vi.fn>;
 }
 
 function createPoolFixture(jobResult: unknown): PoolFixture {
+  const cleanupExpiredAuthState = vi.fn(() => Promise.resolve(jobResult));
+  const cleanupExpiredCarRecipeProposals = vi.fn(() => Promise.resolve(jobResult));
   const cleanupExpiredIngestState = vi.fn(() => Promise.resolve(jobResult));
   const cleanupExpiredPairingState = vi.fn(() => Promise.resolve(jobResult));
   const finalizeCommunitySeason = vi.fn(() => Promise.resolve(jobResult));
+  const purgeProfileDeletions = vi.fn(() => Promise.resolve(jobResult));
   const release = vi.fn();
   const refreshCommunitySeason = vi.fn(() => Promise.resolve(jobResult));
   const verifyRuntimeBoundary = vi.fn(() => Promise.resolve(runtimeBoundary));
   const client: JobsDatabaseClient = {
+    cleanupExpiredAuthState,
+    cleanupExpiredCarRecipeProposals,
     cleanupExpiredIngestState,
     cleanupExpiredPairingState,
     finalizeCommunitySeason,
+    purgeProfileDeletions,
     release,
     refreshCommunitySeason,
     verifyRuntimeBoundary,
@@ -52,11 +61,14 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
   return {
     client,
     close,
+    cleanupExpiredAuthState,
+    cleanupExpiredCarRecipeProposals,
     cleanupExpiredIngestState,
     cleanupExpiredPairingState,
     connect,
     finalizeCommunitySeason,
     pool: { close, connect },
+    purgeProfileDeletions,
     release,
     refreshCommunitySeason,
     verifyRuntimeBoundary,
@@ -86,6 +98,34 @@ describe("Community maintenance runner", () => {
   it.each([
     {
       expected: {
+        deletedChallenges: 6,
+        deletedRecoveryAuthorities: 4,
+        deletedUsedRecoveryCodes: 3,
+        kind: "cleanup_expired_auth_state",
+      },
+      functionName: "cleanup_expired_auth_state",
+      input: { batchSize: 9, kind: "cleanup_expired_auth_state" },
+      rows: [
+        {
+          deleted_challenges: 6,
+          deleted_recovery_authorities: 4,
+          deleted_used_recovery_codes: 3,
+        },
+      ],
+      values: [9],
+    },
+    {
+      expected: {
+        deletedProposals: 5,
+        kind: "cleanup_expired_car_recipe_proposals",
+      },
+      functionName: "cleanup_expired_car_recipe_proposals",
+      input: { batchSize: 7, kind: "cleanup_expired_car_recipe_proposals" },
+      rows: [{ deleted_proposals: 5 }],
+      values: [7],
+    },
+    {
+      expected: {
         deletedNonces: 7,
         deletedOriginNonces: 3,
         deletedSnapshots: 5,
@@ -106,6 +146,13 @@ describe("Community maintenance runner", () => {
       input: { batchSize: 8, kind: "cleanup_expired_pairing_state" },
       rows: [{ deleted_pairings: 4, deleted_pending_keys: 4 }],
       values: [8],
+    },
+    {
+      expected: { kind: "purge_profile_deletions", purgedProfiles: 3 },
+      functionName: "purge_profile_deletions",
+      input: { batchSize: 5, kind: "purge_profile_deletions" },
+      rows: [{ purged_profiles: 3 }],
+      values: [5],
     },
     {
       expected: { kind: "refresh_community_season", profileCount: 12 },
@@ -131,18 +178,27 @@ describe("Community maintenance runner", () => {
     expect(Object.isFrozen(result)).toBe(true);
     expect(fixture.connect).toHaveBeenCalledOnce();
     expect(fixture.verifyRuntimeBoundary).toHaveBeenCalledOnce();
-    if (testCase.input.kind === "cleanup_expired_ingest_state") {
+    if (testCase.input.kind === "cleanup_expired_auth_state") {
+      expect(fixture.cleanupExpiredAuthState).toHaveBeenCalledWith(testCase.values[0]);
+    } else if (testCase.input.kind === "cleanup_expired_car_recipe_proposals") {
+      expect(fixture.cleanupExpiredCarRecipeProposals).toHaveBeenCalledWith(testCase.values[0]);
+    } else if (testCase.input.kind === "cleanup_expired_ingest_state") {
       expect(fixture.cleanupExpiredIngestState).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "cleanup_expired_pairing_state") {
       expect(fixture.cleanupExpiredPairingState).toHaveBeenCalledWith(testCase.values[0]);
+    } else if (testCase.input.kind === "purge_profile_deletions") {
+      expect(fixture.purgeProfileDeletions).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "refresh_community_season") {
       expect(fixture.refreshCommunitySeason).toHaveBeenCalledWith(testCase.values[0]);
     } else {
       expect(fixture.finalizeCommunitySeason).toHaveBeenCalledWith(testCase.values[0]);
     }
     expect(
-      fixture.cleanupExpiredIngestState.mock.calls.length +
+      fixture.cleanupExpiredAuthState.mock.calls.length +
+        fixture.cleanupExpiredCarRecipeProposals.mock.calls.length +
+        fixture.cleanupExpiredIngestState.mock.calls.length +
         fixture.cleanupExpiredPairingState.mock.calls.length +
+        fixture.purgeProfileDeletions.mock.calls.length +
         fixture.refreshCommunitySeason.mock.calls.length +
         fixture.finalizeCommunitySeason.mock.calls.length,
     ).toBe(1);
@@ -152,6 +208,16 @@ describe("Community maintenance runner", () => {
   it.each([
     null,
     [],
+    { batchSize: 0, kind: "cleanup_expired_auth_state" },
+    { batchSize: 1_001, kind: "cleanup_expired_auth_state" },
+    { batchSize: 1.5, kind: "cleanup_expired_auth_state" },
+    { batchSize: "1", kind: "cleanup_expired_auth_state" },
+    { batchSize: 1, extra: true, kind: "cleanup_expired_auth_state" },
+    { batchSize: 0, kind: "cleanup_expired_car_recipe_proposals" },
+    { batchSize: 1_001, kind: "cleanup_expired_car_recipe_proposals" },
+    { batchSize: 1.5, kind: "cleanup_expired_car_recipe_proposals" },
+    { batchSize: "1", kind: "cleanup_expired_car_recipe_proposals" },
+    { batchSize: 1, extra: true, kind: "cleanup_expired_car_recipe_proposals" },
     { batchSize: 0, kind: "cleanup_expired_ingest_state" },
     { batchSize: 1_001, kind: "cleanup_expired_ingest_state" },
     { batchSize: 1.5, kind: "cleanup_expired_ingest_state" },
@@ -160,6 +226,11 @@ describe("Community maintenance runner", () => {
     { batchSize: 0, kind: "cleanup_expired_pairing_state" },
     { batchSize: 1_001, kind: "cleanup_expired_pairing_state" },
     { batchSize: 1, extra: true, kind: "cleanup_expired_pairing_state" },
+    { batchSize: 0, kind: "purge_profile_deletions" },
+    { batchSize: 11, kind: "purge_profile_deletions" },
+    { batchSize: 1.5, kind: "purge_profile_deletions" },
+    { batchSize: "1", kind: "purge_profile_deletions" },
+    { batchSize: 1, extra: true, kind: "purge_profile_deletions" },
     { kind: "refresh_community_season", seasonStart: "2026-07-14" },
     { extra: true, kind: "refresh_community_season", seasonStart: "2026-07-13" },
     { kind: "refresh_community_season", seasonStart: "2026-02-30" },
@@ -257,14 +328,26 @@ describe("Community maintenance runner", () => {
     { cleanup: false, rows: [{ extra: true, profile_count: 1 }] },
     { cleanup: true, rows: [{ deleted_nonces: 2, deleted_snapshots: 0 }] },
     { cleanup: "pairing", rows: [{ deleted_pairings: 1 }] },
+    { cleanup: "purge", rows: [{ purged_profile_count: 1 }] },
+    {
+      cleanup: "auth",
+      rows: [{ deleted_challenges: 1, deleted_recovery_authorities: 1 }],
+    },
+    { cleanup: "car", rows: [{ deleted_proposal_count: 1 }] },
   ])("rejects invalid fixed result shapes", async ({ cleanup, rows }) => {
     const fixture = createPoolFixture(rows);
     const job: CommunityMaintenanceJob =
-      cleanup === "pairing"
-        ? { batchSize: 1, kind: "cleanup_expired_pairing_state" }
-        : cleanup
-          ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
-          : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
+      cleanup === "auth"
+        ? { batchSize: 1, kind: "cleanup_expired_auth_state" }
+        : cleanup === "car"
+          ? { batchSize: 1, kind: "cleanup_expired_car_recipe_proposals" }
+          : cleanup === "purge"
+            ? { batchSize: 1, kind: "purge_profile_deletions" }
+            : cleanup === "pairing"
+              ? { batchSize: 1, kind: "cleanup_expired_pairing_state" }
+              : cleanup
+                ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
+                : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
 
     await expectMaintenanceError(
       createCommunityMaintenanceRunner(fixture.pool).execute(job),
@@ -319,6 +402,21 @@ describe("Community maintenance runner", () => {
   });
 
   it.each([
+    { batchSize: 1, row: { deleted_proposals: 2 } },
+    { batchSize: 10, row: { deleted_proposals: -1 } },
+    { batchSize: 10, row: { deleted_proposals: "1" } },
+  ])("bounds the CarRecipe proposal cleanup result", async ({ batchSize, row }) => {
+    const fixture = createPoolFixture([row]);
+    await expectMaintenanceError(
+      createCommunityMaintenanceRunner(fixture.pool).execute({
+        batchSize,
+        kind: "cleanup_expired_car_recipe_proposals",
+      }),
+      "result_invalid",
+    );
+  });
+
+  it.each([
     { batchSize: 1, row: { deleted_pairings: 2, deleted_pending_keys: 0 } },
     { batchSize: 1, row: { deleted_pairings: 0, deleted_pending_keys: 2 } },
     { batchSize: 2, row: { deleted_pairings: 1, deleted_pending_keys: 0 } },
@@ -329,6 +427,65 @@ describe("Community maintenance runner", () => {
       createCommunityMaintenanceRunner(fixture.pool).execute({
         batchSize,
         kind: "cleanup_expired_pairing_state",
+      }),
+      "result_invalid",
+    );
+  });
+
+  it.each([
+    { batchSize: 1, row: { purged_profiles: 2 } },
+    { batchSize: 10, row: { purged_profiles: -1 } },
+    { batchSize: 10, row: { purged_profiles: "1" } },
+  ])("bounds the profile deletion purge result", async ({ batchSize, row }) => {
+    const fixture = createPoolFixture([row]);
+    await expectMaintenanceError(
+      createCommunityMaintenanceRunner(fixture.pool).execute({
+        batchSize,
+        kind: "purge_profile_deletions",
+      }),
+      "result_invalid",
+    );
+  });
+
+  it.each([
+    {
+      batchSize: 1,
+      row: {
+        deleted_challenges: 2,
+        deleted_recovery_authorities: 0,
+        deleted_used_recovery_codes: 0,
+      },
+    },
+    {
+      batchSize: 1,
+      row: {
+        deleted_challenges: 0,
+        deleted_recovery_authorities: 2,
+        deleted_used_recovery_codes: 0,
+      },
+    },
+    {
+      batchSize: 1,
+      row: {
+        deleted_challenges: 0,
+        deleted_recovery_authorities: 0,
+        deleted_used_recovery_codes: 2,
+      },
+    },
+    {
+      batchSize: 2,
+      row: {
+        deleted_challenges: 0,
+        deleted_recovery_authorities: 1,
+        deleted_used_recovery_codes: 2,
+      },
+    },
+  ])("bounds and correlates authentication cleanup result counts", async ({ batchSize, row }) => {
+    const fixture = createPoolFixture([row]);
+    await expectMaintenanceError(
+      createCommunityMaintenanceRunner(fixture.pool).execute({
+        batchSize,
+        kind: "cleanup_expired_auth_state",
       }),
       "result_invalid",
     );

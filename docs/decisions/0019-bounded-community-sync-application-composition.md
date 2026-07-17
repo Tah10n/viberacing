@@ -1,6 +1,6 @@
 # ADR 0019: Bounded Community sync application composition
 
-- Status: Accepted (local application boundary; consumed by ADR 0020)
+- Status: Accepted (local application consumed by ADRs 0020/0033 and synthetic full-path gate)
 - Date: 2026-07-15
 - Decision owners: Ingest, API, Database, Security, Privacy, Contracts, and Operations
 - Supersedes: None
@@ -137,13 +137,16 @@ Current local evidence includes:
 - one synthetic signed raw request passing through the actual production verifier, origin consume,
   minimal device lookup, bounded database adapter, and submission mapper in the required order;
 - configured factory construction, explicit close, and database cleanup after invalid origin
-  configuration; and
+  configuration;
 - 54 new adversarial/composition cases, bringing the Ingest suite to 317 tests at 100% statement,
-  branch, function, and line coverage, plus strict lint, type checking, and production build.
+  branch, function, and line coverage, plus strict lint, type checking, and production build; and
+- one opt-in emitted-host scenario proving this composition against a synthetic dedicated login in
+  disposable PostgreSQL for accepted, duplicate, replay, and revoked-device decisions.
 
-The composed production-path test uses a synthetic key and mock PostgreSQL pool. It does not prove a
-working deployment login, certificate, live PostgreSQL connection, Cloudflare signer, direct-origin
-denial, HTTP framing, public header/serialization policy, admission, backpressure, rate limits,
+The focused production-path test uses a synthetic key and mock PostgreSQL pool. The full-path gate
+separately proves loopback framing, public header/serialization policy, and the real procedure calls
+under a disposable synthetic login. It does not prove a deployment credential/certificate,
+Cloudflare signer, direct-origin denial, external TLS, distributed backpressure/rate limits,
 capacity, connector behavior, or real-user synchronization.
 
 ## References

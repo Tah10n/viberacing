@@ -13,6 +13,13 @@ apply.
 - Community results are self-reported. Keep the disclaimer visible and Verified mode unreachable.
 - `CarRecipe` remains a closed enum with fixed repository-owned output. Do not add arbitrary text,
   markup, styles, colors, files, SVG, or URLs.
+- CarRecipe proposal identity and expiry are server-owned. Preserve generated validation before
+  persistence, exact possessed-session profile derivation, one pending proposal, the maximum 24-hour
+  logical expiry, purpose-separated encrypted decision control, raw proposal/profile ID omission
+  from HTML, explicit approve/reject, and atomic activation. Device credentials cannot administer a
+  recipe. Physical expired-row cleanup is a separate bounded Jobs capability; do not claim a
+  schedule, agent ingress, public active-recipe projection, a live login, or deployment until
+  separate evidence exists.
 - Browser persistence is limited to locale, theme, and motion. Do not add trackers, analytics,
   fingerprinting, or account state to local storage.
 - Preserve per-navigation nonce CSP and repository-root build isolation. Do not add a CSP origin,
@@ -86,8 +93,8 @@ apply.
   required-UV assertion bound to that session, profile, handle, RP, origin, and five-minute
   challenge. Consume the challenge and invoke the existing atomic hide/revoke/unlink/enqueue
   capability in one statement, clear all browser auth cookies only after success, and keep every
-  failure generic. Do not claim that queueing runs the absent purge worker, clears a future public
-  cache, or proves restore replay.
+  failure generic. Do not claim that queueing itself invokes the separate Jobs purge command, clears
+  a future public cache, or proves tombstone/backup/restore replay.
 - Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
   correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
   CORS/auth/retry semantics to the common problem-response boundary.

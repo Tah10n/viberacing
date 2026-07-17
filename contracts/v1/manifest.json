@@ -17,6 +17,11 @@
   ],
   "schemas": [
     {
+      "file": "car-recipe.schema.json",
+      "exportName": "carRecipeV1",
+      "typeName": "CarRecipeV1"
+    },
+    {
       "file": "community-score-page.schema.json",
       "exportName": "communityScorePageV1",
       "typeName": "CommunityScorePageV1"

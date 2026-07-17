@@ -57,6 +57,9 @@ jobs:
       - name: Run deterministic Node and repository gates
         run: pnpm run verify:node
 
+      - name: Exercise the local Ingest HTTP-to-PostgreSQL path
+        run: pnpm run test:ingest:postgres-integration
+
       - name: Audit the locked dependency graph
         run: pnpm audit --audit-level high --registry=https://registry.npmjs.org/
 

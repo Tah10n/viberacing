@@ -21,6 +21,31 @@ function accountScoreRows() {
   }));
 }
 
+function carRecipeStateRow() {
+  return {
+    active_chassis: "roadster",
+    active_cockpit: "canopy",
+    active_nose: "classic",
+    active_palette: "mint",
+    active_schema_version: 1,
+    active_seed: 7,
+    active_trail: "none",
+    active_wheels: "street",
+    active_wing: "none",
+    proposal_chassis: "rally",
+    proposal_cockpit: "rally",
+    proposal_expires_at: "2026-07-17T11:00:00.000Z",
+    proposal_id: "00000000-0000-4000-8000-000000000701",
+    proposal_nose: "scoop",
+    proposal_palette: "sunburst",
+    proposal_schema_version: 1,
+    proposal_seed: 42,
+    proposal_trail: "spark",
+    proposal_wheels: "all-terrain",
+    proposal_wing: "low",
+  };
+}
+
 const accountOverviewRequest = {
   seasonStart: "2026-07-13",
   sessionId: "00000000-0000-4000-8000-000000000403",
@@ -30,6 +55,7 @@ const accountOverviewRequest = {
 function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
   const releases: boolean[] = [];
   const client: EnrollmentDatabaseClient = {
+    approveCarRecipe: vi.fn(() => Promise.resolve([{ approved: true }])),
     completePairingApproval: vi.fn(() => Promise.resolve([{ approved: true }])),
     completeInitialPasskey: vi.fn(() => Promise.resolve([{ registered: true }])),
     completePasskeyAddition: vi.fn(() => Promise.resolve([{ added: true }])),
@@ -66,7 +92,34 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     createSourceUnlinkChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
     pauseSource: vi.fn(() => Promise.resolve([{ paused: true }])),
+    proposeCarRecipe: vi.fn(() => Promise.resolve([{ proposed: true }])),
     readAccountOverview: vi.fn(() => Promise.resolve(accountScoreRows())),
+    readCarRecipeState: vi.fn(() =>
+      Promise.resolve([
+        {
+          active_chassis: null,
+          active_cockpit: null,
+          active_nose: null,
+          active_palette: null,
+          active_schema_version: null,
+          active_seed: null,
+          active_trail: null,
+          active_wheels: null,
+          active_wing: null,
+          proposal_chassis: null,
+          proposal_cockpit: null,
+          proposal_expires_at: null,
+          proposal_id: null,
+          proposal_nose: null,
+          proposal_palette: null,
+          proposal_schema_version: null,
+          proposal_seed: null,
+          proposal_trail: null,
+          proposal_wheels: null,
+          proposal_wing: null,
+        },
+      ]),
+    ),
     readActiveDeviceInventory: vi.fn(() =>
       Promise.resolve([
         {
@@ -126,6 +179,7 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     },
     revokeEnrollmentSession: vi.fn(() => Promise.resolve([{ revoked: true }])),
     revokeDevice: vi.fn(() => Promise.resolve([{ revoked: true }])),
+    rejectCarRecipe: vi.fn(() => Promise.resolve([{ rejected: true }])),
     setProfileVisibility: vi.fn(() => Promise.resolve([{ visibility: "hidden" }])),
     startRecovery: vi.fn(() => Promise.resolve([{ started: true }])),
     verifyRuntimeBoundary: vi.fn(() =>
@@ -814,6 +868,106 @@ describe("enrollment database", () => {
       }),
     ).rejects.toMatchObject({ code: "result_invalid" });
     expect(unorderedInventory.releases).toEqual([true]);
+  });
+
+  it("maps one exact CarRecipe state and rejects malformed or widened database rows", async () => {
+    const request = {
+      sessionId: profile.sessionId,
+      sessionVerifierDigest: new Uint8Array(32),
+    };
+    const valid = fixture({
+      readCarRecipeState: () => Promise.resolve([carRecipeStateRow()]),
+    });
+    const state = await valid.database.readCarRecipeState(request);
+    expect(state).toEqual({
+      active: {
+        schemaVersion: 1,
+        chassis: "roadster",
+        nose: "classic",
+        cockpit: "canopy",
+        wing: "none",
+        wheels: "street",
+        palette: "mint",
+        trail: "none",
+        seed: 7,
+      },
+      proposal: {
+        expiresAt: "2026-07-17T11:00:00.000Z",
+        proposalId: "00000000-0000-4000-8000-000000000701",
+        recipe: {
+          schemaVersion: 1,
+          chassis: "rally",
+          nose: "scoop",
+          cockpit: "rally",
+          wing: "low",
+          wheels: "all-terrain",
+          palette: "sunburst",
+          trail: "spark",
+          seed: 42,
+        },
+      },
+    });
+    expect(Object.isFrozen(state)).toBe(true);
+    expect(Object.isFrozen(state.active)).toBe(true);
+    expect(Object.isFrozen(state.proposal)).toBe(true);
+    expect(Object.isFrozen(state.proposal?.recipe)).toBe(true);
+    expect(valid.releases).toEqual([false]);
+
+    await expect(
+      valid.database.proposeCarRecipe({
+        expiresAt: "2026-07-17T11:00:00.000Z",
+        proposalId: "00000000-0000-4000-8000-000000000701",
+        recipe: state.proposal?.recipe ?? state.active!,
+        ...request,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      valid.database.approveCarRecipe({
+        proposalId: "00000000-0000-4000-8000-000000000701",
+        ...request,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      valid.database.rejectCarRecipe({
+        proposalId: "00000000-0000-4000-8000-000000000701",
+        ...request,
+      }),
+    ).resolves.toBe(true);
+    expect(valid.releases).toEqual([false, false, false, false]);
+
+    const row = carRecipeStateRow();
+    const invalidRows: readonly unknown[] = [
+      [],
+      [row, row],
+      [{ ...row, remote_asset_url: "https://invalid.example/car.svg" }],
+      [{ ...row, active_chassis: null }],
+      [{ ...row, active_schema_version: 2 }],
+      [{ ...row, proposal_palette: "custom" }],
+      [{ ...row, proposal_seed: 65_536 }],
+      [{ ...row, proposal_id: "not-a-uuid" }],
+      [{ ...row, proposal_expires_at: "2026-07-17 11:00:00+00" }],
+      [
+        {
+          ...row,
+          proposal_chassis: null,
+          proposal_cockpit: null,
+          proposal_nose: null,
+          proposal_palette: null,
+          proposal_schema_version: null,
+          proposal_seed: null,
+          proposal_trail: null,
+          proposal_wheels: null,
+          proposal_wing: null,
+        },
+      ],
+    ];
+    for (const rows of invalidRows) {
+      const invalid = fixture({ readCarRecipeState: () => Promise.resolve(rows) });
+      await expect(invalid.database.readCarRecipeState(request)).rejects.toMatchObject({
+        code: "result_invalid",
+      });
+      expect(invalid.releases).toEqual([true]);
+    }
   });
 
   it("keeps empty owned sources visible and enforces the active-device ceiling", async () => {

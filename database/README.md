@@ -2,35 +2,41 @@
 
 ## Status
 
-This directory contains twenty-two SQL-first revisions for identity, passkey login and management,
-restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
-finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
-implemented. A local invite/OAuth/initial-passkey, returning-passkey, session-scoped passkey,
-source/device inventory, source pause/reactivation/unlink, and immediate device-revoke application
-now consumes only fixed Web/Auth capabilities with injected or synthetic dependencies. The same
-local boundary also performs bounded recovery-code Argon2id verification and replacement WebAuthn
-verification before fixed recovery calls. It now also performs session-rate-limited browser pairing
-review and fresh-passkey approval for an explicit new or active existing source. Closed local
-start/poll routes now consume the pairing applications through the same protected Web capability; no
-production credential or deployed database consumes them. A Web/Auth boundary creates bounded
-pairing material through one fixed start call; a second composes keyed pairing lookup, strict
-Ed25519 possession proof, and exact activation through the same mock-tested fixed-query pool, but
-neither has a live login or transport. A local Ingest kernel verifies a bounded exact-body
-origin/device request, and a separate fixed-query adapter maps origin replay plus its output to
-three capabilities through a probed least-privileged pool. Mock tests do not call PostgreSQL or
-supply a working login. One local public-score route and one local one-shot Jobs runner wrap narrow
+This directory contains twenty-six SQL-first revisions for identity, passkey login and management,
+restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
+finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
+PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,
+returning-passkey, session-scoped passkey, source/device inventory, source
+pause/reactivation/unlink, and immediate device-revoke application now consumes only fixed Web/Auth
+capabilities with injected or synthetic dependencies. The same local boundary also performs bounded
+recovery-code Argon2id verification and replacement WebAuthn verification before fixed recovery
+calls. It now also performs session-rate-limited browser pairing review and fresh-passkey approval
+for an explicit new or active existing source. Closed local start/poll routes now consume the
+pairing applications through the same protected Web capability; no production credential or deployed
+database consumes them. A Web/Auth boundary creates bounded pairing material through one fixed start
+call; a second composes keyed pairing lookup, strict Ed25519 possession proof, and exact activation
+through the same mock-tested fixed-query pool, but neither has a live login or transport. A local
+Ingest kernel verifies a bounded exact-body origin/device request, and a separate fixed-query
+adapter maps origin replay plus its output to three capabilities through a probed least-privileged
+pool. Focused tests use mock pools. A separate opt-in integration creates a synthetic dedicated
+Ingest login, passes independently signed loopback HTTP through the emitted host, and verifies the
+exact database result. One local public-score route and one local one-shot Jobs runner wrap narrow
 capabilities without a working database login. The database-only ingest and Jobs-only
-ingest-retention, pairing-retention, open-season scoring, and terminal finalization procedures plus
-Web-only public and exact-session private score projections are implemented; HTTP ingest, scheduled
-execution, audited corrections, and broader purge are not.
+ingest-retention, pairing-retention, authentication-retention, primary profile deletion, open-season
+scoring, and terminal finalization procedures plus Web-only public and exact-session private score
+projections are implemented; deployed HTTP ingest, scheduled execution, audited corrections,
+cache/backup/tombstone purge, and restore replay are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
 32-byte verifier instead of accepting a caller-selected profile ID. The database still relies on
 Web/Auth to perform OAuth and WebAuthn cryptographic verification before invoking the matching
 procedure. The local identity slice does so for enrollment, login, passkey, recovery, profile,
-device, source, and pairing-approval controls with injected/synthetic evidence. Pairing start/poll
-transport is locally implemented, but live credentials and deployment remain absent.
+device, source, pairing-approval, and CarRecipe proposal/decision controls with injected/synthetic
+evidence. Pairing start/poll transport is locally implemented, but live credentials and deployment
+remain absent. CarRecipe is not projected by the public score read, and no agent/connector proposal
+capability is present. Expired-proposal cleanup is implemented only as a bounded local Jobs
+capability with no schedule, live login, monitoring, or deployment.
 
 ## Layout
 
@@ -90,12 +96,27 @@ transport is locally implemented, but live credentials and deployment remain abs
 - `migrations/0022_pairing_transport_rate_policy.sql` adds 130 fixed global/client-bucket window
   rows and one Web-only anonymous start/poll admission function without retaining a client ID or
   digest.
+- `migrations/0023_auth_retention_cleanup.sql` adds Jobs-only bounded deletion of expired
+  authentication challenges, restricted recovery authorities, and exact still-present used/scrubbed
+  source-code rows under profile-first recovery serialization.
+- `migrations/0024_profile_deletion_purge.sql` adds Jobs-only maximum-10 primary deletion of due
+  `deletion_pending` profiles under all-maintenance serialization, restrictive-pairing cleanup, and
+  atomic terminal job settlement.
+- `migrations/0025_car_recipe_proposals.sql` adds one forced-RLS active recipe and at-most-one
+  pending proposal per profile plus Web-only exact-session propose/read/approve/reject capabilities.
+- `migrations/0026_car_recipe_proposal_cleanup.sql` adds Jobs-only maximum-1000 physical deletion of
+  expired pending recipes under a separate private mutex while preserving live and active recipes.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
   cross-profile denial, private derived-score read/hide/republish, visibility
   hide/publish/idempotency, expiry, replay, rollback, audit redaction, and synchronous deletion
   effects.
+- `tests/car_recipe_proposals.sql` exercises exact recipes, replacement, approval/replay, rejection,
+  hidden-profile access, cross-profile denial, malformed values, wrong session proof, and the
+  Web-only grant matrix.
+- `tests/car_recipe_proposal_cleanup.sql` exercises oldest-first batch deletion, idempotency, live
+  and active-state preservation, invalid bounds, missing mutex, and the Jobs-only grant matrix.
 - `tests/pairing_capabilities.sql` exercises session-bound attempt blocking/reset, key-rotation
   lookup, new/existing-source choice, first-winner rebinding denial, replay, poll possession, exact
   activation, immutable binding, and public safety ceilings.
@@ -117,6 +138,13 @@ transport is locally implemented, but live credentials and deployment remain abs
   live-row preservation, entry cascade, retained current values, and detached raw provenance.
 - `tests/pairing_cleanup.sql` exercises bounded oldest-first pending/approved/cancelled deletion,
   challenge cascade, idempotency, activated/live preservation, mutex failure, and exact role denial.
+- `tests/auth_cleanup.sql` exercises independent challenge/authority bounds, consumed and terminal
+  deletion, live and unused-code preservation, idempotency, full expiry indexes, mutex failure, and
+  exact role denial.
+- `tests/profile_deletion_purge.sql` exercises maximum-10 oldest-first due work, retry/future state,
+  idempotency, committed-state drift rollback, mutex failure, no-tombstone scope, and exact role
+  denial. The identity capability scenario additionally runs the real request queue through purge
+  and checks restrictive pairing, pending-key, identity/source/device, score, audit, and job state.
 - `tests/identity_concurrency_setup.sql` and `tests/identity_concurrency_assertions.sql` prove one
   invite enrollment, one initial-passkey challenge consumption, one active-session rotation, and
   deletion dominance over concurrent session rotation without leaving stale authority.
@@ -146,6 +174,12 @@ transport is locally implemented, but live credentials and deployment remain abs
 - `tests/pairing_cleanup_concurrency_setup.sql` and
   `tests/pairing_cleanup_concurrency_assertions.sql` prove two pairing-cleanup calls serialize,
   delete each expired transaction/key pair once, and preserve live pending state.
+- `tests/auth_cleanup_concurrency_setup.sql`, `tests/auth_cleanup_concurrency_assertions.sql`, and
+  `tests/auth_cleanup_recovery_race_assertions.sql` prove two auth-cleanup calls serialize and that
+  cleanup follows profile-first recovery lock order while preserving a concurrent new authority.
+- `tests/profile_deletion_purge_concurrency_setup.sql` and
+  `tests/profile_deletion_purge_concurrency_assertions.sql` prove two purge calls serialize and that
+  purge holds the authentication-cleanup mutex before any primary profile cascade.
 - `tests/season_scoring.sql` proves ISO-week grouping, exact logarithmic rounding and caps,
   distinct-source aggregation, same-rank semantics without a raw-token tie breaker, hidden and
   quarantined exclusion, immutable version/season definitions, idempotent refresh, role denial, and
@@ -168,6 +202,11 @@ transport is locally implemented, but live credentials and deployment remain abs
   assertions and lock-contention races, waits until every tagged contender is observed in the
   holder's transitive blocker chain, proves protective contender order before releasing the holder,
   proves runtime denials, and removes the container, network, and ephemeral storage.
+- `scripts/test-ingest-postgres-integration.mjs` owns a separate one-off `postgres-test` container
+  with only an ephemeral loopback-published port. It applies the same reviewed manifest, creates a
+  synthetic login with only `viberacing_ingest`, sends signed HTTP through emitted Ingest host code,
+  validates accepted/duplicate/replay/revoke responses and exact stored state, then removes the
+  container, network, and storage.
 
 ## Capability model
 
@@ -176,7 +215,7 @@ transport is locally implemented, but live credentials and deployment remain abs
 | `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                             |
 | `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus public score read |
 | `viberacing_ingest` | No    | None           | Usage      | Origin replay, device verification, and Community sync only        |
-| `viberacing_jobs`   | No    | None           | Usage      | Ingest/pairing cleanup plus Community refresh and finalization     |
+| `viberacing_jobs`   | No    | None           | Usage      | Three cleanup calls, profile purge, Community refresh/finalization |
 | `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                       |
 | `PUBLIC`            | N/A   | None           | None       | None                                                               |
 
@@ -338,20 +377,22 @@ against an injected minimal lookup. ADRs 0016 and 0018 let the adapter atomicall
 replay tuple, provide that lookup, and map only a reconstructed, contract-revalidated allowlist to
 `submit_community_sync` through fixed parameterized SQL, a four-client deadline-bound pool, and an
 exact Ingest login/role/search-path probe. The database still independently enforces binding,
-replay, time, lifecycle, season, and monotonic state. A future HTTP service must preserve the exact
-raw envelope, use ADR 0017's protected key reader plus ADR 0018's persistent replay capability,
-compose verifier and adapter, and map only a generic public acknowledgement. The mock-pool evidence
-is not a live login or PostgreSQL integration result. The local returning-login options route keeps
-its challenge only in an encrypted browser continuation and creates no database state before valid
-proof, but it is not launch-ready without edge/service limits and cleanup of consumed ceremonies.
+replay, time, lifecycle, season, and monotonic state. The local HTTP service preserves the exact raw
+envelope, uses ADR 0017's protected key reader plus ADR 0018's persistent replay capability,
+composes verifier and adapter, and maps only a generic public acknowledgement. The opt-in synthetic
+loopback gate exercises that complete path through a disposable least-privileged login. It is not
+deployment TLS/credential, edge, capacity, or real-user evidence. The local returning-login options
+route keeps its challenge only in an encrypted browser continuation and creates no database state
+before valid proof, but it is not launch-ready without edge/service limits. Revision 0023 supplies
+bounded cleanup after expiry, but it still requires scheduling and deployed retention evidence.
 Procedures use one generic failure message for closed authorization and constraint failures; HTTP
 status mapping and response shaping remain application work. Recovery SQL now uses a short-lived
 restricted authority and never represents it as an ordinary session. The local application now
 performs bounded matching/dummy Argon2id work under the protected pepper, generic configured-floor
 HTTP handling, and exact replacement WebAuthn verification before these fixed calls. Distributed
-edge attempt controls, cleanup, notifications, live integration, and operational monitoring remain
-absent. The deletion procedure implements immediate lock-down only; primary purge, cache purge,
-tombstones, backup replay, and user-visible progress remain unimplemented.
+edge attempt controls, cleanup scheduling, notifications, live integration, and operational
+monitoring remain absent. The deletion procedure implements immediate lock-down only; primary purge,
+cache purge, tombstones, backup replay, and user-visible progress remain unimplemented.
 
 ## Data and privacy map
 
@@ -473,8 +514,9 @@ credential against the encrypted challenge continuation, one fixed function crea
 that five-minute profile-free challenge in the same transaction as the existing credential-derived
 session. It returns only profile ID, public handle, and locale so Web/Auth can seal its existing
 session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
-31 cross-capability denials. Consumed ceremony cleanup, a deployment login, edge attempt policy,
-monitoring, and live authenticator/database integration remain open.
+37 cross-capability denials. Physical cleanup after expiry is supplied by revision 0023; a
+deployment login, edge attempt policy, monitoring, and live authenticator/database integration
+remain open.
 
 Revision 0015 adds no table, preference field, or broader role. It maps the existing active/hidden
 profile lifecycle to one closed account value, derives the target solely from an exact active
@@ -506,6 +548,45 @@ Revision 0019 adds no table, column, retained value, or runtime role. Its Web-on
 Monday, and projects existing derived season rows. PostgreSQL evidence covers exact possession,
 canonical-week rejection, seven-row shape, hidden empty state, and republish restoration. Ingest,
 Jobs, Admin, and `PUBLIC` remain denied by the runtime capability matrix.
+
+Revision 0023 physically removes expired authentication challenges and independently bounded expired
+restricted recovery authorities. It deletes an authority's exact source code only when the row still
+exists in terminal used/scrubbed form; unused recovery codes remain credentials. Cleanup captures
+server time after its private Jobs mutex and locks candidate profiles in stable order before
+authority/code rows, matching recovery and deletion transitions. Observed worker and recovery-start
+races prove serialization, live-authority preservation, and the profile-first lock order in isolated
+PostgreSQL. No scheduler, live Jobs login, backup purge, monitoring, public retention cadence, or
+deployment is implied.
+
+Revision 0024 physically removes at most ten due `deletion_pending` profiles per invocation. It
+locks every current maintenance mutex in stable name order before queue/profile rows, including the
+six rows present after revision 0026, so cascaded auth, pairing, proposal, usage, and score deletion
+cannot deadlock a concurrent Jobs capability. It removes every profile-bound restrictive pairing
+first and deletes only a still-pending source-free key directly; source-bound keys leave through the
+profile cascade. The exact job becomes terminal inside the same transaction before its profile
+foreign key is nulled, while audit linkage is redacted. The opaque job remains. No keyed identity
+tombstone, cache/backup purge, restore replay, scheduler, live Jobs login, monitoring, capacity, or
+deployment is implied.
+
+Revision 0025 stores only the exact `CarRecipeV1` columns, with database checks repeating every
+version, enum, and seed bound. Both tables are forced-RLS and have no runtime table grants. Web may
+propose, read, approve, or reject only after the function derives an `active` or `hidden` profile
+from the exact session ID and 32-byte verifier digest; no function accepts a profile ID. Proposal
+IDs and expiries are server-created, one pending row replaces the previous pending row, approval
+atomically inserts or replaces the active recipe and deletes the exact proposal, while rejection
+deletes only the exact proposal. Ingest, Jobs, Admin, `PUBLIC`, direct table reads, cross-profile
+controls, and replay are denied. Profile deletion cascades both recipe rows. Expiry prevents use
+after at most 24 hours. Revision 0026 supplies bounded physical deletion, while agent ingress,
+public projection, a cleanup schedule/cadence, live credentials, monitoring, capacity evidence, and
+deployment remain open.
+
+Revision 0026 physically removes at most 1000 expired CarRecipe proposals per invocation. It
+captures server time only after its separate private Jobs mutex, selects oldest expiry/ID first,
+uses `FOR UPDATE SKIP LOCKED` around concurrent Web decisions, rechecks expiry at deletion, and
+returns only one bounded count. Active recipes and live proposals are never candidates. Web, Ingest,
+Admin, `PUBLIC`, and direct table access remain denied. The observed two-worker race proves
+serialization, exact expired-row progress, and live-row preservation only in isolated PostgreSQL; no
+scheduler, cadence, live Jobs login, monitoring, backup purge, capacity, or deployment is implied.
 
 The local account application consumes those capabilities through the same probed read-write pool.
 Its combined overview query reads visibility and the current week's derived score with one checkout,
@@ -562,12 +643,14 @@ Focused commands:
 pnpm run test:database-check
 pnpm run check:database
 pnpm run test:database:integration
+pnpm run test:ingest:postgres-integration
 ```
 
-The first two commands are offline and part of `pnpm run verify`. The integration command requires
-Docker, starts only the opt-in `postgres-test` service with no host port, uses ephemeral `tmpfs`
-storage, and removes its uniquely named Compose project in `finally`. It never connects to the
-normal `postgres` volume.
+The first two commands are offline and part of `pnpm run verify`. Both integration commands require
+Docker and never connect to the normal `postgres` volume. The database suite starts only the
+portless `postgres-test` service in a uniquely named Compose project with ephemeral `tmpfs` storage.
+The Ingest suite starts a separate one-off `postgres-test` container with only an ephemeral
+loopback-published port, then removes that container, network, and storage in `finally`.
 
 ## Rollback and deployment boundary
 
@@ -588,14 +671,13 @@ hard failure, not something the script silently broadens or repairs.
 - Integrate the local recovery boundary with deployment-owned pepper/timing configuration and live
   authenticator/database evidence; add distributed edge attempt policy, notifications, inventory
   review evidence, and provenance-preserving cleanup at the 32-passkey lifetime edge.
-- Add edge/service rate limiting for anonymous login, recovery, and pairing starts plus bounded
-  cleanup for consumed passkey-login challenges and recovery authority; do not encode deployable
-  private thresholds in this repository.
-- Wrap the local Ingest verification kernel and protected key reader with an exact-byte HTTP
-  boundary, live secret-manager/edge key injection, generic public errors, no-queue admission,
-  socket deadlines, backpressure, and rate limits. Compose them with the local least-privileged
-  PostgreSQL adapter through a deployment-provisioned login and verified TLS, then add
-  integration/load evidence.
+- Add edge/service rate limiting for anonymous login, recovery, and pairing starts; do not encode
+  deployable private thresholds in this repository. Schedule and monitor the implemented bounded
+  expired authentication and CarRecipe-proposal cleanup before exposure.
+- Deploy the local exact-byte Ingest HTTP/host boundary with live secret-manager/edge key injection,
+  a deployment-provisioned least-privileged login and verified TLS, direct-origin denial,
+  distributed backpressure/rate controls, monitoring, and load evidence. The synthetic loopback
+  integration does not replace those gates.
 - Implement a scheduler, monitoring, retry/overlap policy, live login/TLS integration, and capacity
   evidence around the local one-shot Jobs cleanup/refresh/finalization runner, plus audited
   corrections and freshness/streak projection.
@@ -604,9 +686,10 @@ hard failure, not something the script silently broadens or repairs.
   query-plan/load evidence, monitoring, and deployment verification.
 - Define a separate complete race/profile contract when CarRecipe, streak, freshness, and profile
   detail have real persistence and lifecycle evidence.
-- Schedule and monitor the implemented ingest- and pairing-retention procedures, and implement
-  bounded cleanup for remaining ceremonies, sessions, jobs, recovery authority, passkey provenance,
-  and tombstones. Expiry columns outside revisions 0008, 0012, and 0013 are not cleanup.
+- Schedule and monitor the implemented auth-, CarRecipe-proposal-, ingest-, and pairing-retention
+  procedures, and implement bounded cleanup for remaining sessions, jobs, passkey provenance,
+  pairing rate windows, and tombstones. Expiry columns outside revisions 0008, 0012, 0013, 0023, and
+  0026 are not cleanup.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
   in isolated staging before real-user ingestion.

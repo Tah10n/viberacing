@@ -17,11 +17,23 @@ Rust/Web pairing message and signature. Local Web/Auth boundaries now compose a 
 minute pairing start, protected keyed poll lookup, strict proof, and atomic activation through exact
 versioned routes. A pairing-only Rust command generates and retains its real key in the native OS
 credential store. No operational Codex launch, sync-capable connector, signed upload, deployed
-endpoint, working database credential, edge signer, host/port/TLS entry point, or composed live flow
-exists.
+endpoint, working database credential, edge signer, trusted external TLS/edge route, or composed
+live flow exists. A separate local Ingest host can now bind the reviewed application/server
+composition under a closed loopback or explicitly declared Railway-edge listener contract; that
+local executable evidence does not establish any of those deployment claims. An opt-in synthetic
+integration now carries independently signed requests through the emitted host, a disposable
+least-privileged Ingest login, and the reviewed PostgreSQL procedures. It proves the closed response
+and persistence contract locally, not protected secret delivery, external TLS/edge routing,
+production credentials, real-user input, or capacity.
 
 ## Canonical version 1 schemas
 
+- [`CarRecipeV1`](v1/car-recipe.schema.json) is the exact nine-field customization object used by
+  the local deterministic renderer and session-owned proposal boundary. It fixes version 1,
+  project-owned body/part/palette/trail enums, and an integer seed from 0 through 65535. It rejects
+  arbitrary color, text, URL, path, file, markup, drawing command, conversation, and unknown fields.
+  It is generated as an OpenAPI component but the authenticated local proposal forms are not public
+  OpenAPI operations.
 - [`CommunityScorePageV1`](v1/community-score-page.schema.json) is a response-only top-32 score
   page. It fixes the trust tier to `community`, fixes `selfReported` to true, mirrors only the ten
   reviewed revision 0011 fields, and permits an empty result without private-state disclosure. It
@@ -77,9 +89,9 @@ exists.
   `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
 - [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
   type/export names, closed authentication-policy inventory, and the locally implemented four
-  locally implemented operations: `GET /v1/community/scores`, `POST /v1/community/sync`, and the two
-  pairing start/poll POST routes, with method-specific query/body, response, problem, no-queue,
-  authentication, cache, same-origin CORS, and repository-status policies.
+  operations: `GET /v1/community/scores`, `POST /v1/community/sync`, and the two pairing start/poll
+  POST routes, with method-specific query/body, response, problem, no-queue, authentication, cache,
+  same-origin CORS, and repository-status policies.
 
 Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
 timestamp is bounded. Reviewed date-range and ISO-weekday extensions make the score season boundary
@@ -126,7 +138,11 @@ generated contract, and strict device signature before returning a frozen allowl
 local factory supplies only one exact primary and optional secondary origin-key pair to that
 verifier; no real key or deployment binding is present. The local application composer binds the
 persistent replay/device/submission adapter, generates one request ID, and validates the closed
-success/problem decision. A future deployment entry point may use only this server/application
-composition through a deployment-provisioned Ingest login and verified TLS. The local transport
-bounds one process but does not replace edge rate shaping, direct-origin denial, distributed
-backpressure, capacity testing, monitoring, or database constraints.
+success/problem decision. ADR 0033's separate local host binds only this server/application
+composition through exact listener modes and bounded process shutdown. Its `railway-edge` value is
+an operator declaration, not proof of a provisioned Ingest login, external TLS, or trusted edge
+route. The local transport bounds one process but does not replace edge rate shaping, direct-origin
+denial, distributed backpressure, capacity testing, monitoring, or database constraints.
+`pnpm run test:ingest:postgres-integration` additionally checks the complete synthetic loopback
+contract against disposable PostgreSQL, including accepted, duplicate, replay, and revoked-device
+decisions plus exact stored state.

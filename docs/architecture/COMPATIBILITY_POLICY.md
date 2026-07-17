@@ -25,6 +25,14 @@ policy, records whether any exact Codex and connector combination is currently s
 These axes are independently versioned. A connector version does not imply a database migration or
 scoring change, and a web deployment does not silently change a finalized season.
 
+`CarRecipeV1` currently fixes nine fields, seven project-owned enum axes, and a seed from 0
+through 65535. The schema validator, PostgreSQL checks, animated renderer, and server-rendered
+three-theme preview agree on those values. A stored version 1 recipe must retain that visual
+meaning; adding an axis, widening a value to free-form content, or reinterpreting an enum is a new
+version and reviewed migration, not an additive implementation detail. The current internal account
+forms do not create a public HTTP compatibility promise, and the active recipe is not in the public
+score response.
+
 Revision 0011's internal PostgreSQL score projection is not itself a public HTTP contract. ADR 0010
 defines a closed response-only v1 component and generated derivatives, while ADR 0013 now adds the
 local path, request validation, exact mapping, response headers, no-store policy, and compatibility

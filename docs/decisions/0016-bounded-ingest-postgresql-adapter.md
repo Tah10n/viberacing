@@ -1,6 +1,6 @@
 # ADR 0016: Bounded Ingest PostgreSQL adapter
 
-- Status: Accepted (local adapter and ADR 0019 composition implemented; live login/HTTP pending)
+- Status: Accepted (local adapter through synthetic HTTP/PostgreSQL integration; deployment pending)
 - Date: 2026-07-15
 - Decision owners: Ingest, Database, Security, Privacy, Dependencies, and Operations
 - Supersedes: None
@@ -161,16 +161,18 @@ Current local evidence includes:
   mapping;
 - connection, role, query, result, release, close, and identifier failure containment with
   destructive client release; and
-- 214 total Ingest unit/security tests, including 97 new adapter/configuration/boundary cases, with
+- 426 current Ingest unit/security tests, including the adapter/configuration/boundary cases, with
   100% statement, branch, function, and line coverage, plus strict lint, type checking, and
-  production TypeScript compilation.
+  production TypeScript compilation; and
+- one opt-in emitted-host integration using a synthetic dedicated login against disposable
+  PostgreSQL, with accepted/duplicate/replay/revoke responses and exact stored-state verification.
 
-Tests use synthetic inputs and mock pools. They do not authenticate through a deployment login,
-negotiate TLS, or execute these calls against PostgreSQL. The existing isolated PostgreSQL suite
-separately proves both functions, grants, constraints, deadlines, role denials, and concurrency. ADR
-0019 later adds one signed synthetic verifier-to-adapter execution through a mock pool. HTTP
-framing, live origin secret/replay integration, working login/TLS, admission/load, monitoring
-backend, connector, Cloudflare/Railway, and deployment evidence remain open.
+Focused tests use synthetic inputs and mock pools. The full-path gate separately executes these
+calls through a real disposable PostgreSQL instance and synthetic least-privileged login without
+TLS. The existing isolated PostgreSQL suite additionally proves functions, grants, constraints,
+deadlines, role denials, and concurrency. Deployment origin-secret delivery, credential/TLS,
+admission/load, monitoring, connector, Cloudflare/Railway, real-user, and deployment evidence remain
+open.
 
 ## References
 

@@ -157,10 +157,11 @@ configured response floor, purpose-separated cookies, exact replacement registra
 completion after failed WebAuthn, and minimal post-commit profile mapping. They use synthetic
 secrets, authenticator responses, and database results only.
 
-The repository still lacks distributed/edge anonymous attempt controls, cleanup for abandoned and
-terminal recovery state, notifications, production secrets and timing values, live
-authenticator/database integration, monitoring, and hosted operational evidence. Recovery sign-in is
-locally implemented but not launch-ready until those controls are implemented and tested.
+ADR 0032 now supplies bounded cleanup for expired challenges and terminal recovery authority. The
+repository still lacks distributed/edge anonymous attempt controls, cleanup scheduling,
+notifications, production secrets and timing values, live authenticator/database integration,
+monitoring, and hosted operational evidence. Recovery sign-in is locally implemented but not
+launch-ready until those controls are implemented and tested.
 
 ## References
 
@@ -168,6 +169,7 @@ locally implemented but not launch-ready until those controls are implemented an
 - [Data flow](../architecture/DATA_FLOW.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
 - [Threat model](../security/THREAT_MODEL.md)
+- [Bounded authentication retention cleanup](0032-bounded-auth-retention-cleanup.md)
 - [Authentication takeover abuse](../security/ABUSE_CASES.md#vr-abuse-auth-takeover-oauth-session-passkey-or-recovery-abuse)
 - [Recovery oracle abuse](../security/ABUSE_CASES.md#vr-abuse-recovery-oracle-recovery-enumeration-replay-or-authority-expansion)
 - [Privacy data map](../security/PRIVACY_DATA_MAP.md)

@@ -1,6 +1,6 @@
 # ADR 0018: Persistent Ingest origin replay store
 
-- Status: Accepted (database, adapter, and ADR 0019 local composition implemented; HTTP pending)
+- Status: Accepted (database through synthetic HTTP/PostgreSQL integration; deployment pending)
 - Date: 2026-07-15
 - Decision owners: Ingest, Database, Jobs, Security, Privacy, and Operations
 - Supersedes: None
@@ -112,7 +112,7 @@ capability must be removed or changed. Never fall back to process-local replay a
 
 ## Verification
 
-Current local evidence includes:
+Acceptance evidence recorded for this decision included:
 
 - first consume, exact replay, key-ID separation, expired-tuple reuse, malformed key/digest/time,
   millisecond precision, and bounded-lifetime PostgreSQL scenarios;
@@ -124,14 +124,18 @@ Current local evidence includes:
   five-second lock/statement configuration checks;
 - bounded origin/device/snapshot cleanup, idempotency, live-row preservation, and an observed
   two-worker cleanup race;
-- 12 immutable migration checks and the real isolated PostgreSQL suite with 23 observed lock-wait
-  races, eight relation denials, and 25 cross-capability checks; and
+- 23 immutable migration checks and the real isolated PostgreSQL suite with 25 observed lock-wait
+  races, 12 relation denials, and 34 cross-capability checks; and
 - strict Ingest pool/input/result/failure tests and Jobs three-count mapping tests, bringing the
-  suites to 263 and 96 tests respectively at 100% statement, branch, function, and line coverage.
+  current suites to 426 and 120 tests respectively at 100% statement, branch, function, and line
+  coverage; and
+- one opt-in signed loopback scenario proving a fresh origin nonce reaches persistence while an
+  exact repeated HTTP proof returns generic unauthorized without a second snapshot.
 
-Tests use synthetic tuples and mock application pools. They do not prove live credentials, TLS,
-Cloudflare signing, HTTP composition, production scheduling, physical purge latency, backup expiry,
-deployment, or capacity.
+Focused tests use synthetic tuples and mock application pools; the full-path scenario uses a
+disposable synthetic Ingest login and real PostgreSQL. It does not prove deployment credentials or
+TLS, Cloudflare signing, direct-origin denial, production scheduling, physical purge latency, backup
+expiry, deployment, real-user behavior, or capacity.
 
 ## References
 

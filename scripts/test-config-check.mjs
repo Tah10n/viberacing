@@ -20,6 +20,17 @@ VIBERACING_JOBS_DATABASE_NAME=viberacing_local
 VIBERACING_JOBS_DATABASE_USER=replace_with_local_jobs_login
 VIBERACING_JOBS_DATABASE_PASSWORD=replace-with-local-jobs-password
 VIBERACING_JOBS_DATABASE_TLS_MODE=disable
+VIBERACING_INGEST_LISTENER_HOST=127.0.0.1
+VIBERACING_INGEST_LISTENER_PORT=8788
+VIBERACING_INGEST_TLS_TERMINATION=loopback-cleartext
+VIBERACING_INGEST_DATABASE_HOST=127.0.0.1
+VIBERACING_INGEST_DATABASE_PORT=54329
+VIBERACING_INGEST_DATABASE_NAME=viberacing_local
+VIBERACING_INGEST_DATABASE_USER=replace_with_local_ingest_login
+VIBERACING_INGEST_DATABASE_PASSWORD=replace-with-local-ingest-password
+VIBERACING_INGEST_DATABASE_TLS_MODE=disable
+VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID=edge_local
+VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL=replace-with-random-32-byte-base64url-key
 VIBERACING_WEB_DATABASE_HOST=127.0.0.1
 VIBERACING_WEB_DATABASE_PORT=54329
 VIBERACING_WEB_DATABASE_NAME=viberacing_local
@@ -60,6 +71,33 @@ assert.match(
     ),
   ).join("\n"),
   /Jobs and Web database examples must use distinct login principals/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_INGEST_DATABASE_USER=replace_with_local_ingest_login",
+      "VIBERACING_INGEST_DATABASE_USER=viberacing_local",
+    ),
+  ).join("\n"),
+  /Ingest database example credentials must not reuse the bootstrap owner/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_INGEST_DATABASE_USER=replace_with_local_ingest_login",
+      "VIBERACING_INGEST_DATABASE_USER=replace_with_local_jobs_login",
+    ),
+  ).join("\n"),
+  /Ingest, Jobs, and Web database examples must use distinct login principals/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL=replace-with-random-32-byte-base64url-key",
+      "VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL=private-value",
+    ),
+  ).join("\n"),
+  /must retain the reviewed public-safe example value/,
 );
 assert.match(
   validateEnvExampleText(
@@ -119,6 +157,7 @@ const requiredNodeSteps = [
   { run: "rustup toolchain install 1.94.0 --profile minimal" },
   { run: "cargo fetch --locked" },
   { run: "pnpm run verify:node" },
+  { run: "pnpm run test:ingest:postgres-integration" },
 ];
 const goodCiWorkflow = {
   ...goodWorkflow,
@@ -148,7 +187,25 @@ assert.match(
     jobs: {
       node: {
         ...goodCiWorkflow.jobs.node,
-        steps: [requiredNodeSteps[2], ...requiredNodeSteps.slice(0, 2), requiredNodeSteps[3]],
+        steps: requiredNodeSteps.filter(
+          (step) => step.run !== "pnpm run test:ingest:postgres-integration",
+        ),
+      },
+    },
+  }).join("\n"),
+  /Ingest PostgreSQL integration/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      node: {
+        ...goodCiWorkflow.jobs.node,
+        steps: [
+          requiredNodeSteps[2],
+          ...requiredNodeSteps.slice(0, 2),
+          ...requiredNodeSteps.slice(3),
+        ],
       },
     },
   }).join("\n"),

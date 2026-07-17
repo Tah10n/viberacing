@@ -9,6 +9,8 @@ const contractsRoot = resolve(root, "packages", "contracts");
 const contractsRequire = createRequire(resolve(contractsRoot, "package.json"));
 const ingestRoot = resolve(root, "apps", "ingest");
 const ingestRequire = createRequire(resolve(ingestRoot, "package.json"));
+const ingestHostRoot = resolve(root, "apps", "ingest-host");
+const ingestHostRequire = createRequire(resolve(ingestHostRoot, "package.json"));
 const jobsRoot = resolve(root, "apps", "jobs");
 const jobsRequire = createRequire(resolve(jobsRoot, "package.json"));
 const webRoot = resolve(root, "apps", "web");
@@ -24,6 +26,14 @@ const contractsVitestBin = resolve(dirname(contractsRequire.resolve("vitest")), 
 const ingestEslintBin = resolve(dirname(ingestRequire.resolve("eslint")), "..", "bin", "eslint.js");
 const ingestTscBin = ingestRequire.resolve("typescript/bin/tsc");
 const ingestVitestBin = resolve(dirname(ingestRequire.resolve("vitest")), "vitest.mjs");
+const ingestHostEslintBin = resolve(
+  dirname(ingestHostRequire.resolve("eslint")),
+  "..",
+  "bin",
+  "eslint.js",
+);
+const ingestHostTscBin = ingestHostRequire.resolve("typescript/bin/tsc");
+const ingestHostVitestBin = resolve(dirname(ingestHostRequire.resolve("vitest")), "vitest.mjs");
 const jobsEslintBin = resolve(dirname(jobsRequire.resolve("eslint")), "..", "bin", "eslint.js");
 const jobsTscBin = jobsRequire.resolve("typescript/bin/tsc");
 const jobsVitestBin = resolve(dirname(jobsRequire.resolve("vitest")), "vitest.mjs");
@@ -143,6 +153,12 @@ const checks = [
     [contractsVitestBin, "run", "--coverage"],
     contractsRoot,
   ],
+  [
+    "contract production build",
+    process.execPath,
+    [contractsTscBin, "--project", "tsconfig.build.json"],
+    contractsRoot,
+  ],
   ["Ingest lint", process.execPath, [ingestEslintBin, "."], ingestRoot],
   ["Ingest types", process.execPath, [ingestTscBin, "--noEmit"], ingestRoot],
   [
@@ -156,6 +172,25 @@ const checks = [
     process.execPath,
     [ingestTscBin, "--project", "tsconfig.build.json"],
     ingestRoot,
+  ],
+  ["Ingest host lint", process.execPath, [ingestHostEslintBin, "."], ingestHostRoot],
+  ["Ingest host types", process.execPath, [ingestHostTscBin, "--noEmit"], ingestHostRoot],
+  [
+    "Ingest host tests and coverage",
+    process.execPath,
+    [ingestHostVitestBin, "run", "--coverage"],
+    ingestHostRoot,
+  ],
+  [
+    "Ingest host production build",
+    process.execPath,
+    [ingestHostTscBin, "--project", "tsconfig.build.json"],
+    ingestHostRoot,
+  ],
+  [
+    "Ingest host built entry point",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-ingest-host-entrypoint.mjs")],
   ],
   ["Jobs lint", process.execPath, [jobsEslintBin, "."], jobsRoot],
   ["Jobs types", process.execPath, [jobsTscBin, "--noEmit"], jobsRoot],

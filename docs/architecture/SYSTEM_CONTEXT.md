@@ -6,17 +6,19 @@ This is the planned runtime architecture. The current repository contains a test
 foundation, one local public-score route with a visible validated browser consumer and synthetic
 fallback, local invite/OAuth/initial-passkey enrollment, returning-passkey login, exact-session
 public-profile visibility, and private passkey-inventory/add/revocation slices with encrypted
-cookies, local recovery-code replacement-passkey sign-in, and logout, one local one-shot Jobs
-runner, and local Ingest request-verification, PostgreSQL-adapter, application-composition, and
-bounded HTTP-server boundaries, plus library-only connector initialization and candidate `0.144.5`
-account/usage parser boundaries, a synthetic one-shot supervisor, an exact-body sync composer,
-isolated pairing/sync signers, a pure Web pairing verifier, one local connector command with native
-OS key custody and exact start/poll routes, and one explicit Windows candidate command that admits,
-collects, signs, and uploads a single sync. It still has no deployed application service,
-operational sync connector, supported Codex version, distributed recovery perimeter,
-Cloudflare/Railway deployment, live OAuth or database login, or production database. Component
-status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
-required runtime boundaries, not deployed evidence.
+cookies, local recovery-code replacement-passkey sign-in, and logout, one local one-shot Jobs runner
+including bounded primary profile deletion, and local Ingest request-verification,
+PostgreSQL-adapter, application-composition, and bounded HTTP-server boundaries, plus library-only
+connector initialization and candidate `0.144.5` account/usage parser boundaries, a synthetic
+one-shot supervisor, an exact-body sync composer, isolated pairing/sync signers, a pure Web pairing
+verifier, one local connector command with native OS key custody and exact start/poll routes, and
+one explicit Windows candidate command that admits, collects, signs, and uploads a single sync. It
+also has one opt-in synthetic loopback integration through the emitted Ingest host and a disposable
+least-privileged PostgreSQL login. It still has no deployed application service, operational sync
+connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway deployment,
+live OAuth or database login, or production database. Component status is tracked in
+[implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
+not deployed evidence.
 
 ## System context
 
@@ -93,50 +95,60 @@ state.
 
 Revision 0007 implements the database-only Usage submission capability; revision 0008 gives Jobs
 bounded expired ingest-state cleanup; revision 0013 separately gives Jobs bounded expired
-non-activated pairing/key cleanup; revision 0009 gives Jobs an isolated open-season scoring refresh;
-and revision 0010 adds server-time late-ingest quarantine plus immutable Jobs-only finalization.
-Revision 0011 gives Web only a bounded, active-profile score projection, and ADR 0010 adds its
-response-only top-32 contract. A server-only Web mapper now enforces the exact projection shape and
-its cross-row invariants before returning a validated frozen contract. ADR 0011 adds a bounded
-server-only PostgreSQL pool/config/store boundary around that read, including strict production TLS,
-fixed deadlines/query, and per-checkout effective-role and least-privileged-login verification. ADR
-0013 adds a locally implemented request/admission/response route around it. These capabilities have
-role, contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a local one-shot
-Jobs adapter/CLI; ADR 0029 extends it to exactly two cleanup, one refresh, and one finalization
-command with the same role/login probe, one-client pool, and fixed deadlines. ADR 0015 adds a pure
-local Ingest kernel that bounds the raw envelope and JSON parser, verifies a replay-consumed
-body-bound origin proof before parsing, validates the sync contract, and verifies the exact
-source-bound device request under strict Ed25519 semantics. ADR 0016 adds a fixed-query four-client
-PostgreSQL adapter with strict TLS/config, per-checkout Ingest role/login/search-path verification,
-closed device/submission mappers, copied parameters, and destructive failure release. ADR 0017 adds
-an exact primary/secondary origin-key reader and config-backed verifier factory without exposing a
-reusable key container. ADR 0018 adds persistent atomic origin replay, and ADR 0019 composes the
-same replay/device/submission adapter behind one transport-free validated application decision. ADR
-0020 adds one confined Fastify server factory with exact raw-body/header preservation, closed
-POST/error serialization, local connection/deadline bounds, four-call no-queue admission, and no
-proxy/request-ID trust. The library-only ADR 0021 Rust foundation adds one bounded stable App Server
-JSONL initialization state machine and discards all server values. ADR 0022 adds the exact-version
-candidate account/usage adapter, and ADR 0023 composes both through a fixed,
-deadline/output-bounded, reap-before-success synthetic child supervisor. ADR 0024 adds a second
-inaccessible reviewed context and exact sync-body/digest/device-message composition shared with the
-Ingest verifier. ADR 0025 adds an isolated one-use signer behind a third inaccessible device-bound
-key capability and returns only the same body plus five signed header values. ADR 0026 adds an
-inaccessible pending-key/challenge signer and pure strict Web verifier for one exact
-pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed atomic
-activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
+non-activated pairing/key cleanup; revision 0023 adds bounded authentication cleanup; revision 0024
+adds bounded primary profile deletion; revision 0009 gives Jobs an isolated open-season scoring
+refresh; and revision 0010 adds server-time late-ingest quarantine plus immutable Jobs-only
+finalization. Revision 0011 gives Web only a bounded, active-profile score projection, and ADR 0010
+adds its response-only top-32 contract. A server-only Web mapper now enforces the exact projection
+shape and its cross-row invariants before returning a validated frozen contract. ADR 0011 adds a
+bounded server-only PostgreSQL pool/config/store boundary around that read, including strict
+production TLS, fixed deadlines/query, and per-checkout effective-role and least-privileged-login
+verification. ADR 0013 adds a locally implemented request/admission/response route around it. These
+capabilities have role, contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a
+local one-shot Jobs adapter/CLI; ADRs 0029, 0032, and 0034 extend it to exactly three cleanup, one
+primary purge, one refresh, and one finalization command with the same role/login probe, one-client
+pool, and fixed deadlines. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and
+JSON parser, verifies a replay-consumed body-bound origin proof before parsing, validates the sync
+contract, and verifies the exact source-bound device request under strict Ed25519 semantics. ADR
+0016 adds a fixed-query four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest
+role/login/search-path verification, closed device/submission mappers, copied parameters, and
+destructive failure release. ADR 0017 adds an exact primary/secondary origin-key reader and
+config-backed verifier factory without exposing a reusable key container. ADR 0018 adds persistent
+atomic origin replay, and ADR 0019 composes the same replay/device/submission adapter behind one
+transport-free validated application decision. ADR 0020 adds one confined Fastify server factory
+with exact raw-body/header preservation, closed POST/error serialization, local connection/deadline
+bounds, four-call no-queue admission, and no proxy/request-ID trust. ADR 0033 adds a separate local
+host with exact loopback/Railway listener declarations, one bind, complete partial-startup cleanup,
+and bounded signal-driven shutdown; its external-TLS declaration is not deployment evidence. The
+opt-in full-path gate composes those Ingest boundaries with a synthetic dedicated login in
+disposable PostgreSQL and verifies signed accepted/duplicate/replay/revoke HTTP behavior plus exact
+stored state. It remains local synthetic evidence, not external TLS, edge, secret-delivery,
+production-credential, capacity, or real-user evidence. The library-only ADR 0021 Rust foundation
+adds one bounded stable App Server JSONL initialization state machine and discards all server
+values. ADR 0022 adds the exact-version candidate account/usage adapter, and ADR 0023 composes both
+through a fixed, deadline/output-bounded, reap-before-success synthetic child supervisor. ADR 0024
+adds a second inaccessible reviewed context and exact sync-body/digest/device-message composition
+shared with the Ingest verifier. ADR 0025 adds an isolated one-use signer behind a third
+inaccessible device-bound key capability and returns only the same body plus five signed header
+values. ADR 0026 adds an inaccessible pending-key/challenge signer and pure strict Web verifier for
+one exact pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed
+atomic activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
 material and one fixed database call; ADR 0029 supplies bounded Jobs-only physical cleanup after
-expiry. A separate local `/connect` flow supplies session-rate-limited pending-code review and
-fresh-passkey approval for an explicitly selected new or active existing opaque source, without
-exposing raw source IDs. ADR 0030 now exposes only the pairing journey through one Rust `connect`
-command, exact local start/poll routes, fixed-storage database admission, and native OS credential
-custody. App Server launch and sync capabilities still have no public constructor, so ADR 0031 lets
-only the private Windows x86_64 command construct them after exact explicit-path artifact admission
-and active-record review. It creates fresh context and performs one fixed signed upload. Automatic
-discovery, macOS/Linux admission, scheduling, and release remain absent. The host/port/TLS
-deployment entry point, live secret-manager/edge key injection, working deployment
-login/certificate, composed live end-to-end flow, edge/capacity evidence, Cloudflare/Railway path,
-released sync connector, Jobs scheduler/monitoring, public cache, and audited correction authority
-shown in the design remain planned.
+pairing expiry, while ADR 0032 separately cleans expired authentication challenges and restricted
+recovery authority under the recovery profile-lock order. ADR 0034 adds all-maintenance-serialized
+maximum-10 primary profile purge without inventing a tombstone policy. A separate local `/connect`
+flow supplies session-rate-limited pending-code review and fresh-passkey approval for an explicitly
+selected new or active existing opaque source, without exposing raw source IDs. ADR 0030 now exposes
+only the pairing journey through one Rust `connect` command, exact local start/poll routes,
+fixed-storage database admission, and native OS credential custody. App Server launch and sync
+capabilities still have no public constructor, so ADR 0031 lets only the private Windows x86_64
+command construct them after exact explicit-path artifact admission and active-record review. It
+creates fresh context and performs one fixed signed upload. Automatic discovery, macOS/Linux
+admission, scheduling, and release remain absent. Trusted external TLS/edge routing, live
+secret-manager/edge key injection, working deployment login/certificate, composed live end-to-end
+flow, edge/capacity evidence, a verified Cloudflare/Railway path, released sync connector, Jobs
+scheduler/monitoring, public cache, backup/tombstone/restore replay, and audited correction
+authority shown in the design remain planned.
 
 ## Component responsibilities
 
@@ -146,6 +158,7 @@ shown in the design remain planned.
 | Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                       | Profile authorization, score derivation, database credentials                                     | TB-01 and TB-06        |
 | Web/Auth         | Public score read, OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion initiation | Device private key, direct usage submission, schema ownership                                     | TB-02, TB-07, TB-08    |
 | Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision           | OAuth, admin, invites, passkey/recovery, migrations, final score authority                        | TB-05, TB-06, TB-07    |
+| Ingest host      | Closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                                | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials     | TB-06 and TB-07        |
 | Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                  | Interactive auth, public request handling, schema ownership                                       | TB-07 and TB-11        |
 | PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                      | Public routing, connector trust, release credentials                                              | TB-07                  |
 | Rust connector   | Local App Server lifecycle, compatibility adapter, local key, canonical signing, safe scheduling                              | Website commands, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
@@ -174,6 +187,11 @@ Trust-boundary IDs are defined in the [threat model](../security/THREAT_MODEL.md
 The browser and connector can propose only fields declared in versioned contracts. Trust tier,
 profile identity, accepted source binding, server receipt time, season, score, rank, streak,
 freshness projection, moderation state, and deletion state are server-derived.
+
+The current `CarRecipeV1` proposal is browser-only: Web derives the profile from an exact possessed
+session, creates proposal identity/expiry, and exposes only an encrypted session-bound decision
+control. PostgreSQL owns the atomic pending-to-active transition. A device cannot administer a car,
+and there is no agent/connector proposal ingress or public active-recipe projection yet.
 
 The [privacy data map](../security/PRIVACY_DATA_MAP.md) defines field classification and retention.
 The [data-flow document](DATA_FLOW.md) defines enrollment, pairing, synchronization, public read,

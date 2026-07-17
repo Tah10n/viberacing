@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   dayLabels,
-  formatCarPart,
+  formatCarChassis,
   formatDayCount,
   formatFreshness,
   formatScore,
@@ -30,8 +30,8 @@ describe("localization", () => {
     expect(formatFreshness(2, "ru")).toBe("2 дня");
     expect(formatFreshness(null, "en")).toBe("—");
     expect(formatDayCount(11, "ru")).toBe("11 дн.");
-    expect(formatCarPart("turbo-blue", "en")).toBe("Turbo blue");
-    expect(formatCarPart("turbo-blue", "ru")).toBe("Турбо-синий");
+    expect(formatCarChassis("roadster", "en")).toBe("Roadster");
+    expect(formatCarChassis("roadster", "ru")).toBe("Родстер");
     expect(dayLabels("en")).toHaveLength(7);
     expect(dayLabels("ru")).toHaveLength(7);
   });

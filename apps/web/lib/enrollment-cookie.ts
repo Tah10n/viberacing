@@ -14,7 +14,8 @@ const nonceBytes = 12;
 const tagBytes = 16;
 const segmentPattern = /^[A-Za-z0-9_-]+$/;
 
-export type EnrollmentCookieKind = "login" | "oauth" | "passkey" | "recovery" | "session";
+export type EnrollmentCookieKind =
+  "car-proposal" | "login" | "oauth" | "passkey" | "recovery" | "session";
 export type EnrollmentRandomBytes = (size: number) => Uint8Array;
 
 export interface EnrollmentCookieCodec {
@@ -54,6 +55,7 @@ export function createEnrollmentCookieCodec(
     throw new Error("Enrollment cookie codec is unavailable.");
   }
   const keys = {
+    "car-proposal": deriveKey(masterKey, "car-proposal"),
     login: deriveKey(masterKey, "login"),
     oauth: deriveKey(masterKey, "oauth"),
     passkey: deriveKey(masterKey, "passkey"),

@@ -1,6 +1,6 @@
 # ADR 0020: Bounded Community sync Fastify HTTP boundary
 
-- Status: Accepted (local HTTP server boundary; deployment pending)
+- Status: Accepted (local server/host and synthetic PostgreSQL integration; deployment pending)
 - Date: 2026-07-15
 - Decision owners: Ingest, API, Security, Privacy, Contracts, Dependencies, and Operations
 - Supersedes: None
@@ -150,10 +150,11 @@ network destination, stored row, or retained log. Rollback removes those files a
 restores the manifest to the score-only operation, regenerates derived contracts and inventory, and
 leaves ADRs 0015–0019 intact.
 
-Once a deployment entry point consumes the factory, rollback must disable Community sync or replace
-the transport with an equivalent reviewed boundary. It must not expose the transport-free
-application directly, normalize signed bytes, discard duplicate headers, queue without a bound,
-trust arbitrary proxies, weaken proof/replay checks, or return unvalidated framework output.
+ADR 0033 now consumes this factory through a separate local host. Rolling either boundary back from
+a deployed state must first disable Community sync or replace the complete transport with an
+equivalent reviewed boundary. It must not expose the transport-free application directly, normalize
+signed bytes, discard duplicate headers, queue without a bound, trust arbitrary proxies, weaken
+proof/replay checks, or return unvalidated framework output.
 
 ## Verification
 
@@ -164,30 +165,33 @@ Current local evidence includes:
 - exact raw-body and raw-header preservation, duplicated security-header evidence, strict route,
   method, content type, `Accept`, proxy, inbound-ID, and response-header behavior;
 - malformed framing and duplicate `Content-Length` over a real loopback socket, body/header budgets,
-  partial-request socket timeout, connection/reuse policy, and generic raw client errors;
+  partial-request socket timeout, a completed-stream accepted response after asynchronous work,
+  connection/reuse policy, and generic raw client errors;
 - no-queue overload with four unsettled application calls and lease retention until settlement;
 - every application success/problem mapping, thrown/rejected work, framework-style 503, malformed or
   accessor-backed decisions, generated-validator rejection, entropy failure, write failure, and
   non-reflection assertions;
-- 108 additional cases, bringing the Ingest suite to 425 tests at 100% statement, branch, function,
+- 108 additional cases, bringing the Ingest suite to 426 tests at 100% statement, branch, function,
   and line coverage, plus strict lint, type checking, and production build;
-- two generated OpenAPI operations and 34 checker regression cases, including missing evidence,
+- two generated OpenAPI operations and 40 checker regression cases, including missing evidence,
   method-specific contract drift, referenced authentication-policy digest drift, and stale output;
-  and
+- one opt-in emitted-host integration proving accepted/duplicate/replay/revoke response status,
+  headers, unique request IDs, and exact PostgreSQL state through a disposable synthetic login; and
 - exact lockfile, registry metadata, direct notice, inventory, license, script, and online advisory
   review for Fastify 5.10.0.
 
 The configured 33-second handler limit is bound to executable policy and generic 503 handling; the
 suite does not claim a wall-clock production capacity result. No test proves Cloudflare signing,
 direct-origin denial, trusted deployment routing, a real protected key, TLS termination, a working
-Ingest database login/certificate, live PostgreSQL, distributed rate limits, monitoring, connector
-behavior, or real-user synchronization.
+deployment Ingest login/certificate, distributed rate limits, monitoring, connector behavior,
+real-user synchronization, or production capacity.
 
 ## References
 
 - [Fastify 5.10.0 release](https://github.com/fastify/fastify/releases/tag/v5.10.0)
 - [Fastify security policy](https://github.com/fastify/fastify/security/policy)
 - [Community sync application composition](0019-bounded-community-sync-application-composition.md)
+- [Bounded Railway Ingest host](0033-bounded-railway-ingest-host.md)
 - [Community sync verification kernel](0015-bounded-community-sync-verification-kernel.md)
 - [Bounded Ingest PostgreSQL adapter](0016-bounded-ingest-postgresql-adapter.md)
 - [Persistent origin replay store](0018-persistent-ingest-origin-replay-store.md)

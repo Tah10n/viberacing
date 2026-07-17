@@ -25,8 +25,8 @@ passkey, необратимое отключение источника со с�
 точного ввода handle и свежей проверки passkey, ротацию кодов восстановления с одноразовым показом
 после свежей проверки passkey, а также logout. Репозиторий не предоставляет рабочий invite issuer,
 вход по коду восстановления или замену passkey, OAuth registration, реальные secrets, live
-OAuth/authenticator/database credentials, deletion purge worker, edge abuse controls или evidence с
-реальным пользователем.
+OAuth/authenticator/database credentials, scheduled deletion purge, cache/backup/tombstone handling,
+restore replay, edge abuse controls или evidence с реальным пользователем.
 
 Страница аккаунта теперь также рендерит семь derived-баллов по дням текущей Community-недели и
 bounded summary через один объединённый server-side visibility/score checkout. Hidden-профиль не
@@ -91,10 +91,13 @@ pnpm install --frozen-lockfile --ignore-scripts
 pnpm run dev:web
 ```
 
+Полный синтетический loopback Ingest path отдельно проверяется командой
+`pnpm run test:ingest:postgres-integration`; она требует Docker и не является deployment evidence.
+
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.
 
-В репозитории уже есть пять закрытых JSON Schemas, генерируемые TypeScript validators и локально
+В репозитории уже есть десять закрытых JSON Schemas, генерируемые TypeScript validators и локально
 реализованные OpenAPI GET и POST: sync request/result, bounded problem details, запрос одного
 Community season и response-only top-32 Community score page с неизменяемыми
 `community`/`selfReported` trust fields. Server-only fail-closed mapper преобразует в этот response
@@ -115,25 +118,32 @@ database-ready allowlist. Отдельный bounded Ingest PostgreSQL adapter �
 allowlist, копирует binary/array parameters, при каждом checkout проверяет точный least-privileged
 Ingest login/role и вызывает только fixed origin-replay consume, device lookup или submission через
 four-client pool с deadlines. Без TLS разрешён только loopback development/test, в остальных случаях
-обязательна certificate verification. Тесты используют mock pools и не содержат рабочего login.
-Локальная protected factory теперь требует точную primary origin-HMAC пару и допускает только одну
-полную distinct rotation-пару из namespaced configuration; наружу она возвращает только verifier, а
-реальных key и secret-manager binding в репозитории нет. Forced-RLS PostgreSQL table хранит только
-origin key ID, domain-separated nonce digest и millisecond expiry; Ingest-only function атомарно
-consume-ит tuple, а observed race доказывает одного победителя. Transport-free application boundary
-теперь генерирует server-owned request ID, связывает этот replay/device/submission adapter с точным
-verifier, дожидается settlement базы и возвращает только валидированный acknowledgement либо generic
-problem decision. Отдельная локальная Fastify server factory сохраняет точные raw body/header
-evidence для `POST /v1/community/sync`, не доверяет proxy headers и входящему request ID, без
-очереди допускает четыре application call, ограничивает parser/headers/connections и задаёт
-5/33/34-second request/handler/connection deadlines, после чего сериализует только повторно
-проверенные `no-store` success/problem contracts. Есть loopback и injection evidence, но нет
-deployment entry point. Live protected key injection, edge signer, direct-origin denial,
-host/port/TLS configuration, distributed rate policy и monitoring всё ещё отсутствуют. Library-only
-Rust foundation теперь выполняет фиксированный stable handshake и только после него — candidate
-`0.144.5` account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает email/plan/summary и
-возвращает не более 31 отсортированной строгой date/token записи. В репозитории есть exact release
-metadata, schema digests, minimal extracts, fixtures и drift/matrix checker. Windows x86_64
+обязательна certificate verification. Focused tests используют mock pools. Локальная protected
+factory теперь требует точную primary origin-HMAC пару и допускает только одну полную distinct
+rotation-пару из namespaced configuration; наружу она возвращает только verifier, а реальных key и
+secret-manager binding в репозитории нет. Forced-RLS PostgreSQL table хранит только origin key ID,
+domain-separated nonce digest и millisecond expiry; Ingest-only function атомарно consume-ит tuple,
+а observed race доказывает одного победителя. Transport-free application boundary теперь генерирует
+server-owned request ID, связывает этот replay/device/submission adapter с точным verifier,
+дожидается settlement базы и возвращает только валидированный acknowledgement либо generic problem
+decision. Отдельная локальная Fastify server factory сохраняет точные raw body/header evidence для
+`POST /v1/community/sync`, не доверяет proxy headers и входящему request ID, без очереди допускает
+четыре application call, ограничивает parser/headers/connections и задаёт 5/33/34-second
+request/handler/connection deadlines, после чего сериализует только повторно проверенные `no-store`
+success/problem contracts. Отдельный локальный host теперь запускает именно эту factory только в
+loopback development/test либо с явным Railway-edge production contract, закрывает частично
+созданные boundary и ограниченно обрабатывает SIGINT/SIGTERM. Его 121 test и built-entrypoint check
+не доказывают Railway, внешний TLS, edge route, live credentials или deployment. Отдельный opt-in
+integration test собирает emitted host, создаёт синтетический выделенный Ingest login в одноразовом
+PostgreSQL, отправляет независимо подписанные loopback HTTP requests и проверяет accepted,
+duplicate, persistent replay, revoked device, response headers и точные сохранённые строки до
+полного cleanup. Он не доказывает deployment credential/certificate, protected secret delivery,
+внешний edge route, real-user data или capacity. Live protected key injection, edge signer,
+direct-origin denial, distributed rate policy и monitoring всё ещё отсутствуют. Library-only Rust
+foundation теперь выполняет фиксированный stable handshake и только после него — candidate `0.144.5`
+account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает email/plan/summary и возвращает не
+более 31 отсортированной строгой date/token записи. В репозитории есть exact release metadata,
+schema digests, minimal extracts, fixtures и drift/matrix checker. Windows x86_64
 development-команда допускает только точные size и SHA-256 официального artifact; repository tests
 не запускают пользовательский Codex account, а support matrix остаётся пустой. One-shot supervisor
 проверяет точную sequence на target-built synthetic child: фиксированный `app-server` argument,
@@ -161,10 +171,10 @@ binary автоматически, не повторяет ambiguous POST и н�
 macOS/Linux admission, live database connection, capacity evidence, packaging, release,
 поддерживаемого sync connector и deployment.
 
-Также добавлены двадцать две SQL migrations: 25 приватных
-identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,
-deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL. Узкая
-procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
+Также добавлены двадцать шесть SQL migrations: 27 приватных
+identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring/CarRecipe
+tables, deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL.
+Узкая procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
 initial-passkey challenge, вход с сессией, привязанной к точному passkey, управление несколькими
 passkeys, rotate/revoke сессии, немедленную блокировку при запросе удаления и одноразовую привязку
 устройства к новому или существующему opaque source. Также реализованы приватный inventory
@@ -178,10 +188,9 @@ discoverable-credential login, fresh step-up для отзыва owned non-curre
 зашифрованный привязанный к сессии control token на 15 минут. Pause выполняется сразу, reactivation
 доступна только для `paused` и не меняет public/hidden visibility. Необратимый unlink использует
 отдельный fresh-passkey context, атомарно отзывает устройства источника и также не публикует hidden
-профиль; application verifier для Argon2id recovery всё ещё отсутствует. Database-only scoring
-refresh уже суммирует distinct eligible sources одного профиля перед единым дневным лимитом,
-закрепляет immutable версию формулы за ISO-week season и сохраняет только derived
-score/rank/active-days/source-count без raw tokens и source IDs. Database-only finalization
+профиль. Database-only scoring refresh уже суммирует distinct eligible sources одного профиля перед
+единым дневным лимитом, закрепляет immutable версию формулы за ISO-week season и сохраняет только
+derived score/rank/active-days/source-count без raw tokens и source IDs. Database-only finalization
 закрывает grace window через 48 часов после ISO-week по server time, сохраняет late snapshot только
 как quarantined evidence и делает terminal season неизменяемым, сохраняя profile-purge. Отдельная
 Web-only database projection возвращает только bounded active-profile score rows без raw values,
@@ -204,20 +213,36 @@ consume-ит step-up и добавляет credential в пределах lifeti
 сохраняет только защищённые verifier values и показывает plaintext один раз. Локальные recovery-code
 sign-in, replacement-passkey и WebAuthn pairing approval реализованы только с injected/synthetic
 evidence; live authenticator/database integration, edge rate/capacity controls и deployment всё ещё
-отсутствуют. Database-only Community ingest capability уже выдаёт минимальный материал активного
-устройства и принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic
-source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure независимо
-удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots, сохраняя current
-source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup, scoring refresh
+отсутствуют. Отдельный локальный CarRecipe slice принимает только точный versioned enum-only объект,
+хранит не более одного приватного proposal на 24 часа для выведенного из сессии профиля, показывает
+его во всех трёх темах и требует явный зашифрованный session-bound approve или reject control.
+Approval атомарно заменяет active recipe; device, cross-profile и non-Web capabilities запрещены.
+Отдельная Jobs-only capability теперь bounded oldest-first batches физически удаляет expired
+proposal, сохраняя live proposals и active recipes. Active recipe пока не входит в public
+projection, а agent/connector ingress, schedule для cleanup, live credentials и deployment остаются
+отдельными воротами. Database-only Community ingest capability уже выдаёт минимальный материал
+активного устройства и принимает bounded source-bound snapshots с exact retry, nonce replay,
+monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure
+независимо удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots, сохраняя
+current source/day values. Ещё две отдельные Jobs-only процедуры удаляют bounded expired pairing
+state и истёкшие auth challenges/restricted recovery authorities, сохраняя live ceremonies, unused
+recovery codes, sessions, passkeys и audit evidence. Ещё одна Jobs-only procedure удаляет не более
+1000 expired CarRecipe proposals за вызов под отдельным private mutex и не затрагивает active
+recipes. Отдельная Jobs-only procedure теперь атомарно удаляет до 10 due `deletion_pending`
+профилей, сначала снимает restrictive pairing references, terminally settles opaque job и не создаёт
+неподтверждённый tombstone. Локальный one-shot Jobs runner вызывает только одну из семи fixed
+capabilities: auth/CarRecipe-proposal/ingest/pairing cleanup, primary profile purge, scoring refresh
 или finalization через отдельный least-privileged config, single-client pool, проверку
 role/login/search path, fixed deadlines, prepared parameters, closed result validation и стабильный
 non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel, adapter и
-application объединены на synthetic/mock-pool evidence, а Fastify boundary отдельно проверена через
-injection/loopback с mock application. Полный HTTP-to-PostgreSQL path не проверен через реальный
-login. Deployed HTTP ingest route, operational sync connector, cleanup/scoring scheduler, live
-Ingest/Jobs login/TLS integration, monitoring backend, deployed public score read, audited
-correction flow, purge worker и deployed database ещё не реализованы, поэтому локальный enrollment
-ещё не является готовой production-авторизацией, а приёма реальных данных пока нет.
+application объединены на synthetic/mock-pool evidence. Отдельный opt-in loopback scenario теперь
+проводит независимо подписанный HTTP request через emitted host и одноразовый least-privileged
+PostgreSQL login, включая duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed
+HTTP ingest route, operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs
+login/TLS integration, monitoring backend, deployed public score read, audited correction flow,
+cache/backup/tombstone purge, restore replay и scheduled deletion execution ещё не реализованы,
+поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
+данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

@@ -1,16 +1,19 @@
 # Vibe Racing Jobs
 
-This private workspace is the local one-shot application boundary for four existing PostgreSQL
+This private workspace is the local one-shot application boundary for seven existing PostgreSQL
 maintenance capabilities:
 
+- delete one bounded batch of expired authentication challenges and restricted recovery state;
+- delete one bounded batch of expired private CarRecipe proposals while preserving active recipes;
 - delete one bounded batch of expired ingest nonces and raw snapshots;
 - delete one bounded batch of expired non-activated pairings and their pending keys;
+- purge one bounded batch of due deletion-pending profiles and their primary data;
 - refresh one open Community season; and
 - idempotently finalize one Community season after its server-enforced grace deadline.
 
-It is not a scheduler, deployment, monitoring backend, correction system, deletion worker, or
-production-capacity claim. PostgreSQL remains authoritative for server time, serialization, scoring,
-grace closure, finalization, and row bounds.
+It is not a scheduler, deployment, monitoring backend, correction system, cache/backup/tombstone
+purge system, or production-capacity claim. PostgreSQL remains authoritative for server time,
+serialization, scoring, grace closure, finalization, deletion state, and row bounds.
 
 ## Security boundary
 
@@ -43,8 +46,11 @@ From the repository root:
 
 ```text
 pnpm run build:jobs
+pnpm --filter @viberacing/jobs start -- cleanup-expired-auth-state
+pnpm --filter @viberacing/jobs start -- cleanup-expired-car-recipe-proposals
 pnpm --filter @viberacing/jobs start -- cleanup-expired-ingest-state
 pnpm --filter @viberacing/jobs start -- cleanup-expired-pairing-state
+pnpm --filter @viberacing/jobs start -- purge-profile-deletions
 pnpm --filter @viberacing/jobs start -- refresh-community-season 2026-07-13
 pnpm --filter @viberacing/jobs start -- finalize-community-season 2026-07-06
 ```

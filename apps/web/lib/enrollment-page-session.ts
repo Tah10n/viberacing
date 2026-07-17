@@ -3,6 +3,7 @@ import "server-only";
 import { headers } from "next/headers";
 
 import { readCookie } from "./enrollment-cookie";
+import type { AccountCarRecipeState } from "./car-proposal-service";
 import type { AccountScore, PasskeyInventoryItem, ProfileVisibility } from "./enrollment-database";
 import type { EnrollmentSession } from "./enrollment-domain";
 import { getEnrollmentRuntime } from "./enrollment-runtime";
@@ -54,6 +55,7 @@ export async function readEnrollmentPageConnect(): Promise<EnrollmentPageConnect
 
 export interface EnrollmentPageAccount {
   readonly activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
+  readonly carRecipeState: AccountCarRecipeState | undefined;
   readonly passkeys: readonly PasskeyInventoryItem[] | undefined;
   readonly score: AccountScore | null | undefined;
   readonly session: EnrollmentSession;
@@ -67,18 +69,21 @@ export async function readEnrollmentPageAccount(): Promise<EnrollmentPageAccount
     if (sessionCookie === undefined) {
       return undefined;
     }
-    const service = getEnrollmentRuntime().service;
+    const runtime = getEnrollmentRuntime();
+    const service = runtime.service;
     const session = service.readSession(sessionCookie);
     if (session === undefined) {
       return undefined;
     }
-    const [activeDeviceInventory, overview, passkeys] = await Promise.all([
+    const [activeDeviceInventory, carRecipeState, overview, passkeys] = await Promise.all([
       service.readActiveDeviceInventory(sessionCookie),
+      runtime.carProposalService.read(sessionCookie),
       service.readAccountOverview(sessionCookie),
       service.readPasskeyInventory(sessionCookie),
     ]);
     return Object.freeze({
       activeDeviceInventory,
+      carRecipeState,
       passkeys,
       score: overview?.score,
       session,

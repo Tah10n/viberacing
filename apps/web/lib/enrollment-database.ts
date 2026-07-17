@@ -2,10 +2,14 @@ import "server-only";
 
 import { Buffer } from "node:buffer";
 
+import { validateCarRecipeV1, type CarRecipeV1 } from "@viberacing/contracts";
+
 import { resolvePairingDatabaseConfig } from "./pairing-database-config";
 import {
   createPairingDatabasePool,
   type EnrollmentDatabaseAccountOverviewRequest,
+  type EnrollmentDatabaseCarRecipeDecision,
+  type EnrollmentDatabaseCarRecipeProposal,
   type EnrollmentDatabaseClient,
   type EnrollmentDatabaseDeviceRevocation,
   type EnrollmentDatabaseInitialPasskey,
@@ -89,6 +93,28 @@ const accountOverviewColumns = new Set([
   "visibility",
   "weekly_score",
 ]);
+const carRecipeStateColumns = new Set([
+  "active_chassis",
+  "active_cockpit",
+  "active_nose",
+  "active_palette",
+  "active_schema_version",
+  "active_seed",
+  "active_trail",
+  "active_wheels",
+  "active_wing",
+  "proposal_chassis",
+  "proposal_cockpit",
+  "proposal_expires_at",
+  "proposal_id",
+  "proposal_nose",
+  "proposal_palette",
+  "proposal_schema_version",
+  "proposal_seed",
+  "proposal_trail",
+  "proposal_wheels",
+  "proposal_wing",
+]);
 const accountScoreColumns = [
   "active_days",
   "daily_score",
@@ -127,6 +153,7 @@ export class EnrollmentDatabaseError extends Error {
 }
 
 export interface EnrollmentDatabase {
+  approveCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<boolean>;
   completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<boolean>;
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<boolean>;
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<boolean>;
@@ -157,7 +184,9 @@ export interface EnrollmentDatabase {
   createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<boolean>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
   pauseSource(input: EnrollmentDatabaseSourcePause): Promise<boolean>;
+  proposeCarRecipe(input: EnrollmentDatabaseCarRecipeProposal): Promise<boolean>;
   readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<AccountOverview>;
+  readCarRecipeState(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<CarRecipeState>;
   readActiveDeviceInventory(
     input: EnrollmentDatabaseSourceDeviceInventoryRequest,
   ): Promise<readonly SourceDeviceInventoryItem[]>;
@@ -175,6 +204,7 @@ export interface EnrollmentDatabase {
     input: EnrollmentDatabaseProfileVisibilityRequest,
   ): Promise<ProfileVisibility>;
   revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<boolean>;
+  rejectCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<boolean>;
   revokeSession(input: EnrollmentDatabaseSessionRevocation): Promise<boolean>;
   setProfileVisibility(
     input: EnrollmentDatabaseProfileVisibilityUpdate,
@@ -197,6 +227,17 @@ export interface AccountScore {
 export interface AccountOverview {
   readonly score: AccountScore | null;
   readonly visibility: ProfileVisibility;
+}
+
+export interface CarRecipeProposalState {
+  readonly expiresAt: string;
+  readonly proposalId: string;
+  readonly recipe: CarRecipeV1;
+}
+
+export interface CarRecipeState {
+  readonly active: CarRecipeV1 | null;
+  readonly proposal: CarRecipeProposalState | null;
 }
 
 export interface PasskeyLoginMaterial {
@@ -382,6 +423,86 @@ function exactAccountOverview(value: unknown, expectedSeasonStart: string): Acco
     }),
     visibility,
   });
+}
+
+function exactCarRecipeFromRow(
+  row: Readonly<Record<string, unknown>>,
+  prefix: "active" | "proposal",
+): CarRecipeV1 | null {
+  const fields = [
+    "schema_version",
+    "chassis",
+    "nose",
+    "cockpit",
+    "wing",
+    "wheels",
+    "palette",
+    "trail",
+    "seed",
+  ] as const;
+  const values = fields.map((field) => row[`${prefix}_${field}`]);
+  if (values.every((value) => value === null)) {
+    return null;
+  }
+  if (values.some((value) => value === null)) {
+    fail("result_invalid");
+  }
+  const candidate = {
+    schemaVersion: row[`${prefix}_schema_version`],
+    chassis: row[`${prefix}_chassis`],
+    nose: row[`${prefix}_nose`],
+    cockpit: row[`${prefix}_cockpit`],
+    wing: row[`${prefix}_wing`],
+    wheels: row[`${prefix}_wheels`],
+    palette: row[`${prefix}_palette`],
+    trail: row[`${prefix}_trail`],
+    seed: row[`${prefix}_seed`],
+  };
+  const result = validateCarRecipeV1(candidate);
+  if (!result.ok) {
+    fail("result_invalid");
+  }
+  return Object.freeze({ ...result.value });
+}
+
+function exactCarRecipeState(value: unknown): CarRecipeState {
+  if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
+    fail("result_invalid");
+  }
+  const row = value[0];
+  const keys = Object.keys(row);
+  if (
+    keys.length !== carRecipeStateColumns.size ||
+    keys.some((key) => !carRecipeStateColumns.has(key))
+  ) {
+    fail("result_invalid");
+  }
+  const active = exactCarRecipeFromRow(row, "active");
+  const proposalRecipe = exactCarRecipeFromRow(row, "proposal");
+  let proposal: CarRecipeProposalState | null = null;
+  if (proposalRecipe === null) {
+    if (row.proposal_id !== null || row.proposal_expires_at !== null) {
+      fail("result_invalid");
+    }
+  } else {
+    const expiresAt = typeof row.proposal_expires_at === "string" ? row.proposal_expires_at : "";
+    const expires = new Date(expiresAt);
+    if (
+      typeof row.proposal_id !== "string" ||
+      !enrollmentPatterns.uuidV4.test(row.proposal_id) ||
+      !canonicalTimestampPattern.test(expiresAt) ||
+      !Number.isFinite(expires.valueOf()) ||
+      expires.toISOString() !== expiresAt
+    ) {
+      fail("result_invalid");
+    }
+    proposal = Object.freeze({
+      expiresAt,
+      proposalId: row.proposal_id,
+      recipe: proposalRecipe,
+    });
+  }
+  return Object.freeze({ active, proposal });
 }
 
 function copyBoundedBytes(value: unknown, minimum: number, maximum: number): Buffer | undefined {
@@ -793,6 +914,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
   }
 
   return Object.freeze({
+    approveCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<boolean> {
+      return execute(
+        (client) => client.approveCarRecipe(input),
+        (value) => exactBooleanRow(value, "approved"),
+      );
+    },
     completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<boolean> {
       return execute(
         (client) => client.completePairingApproval(input),
@@ -919,11 +1046,20 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "paused"),
       );
     },
+    proposeCarRecipe(input: EnrollmentDatabaseCarRecipeProposal): Promise<boolean> {
+      return execute(
+        (client) => client.proposeCarRecipe(input),
+        (value) => exactBooleanRow(value, "proposed"),
+      );
+    },
     readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<AccountOverview> {
       return execute(
         (client) => client.readAccountOverview(input),
         (value) => exactAccountOverview(value, input.seasonStart),
       );
+    },
+    readCarRecipeState(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<CarRecipeState> {
+      return execute((client) => client.readCarRecipeState(input), exactCarRecipeState);
     },
     readActiveDeviceInventory(
       input: EnrollmentDatabaseSourceDeviceInventoryRequest,
@@ -963,6 +1099,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
       return execute(
         (client) => client.revokeDevice(input),
         (value) => exactBooleanRow(value, "revoked"),
+      );
+    },
+    rejectCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<boolean> {
+      return execute(
+        (client) => client.rejectCarRecipe(input),
+        (value) => exactBooleanRow(value, "rejected"),
       );
     },
     revokeSession(input: EnrollmentDatabaseSessionRevocation): Promise<boolean> {

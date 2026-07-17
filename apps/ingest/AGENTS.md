@@ -43,5 +43,6 @@ changing this workspace.
 ## Required checks
 
 Run `pnpm run lint:ingest`, `pnpm run typecheck:ingest`, `pnpm run test:ingest:coverage`,
-`pnpm run build:ingest`, and the root `pnpm run verify`. Before committing, review the exact staged
-diff and run `pnpm run check:public:staged` plus `git diff --cached --check`.
+`pnpm run build:ingest`, `pnpm run test:ingest:postgres-integration`, and the root
+`pnpm run verify`. Before committing, review the exact staged diff and run
+`pnpm run check:public:staged` plus `git diff --cached --check`.

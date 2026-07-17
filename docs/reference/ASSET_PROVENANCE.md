@@ -4,6 +4,25 @@ Every non-code visual distributed from this repository must have a reviewable or
 permission basis, integrity digest, privacy review, and regeneration record. An asset is not safe
 merely because it looks generic or was produced by a generation tool.
 
+## Code-native CarRecipe pixels
+
+| Field                       | Record                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| Repository source           | `apps/web/lib/car-recipe.ts` and `apps/web/app/globals.css`                                   |
+| Purpose                     | Deterministic version 1 car sprites, trails, and three-theme account/race rendering           |
+| Created                     | 2026-07-17                                                                                    |
+| Method                      | Project-authored indexed 16-by-8 templates, closed transformations, and reviewed color tokens |
+| Third-party source material | None                                                                                          |
+| Opaque/generated binary     | None; account previews are semantic HTML/CSS pixels and the race uses canvas drawing commands |
+| Distribution basis          | Project-owned source distributed under the repository Apache-2.0 license                      |
+| Drift evidence              | `apps/web/lib/car-recipe.test.ts` and `apps/web/components/car-recipe-preview.test.tsx`       |
+
+Every `CarRecipeV1` axis is rendered from closed enums. Readable sprite assertions cover body, nose,
+cockpit, wing, wheel, seed, and trail transformations; exact palette assertions cover all three
+themes. No automotive logo, brand name, uploaded asset, arbitrary color, remote URL, SVG, font,
+metadata, or user drawing command enters this pipeline. Visual trade-dress review remains a release
+gate even for project-authored combinations.
+
 ## Social preview race scene
 
 | Field                       | Record                                                                                                                                                                   |

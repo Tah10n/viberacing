@@ -833,6 +833,199 @@ tbody .current-driver > :first-child {
   border: 2px solid var(--panel-2);
 }
 
+.car-preview-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  margin-block: 1rem;
+}
+
+.car-preview-card {
+  margin: 0;
+}
+
+.car-preview-canvas {
+  --car-accent: #ffe66d;
+  --car-body: #ff4fc8;
+  --car-glass: #77efff;
+  --car-trim: #9ba7c7;
+  --preview-lane: #ffe66d;
+  --preview-road: #201a38;
+  --preview-sky: #130b2e;
+
+  aspect-ratio: 22 / 8;
+  background: linear-gradient(
+    to bottom,
+    var(--preview-sky) 0 17%,
+    var(--preview-road) 17% 86%,
+    var(--preview-lane) 86% 89%,
+    var(--preview-road) 89% 100%
+  );
+  border: 2px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(22, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  image-rendering: pixelated;
+  max-width: 100%;
+  overflow: hidden;
+  width: 100%;
+}
+
+.car-preview-pixel.pixel-a {
+  background: var(--car-accent);
+}
+
+.car-preview-pixel.pixel-b {
+  background: var(--car-body);
+}
+
+.car-preview-pixel.pixel-g {
+  background: var(--car-glass);
+}
+
+.car-preview-pixel.pixel-t {
+  background: var(--car-trim);
+}
+
+.car-preview-pixel.pixel-w {
+  background: #080a0d;
+}
+
+.car-preview-theme-classic-grand-prix {
+  --car-glass: #c9e6f4;
+  --car-trim: #84909b;
+  --preview-lane: #fff4b8;
+  --preview-road: #424750;
+  --preview-sky: #b9dcff;
+}
+
+.car-preview-theme-cyber-rally {
+  --car-trim: #7bb49e;
+  --preview-lane: #b7ff44;
+  --preview-road: #172a27;
+  --preview-sky: #071c1b;
+}
+
+.car-preview-theme-neon-night.car-preview-cockpit-open {
+  --car-glass: #f7f2ff;
+  --car-trim: #f7f2ff;
+}
+
+.car-preview-theme-classic-grand-prix.car-preview-cockpit-open {
+  --car-glass: #fff9e8;
+  --car-trim: #fff9e8;
+}
+
+.car-preview-theme-cyber-rally.car-preview-cockpit-open {
+  --car-glass: #edffe8;
+  --car-trim: #edffe8;
+}
+
+.car-preview-theme-neon-night.car-preview-cockpit-rally {
+  --car-trim: #140d25;
+}
+
+.car-preview-theme-classic-grand-prix.car-preview-cockpit-rally {
+  --car-trim: #17212b;
+}
+
+.car-preview-theme-cyber-rally.car-preview-cockpit-rally {
+  --car-trim: #071c1b;
+}
+
+.car-preview-theme-neon-night.car-preview-palette-magenta {
+  --car-accent: #ffe66d;
+  --car-body: #ff4fc8;
+}
+
+.car-preview-theme-neon-night.car-preview-palette-turbo-blue {
+  --car-accent: #55f7ff;
+  --car-body: #38a7ff;
+}
+
+.car-preview-theme-neon-night.car-preview-palette-sunburst {
+  --car-accent: #ffe66d;
+  --car-body: #ff9f43;
+}
+
+.car-preview-theme-neon-night.car-preview-palette-mint {
+  --car-accent: #c5ff8a;
+  --car-body: #48e5a8;
+}
+
+.car-preview-theme-neon-night.car-preview-palette-redline {
+  --car-accent: #ffffff;
+  --car-body: #ff5a67;
+}
+
+.car-preview-theme-classic-grand-prix.car-preview-palette-magenta {
+  --car-accent: #f2c14e;
+  --car-body: #a83972;
+}
+
+.car-preview-theme-classic-grand-prix.car-preview-palette-turbo-blue {
+  --car-accent: #eef6ff;
+  --car-body: #2463a5;
+}
+
+.car-preview-theme-classic-grand-prix.car-preview-palette-sunburst {
+  --car-accent: #fff3bd;
+  --car-body: #dd8a1f;
+}
+
+.car-preview-theme-classic-grand-prix.car-preview-palette-mint {
+  --car-accent: #d9f2e6;
+  --car-body: #2f8f72;
+}
+
+.car-preview-theme-classic-grand-prix.car-preview-palette-redline {
+  --car-accent: #fff7e6;
+  --car-body: #c83e37;
+}
+
+.car-preview-theme-cyber-rally.car-preview-palette-magenta {
+  --car-accent: #8dff79;
+  --car-body: #dc4cff;
+}
+
+.car-preview-theme-cyber-rally.car-preview-palette-turbo-blue {
+  --car-accent: #b7ff44;
+  --car-body: #28c7c9;
+}
+
+.car-preview-theme-cyber-rally.car-preview-palette-sunburst {
+  --car-accent: #f5ff65;
+  --car-body: #ff8a3d;
+}
+
+.car-preview-theme-cyber-rally.car-preview-palette-mint {
+  --car-accent: #d8ff5b;
+  --car-body: #38d98a;
+}
+
+.car-preview-theme-cyber-rally.car-preview-palette-redline {
+  --car-accent: #f5ff65;
+  --car-body: #ff5b45;
+}
+
+.car-preview-card figcaption {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 0.35rem;
+}
+
+.car-recipe-form {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  margin-top: 1rem;
+}
+
+.car-recipe-form > p,
+.car-recipe-form > button {
+  grid-column: 1 / -1;
+}
+
 dt {
   margin-bottom: 0.35rem;
   color: var(--muted);

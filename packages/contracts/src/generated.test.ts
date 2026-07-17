@@ -5,6 +5,7 @@ import {
   communityScorePageV1Schema,
   communityScoreQueryV1Schema,
   connectorSyncV1Schema,
+  validateCarRecipeV1,
   validateCommunityScorePageV1,
   validateCommunityScoreQueryV1,
   validateConnectorPairingPollResultV1,
@@ -15,6 +16,20 @@ import {
   validateConnectorSyncV1,
   validateProblemDetailsV1,
 } from "./generated";
+
+function validCarRecipe() {
+  return {
+    schemaVersion: 1,
+    chassis: "roadster",
+    nose: "classic",
+    cockpit: "canopy",
+    wing: "none",
+    wheels: "street",
+    palette: "magenta",
+    trail: "spark",
+    seed: 42,
+  };
+}
 
 function validScorePage() {
   return {
@@ -67,6 +82,33 @@ function queryIssueCodes(value: unknown): string[] {
   const result = validateCommunityScoreQueryV1(value);
   return result.ok ? [] : result.issues.map((issue) => issue.code);
 }
+
+describe("generated CarRecipe contract", () => {
+  it("accepts the exact project-owned enum recipe", () => {
+    const input = validCarRecipe();
+    const result = validateCarRecipeV1(input);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toBe(input);
+      expect(result.value.seed).toBe(42);
+    }
+  });
+
+  it("rejects arbitrary content, unknown versions, enums, and seeds", () => {
+    for (const input of [
+      { ...validCarRecipe(), assetUrl: "https://invalid.example/car.svg" },
+      { ...validCarRecipe(), markup: "<svg></svg>" },
+      { ...validCarRecipe(), conversation: "make a branded car" },
+      { ...validCarRecipe(), palette: "#ffffff" },
+      { ...validCarRecipe(), schemaVersion: 2 },
+      { ...validCarRecipe(), seed: -1 },
+      { ...validCarRecipe(), seed: 65_536 },
+      { ...validCarRecipe(), seed: 1.5 },
+    ]) {
+      expect(validateCarRecipeV1(input).ok).toBe(false);
+    }
+  });
+});
 
 describe("generated connector sync contract", () => {
   it("accepts the bounded writable payload and returns a typed value", () => {

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createCarProposalService, type CarProposalService } from "./car-proposal-service";
 import { resolveEnrollmentConfig, type EnrollmentConfig } from "./enrollment-config";
 import { createEnrollmentCookieCodec } from "./enrollment-cookie";
 import { createConfiguredEnrollmentDatabase } from "./enrollment-database";
@@ -11,6 +12,7 @@ export type EnrollmentRuntimeConfig = Readonly<
 >;
 
 export interface EnrollmentRuntime {
+  readonly carProposalService: CarProposalService;
   readonly config: EnrollmentRuntimeConfig;
   readonly service: EnrollmentService;
 }
@@ -31,12 +33,17 @@ export function getEnrollmentRuntime(): EnrollmentRuntime {
         database,
         derivePairingCode: pairingCodeVerifier.derive.bind(pairingCodeVerifier),
       });
+      const carProposalService = createCarProposalService({
+        cookieCodec,
+        database,
+        readSession: (sessionCookie) => service.readSession(sessionCookie),
+      });
       const publicConfig: EnrollmentRuntimeConfig = Object.freeze({
         publicOrigin: config.publicOrigin,
         recoveryMinimumResponseMs: config.recoveryMinimumResponseMs,
         secureCookies: config.secureCookies,
       });
-      return Object.freeze({ config: publicConfig, service });
+      return Object.freeze({ carProposalService, config: publicConfig, service });
     } catch (error) {
       pairingCodeVerifier?.close();
       throw error;

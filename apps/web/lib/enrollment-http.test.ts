@@ -173,7 +173,16 @@ describe("enrollment HTTP boundary", () => {
 
   beforeEach(() => {
     service = serviceFixture();
-    runtime = { config, service };
+    runtime = {
+      carProposalService: {
+        approve: vi.fn(() => Promise.resolve(true)),
+        propose: vi.fn(() => Promise.resolve(true)),
+        read: vi.fn(() => Promise.resolve(undefined)),
+        reject: vi.fn(() => Promise.resolve(true)),
+      },
+      config,
+      service,
+    };
   });
 
   it("starts OAuth only from a bounded same-origin form", async () => {
@@ -917,6 +926,186 @@ describe("enrollment HTTP boundary", () => {
       ),
     ).resolves.toMatchObject({ status: 401 });
     expect(service.completePairingApproval).toHaveBeenCalledOnce();
+  });
+
+  it("accepts only one exact bounded CarRecipe proposal form under the session cookie", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const values = {
+      schemaVersion: "1",
+      chassis: "rally",
+      nose: "scoop",
+      cockpit: "rally",
+      wing: "low",
+      wheels: "all-terrain",
+      palette: "sunburst",
+      trail: "spark",
+      seed: "42",
+    };
+    const proposed = await http.carRecipePropose(
+      post(
+        "/auth/cars/proposals",
+        new URLSearchParams(values).toString(),
+        "application/x-www-form-urlencoded",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(proposed.status).toBe(303);
+    expect(proposed.headers.get("location")).toBe(`${origin}/account#car-proposal`);
+    expect(proposed.headers.get("cache-control")).toBe("no-store");
+    expect(runtime.carProposalService.propose).toHaveBeenCalledWith("opaque-session", {
+      schemaVersion: 1,
+      chassis: "rally",
+      nose: "scoop",
+      cockpit: "rally",
+      wing: "low",
+      wheels: "all-terrain",
+      palette: "sunburst",
+      trail: "spark",
+      seed: 42,
+    });
+
+    for (const body of [
+      `${new URLSearchParams(values).toString()}&seed=7`,
+      `${new URLSearchParams(values).toString()}&assetUrl=https%3A%2F%2Finvalid.example%2Fcar.svg`,
+      new URLSearchParams({ ...values, schemaVersion: "2" }).toString(),
+      new URLSearchParams({ ...values, seed: "65536" }).toString(),
+      new URLSearchParams({ ...values, seed: "1.5" }).toString(),
+    ]) {
+      await expect(
+        http.carRecipePropose(
+          post(
+            "/auth/cars/proposals",
+            body,
+            "application/x-www-form-urlencoded",
+            "viberacing_session=opaque-session",
+          ),
+        ),
+      ).resolves.toMatchObject({ status: 400 });
+    }
+    expect(runtime.carProposalService.propose).toHaveBeenCalledOnce();
+
+    const missingSession = await http.carRecipePropose(
+      post(
+        "/auth/cars/proposals",
+        new URLSearchParams(values).toString(),
+        "application/x-www-form-urlencoded",
+      ),
+    );
+    expect(missingSession.headers.get("location")).toBe(`${origin}/login?error=unavailable`);
+
+    const crossOrigin = post(
+      "/auth/cars/proposals",
+      new URLSearchParams(values).toString(),
+      "application/x-www-form-urlencoded",
+      "viberacing_session=opaque-session",
+    );
+    crossOrigin.headers.set("origin", "https://attacker.example");
+    await expect(http.carRecipePropose(crossOrigin)).resolves.toMatchObject({ status: 400 });
+    await expect(
+      http.carRecipePropose(
+        post(
+          "/auth/cars/proposals?next=/account",
+          new URLSearchParams(values).toString(),
+          "application/x-www-form-urlencoded",
+          "viberacing_session=opaque-session",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 400 });
+    await expect(
+      http.carRecipePropose(
+        post(
+          "/auth/cars/proposals",
+          new URLSearchParams(values).toString(),
+          "text/plain",
+          "viberacing_session=opaque-session",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 400 });
+
+    vi.mocked(runtime.carProposalService.propose).mockRejectedValueOnce(
+      new Error("private dependency detail"),
+    );
+    const contained = await http.carRecipePropose(
+      post(
+        "/auth/cars/proposals",
+        new URLSearchParams(values).toString(),
+        "application/x-www-form-urlencoded",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(contained.headers.get("location")).toBe(`${origin}/account?error=unavailable`);
+  });
+
+  it("approves or rejects only one bounded opaque CarRecipe control", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const body = new URLSearchParams({ proposalControl: "opaque-proposal-control" }).toString();
+    const cookie = "viberacing_session=opaque-session";
+
+    const approved = await http.carRecipeApprove(
+      post("/auth/cars/proposals/approve", body, "application/x-www-form-urlencoded", cookie),
+    );
+    const rejected = await http.carRecipeReject(
+      post("/auth/cars/proposals/reject", body, "application/x-www-form-urlencoded", cookie),
+    );
+    expect(approved.headers.get("location")).toBe(`${origin}/account`);
+    expect(rejected.headers.get("location")).toBe(`${origin}/account`);
+    expect(runtime.carProposalService.approve).toHaveBeenCalledWith(
+      "opaque-session",
+      "opaque-proposal-control",
+    );
+    expect(runtime.carProposalService.reject).toHaveBeenCalledWith(
+      "opaque-session",
+      "opaque-proposal-control",
+    );
+
+    await expect(
+      http.carRecipeApprove(
+        post(
+          "/auth/cars/proposals/approve",
+          `${body}&proposalControl=second`,
+          "application/x-www-form-urlencoded",
+          cookie,
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 400 });
+    await expect(
+      http.carRecipeReject(
+        post(
+          "/auth/cars/proposals/reject",
+          `proposalControl=${"x".repeat(1025)}`,
+          "application/x-www-form-urlencoded",
+          cookie,
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 400 });
+    const missingSession = await http.carRecipeApprove(
+      post("/auth/cars/proposals/approve", body, "application/x-www-form-urlencoded"),
+    );
+    expect(missingSession.headers.get("location")).toBe(`${origin}/login?error=unavailable`);
+
+    vi.mocked(runtime.carProposalService.approve).mockRejectedValueOnce(
+      new Error("private dependency detail"),
+    );
+    const contained = await http.carRecipeApprove(
+      post("/auth/cars/proposals/approve", body, "application/x-www-form-urlencoded", cookie),
+    );
+    expect(contained.headers.get("location")).toBe(`${origin}/account?error=unavailable`);
+
+    const admission = createEnrollmentAdmission(1);
+    const held = admission.tryAcquire();
+    const overloaded = createEnrollmentHttp({ admission, getRuntime: () => runtime });
+    const busy = await overloaded.carRecipeReject(
+      post("/auth/cars/proposals/reject", body, "application/x-www-form-urlencoded", cookie),
+    );
+    held?.release();
+    expect(busy.headers.get("location")).toBe(`${origin}/account?error=unavailable`);
+    expect(runtime.carProposalService.reject).toHaveBeenCalledOnce();
   });
 
   it("clears every browser credential on same-origin logout even when admission is busy", async () => {

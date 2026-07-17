@@ -45,10 +45,24 @@ const cleanupQuery = `SELECT
   cleanup.deleted_snapshots AS deleted_snapshots
 FROM viberacing_api.cleanup_expired_ingest_state($1::integer) AS cleanup`;
 
+const authCleanupQuery = `SELECT
+  cleanup.deleted_challenges AS deleted_challenges,
+  cleanup.deleted_recovery_authorities AS deleted_recovery_authorities,
+  cleanup.deleted_used_recovery_codes AS deleted_used_recovery_codes
+FROM viberacing_api.cleanup_expired_auth_state($1::integer) AS cleanup`;
+
+const carRecipeProposalCleanupQuery = `SELECT
+  cleanup.deleted_proposals AS deleted_proposals
+FROM viberacing_api.cleanup_expired_car_recipe_proposals($1::integer) AS cleanup`;
+
 const pairingCleanupQuery = `SELECT
   cleanup.deleted_pairings AS deleted_pairings,
   cleanup.deleted_pending_keys AS deleted_pending_keys
 FROM viberacing_api.cleanup_expired_pairing_state($1::integer) AS cleanup`;
+
+const profileDeletionPurgeQuery = `SELECT
+  purge.purged_profiles AS purged_profiles
+FROM viberacing_api.purge_profile_deletions($1::integer) AS purge`;
 
 const refreshQuery = `SELECT
   refresh.profile_count AS profile_count
@@ -62,9 +76,12 @@ export type JobsDatabasePoolSignal = "idle_client_error";
 export type JobsDatabasePoolSignalSink = (signal: JobsDatabasePoolSignal) => Promise<void> | void;
 
 export interface JobsDatabaseClient {
+  cleanupExpiredAuthState(batchSize: number): Promise<unknown>;
+  cleanupExpiredCarRecipeProposals(batchSize: number): Promise<unknown>;
   cleanupExpiredIngestState(batchSize: number): Promise<unknown>;
   cleanupExpiredPairingState(batchSize: number): Promise<unknown>;
   finalizeCommunitySeason(seasonStart: string): Promise<unknown>;
+  purgeProfileDeletions(batchSize: number): Promise<unknown>;
   release(destroy?: boolean): void;
   refreshCommunitySeason(seasonStart: string): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
@@ -113,6 +130,12 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
   }
 
   return Object.freeze({
+    cleanupExpiredAuthState(batchSize: number): Promise<unknown> {
+      return fixedQuery(authCleanupQuery, [batchSize]);
+    },
+    cleanupExpiredCarRecipeProposals(batchSize: number): Promise<unknown> {
+      return fixedQuery(carRecipeProposalCleanupQuery, [batchSize]);
+    },
     cleanupExpiredIngestState(batchSize: number): Promise<unknown> {
       return fixedQuery(cleanupQuery, [batchSize]);
     },
@@ -121,6 +144,9 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
     },
     finalizeCommunitySeason(seasonStart: string): Promise<unknown> {
       return fixedQuery(finalizationQuery, [seasonStart]);
+    },
+    purgeProfileDeletions(batchSize: number): Promise<unknown> {
+      return fixedQuery(profileDeletionPurgeQuery, [batchSize]);
     },
     release(destroy = false): void {
       client.release(destroy);

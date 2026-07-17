@@ -3,56 +3,59 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and twenty-two checksum-ledgered database migrations. Repository verification uses synthetic data
+and twenty-six checksum-ledgered database migrations. Repository verification uses synthetic data
 and injected capabilities only. It has procedure-only identity, passkey login/management, restricted
 recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
-retention cleanup, scoring, terminal finalization, and public score-projection procedures. A local
-Web slice now composes invite redemption, GitHub OAuth state plus PKCE, encrypted browser cookies,
-initial WebAuthn registration, returning discoverable-credential login, a private session-scoped
-passkey inventory, an account page, fresh revocation of an owned non-current passkey, and logout. It
-can also add a backup passkey after separate existing-key assertion and registration ceremonies and
-rotate a ten-code recovery batch after a fresh passkey assertion. A separate local `/recover` flow
-performs bounded exact-code/dummy Argon2id work, creates only a five-minute restricted authority,
-and requires exact replacement WebAuthn registration before a normal session exists. It has no
-working invite/OAuth/database credential or live-authenticator evidence. A local `/connect` page
-adds session-rate-limited pending-code review, opaque new or active existing source selection, and
-fresh-passkey approval with synthetic evidence. Distributed recovery/anonymous pairing edge
-controls, cleanup, a Jobs scheduler, real-user ingestion, audited correction, and an operational
-connector remain absent. A library-only Rust crate implements the bounded stable App Server
-initialization exchange and a candidate `0.144.5` account/usage parser with fixed methods, discarded
-account/summary fields, and bounded normalized daily output. A one-shot supervisor now composes
-those states with a fixed child argument, local pipes, cleared ambient environment, output/deadline
-limits, and reap-before-success behavior. One explicit Windows x86_64 development command can
-construct that private launch only after the selected absolute path matches the exact `0.144.5`
-artifact size and SHA-256. It then uses the active native credential to build the previously
-inaccessible context/key, sign the exact bounded sync JSON, and make one fixed upload. It does not
-discover a binary, retry the POST, or establish support. A separate inaccessible
-pending-key/challenge signer and pure Web verifier agree on an exact synthetic pairing-possession
-proof. Two transport-free Web/Auth applications create bounded pending material and later handle
-protected poll-verifier derivation, a fixed approved-row lookup through a separately probed
-read-write pool, that strict proof, and exact atomic activation with server-owned IDs behind local
-admission/timing. They cannot perform pairing browser or WebAuthn approval themselves; the separate
-`/connect` flow supplies only that intervening step. Two exact local POST routes now compose those
-applications behind fixed distributed global/client-bucket admission, and a one-command Rust client
-generates a device key through the OS CSPRNG, stores resumable pairing state in the native
-credential store, and performs the exact start/poll proof. No supported Codex version, macOS/Linux
-admission, real-account/deployed sync result, package, release, or deployment exists. A local Ingest
-kernel bounds and authenticates a synthetic exact-body sync request, and a separate adapter
-constrains origin replay, database lookup, and submission mapping with mock-pool evidence. A
-transport-free application composes those exact boundaries, generates a server request ID, and
-validates the acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic
-replay and cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies
-no-queue and deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS
-launch entry point. There is no working database login/certificate, live end-to-end PostgreSQL flow,
-edge path, supported connector adapter, or deployment. A bounded local one-shot Jobs process now
-wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A
-bounded server-only Web PostgreSQL adapter and local public-score GET are implemented and
-unit/build-tested, but this repository supplies no working deployment login or TLS certificate. A
-successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL
-constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
-isolation; it does not prove a live adapter, deployed API, or production flow. The Ingest server
-tests bind only ephemeral loopback sockets and use synthetic requests; no development command
-exposes it to the LAN or Internet.
+retention cleanup, bounded primary profile deletion, scoring, terminal finalization, and public
+score-projection procedures. A local Web slice now composes invite redemption, GitHub OAuth state
+plus PKCE, encrypted browser cookies, initial WebAuthn registration, returning
+discoverable-credential login, a private session-scoped passkey inventory, an account page, fresh
+revocation of an owned non-current passkey, and logout. It can also add a backup passkey after
+separate existing-key assertion and registration ceremonies and rotate a ten-code recovery batch
+after a fresh passkey assertion. A separate local `/recover` flow performs bounded exact-code/dummy
+Argon2id work, creates only a five-minute restricted authority, and requires exact replacement
+WebAuthn registration before a normal session exists. It has no working invite/OAuth/database
+credential or live-authenticator evidence. A local `/connect` page adds session-rate-limited
+pending-code review, opaque new or active existing source selection, and fresh-passkey approval with
+synthetic evidence. Distributed recovery/anonymous pairing edge controls, cleanup scheduling, a Jobs
+scheduler, real-user ingestion, audited correction, and an operational connector remain absent. A
+library-only Rust crate implements the bounded stable App Server initialization exchange and a
+candidate `0.144.5` account/usage parser with fixed methods, discarded account/summary fields, and
+bounded normalized daily output. A one-shot supervisor now composes those states with a fixed child
+argument, local pipes, cleared ambient environment, output/deadline limits, and reap-before-success
+behavior. One explicit Windows x86_64 development command can construct that private launch only
+after the selected absolute path matches the exact `0.144.5` artifact size and SHA-256. It then uses
+the active native credential to build the previously inaccessible context/key, sign the exact
+bounded sync JSON, and make one fixed upload. It does not discover a binary, retry the POST, or
+establish support. A separate inaccessible pending-key/challenge signer and pure Web verifier agree
+on an exact synthetic pairing-possession proof. Two transport-free Web/Auth applications create
+bounded pending material and later handle protected poll-verifier derivation, a fixed approved-row
+lookup through a separately probed read-write pool, that strict proof, and exact atomic activation
+with server-owned IDs behind local admission/timing. They cannot perform pairing browser or WebAuthn
+approval themselves; the separate `/connect` flow supplies only that intervening step. Two exact
+local POST routes now compose those applications behind fixed distributed global/client-bucket
+admission, and a one-command Rust client generates a device key through the OS CSPRNG, stores
+resumable pairing state in the native credential store, and performs the exact start/poll proof. No
+supported Codex version, macOS/Linux admission, real-account/deployed sync result, package, release,
+or deployment exists. A local Ingest kernel bounds and authenticates a synthetic exact-body sync
+request, and a separate adapter constrains origin replay, database lookup, and submission mapping
+with mock-pool evidence. A transport-free application composes those exact boundaries, generates a
+server request ID, and validates the acknowledgement/problem decision; isolated PostgreSQL tests
+separately prove atomic replay and cleanup. A bounded local Fastify factory now preserves exact raw
+HTTP evidence, applies no-queue and deadline policy, and serializes only revalidated contracts. A
+separate local host now binds that exact composition only on loopback in development/test or under
+an explicit Railway-edge production declaration, with bounded partial-startup cleanup and process
+shutdown. A separate opt-in gate now proves one full synthetic loopback HTTP-to-PostgreSQL path
+through a disposable dedicated Ingest login. There is no deployment database credential/certificate,
+trusted external TLS/edge path, supported connector adapter, or deployment. A bounded local one-shot
+Jobs process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor,
+or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
+implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
+certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
+boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
+database role isolation; it does not prove a live adapter, deployed API, or production flow. The
+Ingest server tests bind only ephemeral loopback sockets and use synthetic requests; no development
+command exposes it to the LAN or Internet.
 
 ## Prerequisites
 
@@ -78,14 +81,14 @@ unreviewed dependency build scripts, newly published packages inside the quarant
 untrusted registry redirects, and exotic transitive sources.
 
 `pnpm run verify` is deterministic and offline after installation. It includes a complete reachable
-Git-history scan, external-host policy, English spelling, dependency-license inventory, contract and
-Ingest/Jobs lint/types/coverage, Ingest/Jobs production compilation, contract generation/drift
-checks and coverage, web component coverage, and a production web build. It also runs the offline
-migration manifest/capability checker plus Rust formatting, all-target checking, tests, and Clippy;
-the real PostgreSQL integration is a separate Docker command and a secretless CI job. The optional
-`pnpm run check:external-links:online` performs bounded network validation and may fail closed
-behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
-workstation.
+Git-history scan, external-host policy, English spelling, dependency-license inventory, contract,
+Ingest, Ingest-host, and Jobs lint/types/coverage, their required production compilation, the built
+Ingest-host entrypoint check, contract generation/drift checks and coverage, web component coverage,
+and a production web build. It also runs the offline migration manifest/capability checker plus Rust
+formatting, all-target checking, tests, and Clippy; the real PostgreSQL integration is a separate
+Docker command and a secretless CI job. The optional `pnpm run check:external-links:online` performs
+bounded network validation and may fail closed behind a private DNS/proxy; do not weaken its address
+or redirect rules to accommodate a workstation.
 
 After an intentionally reviewed dependency change, regenerate the machine inventory with
 `node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
@@ -124,13 +127,15 @@ pnpm run check:contracts
 pnpm run lint:contracts
 pnpm run typecheck:contracts
 pnpm run test:contracts:coverage
+pnpm run build:contracts
 ```
 
 Run `pnpm run generate:contracts` only after intentionally changing a canonical file or manifest
 operation under `contracts/v1/`; review both generated diffs and their source digest. The generated
 OpenAPI document contains two paths marked `implemented-local`. The corresponding dynamic Next.js
 GET and bounded Ingest POST have request/response and build evidence, but no working database login
-is tracked and no deployment exists merely because the local operations are documented.
+is tracked. The separate Ingest integration creates and removes only a synthetic disposable login;
+no deployment exists merely because the local operations are documented.
 
 Connector-focused commands use only checked-in synthetic fixtures. Rust tests launch a target-built
 fixture executable to prove fixed arguments, environment isolation, protocol order, timeout,
@@ -178,6 +183,27 @@ real edge key, public key, signature, nonce, usage payload, database credential,
 request. See [`apps/ingest/README.md`](../../apps/ingest/README.md) for the exact boundary and
 remaining integration work.
 
+The separate host-focused gates use only synthetic placeholders and ephemeral loopback listeners:
+
+```text
+pnpm run lint:ingest-host
+pnpm run typecheck:ingest-host
+pnpm run test:ingest-host:coverage
+pnpm run build:contracts
+pnpm run build:ingest
+pnpm run build:ingest-host
+pnpm run check:ingest-host-entrypoint
+```
+
+After those ordered builds, the emitted entrypoint is `node apps/ingest-host/dist/main.js`. Start it
+with Node directly so SIGTERM reaches the process. Tracked `.env.example` values are deliberately
+non-working; a local listener additionally requires exact loopback host/port and
+`loopback-cleartext`, while production requires exact `0.0.0.0`, Railway-injected `PORT`,
+`railway-edge`, and a 40-to-300-second platform drain declaration. Do not add real login/key values
+to a repository file or treat a successful local bind as external TLS/deployment evidence. See
+[`apps/ingest-host/README.md`](../../apps/ingest-host/README.md) for the complete listener and
+shutdown contract.
+
 Jobs-focused commands use injected synthetic results and never need a database credential:
 
 ```text
@@ -187,11 +213,12 @@ pnpm run test:jobs:coverage
 pnpm run build:jobs
 ```
 
-The built one-shot CLI accepts only `cleanup-expired-ingest-state`,
-`refresh-community-season YYYY-MM-DD`, or `finalize-community-season YYYY-MM-DD`. Do not invoke it
-against a database until an environment-owned login has been separately provisioned with only
-`viberacing_jobs`; the repository does not create that login or provide an application integration
-test. See [`apps/jobs/README.md`](../../apps/jobs/README.md) for the exact boundary and remaining
+The built one-shot CLI accepts only `cleanup-expired-auth-state`, `cleanup-expired-ingest-state`,
+`cleanup-expired-pairing-state`, `purge-profile-deletions`, `refresh-community-season YYYY-MM-DD`,
+or `finalize-community-season YYYY-MM-DD`. Do not invoke it against a database until an
+environment-owned login has been separately provisioned with only `viberacing_jobs`; the repository
+does not create that login or provide an application integration test. See
+[`apps/jobs/README.md`](../../apps/jobs/README.md) for the exact boundary and remaining
 scheduler/deployment work.
 
 The product components and libraries must meet the committed coverage thresholds. Small Next.js
@@ -211,6 +238,21 @@ The integration command creates a uniquely named Compose project containing only
 That service publishes no host port, stores data on `tmpfs`, and is removed with its network and
 storage after the test. It does not touch the normal local database volume. See
 [`database/README.md`](../../database/README.md) before changing SQL, roles, or migrations.
+
+The separate full Ingest path is opt-in and also requires Docker:
+
+```text
+pnpm run test:ingest:postgres-integration
+```
+
+This command builds emitted contracts, Ingest, and host code; starts one one-off `postgres-test`
+container with only an ephemeral `127.0.0.1` port; applies the reviewed migration manifest; and
+creates an obviously synthetic login with only `viberacing_ingest`. It sends independently composed
+signed HTTP requests through the real loopback host and checks accepted, duplicate, persistent
+origin-replay, revoked-device, response-header, request-ID, and exact persistence behavior. The
+container, network, and storage are removed in `finally`; the normal local database volume is never
+used. This is synthetic local evidence, not a deployment credential, external TLS/edge route,
+secret-manager integration, real-user result, or capacity test.
 
 ## Local configuration
 
@@ -309,7 +351,7 @@ docker compose ps
 The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
 index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
 stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
-this persistent service automatically; revisions 0001 through 0022 are currently exercised by the
+this persistent service automatically; revisions 0001 through 0026 are currently exercised by the
 isolated integration runner only.
 
 Stop the service without deleting its volume:

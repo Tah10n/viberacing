@@ -119,7 +119,7 @@ origin/label record without weakening device revocation.
 
 ## Verification
 
-Current local evidence includes:
+Acceptance evidence recorded for this decision included:
 
 - contract generation and drift checks for nine Schemas, three policies, and four operations;
 - focused Web route/application/database tests for framing, duplicate/unknown fields, rate and
@@ -133,8 +133,8 @@ Current local evidence includes:
 - a point-in-time OSV query across all 209 locked crates with no known advisory returned on
   2026-07-17, plus deterministic license/inventory checks.
 
-The PostgreSQL suite currently proves 25 private tables, 23 observed lock-wait races, 12 direct
-relation denials, and 31 cross-capability denials in an ephemeral database. HTTP/client tests use
+At acceptance, the PostgreSQL suite proved 25 private tables, 25 observed lock-wait races, 12 direct
+relation denials, and 34 cross-capability denials in an ephemeral database. HTTP/client tests use
 injected services and synthetic material. They do not prove a live login, real browser approval,
 cross-platform key-store behavior, Internet TLS path, capacity, release artifact, or deployment.
 

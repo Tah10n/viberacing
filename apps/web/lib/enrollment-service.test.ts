@@ -121,6 +121,7 @@ function createFixture() {
   let visibilityWriteDigestInput: Uint8Array | undefined;
   let verifiedLoginCredential: Buffer | undefined;
   const database: EnrollmentDatabase = {
+    approveCarRecipe: vi.fn(() => Promise.resolve(true)),
     completePairingApproval: vi.fn(() => Promise.resolve(true)),
     completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
     completePasskeyAddition: vi.fn((input: EnrollmentDatabasePasskeyAddition) => {
@@ -277,6 +278,7 @@ function createFixture() {
       };
       return Promise.resolve(true);
     }),
+    proposeCarRecipe: vi.fn(() => Promise.resolve(true)),
     readAccountOverview: vi.fn((input: EnrollmentDatabaseAccountOverviewRequest) => {
       accountOverviewDigestInput = input.sessionVerifierDigest;
       accountOverviewRead = {
@@ -285,6 +287,7 @@ function createFixture() {
       };
       return Promise.resolve({ score: null, visibility: "public" as const });
     }),
+    readCarRecipeState: vi.fn(() => Promise.resolve({ active: null, proposal: null })),
     readActiveDeviceInventory: vi.fn((input: EnrollmentDatabaseSourceDeviceInventoryRequest) => {
       activeDeviceInventoryDigestInput = input.sessionVerifierDigest;
       activeDeviceInventoryRead = {
@@ -355,6 +358,7 @@ function createFixture() {
       };
       return Promise.resolve(true);
     }),
+    rejectCarRecipe: vi.fn(() => Promise.resolve(true)),
     revokeDevice: vi.fn((input: EnrollmentDatabaseDeviceRevocation) => {
       deviceRevocationDigestInput = input.sessionVerifierDigest;
       deviceRevocationWrite = {
@@ -1770,6 +1774,7 @@ describe("enrollment service", () => {
 
   it("seals continuation cookies before consuming an invite or passkey challenge", async () => {
     const database: EnrollmentDatabase = {
+      approveCarRecipe: vi.fn(() => Promise.resolve(true)),
       completePairingApproval: vi.fn(() => Promise.resolve(true)),
       completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
       completePasskeyAddition: vi.fn(() => Promise.resolve(true)),
@@ -1802,15 +1807,18 @@ describe("enrollment service", () => {
       createSourceUnlinkChallenge: vi.fn(() => Promise.resolve(true)),
       enrollProfile: vi.fn(() => Promise.resolve(true)),
       pauseSource: vi.fn(() => Promise.resolve(true)),
+      proposeCarRecipe: vi.fn(() => Promise.resolve(true)),
       readAccountOverview: vi.fn(() =>
         Promise.resolve({ score: null, visibility: "public" as const }),
       ),
+      readCarRecipeState: vi.fn(() => Promise.resolve({ active: null, proposal: null })),
       readActiveDeviceInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyInventory: vi.fn(() => Promise.resolve([])),
       readPairingApproval: vi.fn(() => Promise.resolve(undefined)),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),
       readRecoveryCodeVerificationMaterial: vi.fn(() => Promise.resolve(undefined)),
       readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
+      rejectCarRecipe: vi.fn(() => Promise.resolve(true)),
       revokeDevice: vi.fn(() => Promise.resolve(true)),
       revokeSession: vi.fn(() => Promise.resolve(true)),
       setProfileVisibility: vi.fn(() => Promise.resolve("hidden" as const)),

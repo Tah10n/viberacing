@@ -57,7 +57,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 25
+    SELECT pg_catalog.count(*) = 27
     FROM pg_catalog.pg_class AS relation
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace
     WHERE namespace.nspname = 'viberacing_private'

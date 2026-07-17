@@ -18,6 +18,7 @@ const implementedLocalEvidencePaths = [
   "apps/ingest/src/community-sync-http-server-contract-failure.test.ts",
   "apps/ingest/src/community-sync-http-server.test.ts",
   "apps/ingest/src/community-sync-http-server.ts",
+  "scripts/test-ingest-postgres-integration.mjs",
   "apps/web/app/v1/community/scores/route.test.ts",
   "apps/web/app/v1/community/scores/route.ts",
   "apps/web/app/v1/connector/pairing/poll/route.test.ts",
@@ -514,6 +515,13 @@ try {
     "missing-sync-implementation-evidence",
     (root) => {
       rmSync(resolve(root, "apps", "ingest", "src", "community-sync-http-server.ts"));
+    },
+    /implemented-local contract evidence is missing/,
+  );
+  await expectFailure(
+    "missing-sync-postgres-integration-evidence",
+    (root) => {
+      rmSync(resolve(root, "scripts", "test-ingest-postgres-integration.mjs"));
     },
     /implemented-local contract evidence is missing/,
   );

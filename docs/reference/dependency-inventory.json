@@ -3,6 +3,7 @@
   "generatedFrom": [
     "package.json",
     "apps/ingest/package.json",
+    "apps/ingest-host/package.json",
     "apps/jobs/package.json",
     "apps/web/package.json",
     "packages/contracts/package.json",
@@ -156,6 +157,7 @@
       "license": "MIT",
       "direct": [
         { "workspace": "apps/ingest", "scope": "development" },
+        { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
@@ -338,6 +340,7 @@
       "license": "MIT",
       "direct": [
         { "workspace": "apps/ingest", "scope": "development" },
+        { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
@@ -417,6 +420,7 @@
       "license": "MIT",
       "direct": [
         { "workspace": "apps/ingest", "scope": "development" },
+        { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
@@ -521,6 +525,7 @@
       "license": "MIT",
       "direct": [
         { "workspace": "apps/ingest", "scope": "development" },
+        { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
@@ -907,6 +912,7 @@
       "license": "Apache-2.0",
       "direct": [
         { "workspace": "apps/ingest", "scope": "development" },
+        { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
@@ -918,6 +924,7 @@
       "license": "MIT",
       "direct": [
         { "workspace": "apps/ingest", "scope": "development" },
+        { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
@@ -935,6 +942,7 @@
       "license": "MIT",
       "direct": [
         { "workspace": "apps/ingest", "scope": "development" },
+        { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }

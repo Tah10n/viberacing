@@ -132,6 +132,30 @@
       "name": "pairing_transport_rate_policy",
       "path": "database/migrations/0022_pairing_transport_rate_policy.sql",
       "sha256": "fd3556c427ff4a6dff34ba9815d48ba7ec1ebc9833bd2202fe6741844865d6eb"
+    },
+    {
+      "revision": 23,
+      "name": "auth_retention_cleanup",
+      "path": "database/migrations/0023_auth_retention_cleanup.sql",
+      "sha256": "ba26290e0c57568a4a45909e4999ea2dd7132e82585a7cde708796e7966aeaa8"
+    },
+    {
+      "revision": 24,
+      "name": "profile_deletion_purge",
+      "path": "database/migrations/0024_profile_deletion_purge.sql",
+      "sha256": "405482a78761b821ce9be28dd432860ba838adb1c5b2b0c147b9dc746b8e6ad4"
+    },
+    {
+      "revision": 25,
+      "name": "car_recipe_proposals",
+      "path": "database/migrations/0025_car_recipe_proposals.sql",
+      "sha256": "31afe8d89c3971a05d49ead03d62decf45dfdb3fc6fc1468622146ae89171128"
+    },
+    {
+      "revision": 26,
+      "name": "car_recipe_proposal_cleanup",
+      "path": "database/migrations/0026_car_recipe_proposal_cleanup.sql",
+      "sha256": "fc2dd335b573631b41e0585e673ee89a173f76709dd15b66d8d8fdf7b16d7c88"
     }
   ]
 }

@@ -634,7 +634,11 @@ export function createCommunitySyncHttpServer(application: unknown): FastifyInst
       }
       try {
         const decision = await validatedApplication.execute(createRawEnvelope(request));
-        if (request.signal.aborted || reply.sent) {
+        // Fastify's handler-timeout signal also observes the IncomingMessage `close` event, which
+        // Node emits after a normally completed request stream. `readableAborted` distinguishes a
+        // stream destroyed or errored before `end`; a timeout or later client disconnect has
+        // already sent or destroyed the outgoing response.
+        if (request.raw.readableAborted || reply.raw.destroyed || reply.sent) {
           return;
         }
         const serialized = readApplicationDecision(decision);

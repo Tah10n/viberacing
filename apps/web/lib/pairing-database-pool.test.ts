@@ -1136,6 +1136,92 @@ describe("pairing database pool", () => {
     }
   });
 
+  it("uses only fixed CarRecipe statements and clears copied session proof", async () => {
+    const liveQueries: { text: string; values: unknown[] }[] = [];
+    const snapshots: { text: string; values: unknown[] }[] = [];
+    const releases: boolean[] = [];
+    const driverClient = {
+      query(query: { text: string; values: unknown[] }): Promise<{ rows: unknown }> {
+        liveQueries.push(query);
+        snapshots.push({
+          text: query.text,
+          values: query.values.map((value) =>
+            Buffer.isBuffer(value) ? Buffer.from(value) : value,
+          ),
+        });
+        return Promise.resolve({ rows: [] });
+      },
+      release(destroy = false): void {
+        releases.push(destroy);
+      },
+    };
+    const driverPool = {
+      connect: () => Promise.resolve(driverClient),
+      end: () => Promise.resolve(),
+      on() {
+        return this;
+      },
+    };
+    const pool = createPairingDatabasePool(config, undefined, () => driverPool);
+    const client = await pool.connect();
+    const digest = Buffer.alloc(32, 0x71);
+    const request = {
+      sessionId: "00000000-0000-4000-8000-000000000312",
+      sessionVerifierDigest: digest,
+    };
+    const proposalId = "00000000-0000-4000-8000-000000000701";
+
+    await client.proposeCarRecipe({
+      ...request,
+      expiresAt: "2026-07-17T11:00:00.000Z",
+      proposalId,
+      recipe: {
+        schemaVersion: 1,
+        chassis: "rally",
+        nose: "scoop",
+        cockpit: "rally",
+        wing: "low",
+        wheels: "all-terrain",
+        palette: "sunburst",
+        trail: "spark",
+        seed: 42,
+      },
+    });
+    await client.readCarRecipeState(request);
+    await client.approveCarRecipe({ ...request, proposalId });
+    await client.rejectCarRecipe({ ...request, proposalId });
+    client.release();
+
+    expect(snapshots).toHaveLength(4);
+    expect(snapshots[0]?.text).toContain("viberacing_api.propose_car_recipe");
+    expect(snapshots[0]?.values).toEqual([
+      request.sessionId,
+      digest,
+      proposalId,
+      1,
+      "rally",
+      "scoop",
+      "rally",
+      "low",
+      "all-terrain",
+      "sunburst",
+      "spark",
+      42,
+      "2026-07-17T11:00:00.000Z",
+    ]);
+    expect(snapshots[1]?.text).toContain("viberacing_api.read_car_recipe_state");
+    expect(snapshots[1]?.values).toEqual([request.sessionId, digest]);
+    expect(snapshots[2]?.text).toContain("viberacing_api.approve_car_recipe");
+    expect(snapshots[2]?.values).toEqual([request.sessionId, digest, proposalId]);
+    expect(snapshots[3]?.text).toContain("viberacing_api.reject_car_recipe");
+    expect(snapshots[3]?.values).toEqual([request.sessionId, digest, proposalId]);
+    expect(digest).toEqual(Buffer.alloc(32, 0x71));
+    for (const query of liveQueries) {
+      expect(query.values[1]).toEqual(Buffer.alloc(32));
+    }
+    expect(releases).toEqual([false]);
+  });
+
   it("contains synchronous and asynchronous monitoring failures", async () => {
     const listeners: ((error: Error) => void)[] = [];
     const driverPool = {

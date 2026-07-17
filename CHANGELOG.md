@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and thirty-one accepted ADRs.
+  fail-closed compatibility policy and matrix, and thirty-six accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -25,6 +25,13 @@ Versioning where its guarantees are applicable.
   covering the exact npm lock graph, pinned Actions, and local PostgreSQL image.
 - Synthetic EN/RU Next.js race, leaderboard, demo profile, three code-native themes, reduced-motion
   controls, and deterministic pixel-car renderer.
+- A canonical `CarRecipeV1` schema with seven closed project-owned enum axes and a bounded seed;
+  generated validation; deterministic part/trail snapshots; code-native three-theme account
+  previews; forced-RLS active/proposal tables; exact-session Web-only propose/read/approve/reject
+  functions; opaque session-bound decisions; same-origin account forms; and a separate Jobs-only,
+  maximum-1000, oldest-first expired-proposal cleanup under a private mutex. This local slice has no
+  agent/connector ingress, public active-recipe projection, cleanup schedule, live credential, or
+  deployment.
 - Strict frontend lint/type/build gates plus unit, interaction, accessibility, CSP/header, scoring,
   localization, and data-boundary tests with enforced coverage thresholds.
 - Integrity-bound cross-platform npm license metadata and an expiring reviewed override for the
@@ -99,10 +106,24 @@ Versioning where its guarantees are applicable.
   sheds load after four unsettled application calls without a queue, applies explicit body/header/
   connection/socket-reuse and 5/33/34-second request/handler/connection limits, and emits only
   revalidated `no-store`, no-CORS acknowledgement/problem contracts. Real loopback framing plus
-  adversarial injection cases bring the Ingest suite to 425 tests at 100% coverage. The manifest now
+  adversarial injection cases bring the Ingest suite to 426 tests at 100% coverage. The manifest now
   generates both public GET and POST OpenAPI operations and binds the sync authentication policy
   into its digest. This does not add a host/port/TLS entry point, edge signer, direct-origin denial,
   live database credential, monitoring, load evidence, connector, or deployment.
+- A separate bounded Ingest host workspace that admits only exact loopback cleartext in local/test
+  mode or `0.0.0.0:$PORT` behind an explicit Railway-edge TLS contract in production. It composes
+  only the reviewed Ingest application/server factories, cleans every partial startup, closes once
+  under a 36-second SIGINT/SIGTERM deadline, and forces failure on a second signal, deadline, or
+  teardown error. Its 121 tests reach 100% coverage; a built-ESM gate proves invalid startup exits
+  silently without a module-resolution stack. No deployed TLS route, secret, live login, edge
+  policy, monitoring, capacity, or deployment is claimed.
+- An opt-in synthetic Ingest HTTP-to-PostgreSQL integration gate. It builds the emitted contracts,
+  Ingest, and host workspaces; applies every reviewed migration to one disposable PostgreSQL
+  container; creates a dedicated least-privileged login and synthetic device; sends independently
+  signed loopback requests; and proves accepted, duplicate, persistent replay denial, revoked-device
+  denial, closed response headers, unique server request IDs, and exact stored state before cleanup.
+  CI requires the gate, but it supplies no external TLS, protected secret, edge route, production
+  credential, real-user input, or capacity evidence.
 - A library-only Rust connector protocol foundation with one fixed stable App Server initialization
   exchange, 16 KiB LF-only framing, manual duplicate/unknown-field rejection, bounded discarded
   response values, terminal hostile-input state, and non-reflective errors. Seven public-API tests
@@ -237,6 +258,14 @@ Versioning where its guarantees are applicable.
 - Jobs-only bounded cleanup for expired origin/device nonces and raw Community snapshots, with
   server-time cutoffs, an owner-only mutex row, bounded lock wait, preserved current source/day
   values, strict batch limits, and no implied scheduler.
+- Jobs-only bounded cleanup for expired authentication challenges and restricted recovery
+  authorities plus their still-present used/scrubbed code rows, with profile-first recovery lock
+  ordering, live/unused state preservation, worker and cross-capability race evidence, and no
+  implied scheduler.
+- Jobs-only maximum-10 primary profile deletion for due queued/retry work, with committed
+  `deletion_pending` validation, all-maintenance mutex ordering, restrictive-pairing and pending-key
+  cleanup, atomic terminal job settlement, cascaded primary-data removal, redacted retained audit,
+  two-worker/cross-capability race evidence, and no invented tombstone or implied scheduler.
 - Jobs-only atomic open-season Community scoring refresh with immutable formula/season binding,
   distinct-source aggregation under one profile cap, shared-rank semantics, private derived score
   tables, bounded lock/statement waits, no empty-season growth, and observed concurrent idempotent
@@ -244,18 +273,21 @@ Versioning where its guarantees are applicable.
 - Jobs-only immutable Community season finalization after an exact 48-hour server-time grace period,
   with whole-payload late quarantine, terminal no-data seasons, idempotent retry, bounded calendar
   support, and no implied scheduler, correction capability, or public read surface.
-- A private local one-shot Jobs workspace for exactly cleanup, open-season refresh, or terminal
-  finalization, with strict command/object/result parsing, a distinct redacted database namespace,
-  one-client pool, fixed deadlines, an exact role/login/capability/search-path probe, prepared
-  procedure calls, destructive failure release, stable non-reflective CLI output, production build,
-  and 96 tests at 100% coverage. It adds no scheduler, live credential, monitoring, retry loop, or
-  deployment claim.
+- A private local one-shot Jobs workspace for exactly six fixed authentication/ingest/pairing
+  cleanup, primary profile purge, open-season refresh, or terminal-finalization capabilities, with
+  strict command/object/result parsing, a distinct redacted database namespace, one-client pool,
+  fixed deadlines, an exact role/login/capability/search-path probe, prepared procedure calls,
+  destructive failure release, stable non-reflective CLI output, production build, and 132 tests at
+  100% coverage. It adds no scheduler, live credential, monitoring, retry loop, or deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.
 
 ### Security
 
+- Distinguished a normally completed HTTP request stream from an aborted upload after asynchronous
+  Ingest database work. Real loopback regression evidence now requires the accepted response body,
+  content type, and exact server request ID instead of allowing an empty HTTP 200.
 - Patched the transitive Next.js PostCSS resolution from 8.4.31 to 8.5.19 for GHSA-qx2v-qp2m-jg93,
   with an exact expiring override and removal condition.
 - Pinned pnpm to a repository-local virtual store for deterministic CI/developer dependency layout.
@@ -294,7 +326,7 @@ Versioning where its guarantees are applicable.
 - Added observed identity races proving one-winner invite enrollment, initial-passkey challenge
   consumption, and session rotation plus deletion dominance over concurrent rotation without stale
   authority or losing transaction artifacts.
-- Made all twenty-three race gates observe every tagged contender in the holder's PostgreSQL blocker
+- Made all twenty-seven race gates observe every tagged contender in the holder's PostgreSQL blocker
   chain before releasing the holder, and made protective races prove first-contender queue order
   before launching the competing action, removing timer-only and scheduler-order evidence.
 - Added Community ingest rejection, replay, binding, role, and lifecycle scenarios plus observed

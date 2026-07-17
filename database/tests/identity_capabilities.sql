@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 49
+    SELECT pg_catalog.count(*) = 56
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 8
+    SELECT pg_catalog.count(*) = 15
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -69,15 +69,22 @@ SELECT pg_temp.assert_true(
       AND procedure.proname IN (
         'consume_origin_nonce',
         'admit_pairing_transport_request',
+        'cleanup_expired_auth_state',
+        'cleanup_expired_car_recipe_proposals',
         'cleanup_expired_ingest_state',
         'cleanup_expired_pairing_state',
+        'purge_profile_deletions',
+        'propose_car_recipe',
+        'read_car_recipe_state',
+        'approve_car_recipe',
+        'reject_car_recipe',
         'read_pairing_for_approval_limited',
         'refresh_community_season',
         'finalize_community_season',
         'submit_community_sync'
       )
   ),
-  'Ingest and Jobs mutation functions have database-enforced lock-wait bounds'
+  'Ingest, Jobs, and CarRecipe functions have database-enforced lock-wait bounds'
 );
 
 SELECT pg_temp.assert_true(
@@ -96,7 +103,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 5
+    SELECT pg_catalog.count(*) = 8
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -104,8 +111,11 @@ SELECT pg_temp.assert_true(
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.proname IN (
+        'cleanup_expired_auth_state',
+        'cleanup_expired_car_recipe_proposals',
         'cleanup_expired_ingest_state',
         'cleanup_expired_pairing_state',
+        'purge_profile_deletions',
         'submit_community_sync',
         'refresh_community_season',
         'finalize_community_season'
@@ -116,7 +126,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 2
+    SELECT pg_catalog.count(*) = 6
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=5s']::text[]
       )
@@ -125,10 +135,14 @@ SELECT pg_temp.assert_true(
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.proname IN (
         'consume_origin_nonce',
-        'admit_pairing_transport_request'
+        'admit_pairing_transport_request',
+        'propose_car_recipe',
+        'read_car_recipe_state',
+        'approve_car_recipe',
+        'reject_car_recipe'
       )
   ),
-  'origin replay and pairing admission have database-enforced statement deadlines'
+  'origin replay, pairing admission, and CarRecipe have database-enforced statement deadlines'
 );
 
 SELECT pg_temp.assert_true(
@@ -183,8 +197,11 @@ SELECT pg_temp.assert_true(
           'consume_origin_nonce',
           'read_device_verification_material',
           'submit_community_sync',
+          'cleanup_expired_auth_state',
+          'cleanup_expired_car_recipe_proposals',
           'cleanup_expired_ingest_state',
           'cleanup_expired_pairing_state',
+          'purge_profile_deletions',
           'read_pairing_for_approval',
           'refresh_community_season',
           'finalize_community_season'
@@ -219,8 +236,11 @@ SELECT pg_temp.assert_true(
       pg_catalog.has_function_privilege('viberacing_jobs', procedure.oid, 'EXECUTE')
       = (
         procedure.proname IN (
+          'cleanup_expired_auth_state',
+          'cleanup_expired_car_recipe_proposals',
           'cleanup_expired_ingest_state',
           'cleanup_expired_pairing_state',
+          'purge_profile_deletions',
           'refresh_community_season',
           'finalize_community_season'
         )
@@ -1067,6 +1087,101 @@ SELECT pg_temp.assert_true(
     )
   ),
   'profile purge redacts audit linkage without blocking deletion'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_jobs;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT purged_profiles = 1
+    FROM viberacing_api.purge_profile_deletions(10)
+  ),
+  'the Jobs purge consumes the exact queued deletion request'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_owner;
+
+SELECT pg_temp.assert_true(
+  NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.profiles
+    WHERE profile_id = '00000000-0000-4000-8000-000000000101'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.invites
+    WHERE invite_id = '00000000-0000-4000-8000-000000000001'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.sessions
+    WHERE profile_id = '00000000-0000-4000-8000-000000000101'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.passkeys
+    WHERE profile_id = '00000000-0000-4000-8000-000000000101'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.codex_sources
+    WHERE source_id = 'src_' || pg_catalog.repeat('D', 22)
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.device_keys
+    WHERE device_key_id IN (
+      '00000000-0000-4000-8000-000000000601',
+      '00000000-0000-4000-8000-000000000602'
+    )
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.pairing_transactions
+    WHERE pairing_id = '00000000-0000-4000-8000-000000000701'
+  ),
+  'primary identity, session, passkey, source, device, invite, and pairing rows are removed'
+);
+
+SELECT pg_temp.assert_true(
+  NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.season_entries
+    WHERE profile_id = '00000000-0000-4000-8000-000000000101'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.season_daily_scores
+    WHERE profile_id = '00000000-0000-4000-8000-000000000101'
+  ),
+  'profile purge removes open Community score projections'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT state = 'purged'
+      AND profile_id IS NULL
+      AND completed_at IS NOT NULL
+      AND lease_token_digest IS NULL
+      AND lease_expires_at IS NULL
+      AND last_error_code IS NULL
+    FROM viberacing_private.deletion_jobs
+    WHERE deletion_job_id = '00000000-0000-4000-8000-000000000801'
+  )
+  AND (
+    SELECT profile_id IS NULL
+    FROM viberacing_private.audit_events
+    WHERE audit_event_id = '00000000-0000-4000-8000-000000001501'
+      AND event_type = 'deletion.requested'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.deletion_tombstones
+    WHERE profile_ref_digest = pg_catalog.decode(pg_catalog.repeat('81', 32), 'hex')
+  ),
+  'the terminal opaque job and redacted audit remain without inventing a tombstone policy'
 );
 
 ROLLBACK;

@@ -37,34 +37,56 @@ describe("Jobs database pool", () => {
     const client = await pool.connect();
 
     await expect(client.verifyRuntimeBoundary()).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupExpiredIngestState(7)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupExpiredPairingState(8)).resolves.toEqual([{ value: 1 }]);
+    await expect(client.cleanupExpiredAuthState(6)).resolves.toEqual([{ value: 1 }]);
+    await expect(client.cleanupExpiredCarRecipeProposals(7)).resolves.toEqual([{ value: 1 }]);
+    await expect(client.cleanupExpiredIngestState(8)).resolves.toEqual([{ value: 1 }]);
+    await expect(client.cleanupExpiredPairingState(9)).resolves.toEqual([{ value: 1 }]);
+    await expect(client.purgeProfileDeletions(10)).resolves.toEqual([{ value: 1 }]);
     await expect(client.refreshCommunitySeason("2026-07-13")).resolves.toEqual([{ value: 1 }]);
     await expect(client.finalizeCommunitySeason("2026-07-06")).resolves.toEqual([{ value: 1 }]);
     expect(client).not.toHaveProperty("query");
-    expect(query).toHaveBeenCalledTimes(5);
+    expect(query).toHaveBeenCalledTimes(8);
     expect(query.mock.calls[0]![0]).toMatchObject({ values: [] });
     expect(query.mock.calls[0]![0].text).toContain("CURRENT_USER = 'viberacing_jobs'");
-    expect(query.mock.calls[1]![0]).toMatchObject({ values: [7] });
+    expect(query.mock.calls[1]![0]).toMatchObject({ values: [6] });
     expect(query.mock.calls[1]![0].text).toContain(
+      "viberacing_api.cleanup_expired_auth_state($1::integer)",
+    );
+    expect(query.mock.calls[1]![0].text).toContain(
+      "cleanup.deleted_used_recovery_codes AS deleted_used_recovery_codes",
+    );
+    expect(query.mock.calls[2]![0]).toMatchObject({ values: [7] });
+    expect(query.mock.calls[2]![0].text).toContain(
+      "viberacing_api.cleanup_expired_car_recipe_proposals($1::integer)",
+    );
+    expect(query.mock.calls[2]![0].text).toContain(
+      "cleanup.deleted_proposals AS deleted_proposals",
+    );
+    expect(query.mock.calls[3]![0]).toMatchObject({ values: [8] });
+    expect(query.mock.calls[3]![0].text).toContain(
       "viberacing_api.cleanup_expired_ingest_state($1::integer)",
     );
-    expect(query.mock.calls[1]![0].text).toContain(
+    expect(query.mock.calls[3]![0].text).toContain(
       "cleanup.deleted_origin_nonces AS deleted_origin_nonces",
     );
-    expect(query.mock.calls[2]![0]).toMatchObject({ values: [8] });
-    expect(query.mock.calls[2]![0].text).toContain(
+    expect(query.mock.calls[4]![0]).toMatchObject({ values: [9] });
+    expect(query.mock.calls[4]![0].text).toContain(
       "viberacing_api.cleanup_expired_pairing_state($1::integer)",
     );
-    expect(query.mock.calls[2]![0].text).toContain(
+    expect(query.mock.calls[4]![0].text).toContain(
       "cleanup.deleted_pending_keys AS deleted_pending_keys",
     );
-    expect(query.mock.calls[3]![0]).toMatchObject({ values: ["2026-07-13"] });
-    expect(query.mock.calls[3]![0].text).toContain(
+    expect(query.mock.calls[5]![0]).toMatchObject({ values: [10] });
+    expect(query.mock.calls[5]![0].text).toContain(
+      "viberacing_api.purge_profile_deletions($1::integer)",
+    );
+    expect(query.mock.calls[5]![0].text).toContain("purge.purged_profiles AS purged_profiles");
+    expect(query.mock.calls[6]![0]).toMatchObject({ values: ["2026-07-13"] });
+    expect(query.mock.calls[6]![0].text).toContain(
       "viberacing_api.refresh_community_season($1::date)",
     );
-    expect(query.mock.calls[4]![0]).toMatchObject({ values: ["2026-07-06"] });
-    expect(query.mock.calls[4]![0].text).toContain(
+    expect(query.mock.calls[7]![0]).toMatchObject({ values: ["2026-07-06"] });
+    expect(query.mock.calls[7]![0].text).toContain(
       "viberacing_api.finalize_community_season($1::date)",
     );
     client.release(true);

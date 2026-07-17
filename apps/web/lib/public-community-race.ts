@@ -22,10 +22,50 @@ const handlePattern = /^[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]$/;
 const scoreVersionPattern = /^[a-z][a-z0-9_]{2,31}$/;
 
 const fallbackCars = [
-  { body: "formula", paint: "magenta", trim: "chrome", spoiler: "high" },
-  { body: "roadster", paint: "sunburst", trim: "dark", spoiler: "low" },
-  { body: "rally", paint: "turbo-blue", trim: "light", spoiler: "high" },
-  { body: "roadster", paint: "mint", trim: "dark", spoiler: "none" },
+  {
+    schemaVersion: 1,
+    chassis: "formula",
+    nose: "wedge",
+    cockpit: "canopy",
+    wing: "high",
+    wheels: "slick",
+    palette: "magenta",
+    trail: "spark",
+    seed: 1101,
+  },
+  {
+    schemaVersion: 1,
+    chassis: "roadster",
+    nose: "classic",
+    cockpit: "open",
+    wing: "low",
+    wheels: "street",
+    palette: "sunburst",
+    trail: "grid",
+    seed: 2202,
+  },
+  {
+    schemaVersion: 1,
+    chassis: "rally",
+    nose: "scoop",
+    cockpit: "rally",
+    wing: "high",
+    wheels: "all-terrain",
+    palette: "turbo-blue",
+    trail: "spark",
+    seed: 3303,
+  },
+  {
+    schemaVersion: 1,
+    chassis: "roadster",
+    nose: "wedge",
+    cockpit: "canopy",
+    wing: "none",
+    wheels: "street",
+    palette: "mint",
+    trail: "none",
+    seed: 4404,
+  },
 ] as const satisfies readonly CarRecipe[];
 
 type ScoreFetch = (input: string, init: RequestInit) => Promise<Response>;

@@ -180,8 +180,11 @@ material availability cost.
   synthetic pending-key possession. The bounded connector now generates the pairing key from the OS
   CSPRNG, stores one versioned record only in the native credential store, and clears pending bearer
   material after local activation/expiry. Exact HTTP start/poll and retry-safe activation are
-  locally tested. Key rotation/uninstall, metrics, cross-platform runtime evidence, live login,
-  release, and the live verifier-to-PostgreSQL path remain unimplemented.
+  locally tested. A separate opt-in synthetic gate now carries independently signed requests through
+  the emitted host and a disposable least-privileged PostgreSQL login, proving accepted/duplicate,
+  persistent replay, revoked-device denial, and exact stored state. Key rotation/uninstall, metrics,
+  cross-platform runtime evidence, deployment credentials/TLS, release, edge routing, and real-user
+  operation remain unimplemented.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity.
 
@@ -201,7 +204,8 @@ material availability cost.
   submission, has no direct table access, and is denied every current identity/lifecycle sample; the
   role matrix is exercised in real PostgreSQL. The pure verifier exposes only request verification
   and an allowlisted submission result; it owns no profile, pairing, recovery, passkey, admin, or
-  database capability. A future HTTP route still needs a tested route-level scope matrix.
+  database capability. The confined HTTP server exposes only the sync POST plus closed route/method
+  failures, and the full synthetic loopback gate reaches only the three reviewed Ingest procedures.
 - **Residual risk:** A future endpoint can accidentally reuse the wrong middleware; a scope matrix
   is required in CI.
 
@@ -303,12 +307,14 @@ material availability cost.
   PHC, performs matching or dummy bounded Argon2id work under a protected pepper, returns generic
   admitted failures behind a configured floor, and grants only a five-minute replacement-passkey
   continuation. Exact WebAuthn verification and one atomic completion are required before a normal
-  session exists. Aggregate edge rate policy, abandoned consumed-state cleanup, notification, live
-  OAuth/authenticator/database integration, deletion purge execution, and deployment remain absent.
-  The account read additionally revalidates exact session possession and accepts at most 32 closed,
-  ordered rows with one current active authenticator; it renders no credential ID, key, sign
-  counter, exact activity timestamp, or profile ID. Only a revocable target's opaque passkey ID
-  enters the authenticated control and options request.
+  session exists. Revision 0023 now deletes expired challenges and restricted recovery authority in
+  bounded profile-serialized Jobs batches while preserving live/unused state. Aggregate edge rate
+  policy, cleanup scheduling, notification, live OAuth/authenticator/database integration,
+  cache/backup/tombstone purge, restore replay, and deployment remain absent. Revision 0024 locally
+  executes only bounded primary deletion. The account read additionally revalidates exact session
+  possession and accepts at most 32 closed, ordered rows with one current active authenticator; it
+  renders no credential ID, key, sign counter, exact activity timestamp, or profile ID. Only a
+  revocable target's opaque passkey ID enters the authenticated control and options request.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a
@@ -341,8 +347,8 @@ material availability cost.
 - **Residual risk:** The database trusts Web/Auth to report Argon2id and WebAuthn success. A
   compromised service role can misuse its recovery procedures until credentials are rotated or the
   service is isolated; database scope limits but cannot remove that trust. The local four-call
-  admission and configured response floor do not replace a distributed edge attempt policy, cleanup,
-  notification, monitoring, or live capacity evidence.
+  admission, configured response floor, and unscheduled bounded expiry cleanup do not replace a
+  distributed edge attempt policy, notification, monitoring, or live capacity evidence.
 
 ### VR-ABUSE-PUBLIC-SCRAPE — Profiling work habits from public data
 
@@ -398,8 +404,13 @@ material availability cost.
   unlicensed asset.
 - **Impact:** XSS, SSRF, supply-chain content, nondeterminism, privacy leak, or legal exposure.
 - **Controls:** Versioned enum-only schema, project-owned assets, strict server validation, browser
-  preview, explicit user approval, and deterministic snapshots.
-- **Detection:** Schema rejection metrics, generated-asset drift, provenance and license review.
+  preview, explicit user approval, exact-session PostgreSQL authority, opaque decision control,
+  forced RLS, and deterministic snapshots.
+- **Current evidence:** Contract, HTTP/service, mapper/pool, renderer, role-denial, IDOR, replay,
+  replacement, approval/rejection, hidden-profile, and profile-purge tests pass locally. There is no
+  agent/connector proposal ingress or public active-recipe projection.
+- **Detection:** Schema rejection metrics, generated-asset drift, provenance and license review;
+  operational metrics and alerting are still pending.
 - **Recovery:** Reject or disable the recipe/version, restore a safe default, and remove invalid
   generated artifacts.
 - **Residual risk:** Project-owned combinations may still resemble protected trade dress and need
@@ -450,7 +461,12 @@ material availability cost.
   production cleanup scheduling remain unimplemented. The local Fastify boundary preserves the exact
   body/header evidence, sets proxy trust to false, ignores inbound request IDs, and returns only
   generic contract-validated errors. The transport-free composer binds the same replay/device/
-  submission adapter and maps origin rejection to one generic unauthorized decision.
+  submission adapter and maps origin rejection to one generic unauthorized decision. The separate
+  local host accepts production startup only for exact `0.0.0.0:$PORT` with an explicit
+  `railway-edge` declaration, but that declaration neither trusts forwarding nor proves the route;
+  the origin HMAC remains mandatory. The full synthetic loopback gate proves an HTTP replay of the
+  same origin nonce is rejected without another stored snapshot, but it does not prove an edge
+  signer or direct-origin policy.
 - **Residual risk:** Infrastructure metadata exposure can increase probing but must not be the only
   protection.
 
@@ -470,26 +486,27 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 31 cross-capability denials.
-  Ingest has exactly three reviewed functions; Jobs has exactly four reviewed functions: bounded
-  ingest-retention cleanup, bounded pairing-retention cleanup, open-season scoring refresh, and
-  terminal season finalization. Web alone receives the bounded public score function; Ingest, Jobs,
-  and Admin are explicitly denied. The Web adapter uses one dedicated pool, a fixed parameterized
-  function call, and checks effective role, distinct non-privileged login, exact Web-only
-  membership, database capability, search path, and read-only state before every pooled read. Failed
-  sessions are destroyed and raw driver errors are not forwarded. The local Jobs adapter
-  independently checks an exact Jobs-only login/membership, CONNECT without CREATE/TEMPORARY, and
-  safe search path before exactly one of the four prepared function calls. Its pool maximum is one,
-  input/result shapes are closed, failed clients are destroyed, and CLI output reflects no
-  configuration, command, SQL, count, or error detail. The local Ingest adapter independently caps
-  its pool at four, probes the exact Ingest login/role and safe search path before each capability,
-  exposes only fixed parameterized origin replay, device lookup, and submission calls, reconstructs
-  and revalidates inputs, copies mutable values, accepts only closed rows, and destroys failed
-  clients without forwarding driver/configuration details.
+  and usage/scoring-table reads or API-schema mutation, and proves 37 cross-capability denials.
+  Ingest has exactly three reviewed functions; Jobs has exactly seven reviewed functions: bounded
+  authentication-, CarRecipe-proposal-, ingest-, and pairing-retention cleanup, primary profile
+  deletion, open-season scoring refresh, and terminal season finalization. Web alone receives the
+  bounded public score function; Ingest, Jobs, and Admin are explicitly denied. The Web adapter uses
+  one dedicated pool, a fixed parameterized function call, and checks effective role, distinct
+  non-privileged login, exact Web-only membership, database capability, search path, and read-only
+  state before every pooled read. Failed sessions are destroyed and raw driver errors are not
+  forwarded. The local Jobs adapter independently checks an exact Jobs-only login/membership,
+  CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the seven prepared
+  function calls. Its pool maximum is one, input/result shapes are closed, failed clients are
+  destroyed, and CLI output reflects no configuration, command, SQL, count, or error detail. The
+  local Ingest adapter independently caps its pool at four, probes the exact Ingest login/role and
+  safe search path before each capability, exposes only fixed parameterized origin replay, device
+  lookup, and submission calls, reconstructs and revalidates inputs, copies mutable values, accepts
+  only closed rows, and destroys failed clients without forwarding driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
-  migration workflow. Web, Jobs, and Ingest deployment login/TLS integration and live adapter
-  connections have not been exercised because no credential or certificate is supplied. No HTTP
-  boundary composes the Ingest verifier and adapter.
+  migration workflow. Web and Jobs deployment login/TLS integration and live adapters have not been
+  exercised. Ingest now has a disposable synthetic least-privileged loopback login and full HTTP
+  integration result, but no deployment credential/certificate, external TLS/edge route, capacity,
+  or real-user evidence.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -569,8 +586,14 @@ material availability cost.
   passkey challenge, and atomically consumes it with revision 0002's immediate
   hide/revoke/unlink/enqueue transaction. Negative application and route tests cover handle
   mismatch, malformed/replayed proof shapes, database refusal, cross-origin and cookie denial, and
-  cookie clearing only after success. Cache invalidation, primary purge execution, tombstone policy,
-  and restore replay remain unimplemented.
+  cookie clearing only after success. Revision 0024 and the local one-shot Jobs command then purge
+  at most ten due `deletion_pending` profiles atomically, removing restrictive pairings and cascaded
+  primary identity/credential/source/device/usage/personal-score rows while retaining only the
+  opaque terminal job and redacted audit linkage. Static scenarios cover due/retry/future work,
+  committed-state drift rollback, exact role denial, batch bounds, idempotency, and no invented
+  tombstone; observed races cover purge workers and purge versus authentication cleanup. Cache
+  invalidation, scheduler/monitoring, keyed tombstone policy, backup expiry, and restore replay
+  remain unimplemented.
 - **Residual risk:** Immutable backup media may retain encrypted data until documented expiry.
 
 ### VR-ABUSE-RESOURCE-EXHAUSTION — Expensive endpoint or state-table growth
@@ -600,50 +623,57 @@ material availability cost.
   live/current state, and serializes two workers in observed PostgreSQL evidence. Revision 0013 adds
   a separate oldest-first 1-to-1000 cleanup for expired non-activated pairing rows and their exact
   pending keys, including cancelled state, while preserving live and activated bindings. Its own
-  observed two-worker race proves serialization and live-row preservation. Scoring
-  refresh/finalization use one private mutex, per-season locks, a five-second database lock bound,
-  numeric overflow protection, a 30-second statement deadline, bounded no-data terminal state, and
-  one atomic global-rank rebuild. The public score projection returns at most 100 rows and has a
-  five-second statement deadline; the response-only contract narrows one future page to 32 rows, and
-  the mapper rejects row 33 before traversing projected rows. The Web adapter adds a four-connection
-  ceiling, two-second checkout/connect wait, one/five/six-second lock/server/ client-query
-  deadlines, idle/lifetime recycling, and a fixed limit 32. Ranking still evaluates all currently
-  visible season entries. The generated query validator now rejects malformed, out-of-range, and
-  non-Monday seasons before the route may call the store. The local route rejects bodies and
-  oversized/malformed URL or `Accept` work, admits at most four active reads with no queue, holds
-  each lease through adapter settlement, and returns 503 on exhaustion. The visible home page makes
-  one current-week request per navigation with no client retry loop and retains its synthetic
-  fallback after failure. The operation reserves a 429 response without claiming a client-rate
-  limiter exists. The local identity routes separately admit at most four unsettled calls without a
-  queue, reject malformed or over-limit bodies before database work, and create no database state
-  for login options. A valid login proof performs one bounded atomic completion, while failure to
-  seal the resulting browser cookie revokes the new session. These are local process ceilings, not
-  distributed or client-identity rate limits. The transport-free pairing-start application bounds
-  labels, metadata, keys, entropy, and HMAC work, admits four unsettled attempts without a queue,
-  holds each lease through a 250-millisecond floor, and makes no database call for malformed input.
-  Revision 0022 now adds one Web-only fixed-storage admission before start/poll database work: every
-  request locks/increments one operation-global row and one of 64 digest-selected buckets under a
-  five-second deadline. Counts saturate, windows reset in place, and neither raw client ID nor
-  digest is retained. The shared service retains the four-call no-queue ceiling across both
-  operations. This is distributed across Web instances using one database, but the self-asserted ID
-  is not a trusted edge/IP identity and still needs capacity evidence. Physical pairing cleanup
-  exists as a separate local capability, but scheduling and edge controls are still pending. The
-  local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client deadlines, two
-  fixed 1000-row cleanup commands, canonical season validation, closed one-row results, and
-  destructive release on failure. The kernel itself has no socket/ stream authority. The separate
-  Ingest adapter adds a four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines,
-  idle/lifetime recycling, exact one-row origin consume, zero-or-one device lookup, and one-row
-  submission results, with destructive release on failure. The transport-free application generates
-  request correlation before verification, submits only after verification, waits for settlement,
-  and contains dependency failures without a retry loop. The local Fastify boundary caps the raw
-  body at 8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and
-  requests per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a
-  five-second keep-alive, admits four unsettled application calls without a queue, holds each lease
-  through settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and
-  partial requests; injection tests cover overload and response policy. There is no live
-  identity/database integration, distributed rate/backpressure policy, monitoring, or combined
-  capacity evidence. Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and
-  production load evidence remain unimplemented.
+  observed two-worker race proves serialization and live-row preservation. Revision 0023 adds an
+  independently bounded cleanup for expired auth challenges and restricted recovery authorities plus
+  their still-present used/scrubbed code rows. Its worker race and recovery-start race prove
+  serialization, live/unused-state preservation, and profile-first cross-capability lock order.
+  Scoring refresh/finalization use one private mutex, per-season locks, a five-second database lock
+  bound, numeric overflow protection, a 30-second statement deadline, bounded no-data terminal
+  state, and one atomic global-rank rebuild. The public score projection returns at most 100 rows
+  and has a five-second statement deadline; the response-only contract narrows one future page to 32
+  rows, and the mapper rejects row 33 before traversing projected rows. The Web adapter adds a
+  four-connection ceiling, two-second checkout/connect wait, one/five/six-second lock/server/
+  client-query deadlines, idle/lifetime recycling, and a fixed limit 32. Ranking still evaluates all
+  currently visible season entries. The generated query validator now rejects malformed,
+  out-of-range, and non-Monday seasons before the route may call the store. The local route rejects
+  bodies and oversized/malformed URL or `Accept` work, admits at most four active reads with no
+  queue, holds each lease through adapter settlement, and returns 503 on exhaustion. The visible
+  home page makes one current-week request per navigation with no client retry loop and retains its
+  synthetic fallback after failure. The operation reserves a 429 response without claiming a
+  client-rate limiter exists. The local identity routes separately admit at most four unsettled
+  calls without a queue, reject malformed or over-limit bodies before database work, and create no
+  database state for login options. A valid login proof performs one bounded atomic completion,
+  while failure to seal the resulting browser cookie revokes the new session. These are local
+  process ceilings, not distributed or client-identity rate limits. The transport-free pairing-start
+  application bounds labels, metadata, keys, entropy, and HMAC work, admits four unsettled attempts
+  without a queue, holds each lease through a 250-millisecond floor, and makes no database call for
+  malformed input. Revision 0022 now adds one Web-only fixed-storage admission before start/poll
+  database work: every request locks/increments one operation-global row and one of 64
+  digest-selected buckets under a five-second deadline. Counts saturate, windows reset in place, and
+  neither raw client ID nor digest is retained. The shared service retains the four-call no-queue
+  ceiling across both operations. This is distributed across Web instances using one database, but
+  the self-asserted ID is not a trusted edge/IP identity and still needs capacity evidence. Physical
+  pairing cleanup exists as a separate local capability, but scheduling and edge controls are still
+  pending. The local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client
+  deadlines, four fixed 1000-row cleanup commands, canonical season validation, closed one-row
+  results, and destructive release on failure. The kernel itself has no socket/ stream authority.
+  The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
+  checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row origin consume,
+  zero-or-one device lookup, and one-row submission results, with destructive release on failure.
+  The transport-free application generates request correlation before verification, submits only
+  after verification, waits for settlement, and contains dependency failures without a retry loop.
+  The local Fastify boundary caps the raw body at 8192 bytes, parsed headers at 16384 bytes, raw
+  header pairs at 64, connections at 32, and requests per socket at 16; it sets 5/33/34-second
+  request/handler/connection deadlines and a five-second keep-alive, admits four unsettled
+  application calls without a queue, holds each lease through settlement, and returns generic 503 on
+  exhaustion. Real loopback tests close malformed and partial requests; injection tests cover
+  overload and response policy. The separate host closes that composition under a 36-second first-
+  signal deadline, forces failure on a second signal/deadline/close error, and requires the Railway
+  drain declaration to leave at least four seconds beyond its local close bound. There is no live
+  identity or deployment database integration, distributed rate/backpressure policy, monitoring, or
+  combined capacity evidence. The full synthetic Ingest gate proves correctness under four
+  sequential signed requests, not load capacity. Scheduling, cache, scoring/read capacity evidence,
+  quotas, edge shaping, and production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

@@ -1,20 +1,14 @@
-import type { CarBody, CarPaint, CarSpoiler, CarTrim } from "./car-recipe";
+import type { CarChassis } from "./car-recipe";
 
 export const locales = ["en", "ru"] as const;
 export type Locale = (typeof locales)[number];
-
-type CarPart = CarBody | CarPaint | CarSpoiler | CarTrim;
 
 const english = {
   account: "Account",
   activeDays: "Active days",
   brand: "Vibe Racing",
   car: "Car",
-  carBody: "Body",
-  carPaint: "Paint",
   carProposal: "Next-week car proposal",
-  carSpoiler: "Spoiler",
-  carTrim: "Trim",
   communityDetail:
     "Scores are self-reported by participating users. They are not audited or endorsed by OpenAI.",
   communityDataBadge: "Community standings",
@@ -93,11 +87,7 @@ const russian: Record<TranslationKey, string> = {
   activeDays: "Активные дни",
   brand: "Vibe Racing",
   car: "Машина",
-  carBody: "Кузов",
-  carPaint: "Цвет",
   carProposal: "Машина на следующую неделю",
-  carSpoiler: "Спойлер",
-  carTrim: "Отделка",
   communityDetail:
     "Результаты заявляют сами участники. Они не проверяются и не подтверждаются OpenAI.",
   communityDataBadge: "Рейтинг сообщества",
@@ -175,38 +165,16 @@ export const translations: Readonly<Record<Locale, Readonly<Record<TranslationKe
   ru: russian,
 };
 
-const carPartLabels: Readonly<Record<Locale, Readonly<Record<CarPart, string>>>> = {
+const chassisLabels: Readonly<Record<Locale, Readonly<Record<CarChassis, string>>>> = {
   en: {
-    chrome: "Chrome",
-    dark: "Dark",
     formula: "Formula",
-    high: "High",
-    light: "Light",
-    low: "Low",
-    magenta: "Magenta",
-    mint: "Mint",
-    none: "None",
     rally: "Rally",
-    redline: "Redline",
     roadster: "Roadster",
-    sunburst: "Sunburst",
-    "turbo-blue": "Turbo blue",
   },
   ru: {
-    chrome: "Хром",
-    dark: "Тёмная",
     formula: "Формула",
-    high: "Высокий",
-    light: "Светлая",
-    low: "Низкий",
-    magenta: "Маджента",
-    mint: "Мятный",
-    none: "Нет",
     rally: "Ралли",
-    redline: "Красный",
     roadster: "Родстер",
-    sunburst: "Солнечный",
-    "turbo-blue": "Турбо-синий",
   },
 };
 
@@ -218,8 +186,8 @@ export function formatScore(value: number, locale: Locale): string {
   return new Intl.NumberFormat(locale === "ru" ? "ru-RU" : "en-US").format(value);
 }
 
-export function formatCarPart(value: CarPart, locale: Locale): string {
-  return carPartLabels[locale][value];
+export function formatCarChassis(value: CarChassis, locale: Locale): string {
+  return chassisLabels[locale][value];
 }
 
 export function formatFreshness(days: number | null, locale: Locale): string {

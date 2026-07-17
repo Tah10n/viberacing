@@ -13,7 +13,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0002](0002-opaque-multi-source-aggregation.md)                | Opaque multi-source profiles with one profile cap                   | Accepted; aggregation/finalization DB implemented      |
 | [0003](0003-identity-step-up-and-device-authority.md)          | GitHub identity, passkey step-up, and source-bound device authority | Accepted; identity/passkey/recovery/device DB          |
 | [0004](0004-edge-service-and-database-isolation.md)            | Cloudflare ingress plus service and database capability isolation   | Accepted; role DB and bounded local adapters           |
-| [0005](0005-enum-only-car-recipe.md)                           | Enum-only deterministic car customization                           | Accepted design; implementation pending                |
+| [0005](0005-enum-only-car-recipe.md)                           | Enum-only deterministic car customization                           | Accepted; v1 and local browser slice implemented       |
 | [0006](0006-public-repository-boundary.md)                     | Every tracked artifact is immediately public-safe                   | Accepted; repository controls partially implemented    |
 | [0007](0007-restricted-recovery-authority.md)                  | Recovery codes grant only short-lived passkey-replacement authority | Accepted; recovery DB capability implemented           |
 | [0008](0008-community-season-grace-and-finalization.md)        | Server-time Community grace and immutable finalization              | Accepted; finalization DB and local runner             |
@@ -40,6 +40,11 @@ what it costs, how it is verified, and how it can be replaced.
 | [0029](0029-bounded-pairing-retention-cleanup.md)              | Bounded pairing retention cleanup                                   | Accepted; database and local command; schedule pending |
 | [0030](0030-bounded-connector-pairing-transport.md)            | Bounded connector pairing transport and native key custody          | Accepted; local vertical slice; deployment pending     |
 | [0031](0031-one-shot-candidate-community-sync.md)              | One-shot exact-candidate Community sync                             | Accepted; Windows development slice; release pending   |
+| [0032](0032-bounded-auth-retention-cleanup.md)                 | Bounded authentication retention cleanup                            | Accepted; database and local command; schedule pending |
+| [0033](0033-bounded-railway-ingest-host.md)                    | Bounded Railway Ingest host                                         | Accepted; local entry point; deployment pending        |
+| [0034](0034-bounded-profile-deletion-purge.md)                 | Bounded primary profile deletion purge                              | Accepted; database and local command; schedule pending |
+| [0035](0035-bounded-session-car-recipe-proposal.md)            | Bounded session-owned CarRecipe proposal and approval               | Accepted; local Web/DB slice; agent path pending       |
+| [0036](0036-bounded-car-recipe-proposal-cleanup.md)            | Bounded CarRecipe proposal retention cleanup                        | Accepted; database and local command; schedule pending |
 
 ## Lifecycle
 

@@ -1,6 +1,7 @@
 import {
   createConfiguredCommunityMaintenanceRunner,
   maximumCleanupBatchSize,
+  maximumProfileDeletionPurgeBatchSize,
   type CommunityMaintenanceJob,
   type ConfiguredCommunityMaintenanceRunner,
 } from "./community-maintenance.js";
@@ -106,10 +107,28 @@ export function parseJobsCommand(value: unknown): CommunityMaintenanceJob {
       kind: "cleanup_expired_ingest_state",
     });
   }
+  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-auth-state") {
+    return Object.freeze({
+      batchSize: maximumCleanupBatchSize,
+      kind: "cleanup_expired_auth_state",
+    });
+  }
+  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-car-recipe-proposals") {
+    return Object.freeze({
+      batchSize: maximumCleanupBatchSize,
+      kind: "cleanup_expired_car_recipe_proposals",
+    });
+  }
   if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-pairing-state") {
     return Object.freeze({
       batchSize: maximumCleanupBatchSize,
       kind: "cleanup_expired_pairing_state",
+    });
+  }
+  if (argumentsValue.length === 1 && argumentsValue[0] === "purge-profile-deletions") {
+    return Object.freeze({
+      batchSize: maximumProfileDeletionPurgeBatchSize,
+      kind: "purge_profile_deletions",
     });
   }
   if (argumentsValue.length !== 2) {

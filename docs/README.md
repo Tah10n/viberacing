@@ -37,6 +37,8 @@ remain safe to publish verbatim.
   release, cross-platform result, or operational connector.
 - [Asset provenance](reference/ASSET_PROVENANCE.md) — generation/source records, integrity digests,
   metadata sanitation, accessibility text, and release-review status for non-code visuals.
+- [CarRecipe version 1](reference/car-recipe.md) — exact closed fields, local session-owned
+  proposal/approval lifecycle, deterministic rendering, trust limits, and remaining gates.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary
   and enforced workflow rules.
 - [Threat model](security/THREAT_MODEL.md), [abuse cases](security/ABUSE_CASES.md), and

@@ -23,6 +23,12 @@ Generated schema objects are recursively frozen before export. The package root 
 generated validators and validation result types, not the generic interpreter function, so normal
 consumers cannot substitute a runtime or network-provided schema.
 
+`CarRecipeV1` is also exported with `validateCarRecipeV1`. Web/Auth invokes that validator before
+proposal persistence, while browser rendering imports only the generated type and the code-native
+renderer. The generic schema interpreter and embedded schema therefore do not enter the public race
+client bundle. The authenticated proposal forms remain an internal same-origin Web boundary, not a
+fifth public OpenAPI operation.
+
 The runtime intentionally supports only the subset accepted by `scripts/check-contracts.mjs`. New
 JSON Schema keywords require implementation, negative tests, documentation, and security review;
 they must not be ignored silently.
@@ -34,9 +40,18 @@ pnpm run check:contracts
 pnpm run lint:contracts
 pnpm run typecheck:contracts
 pnpm run test:contracts:coverage
+pnpm run build:contracts
 ```
 
+The production build emits ESM with explicit relative `.js` specifiers under `dist/`. TypeScript
+consumers still resolve the reviewed source types, while plain Node.js runtime consumers load only
+the emitted JavaScript entry point; the root verification pipeline rejects either build failure or
+generated-source drift.
+
 Generated code is committed so TypeScript and future Rust consumers can review an immutable source
-digest. The generated OpenAPI operation is marked `implemented-local`: the Web route imports and
-validates the Community query/response components, but no deployment consumes a live database
-credential, no service imports the connector contract, and no real usage data is accepted.
+digest. The generated OpenAPI operations are marked `implemented-local`: the Web route imports and
+validates the Community query/response components, while the Ingest service validates the sync,
+result, and problem components. An opt-in synthetic loopback integration exercises the emitted
+Ingest runtime with a disposable least-privileged PostgreSQL login. No deployment consumes a live
+credential, no protected edge route or secret delivery is proven, and no real usage data is
+accepted.

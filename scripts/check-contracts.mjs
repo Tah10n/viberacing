@@ -70,6 +70,10 @@ const forbiddenConnectorFields = new Set([
 ]);
 const expectedFields = new Map([
   [
+    "car-recipe.schema.json",
+    ["schemaVersion", "chassis", "nose", "cockpit", "wing", "wheels", "palette", "trail", "seed"],
+  ],
+  [
     "community-score-page.schema.json",
     ["schemaVersion", "trustTier", "selfReported", "participants"],
   ],
@@ -168,6 +172,7 @@ const implementedLocalEvidencePaths = new Map([
       "apps/ingest/src/community-sync-http-server-contract-failure.test.ts",
       "apps/ingest/src/community-sync-http-server.test.ts",
       "apps/ingest/src/community-sync-http-server.ts",
+      "scripts/test-ingest-postgres-integration.mjs",
     ],
   ],
   [
@@ -763,6 +768,28 @@ if (sources !== undefined) {
         seasonStart?.["x-viberacing-isoWeekday"] !== 1
       ) {
         report(scope, "Community score query differs from the reviewed season boundary");
+      }
+    }
+    if (entry.file === "car-recipe.schema.json") {
+      const properties = schema?.properties ?? {};
+      const exactEnums = [
+        ["chassis", ["formula", "rally", "roadster"]],
+        ["nose", ["classic", "scoop", "wedge"]],
+        ["cockpit", ["canopy", "open", "rally"]],
+        ["wing", ["high", "low", "none"]],
+        ["wheels", ["all-terrain", "slick", "street"]],
+        ["palette", ["magenta", "mint", "redline", "sunburst", "turbo-blue"]],
+        ["trail", ["grid", "none", "spark"]],
+      ];
+      if (
+        properties.schemaVersion?.const !== 1 ||
+        properties.schemaVersion?.minimum !== 1 ||
+        properties.schemaVersion?.maximum !== 1 ||
+        properties.seed?.minimum !== 0 ||
+        properties.seed?.maximum !== 65_535 ||
+        exactEnums.some(([name, values]) => !sameEntries(properties[name]?.enum ?? [], values))
+      ) {
+        report(scope, "CarRecipe version, enum set, or seed bounds differ from ADR 0005");
       }
     }
     if (entry.file === "problem-details.schema.json") {

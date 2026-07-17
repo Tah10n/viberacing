@@ -71,10 +71,11 @@ is preferable to racing a live security transition. The separate private mutex p
 workers from selecting overlapping batches.
 
 Residual risk remains: there is no scheduler, cadence, retry/overlap policy, alert, capacity result,
-live Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. Other expiring
-sessions, ceremonies, recovery authorities, jobs, passkey provenance, and tombstones still need
-separate bounded cleanup. Anonymous pairing start also still needs an HTTP contract, browser
-approval, connector client, distributed edge/service limits, monitoring, and real-key custody.
+live Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. ADR 0032 now
+covers expired authentication challenges and restricted recovery authorities; expired sessions,
+jobs, passkey provenance, and tombstones still need separate bounded cleanup. Anonymous pairing
+start also still needs an HTTP contract, browser approval, connector client, distributed
+edge/service limits, monitoring, and real-key custody.
 
 Affected invariants are VR-DEVICE-001, VR-DATA-001, and VR-ABUSE-001. Primary attacker stories are
 VR-ABUSE-PAIRING-GUESS, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -111,18 +112,18 @@ secrets, and rollback must not widen Jobs table access or substitute owner SQL.
 
 ## Verification
 
-Current evidence includes:
+Acceptance evidence recorded for this decision included:
 
-- static migration/checksum validation across 13 immutable revisions;
+- static migration/checksum validation across 23 immutable revisions;
 - real PostgreSQL scenarios for oldest-first bounds, `pending`/`approved`/`cancelled` deletion,
   approval-challenge cascade, idempotency, live-pending and activated-row preservation, invalid
   batches, missing mutex, exact role grants, and the expanded partial index;
 - an observed two-connection Jobs race in which the second cleanup waits on the first private mutex,
   both one-row batches settle, and live pending state remains;
-- the complete isolated PostgreSQL suite with 24 tables, 23 observed lock-wait races, 8 relation
-  denials, and 25 cross-capability checks; and
-- 107 focused Jobs tests for the fourth fixed command/query/result path plus strict lint and type
-  checking.
+- the complete isolated PostgreSQL suite with 25 tables, 25 observed lock-wait races, 12 relation
+  denials, and 34 cross-capability checks; and
+- 120 focused Jobs tests, including the pairing cleanup command/query/result path, plus strict lint
+  and type checking.
 
 The SQL evidence uses only synthetic rows in a portless ephemeral PostgreSQL project. Jobs tests use
 an injected pool. They do not prove a Node-to-PostgreSQL login, scheduler, production retention
@@ -141,3 +142,4 @@ cadence, capacity, monitoring, backup purge, anonymous route, or deployment.
 - [Identity step-up and device authority](0003-identity-step-up-and-device-authority.md)
 - [Bounded Community maintenance runner](0014-bounded-community-maintenance-job-runner.md)
 - [Bounded pairing start composition](0028-bounded-pairing-start-composition.md)
+- [Bounded authentication retention cleanup](0032-bounded-auth-retention-cleanup.md)
