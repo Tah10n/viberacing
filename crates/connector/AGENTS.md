@@ -11,17 +11,18 @@ changing it.
   out-of-order, and over-budget messages without reflecting their content into errors or logs.
 - Emit only reviewed method names and fixed-shape parameters. Never add a generic arbitrary-method
   escape hatch.
-- Keep App Server communication on local stdio only. The separate pairing command may call only the
-  two versioned HTTPS paths (or explicit loopback HTTP), with proxies and redirects disabled; do not
-  add WebSocket, generic TCP/URL methods, shell interpolation, or inherited secret access.
+- Keep App Server communication on local stdio only. Connector commands may call only the two
+  versioned pairing paths and the versioned Community sync path over HTTPS (or explicit loopback
+  HTTP), with proxies and redirects disabled; do not add WebSocket, generic TCP/URL methods, shell
+  interpolation, or inherited secret access.
 - Never read, retain, log, or transmit prompts, conversations, repositories, Codex credentials,
   account email, or App Server paths.
 - Treat exact sync bodies, daily usage, nonces, and device-signature messages as private security
   material. Keep their types non-reflective, bind signatures to returned bytes, and match the
   versioned Ingest authentication policy and shared synthetic vector exactly.
-- Keep source/device/time/nonce context construction inaccessible until a reviewed boundary owns
-  source binding, canonical time, and replay behavior. The composer/signer boundary must not grow a
-  sync context provider, scheduler, upload client, or Codex network client implicitly. Pairing key
+- Keep source/device/time/nonce context construction confined to the reviewed one-shot sync command,
+  which owns source binding, canonical time, and replay behavior. The composer/signer boundary must
+  not grow a scheduler, generic upload client, or Codex network client. Pairing key
   generation/storage remains confined to the one-command native-store boundary.
 - Pairing possession must match `connector-pairing-authentication.json` byte for byte. Keep the
   pending key/challenge capabilities inaccessible outside the crate, sign only the fixed

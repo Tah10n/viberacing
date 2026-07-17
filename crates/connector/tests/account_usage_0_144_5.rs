@@ -1,40 +1,40 @@
 use viberacing_connector::{
-    CandidateCodex01444AccountUsage, ConnectorHandshake, MAX_DAILY_USAGE_ENTRIES, MAX_FRAME_BYTES,
+    CandidateCodex01445AccountUsage, ConnectorHandshake, MAX_DAILY_USAGE_ENTRIES, MAX_FRAME_BYTES,
     MAX_SYNC_TOKEN_VALUE, ProtocolError,
 };
 
-const INITIALIZE_RESPONSE: &[u8] = b"{\"id\":0,\"result\":{\"codexHome\":\"X:\\\\synthetic\\\\codex-home\",\"platformFamily\":\"windows\",\"platformOs\":\"windows\",\"userAgent\":\"codex-cli/0.144.4\"}}\n";
+const INITIALIZE_RESPONSE: &[u8] = b"{\"id\":0,\"result\":{\"codexHome\":\"X:\\\\synthetic\\\\codex-home\",\"platformFamily\":\"windows\",\"platformOs\":\"windows\",\"userAgent\":\"codex-cli/0.144.5\"}}\n";
 const ACCOUNT_CHATGPT: &[u8] =
-    include_bytes!("../../../compat/codex/0.144.4/fixtures/account-chatgpt.jsonl");
+    include_bytes!("../../../compat/codex/0.144.5/fixtures/account-chatgpt.jsonl");
 const ACCOUNT_NULL_EMAIL: &[u8] =
-    include_bytes!("../../../compat/codex/0.144.4/fixtures/account-null-email.jsonl");
+    include_bytes!("../../../compat/codex/0.144.5/fixtures/account-null-email.jsonl");
 const ACCOUNT_UNSUPPORTED: &[u8] =
-    include_bytes!("../../../compat/codex/0.144.4/fixtures/account-unsupported.jsonl");
+    include_bytes!("../../../compat/codex/0.144.5/fixtures/account-unsupported.jsonl");
 const ACCOUNT_UNKNOWN_FIELD: &[u8] =
-    include_bytes!("../../../compat/codex/0.144.4/fixtures/account-unknown-field.jsonl");
+    include_bytes!("../../../compat/codex/0.144.5/fixtures/account-unknown-field.jsonl");
 const USAGE_DAILY: &[u8] =
-    include_bytes!("../../../compat/codex/0.144.4/fixtures/usage-daily.jsonl");
+    include_bytes!("../../../compat/codex/0.144.5/fixtures/usage-daily.jsonl");
 const USAGE_NULLABLE: &[u8] =
-    include_bytes!("../../../compat/codex/0.144.4/fixtures/usage-nullable.jsonl");
+    include_bytes!("../../../compat/codex/0.144.5/fixtures/usage-nullable.jsonl");
 const USAGE_MISSING_FIELD: &[u8] =
-    include_bytes!("../../../compat/codex/0.144.4/fixtures/usage-missing-field.jsonl");
+    include_bytes!("../../../compat/codex/0.144.5/fixtures/usage-missing-field.jsonl");
 const USAGE_MALFORMED_DATE: &[u8] =
-    include_bytes!("../../../compat/codex/0.144.4/fixtures/usage-malformed-date.jsonl");
+    include_bytes!("../../../compat/codex/0.144.5/fixtures/usage-malformed-date.jsonl");
 const USAGE_UNKNOWN_FIELD: &[u8] =
-    include_bytes!("../../../compat/codex/0.144.4/fixtures/usage-unknown-field.jsonl");
+    include_bytes!("../../../compat/codex/0.144.5/fixtures/usage-unknown-field.jsonl");
 
-fn candidate() -> CandidateCodex01444AccountUsage {
+fn candidate() -> CandidateCodex01445AccountUsage {
     let mut handshake = ConnectorHandshake::new();
     handshake.start().expect("fresh handshake must start");
     handshake
         .accept_initialize_response(INITIALIZE_RESPONSE)
         .expect("reviewed initialization fixture must pass");
     handshake
-        .into_codex_0_144_4_account_usage()
+        .into_codex_0_144_5_account_usage()
         .expect("completed handshake must convert")
 }
 
-fn awaiting_account() -> CandidateCodex01444AccountUsage {
+fn awaiting_account() -> CandidateCodex01445AccountUsage {
     let mut candidate = candidate();
     candidate
         .start_account_read()
@@ -42,7 +42,7 @@ fn awaiting_account() -> CandidateCodex01444AccountUsage {
     candidate
 }
 
-fn awaiting_usage() -> CandidateCodex01444AccountUsage {
+fn awaiting_usage() -> CandidateCodex01445AccountUsage {
     let mut candidate = awaiting_account();
     candidate
         .accept_account_read_response(ACCOUNT_CHATGPT)
@@ -62,7 +62,7 @@ fn framed(json: &str) -> Vec<u8> {
 #[test]
 fn requires_the_handshake_and_emits_only_fixed_candidate_requests() {
     assert!(matches!(
-        ConnectorHandshake::new().into_codex_0_144_4_account_usage(),
+        ConnectorHandshake::new().into_codex_0_144_5_account_usage(),
         Err(ProtocolError::InvalidState)
     ));
 

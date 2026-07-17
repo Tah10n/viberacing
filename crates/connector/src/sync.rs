@@ -5,7 +5,7 @@ use std::fmt;
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 use sha2::{Digest, Sha256};
 
-use crate::codex_0_144_4::{CANDIDATE_CODEX_VERSION, valid_reported_date};
+use crate::codex_0_144_5::{CANDIDATE_CODEX_VERSION, valid_reported_date};
 use crate::{DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES, MAX_SYNC_TOKEN_VALUE};
 
 mod signing;
@@ -43,20 +43,37 @@ const IDENTIFIER_SUFFIX_LENGTH: usize = 22;
 const BASE64URL_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-/// One-use capability containing future-reviewed source, device, clock, identifier, and nonce
-/// inputs for a Community sync request.
+/// One-use capability containing reviewed source, device, clock, identifier, and nonce inputs for
+/// a Community sync request.
 ///
-/// This type deliberately has no public constructor, accessor, `Clone`, or `Debug`. A future
-/// source-bound device boundary must load the paired identifiers, obtain canonical UTC time, and
-/// generate a fresh cryptographic sync identifier and nonce before constructing it inside this
-/// crate. The composer is therefore executable under tests but cannot create a caller-selected or
-/// replay-prone request today.
+/// This type deliberately has no public constructor, accessor, `Clone`, or `Debug`. The private
+/// one-shot sync command loads the active paired identifiers, obtains canonical UTC time, and
+/// generates a fresh cryptographic sync identifier and nonce before constructing it inside this
+/// crate. External callers cannot create a caller-selected or replay-prone request.
 pub struct ReviewedCommunitySyncContext {
     source_id: String,
     sync_id: String,
     observed_at: String,
     device_id: String,
     device_nonce: [u8; DEVICE_NONCE_BYTES],
+}
+
+impl ReviewedCommunitySyncContext {
+    pub(crate) fn from_active_device(
+        source_id: String,
+        sync_id: String,
+        observed_at: String,
+        device_id: String,
+        device_nonce: [u8; DEVICE_NONCE_BYTES],
+    ) -> Self {
+        Self {
+            source_id,
+            sync_id,
+            observed_at,
+            device_id,
+            device_nonce,
+        }
+    }
 }
 
 /// Exact unsigned Community sync material ready for the isolated Ed25519 signer.
@@ -122,7 +139,7 @@ impl CandidateCommunitySyncV1Composer {
     /// Consumes one reviewed context and minimized daily usage into bounded unsigned request
     /// material for the isolated signer.
     ///
-    /// The body uses the fixed connector crate version and candidate Codex `0.144.4` version. The
+    /// The body uses the fixed connector crate version and candidate Codex `0.144.5` version. The
     /// SHA-256 digest is calculated over the exact returned body bytes, then bound into the exact
     /// version 1 LF-separated message. No key is loaded and no signature, HTTP request, persistence,
     /// key-store access, HTTP request, persistence, log, or network operation is created.
@@ -347,7 +364,7 @@ mod tests {
     use super::*;
     use crate::ConnectorHandshake;
 
-    const INITIALIZE_RESPONSE: &[u8] = b"{\"id\":0,\"result\":{\"codexHome\":\"/synthetic/codex-home\",\"platformFamily\":\"unix\",\"platformOs\":\"linux\",\"userAgent\":\"codex-cli/0.144.4\"}}\n";
+    const INITIALIZE_RESPONSE: &[u8] = b"{\"id\":0,\"result\":{\"codexHome\":\"/synthetic/codex-home\",\"platformFamily\":\"unix\",\"platformOs\":\"linux\",\"userAgent\":\"codex-cli/0.144.5\"}}\n";
     const ACCOUNT_RESPONSE: &[u8] = b"{\"id\":1,\"result\":{\"account\":{\"email\":\"racer@example.invalid\",\"planType\":\"plus\",\"type\":\"chatgpt\"},\"requiresOpenaiAuth\":false}}\n";
     const SOURCE_ID: &str = "src_AAAAAAAAAAAAAAAAAAAAAA";
     const SYNC_ID: &str = "syn_BBBBBBBBBBBBBBBBBBBBBB";
@@ -382,7 +399,7 @@ mod tests {
             .accept_initialize_response(INITIALIZE_RESPONSE)
             .expect("synthetic initialization must be accepted");
         let mut account_usage = handshake
-            .into_codex_0_144_4_account_usage()
+            .into_codex_0_144_5_account_usage()
             .expect("completed handshake must enter candidate adapter");
         account_usage
             .start_account_read()

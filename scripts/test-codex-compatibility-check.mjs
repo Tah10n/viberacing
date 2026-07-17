@@ -23,7 +23,7 @@ function makeFixture(name) {
 }
 
 function manifestPath(directory) {
-  return resolve(directory, "compat", "codex", "0.144.4", "manifest.json");
+  return resolve(directory, "compat", "codex", "0.144.5", "manifest.json");
 }
 
 function mutateManifest(directory, transform) {
@@ -57,7 +57,7 @@ const cases = [
   {
     name: "rejects removal of every exact-version evidence directory",
     mutate(directory) {
-      rmSync(resolve(directory, "compat", "codex", "0.144.4"), {
+      rmSync(resolve(directory, "compat", "codex", "0.144.5"), {
         recursive: true,
       });
     },
@@ -67,7 +67,7 @@ const cases = [
   {
     name: "rejects an unmanifested artifact",
     mutate(directory) {
-      writeFileSync(resolve(directory, "compat", "codex", "0.144.4", "full-schema.json"), "{}\n");
+      writeFileSync(resolve(directory, "compat", "codex", "0.144.5", "full-schema.json"), "{}\n");
     },
     expectedStatus: 1,
     expectedText: "unmanifested compatibility artifact",
@@ -76,7 +76,7 @@ const cases = [
     name: "rejects fixture digest drift",
     mutate(directory) {
       writeFileSync(
-        resolve(directory, "compat", "codex", "0.144.4", "fixtures", "usage-nullable.jsonl"),
+        resolve(directory, "compat", "codex", "0.144.5", "fixtures", "usage-nullable.jsonl"),
         '{"id":2,"result":{"summary":{},"dailyUsageBuckets":null}}\n',
       );
     },
@@ -111,7 +111,7 @@ const cases = [
         path,
         readFileSync(path, "utf8").replace(
           "| None          | Not available        | Not released         | None             | Unsupported until the full admission process passes |",
-          `| 0.144.4 | sha256:${"a".repeat(64)} | >=0.1.0 <0.2.0 | Windows | Supported: [evidence](evidence.md) |`,
+          `| 0.144.5 | sha256:${"a".repeat(64)} | >=0.1.0 <0.2.0 | Windows | Supported: [evidence](evidence.md) |`,
         ),
       );
     },
@@ -132,7 +132,7 @@ const cases = [
   {
     name: "rejects a missing fixture",
     mutate(directory) {
-      rmSync(resolve(directory, "compat", "codex", "0.144.4", "fixtures", "usage-daily.jsonl"));
+      rmSync(resolve(directory, "compat", "codex", "0.144.5", "fixtures", "usage-daily.jsonl"));
     },
     expectedStatus: 1,
     expectedText: "required compatibility file is missing",
@@ -161,7 +161,7 @@ const cases = [
     name: "rejects duplicate JSON keys in a fixture",
     mutate(directory) {
       writeFileSync(
-        resolve(directory, "compat", "codex", "0.144.4", "fixtures", "account-chatgpt.jsonl"),
+        resolve(directory, "compat", "codex", "0.144.5", "fixtures", "account-chatgpt.jsonl"),
         '{"id":1,"id":1}\n',
       );
     },

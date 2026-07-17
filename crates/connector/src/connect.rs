@@ -4,6 +4,7 @@ use std::ffi::OsString;
 use std::fmt;
 use std::io::{self, Write};
 use std::net::IpAddr;
+use std::path::PathBuf;
 use std::str;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -21,6 +22,8 @@ use crate::pairing::{
 };
 use crate::sync::encode_base64url;
 
+mod sync_command;
+
 const START_PATH: &str = "/v1/connector/pairing/start";
 const POLL_PATH: &str = "/v1/connector/pairing/poll";
 const CONNECT_PATH: &str = "/connect";
@@ -31,8 +34,7 @@ const KEYRING_SERVICE: &str = "viberacing.connector.pairing.v1";
 const KEYRING_ACCOUNT_PREFIX: &str = "device-";
 const ACCOUNT_DOMAIN: &[u8] = b"viberacing-connector-keyring-account-v1\0";
 const ORIGIN_DOMAIN: &[u8] = b"viberacing-connector-origin-v1\0";
-const USAGE: &str =
-    "Usage: viberacing-connector connect --origin <https-origin> --label <device-label>";
+const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector sync --origin <https-origin> --label <device-label> --codex <absolute-path>";
 const MAX_ORIGIN_BYTES: usize = 512;
 const MAX_LABEL_CHARACTERS: usize = 64;
 const MAX_REQUEST_BYTES: usize = 1024;
@@ -63,7 +65,7 @@ const RECORD_BYTES: usize = 264;
 /// Stable, non-reflective failures from the bounded connector command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConnectorCliError {
-    /// The command line does not match the one supported `connect` command.
+    /// The command line does not match one of the two bounded commands.
     InvalidArguments,
     /// The supplied server origin is not an HTTPS origin or permitted loopback HTTP origin.
     InvalidOrigin,
@@ -83,6 +85,20 @@ pub enum ConnectorCliError {
     InvalidServiceResponse,
     /// The short-lived pairing transaction expired before approval completed.
     PairingExpired,
+    /// No active source-bound credential exists for the requested origin and label.
+    NotConnected,
+    /// The selected Codex path or exact artifact did not pass admission.
+    CodexNotAdmitted,
+    /// The reviewed Codex process did not produce bounded usable data.
+    CodexUnavailable,
+    /// The active account currently has no bounded daily usage to submit.
+    NoUsage,
+    /// Fresh request time or identifier material could not be created safely.
+    SyncPreparationUnavailable,
+    /// The synchronization endpoint was unavailable or rejected the request.
+    SyncUnavailable,
+    /// The synchronization acknowledgement was outside the closed response contract.
+    InvalidSyncResponse,
     /// Connector output could not be written.
     OutputUnavailable,
 }
@@ -102,6 +118,13 @@ impl fmt::Display for ConnectorCliError {
             Self::ServiceUnavailable => "the pairing service is temporarily unavailable",
             Self::InvalidServiceResponse => "the pairing service response is invalid",
             Self::PairingExpired => "the pairing request expired; run connect again",
+            Self::NotConnected => "this device is not connected; run connect first",
+            Self::CodexNotAdmitted => "the selected Codex executable is not admitted",
+            Self::CodexUnavailable => "Codex usage is temporarily unavailable",
+            Self::NoUsage => "Codex reported no daily usage to sync",
+            Self::SyncPreparationUnavailable => "usage could not be prepared safely",
+            Self::SyncUnavailable => "the sync service is temporarily unavailable",
+            Self::InvalidSyncResponse => "the sync service response is invalid",
             Self::OutputUnavailable => "connector output is unavailable",
         })
     }
@@ -109,11 +132,10 @@ impl fmt::Display for ConnectorCliError {
 
 impl std::error::Error for ConnectorCliError {}
 
-/// Runs the single supported connector CLI command using process arguments and standard output.
+/// Runs a bounded connector CLI command using process arguments and standard output.
 ///
-/// `connect` creates or resumes one device credential, sends only the closed pairing start/poll
-/// contracts, and stores key material in the native operating-system credential store. It never
-/// launches Codex or submits usage.
+/// `connect` creates or resumes one device credential. `sync` admits one exact Codex candidate,
+/// collects only bounded daily usage, signs it with that active credential, and submits it once.
 ///
 /// # Errors
 ///
@@ -139,12 +161,30 @@ pub fn run_connector_cli() -> Result<(), ConnectorCliError> {
                 &mut io::stdout().lock(),
             )
         }
+        ParsedCommand::Sync {
+            codex_path,
+            label,
+            origin,
+        } => {
+            let origin = Origin::parse(&origin)?;
+            validate_label(&label)?;
+            let mut store = OsCredentialStore::new(&origin, &label)?;
+            sync_command::run_sync(&origin, &codex_path, &mut store, &mut io::stdout().lock())
+        }
     }
 }
 
 enum ParsedCommand {
     Help,
-    Connect { label: String, origin: String },
+    Connect {
+        label: String,
+        origin: String,
+    },
+    Sync {
+        codex_path: PathBuf,
+        label: String,
+        origin: String,
+    },
 }
 
 fn parse_command(
@@ -158,12 +198,17 @@ fn parse_command(
     if arguments.as_slice() == ["--help"] || arguments.as_slice() == ["-h"] {
         return Ok(ParsedCommand::Help);
     }
-    if arguments.first().map(String::as_str) != Some("connect") {
+    let command = arguments
+        .first()
+        .map(String::as_str)
+        .ok_or(ConnectorCliError::InvalidArguments)?;
+    if !matches!(command, "connect" | "sync") {
         return Err(ConnectorCliError::InvalidArguments);
     }
 
     let mut origin = None;
     let mut label = None;
+    let mut codex_path = None;
     let mut index = 1;
     while index < arguments.len() {
         let flag = arguments
@@ -175,13 +220,23 @@ fn parse_command(
         match flag.as_str() {
             "--origin" if origin.is_none() => origin = Some(value.clone()),
             "--label" if label.is_none() => label = Some(value.clone()),
+            "--codex" if command == "sync" && codex_path.is_none() && value.len() <= 1024 => {
+                codex_path = Some(PathBuf::from(value));
+            }
             _ => return Err(ConnectorCliError::InvalidArguments),
         }
         index += 2;
     }
 
-    match (origin, label) {
-        (Some(origin), Some(label)) => Ok(ParsedCommand::Connect { label, origin }),
+    match (command, origin, label, codex_path) {
+        ("connect", Some(origin), Some(label), None) => {
+            Ok(ParsedCommand::Connect { label, origin })
+        }
+        ("sync", Some(origin), Some(label), Some(codex_path)) => Ok(ParsedCommand::Sync {
+            codex_path,
+            label,
+            origin,
+        }),
         _ => Err(ConnectorCliError::InvalidArguments),
     }
 }
@@ -658,23 +713,8 @@ enum HttpOutcome {
 
 impl HttpPairingTransport {
     fn new(origin: &Origin) -> Self {
-        let config = Agent::config_builder()
-            .proxy(None)
-            .max_redirects(0)
-            .http_status_as_error(false)
-            .timeout_global(Some(HTTP_TIMEOUT))
-            .timeout_connect(Some(CONNECT_TIMEOUT))
-            .max_response_header_size(16 * 1024)
-            .user_agent(concat!("viberacing-connector/", env!("CARGO_PKG_VERSION")))
-            .accept(JSON_MEDIA_TYPE)
-            .tls_config(
-                TlsConfig::builder()
-                    .root_certs(RootCerts::PlatformVerifier)
-                    .build(),
-            )
-            .build();
         Self {
-            agent: config.new_agent(),
+            agent: new_http_agent(),
             origin: origin.value.clone(),
         }
     }
@@ -728,6 +768,25 @@ impl HttpPairingTransport {
         }
         Ok(HttpOutcome::Success(SuccessBody { body, request_id }))
     }
+}
+
+fn new_http_agent() -> Agent {
+    Agent::config_builder()
+        .proxy(None)
+        .max_redirects(0)
+        .http_status_as_error(false)
+        .timeout_global(Some(HTTP_TIMEOUT))
+        .timeout_connect(Some(CONNECT_TIMEOUT))
+        .max_response_header_size(16 * 1024)
+        .user_agent(concat!("viberacing-connector/", env!("CARGO_PKG_VERSION")))
+        .accept(JSON_MEDIA_TYPE)
+        .tls_config(
+            TlsConfig::builder()
+                .root_certs(RootCerts::PlatformVerifier)
+                .build(),
+        )
+        .build()
+        .new_agent()
 }
 
 impl PairingTransport for HttpPairingTransport {
@@ -1157,6 +1216,17 @@ mod tests {
         ])
         .expect("exact connect arguments must parse");
         assert!(matches!(command, ParsedCommand::Connect { .. }));
+        let command = parse_command([
+            "sync".into(),
+            "--codex".into(),
+            "C:\\synthetic\\codex.exe".into(),
+            "--label".into(),
+            "Desktop".into(),
+            "--origin".into(),
+            "https://race.example".into(),
+        ])
+        .expect("exact sync arguments must parse");
+        assert!(matches!(command, ParsedCommand::Sync { .. }));
         assert!(matches!(
             parse_command([
                 "connect".into(),
@@ -1167,6 +1237,18 @@ mod tests {
         ));
         assert!(matches!(
             parse_command(["sync".into()]),
+            Err(ConnectorCliError::InvalidArguments)
+        ));
+        assert!(matches!(
+            parse_command([
+                "connect".into(),
+                "--origin".into(),
+                "https://race.example".into(),
+                "--label".into(),
+                "Desktop".into(),
+                "--codex".into(),
+                "C:\\synthetic\\codex.exe".into()
+            ]),
             Err(ConnectorCliError::InvalidArguments)
         ));
         assert!(matches!(

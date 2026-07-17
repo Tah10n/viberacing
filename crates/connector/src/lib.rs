@@ -15,14 +15,15 @@ use std::fmt;
 
 use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 
-mod codex_0_144_4;
+mod admission;
+mod codex_0_144_5;
 mod connect;
 mod pairing;
 mod process;
 mod sync;
 
-pub use codex_0_144_4::{
-    CandidateCodex01444AccountUsage, DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES,
+pub use codex_0_144_5::{
+    CandidateCodex01445AccountUsage, DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES,
     MAX_SYNC_TOKEN_VALUE,
 };
 pub use connect::{ConnectorCliError, run_connector_cli};
@@ -33,7 +34,7 @@ pub use pairing::{
 };
 pub use process::{
     APP_SERVER_EXIT_GRACE, APP_SERVER_LIFETIME, APP_SERVER_RESPONSE_TIMEOUT,
-    CandidateCodex01444Collector, CollectionError, MAX_APP_SERVER_STDERR_BYTES,
+    CandidateCodex01445Collector, CollectionError, MAX_APP_SERVER_STDERR_BYTES,
     MAX_APP_SERVER_STDOUT_FRAMES, ReviewedCodexLaunch,
 };
 pub use sync::{
@@ -162,21 +163,21 @@ impl ConnectorHandshake {
         self.state == HandshakeState::Initialized
     }
 
-    /// Consumes a completed handshake into the candidate Codex `0.144.4` account/usage adapter.
+    /// Consumes a completed handshake into the candidate Codex `0.144.5` account/usage adapter.
     ///
     /// This exact-version adapter is development evidence only. Its existence does not mark Codex
-    /// `0.144.4` supported; the public compatibility matrix remains authoritative.
+    /// `0.144.5` supported; the public compatibility matrix remains authoritative.
     ///
     /// # Errors
     ///
     /// Returns [`ProtocolError::InvalidState`] unless initialization completed successfully.
-    pub fn into_codex_0_144_4_account_usage(
+    pub fn into_codex_0_144_5_account_usage(
         self,
-    ) -> Result<CandidateCodex01444AccountUsage, ProtocolError> {
+    ) -> Result<CandidateCodex01445AccountUsage, ProtocolError> {
         if self.state != HandshakeState::Initialized {
             return Err(ProtocolError::InvalidState);
         }
-        Ok(CandidateCodex01444AccountUsage::new())
+        Ok(CandidateCodex01445AccountUsage::new())
     }
 }
 

@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and twenty-eight accepted ADRs.
+  fail-closed compatibility policy and matrix, and thirty-one accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -111,7 +111,7 @@ Versioning where its guarantees are applicable.
   implied. The root Rust gate now runs tests, and the exact Serde/serde_json lock graph, build
   scripts, licenses, features, and point-in-time advisories are reviewed and inventoried. Clean CI
   fetches the exact Cargo lock graph without building it before the offline Node license gate.
-- Candidate-only Codex `0.144.4` account/usage evidence and parser. The manifest records the
+- Candidate-only Codex `0.144.5` account/usage evidence and parser. The manifest records the
   official release tag/commit/artifact metadata, full stable-schema digests, three minimal extracts,
   and nine synthetic fixtures; a new checker plus fourteen black-box cases enforce canonical files,
   digests, exact methods, safe paths, coverage inventory, and candidate/matrix separation. After a
@@ -128,15 +128,17 @@ Versioning where its guarantees are applicable.
   minimized usage only after child reap. Nine unit cases execute only a target-built Rust fixture
   and cover exact protocol composition, environment filtering, timeout, early exit,
   pre/post-response output overload, stable diagnostics, missing executable, nonzero terminal
-  status, and forced cleanup. No binary discovery/path ownership, official-artifact execution,
-  platform matrix, live Codex path, key, upload, CLI, package, or support row is implied.
+  status, and forced cleanup. That supervisor boundary alone implies no binary discovery/path
+  ownership, official-artifact execution, platform matrix, live Codex path, key, upload, CLI,
+  package, or support row.
 - A bounded unsigned candidate Community sync composer behind an inaccessible
   `ReviewedCommunitySyncContext`. It consumes production-parsed daily usage, revalidates the closed
   identifiers/time/entry bounds, emits one exact seven-field `ConnectorSyncV1` body, hashes those
   bytes with pinned RustCrypto SHA-256, and builds the exact unpadded-base64url, LF-separated device
   message without loading a key or opening a network path. Six Rust cases and one production-path
-  Ingest case share a synthetic exact-body/digest/message vector. No source/device context provider,
-  entropy, clock, key store, HTTP client, retry loop, scheduler, or support row is implied.
+  Ingest case share a synthetic exact-body/digest/message vector. That composer boundary alone
+  implies no source/device context provider, entropy, clock, key store, HTTP client, retry loop,
+  scheduler, or support row.
 - An isolated one-use candidate Ed25519 signer behind an inaccessible device-bound key capability.
   It removes public access from prepared unsigned material, consumes the key, rejects a different
   device ID without reflection, signs only the exact prepared message, and returns the same body
@@ -145,8 +147,15 @@ Versioning where its guarantees are applicable.
   verify the synthetic public key/signature, including body-change and trailing-LF rejection. The
   exact ten-record Dalek graph is pinned, inventoried,
   license/advisory/feature/build/unsafe-reviewed, and default features remain disabled except
-  zeroization. No real key generation/store, pairing proof, context provider, upload, scheduler,
-  supported Codex version, or release is implied.
+  zeroization. That signer boundary alone implies no real key generation/store, pairing proof,
+  context provider, upload, scheduler, supported Codex version, or release.
+- A Windows x86_64 candidate-only `sync` command that requires an active native credential and an
+  explicit exact Codex `0.144.5` artifact. It canonicalizes and hash-admits the selected file while
+  holding it against write substitution, runs the existing bounded collector in a fresh empty
+  directory, creates fresh request time/ID/nonce, consumes the existing composer/signer, and sends
+  one no-proxy/no-redirect/no-retry request to the fixed sync path. Exact loopback tests cover only
+  the five device headers and closed acknowledgement; no local Codex account, real credential,
+  deployed edge/Ingest/database, supported version, package, or release is exercised.
 - Bounded pairing start, possession, and dormant activation compositions. The start boundary accepts
   only closed device metadata, creates fresh server IDs, a 32-byte poll token and challenge, a
   60-bit human code, and a nine-minute expiry, then stores separate protected poll/code HMAC

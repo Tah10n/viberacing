@@ -131,15 +131,16 @@ evidence для `POST /v1/community/sync`, не доверяет proxy headers �
 deployment entry point. Live protected key injection, edge signer, direct-origin denial,
 host/port/TLS configuration, distributed rate policy и monitoring всё ещё отсутствуют. Library-only
 Rust foundation теперь выполняет фиксированный stable handshake и только после него — candidate
-`0.144.4` account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает email/plan/summary и
+`0.144.5` account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает email/plan/summary и
 возвращает не более 31 отсортированной строгой date/token записи. В репозитории есть exact release
-metadata, schema digests, minimal extracts, fixtures и drift/matrix checker, но официальный artifact
-не был независимо выполнен, а support matrix остаётся пустой. One-shot supervisor теперь проверяет
-точную sequence на target-built synthetic child: фиксированный `app-server` argument, local pipes,
-очищенное ambient environment, bounded stdout/stderr/time, отклонение late output и
-reap-before-success cleanup. У reviewed-launch capability нет публичного constructor. Второй
-недоступный reviewed context теперь позволяет candidate composer превратить минимизированные записи
-в точные `ConnectorSyncV1` JSON, SHA-256 digest, unpadded base64url nonce и LF-separated
+metadata, schema digests, minimal extracts, fixtures и drift/matrix checker. Windows x86_64
+development-команда допускает только точные size и SHA-256 официального artifact; repository tests
+не запускают пользовательский Codex account, а support matrix остаётся пустой. One-shot supervisor
+проверяет точную sequence на target-built synthetic child: фиксированный `app-server` argument,
+local pipes, очищенное ambient environment, bounded stdout/stderr/time, отклонение late output и
+reap-before-success cleanup. Reviewed-launch capability остаётся приватной для exact admission.
+Второй недоступный reviewed context теперь позволяет candidate composer превратить минимизированные
+записи в точные `ConnectorSyncV1` JSON, SHA-256 digest, unpadded base64url nonce и LF-separated
 device-signature message. Изолированный one-use signer потребляет этот закрытый материал вместе с
 таким же недоступным device-bound Ed25519 key capability и возвращает только то же body и пять
 точных header values. Общий synthetic vector проверяет exact public key/signature между Rust и
@@ -151,10 +152,13 @@ versioned pairing start/poll contracts через общий лимит в че�
 64-bucket PostgreSQL rate policy, ограниченные body и generic `no-store` ответы. Локальная
 Rust-команда `connect` получает Ed25519 key и анонимный rate ID из OS CSPRNG, сохраняет
 prepared/pending/active record только в нативном credential store, доказывает владение ключом и
-возобновляет прерванный poll, не печатая key, token, challenge, source или device ID. Всё ещё нет
-executable discovery и artifact/version admission, реального запуска Codex, cross-platform runtime
-evidence, source/device sync context provider, signed upload, live database connection, capacity
-evidence, packaging, release, operational sync connector и deployment.
+возобновляет прерванный poll, не печатая key, token, challenge, source или device ID. Отдельная
+Windows x86_64 команда `sync` canonicalize-ит и hash-проверяет один exact `0.144.5` executable,
+запускает его в новом пустом working directory, создаёт свежие request time/ID/nonce из active
+record, один раз отправляет точное signed body на фиксированный sync path и принимает только closed
+acknowledgement. Она не ищет binary автоматически, не повторяет ambiguous POST и не отправляет edge
+origin proof. Всё ещё нет macOS/Linux admission, live database connection, capacity evidence,
+packaging, release, поддерживаемого sync connector и deployment.
 
 Также добавлены двадцать две SQL migrations: 25 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,

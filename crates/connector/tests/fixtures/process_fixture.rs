@@ -16,7 +16,7 @@ const INITIALIZED_NOTIFICATION: &str = "{\"method\":\"initialized\",\"params\":{
 const ACCOUNT_REQUEST: &str =
     "{\"id\":1,\"method\":\"account/read\",\"params\":{\"refreshToken\":false}}";
 const USAGE_REQUEST: &str = "{\"id\":2,\"method\":\"account/usage/read\",\"params\":null}";
-const INITIALIZE_RESPONSE: &[u8] = b"{\"id\":0,\"result\":{\"codexHome\":\"/synthetic/codex-home\",\"platformFamily\":\"unix\",\"platformOs\":\"linux\",\"userAgent\":\"codex-cli/0.144.4\"}}\n";
+const INITIALIZE_RESPONSE: &[u8] = b"{\"id\":0,\"result\":{\"codexHome\":\"/synthetic/codex-home\",\"platformFamily\":\"unix\",\"platformOs\":\"linux\",\"userAgent\":\"codex-cli/0.144.5\"}}\n";
 const ACCOUNT_RESPONSE: &[u8] = b"{\"id\":1,\"result\":{\"account\":{\"email\":\"racer@example.invalid\",\"planType\":\"plus\",\"type\":\"chatgpt\"},\"requiresOpenaiAuth\":false}}\n";
 const USAGE_RESPONSE: &[u8] = b"{\"id\":2,\"result\":{\"dailyUsageBuckets\":[{\"startDate\":\"2026-07-14\",\"tokens\":456},{\"startDate\":\"2026-07-13\",\"tokens\":123}],\"summary\":{\"currentStreakDays\":2,\"lifetimeTokens\":579,\"longestRunningTurnSec\":30,\"longestStreakDays\":2,\"peakDailyTokens\":456}}}\n";
 

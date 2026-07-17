@@ -39,6 +39,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0028](0028-bounded-pairing-start-composition.md)              | Bounded pairing start composition                                   | Accepted; local start; transport pending               |
 | [0029](0029-bounded-pairing-retention-cleanup.md)              | Bounded pairing retention cleanup                                   | Accepted; database and local command; schedule pending |
 | [0030](0030-bounded-connector-pairing-transport.md)            | Bounded connector pairing transport and native key custody          | Accepted; local vertical slice; deployment pending     |
+| [0031](0031-one-shot-candidate-community-sync.md)              | One-shot exact-candidate Community sync                             | Accepted; Windows development slice; release pending   |
 
 ## Lifecycle
 

@@ -212,7 +212,7 @@ material availability cost.
 - **Impact:** Local code execution under the user, resource exhaustion, key theft, or prompt and
   credential disclosure.
 - **Controls:** The implemented library foundation has one fixed stable initialization exchange,
-  then a candidate-only `0.144.4` account/usage state machine with fixed IDs/methods, 16 KiB LF-only
+  then a candidate-only `0.144.5` account/usage state machine with fixed IDs/methods, 16 KiB LF-only
   frames, closed duplicate-rejecting fields, exact order, terminal hostile input, discarded
   account/summary values, 31 bounded normalized daily entries, and non-reflective errors. A one-shot
   supervisor now uses one fixed `app-server` argument, local pipes, a capability-owned working
@@ -222,24 +222,24 @@ material availability cost.
   inaccessible reviewed context, revalidates every body and unsigned device-header input it owns,
   and fixes the exact JSON/digest/device-message bytes shared with Ingest. An isolated one-use
   signer removes public unsigned access, rejects a key capability bound to another device, signs
-  only the fixed message, and returns the same body plus five header values without opening a sync
-  network path. The operational connector still requires a user-scoped install, resolved trusted
-  binary path, link/ownership and artifact/version admission, reviewed construction of every
-  capability, safe diagnostics, platform evidence, and the existing sync egress allowlist. The
-  separate pairing command now supplies OS key generation/native custody and only the two exact
-  bounded start/poll paths; it does not satisfy Codex admission, upload, packaging, or release
-  controls.
+  only the fixed message, and returns the same body plus five header values. The Windows x86_64
+  development sync command accepts only an explicit canonical path matching one exact artifact
+  size/digest, holds the file against write substitution, creates fresh context from an active
+  native record, and sends one no-proxy/no-redirect/no-retry request to the fixed endpoint. The
+  pairing command supplies OS key generation/native custody and only the two exact bounded
+  start/poll paths. The operational connector still requires automatic discovery policy,
+  other-platform evidence, safe diagnostics, packaging, provenance, release, and clean-machine
+  privacy evidence.
 - **Detection:** Local safe diagnostics for selected binary/version, bounded failure reason, and
   child cleanup verification without uploading content.
 - **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified
   binary, and rotate the device key after suspected compromise.
 - **Residual risk:** A computer owner can replace all local components; official signing and clear
-  diagnostics reduce accidental compromise, not owner control. Candidate schema/parser tests do not
-  prove selected-artifact provenance, real Codex execution, cross-platform behavior, or release
-  integrity. The synthetic supervisor tests prove bounded mechanics only and do not make the version
-  supported. The shared signed sync vector proves synthetic byte and cryptographic agreement only;
-  it does not prove fresh entropy, clock correctness, real key custody/pairing, transport, or
-  real-user privacy.
+  diagnostics reduce accidental compromise, not owner control. Candidate schema/admission tests do
+  not prove protected clean-machine provenance, real Codex account execution, cross-platform
+  behavior, or release integrity. The synthetic supervisor tests prove bounded mechanics only and do
+  not make the version supported. The shared signed vector and loopback POST prove synthetic byte,
+  cryptographic, and transport agreement only; they do not prove real-user privacy or deployment.
 
 ## Web, privacy, and content abuse
 

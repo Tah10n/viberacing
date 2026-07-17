@@ -1,33 +1,33 @@
 {
   "manifestVersion": 1,
-  "codexVersion": "0.144.4",
+  "codexVersion": "0.144.5",
   "status": "candidate",
   "release": {
     "repository": "https://github.com/openai/codex",
-    "tag": "rust-v0.144.4",
-    "commit": "8c68d4c87dc54d38861f5114e920c3de2efa5876",
-    "publishedAt": "2026-07-14T05:08:11Z",
-    "url": "https://github.com/openai/codex/releases/tag/rust-v0.144.4",
+    "tag": "rust-v0.144.5",
+    "commit": "87db9bc18ba5bc82c1cb4e4381b44f693ee35623",
+    "publishedAt": "2026-07-16T02:54:48Z",
+    "url": "https://github.com/openai/codex/releases/tag/rust-v0.144.5",
     "artifact": {
       "name": "codex-x86_64-pc-windows-msvc.exe",
-      "bytes": 341142832,
-      "sha256": "51398051c2332b6afe08dc3b9dbb4056085c197f35ca57a307ee303d450cada5",
+      "bytes": 341195568,
+      "sha256": "efdb3540ef74b9909408c8d38da79483454797b36f471e3e004fc2bf2b70e22a",
       "verificationStatus": "release-metadata-recorded"
     }
   },
   "generation": {
     "command": "codex app-server generate-json-schema --out <output-directory>",
     "experimentalApi": false,
-    "reportedVersion": "0.144.4",
+    "reportedVersion": "0.144.5",
     "fullStableBundle": {
       "sourcePath": "codex_app_server_protocol.schemas.json",
       "bytes": 560640,
-      "sha256": "ce60b1ce3632c026f26c6eedfd516ab2836384b6dcc20bde540f5cffbaa2ce21"
+      "sha256": "464c4cfe876dbb28b157bcde174750f24ad2b4e1188b33b07059789fe002fad9"
     },
     "clientRequestSchema": {
       "sourcePath": "ClientRequest.json",
       "bytes": 166089,
-      "sha256": "e52f3ef71c9980be0e65222f064ef08e09e69dff337e5c7d8891c05569afe27e"
+      "sha256": "54d89e5d38f51cd16d734f6f22a72713bba2abdf5c8aaef27d1135e99dfb5b84"
     }
   },
   "extracts": [
@@ -147,8 +147,8 @@
     "unsafe-integer"
   ],
   "supportBlockers": [
-    "The official release metadata is recorded, but the release artifact was not independently downloaded and verified for this extract.",
-    "The one-shot supervisor has synthetic Windows evidence only; executable discovery, path ownership, official-artifact execution, and macOS/Linux results remain absent.",
-    "Exact unsigned sync composition exists only behind an inaccessible reviewed context with synthetic evidence; no source/device context provider, secure device-key storage, signer, upload, connector CLI, packaged artifact, or connector release exists."
+    "The exact Windows x86_64 release digest is admitted locally, but protected clean-machine build, signature, SBOM, provenance, and release-pipeline evidence remain absent.",
+    "The one-shot sync path is Windows x86_64 development evidence only; macOS/Linux executable admission and clean-machine account/privacy execution results remain absent.",
+    "No deployed edge/Ingest/database path, real-user end-to-end result, packaged connector, credential rotation/uninstall flow, scheduler, or connector release exists."
   ]
 }

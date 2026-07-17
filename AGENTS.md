@@ -56,7 +56,7 @@ replacement WebAuthn ceremony, and returns a normal session only after atomic co
 only injected/synthetic evidence and no invite issuer UI, working OAuth or database credential,
 distributed recovery attempt controls, abandoned-state cleanup or notification, deletion purge
 worker, edge abuse controls, or deployment. A library-only Rust connector foundation now implements
-a bounded stable App Server JSONL handshake and a candidate-only `0.144.4` account/usage parser with
+a bounded stable App Server JSONL handshake and a candidate-only `0.144.5` account/usage parser with
 checked schema/fixture evidence. A one-shot supervisor composes that sequence with fixed local
 pipes, arguments, deadlines, output budgets, ambient-environment clearing, and reap-before-success
 behavior, but its reviewed-launch capability has no public constructor. An exact-body composer now
@@ -76,13 +76,16 @@ boundary now shares four-call admission, applies a fixed-storage global-and-64-b
 rate policy, and serializes only the versioned contracts. A bounded Rust `connect` command generates
 one Ed25519 key through the OS CSPRNG, stores its versioned state only in the native credential
 store, resumes polling, and persists the activated binding without printing bearer or key material.
-There is still no executable discovery/admission, live Codex launch path, supported version,
-source/device sync context provider, upload, packaging, release, cross-platform execution result,
-live pairing database/login result, edge deployment, or capacity evidence. Do not claim that
-deployed browser/session HTTP authentication, production-ready recovery or remaining unimplemented
-critical-action verification, real-user ingestion, an operational connector, a Jobs scheduler or
-deployed public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted
-security control exists until its implementation and verification are present in the working tree.
+A separate Windows x86_64 development `sync` command can construct the private launch/context/key
+capabilities only after explicit exact `0.144.5` artifact and active-record admission, then sends
+one fixed signed request and validates one closed acknowledgement without retry or edge-origin
+headers. There is still no automatic executable discovery, supported version, macOS/Linux admission,
+clean-machine real-account result, packaging, release, live pairing/Ingest database/login result,
+edge deployment, or capacity evidence. Do not claim that deployed browser/session HTTP
+authentication, production-ready recovery or remaining unimplemented critical-action verification,
+real-user ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
+correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
+implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -113,14 +116,14 @@ security control exists until its implementation and verification are present in
   persistence, and real PostgreSQL invariant tests. Read `database/AGENTS.md` before editing it.
 - `crates/connector/` contains the bounded App Server JSONL handshake, candidate exact-version
   account/usage parser, inaccessible one-shot child supervisor, synthetic process fixture,
-  exact-body sync composer, isolated pairing/sync signers, the pairing-only native-store `connect`
-  command, and nested connector security guidance. Read `crates/connector/AGENTS.md` before editing
-  it.
+  exact-body sync composer, isolated pairing/sync signers, the native-store `connect` command, the
+  exact-candidate one-shot `sync` command, and nested connector security guidance. Read
+  `crates/connector/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
 - The Ingest host/port/TLS deployment entry point, distributed recovery perimeter and cleanup, and
-  operational connector layers are not present yet; follow `docs/PROJECT_PLAN.md` when they are
-  introduced.
+  released or scheduled connector layers are not present yet; follow `docs/PROJECT_PLAN.md` when
+  they are introduced.
 
 ## Verified commands
 

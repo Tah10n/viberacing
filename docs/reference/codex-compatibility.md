@@ -5,11 +5,12 @@
 Compatibility status: no supported versions.
 
 No Codex version and no Vibe Racing connector version is supported. A library-only connector now
-implements the bounded initialization exchange and a candidate parser for exact version `0.144.4`,
-plus a synthetic one-shot process supervisor behind a launch capability with no public constructor.
-Executable discovery/admission, official-artifact execution, cross-platform results, secure keys,
-upload, packaging, and a released connector do not exist. This empty matrix is fail-closed evidence,
-not an invitation to run the candidate against an arbitrary local version.
+implements the bounded initialization exchange and a candidate parser for exact version `0.144.5`,
+plus a bounded one-shot supervisor. A Windows x86_64 development command can construct its private
+launch capability only for the exact artifact size and SHA-256, then use an active native credential
+for one signed upload. Automatic discovery, macOS/Linux admission, clean-machine real-account
+results, packaging, provenance, and a released connector do not exist. This empty matrix is
+fail-closed evidence, not an invitation to run an arbitrary local version.
 
 | Codex version | Stable schema digest | Compatible connector | Platforms tested | Status and evidence                                 |
 | ------------- | -------------------- | -------------------- | ---------------- | --------------------------------------------------- |
@@ -17,11 +18,13 @@ not an invitation to run the candidate against an arbitrary local version.
 
 ## Candidate evidence, not support
 
-[`compat/codex/0.144.4/manifest.json`](../../compat/codex/0.144.4/manifest.json) records the
-official `rust-v0.144.4` tag, immutable release commit and artifact metadata, full stable-bundle and
+[`compat/codex/0.144.5/manifest.json`](../../compat/codex/0.144.5/manifest.json) records the
+official `rust-v0.144.5` tag, immutable release commit and artifact metadata, full stable-bundle and
 client request digests, three minimal account schema extracts, and nine synthetic JSONL fixtures.
-The bundle was generated from a local CLI reporting `0.144.4` with experimental API omitted. The
-official artifact itself was not independently downloaded and verified for this extract.
+The bundle was generated from a local CLI reporting `0.144.5` with experimental API omitted. The
+Windows admission policy matches the recorded official release asset size/digest, but repository
+verification does not execute that artifact and this is not protected clean-machine release
+evidence.
 
 The candidate Rust adapter is reachable only after the handshake. It emits the fixed IDs `1` and `2`
 for `account/read` and `account/usage/read`, accepts only ChatGPT mode, discards email, plan, and
@@ -35,8 +38,8 @@ Nine supervisor unit cases launch only a target-built Rust fixture. They prove o
 capability-owned allowlist, exact handshake/account/usage composition, three-frame stdout and 8 KiB
 discard-only stderr budgets, response/lifetime deadlines, early-exit handling, late-output checks,
 stable errors, nonzero terminal-status rejection, and reap-before-success cleanup.
-`ReviewedCodexLaunch` has no public constructor, so this is not an installed-Codex or
-selected-artifact execution result.
+`ReviewedCodexLaunch` has no public constructor. ADR 0031 adds exact internal artifact admission and
+held-handle launch wiring; repository tests still do not execute an installed Codex account.
 
 The repository compatibility checker verifies manifest paths, shapes, byte counts, digests,
 provenance syntax, fixed methods, fixture coverage, and the candidate/support-matrix separation. Its
@@ -72,26 +75,24 @@ discards them, then emits one fixed `initialized` notification. A remote protoco
 terminal for that state-machine instance and errors do not reflect server content.
 
 The candidate adapter adds exact-version parsing evidence described above. The one-shot supervisor
-adds fixed local launch mechanics and synthetic timeout/overload/cleanup evidence but accepts only
-the inaccessible `ReviewedCodexLaunch` capability. A composer now consumes the normalized output
-only behind an equally inaccessible `ReviewedCommunitySyncContext` and fixes the exact sync body,
-SHA-256 digest, nonce encoding, and device message. An isolated one-use signer consumes that closed
-material only with an inaccessible device-bound key capability. A separate pairing-only command can
-generate a native-store device key and complete the local start/approve/poll transaction, but it
-does not admit or run Codex. No library boundary discovers a binary, resolves its links/ownership,
-constructs the operational App Server or sync capability, verifies or executes the selected release
-artifact, uploads data, admits a release, or creates a supported connector artifact. Every matrix
-row still requires the complete admission evidence above.
+accepts only the inaccessible `ReviewedCodexLaunch` capability. A composer and one-use signer keep
+the exact sync bytes and device key behind two further inaccessible capabilities. `connect`
+generates and activates the native-store credential. The explicit Windows x86_64 `sync` command now
+canonicalizes and hash-admits one exact path, keeps a no-write-sharing handle through launch,
+creates fresh request context from that active record, and sends one closed signed request without
+proxy, redirect, retry, or edge-origin credentials. It does not search for binaries, admit another
+version or platform, create a release, or make the candidate supported. Every matrix row still
+requires the complete admission evidence above.
 
 ## Planned stable surface
 
 The implementation plan names `account/read` for a local auth-mode decision and `account/usage/read`
-for bounded usage daily buckets. The `0.144.4` candidate proves those methods and reviewed fields
+for bounded usage daily buckets. The `0.144.5` candidate proves those methods and reviewed fields
 exist in one generated stable schema and implements their closed parser. It is still not a current
-support claim. The first proposed row must additionally prove executable admission, the official
-artifact, clean-machine platforms, reviewed context/key-store/pairing/upload behavior, privacy
-egress, and a released connector range. The shared signed sync vector is synthetic cryptographic
-contract evidence only.
+support claim. The first proposed row must additionally prove clean-machine supported platforms,
+real-account privacy egress, packaged artifact signature/SBOM/provenance, release review, and a
+released connector range. The shared signed sync vector and loopback upload remain synthetic
+cryptographic/transport evidence only.
 
 All other App Server methods and transports are denied for connector v1. In particular, Vibe Racing
 does not consume thread, turn, item, approval, MCP, file, shell, login, conversation, or repository

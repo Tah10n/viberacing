@@ -31,10 +31,10 @@ remain safe to publish verbatim.
 - [Dependency inventory](reference/dependency-inventory.json) — deterministic locked npm/Cargo and
   external artifact/license evidence.
 - [Connector protocol, candidate adapter, supervisor, pairing, and sync signers](../crates/connector/README.md)
-  — bounded local App Server handshake, exact `0.144.4` account/usage parser, synthetic one-shot
-  process evidence, inaccessible sync material/signing, and a local pairing-only `connect` command
-  with native OS key custody and exact Web start/poll routes; no operational Codex launch, upload,
-  supported release, or sync connector.
+  — bounded local App Server handshake, exact `0.144.5` account/usage parser, synthetic one-shot
+  process evidence, exact sync material/signing, a native-store `connect` command, and one explicit
+  Windows exact-artifact `sync` command with synthetic loopback upload evidence; no supported
+  release, cross-platform result, or operational connector.
 - [Asset provenance](reference/ASSET_PROVENANCE.md) — generation/source records, integrity digests,
   metadata sanitation, accessibility text, and release-review status for non-code visuals.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary

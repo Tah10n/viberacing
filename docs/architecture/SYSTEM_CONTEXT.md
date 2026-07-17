@@ -8,11 +8,12 @@ fallback, local invite/OAuth/initial-passkey enrollment, returning-passkey login
 public-profile visibility, and private passkey-inventory/add/revocation slices with encrypted
 cookies, local recovery-code replacement-passkey sign-in, and logout, one local one-shot Jobs
 runner, and local Ingest request-verification, PostgreSQL-adapter, application-composition, and
-bounded HTTP-server boundaries, plus library-only connector initialization and candidate `0.144.4`
+bounded HTTP-server boundaries, plus library-only connector initialization and candidate `0.144.5`
 account/usage parser boundaries, a synthetic one-shot supervisor, an exact-body sync composer,
-isolated pairing/sync signers, a pure Web pairing verifier, and one local pairing-only connector
-command with native OS key custody and exact start/poll routes. It still has no deployed application
-service, operational sync connector, supported Codex version, distributed recovery perimeter,
+isolated pairing/sync signers, a pure Web pairing verifier, one local connector command with native
+OS key custody and exact start/poll routes, and one explicit Windows candidate command that admits,
+collects, signs, and uploads a single sync. It still has no deployed application service,
+operational sync connector, supported Codex version, distributed recovery perimeter,
 Cloudflare/Railway deployment, live OAuth or database login, or production database. Component
 status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
 required runtime boundaries, not deployed evidence.
@@ -127,13 +128,14 @@ material and one fixed database call; ADR 0029 supplies bounded Jobs-only physic
 expiry. A separate local `/connect` flow supplies session-rate-limited pending-code review and
 fresh-passkey new-source approval. ADR 0030 now exposes only the pairing journey through one Rust
 `connect` command, exact local start/poll routes, fixed-storage database admission, and native OS
-credential custody. App Server launch and sync capabilities still have no public constructor, so
-executable Codex discovery/admission, official-artifact execution, sync context creation,
-scheduling, upload, and release remain absent. The host/port/TLS deployment entry point, live
-secret-manager/edge key injection, working deployment login/certificate, composed live end-to-end
-flow, edge/capacity evidence, Cloudflare/Railway path, operational sync connector, Jobs
-scheduler/monitoring, public cache, and audited correction authority shown in the design remain
-planned.
+credential custody. App Server launch and sync capabilities still have no public constructor, so ADR
+0031 lets only the private Windows x86_64 command construct them after exact explicit-path artifact
+admission and active-record review. It creates fresh context and performs one fixed signed upload.
+Automatic discovery, macOS/Linux admission, scheduling, and release remain absent. The host/port/TLS
+deployment entry point, live secret-manager/edge key injection, working deployment
+login/certificate, composed live end-to-end flow, edge/capacity evidence, Cloudflare/Railway path,
+released sync connector, Jobs scheduler/monitoring, public cache, and audited correction authority
+shown in the design remain planned.
 
 ## Component responsibilities
 

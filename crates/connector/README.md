@@ -1,12 +1,13 @@
 # Vibe Racing connector and bounded protocol foundation
 
 This Rust crate contains the fail-closed local Codex App Server initialization boundary and one
-candidate-only account/usage adapter for the exact `0.144.4` schema extract. It also contains a
+candidate-only account/usage adapter for the exact `0.144.5` schema extract. It also contains a
 bounded one-shot child supervisor behind a reviewed-launch capability with no public constructor, an
 isolated pairing-possession signer, and an exact-body Community sync composer/request signer behind
-inaccessible reviewed capabilities. One runnable `connect` command now completes only the versioned
-pairing start/poll journey with native OS key custody. It is not a supported, packaged, or released
-sync connector.
+inaccessible reviewed capabilities. One runnable `connect` command completes the versioned pairing
+journey with native OS key custody. A second Windows x86_64 development command admits one exact
+Codex candidate, collects, signs, and uploads one bounded sync. It is not a supported, packaged, or
+released connector.
 
 The implemented surface is deliberately narrow:
 
@@ -54,30 +55,40 @@ The implemented surface is deliberately narrow:
   interrupted poll, retries every two seconds for at most eight local minutes, and saves activation
   before success output; and
 - output limited to the exact `/connect` URL, human code, generic progress, and success without key,
-  token, challenge, source, or device identifiers.
+  token, challenge, source, or device identifiers;
+- one explicit `sync --origin <origin> --label <label> --codex <absolute-path>` command that
+  requires an active record and never discovers a binary or accepts an environment path override;
+- Windows x86_64 admission for the exact `0.144.5` official artifact byte count and SHA-256 digest,
+  with exact-version-only output and a no-write-sharing handle retained through direct launch;
+- fresh OS-random sync ID and nonce, canonical millisecond UTC, active-record source/device/key
+  binding, and one existing exact composition/signing path;
+- one fixed `/v1/community/sync` POST with proxies and redirects disabled, platform TLS, only the
+  five device headers, an 8192-byte request, and a closed 1024-byte acknowledgement; and
+- no automatic retry after an ambiguous POST and only generic accepted, duplicate, or review output.
 
 `ReviewedCodexLaunch`, `PendingDevicePairingSigningKey`, `ReviewedPairingChallenge`,
-`ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public constructors; only the
-private pairing command can construct the two pairing capabilities from its validated native-store
-record and server response. There is no executable discovery, link/ownership review, artifact or
-version admission, live Codex launch path, source/device sync context provider, WebSocket transport,
-generic JSON-RPC or HTTP method, usage upload, scheduler, installer, credential rotation/uninstall,
-package, or release artifact. Browser approval remains the separate Web/Auth boundary. The
-checked-in [`0.144.4` candidate evidence](../../compat/codex/0.144.4/manifest.json) is development
+`ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public constructors. The
+private pairing command constructs only its two pending capabilities; the private sync command can
+construct the launch/context/key capabilities only after exact artifact and active-record review.
+There is no automatic discovery, macOS/Linux executable admission, WebSocket transport, generic
+JSON-RPC or HTTP method, scheduler, installer, credential rotation/uninstall, package, or release
+artifact. Browser approval and edge origin proof remain separate server-side boundaries. The
+checked-in [`0.144.5` candidate evidence](../../compat/codex/0.144.5/manifest.json) is development
 evidence only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty
-until official-artifact, executable-admission, platform, privacy, packaging, and release evidence
-all pass.
+until clean-machine platform, privacy, packaging, provenance, and release evidence all pass.
 
-The local command shape is:
+The local command shapes are:
 
 ```text
 viberacing-connector connect --origin <https-origin> --label <device-label>
+viberacing-connector sync --origin <https-origin> --label <device-label> --codex <absolute-path>
 ```
 
 Plain HTTP with `localhost`, `127.0.0.1`, or `::1` is accepted only for explicit local development.
-Running the command creates a real local keyring entry even when the server later fails; use one
-connect process at a time. No checked-in default server, credential, code, or released binary
-exists.
+Running `connect` creates a real local keyring entry even when the server later fails; use one
+connect process at a time. `sync` is Windows x86_64 candidate development behavior: it reads the
+active native record, starts only the exact admitted artifact, and sends private daily usage once to
+the explicit origin. No checked-in default server, credential, code, or released binary exists.
 
 Run the focused gate from the repository root:
 
@@ -87,5 +98,6 @@ node scripts/check-codex-compatibility.mjs
 ```
 
 The root `pnpm run verify` additionally checks formatting, Clippy, licenses, public-data safety, and
-the rest of the repository. Rust process tests launch only a target-built synthetic fixture; they
-never discover or execute a local Codex installation.
+the rest of the repository. Rust tests launch only target-built synthetic fixtures and ephemeral
+loopback HTTP; they never execute a local Codex account, open a real user credential, or upload real
+usage.

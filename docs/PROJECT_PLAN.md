@@ -249,42 +249,47 @@ broad semantic-version range.
 - Compatibility additions require fixtures, an ADR when semantics change, and connector release
   notes.
 
-ADR 0022 now adds candidate-only `0.144.4` evidence: immutable release metadata, full stable-schema
-digests, minimal account extracts, synthetic fixtures, a drift checker, and a closed library parser
-for the two planned reads. It confirms ChatGPT mode while discarding email/plan/summary values and
-returns only bounded sorted daily date/token entries. ADR 0023 adds a one-shot supervisor with a
-fixed `app-server` argument, local pipes, no ambient environment, bounded stdout/stderr/time, and
-reap-before-success composition. Its launch capability deliberately has no public constructor until
-a later boundary resolves links, rejects untrusted writable paths, and verifies the exact executable
-and version. The candidate does not execute the official artifact, run on all platforms, upload, or
-create a matrix row. ADR 0024 adds an inaccessible reviewed source/device/time/nonce context whose
-minimized daily usage produces one exact bounded `ConnectorSyncV1` body, SHA-256 digest, and
-LF-separated device message. ADR 0025 removes public access to that unsigned material and adds an
-isolated one-use signer behind an equally inaccessible device-bound key capability. A shared
-Rust/Ingest vector proves exact body, public-key, and signature agreement. ADR 0026 adds a second
-domain-separated pairing-possession policy, inaccessible pending-key/challenge signer, and pure
-strict Web verifier with a shared synthetic vector. A separate local Web/Auth slice implements
-browser approval for a signed-in passkey session. ADR 0027 adds the server-side half of the final
-activation step: exact 32-byte poll tokens become primary/secondary HMAC-SHA-256 verifier
-candidates, one probed read-write Web pool selects at most one approved transaction, the strict
-proof is mandatory, and only server-owned IDs reach the atomic procedure. Its four-call admission
-and 250-millisecond floor are local process safeguards, not an anonymous route or distributed
-client-rate policy. ADR 0028 adds the transport-free server-side start half: closed
-public-key/device metadata enters, fresh server IDs, a 32-byte poll token and challenge, separate
-primary poll/code HMAC verifiers, a 60-bit human code, and a nine-minute expiry reach only the fixed
-`start_pairing` procedure. Malformed admitted input performs fixed-shape local work but no database
-write. Revision 0021 separately gives the authenticated browser approval lookup a session-bound
-distributed attempt window and a closed primary/secondary code probe. Revision 0013 and ADR 0029 add
-the separate Jobs-side physical cleanup: at most 1000 expired non-activated transactions and exact
-pending keys per call, with activated and live state preserved. ADR 0030 now closes the local
-connection journey with four versioned start/poll request/response contracts, exact no-store POST
-routes, one aggregate four-call application boundary, revision 0022's fixed global-and-64-bucket
-distributed rate windows, and a one-command Rust client. The client uses OS randomness, native
-credential storage without a plaintext fallback, HTTPS with platform trust (or loopback HTTP for
-development), bounded bodies/time/retries, exact possession proof, resumable prepared/pending/active
-state, and non-reflective output. This evidence is still local and synthetic: there is no live Web
-login/database result, edge capacity policy, cross-platform execution matrix, released binary, Codex
-admission, sync context, upload, scheduler, or support claim.
+ADR 0022 now adds candidate-only evidence, advanced to `0.144.5`: immutable release metadata, full
+stable-schema digests, minimal account extracts, synthetic fixtures, a drift checker, and a closed
+library parser for the two planned reads. It confirms ChatGPT mode while discarding
+email/plan/summary values and returns only bounded sorted daily date/token entries. ADR 0023 adds a
+one-shot supervisor with a fixed `app-server` argument, local pipes, no ambient environment, bounded
+stdout/stderr/time, and reap-before-success composition. Its launch capability has no public
+constructor. ADR 0031 now lets only one private Windows x86_64 development command construct it
+after an explicit canonical path matches the exact `0.144.5` artifact size and SHA-256 while a
+no-write-sharing handle remains open. The candidate still does not run on all platforms, create a
+supported release, or create a matrix row. ADR 0024 adds an inaccessible reviewed
+source/device/time/nonce context whose minimized daily usage produces one exact bounded
+`ConnectorSyncV1` body, SHA-256 digest, and LF-separated device message. ADR 0025 removes public
+access to that unsigned material and adds an isolated one-use signer behind an equally inaccessible
+device-bound key capability. A shared Rust/Ingest vector proves exact body, public-key, and
+signature agreement. ADR 0026 adds a second domain-separated pairing-possession policy, inaccessible
+pending-key/challenge signer, and pure strict Web verifier with a shared synthetic vector. A
+separate local Web/Auth slice implements browser approval for a signed-in passkey session. ADR 0027
+adds the server-side half of the final activation step: exact 32-byte poll tokens become
+primary/secondary HMAC-SHA-256 verifier candidates, one probed read-write Web pool selects at most
+one approved transaction, the strict proof is mandatory, and only server-owned IDs reach the atomic
+procedure. Its four-call admission and 250-millisecond floor are local process safeguards, not an
+anonymous route or distributed client-rate policy. ADR 0028 adds the transport-free server-side
+start half: closed public-key/device metadata enters, fresh server IDs, a 32-byte poll token and
+challenge, separate primary poll/code HMAC verifiers, a 60-bit human code, and a nine-minute expiry
+reach only the fixed `start_pairing` procedure. Malformed admitted input performs fixed-shape local
+work but no database write. Revision 0021 separately gives the authenticated browser approval lookup
+a session-bound distributed attempt window and a closed primary/secondary code probe. Revision 0013
+and ADR 0029 add the separate Jobs-side physical cleanup: at most 1000 expired non-activated
+transactions and exact pending keys per call, with activated and live state preserved. ADR 0030 now
+closes the local connection journey with four versioned start/poll request/response contracts, exact
+no-store POST routes, one aggregate four-call application boundary, revision 0022's fixed
+global-and-64-bucket distributed rate windows, and a one-command Rust client. The client uses OS
+randomness, native credential storage without a plaintext fallback, HTTPS with platform trust (or
+loopback HTTP for development), bounded bodies/time/retries, exact possession proof, resumable
+prepared/pending/active state, and non-reflective output. This evidence is still local and
+synthetic: there is no live Web login/database result, edge capacity policy, cross-platform
+execution matrix, released binary, Codex support, scheduler, or deployed result. ADR 0031 adds the
+next one-shot Windows development command: exact artifact admission, fresh context from the active
+record, the existing composer/signer, and one fixed no-proxy/no-redirect upload with a closed
+acknowledgement. It adds no automatic discovery, retry, edge proof, cross-platform evidence,
+package, release, or support claim.
 
 ### Date semantics
 
@@ -424,16 +429,19 @@ Nonce records expire after the replay window. Idempotency records have bounded r
 table can grow without cleanup.
 
 Steps 3 through 8 now have one local executable path with synthetic/injected HTTP evidence and
-isolated PostgreSQL evidence. Step 2, a live authenticator/database/TLS path, cross-platform runtime
-results, release provenance, and later signed sync remain separate gates.
+isolated PostgreSQL evidence. The later signed sync also has one separate Windows candidate command
+with synthetic loopback acknowledgement evidence. Step 2, a live authenticator/database/TLS/edge
+path, cross-platform runtime results, release provenance, and real-user end-to-end sync remain
+separate gates.
 
 ### Local connector safety
 
 - User-scoped installation with no administrator or root requirement.
 - Keys live in Windows Credential Manager, macOS Keychain, or Linux Secret Service. No plaintext
   persistent fallback.
-- The connector resolves symlinks, rejects an untrusted writable Codex path, displays the selected
-  binary and version, and does not accept a silent environment-variable override.
+- The connector resolves links, hash-admits the exact Codex artifact while preventing write
+  substitution, displays only the admitted exact version, and does not accept a silent
+  environment-variable override.
 - The App Server child process has a bounded lifetime, bounded output, separate stderr, sanitized
   environment, and guaranteed cleanup.
 - Scheduled execution uses an argument array, fixed executable path, fixed working directory,

@@ -18,27 +18,36 @@ pub const DEVICE_SIGNATURE_BYTES: usize = ed25519_dalek::SIGNATURE_LENGTH;
 /// One-use capability containing a reviewed device signing key from a source-bound pairing.
 ///
 /// This type deliberately has no public constructor, accessor, `Clone`, `Debug`, or serialization.
-/// A future platform key-store boundary must load an already paired key, prove that it is bound to
-/// the exact device identifier, and construct this capability without exposing private key bytes.
-/// The capability is consumed by [`CandidateCommunitySyncV1Signer`], and the upstream signing key
-/// is zeroized when it is dropped.
+/// The private one-shot sync command loads an active paired key and its exact device identifier from
+/// the native credential record, then constructs this capability without exposing private key
+/// bytes. The capability is consumed by [`CandidateCommunitySyncV1Signer`], and the upstream
+/// signing key is zeroized when it is dropped.
 pub struct ReviewedDeviceSigningKey {
     device_id: String,
     signing_key: SigningKey,
+}
+
+impl ReviewedDeviceSigningKey {
+    pub(crate) fn from_active_device(
+        device_id: String,
+        mut secret_key: [u8; ed25519_dalek::SECRET_KEY_LENGTH],
+    ) -> Self {
+        let signing_key = SigningKey::from_bytes(&secret_key);
+        secret_key.fill(0);
+        Self {
+            device_id,
+            signing_key,
+        }
+    }
 }
 
 #[cfg(test)]
 impl ReviewedDeviceSigningKey {
     pub(super) fn for_test(
         device_id: &str,
-        mut secret_key: [u8; ed25519_dalek::SECRET_KEY_LENGTH],
+        secret_key: [u8; ed25519_dalek::SECRET_KEY_LENGTH],
     ) -> Self {
-        let signing_key = SigningKey::from_bytes(&secret_key);
-        secret_key.fill(0);
-        Self {
-            device_id: device_id.to_owned(),
-            signing_key,
-        }
+        Self::from_active_device(device_id.to_owned(), secret_key)
     }
 
     pub(super) fn verifying_key_bytes(&self) -> [u8; DEVICE_PUBLIC_KEY_BYTES] {
@@ -49,8 +58,8 @@ impl ReviewedDeviceSigningKey {
 /// Exact signed Community sync body and device-authentication header values.
 ///
 /// The body contains private usage material. This type does not implement `Debug`, `Display`,
-/// `Clone`, or serialization. Its read-only accessors exist solely for a future bounded HTTP
-/// transport, which is not implemented by this crate yet.
+/// `Clone`, or serialization. Its read-only accessors exist solely for the bounded one-shot HTTP
+/// transport.
 pub struct SignedCommunitySync {
     body: Vec<u8>,
     device_id: String,

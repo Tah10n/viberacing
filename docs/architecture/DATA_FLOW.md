@@ -23,7 +23,7 @@ query field or browser persistence. One local one-shot Jobs runner can invoke ex
 fixed functions: either cleanup function, refresh, or finalization, but no broader recovery/step-up,
 deployed ingest endpoint, operational connector, purge worker, Jobs scheduler/monitor, audited
 correction, or deployed service executes the complete sequences. A library-only Rust connector
-foundation validates the bounded stable App Server initialization exchange and candidate `0.144.4`
+foundation validates the bounded stable App Server initialization exchange and candidate `0.144.5`
 account/usage responses. A synthetic one-shot supervisor composes those states with fixed local
 process mechanics, while an exact-body composer and isolated one-use signer produce a synthetic
 signed envelope. A separate pending-key and challenge signer plus a pure server-only Web verifier
@@ -35,16 +35,18 @@ local signed-in `/connect` flow counts pending-code attempts on the exact sessio
 device evidence plus the full public-key fingerprint, and consumes a fresh WebAuthn assertion into
 atomic new-source approval. ADR 0030 adds exact start/poll HTTP routes, fixed-storage aggregate
 admission, and one pairing-only Rust command that creates and retains its device key only in a
-native OS credential store. App Server launch and sync capabilities remain inaccessible: there is no
-real Codex execution, supported-version admission, upload, scheduling, or released connector. A
-local Ingest kernel now verifies the bounded exact-body origin/device request, while the separate
-adapter maps origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves
-atomic origin replay consumption and bounded cleanup. A transport-free application now composes
-those exact local capabilities and validates only closed acknowledgement/problem decisions. A
-bounded local Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline
-policy, and serializes only revalidated contracts. There is no edge/live-database/deployment
-integration. No host/port/TLS entry point, deployment login, certificate, edge signer/direct-origin
-policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+native OS credential store. ADR 0031 adds a separate Windows candidate command that can construct
+the otherwise inaccessible launch/context/key capabilities only after exact artifact and active-
+record review, then performs one fixed signed upload. There is still no supported version,
+cross-platform result, scheduling, or released connector. A local Ingest kernel now verifies the
+bounded exact-body origin/device request, while the separate adapter maps origin replay, device
+lookup, and submission through fixed calls. PostgreSQL now proves atomic origin replay consumption
+and bounded cleanup. A transport-free application now composes those exact local capabilities and
+validates only closed acknowledgement/problem decisions. A bounded local Fastify factory preserves
+exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes only revalidated
+contracts. There is no edge/live-database/deployment integration. No host/port/TLS entry point,
+deployment login, certificate, edge signer/direct-origin policy, or live route/Jobs evidence is
+supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -429,35 +431,37 @@ malformed framing and partial sockets; injection tests exercise route, overload,
 
 ADR 0021 implements the first local App Server protocol step: a fixed capability-free `initialize`,
 one 16 KiB LF-only closed response, discarded initialization strings, and fixed `initialized`. ADR
-0022 adds a candidate `0.144.4` sequence after that handshake: fixed account/usage reads, ChatGPT
+0022 adds a candidate `0.144.5` sequence after that handshake: fixed account/usage reads, ChatGPT
 mode confirmation with account fields discarded, and no more than 31 normalized daily usage entries.
 ADR 0023 composes that exact one-shot sequence through one fixed `app-server` argument, a reviewed
 working directory/environment with ambient variables cleared, local pipes, bounded stdout/stderr and
 deadlines, terminal-event checks, and reap-before-success cleanup. The required launch capability
-has no public constructor, so it cannot identify or admit a binary or execute the official artifact.
-ADR 0024 then consumes the normalized output only with another inaccessible capability containing
-reviewed source/device/time/nonce inputs. It emits the exact bounded `ConnectorSyncV1` bytes,
-SHA-256 digest, unpadded base64url nonce, and LF-separated device message verified by Ingest. ADR
-0025 removes public unsigned access and consumes that value only with an inaccessible, device-bound,
-one-use Ed25519 key capability; the returned envelope contains the same body and five exact header
-values. ADR 0026 adds a separate pending-key/challenge signer and pure Web verifier for one exact
-pairing-possession proof. ADR 0027 adds protected poll verification, fixed approved-material lookup,
-strict proof-to-activation mapping, and local admission/timing composition. ADR 0028 adds closed
-pairing-start composition with fresh material, separate keyed poll/code verifiers, and one fixed
-database call. ADR 0030 opens only those pairing applications through exact HTTP routes and a
-pairing-only native-store connector command; the local `/connect` route performs the browser/passkey
-approval. No public boundary can construct the operational Codex launch or sync context, schedule,
-or upload, and the support matrix stays empty.
+has no generic public constructor; ADR 0031 later gives only the exact-admission command a private
+construction path. ADR 0024 then consumes the normalized output only with another inaccessible
+capability containing reviewed source/device/time/nonce inputs. It emits the exact bounded
+`ConnectorSyncV1` bytes, SHA-256 digest, unpadded base64url nonce, and LF-separated device message
+verified by Ingest. ADR 0025 removes public unsigned access and consumes that value only with an
+inaccessible, device-bound, one-use Ed25519 key capability; the returned envelope contains the same
+body and five exact header values. ADR 0026 adds a separate pending-key/challenge signer and pure
+Web verifier for one exact pairing-possession proof. ADR 0027 adds protected poll verification,
+fixed approved-material lookup, strict proof-to-activation mapping, and local admission/timing
+composition. ADR 0028 adds closed pairing-start composition with fresh material, separate keyed
+poll/code verifiers, and one fixed database call. ADR 0030 opens only those pairing applications
+through exact HTTP routes and a pairing-only native-store connector command; the local `/connect`
+route performs the browser/passkey approval. ADR 0031 adds exact internal Windows artifact admission
+plus one active-record context/key construction and fixed-path upload. Only that explicit local
+command can construct the three sync capabilities; no boundary discovers a binary, schedules
+execution, or alters the empty support matrix.
 
-The operational connector layers, edge signer, direct-origin denial, host/port/TLS Ingest deployment
-entry point, live secret-manager/edge key injection, live PostgreSQL login/TLS connection,
-distributed rate/ backpressure controls, monitoring, and load evidence are still absent. Revisions
-0008 and 0012 give Jobs a server-time, 1-to-1000 batch procedure for expired origin nonces, device
-nonces, and raw snapshots. It serializes callers, caps each class independently, cascades raw
-entries, preserves current source/day values, and clears only their deleted raw reference. The
-expiry columns still do not delete rows by themselves. The local one-shot Jobs command can invoke
-one fixed 1000-row batch, but no scheduler, monitor, live login, or deployment invokes it
-automatically.
+The released or scheduled connector layers, edge signer, direct-origin denial, host/port/TLS Ingest
+deployment entry point, live secret-manager/edge key injection, live PostgreSQL login/TLS
+connection, distributed rate/ backpressure controls, monitoring, and load evidence are still absent.
+Revisions 0008 and 0012 give Jobs a server-time, 1-to-1000 batch procedure for expired origin
+nonces, device nonces, and raw snapshots. It serializes callers, caps each class independently,
+cascades raw entries, preserves current source/day values, and clears only their deleted raw
+reference. The expiry columns still do not delete rows by themselves. The local one-shot Jobs
+command can invoke one fixed 1000-row batch, but no scheduler, monitor, live login, or deployment
+invokes it automatically.
 
 Revision 0013 adds a separate private mutex and oldest-first 1-to-1000 batch for expired `pending`,
 `approved`, or `cancelled` pairing transactions whose exact key is still pending and unbound. It

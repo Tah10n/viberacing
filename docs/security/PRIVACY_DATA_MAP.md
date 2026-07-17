@@ -219,14 +219,15 @@ access policy, and retention decision before collection.
 ADR 0021 adds no collected or retained field. The connector library transiently validates the stable
 initialization response's Codex home, platform family, operating-system name, and user agent under
 fixed string/frame bounds, then discards all four values before returning. ADR 0022 then validates
-the candidate `0.144.4` account variant and immediately discards email, plan, and nullable summary
+the candidate `0.144.5` account variant and immediately discards email, plan, and nullable summary
 values. Only the already mapped private `codexReportedDate`/token entries leave the parser in
 caller-owned memory: at most 31, sorted, unique, calendar-valid, and integer-bounded. Its diagnostic
 representation contains entry count only. The local Codex home and account email remain prohibited
-outside their validators. No value reaches a log, metric, file, database, HTTP payload, cache,
-analytics event, export, key, or network sink.
+outside their validators. At this parser boundary no value reaches a log, metric, file, database,
+cache, analytics event, export, key, or network sink; ADR 0031 separately permits only the minimized
+daily entries to enter the already mapped signed sync payload.
 
-ADR 0023 adds no collected or retained field. The one-shot supervisor receives only a future
+ADR 0023 adds no collected or retained field. The one-shot supervisor receives only a
 capability-owned executable path, isolated working directory, and allowlisted environment values;
 none has a public accessor or diagnostic representation. It reads no ambient environment, launches
 only one fixed argument over local pipes, retains at most three 16 KiB stdout frames in bounded
@@ -234,10 +235,11 @@ memory, and permits only 8 KiB discard-only stderr before failing on the next by
 or returning its content. Child status, operating-system errors, paths, environment values, and raw
 output never enter returned errors. The only success result is the already mapped minimized
 `DailyUsage`, returned after terminal-event checking and child reap. Synthetic tests use a
-target-built fixture and temporary directory only. Because `ReviewedCodexLaunch` has no public
-constructor, the library cannot discover or execute a local Codex installation, access a credential
-store, or upload. A future executable-admission diagnostic or retained connector/Codex version must
-use the existing mapped Security/Operational class with an explicit purpose and bounded retention.
+target-built fixture and temporary directory only. `ReviewedCodexLaunch` has no public constructor;
+ADR 0031 permits only the private exact-admission command to construct it. No path, environment
+value, or child output is retained. A future executable-admission diagnostic or retained
+connector/Codex version must use the existing mapped Security/Operational class with an explicit
+purpose and bounded retention.
 
 ADR 0024 adds no new data class or persistent field. It consumes the already mapped private daily
 usage plus reviewed opaque source, sync, device, millisecond UTC, and nonce values in transient
@@ -249,15 +251,23 @@ request. Its shared test vector uses only synthetic identifiers and values.
 ADR 0025 adds no persistent field or sink. It removes every public accessor from the unsigned
 prepared value and consumes it only with an inaccessible capability containing the already mapped
 private device signing key plus its public device ID. The returned closed envelope exposes only the
-same exact body and five bounded header values to a future transport. Prepared body/message buffers,
-the signed body buffer, and the upstream signing key are zeroed on drop; this is defense in depth,
-not a guarantee that compiler, caller, or operating-system copies are erased. The key capability has
-no constructor, accessor, clone, diagnostic, serialization, file, store, or network surface. The
-extended public vector contains only synthetic usage/identifiers, a public key, and a signature; its
-private test seed is deterministically derived at runtime from an obvious fixed label. No current
-code can obtain a real sync context or operational sync key. ADR 0030 separately adds pairing-only
-OS-store custody, fresh entropy, bounded clock/retry handling, and fixed start/poll egress; it does
-not make the candidate sync capability reachable.
+same exact body and five bounded header values to the bounded one-shot transport. Prepared
+body/message buffers, the signed body buffer, and the upstream signing key are zeroed on drop; this
+is defense in depth, not a guarantee that compiler, caller, or operating-system copies are erased.
+The key capability has no constructor, accessor, clone, diagnostic, serialization, file, store, or
+network surface. The extended public vector contains only synthetic usage/identifiers, a public key,
+and a signature; its private test seed is deterministically derived at runtime from an obvious fixed
+label. ADR 0030 separately adds OS-store custody, fresh entropy, bounded pairing clock/retry
+handling, and fixed start/poll egress.
+
+ADR 0031 adds no persistent field, log, metric, cache, analytics event, export, or browser storage.
+The private sync command transiently reads the active record's already mapped source/device IDs and
+device key, generates one random sync ID and nonce, formats current millisecond UTC, and sends only
+the existing `ConnectorSyncV1` body plus five device-authentication headers to the explicit origin.
+Only the selected exact version is displayed locally before launch. The canonical executable path,
+exact usage, body, key, nonce, signature, identifiers, and acknowledgement request ID are neither
+sent as diagnostics nor printed. The synthetic HTTP test uses only reserved values; repository tests
+never open a real credential or local account.
 
 ADR 0026 adds no data class, persistent field, or sink. The Rust kernel transiently receives the
 already mapped pending private key plus pairing ID/challenge, derives the already mapped public key,
@@ -451,14 +461,16 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   evidence opens no connection. Neither boundary has HTTP, logging, analytics, export, or deployment
   authority.
 - The connector library validates and discards the App Server initialization values and candidate
-  `0.144.4` account/summary fields, then exposes only bounded private daily usage to its caller. It
+  `0.144.5` account/summary fields, then exposes only bounded private daily usage to its caller. It
   composes that sequence only behind a reviewed-launch capability with no public constructor and
   bounded synthetic process evidence. It can compose exact sync bytes only behind a second
   inaccessible reviewed context and sign them only behind a third inaccessible one-use device-key
-  capability. A separate command now owns pairing-only native key persistence and fixed start/poll
-  egress. It has no executable discovery/admission, real Codex path, sync context provider, usage
-  upload, log/export capability, package, or release; the candidate remains unsupported until
-  official-artifact, platform, privacy-egress, packaging, and release gates pass.
+  capability. `connect` owns native key persistence and fixed start/poll egress. The separate
+  private Windows sync command can construct those capabilities only after exact
+  artifact/active-record review and make one fixed signed upload. It has no automatic discovery,
+  other-platform admission, log/export capability, package, or release; the candidate remains
+  unsupported until clean-machine platform, privacy-egress, packaging, provenance, and release gates
+  pass.
 - Jobs currently receive only bounded expired ingest- and pairing-state cleanup, open-season
   Community scoring refresh, and terminal finalization. The local one-shot adapter rechecks the
   exact Jobs-only login and invokes one prepared capability without logging inputs or results.

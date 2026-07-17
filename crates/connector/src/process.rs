@@ -1,7 +1,8 @@
-//! Bounded one-shot process supervision for a future reviewed Codex executable.
+//! Bounded one-shot process supervision for the exact admitted Codex candidate.
 
 use std::ffi::{OsStr, OsString};
 use std::fmt;
+use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -31,16 +32,32 @@ pub const MAX_APP_SERVER_STDERR_BYTES: usize = 8 * 1024;
 pub const MAX_APP_SERVER_STDOUT_FRAMES: usize = 3;
 
 /// Capability for a canonical executable, isolated working directory, and explicit environment
-/// values accepted by a future discovery and admission boundary.
+/// values accepted by the exact candidate admission boundary.
 ///
-/// This type deliberately has no public constructor. The process supervisor is therefore present
-/// for review and synthetic testing but cannot launch a caller-selected path. A later path-review
-/// slice must resolve links, reject untrusted writable components, verify the selected artifact and
-/// version, and only then construct this capability inside the crate.
+/// This type deliberately has no public constructor. Only the private one-shot sync command can
+/// construct it, after canonical-path, size, digest, and platform admission; external callers
+/// cannot turn the supervisor into a generic process launcher.
 pub struct ReviewedCodexLaunch {
     executable: PathBuf,
     working_directory: PathBuf,
     environment: Vec<(OsString, OsString)>,
+    artifact_guard: Option<File>,
+}
+
+impl ReviewedCodexLaunch {
+    pub(crate) fn from_admitted(
+        executable: PathBuf,
+        working_directory: PathBuf,
+        environment: Vec<(OsString, OsString)>,
+        artifact_guard: File,
+    ) -> Self {
+        Self {
+            executable,
+            working_directory,
+            environment,
+            artifact_guard: Some(artifact_guard),
+        }
+    }
 }
 
 /// Stable, non-reflective failures from candidate one-shot collection.
@@ -91,15 +108,15 @@ impl From<ProtocolError> for CollectionError {
     }
 }
 
-/// One-shot collector for the candidate Codex `0.144.4` initialize/account/usage sequence.
+/// One-shot collector for the candidate Codex `0.144.5` initialize/account/usage sequence.
 ///
 /// The collector always uses the fixed `app-server` argument, local pipes, a fixed reviewed working
 /// directory, a cleared and allowlisted environment, and the public process budgets in this module.
 /// It returns only normalized daily usage after the child has been reaped. The launch capability is
-/// intentionally unavailable until executable admission is implemented.
-pub struct CandidateCodex01444Collector;
+/// intentionally constructible only by the private exact-admission command.
+pub struct CandidateCodex01445Collector;
 
-impl CandidateCodex01444Collector {
+impl CandidateCodex01445Collector {
     /// Launches the reviewed candidate and performs exactly one bounded collection.
     ///
     /// # Errors
@@ -116,8 +133,10 @@ impl CandidateCodex01444Collector {
         limits: ProcessLimits,
     ) -> Result<DailyUsage, CollectionError> {
         let specification = LaunchSpecification::from_reviewed(launch);
-        let child = SupervisedChild::launch(specification.into_command(), limits)?;
-        collect_from_child(child)
+        let (command, artifact_guard) = specification.into_command();
+        let result = SupervisedChild::launch(command, limits).and_then(collect_from_child);
+        drop(artifact_guard);
+        result
     }
 }
 
@@ -139,7 +158,7 @@ fn run_candidate_protocol(child: &mut SupervisedChild) -> Result<DailyUsage, Col
     let initialized = handshake.accept_initialize_response(&initialize_response)?;
     child.write_frame(initialized)?;
 
-    let mut account_usage = handshake.into_codex_0_144_4_account_usage()?;
+    let mut account_usage = handshake.into_codex_0_144_5_account_usage()?;
     child.write_frame(account_usage.start_account_read()?)?;
 
     let account_response = child.read_frame()?;
@@ -170,6 +189,7 @@ struct LaunchSpecification {
     executable: PathBuf,
     working_directory: PathBuf,
     environment: Vec<(OsString, OsString)>,
+    artifact_guard: Option<File>,
 }
 
 impl LaunchSpecification {
@@ -178,10 +198,11 @@ impl LaunchSpecification {
             executable: launch.executable,
             working_directory: launch.working_directory,
             environment: sanitize_environment(launch.environment),
+            artifact_guard: launch.artifact_guard,
         }
     }
 
-    fn into_command(self) -> Command {
+    fn into_command(self) -> (Command, Option<File>) {
         let mut command = Command::new(self.executable);
         command
             .arg(APP_SERVER_ARGUMENT)
@@ -200,7 +221,7 @@ impl LaunchSpecification {
             command.creation_flags(CREATE_NO_WINDOW);
         }
 
-        command
+        (command, self.artifact_guard)
     }
 }
 
@@ -245,6 +266,13 @@ where
                 .find(|(key, _)| environment_key_matches(key, allowed))
                 .map(|(_, value)| (OsString::from(allowed), value.clone()))
         })
+        .collect()
+}
+
+pub(crate) fn current_allowed_environment() -> Vec<(OsString, OsString)> {
+    ALLOWED_ENVIRONMENT_KEYS
+        .iter()
+        .filter_map(|key| std::env::var_os(key).map(|value| (OsString::from(key), value)))
         .collect()
 }
 
@@ -644,6 +672,7 @@ mod tests {
                 executable,
                 working_directory,
                 environment: Vec::new(),
+                artifact_guard: None,
             }
         }
 
@@ -656,6 +685,7 @@ mod tests {
                 executable,
                 working_directory,
                 environment,
+                artifact_guard: None,
             }
         }
     }
@@ -733,7 +763,8 @@ mod tests {
                 && value != "forbidden-path"
         }));
 
-        let command = specification.into_command();
+        let (command, artifact_guard) = specification.into_command();
+        assert!(artifact_guard.is_none());
         assert_eq!(command.get_program(), OsStr::new("synthetic-codex"));
         assert_eq!(
             command.get_args().collect::<Vec<_>>(),
@@ -752,7 +783,7 @@ mod tests {
     #[cfg(feature = "process-test-fixture")]
     fn completes_fixed_one_shot_exchange_and_discards_stderr() {
         let (launch, _directory) = launch_for("happy");
-        let usage = CandidateCodex01444Collector::collect_with_limits(launch, TEST_LIMITS)
+        let usage = CandidateCodex01445Collector::collect_with_limits(launch, TEST_LIMITS)
             .expect("synthetic candidate exchange must succeed");
 
         assert_eq!(usage.len(), 2);
@@ -769,7 +800,7 @@ mod tests {
     fn times_out_and_reaps_a_silent_child() {
         let (launch, _directory) = launch_for("timeout");
         let started = Instant::now();
-        let error = CandidateCodex01444Collector::collect_with_limits(launch, TEST_LIMITS)
+        let error = CandidateCodex01445Collector::collect_with_limits(launch, TEST_LIMITS)
             .expect_err("silent helper must time out");
 
         assert_eq!(error, CollectionError::TimedOut);
@@ -784,7 +815,7 @@ mod tests {
             ("stderr-overload", CollectionError::StderrLimitExceeded),
         ] {
             let (launch, _directory) = launch_for(scenario);
-            let error = CandidateCodex01444Collector::collect_with_limits(launch, TEST_LIMITS)
+            let error = CandidateCodex01445Collector::collect_with_limits(launch, TEST_LIMITS)
                 .expect_err("output overload must fail closed");
             assert_eq!(error, expected);
             assert!(!error.to_string().contains("private-output-marker"));
@@ -799,7 +830,7 @@ mod tests {
             ("late-stderr-overload", CollectionError::StderrLimitExceeded),
         ] {
             let (launch, _directory) = launch_for(scenario);
-            let error = CandidateCodex01444Collector::collect_with_limits(launch, TEST_LIMITS)
+            let error = CandidateCodex01445Collector::collect_with_limits(launch, TEST_LIMITS)
                 .expect_err("late output overload must fail before returning data");
             assert_eq!(error, expected);
             assert!(!error.to_string().contains("private-output-marker"));
@@ -810,7 +841,7 @@ mod tests {
     #[cfg(feature = "process-test-fixture")]
     fn rejects_early_exit_and_nonreflective_protocol_failure() {
         let (launch, _directory) = launch_for("early-exit");
-        let early_exit = CandidateCodex01444Collector::collect_with_limits(launch, TEST_LIMITS)
+        let early_exit = CandidateCodex01445Collector::collect_with_limits(launch, TEST_LIMITS)
             .expect_err("early exit must fail closed");
         assert!(matches!(
             early_exit,
@@ -818,7 +849,7 @@ mod tests {
         ));
 
         let (launch, _directory) = launch_for("malformed");
-        let malformed = CandidateCodex01444Collector::collect_with_limits(launch, TEST_LIMITS)
+        let malformed = CandidateCodex01445Collector::collect_with_limits(launch, TEST_LIMITS)
             .expect_err("malformed frame must fail closed");
         assert_eq!(
             malformed,
@@ -833,7 +864,7 @@ mod tests {
     fn forcibly_reaps_a_child_that_ignores_closed_stdin() {
         let (launch, _directory) = launch_for("linger");
         let started = Instant::now();
-        let usage = CandidateCodex01444Collector::collect_with_limits(launch, TEST_LIMITS)
+        let usage = CandidateCodex01445Collector::collect_with_limits(launch, TEST_LIMITS)
             .expect("valid data must survive bounded forced cleanup");
 
         assert_eq!(usage.len(), 2);
@@ -844,7 +875,7 @@ mod tests {
     #[cfg(feature = "process-test-fixture")]
     fn rejects_a_nonzero_exit_after_valid_usage() {
         let (launch, _directory) = launch_for("late-failure");
-        let error = CandidateCodex01444Collector::collect_with_limits(launch, TEST_LIMITS)
+        let error = CandidateCodex01445Collector::collect_with_limits(launch, TEST_LIMITS)
             .expect_err("nonzero child exit must invalidate otherwise valid output");
 
         assert_eq!(error, CollectionError::ChildExited);
@@ -855,7 +886,7 @@ mod tests {
         let directory = TestDirectory::new("missing");
         let marker = "private-path-marker";
         let launch = ReviewedCodexLaunch::for_test(directory.0.join(marker), directory.0.clone());
-        let error = CandidateCodex01444Collector::collect_with_limits(launch, TEST_LIMITS)
+        let error = CandidateCodex01445Collector::collect_with_limits(launch, TEST_LIMITS)
             .expect_err("missing executable must not launch");
 
         assert_eq!(error, CollectionError::LaunchFailed);

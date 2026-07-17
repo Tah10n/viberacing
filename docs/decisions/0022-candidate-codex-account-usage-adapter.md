@@ -14,6 +14,10 @@ extracts daily usage without retaining account email, plan, summary statistics, 
 Server surface. The work must not turn a locally generated schema or one successful parser test into
 a compatibility claim.
 
+ADR 0031 later advances the checked-in exact candidate evidence and implementation from `0.144.4` to
+schema-compatible `0.144.5`. This ADR remains the record of the parser-boundary decision; the
+current evidence lives under the newer exact-version directory.
+
 The official OpenAI Codex release `rust-v0.144.4` points to immutable commit
 `8c68d4c87dc54d38861f5114e920c3de2efa5876`. A local CLI reporting the same version generated the
 stable schema bundle without `--experimental`. The generated bundle contains stable `account/read`
@@ -144,9 +148,10 @@ official artifact execution, platform cleanup, key store, signed upload, package
 ## References
 
 - [Official Codex `0.144.4` release](https://github.com/openai/codex/releases/tag/rust-v0.144.4)
-- [Candidate compatibility manifest](../../compat/codex/0.144.4/manifest.json)
+- [Current candidate compatibility manifest](../../compat/codex/0.144.5/manifest.json)
 - [Codex App Server](https://learn.chatgpt.com/docs/app-server)
 - [ADR 0021](0021-fail-closed-codex-handshake-foundation.md)
+- [ADR 0031](0031-one-shot-candidate-community-sync.md)
 - [Compatibility policy](../architecture/COMPATIBILITY_POLICY.md)
 - [Codex compatibility matrix](../reference/codex-compatibility.md)
 - [Connector library](../../crates/connector/README.md)

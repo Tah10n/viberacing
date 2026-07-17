@@ -1,6 +1,6 @@
-//! Candidate-only parser for the stable Codex App Server `0.144.4` account schemas.
+//! Candidate-only parser for the stable Codex App Server `0.144.5` account schemas.
 
-pub(crate) const CANDIDATE_CODEX_VERSION: &str = "0.144.4";
+pub(crate) const CANDIDATE_CODEX_VERSION: &str = "0.144.5";
 
 use std::{fmt, marker::PhantomData};
 
@@ -78,7 +78,7 @@ macro_rules! string_unit {
     };
 }
 
-/// Maximum daily buckets admitted into a future `ConnectorSyncV1` payload.
+/// Maximum daily buckets admitted into a `ConnectorSyncV1` payload.
 pub const MAX_DAILY_USAGE_ENTRIES: usize = 31;
 
 /// Largest exact token integer admitted by the language-neutral sync contract.
@@ -95,17 +95,17 @@ enum AccountUsageState {
     Failed,
 }
 
-/// Candidate state machine for the exact Codex App Server `0.144.4` account schema extract.
+/// Candidate state machine for the exact Codex App Server `0.144.5` account schema extract.
 ///
 /// A caller can obtain this type only by consuming a completed [`super::ConnectorHandshake`]. Any
 /// invalid remote account or usage frame permanently fails the instance. No account email, plan,
 /// summary statistic, or upstream field outside the bounded daily buckets is retained.
 #[derive(Debug, Default)]
-pub struct CandidateCodex01444AccountUsage {
+pub struct CandidateCodex01445AccountUsage {
     state: AccountUsageState,
 }
 
-impl CandidateCodex01444AccountUsage {
+impl CandidateCodex01445AccountUsage {
     pub(crate) fn new() -> Self {
         Self::default()
     }
@@ -246,7 +246,7 @@ impl fmt::Debug for DailyUsage {
     }
 }
 
-/// One private daily usage value ready for a future signed sync composer.
+/// One private daily usage value ready for the signed sync composer.
 ///
 /// `Debug` is deliberately not implemented so exact private usage does not enter diagnostics by
 /// accident.
@@ -361,7 +361,7 @@ impl<'de> Visitor<'de> for AccountReadResultVisitor {
     type Value = AccountMode;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("the closed Codex 0.144.4 account result")
+        formatter.write_str("the closed Codex 0.144.5 account result")
     }
 
     fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
@@ -448,7 +448,7 @@ impl<'de> Visitor<'de> for AccountVisitor {
     type Value = Account;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("a closed Codex 0.144.4 account variant")
+        formatter.write_str("a closed Codex 0.144.5 account variant")
     }
 
     fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
@@ -663,7 +663,7 @@ impl<'de> Visitor<'de> for UsageReadResultVisitor {
     type Value = UsageReadResult;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("the closed Codex 0.144.4 usage result")
+        formatter.write_str("the closed Codex 0.144.5 usage result")
     }
 
     fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
