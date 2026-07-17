@@ -69,13 +69,16 @@ transport-free Web/Auth start application creates nine-minute pending transactio
 device metadata with fresh server IDs, poll tokens, challenges, 60-bit human codes, and separate
 protected poll/code verifiers through the fixed read-write Web pool. A second dormant application
 performs protected poll lookup, runs the strict proof, and alone invokes exact activation with
-server-owned IDs behind fixed admission and timing. There is no executable discovery/admission, live
-Codex launch path, supported version, source/device context provider, key generation/store, browser
-approval/HTTP route or connector client, upload, CLI, or release. Do not claim that deployed
-browser/session HTTP authentication, production-ready recovery or remaining unimplemented
-critical-action verification, real-user ingestion, an operational connector, a Jobs scheduler or
-deployed public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted
-security control exists until its implementation and verification are present in the working tree.
+server-owned IDs behind fixed admission and timing. A local signed-in `/connect` flow now counts
+pending-code attempts on the exact session, renders bounded device metadata plus a full public-key
+fingerprint, and requires a separate fresh passkey assertion before atomic new-source approval.
+There is no executable discovery/admission, live Codex launch path, supported version, source/device
+context provider, key generation/store, connector pairing start/poll route or client, upload, CLI,
+or release. Do not claim that deployed browser/session HTTP authentication, production-ready
+recovery or remaining unimplemented critical-action verification, real-user ingestion, an
+operational connector, a Jobs scheduler or deployed public-race read, season correction, scheduled
+or broader cleanup, deployment, or a hosted security control exists until its implementation and
+verification are present in the working tree.
 
 ## Repository map
 

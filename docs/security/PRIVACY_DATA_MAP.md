@@ -71,6 +71,8 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Device label                                                                | Account                         | User or safe generated default; distinguish devices                      | User profile only after activation; pairing service while pending                           | `device_keys` metadata                                                                                                              | Pending label is Jobs-cleanup eligible at pairing expiry; active label follows device lifecycle                                  |
 | Connector, Codex, and OS-family versions                                    | Security; Operational           | Connector; compatibility and incident diagnosis                          | Pairing service while pending; user inventory after activation                              | Device/sync metadata                                                                                                                | Pending metadata is Jobs-cleanup eligible at pairing expiry; active history needs launch policy                                  |
 | Pairing poll token, HMAC keys/verifiers, challenge, user code, transaction  | Security                        | Server/connector; poll safely and bind browser approval to one key       | Pairing service/application, connector memory, and browser confirmation                     | Plain token/code returned once; separate keyed verifiers in DB; poll/code HMAC keys in protected configuration                      | Plaintext is never logged/persisted; expired non-activated rows have bounded cleanup but need scheduling                         |
+| Pairing approval attempt window and count                                   | Security; Operational           | Server; bound authenticated code guessing across Web instances           | Web/Auth and database only                                                                  | Two fields on the possessed `sessions` row; no code, digest, IP, or user-agent history                                              | Window resets in place; fields disappear with the session row                                                                    |
+| Encrypted pairing approval continuation                                     | Security                        | Server; bind reviewed pairing and generated new source to fresh step-up  | Browser receives only an opaque HttpOnly cookie; Web/Auth decrypts it                       | AES-GCM continuation contains challenge, pairing/source IDs, and expiry; no raw code or public key                                  | At most five minutes, one-time database action, cleared from the browser after success                                           |
 | Pairing possession message and signature                                    | Security                        | Connector/Web verifier; prove one pending device holds its private key   | Connector signer, pure Web verifier, and closed activation application                      | Transient process memory only; never persisted                                                                                      | Web copies overwritten after settlement; Rust proof lives until owner drop; never logged or retained                             |
 | `codexReportedDate` and exact daily token value                             | Usage                           | Local stable App Server adapter; compute Community score                 | Isolated Ingest and Jobs scoring/cleanup procedures; never public raw                       | `usage_snapshot_entries`, `source_day_values`                                                                                       | Raw snapshot is Jobs-cleanup eligible after 30 days; current/history policy remains a launch decision                            |
 | Connector `observedAt`, server `receivedAt`, device nonce, idempotency key  | Security; Usage                 | Connector/server; replay, ordering, deadline, and retry safety           | Isolated Ingest and Jobs cleanup procedures; shared finalization policy                     | `usage_snapshots`, `device_nonces`                                                                                                  | Nonce after 15 minutes and raw snapshot after 30 days; scheduler and production purge proof remain required                      |
@@ -274,8 +276,9 @@ overwritten after settlement and configured key buffers on close; runtime and dr
 an erasure guarantee. The local admission/timing gate retains only an integer active count and no
 token, digest, address, user agent, profile, or result history. No log, metric, cache, cookie,
 analytics event, export, network destination, or new database field is added. Future browser
-approval, HTTP/client identity, diagnostics, and distributed rate state require separate mapping and
-review.
+HTTP/client identity, diagnostics, and anonymous distributed rate state require separate mapping and
+review. The implemented authenticated browser approval is mapped in the table above and described
+below.
 
 ADR 0028 consumes the same mapped pairing and metadata classes for a dormant transport-free start.
 It accepts only one canonical public key, bounded non-personal device label, syntactic connector
@@ -286,9 +289,18 @@ keys are protected configuration distinct from every poll key. Malformed admitte
 input or result history and perform no database write. Candidate, material, parameter, and
 configured key copies are overwritten where ownership permits, but strings, runtime copies, and
 driver internals are not an erasure guarantee. This adds no field, log, metric, cache, cookie,
-analytics event, export, or network destination. Browser approval, route/client identity, external
-diagnostics, distributed rate state, and cleanup scheduling remain separately reviewable. Revision
-0013 and ADR 0029 now supply the bounded local physical pairing-row/key deletion capability.
+analytics event, export, or network destination. External start-route/client identity, diagnostics,
+anonymous distributed rate state, and cleanup scheduling remain separately reviewable. Revision 0013
+and ADR 0029 now supply the bounded local physical pairing-row/key deletion capability.
+
+Revision 0021 stores only a window start and bounded attempt count on the already mapped active
+session. Every admitted canonical or malformed code reaches the same primary/optional-secondary
+keyed lookup shape; plaintext codes and candidate digests are transient and are neither logged nor
+retained. A successful lookup returns only bounded pending metadata and a full public-key
+fingerprint to the signed-in browser. The exact pairing ID, server-generated new source ID,
+challenge, and expiry are sealed in the purpose-separated HttpOnly continuation until fresh WebAuthn
+verification and atomic approval. No IP address, user agent, per-attempt record, analytics, cache,
+export, or new network destination is added.
 
 Revision 0008 adds deletion evidence for only those raw nonce and snapshot rows: a Jobs-only
 procedure derives cutoff time on the server, deletes bounded expired batches, cascades raw entries,

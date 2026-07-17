@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { joinTranslations } from "@/lib/join-i18n";
 
 import { AccountExperience } from "./account-experience";
+import { ConnectExperience } from "./connect-experience";
 import { JoinExperience } from "./join-experience";
 import { PasskeyLogin, PasskeySetup, RecoveryExperience } from "./passkey-setup";
 
@@ -715,6 +716,94 @@ describe("enrollment experience", () => {
     });
   });
 
+  it("shows exact device evidence before separately requesting pairing approval", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const challenge = Buffer.alloc(32, 0x31).toString("base64url");
+    const fingerprint = `SHA256:${Buffer.alloc(32, 0x32).toString("base64url")}`;
+    const fetchMock = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            options: { challenge },
+            pairing: {
+              architecture: "x86_64",
+              connectorVersion: "1.2.3",
+              deviceLabel: "Studio PC",
+              expiresAt: "2026-07-16T10:09:00.000Z",
+              osFamily: "windows",
+              publicKeyFingerprint: fingerprint,
+            },
+          }),
+          { headers: { "content-type": "application/json; charset=utf-8" } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(<ConnectExperience initialLocale="en" signedIn />);
+    const codeInput = mounted.container.querySelector<HTMLInputElement>('input[name="userCode"]');
+    if (codeInput === null) {
+      throw new Error("expected pairing code input");
+    }
+    codeInput.value = "7k9m-p2qr-w4xy";
+
+    await act(async () => {
+      codeInput.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(webauthn.startAuthentication).not.toHaveBeenCalled();
+    expect(mounted.container.textContent).toContain("Studio PC");
+    expect(mounted.container.textContent).toContain("1.2.3");
+    expect(mounted.container.textContent).toContain(fingerprint);
+
+    await act(async () => {
+      mounted.container
+        .querySelector(".account-security form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(webauthn.startAuthentication).toHaveBeenCalledWith({
+      optionsJSON: { challenge },
+    });
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      "/auth/pairing/options",
+      "/auth/pairing/verify",
+    ]);
+    expect(fetchMock.mock.calls[0]?.[1].body).toBe('{"userCode":"7K9M-P2QR-W4XY"}');
+    expect(fetchMock.mock.calls[1]?.[1].body).toBe('{"response":{"id":"synthetic-login"}}');
+    expect(mounted.container.textContent).toContain("Device approved");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
+  it("rejects malformed pairing review data before invoking WebAuthn", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ options: { challenge: "bad" }, pairing: {} }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(<ConnectExperience initialLocale="en" signedIn />);
+    const codeInput = mounted.container.querySelector<HTMLInputElement>('input[name="userCode"]');
+    if (codeInput === null) {
+      throw new Error("expected pairing code input");
+    }
+    codeInput.value = "7K9M-P2QR-W4XY";
+    await act(async () => {
+      codeInput.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(webauthn.startAuthentication).not.toHaveBeenCalled();
+    expect(mounted.container.textContent).toContain("could not be completed");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
   it("renders semantic join and passkey forms without automated violations", async () => {
     document.documentElement.lang = "en";
     document.title = "Vibe Racing enrollment test";
@@ -740,6 +829,7 @@ describe("enrollment experience", () => {
       renderToStaticMarkup(<PasskeyLogin />),
       renderToStaticMarkup(<RecoveryExperience />),
       renderToStaticMarkup(<PasskeySetup handle="pixel_driver" locale="en" />),
+      renderToStaticMarkup(<ConnectExperience initialLocale="en" signedIn />),
     ]) {
       document.body.innerHTML = markup;
       const results = await axe.run(document.documentElement, {

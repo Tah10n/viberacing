@@ -269,10 +269,14 @@ SELECT pg_temp.assert_true(
 SELECT pg_temp.expect_operation_failure(
   $sql$
     SELECT *
-    FROM viberacing_api.read_pairing_for_approval(
+    FROM viberacing_api.read_pairing_for_approval_limited(
       '00000000-0000-4000-8000-000000000201',
       pg_catalog.decode(pg_catalog.repeat('ff', 32), 'hex'),
-      pg_catalog.decode(pg_catalog.repeat('12', 32), 'hex')
+      pg_catalog.decode(pg_catalog.repeat('12', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex'),
+      false,
+      1000,
+      86400
     )
   $sql$,
   'pairing display requires possession of the exact active session'
@@ -282,20 +286,113 @@ SELECT pg_temp.assert_true(
   (
     SELECT pg_catalog.count(*) = 1
       AND pg_catalog.bool_and(
-        pairing_id = '00000000-0000-4000-8000-000000001001'
+        candidate_index = 1
+        AND pairing_id = '00000000-0000-4000-8000-000000001001'
         AND device_label = 'New source connector'
         AND connector_version = '1.0.0'
         AND os_family = 'linux'
         AND architecture = 'x86_64'
         AND pg_catalog.octet_length(public_key) = 32
       )
-    FROM viberacing_api.read_pairing_for_approval(
+    FROM viberacing_api.read_pairing_for_approval_limited(
       '00000000-0000-4000-8000-000000000201',
       pg_catalog.decode(pg_catalog.repeat('a1', 32), 'hex'),
-      pg_catalog.decode(pg_catalog.repeat('12', 32), 'hex')
+      pg_catalog.decode(pg_catalog.repeat('12', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex'),
+      false,
+      1000,
+      86400
     )
   ),
   'authenticated display returns only bounded pending-key metadata'
+);
+
+SELECT pg_temp.assert_true(
+  NOT EXISTS (
+    SELECT 1
+    FROM viberacing_api.read_pairing_for_approval_limited(
+      '00000000-0000-4000-8000-000000000202',
+      pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('99', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('12', 32), 'hex'),
+      false,
+      1,
+      1
+    )
+  ),
+  'a synthetic wrong code consumes one session-bound approval attempt'
+);
+
+SELECT pg_temp.assert_true(
+  NOT EXISTS (
+    SELECT 1
+    FROM viberacing_api.read_pairing_for_approval_limited(
+      '00000000-0000-4000-8000-000000000202',
+      pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('12', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('98', 32), 'hex'),
+      false,
+      1,
+      1
+    )
+  ),
+  'the distributed session window blocks a later matching code'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_owner;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pairing_approval_attempt_count = 2
+      AND pairing_approval_window_started_at IS NOT NULL
+    FROM viberacing_private.sessions
+    WHERE session_id = '00000000-0000-4000-8000-000000000202'
+  ),
+  'pairing attempts are persisted on the authenticated session'
+);
+
+UPDATE viberacing_private.sessions
+SET pairing_approval_window_started_at = pg_catalog.statement_timestamp() - INTERVAL '2 seconds'
+WHERE session_id = '00000000-0000-4000-8000-000000000202';
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_web;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.bool_and(
+        candidate_index = 2
+        AND pairing_id = '00000000-0000-4000-8000-000000001001'
+      )
+    FROM viberacing_api.read_pairing_for_approval_limited(
+      '00000000-0000-4000-8000-000000000202',
+      pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('97', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('12', 32), 'hex'),
+      true,
+      1,
+      1
+    )
+  ),
+  'an expired synthetic window resets and accepts the active secondary verifier'
+);
+
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT *
+    FROM viberacing_api.read_pairing_for_approval_limited(
+      '00000000-0000-4000-8000-000000000202',
+      pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('12', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex'),
+      false,
+      0,
+      1
+    )
+  $sql$,
+  'pairing approval rejects an invalid deployment policy'
 );
 
 SELECT viberacing_api.create_pairing_approval_challenge(

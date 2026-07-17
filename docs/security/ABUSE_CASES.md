@@ -130,11 +130,14 @@ material availability cost.
   250-millisecond settlement floor, and one generic local failure decision. ADR 0028 adds a closed
   transport-free start request, fresh server IDs, 32-byte poll/challenge material, a 60-bit human
   code, separate protected poll/code HMAC keys and primary verifiers, a nine-minute expiry, a fixed
-  database call, four-call admission, and generic local failure. Pairing remains externally
-  unavailable: there is no approval/HTTP route, WebAuthn composition, connector client, distributed
-  client-rate policy, live login, cleanup schedule, or real key. Revision 0013 adds a separate
-  Jobs-only 1-to-1000 cleanup for expired `pending`, `approved`, and `cancelled` transactions plus
-  their exact still-pending keys; activated bindings and live rows are excluded.
+  database call, four-call admission, and generic local failure. Revision 0021 and the local
+  `/connect` flow add exact-session primary/secondary code lookup, a persisted attempt window shared
+  across Web instances, bounded device/fingerprint rendering, explicit fresh-passkey approval, and
+  one atomic new-source action. Malformed and non-matching codes return the same generic decision.
+  Pairing remains externally unavailable: there is no connector client or start/poll route,
+  anonymous distributed client-rate policy, live login, cleanup schedule, or real key. Revision 0013
+  adds a separate Jobs-only 1-to-1000 cleanup for expired `pending`, `approved`, and `cancelled`
+  transactions plus their exact still-pending keys; activated bindings and live rows are excluded.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the

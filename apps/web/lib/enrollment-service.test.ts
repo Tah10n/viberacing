@@ -49,6 +49,8 @@ const config = resolveEnrollmentConfig({
   GITHUB_CLIENT_SECRET: "a".repeat(40),
   NODE_ENV: "test",
   SESSION_SECRET: Buffer.alloc(32, 0x31).toString("base64url"),
+  VIBERACING_PAIRING_APPROVAL_ATTEMPT_LIMIT: "6",
+  VIBERACING_PAIRING_APPROVAL_WINDOW_SECONDS: "600",
   VIBERACING_PUBLIC_ORIGIN: "https://race.example.com",
   VIBERACING_RECOVERY_ARGON2_MEMORY_KIB: "19456",
   VIBERACING_RECOVERY_ARGON2_PARALLELISM: "2",
@@ -66,6 +68,21 @@ const join: JoinRequest = Object.freeze({
   motionPreference: "system",
   streakVisible: false,
   theme: "neon-night",
+});
+
+const derivePairingCode = vi.fn((code: unknown) => {
+  const primary = Buffer.alloc(32, 0x45);
+  const secondary = Buffer.alloc(32, 0x46);
+  const digests = Object.freeze([primary, secondary] as const);
+  return Object.freeze({
+    clear(): void {
+      primary.fill(0);
+      secondary.fill(0);
+    },
+    codeAccepted: code === "7K9M-P2QR-W4XY",
+    digests,
+    secondaryActive: false,
+  });
 });
 
 function createFixture() {
@@ -104,6 +121,7 @@ function createFixture() {
   let visibilityWriteDigestInput: Uint8Array | undefined;
   let verifiedLoginCredential: Buffer | undefined;
   const database: EnrollmentDatabase = {
+    completePairingApproval: vi.fn(() => Promise.resolve(true)),
     completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
     completePasskeyAddition: vi.fn((input: EnrollmentDatabasePasskeyAddition) => {
       additionWrite = {
@@ -198,6 +216,7 @@ function createFixture() {
       };
       return Promise.resolve(true);
     }),
+    createPairingApprovalChallenge: vi.fn(() => Promise.resolve(true)),
     createPasskeyChallenge: vi.fn((input: EnrollmentDatabasePasskeyChallenge) => {
       challengeSessionDigest = Buffer.from(input.sessionVerifierDigest);
       challengeSessionDigestInput = input.sessionVerifierDigest;
@@ -309,6 +328,7 @@ function createFixture() {
         },
       ]);
     }),
+    readPairingApproval: vi.fn(() => Promise.resolve(undefined)),
     readPasskeyLoginMaterial: vi.fn((credentialId: Uint8Array) => {
       loginCredentialLookup = Buffer.from(credentialId);
       return Promise.resolve({
@@ -440,6 +460,7 @@ function createFixture() {
     createRecoveryOptions,
     createRequestId: () => "req_AAAAAAAAAAAAAAAAAAAAAA",
     database,
+    derivePairingCode,
     exchangeGithub,
     generateRecoveryCodes,
     now: () => now,
@@ -645,6 +666,127 @@ describe("enrollment service", () => {
       profileId: join.inviteId,
       sessionId: "00000000-0000-4000-8000-000000000503",
     });
+  });
+
+  it("reviews one pending device before a fresh passkey atomically approves it", async () => {
+    derivePairingCode.mockClear();
+    const { authenticationChallenge, cookieCodec, database, service, verifyLogin } =
+      createFixture();
+    const verifier = Buffer.alloc(32, 0x47);
+    const sessionId = "00000000-0000-4000-8000-000000000512";
+    const pairingId = "00000000-0000-4000-8000-000000001001";
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId,
+      sessionVerifier: verifier.toString("base64url"),
+      version: 1,
+    });
+    const publicKey = Buffer.alloc(32, 0x64);
+    const expectedFingerprint = `SHA256:${createHash("sha256").update(publicKey).digest("base64url")}`;
+    vi.mocked(database.readPairingApproval).mockResolvedValueOnce({
+      architecture: "x86_64",
+      candidateIndex: 1,
+      connectorVersion: "1.2.3",
+      deviceLabel: "Studio PC",
+      expiresAt: "2026-07-16T10:09:00.000Z",
+      osFamily: "windows",
+      pairingId,
+      publicKey,
+    });
+
+    const start = await service.beginPairingApproval(sessionCookie, {
+      userCode: "7K9M-P2QR-W4XY",
+    });
+    expect(start).toMatchObject({
+      options: { challenge: authenticationChallenge },
+      pairing: {
+        architecture: "x86_64",
+        connectorVersion: "1.2.3",
+        deviceLabel: "Studio PC",
+        osFamily: "windows",
+        publicKeyFingerprint: expectedFingerprint,
+      },
+    });
+    expect(database.readPairingApproval).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attemptLimit: config.pairingApprovalAttemptLimit,
+        secondaryActive: false,
+        sessionId,
+        windowSeconds: config.pairingApprovalWindowSeconds,
+      }),
+    );
+    expect(database.createPairingApprovalChallenge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        challengeId: "00000000-0000-4000-8000-000000000502",
+        pairingId,
+        sessionId,
+      }),
+    );
+    const approvalChallengeInput = vi.mocked(database.createPairingApprovalChallenge).mock
+      .calls[0]?.[0];
+    expect(approvalChallengeInput?.sourceId).toMatch(/^src_[A-Za-z0-9_-]{22}$/);
+    const sealedChallenge = cookieCodec.open("passkey", start?.pairingApprovalCookie ?? "");
+    expect(sealedChallenge).toMatchObject({
+      challenge: authenticationChallenge,
+      challengeId: "00000000-0000-4000-8000-000000000502",
+      pairingId,
+      version: 1,
+    });
+    const sealedSourceId = (sealedChallenge as Record<string, unknown>).sourceId;
+    expect(sealedSourceId).toMatch(/^src_[A-Za-z0-9_-]{22}$/);
+    expect(sealedChallenge).not.toHaveProperty("sessionId");
+    expect(start?.pairingApprovalCookie).not.toContain("7K9M-P2QR-W4XY");
+    expect(publicKey).toEqual(Buffer.alloc(32));
+
+    const credentialId = Buffer.alloc(32, 0x74);
+    const response = {
+      id: credentialId.toString("base64url"),
+      rawId: credentialId.toString("base64url"),
+      response: {},
+      type: "public-key",
+    };
+    await expect(
+      service.completePairingApproval(sessionCookie, start?.pairingApprovalCookie ?? "", {
+        response,
+      }),
+    ).resolves.toBe(true);
+    expect(verifyLogin).toHaveBeenCalledWith(
+      response,
+      authenticationChallenge,
+      config.webauthnOrigin,
+      config.webauthnRpId,
+      expect.any(Object),
+    );
+    expect(database.completePairingApproval).toHaveBeenCalledWith(
+      expect.objectContaining({
+        auditEventId: "00000000-0000-4000-8000-000000000503",
+        challengeId: "00000000-0000-4000-8000-000000000502",
+        observedSignCount: 4,
+        pairingId,
+        sessionId,
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
+      }),
+    );
+
+    vi.mocked(database.readPairingApproval).mockResolvedValueOnce({
+      architecture: "x86_64",
+      candidateIndex: 1,
+      connectorVersion: "1.2.3",
+      deviceLabel: "Studio PC",
+      expiresAt: "2026-07-16T10:09:00.000Z",
+      osFamily: "windows",
+      pairingId,
+      publicKey: Buffer.alloc(32, 0x65),
+    });
+    await expect(
+      service.beginPairingApproval(sessionCookie, { userCode: "not-a-code" }),
+    ).resolves.toBeUndefined();
+    expect(database.readPairingApproval).toHaveBeenCalledTimes(2);
+    expect(database.createPairingApprovalChallenge).toHaveBeenCalledOnce();
   });
 
   it("reads only the exact active session's bounded passkey inventory", async () => {
@@ -1443,6 +1585,7 @@ describe("enrollment service", () => {
       },
       createRequestId: () => "req_AAAAAAAAAAAAAAAAAAAAAA",
       database: fixture.database,
+      derivePairingCode,
       now: () => now,
       randomBytes: (size) => Buffer.alloc(size, 0x31),
       randomUuid: () => uuids.shift() ?? "invalid",
@@ -1533,6 +1676,7 @@ describe("enrollment service", () => {
       config,
       cookieCodec: createEnrollmentCookieCodec(config.cookieKey),
       database: fixture.database,
+      derivePairingCode,
       now: () => new Date(Number.NaN),
     });
     expect(invalidClockService.beginGithub(join)).toBeUndefined();
@@ -1541,6 +1685,7 @@ describe("enrollment service", () => {
 
   it("seals continuation cookies before consuming an invite or passkey challenge", async () => {
     const database: EnrollmentDatabase = {
+      completePairingApproval: vi.fn(() => Promise.resolve(true)),
       completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
       completePasskeyAddition: vi.fn(() => Promise.resolve(true)),
       completePasskeyLogin: vi.fn(() =>
@@ -1563,6 +1708,7 @@ describe("enrollment service", () => {
       completeSourceReactivation: vi.fn(() => Promise.resolve(true)),
       completeSourceUnlink: vi.fn(() => Promise.resolve(true)),
       createPasskeyAddChallenge: vi.fn(() => Promise.resolve(true)),
+      createPairingApprovalChallenge: vi.fn(() => Promise.resolve(true)),
       createPasskeyChallenge: vi.fn(() => Promise.resolve(true)),
       createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve(true)),
       createProfileDeletionChallenge: vi.fn(() => Promise.resolve(true)),
@@ -1576,6 +1722,7 @@ describe("enrollment service", () => {
       ),
       readActiveDeviceInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyInventory: vi.fn(() => Promise.resolve([])),
+      readPairingApproval: vi.fn(() => Promise.resolve(undefined)),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),
       readRecoveryCodeVerificationMaterial: vi.fn(() => Promise.resolve(undefined)),
       readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
@@ -1601,6 +1748,7 @@ describe("enrollment service", () => {
         },
       },
       database,
+      derivePairingCode,
       exchangeGithub: () => Promise.resolve(123),
       now: () => now,
       randomBytes: (size) => Buffer.alloc(size, 5),
@@ -1644,6 +1792,7 @@ describe("enrollment service", () => {
         },
       },
       database,
+      derivePairingCode,
       now: () => now,
       randomBytes: (size) => Buffer.alloc(size, 10),
       randomUuid: () => passkeyUuids.shift() ?? "invalid",

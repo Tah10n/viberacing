@@ -33,8 +33,9 @@ remain safe to publish verbatim.
 - [Connector protocol, candidate adapter, supervisor, pairing, and sync signers](../crates/connector/README.md)
   — bounded local App Server handshake, exact `0.144.4` account/usage parser, synthetic one-shot
   process evidence, exact sync material, and isolated one-use Ed25519 signing behind inaccessible
-  capabilities plus a strict pure Web pairing verifier; no key generation/store, pairing
-  transaction/activation composition, upload, supported release, or operational connector.
+  capabilities plus a strict pure Web pairing verifier, dormant start/activation composition, and
+  local browser approval; no key generation/store, connector transport, upload, supported release,
+  or operational connector.
 - [Asset provenance](reference/ASSET_PROVENANCE.md) — generation/source records, integrity digests,
   metadata sanitation, accessibility text, and release-review status for non-code visuals.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary

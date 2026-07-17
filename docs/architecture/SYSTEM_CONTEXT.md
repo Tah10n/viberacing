@@ -123,14 +123,14 @@ inaccessible pending-key/challenge signer and pure strict Web verifier for one e
 pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed atomic
 activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
 material and one fixed database call; ADR 0029 supplies bounded Jobs-only physical cleanup after
-expiry. No connector capability has a public constructor, so executable discovery/admission,
-official-artifact execution, context creation, key generation/store, connector pairing client,
-browser/WebAuthn approval, pairing HTTP transport, scheduling, upload, CLI, and release
-responsibilities remain absent. The host/port/TLS deployment entry point, live secret-manager/edge
-key injection, working deployment login/certificate, composed live end-to-end flow, distributed
-rate/backpressure and capacity evidence, Cloudflare/Railway path, operational connector, Jobs
-scheduler/monitoring, public cache, and audited correction authority shown in the design remain
-planned.
+expiry. A separate local `/connect` flow now supplies session-rate-limited pending-code review and
+fresh-passkey new-source approval. No connector capability has a public constructor, so executable
+discovery/admission, official-artifact execution, context creation, key generation/store, connector
+pairing client and start/poll transport, scheduling, upload, CLI, and release responsibilities
+remain absent. The host/port/TLS deployment entry point, live secret-manager/edge key injection,
+working deployment login/certificate, composed live end-to-end flow, distributed rate/backpressure
+and capacity evidence, Cloudflare/Railway path, operational connector, Jobs scheduler/monitoring,
+public cache, and audited correction authority shown in the design remain planned.
 
 ## Component responsibilities
 

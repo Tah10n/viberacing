@@ -159,13 +159,23 @@ dominates old-code start, and completion leaves only the replacement passkey/ses
 concurrent old-passkey login. [ADR 0007](0007-restricted-recovery-authority.md) defines the narrow
 authority and remaining application boundary.
 
+Revision 0021 and the local `/connect` application now supply the browser pairing step for one new
+source. Every admitted code lookup first increments a bounded window on the exact active session,
+then probes the primary and optional rotation verifier in one closed function. The UI renders only
+bounded pending-device metadata and the full public-key fingerprint; a separate fresh user-verified
+assertion is bound to session, pairing, server-generated source, RP, and origin before one atomic
+consume-and-approve statement. Unit, component, HTTP, fixed-query, and isolated PostgreSQL tests
+cover malformed code, cross-origin and duplicate-cookie denial, key rotation, attempt
+exhaustion/reset, replay-resistant step-up, and first-winner settlement. This is not a connector
+start/poll transport, live authenticator/database result, or deployment claim.
+
 Remaining application and protocol evidence includes:
 
 - Application WebAuthn transaction rendering and verification for remaining critical-action step-up,
   recovery Argon2id/pepper and generic-response behavior, and anonymous ceremony/recovery-lookup
   rate-limit and cleanup tests.
-- Application-level pairing code attempt/rate limits, displayed-transaction rendering, external
-  Ed25519 proof verification, key rotation, bounded cleanup, and plaintext token log rejection.
+- Anonymous pairing-start attempt policy, operational connector proof/transport, live key rotation,
+  scheduled bounded cleanup, and plaintext token log rejection.
 - Scope matrix proving device credentials cannot manage profile, devices, invites, sources,
   recovery, deletion, or admin.
 - Canonical-signature, body tamper, nonce, idempotency, cross-source, clock, and stolen-key tests.

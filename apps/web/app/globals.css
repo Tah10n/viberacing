@@ -190,6 +190,48 @@ a {
   color: #55f7ff;
 }
 
+.connect-steps {
+  display: grid;
+  gap: 0.75rem;
+  padding-inline-start: 1.5rem;
+  line-height: 1.55;
+}
+
+.connect-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-block-start: 2rem;
+}
+
+.pairing-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1.5rem 0 0;
+}
+
+.pairing-details > div {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 2px solid rgb(247 242 255 / 45%);
+  background: #130b2e;
+}
+
+.pairing-details dd {
+  color: #ffe66d;
+  text-transform: none;
+}
+
+.pairing-fingerprint {
+  grid-column: 1 / -1;
+}
+
+.pairing-fingerprint code {
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
 .passkey-list {
   display: grid;
   gap: 0.75rem;
@@ -290,6 +332,16 @@ a {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+@media (max-width: 40rem) {
+  .pairing-details {
+    grid-template-columns: 1fr;
+  }
+
+  .pairing-fingerprint {
+    grid-column: auto;
+  }
 }
 
 .skip-link {

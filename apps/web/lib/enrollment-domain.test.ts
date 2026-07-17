@@ -8,6 +8,7 @@ import {
   readEnrollmentSession,
   readPasskeyAddChallenge,
   readPasskeyChallenge,
+  readPairingApprovalChallenge,
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
   readProfileDeletionChallenge,
@@ -94,6 +95,10 @@ describe("enrollment domain", () => {
       ...challenge,
       sourceId: `src_${"A".repeat(22)}`,
     } as const;
+    const pairingApprovalChallenge = {
+      ...sourceReactivationChallenge,
+      pairingId: "00000000-0000-4000-8000-000000000107",
+    } as const;
     const addChallenge = {
       authenticationChallenge: challenge.challenge,
       challengeId: challenge.challengeId,
@@ -122,6 +127,9 @@ describe("enrollment domain", () => {
     expect(readSourceActionChallenge(sourceReactivationChallenge, now)).toEqual(
       sourceReactivationChallenge,
     );
+    expect(readPairingApprovalChallenge(pairingApprovalChallenge, now)).toEqual(
+      pairingApprovalChallenge,
+    );
     expect(readRecoveryAuthorityChallenge(recoveryAuthority, now)).toEqual(recoveryAuthority);
     expect(readPendingEnrollment({ ...pending, extra: true }, now)).toBeUndefined();
     expect(readEnrollmentSession({ ...session, expiresAt: now }, now)).toBeUndefined();
@@ -130,6 +138,7 @@ describe("enrollment domain", () => {
     expect(readPasskeyChallenge(addChallenge, now)).toBeUndefined();
     expect(readPasskeyChallenge(profileDeletionChallenge, now)).toBeUndefined();
     expect(readPasskeyChallenge(sourceReactivationChallenge, now)).toBeUndefined();
+    expect(readSourceActionChallenge(pairingApprovalChallenge, now)).toBeUndefined();
     expect(readPasskeyAddChallenge(challenge, now)).toBeUndefined();
     expect(
       readPasskeyAddChallenge(
@@ -159,6 +168,13 @@ describe("enrollment domain", () => {
     ).toBeUndefined();
     expect(
       readSourceActionChallenge({ ...sourceReactivationChallenge, extra: true }, now),
+    ).toBeUndefined();
+    expect(readPairingApprovalChallenge(sourceReactivationChallenge, now)).toBeUndefined();
+    expect(
+      readPairingApprovalChallenge({ ...pairingApprovalChallenge, pairingId: "bad" }, now),
+    ).toBeUndefined();
+    expect(
+      readPairingApprovalChallenge({ ...pairingApprovalChallenge, sourceId: "bad" }, now),
     ).toBeUndefined();
     expect(readRecoveryAuthorityChallenge(challenge, now)).toBeUndefined();
     expect(

@@ -52,7 +52,7 @@ const english = {
   noActiveDevices: "No source is connected yet.",
   noSourceActiveDevices: "No active device credential remains on this source.",
   passkeyCopy:
-    "A passkey is required before the profile becomes active and replaces a password. Device approval is not available in this local slice yet.",
+    "A passkey is required before the profile becomes active and replaces a password. The same passkey protects later device approval.",
   passkeyLabel: "Passkey label",
   passkeyRevokeCopy:
     "Revoking a passkey is permanent and requires a fresh passkey check. The key protecting this session cannot be selected.",
@@ -181,7 +181,7 @@ const russian: Record<JoinTranslationKey, string> = {
   noActiveDevices: "Источники пока не подключены.",
   noSourceActiveDevices: "У этого источника не осталось активных прав устройства.",
   passkeyCopy:
-    "До активации профиля нужен ключ доступа, заменяющий пароль. Подключение устройств в этом локальном срезе пока недоступно.",
+    "До активации профиля нужен ключ доступа, заменяющий пароль. Тот же ключ защищает последующее подтверждение устройств.",
   passkeyLabel: "Название ключа",
   passkeyRevokeCopy:
     "Отзыв ключа необратим и требует свежей проверки ключом доступа. Ключ, защищающий эту сессию, выбрать нельзя.",

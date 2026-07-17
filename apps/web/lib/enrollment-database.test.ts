@@ -30,6 +30,7 @@ const accountOverviewRequest = {
 function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
   const releases: boolean[] = [];
   const client: EnrollmentDatabaseClient = {
+    completePairingApproval: vi.fn(() => Promise.resolve([{ approved: true }])),
     completeInitialPasskey: vi.fn(() => Promise.resolve([{ registered: true }])),
     completePasskeyAddition: vi.fn(() => Promise.resolve([{ added: true }])),
     completePasskeyLogin: vi.fn(() =>
@@ -56,6 +57,7 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     completeSourceReactivation: vi.fn(() => Promise.resolve([{ reactivated: true }])),
     completeSourceUnlink: vi.fn(() => Promise.resolve([{ unlinked: true }])),
     createPasskeyAddChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
+    createPairingApprovalChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createProfileDeletionChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
@@ -98,6 +100,7 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
         },
       ]),
     ),
+    readPairingApproval: vi.fn(() => Promise.resolve([])),
     readPasskeyLoginMaterial: vi.fn(() =>
       Promise.resolve([
         {
@@ -535,6 +538,84 @@ describe("enrollment database", () => {
     ).resolves.toBe(true);
     expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(28);
     expect(releases).toEqual(Array.from({ length: 28 }, () => false));
+  });
+
+  it("maps only one exact pending pairing and composes its approval writes", async () => {
+    const row = {
+      architecture: "x86_64",
+      candidate_index: 1,
+      connector_version: "1.2.3",
+      device_label: "Studio PC",
+      expires_at: "2026-07-16T10:09:00.000Z",
+      os_family: "windows",
+      pairing_id: "00000000-0000-4000-8000-000000000430",
+      public_key: Buffer.alloc(32, 0x44),
+    };
+    const { database } = fixture({
+      readPairingApproval: vi.fn(() => Promise.resolve([row])),
+    });
+    const read = {
+      attemptLimit: 6,
+      codeDigests: [new Uint8Array(32), new Uint8Array(32)] as const,
+      secondaryActive: false,
+      sessionId: profile.sessionId,
+      sessionVerifierDigest: new Uint8Array(32),
+      windowSeconds: 600,
+    };
+
+    const material = await database.readPairingApproval(read);
+    expect(material).toMatchObject({
+      architecture: "x86_64",
+      candidateIndex: 1,
+      connectorVersion: "1.2.3",
+      deviceLabel: "Studio PC",
+      expiresAt: "2026-07-16T10:09:00.000Z",
+      osFamily: "windows",
+      pairingId: row.pairing_id,
+    });
+    expect(material?.publicKey).toEqual(Buffer.alloc(32, 0x44));
+    material?.publicKey.fill(0);
+    await expect(
+      database.createPairingApprovalChallenge({
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000431",
+        contextDigest: new Uint8Array(32),
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        pairingId: row.pairing_id,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        sourceId: `src_${"A".repeat(22)}`,
+        userCodeDigest: new Uint8Array(32),
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      database.completePairingApproval({
+        auditEventId: profile.auditEventId,
+        backupState: false,
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000431",
+        contextDigest: new Uint8Array(32),
+        observedSignCount: 4,
+        pairingId: row.pairing_id,
+        requestId: profile.requestId,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000406",
+      }),
+    ).resolves.toBe(true);
+
+    await expect(
+      fixture({
+        readPairingApproval: vi.fn(() =>
+          Promise.resolve([{ ...row, public_key: Buffer.alloc(32) }]),
+        ),
+      }).database.readPairingApproval(read),
+    ).rejects.toMatchObject({ code: "result_invalid" });
+    await expect(
+      fixture({
+        readPairingApproval: vi.fn(() => Promise.resolve([row, row])),
+      }).database.readPairingApproval(read),
+    ).rejects.toMatchObject({ code: "result_invalid" });
   });
 
   it("accepts only an exact bounded account score projection", async () => {

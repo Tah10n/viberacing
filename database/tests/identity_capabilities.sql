@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 47
+    SELECT pg_catalog.count(*) = 48
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 6
+    SELECT pg_catalog.count(*) = 7
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -70,12 +70,27 @@ SELECT pg_temp.assert_true(
         'consume_origin_nonce',
         'cleanup_expired_ingest_state',
         'cleanup_expired_pairing_state',
+        'read_pairing_for_approval_limited',
         'refresh_community_season',
         'finalize_community_season',
         'submit_community_sync'
       )
   ),
   'Ingest and Jobs mutation functions have database-enforced lock-wait bounds'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.bool_and(
+        procedure.proconfig @> ARRAY['statement_timeout=10s']::text[]
+      )
+    FROM pg_catalog.pg_proc AS procedure
+    JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'viberacing_api'
+      AND procedure.proname = 'read_pairing_for_approval_limited'
+  ),
+  'pairing approval lookup has a database-enforced statement deadline'
 );
 
 SELECT pg_temp.assert_true(
@@ -166,6 +181,7 @@ SELECT pg_temp.assert_true(
           'submit_community_sync',
           'cleanup_expired_ingest_state',
           'cleanup_expired_pairing_state',
+          'read_pairing_for_approval',
           'refresh_community_season',
           'finalize_community_season'
         )

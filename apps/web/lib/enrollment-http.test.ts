@@ -28,6 +28,8 @@ const config = resolveEnrollmentConfig({
   NODE_ENV: "test",
   SESSION_SECRET: Buffer.alloc(32, 2).toString("base64url"),
   VIBERACING_PUBLIC_ORIGIN: origin,
+  VIBERACING_PAIRING_APPROVAL_ATTEMPT_LIMIT: "6",
+  VIBERACING_PAIRING_APPROVAL_WINDOW_SECONDS: "600",
   VIBERACING_RECOVERY_ARGON2_MEMORY_KIB: "19456",
   VIBERACING_RECOVERY_ARGON2_PARALLELISM: "2",
   VIBERACING_RECOVERY_ARGON2_PASSES: "2",
@@ -52,6 +54,20 @@ function post(path: string, body: string, contentType: string, cookie?: string):
 
 function serviceFixture(): EnrollmentService {
   return {
+    beginPairingApproval: vi.fn(() =>
+      Promise.resolve({
+        options: { challenge: Buffer.alloc(32, 13).toString("base64url") },
+        pairing: {
+          architecture: "x86_64" as const,
+          connectorVersion: "1.2.3",
+          deviceLabel: "Studio PC",
+          expiresAt: "2026-07-16T10:09:00.000Z",
+          osFamily: "windows" as const,
+          publicKeyFingerprint: `SHA256:${Buffer.alloc(32, 14).toString("base64url")}`,
+        },
+        pairingApprovalCookie: "opaque-pairing-approval",
+      }),
+    ),
     beginGithub: vi.fn(() => ({
       oauthCookie: "opaque-oauth",
       redirectUrl: "https://github.com/login/oauth/authorize?state=opaque",
@@ -124,6 +140,7 @@ function serviceFixture(): EnrollmentService {
     completeLogin: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskey: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskeyAdd: vi.fn(() => Promise.resolve(true)),
+    completePairingApproval: vi.fn(() => Promise.resolve(true)),
     completePasskeyRevoke: vi.fn(() => Promise.resolve(true)),
     completeProfileDeletion: vi.fn(() => Promise.resolve(true)),
     completeRecoveryCodeRotation: vi.fn(() =>
@@ -814,6 +831,77 @@ describe("enrollment HTTP boundary", () => {
     });
   });
 
+  it("serves pairing review and approval as two closed same-origin steps", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const options = await http.pairingApprovalOptions(
+      post(
+        "/auth/pairing/options",
+        JSON.stringify({ userCode: "7K9M-P2QR-W4XY" }),
+        "application/json",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(options.status).toBe(200);
+    expect(options.headers.get("cache-control")).toBe("no-store");
+    expect(options.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(options.headers.get("set-cookie")).toContain(
+      "viberacing_pairing_approval=opaque-pairing-approval",
+    );
+    expect(options.headers.get("set-cookie")).toContain("Path=/auth/pairing");
+    await expect(options.json()).resolves.toMatchObject({
+      options: { challenge: Buffer.alloc(32, 13).toString("base64url") },
+      pairing: {
+        architecture: "x86_64",
+        connectorVersion: "1.2.3",
+        deviceLabel: "Studio PC",
+        osFamily: "windows",
+      },
+    });
+    expect(service.beginPairingApproval).toHaveBeenCalledWith("opaque-session", {
+      userCode: "7K9M-P2QR-W4XY",
+    });
+
+    const verification = await http.pairingApprovalVerify(
+      post(
+        "/auth/pairing/verify",
+        JSON.stringify({ response: { id: "synthetic" } }),
+        "application/json",
+        "viberacing_session=opaque-session; viberacing_pairing_approval=opaque-pairing-approval",
+      ),
+    );
+    expect(verification.status).toBe(204);
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_pairing_approval=");
+    expect(verification.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(service.completePairingApproval).toHaveBeenCalledWith(
+      "opaque-session",
+      "opaque-pairing-approval",
+      { response: { id: "synthetic" } },
+    );
+
+    const crossOrigin = post(
+      "/auth/pairing/options",
+      JSON.stringify({ userCode: "7K9M-P2QR-W4XY" }),
+      "application/json",
+      "viberacing_session=opaque-session",
+    );
+    crossOrigin.headers.set("origin", "https://attacker.example");
+    await expect(http.pairingApprovalOptions(crossOrigin)).resolves.toMatchObject({ status: 400 });
+    await expect(
+      http.pairingApprovalVerify(
+        post(
+          "/auth/pairing/verify",
+          JSON.stringify({ response: { id: "synthetic" } }),
+          "application/json",
+          "viberacing_session=opaque-session; viberacing_pairing_approval=one; viberacing_pairing_approval=two",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 401 });
+    expect(service.completePairingApproval).toHaveBeenCalledOnce();
+  });
+
   it("clears every browser credential on same-origin logout even when admission is busy", async () => {
     const admission = createEnrollmentAdmission(1);
     const held = admission.tryAcquire();
@@ -832,6 +920,7 @@ describe("enrollment HTTP boundary", () => {
     expect(response.headers.get("set-cookie")).toContain("viberacing_recovery_codes=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_source_unlink=");
+    expect(response.headers.get("set-cookie")).toContain("viberacing_pairing_approval=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.logout).not.toHaveBeenCalled();
 

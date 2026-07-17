@@ -8,6 +8,7 @@ import type {
   ProfileVisibility,
 } from "@/lib/enrollment-database";
 import type { AccountSourceDeviceInventoryItem } from "@/lib/enrollment-service";
+import { connectTranslations } from "@/lib/connect-i18n";
 import { dayLabels, formatScore, translations, type Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
@@ -40,6 +41,7 @@ export function AccountExperience({
   visibility,
 }: AccountExperienceProps) {
   const copy = joinTranslations[locale];
+  const connectCopy = connectTranslations[locale];
   const raceCopy = translations[locale];
   const days = dayLabels(locale);
   return (
@@ -142,6 +144,9 @@ export function AccountExperience({
         <section aria-labelledby="active-devices-title" className="account-security">
           <h2 id="active-devices-title">{copy.activeDevicesTitle}</h2>
           <p>{copy.activeDevicesCopy}</p>
+          <p>
+            <Link href="/connect">{connectCopy.title}</Link>
+          </p>
           {activeDeviceInventory === undefined ? (
             <p className="auth-error" role="status">
               {copy.activeDevicesUnavailable}

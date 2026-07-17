@@ -89,6 +89,75 @@ const startPairingQuery = `WITH pairing_start AS MATERIALIZED (
 SELECT pg_catalog.count(*) = 1 AS started
 FROM pairing_start`;
 
+const readPairingApprovalQuery = `SELECT
+  approval.candidate_index::integer AS candidate_index,
+  approval.pairing_id::text AS pairing_id,
+  approval.device_label,
+  approval.connector_version,
+  approval.os_family,
+  approval.architecture,
+  approval.public_key,
+  pg_catalog.to_char(
+    approval.expires_at AT TIME ZONE 'UTC',
+    'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+  ) AS expires_at
+FROM viberacing_api.read_pairing_for_approval_limited(
+  $1::uuid,
+  $2::bytea,
+  $3::bytea,
+  $4::bytea,
+  $5::boolean,
+  $6::integer,
+  $7::integer
+) AS approval`;
+
+const createPairingApprovalChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
+  SELECT viberacing_api.create_pairing_approval_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    $4::bytea,
+    'new'::text,
+    $5::text,
+    $6::uuid,
+    $7::bytea,
+    $8::bytea,
+    $9::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS created
+FROM challenge_creation`;
+
+const completePairingApprovalQuery = `WITH challenge_consumption AS MATERIALIZED (
+  SELECT viberacing_api.consume_passkey_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    'pairing_approval'::text,
+    $4::bytea,
+    $5::bytea,
+    $6::uuid,
+    $7::bigint,
+    $8::boolean
+  ) AS consumed
+), pairing_approval AS MATERIALIZED (
+  SELECT viberacing_api.approve_pairing(
+    $1::uuid,
+    $2::bytea,
+    $9::uuid,
+    $3::uuid,
+    $5::bytea,
+    $10::uuid,
+    $11::text
+  ) AS ignored
+  FROM challenge_consumption
+  WHERE consumed
+)
+SELECT
+  (SELECT consumed FROM challenge_consumption)
+  AND pg_catalog.count(*) = 1 AS approved
+FROM pairing_approval`;
+
 const enrollProfileQuery = `WITH profile_enrollment AS MATERIALIZED (
   SELECT viberacing_api.enroll_profile(
     $1::uuid,
@@ -743,6 +812,41 @@ export interface EnrollmentDatabaseSourcePause {
   readonly sourceId: string;
 }
 
+export interface EnrollmentDatabasePairingApprovalRead {
+  readonly attemptLimit: number;
+  readonly codeDigests: readonly [Uint8Array, Uint8Array];
+  readonly secondaryActive: boolean;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly windowSeconds: number;
+}
+
+export interface EnrollmentDatabasePairingApprovalChallenge {
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly expiresAt: string;
+  readonly pairingId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly sourceId: string;
+  readonly userCodeDigest: Uint8Array;
+}
+
+export interface EnrollmentDatabasePairingApproval {
+  readonly auditEventId: string;
+  readonly backupState: boolean;
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly observedSignCount: number;
+  readonly pairingId: string;
+  readonly requestId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly verifiedPasskeyId: string;
+}
+
 export interface EnrollmentDatabaseSourceReactivationChallenge {
   readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
@@ -933,6 +1037,7 @@ export interface PairingDatabaseClient {
 }
 
 export interface EnrollmentDatabaseClient {
+  completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<unknown>;
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown>;
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<unknown>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown>;
@@ -945,6 +1050,9 @@ export interface EnrollmentDatabaseClient {
   completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<unknown>;
   completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<unknown>;
   createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<unknown>;
+  createPairingApprovalChallenge(
+    input: EnrollmentDatabasePairingApprovalChallenge,
+  ): Promise<unknown>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<unknown>;
   createProfileDeletionChallenge(
@@ -962,6 +1070,7 @@ export interface EnrollmentDatabaseClient {
     input: EnrollmentDatabaseSourceDeviceInventoryRequest,
   ): Promise<unknown>;
   readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown>;
+  readPairingApproval(input: EnrollmentDatabasePairingApprovalRead): Promise<unknown>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown>;
   readRecoveryCodeVerificationMaterial(recoveryCodeId: string): Promise<unknown>;
   readProfileVisibility(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
@@ -1039,6 +1148,30 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         ]);
       } finally {
         digest.fill(0);
+      }
+    },
+    async completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(completePairingApprovalQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.verifiedPasskeyId,
+          input.observedSignCount,
+          input.backupState,
+          input.pairingId,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
       }
     },
     async completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown> {
@@ -1328,6 +1461,32 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         contextDigest.fill(0);
       }
     },
+    async createPairingApprovalChallenge(
+      input: EnrollmentDatabasePairingApprovalChallenge,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const userCodeDigest = Buffer.from(input.userCodeDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(createPairingApprovalChallengeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.pairingId,
+          userCodeDigest,
+          input.sourceId,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.expiresAt,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        userCodeDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
     async createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       const challengeDigest = Buffer.from(input.challengeDigest);
@@ -1490,6 +1649,26 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
       } finally {
         first.fill(0);
         second.fill(0);
+      }
+    },
+    async readPairingApproval(input: EnrollmentDatabasePairingApprovalRead): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const primaryCodeDigest = Buffer.from(input.codeDigests[0]);
+      const secondaryCodeDigest = Buffer.from(input.codeDigests[1]);
+      try {
+        return await fixedQuery(readPairingApprovalQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          primaryCodeDigest,
+          secondaryCodeDigest,
+          input.secondaryActive,
+          input.attemptLimit,
+          input.windowSeconds,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        primaryCodeDigest.fill(0);
+        secondaryCodeDigest.fill(0);
       }
     },
     async readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown> {

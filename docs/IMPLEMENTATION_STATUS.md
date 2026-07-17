@@ -331,8 +331,8 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- Twenty checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and
-  24 forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and
+- Twenty-one checksum-ledgered, transactional SQL migrations with bounded lock/statement execution
+  and 24 forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and
   restricted authorities, session-bound challenges, opaque sources, pending/active/revoked device
   keys, pairing, bounded audit references, deletion work/tombstones, three fixed maintenance mutex
   rows, origin and device nonces, bounded raw Community snapshots, monotonic current source/day
@@ -546,10 +546,18 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   no-scope GitHub redirect and callback-only cookie, state-bound cancellation, cross-origin
   rejection, missing-session denial, cookie-clearing logout, and callback-query suppression in
   development logs. Recovery component and axe cases use synthetic browser adapter responses only.
-  This is HTTP/runtime evidence only, not visual browser, OAuth-provider, authenticator, or database
-  E2E. There is no invite issuer UI, pairing approval, aggregate/distributed attempt policy,
-  abandoned-state cleanup or notification, live OAuth/authenticator/database integration,
-  monitoring, or deployment evidence.
+  The same local identity boundary now exposes `/connect` plus two exact same-origin JSON steps for
+  pairing approval. A passkey-registered session submits one canonical code, revision 0021 counts
+  the admitted attempt on the session across application instances under deployment-private bounds,
+  and the browser receives only bounded device metadata plus a full SHA-256 public-key fingerprint.
+  WebAuthn begins only after a second explicit approval action; its challenge binds the session,
+  pairing, server-generated new source, RP, and origin, and one fixed statement consumes it while
+  approving atomically. The code is cleared from the form after lookup, the raw public key never
+  reaches the client, and the pairing/source IDs exist only inside the encrypted HttpOnly
+  continuation rather than client-readable state or logs. This is HTTP/runtime evidence only, not
+  visual browser, OAuth-provider, authenticator, or database E2E. There is no invite issuer UI,
+  anonymous pairing-start or recovery edge attempt policy, abandoned-state cleanup or notification,
+  live OAuth/authenticator/database integration, monitoring, or deployment evidence.
 - A private current-week account score slice now reuses the exact possessed session and one combined
   Web/Auth pool checkout for visibility plus revision 0019's derived-score read. The server-only
   mapper accepts one empty sentinel or exactly seven consecutive 0–1000 daily scores with coherent
@@ -570,12 +578,12 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   procedure with a server-generated `dev_` ID, audit UUID, and common `req_` ID. Each transport-free
   application admits four unsettled attempts, holds each through a 250-millisecond floor, and
   returns only its frozen success shape or generic failure plus a request ID. The Web suite now
-  contains 521 tests; pairing coverage includes material/code bounds, HMAC vectors/rotation and key
+  contains 547 tests; pairing coverage includes material/code bounds, HMAC vectors/rotation and key
   separation, hostile configuration/input/result shapes, fixed start/lookup/activation queries,
   driver confinement, role drift, strict proof selection, IDs, admission/timing, generic failure,
-  clearing, release, and close. No pairing approval/HTTP route, client identity or distributed rate
-  limit, live login/TLS connection, cleanup schedule, capacity evidence, real key, or deployment is
-  claimed.
+  clearing, release, and close. The separate browser approval route and session-bound database
+  attempt window do not add a connector client, start/poll transport, anonymous distributed rate
+  limit, live login/TLS connection, cleanup schedule, capacity evidence, real key, or deployment.
 - A private TypeScript Jobs workspace now accepts exactly either fixed 1000-row ingest/pairing
   cleanup command or one canonical Monday refresh/finalization command. It revalidates closed plain
   job data, reads only redacted `VIBERACING_JOBS_DATABASE_*` configuration, permits cleartext only
@@ -639,9 +647,9 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   deployment without a real HTTPS DNS value remains forbidden. The separate enrollment slice stores
   account state only in encrypted HttpOnly cookies and reads its exact server-only configuration
   lazily; the default preview still needs none of it.
-- Five hundred twenty-one unit, component, interaction, security-header, localization, scoring,
+- Five hundred forty-seven unit, component, interaction, security-header, localization, scoring,
   HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
-  coverage gate currently reports 87.54% statements, 86.19% branches, 96.17% functions, and 87.63%
+  coverage gate currently reports 86.82% statements, 85.46% branches, 95.87% functions, and 86.88%
   lines over product components and libraries; framework entrypoints are verified by the production
   build instead of artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift; contract, Ingest, and
@@ -664,7 +672,7 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0020 from the checksum manifest,
+reached `healthy`, validated and applied revisions 0001 through 0021 from the checksum manifest,
 passed 24-table state/ownership/RLS assertions, twenty-three observed lock-wait races, eight
 relation-denial checks, twenty-eight cross-capability denials, and the identity, passkey, recovery,
 pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention,
@@ -698,10 +706,10 @@ defect found and corrected during review. The report names its local-only limita
 
 ## Not implemented yet
 
-Invite issuance UI, pairing browser approval and connector client, client-identity and distributed
-admission/rate/deadline policy, anonymous login/pairing/recovery edge limits, recovery notification,
-cleanup for abandoned enrollment/recovery challenges and consumed login ceremonies, an Ingest
-host/port/TLS deployment entry point, trusted edge routing and direct-origin denial, live
+Invite issuance UI, connector pairing client and start/poll routes, client-identity and distributed
+anonymous admission/rate/deadline policy, anonymous login/pairing/recovery edge limits, recovery
+notification, cleanup for abandoned enrollment/recovery challenges and consumed login ceremonies, an
+Ingest host/port/TLS deployment entry point, trusted edge routing and direct-origin denial, live
 secret-manager/edge key injection, the Ingest live PostgreSQL login/TLS connection, distributed
 rate/backpressure controls and load evidence, scheduled execution/monitoring of ingest- and
 pairing-retention cleanup, cleanup for other expiring state, the Jobs scheduler/live login and

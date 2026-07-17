@@ -178,9 +178,11 @@ flowchart LR
   server IDs/token/challenge/code, separate protected poll/code verifiers, closed device metadata,
   nine-minute expiry, and one fixed call through a separate probed read-write pool wrapper. A second
   dormant boundary owns protected poll lookup, strict possession proof, server-owned activation IDs,
-  and fixed admission/timing. Pairing browser approval, distributed recovery/anonymous edge attempt
-  policy, abandoned-state cleanup and notification, live provider/database credentials, and
-  deployment remain separate gates.
+  and fixed admission/timing. The local `/connect` slice now supplies the intervening browser step:
+  exact-session code lookup with a database-backed attempt window, bounded device/fingerprint
+  review, and fresh-passkey atomic new-source approval. Existing-source choice, distributed
+  recovery/anonymous edge attempt policy, abandoned-state cleanup and notification, live
+  provider/database credentials, and deployment remain separate gates.
 - Authenticated score view: the account server render reuses the exact possessed session and one
   combined Web/Auth pool checkout to read visibility plus the current Monday's existing seven
   derived daily scores and bounded summary. Hidden profiles return no score; raw usage, private
@@ -262,19 +264,23 @@ isolated one-use signer behind an equally inaccessible device-bound key capabili
 Rust/Ingest vector proves exact body, public-key, and signature agreement. ADR 0026 adds a second
 domain-separated pairing-possession policy, inaccessible pending-key/challenge signer, and pure
 strict Web verifier with a shared synthetic vector. Context construction, key generation/storage,
-browser approval, transport, retry, scheduling, and support remain absent. ADR 0027 adds the dormant
-server-side half of the final activation step: exact 32-byte poll tokens become primary/secondary
-HMAC-SHA-256 verifier candidates, one probed read-write Web pool selects at most one approved
-transaction, the strict proof is mandatory, and only server-owned IDs reach the atomic procedure.
-Its four-call admission and 250-millisecond floor are local process safeguards, not an anonymous
-route or distributed client-rate policy. ADR 0028 adds the dormant server-side start half: closed
-public-key/device metadata enters, fresh server IDs, a 32-byte poll token and challenge, separate
-primary poll/code HMAC verifiers, a 60-bit human code, and a nine-minute expiry reach only the fixed
-`start_pairing` procedure. Malformed admitted input performs fixed-shape local work but no database
-write. This still provides no public request/response contract, connector client, browser approval,
-anonymous route, or distributed abuse control. Revision 0013 and ADR 0029 add only the separate
-Jobs-side physical cleanup: at most 1000 expired non-activated transactions and exact pending keys
-per call, with activated and live state preserved. No scheduler or retention cadence exists.
+connector transport, retry, scheduling, and support remain absent. A separate local Web/Auth slice
+now implements browser approval for a signed-in passkey session, but does not construct connector
+context or activate a device. ADR 0027 adds the dormant server-side half of the final activation
+step: exact 32-byte poll tokens become primary/secondary HMAC-SHA-256 verifier candidates, one
+probed read-write Web pool selects at most one approved transaction, the strict proof is mandatory,
+and only server-owned IDs reach the atomic procedure. Its four-call admission and 250-millisecond
+floor are local process safeguards, not an anonymous route or distributed client-rate policy. ADR
+0028 adds the dormant server-side start half: closed public-key/device metadata enters, fresh server
+IDs, a 32-byte poll token and challenge, separate primary poll/code HMAC verifiers, a 60-bit human
+code, and a nine-minute expiry reach only the fixed `start_pairing` procedure. Malformed admitted
+input performs fixed-shape local work but no database write. This still provides no public start
+request/response contract, connector client, anonymous route, or distributed abuse control. Revision
+0021 separately gives the authenticated browser approval lookup a session-bound distributed attempt
+window and a closed primary/secondary code probe; it does not protect an anonymous start route.
+Revision 0013 and ADR 0029 add only the separate Jobs-side physical cleanup: at most 1000 expired
+non-activated transactions and exact pending keys per call, with activated and live state preserved.
+No scheduler or retention cadence exists.
 
 ### Date semantics
 
@@ -394,9 +400,10 @@ event.
 4. The connector starts a transaction with its immutable public key and safe metadata. The server
    returns a high-entropy poll token, a transaction challenge, and a short user code; only keyed
    verifiers are persisted.
-5. The browser displays the code, public-key fingerprint, source choice, connector version,
-   platform, and device label.
-6. A GitHub session plus fresh passkey approves the exact pending transaction and source choice.
+5. The browser accepts the code and displays the public-key fingerprint, fixed new-source choice,
+   connector version, platform, and device label. Existing-source choice remains Phase 3 work.
+6. An authenticated session plus fresh passkey approves the exact pending transaction and
+   server-generated new source.
 7. The connector presents the poll token and proves private-key possession by signing the bound
    challenge.
 8. The server atomically activates the binding and issues a public device ID tied to that public key

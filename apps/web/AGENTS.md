@@ -102,10 +102,16 @@ apply.
   Server code owns all IDs, token, challenge, code, digests, and expiry; poll and human-code HMAC
   keys remain separate protected capabilities. Only the closed start adapter may invoke the fixed
   start procedure.
-- Do not add a pairing route, its browser/session approval, a connector client, or a pairing
-  WebAuthn claim without complete transport admission, distributed rate/deadline policy, contracts,
-  and negative tests. Do not describe the local identity slices as production-ready recovery,
-  deployed authentication, or live-user evidence.
+- Keep `/connect` approval split into review and explicit confirmation. Every admitted code lookup
+  must count against the exact possessed session in PostgreSQL, probe fixed primary/optional
+  secondary candidates, return only bounded metadata plus the full public-key fingerprint, and start
+  no WebAuthn ceremony until the user confirms. Bind the fresh assertion to the session, pairing,
+  server-generated new source, RP, and origin; consume and approve in one fixed statement. Keep the
+  raw code/key out of cookies, logs, cache, and persistence, and keep errors generic.
+- Do not add a connector client or pairing start/poll route without complete transport admission,
+  distributed anonymous rate/deadline policy, contracts, and negative tests. Do not describe the
+  local identity slices as production-ready recovery, deployed authentication, live-user evidence,
+  or completed device activation.
 
 ## Commands
 

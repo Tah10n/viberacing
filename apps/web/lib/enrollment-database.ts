@@ -14,6 +14,9 @@ import {
   type EnrollmentDatabasePasskeyAddChallenge,
   type EnrollmentDatabasePasskeyChallenge,
   type EnrollmentDatabasePasskeyInventoryRequest,
+  type EnrollmentDatabasePairingApproval,
+  type EnrollmentDatabasePairingApprovalChallenge,
+  type EnrollmentDatabasePairingApprovalRead,
   type EnrollmentDatabasePasskeyRevocation,
   type EnrollmentDatabasePasskeyRevokeChallenge,
   type EnrollmentDatabasePool,
@@ -47,6 +50,16 @@ const loginMaterialColumns = new Set([
 ]);
 const loginProfileColumns = new Set(["handle", "locale", "profile_id"]);
 const recoveryMaterialColumns = new Set(["recovery_code_id", "verifier_phc"]);
+const pairingApprovalColumns = new Set([
+  "architecture",
+  "candidate_index",
+  "connector_version",
+  "device_label",
+  "expires_at",
+  "os_family",
+  "pairing_id",
+  "public_key",
+]);
 const passkeyInventoryColumns = new Set([
   "created_on",
   "current_authenticator",
@@ -87,6 +100,7 @@ const accountScoreColumns = [
   "weekly_score",
 ] as const;
 const canonicalDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+const canonicalTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
 const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
 const connectorVersionPattern = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -113,6 +127,7 @@ export class EnrollmentDatabaseError extends Error {
 }
 
 export interface EnrollmentDatabase {
+  completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<boolean>;
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<boolean>;
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<boolean>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile>;
@@ -127,6 +142,9 @@ export interface EnrollmentDatabase {
   completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<boolean>;
   completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<boolean>;
   createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean>;
+  createPairingApprovalChallenge(
+    input: EnrollmentDatabasePairingApprovalChallenge,
+  ): Promise<boolean>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<boolean>;
   createProfileDeletionChallenge(
@@ -147,6 +165,9 @@ export interface EnrollmentDatabase {
     input: EnrollmentDatabasePasskeyInventoryRequest,
   ): Promise<readonly PasskeyInventoryItem[]>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined>;
+  readPairingApproval(
+    input: EnrollmentDatabasePairingApprovalRead,
+  ): Promise<PairingApprovalMaterial | undefined>;
   readRecoveryCodeVerificationMaterial(
     recoveryCodeId: string,
   ): Promise<RecoveryCodeVerificationMaterial | undefined>;
@@ -190,6 +211,17 @@ export interface PasskeyLoginProfile {
   readonly handle: string;
   readonly locale: "en" | "ru";
   readonly profileId: string;
+}
+
+export interface PairingApprovalMaterial {
+  readonly architecture: "aarch64" | "x86_64";
+  readonly candidateIndex: 1 | 2;
+  readonly connectorVersion: string;
+  readonly deviceLabel: string;
+  readonly expiresAt: string;
+  readonly osFamily: "linux" | "macos" | "windows";
+  readonly pairingId: string;
+  readonly publicKey: Buffer;
 }
 
 export interface RecoveryCodeVerificationMaterial {
@@ -403,6 +435,72 @@ function exactLoginMaterial(value: unknown): PasskeyLoginMaterial | undefined {
       cosePublicKey: publicKey,
       passkeyId: row.passkey_id,
       signCount: Number(row.sign_count),
+    });
+  } catch (error) {
+    publicKey?.fill(0);
+    if (error instanceof EnrollmentDatabaseError) {
+      throw error;
+    }
+    fail("result_invalid");
+  }
+}
+
+function exactPairingApprovalMaterial(value: unknown): PairingApprovalMaterial | undefined {
+  let publicKey: Buffer | undefined;
+  try {
+    if (!Array.isArray(value) || value.length > 1) {
+      fail("result_invalid");
+    }
+    if (value.length === 0) {
+      return undefined;
+    }
+    const row: unknown = value[0];
+    if (!isRecord(row)) {
+      fail("result_invalid");
+    }
+    const keys = Object.keys(row);
+    publicKey = copyBoundedBytes(row.public_key, 32, 32);
+    const labelLength =
+      typeof row.device_label === "string" ? Array.from(row.device_label).length : 0;
+    const expiresAt = typeof row.expires_at === "string" ? new Date(row.expires_at) : undefined;
+    if (
+      keys.length !== pairingApprovalColumns.size ||
+      keys.some((key) => !pairingApprovalColumns.has(key)) ||
+      (row.candidate_index !== 1 && row.candidate_index !== 2) ||
+      typeof row.pairing_id !== "string" ||
+      !enrollmentPatterns.uuidV4.test(row.pairing_id) ||
+      typeof row.device_label !== "string" ||
+      row.device_label.length < 1 ||
+      row.device_label.length > 128 ||
+      labelLength < 1 ||
+      labelLength > 64 ||
+      row.device_label !== row.device_label.trim() ||
+      row.device_label !== row.device_label.normalize("NFC") ||
+      unsafeLabelPattern.test(row.device_label) ||
+      typeof row.connector_version !== "string" ||
+      row.connector_version.length > 64 ||
+      !connectorVersionPattern.test(row.connector_version) ||
+      (row.os_family !== "linux" && row.os_family !== "macos" && row.os_family !== "windows") ||
+      (row.architecture !== "aarch64" && row.architecture !== "x86_64") ||
+      typeof row.expires_at !== "string" ||
+      !canonicalTimestampPattern.test(row.expires_at) ||
+      expiresAt === undefined ||
+      !Number.isFinite(expiresAt.valueOf()) ||
+      expiresAt.toISOString() !== row.expires_at ||
+      publicKey === undefined ||
+      publicKey.every((byte) => byte === 0)
+    ) {
+      fail("result_invalid");
+    }
+    return Object.freeze({
+      architecture: row.architecture,
+      candidateIndex: row.candidate_index,
+      connectorVersion: row.connector_version,
+      deviceLabel: row.device_label,
+      expiresAt: row.expires_at,
+      osFamily: row.os_family,
+      pairingId: row.pairing_id,
+      publicKey,
     });
   } catch (error) {
     publicKey?.fill(0);
@@ -695,6 +793,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
   }
 
   return Object.freeze({
+    completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<boolean> {
+      return execute(
+        (client) => client.completePairingApproval(input),
+        (value) => exactBooleanRow(value, "approved"),
+      );
+    },
     completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<boolean> {
       return execute(
         (client) => client.completeInitialPasskey(input),
@@ -750,6 +854,14 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
     createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean> {
       return execute(
         (client) => client.createPasskeyAddChallenge(input),
+        (value) => exactBooleanRow(value, "created"),
+      );
+    },
+    createPairingApprovalChallenge(
+      input: EnrollmentDatabasePairingApprovalChallenge,
+    ): Promise<boolean> {
+      return execute(
+        (client) => client.createPairingApprovalChallenge(input),
         (value) => exactBooleanRow(value, "created"),
       );
     },
@@ -828,6 +940,11 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
     },
     readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined> {
       return execute((client) => client.readPasskeyLoginMaterial(credentialId), exactLoginMaterial);
+    },
+    readPairingApproval(
+      input: EnrollmentDatabasePairingApprovalRead,
+    ): Promise<PairingApprovalMaterial | undefined> {
+      return execute((client) => client.readPairingApproval(input), exactPairingApprovalMaterial);
     },
     readRecoveryCodeVerificationMaterial(
       recoveryCodeId: string,

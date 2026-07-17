@@ -11,11 +11,15 @@ import {
   type PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
 
+import { connectTranslations } from "@/lib/connect-i18n";
 import type { Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
 const recoveryCodePattern =
   /^vrr1_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}_[A-Za-z0-9_-]{43}$/;
+const pairingFingerprintPattern = /^SHA256:[A-Za-z0-9_-]{43}$/;
+const pairingVersionPattern =
+  /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function readRecoveryCodesResponse(value: unknown): readonly string[] | undefined {
   if (
@@ -43,6 +47,72 @@ function readRecoveryCodesResponse(value: unknown): readonly string[] | undefine
     return undefined;
   }
   return Object.freeze([...recoveryCodes]) as readonly string[];
+}
+
+interface PairingReview {
+  readonly options: PublicKeyCredentialRequestOptionsJSON;
+  readonly pairing: Readonly<{
+    architecture: "aarch64" | "x86_64";
+    connectorVersion: string;
+    deviceLabel: string;
+    expiresAt: string;
+    osFamily: "linux" | "macos" | "windows";
+    publicKeyFingerprint: string;
+  }>;
+}
+
+function plainRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
+}
+
+function readPairingReview(value: unknown): PairingReview | undefined {
+  if (!plainRecord(value) || Object.keys(value).length !== 2) {
+    return undefined;
+  }
+  const options = value.options;
+  const pairing = value.pairing;
+  if (
+    !plainRecord(options) ||
+    typeof options.challenge !== "string" ||
+    !/^[A-Za-z0-9_-]{43}$/.test(options.challenge) ||
+    !plainRecord(pairing) ||
+    Object.keys(pairing).length !== 6 ||
+    typeof pairing.deviceLabel !== "string" ||
+    pairing.deviceLabel.length < 1 ||
+    pairing.deviceLabel.length > 128 ||
+    pairing.deviceLabel !== pairing.deviceLabel.trim() ||
+    pairing.deviceLabel !== pairing.deviceLabel.normalize("NFC") ||
+    Array.from(pairing.deviceLabel).length > 64 ||
+    typeof pairing.connectorVersion !== "string" ||
+    !pairingVersionPattern.test(pairing.connectorVersion) ||
+    (pairing.osFamily !== "linux" &&
+      pairing.osFamily !== "macos" &&
+      pairing.osFamily !== "windows") ||
+    (pairing.architecture !== "aarch64" && pairing.architecture !== "x86_64") ||
+    typeof pairing.expiresAt !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(pairing.expiresAt) ||
+    !Number.isFinite(new Date(pairing.expiresAt).valueOf()) ||
+    typeof pairing.publicKeyFingerprint !== "string" ||
+    !pairingFingerprintPattern.test(pairing.publicKeyFingerprint)
+  ) {
+    return undefined;
+  }
+  return Object.freeze({
+    options: options as unknown as PublicKeyCredentialRequestOptionsJSON,
+    pairing: Object.freeze({
+      architecture: pairing.architecture,
+      connectorVersion: pairing.connectorVersion,
+      deviceLabel: pairing.deviceLabel,
+      expiresAt: pairing.expiresAt,
+      osFamily: pairing.osFamily,
+      publicKeyFingerprint: pairing.publicKeyFingerprint,
+    }),
+  });
 }
 
 interface PasskeySetupProps {
@@ -751,6 +821,190 @@ export function SourceReactivationButton(props: SourceActionButtonProps) {
 
 export function SourceUnlinkButton(props: SourceActionButtonProps) {
   return <SourcePasskeyActionButton action="unlink" {...props} />;
+}
+
+interface PairingApprovalFormProps {
+  readonly locale: Locale;
+}
+
+export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
+  const copy = connectTranslations[locale];
+  const [approved, setApproved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<"generic" | "unsupported" | undefined>();
+  const [review, setReview] = useState<PairingReview>();
+
+  async function findPairing(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy) {
+      return;
+    }
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const enteredCode = form.get("userCode");
+    if (typeof enteredCode !== "string") {
+      setError("generic");
+      return;
+    }
+    const userCode = enteredCode.trim().toUpperCase();
+    formElement.reset();
+    setBusy(true);
+    setError(undefined);
+    try {
+      const response = await fetch("/auth/pairing/options", {
+        body: JSON.stringify({ userCode }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (!response.ok) {
+        throw new Error("pairing unavailable");
+      }
+      const parsed = readPairingReview((await response.json()) as unknown);
+      if (parsed === undefined) {
+        throw new Error("pairing response invalid");
+      }
+      setReview(parsed);
+    } catch {
+      setError("generic");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function approvePairing(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy || review === undefined) {
+      return;
+    }
+    if (!browserSupportsWebAuthn()) {
+      setError("unsupported");
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      const response = await startAuthentication({ optionsJSON: review.options });
+      const verification = await fetch("/auth/pairing/verify", {
+        body: JSON.stringify({ response }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (verification.status !== 204) {
+        throw new Error("pairing approval failed");
+      }
+      setApproved(true);
+      setReview(undefined);
+    } catch {
+      setError("generic");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (approved) {
+    return (
+      <section aria-labelledby="pairing-approved-title" className="account-security">
+        <h2 id="pairing-approved-title">{copy.approvedTitle}</h2>
+        <p className="auth-status" role="status">
+          {copy.approvedCopy}
+        </p>
+        <Link href="/account">{copy.backToAccount}</Link>
+      </section>
+    );
+  }
+
+  if (review === undefined) {
+    return (
+      <form className="auth-form" onSubmit={(event) => void findPairing(event)}>
+        <label>
+          <span>{copy.codeLabel}</span>
+          <input
+            autoCapitalize="characters"
+            autoComplete="off"
+            inputMode="text"
+            maxLength={14}
+            minLength={14}
+            name="userCode"
+            pattern="[0-9A-HJKMNP-TV-Z]{4}(?:-[0-9A-HJKMNP-TV-Z]{4}){2}"
+            placeholder="7K9M-P2QR-W4XY"
+            required
+            spellCheck={false}
+            type="text"
+          />
+          <small>{copy.codeHint}</small>
+        </label>
+        <button className="primary-action" disabled={busy} type="submit">
+          {busy ? copy.searching : copy.submitCode}
+        </button>
+        <span aria-live="polite" className={error === undefined ? "auth-status" : "auth-error"}>
+          {error === "unsupported" ? copy.unsupported : error === "generic" ? copy.error : ""}
+        </span>
+      </form>
+    );
+  }
+
+  const platform =
+    review.pairing.osFamily === "macos"
+      ? "macOS"
+      : review.pairing.osFamily === "windows"
+        ? "Windows"
+        : "Linux";
+
+  return (
+    <section aria-labelledby="pairing-review-title" className="account-security">
+      <h2 id="pairing-review-title">{copy.reviewTitle}</h2>
+      <p>{copy.reviewCopy}</p>
+      <dl className="pairing-details">
+        <div>
+          <dt>{copy.device}</dt>
+          <dd>{review.pairing.deviceLabel}</dd>
+        </div>
+        <div>
+          <dt>{copy.connector}</dt>
+          <dd>{review.pairing.connectorVersion}</dd>
+        </div>
+        <div>
+          <dt>{copy.platform}</dt>
+          <dd>{platform}</dd>
+        </div>
+        <div>
+          <dt>{copy.architecture}</dt>
+          <dd>{review.pairing.architecture}</dd>
+        </div>
+        <div>
+          <dt>{copy.expires}</dt>
+          <dd>
+            <time dateTime={review.pairing.expiresAt}>
+              {new Intl.DateTimeFormat(locale, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              }).format(new Date(review.pairing.expiresAt))}
+            </time>
+          </dd>
+        </div>
+        <div className="pairing-fingerprint">
+          <dt>{copy.fingerprint}</dt>
+          <dd>
+            <code>{review.pairing.publicKeyFingerprint}</code>
+          </dd>
+        </div>
+      </dl>
+      <form className="auth-form" onSubmit={(event) => void approvePairing(event)}>
+        <button className="primary-action" disabled={busy} type="submit">
+          {busy ? copy.approving : copy.approve}
+        </button>
+        <span aria-live="polite" className={error === undefined ? "auth-status" : "auth-error"}>
+          {error === "unsupported" ? copy.unsupported : error === "generic" ? copy.error : ""}
+        </span>
+      </form>
+    </section>
+  );
 }
 
 interface ProfileDeletionFormProps {

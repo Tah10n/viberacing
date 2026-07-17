@@ -16,6 +16,7 @@ const callbackCancellationKeys = new Set(["error", "error_description", "error_u
 const enrollmentCookiePaths = Object.freeze({
   login: "/auth/login",
   oauth: "/auth/github/callback",
+  pairingApproval: "/auth/pairing",
   passkey: "/auth/passkey",
   passkeyAdd: "/auth/passkeys/add",
   passkeyRevoke: "/auth/passkeys/revoke",
@@ -33,6 +34,8 @@ export interface EnrollmentHttp {
   loginOptions(request: Request): Promise<Response>;
   loginVerify(request: Request): Promise<Response>;
   logout(request: Request): Promise<Response>;
+  pairingApprovalOptions(request: Request): Promise<Response>;
+  pairingApprovalVerify(request: Request): Promise<Response>;
   passkeyOptions(request: Request): Promise<Response>;
   passkeyAddOptions(request: Request): Promise<Response>;
   passkeyAddVerify(request: Request): Promise<Response>;
@@ -443,6 +446,126 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           ),
         );
         return new Response(null, { headers, status: 204 });
+      } finally {
+        lease.release();
+      }
+    },
+    async pairingApprovalOptions(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/pairing/options") ||
+        !contentType(request, jsonContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 512);
+        if (body === undefined) {
+          return problem("invalid_request");
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
+          return problem("invalid_request");
+        }
+        const sessionCookie = readCookie(
+          request.headers.get("cookie"),
+          enrollmentCookieNames.session,
+        );
+        if (sessionCookie === undefined) {
+          return problem("unauthorized");
+        }
+        const decision = await currentRuntime.service.beginPairingApproval(sessionCookie, parsed);
+        if (decision === undefined) {
+          return problem("unauthorized");
+        }
+        return new Response(
+          JSON.stringify({ options: decision.options, pairing: decision.pairing }),
+          {
+            headers: noStoreHeaders({
+              "content-type": "application/json; charset=utf-8",
+              "set-cookie": serializeEnrollmentCookie(
+                enrollmentCookieNames.pairingApproval,
+                decision.pairingApprovalCookie,
+                300,
+                currentRuntime.config.secureCookies,
+                enrollmentCookiePaths.pairingApproval,
+              ),
+            }),
+            status: 200,
+          },
+        );
+      } finally {
+        lease.release();
+      }
+    },
+    async pairingApprovalVerify(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/pairing/verify") ||
+        !contentType(request, jsonContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 16_384);
+        if (body === undefined) {
+          return problem("invalid_request");
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
+          return problem("invalid_request");
+        }
+        const cookieHeader = request.headers.get("cookie");
+        const sessionCookie = readCookie(cookieHeader, enrollmentCookieNames.session);
+        const pairingApprovalCookie = readCookie(
+          cookieHeader,
+          enrollmentCookieNames.pairingApproval,
+        );
+        if (sessionCookie === undefined || pairingApprovalCookie === undefined) {
+          return problem("unauthorized");
+        }
+        const approved = await currentRuntime.service.completePairingApproval(
+          sessionCookie,
+          pairingApprovalCookie,
+          parsed,
+        );
+        if (!approved) {
+          return problem("unauthorized");
+        }
+        return new Response(null, {
+          headers: noStoreHeaders({
+            "set-cookie": clearEnrollmentCookie(
+              enrollmentCookieNames.pairingApproval,
+              currentRuntime.config.secureCookies,
+              enrollmentCookiePaths.pairingApproval,
+            ),
+          }),
+          status: 204,
+        });
       } finally {
         lease.release();
       }
@@ -1381,6 +1504,11 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           enrollmentCookieNames.oauth,
           currentRuntime.config.secureCookies,
           enrollmentCookiePaths.oauth,
+        ),
+        clearEnrollmentCookie(
+          enrollmentCookieNames.pairingApproval,
+          currentRuntime.config.secureCookies,
+          enrollmentCookiePaths.pairingApproval,
         ),
         clearEnrollmentCookie(
           enrollmentCookieNames.passkey,

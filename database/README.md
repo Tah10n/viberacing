@@ -2,14 +2,15 @@
 
 ## Status
 
-This directory contains twenty SQL-first revisions for identity, passkey login and management,
+This directory contains twenty-one SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, and season
 finalization state. The migrations, narrow database procedures, and PostgreSQL integration tests are
 implemented. A local invite/OAuth/initial-passkey, returning-passkey, session-scoped passkey,
 source/device inventory, source pause/reactivation/unlink, and immediate device-revoke application
 now consumes only fixed Web/Auth capabilities with injected or synthetic dependencies. The same
 local boundary also performs bounded recovery-code Argon2id verification and replacement WebAuthn
-verification before fixed recovery calls. No authentication/HTTP pairing route, production
+verification before fixed recovery calls. It now also performs session-rate-limited browser pairing
+review and fresh-passkey new-source approval. No pairing start/poll HTTP route, production
 credential, or deployed database consumes the remaining protected identity/ingest capabilities. A
 dormant Web/Auth boundary creates bounded pairing material through one fixed start call; a second
 composes keyed pairing lookup, strict Ed25519 possession proof, and exact activation through the
@@ -27,7 +28,8 @@ table access. Profile-scoped procedures derive identity from an exact active ses
 32-byte verifier instead of accepting a caller-selected profile ID. The database still relies on
 Web/Auth to perform OAuth and WebAuthn cryptographic verification before invoking the matching
 procedure. The local identity slice does so for enrollment, login, passkey, recovery, profile,
-device, and source controls with injected/synthetic evidence; pairing approval remains absent.
+device, source, and pairing-approval controls with injected/synthetic evidence. Pairing start/poll
+transport and live credentials remain absent.
 
 ## Layout
 
@@ -81,14 +83,18 @@ device, and source controls with injected/synthetic evidence; pairing approval r
   profile's existing derived season summary and seven daily scores; hidden profiles return no rows.
 - `migrations/0020_recovery_session_result.sql` composes successful restricted recovery completion
   with only profile ID, handle, and locale for post-commit session-cookie sealing.
+- `migrations/0021_pairing_approval_attempt_policy.sql` adds a session-bound distributed attempt
+  window, replaces Web access to the unbounded pairing lookup with one fixed two-key candidate
+  lookup, and keeps deployment policy values outside tracked configuration.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
   cross-profile denial, private derived-score read/hide/republish, visibility
   hide/publish/idempotency, expiry, replay, rollback, audit redaction, and synchronous deletion
   effects.
-- `tests/pairing_capabilities.sql` exercises new/existing-source choice, first-winner rebinding
-  denial, replay, poll possession, exact activation, immutable binding, and public safety ceilings.
+- `tests/pairing_capabilities.sql` exercises session-bound attempt blocking/reset, key-rotation
+  lookup, new/existing-source choice, first-winner rebinding denial, replay, poll possession, exact
+  activation, immutable binding, and public safety ceilings.
 - `tests/source_device_lifecycle.sql` exercises inventory isolation, hidden-profile
   inventory/revoke, source/device IDOR denial, step-up binding, replay, quarantine separation, stale
   challenge/pairing cancellation, recursive device revoke, and audit-failure rollback.
@@ -248,11 +254,14 @@ Runtime access must remain procedure-only and must have positive and negative in
   boundary now generates all IDs, 32-byte token/challenge material, a separate keyed 60-bit human
   code, and a nine-minute expiry before invoking only this fixed procedure through the probed
   read-write Web pool. Tests use injected pools and create no live row.
-- `read_pairing_for_approval`, `create_pairing_approval_challenge`, and `approve_pairing` require
-  the exact active session. Approval also requires a fresh, consumed, transaction-bound WebAuthn
-  challenge and persists the exact verifying passkey plus approving session. The user can select a
-  new opaque source or an existing active source owned by the same profile. The first valid approval
-  wins; after that, another profile cannot take over or rebind the transaction.
+- `read_pairing_for_approval_limited`, `create_pairing_approval_challenge`, and `approve_pairing`
+  require the exact active session. The lookup atomically counts every admitted code attempt on the
+  session under deployment-supplied bounded policy and probes one primary plus one optional rotation
+  verifier without revealing which failed. Approval also requires a fresh, consumed,
+  transaction-bound WebAuthn challenge and persists the exact verifying passkey plus approving
+  session. The user can select a new opaque source or an existing active source owned by the same
+  profile. The first valid approval wins; after that, another profile cannot take over or rebind the
+  transaction.
 - `read_pairing_verification_material`, `activate_pairing`, and `poll_pairing_status` expose only
   the minimum material needed for external Ed25519 proof verification and poll possession.
   Activation atomically binds the exact pending key to the approved source and one public device ID.
@@ -342,24 +351,24 @@ tombstones, backup replay, and user-visible progress remain unimplemented.
 
 All current columns map to the canonical [privacy data map](../docs/security/PRIVACY_DATA_MAP.md):
 
-| Tables                                      | Classes                       | Stored boundary                                                                    |
-| ------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------- |
-| `profiles`                                  | Account; handle is Public     | Numeric GitHub binding, handle, closed visibility/preferences, lifecycle time      |
-| `invites`, `sessions`, `auth_challenges`    | Security                      | Keyed verifiers, exact session/passkey provenance, expiry, and one-time use        |
-| `passkeys`, `recovery_codes`                | Security; label is Account    | Public credential material, opaque selectors, and unused PHCs; no plaintext        |
-| `recovery_authorities`                      | Security                      | Keyed/challenge/context digests, terminal state, expiry, and opaque provenance     |
-| `codex_sources`                             | Account                       | Opaque source ID, owning profile, and constrained lifecycle state                  |
-| `device_keys`, `pairing_transactions`       | Security; metadata is Account | Ed25519 public key, exact source/device binding, keyed poll/code verifiers         |
-| `deletion_jobs`, `deletion_tombstones`      | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry            |
-| `audit_events`                              | Security; Operational         | Closed event/actor enums, request reference, reason code, and server time          |
-| `maintenance_locks`                         | Operational                   | Fixed owner-only cleanup/scoring mutex rows; no user or request data               |
-| `origin_nonces`                             | Security                      | Origin key ID, domain-separated replay digest, and millisecond expiry              |
-| `device_nonces`                             | Security                      | Device-bound replay digest and 15-minute expiry marker                             |
-| `usage_snapshots`, `usage_snapshot_entries` | Usage; Security               | Bounded signed snapshot metadata, exact private daily values, 30-day expiry marker |
-| `source_day_values`                         | Usage                         | One monotonic current token value and accepted provenance per source/date          |
-| `score_versions`, `seasons`                 | Operational; Public           | Immutable formula, ISO-week binding, grace, and terminal state                     |
-| `season_entries`, `season_daily_scores`     | Public                        | Private pre-projection scores, active days, source count, rank, and display order  |
-| `schema_migrations`                         | Operational                   | Revision name and server application time only                                     |
+| Tables                                      | Classes                       | Stored boundary                                                                                     |
+| ------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| `profiles`                                  | Account; handle is Public     | Numeric GitHub binding, handle, closed visibility/preferences, lifecycle time                       |
+| `invites`, `sessions`, `auth_challenges`    | Security                      | Keyed verifiers, exact session/passkey provenance, pairing-attempt window, expiry, and one-time use |
+| `passkeys`, `recovery_codes`                | Security; label is Account    | Public credential material, opaque selectors, and unused PHCs; no plaintext                         |
+| `recovery_authorities`                      | Security                      | Keyed/challenge/context digests, terminal state, expiry, and opaque provenance                      |
+| `codex_sources`                             | Account                       | Opaque source ID, owning profile, and constrained lifecycle state                                   |
+| `device_keys`, `pairing_transactions`       | Security; metadata is Account | Ed25519 public key, exact source/device binding, keyed poll/code verifiers                          |
+| `deletion_jobs`, `deletion_tombstones`      | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry                             |
+| `audit_events`                              | Security; Operational         | Closed event/actor enums, request reference, reason code, and server time                           |
+| `maintenance_locks`                         | Operational                   | Fixed owner-only cleanup/scoring mutex rows; no user or request data                                |
+| `origin_nonces`                             | Security                      | Origin key ID, domain-separated replay digest, and millisecond expiry                               |
+| `device_nonces`                             | Security                      | Device-bound replay digest and 15-minute expiry marker                                              |
+| `usage_snapshots`, `usage_snapshot_entries` | Usage; Security               | Bounded signed snapshot metadata, exact private daily values, 30-day expiry marker                  |
+| `source_day_values`                         | Usage                         | One monotonic current token value and accepted provenance per source/date                           |
+| `score_versions`, `seasons`                 | Operational; Public           | Immutable formula, ISO-week binding, grace, and terminal state                                      |
+| `season_entries`, `season_daily_scores`     | Public                        | Private pre-projection scores, active days, source count, rank, and display order                   |
+| `schema_migrations`                         | Operational                   | Revision name and server application time only                                                      |
 
 The schema has no column for GitHub access tokens, account email, prompts, conversations, repository
 data, Codex credentials, API keys, local paths, arbitrary payloads, or raw support evidence.

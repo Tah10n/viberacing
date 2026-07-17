@@ -14,6 +14,7 @@ import type {
   AccountOverview,
   ActiveDeviceInventoryItem,
   EnrollmentDatabase,
+  PairingApprovalMaterial,
   PasskeyInventoryItem,
   PasskeyLoginMaterial,
   ProfileVisibility,
@@ -24,6 +25,7 @@ import {
   readEnrollmentSession,
   readPasskeyAddChallenge,
   readPasskeyChallenge,
+  readPairingApprovalChallenge,
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
   readProfileDeletionChallenge,
@@ -32,6 +34,7 @@ import {
   type EnrollmentSession,
   type JoinRequest,
   type PasskeyAddChallenge,
+  type PairingApprovalChallenge,
   type PasskeyRegistrationChallenge,
   type PasskeyRevokeChallenge,
   type PendingEnrollment,
@@ -50,6 +53,7 @@ import {
   createRecoveryPasskeyRegistrationOptions,
   passkeyChallengeDigest,
   passkeyAddContextDigest,
+  pairingApprovalContextDigest,
   passkeyContextDigest,
   passkeyLoginContextDigest,
   passkeyLoginCredentialId,
@@ -65,6 +69,7 @@ import {
 } from "./passkey-registration";
 import { currentCommunitySeasonStart } from "./public-community-race";
 import { createPublicRequestId } from "./public-http-problem";
+import type { PairingUserCodeVerifier } from "./pairing-user-code-verifier";
 import {
   clearRecoveryCode,
   createRecoveryCodeGenerator,
@@ -91,6 +96,7 @@ const recoveryStartBodyKeys = new Set(["code", "label"]);
 const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
 const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
 const sourceControlBodyKeys = new Set(["sourceControl"]);
+const pairingCodeBodyKeys = new Set(["userCode"]);
 const sourceControlKeys = new Set(["expiresAt", "sessionId", "sourceId", "version"]);
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 const recoveryCodePattern =
@@ -100,6 +106,7 @@ const dummyRecoveryCodeId = "00000000-0000-4000-8000-000000000000";
 export const enrollmentCookieNames = Object.freeze({
   login: "viberacing_login",
   oauth: "viberacing_oauth",
+  pairingApproval: "viberacing_pairing_approval",
   passkey: "viberacing_passkey",
   passkeyAdd: "viberacing_passkey_add",
   passkeyRevoke: "viberacing_passkey_revoke",
@@ -182,6 +189,21 @@ export interface SourceUnlinkOptionsDecision {
   readonly sourceUnlinkCookie: string;
 }
 
+export interface PairingApprovalDisplay {
+  readonly architecture: "aarch64" | "x86_64";
+  readonly connectorVersion: string;
+  readonly deviceLabel: string;
+  readonly expiresAt: string;
+  readonly osFamily: "linux" | "macos" | "windows";
+  readonly publicKeyFingerprint: string;
+}
+
+export interface PairingApprovalOptionsDecision {
+  readonly options: Awaited<ReturnType<typeof createPasskeyLoginOptions>>;
+  readonly pairing: PairingApprovalDisplay;
+  readonly pairingApprovalCookie: string;
+}
+
 export interface AccountSourceDeviceInventoryItem {
   readonly devices: readonly ActiveDeviceInventoryItem[];
   readonly sourceControl: string;
@@ -200,6 +222,10 @@ export interface EnrollmentService {
     sessionCookie: string,
     body: unknown,
   ): Promise<PasskeyRevokeOptionsDecision | undefined>;
+  beginPairingApproval(
+    sessionCookie: string,
+    body: unknown,
+  ): Promise<PairingApprovalOptionsDecision | undefined>;
   beginProfileDeletion(
     sessionCookie: string,
     body: unknown,
@@ -240,6 +266,11 @@ export interface EnrollmentService {
   completePasskeyRevoke(
     sessionCookie: string,
     passkeyRevokeCookie: string,
+    body: unknown,
+  ): Promise<boolean>;
+  completePairingApproval(
+    sessionCookie: string,
+    pairingApprovalCookie: string,
     body: unknown,
   ): Promise<boolean>;
   completeProfileDeletion(
@@ -290,6 +321,7 @@ interface EnrollmentServiceDependencies {
   readonly createLoginOptions?: typeof createPasskeyLoginOptions;
   readonly createRequestId?: () => string;
   readonly database: EnrollmentDatabase;
+  readonly derivePairingCode: PairingUserCodeVerifier["derive"];
   readonly exchangeGithub?: typeof exchangeGithubUserId;
   readonly generateRecoveryCodes?: RecoveryCodeGenerator;
   readonly now?: () => Date;
@@ -335,6 +367,10 @@ interface SourceControlBody {
   readonly sourceControl: string;
 }
 
+interface PairingCodeBody {
+  readonly userCode: unknown;
+}
+
 interface SourceControl {
   readonly expiresAt: number;
   readonly sessionId: string;
@@ -373,6 +409,19 @@ function randomSecret(randomBytes: EnrollmentRandomBytes): Buffer | undefined {
     return undefined;
   }
   return secret;
+}
+
+function randomSourceId(randomBytes: EnrollmentRandomBytes): string | undefined {
+  const entropy = Buffer.from(randomBytes(16));
+  try {
+    if (entropy.length !== 16) {
+      return undefined;
+    }
+    const sourceId = `src_${entropy.toString("base64url")}`;
+    return sourceIdPattern.test(sourceId) ? sourceId : undefined;
+  } finally {
+    entropy.fill(0);
+  }
 }
 
 function sameState(expected: string, received: string): boolean {
@@ -592,6 +641,26 @@ function readSourceControlBody(value: unknown): SourceControlBody | undefined {
   return Object.freeze({ sourceControl: record.sourceControl });
 }
 
+function readPairingCodeBody(value: unknown): PairingCodeBody | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== pairingCodeBodyKeys.size ||
+    keys.some((key) => !pairingCodeBodyKeys.has(key))
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ userCode: record.userCode });
+}
+
 function readSourceControl(
   value: unknown,
   nowSeconds: number,
@@ -703,6 +772,7 @@ export function createEnrollmentService(
     createOptions = createPasskeyRegistrationOptions,
     createRecoveryOptions = createRecoveryPasskeyRegistrationOptions,
     createRequestId = () => createPublicRequestId().value,
+    derivePairingCode,
     exchangeGithub = exchangeGithubUserId,
     generateRecoveryCodes = createRecoveryCodeGenerator(
       config.recoveryArgon2,
@@ -725,6 +795,209 @@ export function createEnrollmentService(
     return sessionCookie === undefined || seconds === undefined
       ? undefined
       : readEnrollmentSession(cookieCodec.open("session", sessionCookie), seconds);
+  }
+
+  async function beginPairingApproval(
+    sessionCookie: string,
+    body: unknown,
+  ): Promise<PairingApprovalOptionsDecision | undefined> {
+    const session = readSession(sessionCookie);
+    const pairingCode = readPairingCodeBody(body);
+    const seconds = currentSeconds();
+    if (!session?.passkeyRegistered || pairingCode === undefined || seconds === undefined) {
+      return undefined;
+    }
+    let candidates: ReturnType<PairingUserCodeVerifier["derive"]> | undefined;
+    let material: PairingApprovalMaterial | undefined;
+    let sessionVerifier: Buffer | undefined;
+    let sessionDigest: Buffer | undefined;
+    let challengeDigest: Buffer | undefined;
+    let contextDigest: Buffer | undefined;
+    try {
+      candidates = derivePairingCode(pairingCode.userCode);
+      sessionVerifier = digestBase64Url(session.sessionVerifier);
+      if (sessionVerifier === undefined) {
+        return undefined;
+      }
+      sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+      material = await database.readPairingApproval({
+        attemptLimit: config.pairingApprovalAttemptLimit,
+        codeDigests: candidates.digests,
+        secondaryActive: candidates.secondaryActive,
+        sessionId: session.sessionId,
+        sessionVerifierDigest: sessionDigest,
+        windowSeconds: config.pairingApprovalWindowSeconds,
+      });
+      if (!candidates.codeAccepted || material === undefined) {
+        return undefined;
+      }
+      const pairingExpiresAtSeconds = Math.floor(new Date(material.expiresAt).valueOf() / 1_000);
+      if (
+        !Number.isSafeInteger(pairingExpiresAtSeconds) ||
+        pairingExpiresAtSeconds <= seconds ||
+        pairingExpiresAtSeconds > seconds + 9 * 60
+      ) {
+        return undefined;
+      }
+      const options = await createLoginOptions(config.webauthnRpId);
+      if (!base64Url32Pattern.test(options.challenge)) {
+        return undefined;
+      }
+      const challengeId = randomUuid();
+      const sourceId = randomSourceId(randomBytes);
+      if (!enrollmentPatterns.uuidV4.test(challengeId) || sourceId === undefined) {
+        return undefined;
+      }
+      const expiresAt = Math.min(seconds + passkeyLifetimeSeconds, pairingExpiresAtSeconds);
+      challengeDigest = passkeyChallengeDigest(options.challenge);
+      contextDigest = pairingApprovalContextDigest(
+        session.sessionId,
+        material.pairingId,
+        sourceId,
+        config.webauthnRpId,
+        config.webauthnOrigin,
+      );
+      const challenge: PairingApprovalChallenge = Object.freeze({
+        challenge: options.challenge,
+        challengeId,
+        expiresAt,
+        pairingId: material.pairingId,
+        sourceId,
+        version: 1,
+      });
+      const pairingApprovalCookie = cookieCodec.seal("passkey", challenge);
+      const selectedCodeDigest = candidates.digests[material.candidateIndex - 1];
+      if (selectedCodeDigest === undefined) {
+        return undefined;
+      }
+      const created = await database.createPairingApprovalChallenge({
+        challengeDigest,
+        challengeId,
+        contextDigest,
+        expiresAt: new Date(expiresAt * 1_000).toISOString(),
+        pairingId: material.pairingId,
+        sessionId: session.sessionId,
+        sessionVerifierDigest: sessionDigest,
+        sourceId,
+        userCodeDigest: selectedCodeDigest,
+      });
+      if (!created) {
+        return undefined;
+      }
+      const publicKeyFingerprint = `SHA256:${createHash("sha256")
+        .update(material.publicKey)
+        .digest("base64url")}`;
+      return Object.freeze({
+        options,
+        pairing: Object.freeze({
+          architecture: material.architecture,
+          connectorVersion: material.connectorVersion,
+          deviceLabel: material.deviceLabel,
+          expiresAt: material.expiresAt,
+          osFamily: material.osFamily,
+          publicKeyFingerprint,
+        }),
+        pairingApprovalCookie,
+      });
+    } catch {
+      return undefined;
+    } finally {
+      candidates?.clear();
+      material?.publicKey.fill(0);
+      sessionVerifier?.fill(0);
+      sessionDigest?.fill(0);
+      challengeDigest?.fill(0);
+      contextDigest?.fill(0);
+    }
+  }
+
+  async function completePairingApproval(
+    sessionCookie: string,
+    pairingApprovalCookie: string,
+    body: unknown,
+  ): Promise<boolean> {
+    const session = readSession(sessionCookie);
+    const seconds = currentSeconds();
+    const authentication = readAuthenticationBody(body);
+    const challenge =
+      seconds === undefined
+        ? undefined
+        : readPairingApprovalChallenge(cookieCodec.open("passkey", pairingApprovalCookie), seconds);
+    if (
+      !session?.passkeyRegistered ||
+      seconds === undefined ||
+      authentication === undefined ||
+      challenge === undefined
+    ) {
+      return false;
+    }
+    let credentialId: Buffer | undefined;
+    let material: PasskeyLoginMaterial | undefined;
+    let sessionVerifier: Buffer | undefined;
+    let sessionDigest: Buffer | undefined;
+    let challengeDigest: Buffer | undefined;
+    let contextDigest: Buffer | undefined;
+    try {
+      credentialId = passkeyLoginCredentialId(authentication.response);
+      sessionVerifier = digestBase64Url(session.sessionVerifier);
+      if (credentialId === undefined || sessionVerifier === undefined) {
+        return false;
+      }
+      material = await database.readPasskeyLoginMaterial(credentialId);
+      if (material === undefined) {
+        return false;
+      }
+      const verified = await verifyLogin(
+        authentication.response,
+        challenge.challenge,
+        config.webauthnOrigin,
+        config.webauthnRpId,
+        {
+          backupEligible: material.backupEligible,
+          cosePublicKey: material.cosePublicKey,
+          credentialId,
+          signCount: material.signCount,
+        },
+      );
+      if (verified === undefined) {
+        return false;
+      }
+      const auditEventId = randomUuid();
+      if (!enrollmentPatterns.uuidV4.test(auditEventId)) {
+        return false;
+      }
+      sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+      challengeDigest = passkeyChallengeDigest(challenge.challenge);
+      contextDigest = pairingApprovalContextDigest(
+        session.sessionId,
+        challenge.pairingId,
+        challenge.sourceId,
+        config.webauthnRpId,
+        config.webauthnOrigin,
+      );
+      return await database.completePairingApproval({
+        auditEventId,
+        backupState: verified.backupState,
+        challengeDigest,
+        challengeId: challenge.challengeId,
+        contextDigest,
+        observedSignCount: verified.signCount,
+        pairingId: challenge.pairingId,
+        requestId: createRequestId(),
+        sessionId: session.sessionId,
+        sessionVerifierDigest: sessionDigest,
+        verifiedPasskeyId: material.passkeyId,
+      });
+    } catch {
+      return false;
+    } finally {
+      credentialId?.fill(0);
+      clearLoginMaterial(material);
+      sessionVerifier?.fill(0);
+      sessionDigest?.fill(0);
+      challengeDigest?.fill(0);
+      contextDigest?.fill(0);
+    }
   }
 
   async function beginSourceAction(
@@ -913,6 +1186,7 @@ export function createEnrollmentService(
   }
 
   return Object.freeze({
+    beginPairingApproval,
     beginGithub(join: JoinRequest): EnrollmentStartDecision | undefined {
       const seconds = currentSeconds();
       if (seconds === undefined) {
@@ -2223,6 +2497,7 @@ export function createEnrollmentService(
         profileRefDigest?.fill(0);
       }
     },
+    completePairingApproval,
     async completeSourceReactivation(
       sessionCookie: string,
       sourceReactivationCookie: string,

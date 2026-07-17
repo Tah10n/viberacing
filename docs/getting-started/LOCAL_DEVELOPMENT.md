@@ -3,8 +3,8 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and twenty checksum-ledgered database migrations. Repository verification uses synthetic data and
-injected capabilities only. It has procedure-only identity, passkey login/management, restricted
+and twenty-one checksum-ledgered database migrations. Repository verification uses synthetic data
+and injected capabilities only. It has procedure-only identity, passkey login/management, restricted
 recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
 retention cleanup, scoring, terminal finalization, and public score-projection procedures. A local
 Web slice now composes invite redemption, GitHub OAuth state plus PKCE, encrypted browser cookies,
@@ -14,37 +14,39 @@ can also add a backup passkey after separate existing-key assertion and registra
 rotate a ten-code recovery batch after a fresh passkey assertion. A separate local `/recover` flow
 performs bounded exact-code/dummy Argon2id work, creates only a five-minute restricted authority,
 and requires exact replacement WebAuthn registration before a normal session exists. It has no
-working invite/OAuth/database credential or live-authenticator evidence, and pairing approval,
-distributed recovery edge controls/cleanup, a Jobs scheduler, real-user ingestion, audited
-correction, and an operational connector remain absent. A library-only Rust crate implements the
-bounded stable App Server initialization exchange and a candidate `0.144.4` account/usage parser
-with fixed methods, discarded account/summary fields, and bounded normalized daily output. A
-one-shot supervisor now composes those states with a fixed child argument, local pipes, cleared
-ambient environment, output/deadline limits, and reap-before-success behavior. Its reviewed-launch
-capability has no public constructor, so it cannot discover, admit, or execute a local Codex
-installation. A second inaccessible reviewed context lets a composer consume the minimized usage
-into the exact bounded sync JSON, SHA-256 digest, nonce encoding, and device message checked by
-Ingest. An isolated one-use signer consumes that closed value only with a third inaccessible
-device-bound key capability. A separate inaccessible pending-key/challenge signer and pure Web
-verifier agree on an exact synthetic pairing-possession proof. Two dormant Web/Auth applications
-create bounded pending material and later handle protected poll-verifier derivation, a fixed
-approved-row lookup through a separately probed read-write pool, that strict proof, and exact atomic
-activation with server-owned IDs behind local admission/timing. They cannot perform pairing browser
-or WebAuthn approval, generate/load a real key, or make an HTTP request; no supported version,
-source/device provider, key store, connector pairing client, or upload exists. A local Ingest kernel
-bounds and authenticates a synthetic exact-body sync request, and a separate adapter constrains
-origin replay, database lookup, and submission mapping with mock-pool evidence. A transport-free
-application composes those exact boundaries, generates a server request ID, and validates the
-acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic replay and
-cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies no-queue and
-deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS launch entry
-point. There is no working database login/certificate, live end-to-end PostgreSQL flow, edge path,
-connector process, supported adapter, or deployment. A bounded local one-shot Jobs process now wraps
-only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A
-bounded server-only Web PostgreSQL adapter and local public-score GET are implemented and
-unit/build-tested, but this repository supplies no working deployment login or TLS certificate. A
-successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL
-constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
+working invite/OAuth/database credential or live-authenticator evidence. A local `/connect` page
+adds session-rate-limited pending-code review and fresh-passkey new-source approval with synthetic
+evidence. Distributed recovery/anonymous pairing edge controls, cleanup, a Jobs scheduler, real-user
+ingestion, audited correction, and an operational connector remain absent. A library-only Rust crate
+implements the bounded stable App Server initialization exchange and a candidate `0.144.4`
+account/usage parser with fixed methods, discarded account/summary fields, and bounded normalized
+daily output. A one-shot supervisor now composes those states with a fixed child argument, local
+pipes, cleared ambient environment, output/deadline limits, and reap-before-success behavior. Its
+reviewed-launch capability has no public constructor, so it cannot discover, admit, or execute a
+local Codex installation. A second inaccessible reviewed context lets a composer consume the
+minimized usage into the exact bounded sync JSON, SHA-256 digest, nonce encoding, and device message
+checked by Ingest. An isolated one-use signer consumes that closed value only with a third
+inaccessible device-bound key capability. A separate inaccessible pending-key/challenge signer and
+pure Web verifier agree on an exact synthetic pairing-possession proof. Two dormant Web/Auth
+applications create bounded pending material and later handle protected poll-verifier derivation, a
+fixed approved-row lookup through a separately probed read-write pool, that strict proof, and exact
+atomic activation with server-owned IDs behind local admission/timing. They cannot perform pairing
+browser or WebAuthn approval themselves; the separate `/connect` flow supplies only that intervening
+step. No boundary can generate/load a real key or make a connector pairing request; no supported
+version, source/device provider, key store, connector pairing client, or upload exists. A local
+Ingest kernel bounds and authenticates a synthetic exact-body sync request, and a separate adapter
+constrains origin replay, database lookup, and submission mapping with mock-pool evidence. A
+transport-free application composes those exact boundaries, generates a server request ID, and
+validates the acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic
+replay and cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies
+no-queue and deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS
+launch entry point. There is no working database login/certificate, live end-to-end PostgreSQL flow,
+edge path, connector process, supported adapter, or deployment. A bounded local one-shot Jobs
+process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or
+deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are implemented
+and unit/build-tested, but this repository supplies no working deployment login or TLS certificate.
+A successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries,
+SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
 isolation; it does not prove a live adapter, deployed API, or production flow. The Ingest server
 tests bind only ephemeral loopback sockets and use synthetic requests; no development command
 exposes it to the LAN or Internet.
@@ -223,16 +225,20 @@ be IP addresses. Recovery-code rotation additionally needs a distinct canonical 
 `VIBERACING_RECOVERY_ARGON2_*` settings within the application's accepted range. Recovery options
 also require `VIBERACING_RECOVERY_MINIMUM_RESPONSE_MS`, a deployment-reviewed integer from 100 to
 5000; do not commit the chosen production timing value. The tracked values are non-working
-placeholders and intentionally do not publish deployment work factors or response timing. A manual
-flow also needs an externally issued invite whose stored digest matches its 256-bit secret; this
-repository intentionally provides no issuer shortcut or sample valid invite. Never reuse these
-values between development, staging, and production.
+placeholders and intentionally do not publish deployment work factors or response timing. The
+`/connect` approval path additionally requires a distinct canonical 32-byte
+`VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL` plus deployment-reviewed private integers in
+`VIBERACING_PAIRING_APPROVAL_ATTEMPT_LIMIT` and `VIBERACING_PAIRING_APPROVAL_WINDOW_SECONDS`. Do not
+commit real keys or selected production attempt policy. A manual flow also needs an externally
+issued invite whose stored digest matches its 256-bit secret; this repository intentionally provides
+no issuer shortcut or sample valid invite. Never reuse these values between development, staging,
+and production.
 
-Constructing the pairing applications additionally requires fresh, distinct 32-byte canonical
-base64url values in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL` and
-`VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL`. The tracked values are intentionally invalid.
-During a bounded rotation only, each previous primary may be supplied under its corresponding
-`VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL` or
+Constructing the dormant start/activation pairing applications additionally requires a fresh,
+distinct 32-byte canonical base64url value in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL`;
+the code key above is shared only as protected configuration, never as a returned container. The
+tracked values are intentionally invalid. During a bounded rotation only, each previous primary may
+be supplied under its corresponding `VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL` or
 `VIBERACING_WEB_PAIRING_CODE_SECONDARY_KEY_BASE64URL`; all configured poll/code values must remain
 pairwise distinct. Remove a secondary after every transaction created under that key has passed the
 ten-minute database lifetime. Never track, print, or reuse real keys.
@@ -263,7 +269,7 @@ docker compose ps
 The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
 index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
 stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
-this persistent service automatically; revisions 0001 through 0015 are currently exercised by the
+this persistent service automatically; revisions 0001 through 0021 are currently exercised by the
 isolated integration runner only.
 
 Stop the service without deleting its volume:

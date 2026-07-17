@@ -142,6 +142,116 @@ describe("pairing database pool", () => {
     expect(Object.isFrozen(pool)).toBe(true);
   });
 
+  it("uses only fixed pairing-approval statements and clears copied secret material", async () => {
+    const approvalRows = [
+      {
+        architecture: "x86_64",
+        candidate_index: 1,
+        connector_version: "1.2.3",
+        device_label: "Studio PC",
+        expires_at: "2026-07-16T10:09:00.000Z",
+        os_family: "windows",
+        pairing_id: "00000000-0000-4000-8000-000000001001",
+        public_key: Buffer.alloc(32, 0x64),
+      },
+    ];
+    const returnedRows = [approvalRows, [{ created: true }], [{ approved: true }]];
+    const liveQueries: { text: string; values: unknown[] }[] = [];
+    const snapshots: { text: string; values: unknown[] }[] = [];
+    const driverClient = {
+      query(query: { text: string; values: unknown[] }): Promise<{ rows: unknown }> {
+        liveQueries.push(query);
+        snapshots.push({
+          text: query.text,
+          values: query.values.map((value) =>
+            Buffer.isBuffer(value) ? Buffer.from(value) : value,
+          ),
+        });
+        return Promise.resolve({ rows: returnedRows.shift() });
+      },
+      release: vi.fn(),
+    };
+    const pool = createPairingDatabasePool(config, undefined, () => ({
+      connect: () => Promise.resolve(driverClient),
+      end: () => Promise.resolve(),
+      on() {
+        return this;
+      },
+    }));
+    const client = await pool.connect();
+    const sessionDigest = Buffer.alloc(32, 0x61);
+    const primaryCodeDigest = Buffer.alloc(32, 0x62);
+    const secondaryCodeDigest = Buffer.alloc(32, 0x63);
+    const challengeDigest = Buffer.alloc(32, 0x65);
+    const contextDigest = Buffer.alloc(32, 0x66);
+
+    await expect(
+      client.readPairingApproval({
+        attemptLimit: 6,
+        codeDigests: [primaryCodeDigest, secondaryCodeDigest],
+        secondaryActive: true,
+        sessionId: "00000000-0000-4000-8000-000000000201",
+        sessionVerifierDigest: sessionDigest,
+        windowSeconds: 600,
+      }),
+    ).resolves.toEqual(approvalRows);
+    await expect(
+      client.createPairingApprovalChallenge({
+        challengeDigest,
+        challengeId: "00000000-0000-4000-8000-000000001201",
+        contextDigest,
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        pairingId: "00000000-0000-4000-8000-000000001001",
+        sessionId: "00000000-0000-4000-8000-000000000201",
+        sessionVerifierDigest: sessionDigest,
+        sourceId: `src_${"N".repeat(22)}`,
+        userCodeDigest: primaryCodeDigest,
+      }),
+    ).resolves.toEqual([{ created: true }]);
+    await expect(
+      client.completePairingApproval({
+        auditEventId: "00000000-0000-4000-8000-000000001301",
+        backupState: false,
+        challengeDigest,
+        challengeId: "00000000-0000-4000-8000-000000001201",
+        contextDigest,
+        observedSignCount: 4,
+        pairingId: "00000000-0000-4000-8000-000000001001",
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionId: "00000000-0000-4000-8000-000000000201",
+        sessionVerifierDigest: sessionDigest,
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000301",
+      }),
+    ).resolves.toEqual([{ approved: true }]);
+
+    expect(snapshots[0]?.text).toContain("read_pairing_for_approval_limited");
+    expect(snapshots[0]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000201",
+      sessionDigest,
+      primaryCodeDigest,
+      secondaryCodeDigest,
+      true,
+      6,
+      600,
+    ]);
+    expect(snapshots[1]?.text).toContain("create_pairing_approval_challenge");
+    expect(snapshots[1]?.text).toContain("'new'::text");
+    expect(snapshots[2]?.text).toContain("consume_passkey_challenge");
+    expect(snapshots[2]?.text).toContain("approve_pairing");
+    expect(sessionDigest).toEqual(Buffer.alloc(32, 0x61));
+    expect(primaryCodeDigest).toEqual(Buffer.alloc(32, 0x62));
+    expect(secondaryCodeDigest).toEqual(Buffer.alloc(32, 0x63));
+    expect(challengeDigest).toEqual(Buffer.alloc(32, 0x65));
+    expect(contextDigest).toEqual(Buffer.alloc(32, 0x66));
+    for (const query of liveQueries) {
+      for (const value of query.values) {
+        if (Buffer.isBuffer(value)) {
+          expect(value).toEqual(Buffer.alloc(value.length));
+        }
+      }
+    }
+  });
+
   it("composes recovery-code challenge consumption and replacement in one fixed statement", async () => {
     const returnedRows = [[{ created: true }], [{ replaced: true }]];
     const snapshots: { text: string; values: unknown[] }[] = [];

@@ -145,6 +145,21 @@ export function passkeyRevokeContextDigest(
     .digest();
 }
 
+export function pairingApprovalContextDigest(
+  sessionId: string,
+  pairingId: string,
+  sourceId: string,
+  rpId: string,
+  origin: string,
+): Buffer {
+  return createHash("sha256")
+    .update(
+      `viberacing-pairing-approval-v1\n${sessionId}\n${pairingId}\n${sourceId}\n${rpId}\n${origin}`,
+      "utf8",
+    )
+    .digest();
+}
+
 export function profileDeletionContextDigest(
   sessionId: string,
   profileId: string,

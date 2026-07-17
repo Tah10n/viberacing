@@ -71,6 +71,14 @@ const sourceActionChallengeKeys = new Set([
   "sourceId",
   "version",
 ]);
+const pairingApprovalChallengeKeys = new Set([
+  "challenge",
+  "challengeId",
+  "expiresAt",
+  "pairingId",
+  "sourceId",
+  "version",
+]);
 const recoveryAuthorityKeys = new Set([
   "authorityId",
   "authoritySecret",
@@ -134,6 +142,10 @@ export interface ProfileDeletionChallenge extends PasskeyRegistrationChallenge {
 
 export interface SourceActionChallenge extends PasskeyRegistrationChallenge {
   readonly sourceId: string;
+}
+
+export interface PairingApprovalChallenge extends SourceActionChallenge {
+  readonly pairingId: string;
 }
 
 export interface RecoveryAuthorityChallenge {
@@ -373,6 +385,28 @@ export function readSourceActionChallenge(
     return undefined;
   }
   return Object.freeze(value as unknown as SourceActionChallenge);
+}
+
+export function readPairingApprovalChallenge(
+  value: unknown,
+  nowSeconds: number,
+): PairingApprovalChallenge | undefined {
+  if (
+    !isPlainObject(value) ||
+    !exactKeys(value, pairingApprovalChallengeKeys) ||
+    value.version !== 1 ||
+    !canonicalBase64Url32(value.challenge) ||
+    typeof value.challengeId !== "string" ||
+    !uuidV4Pattern.test(value.challengeId) ||
+    typeof value.pairingId !== "string" ||
+    !uuidV4Pattern.test(value.pairingId) ||
+    typeof value.sourceId !== "string" ||
+    !/^src_[A-Za-z0-9_-]{22}$/.test(value.sourceId) ||
+    !futureExpiry(value.expiresAt, nowSeconds, 300)
+  ) {
+    return undefined;
+  }
+  return Object.freeze(value as unknown as PairingApprovalChallenge);
 }
 
 export function readPasskeyAddChallenge(
