@@ -19,16 +19,19 @@ describe("enrollment cookies", () => {
     const login = codec.seal("login", payload);
     const oauth = codec.seal("oauth", payload);
     const passkey = codec.seal("passkey", payload);
+    const recovery = codec.seal("recovery", payload);
     const session = codec.seal("session", payload);
 
     expect(codec.open("login", login)).toEqual(payload);
     expect(codec.open("oauth", oauth)).toEqual(payload);
     expect(codec.open("passkey", passkey)).toEqual(payload);
+    expect(codec.open("recovery", recovery)).toEqual(payload);
     expect(codec.open("session", session)).toEqual(payload);
-    expect(new Set([login, oauth, passkey, session])).toHaveLength(4);
+    expect(new Set([login, oauth, passkey, recovery, session])).toHaveLength(5);
     expect(oauth).not.toContain("not-plaintext");
     expect(codec.open("session", oauth)).toBeUndefined();
     expect(codec.open("login", passkey)).toBeUndefined();
+    expect(codec.open("recovery", passkey)).toBeUndefined();
     expect(codec.open("oauth", `${oauth.slice(0, -1)}A`)).toBeUndefined();
     expect(codec.open("oauth", "v1.bad.bad")).toBeUndefined();
     expect(Object.isFrozen(codec)).toBe(true);

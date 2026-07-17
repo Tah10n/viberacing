@@ -256,7 +256,158 @@ export function PasskeyLogin({ initialError = false }: PasskeyLoginProps) {
           {errorMessage ?? ""}
         </p>
         <p className="auth-privacy">{copy.privacyNote}</p>
+        <Link href="/recover">{copy.recoverAccount}</Link>
         <Link href="/join">{copy.needInvite}</Link>
+      </section>
+    </main>
+  );
+}
+
+export function RecoveryExperience() {
+  const [locale, setLocale] = useState<Locale>("en");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<"generic" | "unsupported" | undefined>();
+  const copy = joinTranslations[locale];
+
+  useEffect(() => {
+    try {
+      const storedLocale = localStorage.getItem("viberacing.locale");
+      if (storedLocale === "en" || storedLocale === "ru") {
+        setLocale(storedLocale);
+      }
+    } catch {
+      // Recovery remains usable with the English default when local preferences are blocked.
+    }
+  }, []);
+
+  function selectLocale(nextLocale: Locale): void {
+    setLocale(nextLocale);
+    try {
+      localStorage.setItem("viberacing.locale", nextLocale);
+    } catch {
+      // Locale persistence is optional.
+    }
+  }
+
+  async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy) {
+      return;
+    }
+    if (!browserSupportsWebAuthn()) {
+      setError("unsupported");
+      return;
+    }
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const code = form.get("code");
+    const label = form.get("label");
+    if (typeof code !== "string" || typeof label !== "string") {
+      setError("generic");
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      const optionsResponse = await fetch("/auth/recovery/options", {
+        body: JSON.stringify({ code, label }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      const codeInput = formElement.querySelector<HTMLInputElement>('input[name="code"]');
+      if (codeInput !== null) {
+        codeInput.value = "";
+      }
+      if (!optionsResponse.ok) {
+        throw new Error("recovery unavailable");
+      }
+      const options = (await optionsResponse.json()) as PublicKeyCredentialCreationOptionsJSON;
+      const response = await startRegistration({ optionsJSON: options });
+      const verification = await fetch("/auth/recovery/verify", {
+        body: JSON.stringify({ response }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (verification.status !== 204) {
+        throw new Error("verification failed");
+      }
+      window.location.assign("/account");
+    } catch {
+      setError("generic");
+      setBusy(false);
+    }
+  }
+
+  const errorMessage =
+    error === "unsupported"
+      ? copy.unsupportedPasskey
+      : error === "generic"
+        ? copy.genericError
+        : undefined;
+
+  return (
+    <main className="auth-shell" lang={locale}>
+      <section aria-labelledby="recovery-title" className="auth-card">
+        <Link className="auth-brand" href="/">
+          <span aria-hidden="true">▰</span> {copy.brand}
+        </Link>
+        <div aria-label={copy.language} className="auth-language">
+          <button
+            aria-pressed={locale === "en"}
+            onClick={() => {
+              selectLocale("en");
+            }}
+            type="button"
+          >
+            {copy.english}
+          </button>
+          <button
+            aria-pressed={locale === "ru"}
+            onClick={() => {
+              selectLocale("ru");
+            }}
+            type="button"
+          >
+            {copy.russian}
+          </button>
+        </div>
+        <p className="eyebrow">Community · self-reported</p>
+        <h1 id="recovery-title">{copy.recoverySignInTitle}</h1>
+        <p>{copy.recoverySignInCopy}</p>
+        <form className="auth-form" onSubmit={(event) => void submit(event)}>
+          <label>
+            <span>{copy.recoveryCodeLabel}</span>
+            <input
+              aria-describedby="recovery-code-help"
+              autoCapitalize="none"
+              autoComplete="off"
+              maxLength={128}
+              minLength={1}
+              name="code"
+              required
+              spellCheck={false}
+            />
+          </label>
+          <small id="recovery-code-help">{copy.recoveryCodeHelp}</small>
+          <label>
+            <span>{copy.recoveryPasskeyLabel}</span>
+            <input maxLength={64} minLength={1} name="label" required />
+          </label>
+          <button className="primary-action" disabled={busy} type="submit">
+            {busy ? copy.recovering : copy.recoveryContinue}
+          </button>
+        </form>
+        <p aria-live="polite" className={errorMessage === undefined ? "auth-status" : "auth-error"}>
+          {errorMessage ?? ""}
+        </p>
+        <p className="auth-privacy">{copy.privacyNote}</p>
+        <Link href="/login">{copy.signInWithPasskey}</Link>
       </section>
     </main>
   );

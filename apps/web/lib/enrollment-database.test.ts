@@ -41,6 +41,15 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
         },
       ]),
     ),
+    completeRecoveryRegistration: vi.fn(() =>
+      Promise.resolve([
+        {
+          handle: "pixel_driver",
+          locale: "en",
+          profile_id: "00000000-0000-4000-8000-000000000402",
+        },
+      ]),
+    ),
     completePasskeyRevocation: vi.fn(() => Promise.resolve([{ revoked: true }])),
     completeProfileDeletion: vi.fn(() => Promise.resolve([{ deleted: true }])),
     completeRecoveryCodeReplacement: vi.fn(() => Promise.resolve([{ replaced: true }])),
@@ -100,6 +109,14 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
         },
       ]),
     ),
+    readRecoveryCodeVerificationMaterial: vi.fn(() =>
+      Promise.resolve([
+        {
+          recovery_code_id: "00000000-0000-4000-8000-000000000420",
+          verifier_phc: `$argon2id$v=19$m=19456,t=2,p=2$${"A".repeat(22)}$${"B".repeat(43)}`,
+        },
+      ]),
+    ),
     readProfileVisibility: vi.fn(() => Promise.resolve([{ visibility: "public" }])),
     release(destroy = false): void {
       releases.push(destroy);
@@ -107,6 +124,7 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     revokeEnrollmentSession: vi.fn(() => Promise.resolve([{ revoked: true }])),
     revokeDevice: vi.fn(() => Promise.resolve([{ revoked: true }])),
     setProfileVisibility: vi.fn(() => Promise.resolve([{ visibility: "hidden" }])),
+    startRecovery: vi.fn(() => Promise.resolve([{ started: true }])),
     verifyRuntimeBoundary: vi.fn(() =>
       Promise.resolve([
         {
@@ -428,6 +446,48 @@ describe("enrollment database", () => {
       profileId: profile.profileId,
     });
     await expect(
+      database.readRecoveryCodeVerificationMaterial("00000000-0000-4000-8000-000000000420"),
+    ).resolves.toEqual({
+      recoveryCodeId: "00000000-0000-4000-8000-000000000420",
+      verifierPhc: `$argon2id$v=19$m=19456,t=2,p=2$${"A".repeat(22)}$${"B".repeat(43)}`,
+    });
+    await expect(
+      database.startRecovery({
+        auditEventId: profile.auditEventId,
+        authorityId: "00000000-0000-4000-8000-000000000421",
+        authorityVerifierDigest: new Uint8Array(32),
+        challengeDigest: new Uint8Array(32),
+        contextDigest: new Uint8Array(32),
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        recoveryCodeId: "00000000-0000-4000-8000-000000000420",
+        requestId: profile.requestId,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      database.completeRecoveryRegistration({
+        auditEventId: profile.auditEventId,
+        authorityId: "00000000-0000-4000-8000-000000000421",
+        authorityVerifierDigest: new Uint8Array(32),
+        backupEligible: true,
+        backupState: false,
+        challengeDigest: new Uint8Array(32),
+        contextDigest: new Uint8Array(32),
+        cosePublicKey: new Uint8Array(77),
+        credentialId: new Uint8Array(32),
+        label: "Replacement passkey",
+        passkeyId: "00000000-0000-4000-8000-000000000422",
+        requestId: profile.requestId,
+        sessionExpiresAt: profile.sessionExpiresAt,
+        sessionId: "00000000-0000-4000-8000-000000000423",
+        sessionVerifierDigest: new Uint8Array(32),
+        signCount: 0,
+      }),
+    ).resolves.toEqual({
+      handle: "pixel_driver",
+      locale: "en",
+      profileId: profile.profileId,
+    });
+    await expect(
       database.readProfileVisibility({
         sessionId: profile.sessionId,
         sessionVerifierDigest: new Uint8Array(32),
@@ -473,8 +533,8 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(25);
-    expect(releases).toEqual(Array.from({ length: 25 }, () => false));
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(28);
+    expect(releases).toEqual(Array.from({ length: 28 }, () => false));
   });
 
   it("accepts only an exact bounded account score projection", async () => {

@@ -287,12 +287,16 @@ material availability cost.
   replay-shaped failure, quarantine, and malformed request shapes. A distinct fresh context
   atomically unlinks only active, paused, or quarantined owned sources and recursively revokes
   active source devices. All source controls remain available while the profile is hidden without
-  publishing it. Recovery verification, aggregate edge rate policy, abandoned consumed-state
-  cleanup, live OAuth/authenticator/database integration, deletion purge execution, and deployment
-  remain absent. The account read additionally revalidates exact session possession and accepts at
-  most 32 closed, ordered rows with one current active authenticator; it renders no credential ID,
-  key, sign counter, exact activity timestamp, or profile ID. Only a revocable target's opaque
-  passkey ID enters the authenticated control and options request.
+  publishing it. Local recovery verification now parses only the exact code, obtains one selected
+  PHC, performs matching or dummy bounded Argon2id work under a protected pepper, returns generic
+  admitted failures behind a configured floor, and grants only a five-minute replacement-passkey
+  continuation. Exact WebAuthn verification and one atomic completion are required before a normal
+  session exists. Aggregate edge rate policy, abandoned consumed-state cleanup, notification, live
+  OAuth/authenticator/database integration, deletion purge execution, and deployment remain absent.
+  The account read additionally revalidates exact session possession and accepts at most 32 closed,
+  ordered rows with one current active authenticator; it renders no credential ID, key, sign
+  counter, exact activity timestamp, or profile ID. Only a revocable target's opaque passkey ID
+  enters the authenticated control and options request.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a
@@ -324,7 +328,9 @@ material availability cost.
   bounded flow after investigation.
 - **Residual risk:** The database trusts Web/Auth to report Argon2id and WebAuthn success. A
   compromised service role can misuse its recovery procedures until credentials are rotated or the
-  service is isolated; database scope limits but cannot remove that trust.
+  service is isolated; database scope limits but cannot remove that trust. The local four-call
+  admission and configured response floor do not replace a distributed edge attempt policy, cleanup,
+  notification, monitoring, or live capacity evidence.
 
 ### VR-ABUSE-PUBLIC-SCRAPE — Profiling work habits from public data
 

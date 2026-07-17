@@ -31,6 +31,7 @@ const config = resolveEnrollmentConfig({
   VIBERACING_RECOVERY_ARGON2_MEMORY_KIB: "19456",
   VIBERACING_RECOVERY_ARGON2_PARALLELISM: "2",
   VIBERACING_RECOVERY_ARGON2_PASSES: "2",
+  VIBERACING_RECOVERY_MINIMUM_RESPONSE_MS: "100",
   VIBERACING_RECOVERY_PEPPER: Buffer.alloc(32, 3).toString("base64url"),
   WEBAUTHN_ORIGIN: origin,
   WEBAUTHN_RP_ID: "race.example.com",
@@ -98,6 +99,14 @@ function serviceFixture(): EnrollmentService {
         recoveryCodeCookie: "opaque-recovery-code",
       }),
     ),
+    beginRecovery: vi.fn(() =>
+      Promise.resolve({
+        options: {
+          challenge: Buffer.alloc(32, 12).toString("base64url"),
+        } as PublicKeyCredentialCreationOptionsJSON,
+        recoveryCookie: "opaque-recovery",
+      }),
+    ),
     beginSourceReactivation: vi.fn(() =>
       Promise.resolve({
         options: { challenge: Buffer.alloc(32, 9).toString("base64url") },
@@ -126,6 +135,7 @@ function serviceFixture(): EnrollmentService {
         ),
       }),
     ),
+    completeRecovery: vi.fn(() => Promise.resolve({ sessionCookie: "recovered-session" })),
     completeSourceReactivation: vi.fn(() => Promise.resolve(true)),
     completeSourceUnlink: vi.fn(() => Promise.resolve(true)),
     logout: vi.fn(() => Promise.resolve(true)),
@@ -262,6 +272,59 @@ describe("enrollment HTTP boundary", () => {
 
     await expect(
       http.loginVerify(post("/auth/login/verify", "{}", "application/json")),
+    ).resolves.toMatchObject({ status: 401 });
+  });
+
+  it("admits a bounded recovery code and creates a session only after replacement registration", async () => {
+    const http = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      getRuntime: () => runtime,
+    });
+    const code =
+      `vrr1_00000000-0000-4000-8000-000000000650_` + Buffer.alloc(32, 0x65).toString("base64url");
+    const options = await http.recoveryOptions(
+      post(
+        "/auth/recovery/options",
+        JSON.stringify({ code, label: "Replacement passkey" }),
+        "application/json",
+      ),
+    );
+
+    expect(options.status).toBe(200);
+    expect(options.headers.get("cache-control")).toBe("no-store");
+    expect(options.headers.get("set-cookie")).toContain("viberacing_recovery=opaque-recovery");
+    expect(options.headers.get("set-cookie")).toContain("Path=/auth/recovery");
+    expect(service.beginRecovery).toHaveBeenCalledWith({ code, label: "Replacement passkey" });
+
+    const verification = await http.recoveryVerify(
+      post(
+        "/auth/recovery/verify",
+        JSON.stringify({ response: { id: "synthetic" } }),
+        "application/json",
+        "viberacing_recovery=opaque-recovery",
+      ),
+    );
+    expect(verification.status).toBe(204);
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_recovery=");
+    expect(verification.headers.get("set-cookie")).toContain(
+      "viberacing_session=recovered-session",
+    );
+    expect(service.completeRecovery).toHaveBeenCalledWith("opaque-recovery", {
+      response: { id: "synthetic" },
+    });
+
+    vi.mocked(service.beginRecovery).mockResolvedValueOnce(undefined);
+    const rejected = await http.recoveryOptions(
+      post(
+        "/auth/recovery/options",
+        JSON.stringify({ code, label: "Replacement passkey" }),
+        "application/json",
+      ),
+    );
+    expect(rejected.status).toBe(401);
+    expect(await rejected.text()).not.toContain(code);
+    await expect(
+      http.recoveryVerify(post("/auth/recovery/verify", "{}", "application/json")),
     ).resolves.toMatchObject({ status: 401 });
   });
 
@@ -503,6 +566,7 @@ describe("enrollment HTTP boundary", () => {
     expect(verification.status).toBe(204);
     expect(verification.headers.get("cache-control")).toBe("no-store");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_profile_deletion=");
+    expect(verification.headers.get("set-cookie")).toContain("viberacing_recovery=");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_recovery_codes=");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_source_unlink=");
@@ -764,6 +828,7 @@ describe("enrollment HTTP boundary", () => {
     expect(response.headers.get("set-cookie")).toContain("viberacing_passkey_add=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_passkey_revoke=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_profile_deletion=");
+    expect(response.headers.get("set-cookie")).toContain("viberacing_recovery=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_recovery_codes=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_source_unlink=");

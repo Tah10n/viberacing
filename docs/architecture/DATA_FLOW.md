@@ -3,41 +3,41 @@
 ## Status and notation
 
 Most sequences remain planned application contracts. The enrollment, returning-login, backup-key
-addition, non-current-passkey revocation, immediate profile-deletion-request, source
-inventory/pause/reactivation/unlink, and active-device revoke sequences below plus the public score
-consumer are now locally implemented boundaries; none has live credentials, edge, purge-worker, or
-deployment evidence. Revisions 0001 through 0019 provide private
-identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
-database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
-activation, passkey login and management, restricted recovery, session rotation/revocation,
-immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
-ingest, bounded ingest- and pairing-retention cleanup, open-season scoring refresh, late-ingest
-closure, terminal season finalization, and a Web-only public score projection. One local
-public-score GET constructs the bounded adapter lazily after closed request admission. The visible
-home race now requests its current server-selected week from that exact same-origin route, validates
-the public fields, lets one canonical public-handle URL select a same-page summary from only those
-fields, and retains a clearly labeled synthetic fallback on failure. A public signed-in account
-links to that URL; invalid, duplicate, and unranked selections grant no authority and add no score
-query field or browser persistence. One local one-shot Jobs runner can invoke exactly one of four
-fixed functions: either cleanup function, refresh, or finalization, but no broader recovery/step-up,
-deployed ingest endpoint, Argon2id/WebAuthn pairing approval, operational connector, purge worker,
-Jobs scheduler/monitor, audited correction, or deployed service executes the complete sequences. A
-library-only Rust connector foundation validates the bounded stable App Server initialization
-exchange and candidate `0.144.4` account/usage responses. A synthetic one-shot supervisor composes
-those states with fixed local process mechanics, while an exact-body composer and isolated one-use
-signer produce a synthetic signed envelope. A separate inaccessible pending-key and challenge signer
-plus a pure server-only Web verifier now agree on one exact pairing-possession message and synthetic
-signature. A dormant Web/Auth start application generates fresh IDs, token, challenge, 60-bit code,
-separate protected poll/code verifiers, and a nine-minute pending transaction from closed device
-metadata. A second application performs protected keyed poll lookup, mandates that proof, and
-invokes only exact atomic activation behind local admission/timing. All required connector
-capabilities have no public constructor, and there is no executable admission, real Codex execution,
-key generation/store, pairing-start client, browser/WebAuthn approval, pairing HTTP route, upload,
-or supported-version path. A local Ingest kernel now verifies the bounded exact-body origin/device
-request, while the separate adapter maps origin replay, device lookup, and submission through fixed
-calls. PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
-application now composes those exact local capabilities and validates only closed
-acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+addition, non-current-passkey revocation, recovery-code rotation/replacement-passkey sign-in,
+immediate profile-deletion-request, source inventory/pause/reactivation/unlink, and active-device
+revoke sequences below plus the public score consumer are now locally implemented boundaries; none
+has live credentials, distributed edge policy, purge-worker, or deployment evidence. Revisions 0001
+through 0020 provide private identity/source/device/pairing/audit/deletion/usage tables,
+deny-by-default roles, and a narrow database slice for invite issuance, enrollment, exact-session
+challenges, initial-passkey activation, passkey login and management, restricted recovery, session
+rotation/revocation, immediate deletion lock-down, source-bound pairing, source/device lifecycle
+controls, and Community ingest, bounded ingest- and pairing-retention cleanup, open-season scoring
+refresh, late-ingest closure, terminal season finalization, and a Web-only public score projection.
+One local public-score GET constructs the bounded adapter lazily after closed request admission. The
+visible home race now requests its current server-selected week from that exact same-origin route,
+validates the public fields, lets one canonical public-handle URL select a same-page summary from
+only those fields, and retains a clearly labeled synthetic fallback on failure. A public signed-in
+account links to that URL; invalid, duplicate, and unranked selections grant no authority and add no
+score query field or browser persistence. One local one-shot Jobs runner can invoke exactly one of
+four fixed functions: either cleanup function, refresh, or finalization, but no broader
+recovery/step-up, deployed ingest endpoint, Argon2id/WebAuthn pairing approval, operational
+connector, purge worker, Jobs scheduler/monitor, audited correction, or deployed service executes
+the complete sequences. A library-only Rust connector foundation validates the bounded stable App
+Server initialization exchange and candidate `0.144.4` account/usage responses. A synthetic one-shot
+supervisor composes those states with fixed local process mechanics, while an exact-body composer
+and isolated one-use signer produce a synthetic signed envelope. A separate inaccessible pending-key
+and challenge signer plus a pure server-only Web verifier now agree on one exact pairing-possession
+message and synthetic signature. A dormant Web/Auth start application generates fresh IDs, token,
+challenge, 60-bit code, separate protected poll/code verifiers, and a nine-minute pending
+transaction from closed device metadata. A second application performs protected keyed poll lookup,
+mandates that proof, and invokes only exact atomic activation behind local admission/timing. All
+required connector capabilities have no public constructor, and there is no executable admission,
+real Codex execution, key generation/store, pairing-start client, browser/WebAuthn approval, pairing
+HTTP route, upload, or supported-version path. A local Ingest kernel now verifies the bounded
+exact-body origin/device request, while the separate adapter maps origin replay, device lookup, and
+submission through fixed calls. PostgreSQL now proves atomic origin replay consumption and bounded
+cleanup. A transport-free application now composes those exact local capabilities and validates only
+closed acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
 evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
 no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
 certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
@@ -202,29 +202,33 @@ sequenceDiagram
   end
 ```
 
-Revision 0006 implements the complete database boundary. The local Web/Auth application now
-implements only the passkey-possessed rotation branch: an exact active session starts one
+Revision 0006 implements the database authority boundary, and revision 0020 adds only the minimal
+post-completion profile fields needed to seal a session cookie. The local Web/Auth application now
+implements both branches. For passkey-possessed rotation, an exact active session starts one
 five-minute required-UV challenge bound to session/profile/RP/origin, then a valid assertion causes
 ten independent selector/secret codes to be hashed sequentially with Argon2id and a separate
 protected pepper. One statement consumes that challenge and atomically replaces the old batch; only
 commit returns plaintext in a no-store response, and the account page keeps it only in memory for
 one display.
 
-The no-passkey recovery branch remains database-only. Lookup returns an opaque selector and PHC,
-never a profile identifier. Starting recovery consumes one code, immediately removes its verifier,
-and creates no session. Completion requires the exact authority verifier, challenge, and context; it
-registers one replacement passkey, revokes previous passkeys and browser sessions, cancels
+For no-passkey recovery, lookup returns an opaque selector and PHC, never a profile identifier.
+Known, wrong, unknown, and malformed admitted attempts each perform one bounded Argon2id derivation
+under the protected pepper and settle behind the configured response floor and four-call local
+no-queue admission. A verified attempt seals the five-minute continuation before the database
+consumes the code, immediately removes its verifier, and creates no session. Completion verifies the
+exact replacement WebAuthn registration, authority verifier, challenge, and context; one transaction
+registers the replacement passkey, revokes previous passkeys and browser sessions, cancels
 approved-but-not-activated pairings, removes remaining recovery codes and profile challenges, and
-then creates the replacement-key session in the same transaction. Activated source-bound connector
-keys remain separately visible and revocable because they have no profile-administration scope.
+then creates the replacement-key session. Activated source-bound connector keys remain separately
+visible and revocable because they have no profile-administration scope.
 
 Code rotation and completion serialize on the profile row and take terminal timestamps after lock
 acquisition. Observed cross-connection tests prove rotation dominates a concurrent start with an old
 code and completion dominates a concurrent login with an old passkey. Completion fails closed at the
-32-lifetime-passkey provenance ceiling until bounded cleanup exists. The repository still lacks
-recovery-code lookup/verification application handling, the restricted-authority HTTP flow,
-replacement-passkey registration, anonymous timing/rate controls, cleanup, notifications, and
-deployment evidence; therefore recovery sign-in is not launch-ready.
+32-lifetime-passkey provenance ceiling until bounded cleanup exists. The repository still lacks a
+distributed/edge anonymous attempt policy, abandoned and terminal-state cleanup, notifications,
+production secrets and timing values, live authenticator/database integration, monitoring, and
+deployment evidence; therefore the local recovery sign-in is not launch-ready.
 
 ## Device pairing and source choice
 

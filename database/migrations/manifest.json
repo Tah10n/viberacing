@@ -114,6 +114,12 @@
       "name": "account_score_read",
       "path": "database/migrations/0019_account_score_read.sql",
       "sha256": "c913153de3ff4bddcba2085043b44d1d110233febffe5097ec9935dfb2a87084"
+    },
+    {
+      "revision": 20,
+      "name": "recovery_session_result",
+      "path": "database/migrations/0020_recovery_session_result.sql",
+      "sha256": "00ee69d0b1acac9fbfd17652b5b88f3c94b08295155ee521cb51099eaad559f0"
     }
   ]
 }

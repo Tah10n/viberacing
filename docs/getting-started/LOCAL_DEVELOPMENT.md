@@ -3,17 +3,19 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and fifteen Phase 2/3 database-foundation migrations. Repository verification uses synthetic data
-and injected capabilities only. It has procedure-only identity, passkey login/management, restricted
+and twenty checksum-ledgered database migrations. Repository verification uses synthetic data and
+injected capabilities only. It has procedure-only identity, passkey login/management, restricted
 recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
 retention cleanup, scoring, terminal finalization, and public score-projection procedures. A local
 Web slice now composes invite redemption, GitHub OAuth state plus PKCE, encrypted browser cookies,
 initial WebAuthn registration, returning discoverable-credential login, a private session-scoped
 passkey inventory, an account page, fresh revocation of an owned non-current passkey, and logout. It
 can also add a backup passkey after separate existing-key assertion and registration ceremonies and
-rotate a ten-code recovery batch after a fresh passkey assertion. It has no working
-invite/OAuth/database credential or live-authenticator evidence, and recovery-code verification,
-replacement-passkey registration, pairing approval, a Jobs scheduler, real-user ingestion, audited
+rotate a ten-code recovery batch after a fresh passkey assertion. A separate local `/recover` flow
+performs bounded exact-code/dummy Argon2id work, creates only a five-minute restricted authority,
+and requires exact replacement WebAuthn registration before a normal session exists. It has no
+working invite/OAuth/database credential or live-authenticator evidence, and pairing approval,
+distributed recovery edge controls/cleanup, a Jobs scheduler, real-user ingestion, audited
 correction, and an operational connector remain absent. A library-only Rust crate implements the
 bounded stable App Server initialization exchange and a candidate `0.144.4` account/usage parser
 with fixed methods, discarded account/summary fields, and bounded normalized daily output. A
@@ -218,9 +220,11 @@ Local enrollment additionally requires a dedicated GitHub OAuth app whose callba
 origin's lowercase hostname (`localhost` for the documented loopback setup). WebAuthn RP IDs cannot
 be IP addresses. Recovery-code rotation additionally needs a distinct canonical 32-byte
 `VIBERACING_RECOVERY_PEPPER` and deployment-reviewed integer values for the three
-`VIBERACING_RECOVERY_ARGON2_*` settings within the application's accepted range. The tracked values
-are non-working placeholders and intentionally do not publish deployment work factors. A manual flow
-also needs an externally issued invite whose stored digest matches its 256-bit secret; this
+`VIBERACING_RECOVERY_ARGON2_*` settings within the application's accepted range. Recovery options
+also require `VIBERACING_RECOVERY_MINIMUM_RESPONSE_MS`, a deployment-reviewed integer from 100 to
+5000; do not commit the chosen production timing value. The tracked values are non-working
+placeholders and intentionally do not publish deployment work factors or response timing. A manual
+flow also needs an externally issued invite whose stored digest matches its 256-bit secret; this
 repository intentionally provides no issuer shortcut or sample valid invite. Never reuse these
 values between development, staging, and production.
 

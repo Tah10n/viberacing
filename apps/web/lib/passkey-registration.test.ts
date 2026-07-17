@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createPasskeyRegistrationOptions,
+  createRecoveryPasskeyRegistrationOptions,
   passkeyAddContextDigest,
   createPasskeyLoginOptions,
   passkeyChallengeDigest,
@@ -14,6 +15,7 @@ import {
   passkeyRevokeContextDigest,
   profileDeletionContextDigest,
   recoveryCodeRotationContextDigest,
+  recoveryPasskeyContextDigest,
   sourceReactivationContextDigest,
   sourceUnlinkContextDigest,
   verifyInitialPasskey,
@@ -57,6 +59,21 @@ describe("initial passkey registration", () => {
         "race.example.com",
         "https://race.example.com",
       ).toString("hex"),
+    );
+  });
+
+  it("uses only the restricted authority pseudonym for recovery registration options", async () => {
+    const options = await createRecoveryPasskeyRegistrationOptions(
+      "00000000-0000-4000-8000-000000000202",
+      "race.example.com",
+    );
+
+    expect(options.user).toMatchObject({
+      displayName: "Vibe Racing recovery",
+      name: "Vibe Racing recovery",
+    });
+    expect(options.user.id).toBe(
+      Buffer.from("00000000000040008000000000000202", "hex").toString("base64url"),
     );
   });
 
@@ -246,6 +263,23 @@ describe("passkey login", () => {
       recoveryCodeRotationContextDigest(
         "00000000-0000-4000-8000-000000000101",
         "00000000-0000-4000-8000-000000000103",
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    );
+    expect(
+      recoveryPasskeyContextDigest(
+        "00000000-0000-4000-8000-000000000104",
+        "Replacement passkey",
+        Buffer.alloc(32, 0x51).toString("base64url"),
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    ).not.toEqual(
+      recoveryPasskeyContextDigest(
+        "00000000-0000-4000-8000-000000000104",
+        "Changed label",
+        Buffer.alloc(32, 0x51).toString("base64url"),
         "race.example.com",
         "https://race.example.com",
       ),

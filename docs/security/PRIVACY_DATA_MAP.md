@@ -146,8 +146,16 @@ only selectors and PHCs to the fixed database call, and returns plaintext only a
 replacement succeeds. The HTTP response is `no-store`; the account component keeps the codes only in
 memory for one display and adds no log, audit field, cache, download, analytics, or browser
 persistence. The decoded configuration buffer is overwritten after the generator copies its
-process-lifetime pepper. Tracked pepper and work-factor values are non-working placeholders. No
-recovery-code verification endpoint exists yet.
+process-lifetime pepper. Tracked pepper, work-factor, and response-floor values are non-working
+placeholders. The local recovery endpoint accepts one code and replacement label in a bounded
+same-origin no-store request, immediately reduces the code to its selector plus copied secret bytes,
+and clears the code input after the options response. Known, wrong, unknown, and malformed admitted
+attempts perform matching or dummy Argon2id work without logging or retaining the plaintext. The
+short-lived authority secret and challenge exist only in a purpose-separated encrypted HttpOnly
+cookie; the database receives only digests. Revision 0020 adds no table or personal-data column and
+returns only the already mapped profile ID, handle, and locale after atomic completion so the normal
+session cookie can be sealed. There is no browser persistence, analytics, notification address, or
+new third-party transfer.
 
 Revision 0007 implements the database-only Usage/Security rows named above. It stores an exact
 private daily value, opaque device/source/sync identifiers, bounded connector/Codex versions, body

@@ -24,51 +24,51 @@ an active account page, immediate public-profile hide/show, source inventory and
 fresh-passkey paused-source reactivation and terminal unlink, fresh backup-passkey addition,
 revocation of an owned non-current passkey, a bounded active-device inventory with immediate
 owned-device revoke, fresh-passkey recovery-code rotation with one-time display, an exact-handle
-fresh-passkey profile-deletion request, and database-backed logout. Login options retain the
-profile-free challenge only in a separate encrypted cookie; valid proof alone reaches one atomic
-create-consume-session call. Its GitHub, passkey-verifier, database, and browser evidence is
-injected or synthetic; no working invite issuer, OAuth registration, secret, live
-authenticator/database login, deletion purge worker, edge abuse control, recovery-code verification
-or replacement-passkey flow, or deployment is supplied. A local one-shot Jobs runner invokes only
-the four existing maintenance procedures through a bounded least-privileged adapter. A local Ingest
-kernel now bounds and authenticates the exact Community sync envelope, consumes an injected origin
-nonce, parses bounded JSON, validates the generated contract, and strictly verifies the source-bound
-device request. A separate bounded Ingest PostgreSQL adapter revalidates that output and exposes
-only atomic origin-nonce consumption, device lookup, and submission through a probed
-least-privileged pool. A protected local reader supplies one mandatory and one optional rotation
-origin key directly to the verifier without returning raw configuration. A forced-RLS replay tuple,
-Ingest-only atomic consume, and separate Jobs ingest and pairing cleanup paths now have real
-isolated PostgreSQL evidence. A transport-free Ingest application now composes those exact verifier
-and database capabilities, generates a server-owned request ID, waits for submission, and returns
-only a validated acknowledgement or generic problem decision. A bounded local Fastify server factory
-now preserves exact raw HTTP evidence, admits four application calls without a queue, applies fixed
-parser/header/connection/deadline policies, and serializes only revalidated sync
-acknowledgement/problem contracts. A library-only Rust connector foundation now bounds the stable
-App Server handshake and a candidate `0.144.4` account/usage parser, discarding account/summary
-fields and returning only bounded normalized daily usage in caller memory. An inaccessible one-shot
-supervisor composes those exact states through fixed local pipes, a fixed child argument, no ambient
-environment, bounded stdout/stderr/time, terminal-event draining, and reap-before-success cleanup.
-An inaccessible reviewed sync context now lets a candidate-only composer consume those minimized
-entries into the exact bounded JSON body, SHA-256 digest, nonce encoding, and device-signature
-message shared with the production Ingest verifier. An isolated one-use signer removes public
-unsigned access, consumes that value only with an inaccessible device-bound key capability, and
-returns the same body plus five exact signed header values. The shared synthetic vector is strictly
-verified across Rust and Ingest. A second inaccessible signer and pure Web verifier now agree on an
-exact synthetic pairing-possession proof. A dormant transport-free Web/Auth start application now
-generates fresh server identifiers, 32-byte poll/challenge material, a 60-bit human code, separate
-protected poll/code verifiers, and a nine-minute pending transaction from closed device metadata
-through one fixed call on the probed read-write Web pool. A second dormant application derives two
-fixed-shape HMAC poll-verifier candidates, selects at most one approved row, runs that strict proof,
-and alone invokes exact atomic activation with server-owned identifiers behind four-call admission
-and a 250-millisecond settlement floor. Neither creates browser approval, an HTTP request, a real
-key, or a live database connection. Candidate release, schema, fixture, synthetic-process, composer,
-pairing, and request-signer evidence does not populate the support matrix. Phase 0
-hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
-No recovery-code verification/replacement-passkey or pairing-approval application flow, production
-secret-manager/edge key injection, Ingest host/port/TLS deployment entry point, production
-deployment, live Web/Jobs/Ingest database login/TLS integration, released or operational connector,
-supported Codex version, real-user ingestion, end-to-end public ranking, or finalization scheduler
-exists.
+fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey sign-in, and
+database-backed logout. Login options retain the profile-free challenge only in a separate encrypted
+cookie; valid proof alone reaches one atomic create-consume-session call. Its GitHub,
+passkey-verifier, database, and browser evidence is injected or synthetic; no working invite issuer,
+OAuth registration, secret, live authenticator/database login, deletion purge worker, distributed
+edge abuse control, abandoned recovery cleanup or notification, or deployment is supplied. A local
+one-shot Jobs runner invokes only the four existing maintenance procedures through a bounded
+least-privileged adapter. A local Ingest kernel now bounds and authenticates the exact Community
+sync envelope, consumes an injected origin nonce, parses bounded JSON, validates the generated
+contract, and strictly verifies the source-bound device request. A separate bounded Ingest
+PostgreSQL adapter revalidates that output and exposes only atomic origin-nonce consumption, device
+lookup, and submission through a probed least-privileged pool. A protected local reader supplies one
+mandatory and one optional rotation origin key directly to the verifier without returning raw
+configuration. A forced-RLS replay tuple, Ingest-only atomic consume, and separate Jobs ingest and
+pairing cleanup paths now have real isolated PostgreSQL evidence. A transport-free Ingest
+application now composes those exact verifier and database capabilities, generates a server-owned
+request ID, waits for submission, and returns only a validated acknowledgement or generic problem
+decision. A bounded local Fastify server factory now preserves exact raw HTTP evidence, admits four
+application calls without a queue, applies fixed parser/header/connection/deadline policies, and
+serializes only revalidated sync acknowledgement/problem contracts. A library-only Rust connector
+foundation now bounds the stable App Server handshake and a candidate `0.144.4` account/usage
+parser, discarding account/summary fields and returning only bounded normalized daily usage in
+caller memory. An inaccessible one-shot supervisor composes those exact states through fixed local
+pipes, a fixed child argument, no ambient environment, bounded stdout/stderr/time, terminal-event
+draining, and reap-before-success cleanup. An inaccessible reviewed sync context now lets a
+candidate-only composer consume those minimized entries into the exact bounded JSON body, SHA-256
+digest, nonce encoding, and device-signature message shared with the production Ingest verifier. An
+isolated one-use signer removes public unsigned access, consumes that value only with an
+inaccessible device-bound key capability, and returns the same body plus five exact signed header
+values. The shared synthetic vector is strictly verified across Rust and Ingest. A second
+inaccessible signer and pure Web verifier now agree on an exact synthetic pairing-possession proof.
+A dormant transport-free Web/Auth start application now generates fresh server identifiers, 32-byte
+poll/challenge material, a 60-bit human code, separate protected poll/code verifiers, and a
+nine-minute pending transaction from closed device metadata through one fixed call on the probed
+read-write Web pool. A second dormant application derives two fixed-shape HMAC poll-verifier
+candidates, selects at most one approved row, runs that strict proof, and alone invokes exact atomic
+activation with server-owned identifiers behind four-call admission and a 250-millisecond settlement
+floor. Neither creates browser approval, an HTTP request, a real key, or a live database connection.
+Candidate release, schema, fixture, synthetic-process, composer, pairing, and request-signer
+evidence does not populate the support matrix. Phase 0 hosted-publication controls remain blocked on
+real maintainer identities and GitHub configuration. No pairing-approval application flow,
+production-ready distributed recovery perimeter or cleanup, production secret-manager/edge key
+injection, Ingest host/port/TLS deployment entry point, production deployment, live Web/Jobs/Ingest
+database login/TLS integration, released or operational connector, supported Codex version,
+real-user ingestion, end-to-end public ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -331,7 +331,7 @@ exists.
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- Eighteen checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and
+- Twenty checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and
   24 forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and
   restricted authorities, session-bound challenges, opaque sources, pending/active/revoked device
   keys, pairing, bounded audit references, deletion work/tombstones, three fixed maintenance mutex
@@ -501,44 +501,55 @@ exists.
   distinct protected 32-byte pepper. One materialized statement consumes the challenge and replaces
   every old code and active recovery authority. Only a successful commit returns the plaintext batch
   in a no-store response; the client holds it only in component memory and shows it once. The
-  tracked pepper and work-factor settings remain non-working placeholders. This slice accepts no
-  recovery code and creates no replacement passkey. Profile deletion accepts only the session's
-  exact typed handle before the prompt, seals a five-minute continuation, and binds a fresh
-  required-UV assertion to the exact session/profile/handle/RP/origin context. One materialized
-  statement consumes that challenge and invokes the existing atomic hide/revoke/unlink/enqueue
-  procedure with server-generated job/audit IDs and a fresh opaque 32-byte purge reference. Success
-  clears all browser auth cookies; failure remains generic and retains them. No purge worker, cache
-  invalidation, or restore replay is implemented. Inventory dependency failure renders a generic
-  unavailable state without removing logout. Every POST body is stream-bounded, compressed bodies
-  and duplicate cookies fail closed, and admission is held from the first body read through
-  dependency settlement; overload cancels the body without a queue. Cookies are
-  HttpOnly/SameSite=Lax/secure-on-HTTPS with narrow paths, callback URLs are excluded from Next
-  development request logs, and responses are generic, `no-store`, and `no-referrer`. EN/RU
-  home-session navigation, join, passkey, returning-login, passkey-inventory, active-account,
-  profile-visibility, source inventory/pause/reactivation/unlink, active-device revoke, passkey
-  add/revoke, recovery-code rotation, deletion, and logout UI is present. Each route has four-call
-  local admission. The CSP permits GitHub only as the exact OAuth `form-action`; no remote
-  script/connect/asset/frame capability is added. The two exact-pinned SimpleWebAuthn packages are
-  confined by effective lint policy to one server verifier and one browser component; licenses, full
-  23-record lock addition, production asset budget, and online advisory state were reviewed. Tests
-  cover configuration, cookie purpose/tamper/ambiguity, invite grammar/minimization, state, PKCE,
-  token minimization, fixed SQL and role probes, continuation-before-write ordering, replay and
-  dependency failure shapes, profile-free/database-state-free login options, atomic login
-  settlement, closed account inventory, exact-session idempotent visibility change,
-  independent-challenge atomic add, session/target-bound revoke, current/foreign/replay denial,
-  exact-handle/session-bound deletion, recovery generator/configuration, fresh-step-up atomic batch
-  replacement and one-time client display, atomic consume/delete settlement, bounded
-  empty-source/device mapping, hidden-profile inventory/pause/reactivation/unlink/revoke, encrypted
-  session-bound source targeting, cross-session and replay denial, cross-origin/duplicate-form
-  denial, origin/body/admission/logout policy, actual browser-adapter calls, local-session home
-  navigation, EN/RU, and accessibility. A `localhost` Next dev-server smoke also proves the join
-  page, exact no-scope GitHub redirect and callback-only cookie, state-bound cancellation,
-  cross-origin rejection, missing-session denial, cookie-clearing logout, and callback-query
-  suppression in development logs. This is HTTP/runtime evidence only, not visual browser,
-  OAuth-provider, authenticator, or database E2E. There is no invite issuer UI, recovery-code
-  verification or replacement-passkey registration, pairing approval, aggregate/distributed attempt
-  policy, abandoned-state cleanup, live OAuth/authenticator/database integration, monitoring, or
-  deployment evidence.
+  tracked pepper, work-factor, and response-floor settings remain non-working placeholders. The
+  separate `/recover` flow accepts one exact selector/secret plus a bounded replacement label,
+  retrieves only the matching unused PHC, and performs one bounded Argon2id derivation for known,
+  unknown, wrong, or malformed attempts under the recovery-only pepper. An admitted options request
+  has a 512-byte body, four-call local no-queue admission, generic failure, and a configured minimum
+  response floor. Success seals a purpose-separated five-minute authority continuation only after
+  the database consumes and scrubs the code. The verify route accepts a bounded registration
+  response, verifies exact WebAuthn RP/origin/challenge/context and required UV, then invokes one
+  atomic replacement-passkey/session call. Revision 0020 returns only profile ID, handle, and locale
+  after that commit so Web/Auth can seal the normal session; cookie-sealing failure revokes that new
+  session. The code input is cleared after the options response and is never logged, cached, or
+  persisted in the browser. Profile deletion accepts only the session's exact typed handle before
+  the prompt, seals a five-minute continuation, and binds a fresh required-UV assertion to the exact
+  session/profile/handle/RP/origin context. One materialized statement consumes that challenge and
+  invokes the existing atomic hide/revoke/unlink/enqueue procedure with server-generated job/audit
+  IDs and a fresh opaque 32-byte purge reference. Success clears all browser auth cookies; failure
+  remains generic and retains them. No purge worker, cache invalidation, or restore replay is
+  implemented. Inventory dependency failure renders a generic unavailable state without removing
+  logout. Every POST body is stream-bounded, compressed bodies and duplicate cookies fail closed,
+  and admission is held from the first body read through dependency settlement; overload cancels the
+  body without a queue. Cookies are HttpOnly/SameSite=Lax/secure-on-HTTPS with narrow paths,
+  callback URLs are excluded from Next development request logs, and responses are generic,
+  `no-store`, and `no-referrer`. EN/RU home-session navigation, join, passkey, returning-login,
+  passkey-inventory, active-account, profile-visibility, source inventory/pause/reactivation/unlink,
+  active-device revoke, passkey add/revoke, recovery-code rotation, recovery sign-in, deletion, and
+  logout UI is present. Each route has four-call local admission. The CSP permits GitHub only as the
+  exact OAuth `form-action`; no remote script/connect/asset/frame capability is added. The two
+  exact-pinned SimpleWebAuthn packages are confined by effective lint policy to one server verifier
+  and one browser component; licenses, full 23-record lock addition, production asset budget, and
+  online advisory state were reviewed. Tests cover configuration, cookie purpose/tamper/ambiguity,
+  invite grammar/minimization, state, PKCE, token minimization, fixed SQL and role probes,
+  continuation-before-write ordering, replay and dependency failure shapes,
+  profile-free/database-state-free login options, atomic login settlement, closed account inventory,
+  exact-session idempotent visibility change, independent-challenge atomic add, session/target-bound
+  revoke, current/foreign/replay denial, exact-handle/session-bound deletion, recovery
+  generator/configuration, fresh-step-up atomic batch replacement and one-time client display,
+  exact-code/dummy-work verification, restricted-authority replacement registration, generic/timing
+  HTTP behavior, atomic consume/delete settlement, bounded empty-source/device mapping,
+  hidden-profile inventory/pause/reactivation/unlink/revoke, encrypted session-bound source
+  targeting, cross-session and replay denial, cross-origin/duplicate-form denial,
+  origin/body/admission/logout policy, actual browser-adapter calls, local-session home navigation,
+  EN/RU, and accessibility. A `localhost` Next dev-server smoke also proves the join page, exact
+  no-scope GitHub redirect and callback-only cookie, state-bound cancellation, cross-origin
+  rejection, missing-session denial, cookie-clearing logout, and callback-query suppression in
+  development logs. Recovery component and axe cases use synthetic browser adapter responses only.
+  This is HTTP/runtime evidence only, not visual browser, OAuth-provider, authenticator, or database
+  E2E. There is no invite issuer UI, pairing approval, aggregate/distributed attempt policy,
+  abandoned-state cleanup or notification, live OAuth/authenticator/database integration,
+  monitoring, or deployment evidence.
 - A private current-week account score slice now reuses the exact possessed session and one combined
   Web/Auth pool checkout for visibility plus revision 0019's derived-score read. The server-only
   mapper accepts one empty sentinel or exactly seven consecutive 0–1000 daily scores with coherent
@@ -653,7 +664,7 @@ exists.
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0019 from the checksum manifest,
+reached `healthy`, validated and applied revisions 0001 through 0020 from the checksum manifest,
 passed 24-table state/ownership/RLS assertions, twenty-three observed lock-wait races, eight
 relation-denial checks, twenty-eight cross-capability denials, and the identity, passkey, recovery,
 pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention,
@@ -687,31 +698,30 @@ defect found and corrected during review. The report names its local-only limita
 
 ## Not implemented yet
 
-Invite issuance UI, recovery-code verification and replacement-passkey application handling, pairing
-browser approval and connector client, client-identity and distributed admission/rate/deadline
-policy, anonymous login/pairing/recovery edge limits, cleanup for abandoned enrollment/recovery
-challenges and consumed login ceremonies, an Ingest host/port/TLS deployment entry point, trusted
-edge routing and direct-origin denial, live secret-manager/edge key injection, the Ingest live
-PostgreSQL login/TLS connection, distributed rate/backpressure controls and load evidence, scheduled
-execution/monitoring of ingest- and pairing-retention cleanup, cleanup for other expiring state, the
-Jobs scheduler/live login and application-to-PostgreSQL integration, audited corrections, deployed
-public-score delivery, purge workers, connector executable discovery/link/ownership and
-artifact/version admission, live Codex and cross-platform process evidence, supported operational
-account/usage integration, secure device-key storage, upload/CLI/packaging, release signing,
-deployment, and public beta operations remain proposed. The local Ingest key reader, kernel,
-adapter, application composer, and Fastify server now prove bounded protected configuration,
-raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
-pool, fixed-query, orchestration, no-queue/deadline policy, and result/problem serialization
-behavior, but not those deployed edge, live persistence, capacity, or operational boundaries. A
-bounded database score projection, versioned response-only schema, fail-closed server mapper,
-bounded PostgreSQL adapter, and local HTTP route now exist, including URL/media parsing,
-admission/deadline policy, store translation, and final serialization. Cache/invalidation,
-CarRecipe, streak/freshness, profile detail, client-rate and production-capacity controls,
-monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
-The visible web scoring and ranking experience now consumes a validated current-week response from
-the local route when its separately provisioned database login works, but local defaults and every
-unavailable/error path remain clearly synthetic. No working database/OAuth login, deployed data,
-cache, or end-to-end real-user ranking evidence exists.
+Invite issuance UI, pairing browser approval and connector client, client-identity and distributed
+admission/rate/deadline policy, anonymous login/pairing/recovery edge limits, recovery notification,
+cleanup for abandoned enrollment/recovery challenges and consumed login ceremonies, an Ingest
+host/port/TLS deployment entry point, trusted edge routing and direct-origin denial, live
+secret-manager/edge key injection, the Ingest live PostgreSQL login/TLS connection, distributed
+rate/backpressure controls and load evidence, scheduled execution/monitoring of ingest- and
+pairing-retention cleanup, cleanup for other expiring state, the Jobs scheduler/live login and
+application-to-PostgreSQL integration, audited corrections, deployed public-score delivery, purge
+workers, connector executable discovery/link/ownership and artifact/version admission, live Codex
+and cross-platform process evidence, supported operational account/usage integration, secure
+device-key storage, upload/CLI/packaging, release signing, deployment, and public beta operations
+remain proposed. The local Ingest key reader, kernel, adapter, application composer, and Fastify
+server now prove bounded protected configuration, raw-envelope/JSON/HTTP framing, origin-proof,
+contract, strict Ed25519 device, least-privileged pool, fixed-query, orchestration,
+no-queue/deadline policy, and result/problem serialization behavior, but not those deployed edge,
+live persistence, capacity, or operational boundaries. A bounded database score projection,
+versioned response-only schema, fail-closed server mapper, bounded PostgreSQL adapter, and local
+HTTP route now exist, including URL/media parsing, admission/deadline policy, store translation, and
+final serialization. Cache/invalidation, CarRecipe, streak/freshness, profile detail, client-rate
+and production-capacity controls, monitoring backend, deployment login, certificate, edge policy,
+and live adapter integration do not. The visible web scoring and ranking experience now consumes a
+validated current-week response from the local route when its separately provisioned database login
+works, but local defaults and every unavailable/error path remain clearly synthetic. No working
+database/OAuth login, deployed data, cache, or end-to-end real-user ranking evidence exists.
 
 ## Evidence commands
 

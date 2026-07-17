@@ -52,7 +52,7 @@ const english = {
   noActiveDevices: "No source is connected yet.",
   noSourceActiveDevices: "No active device credential remains on this source.",
   passkeyCopy:
-    "A passkey is required before the profile becomes active and replaces a password. Device approval and recovery sign-in are not available in this local slice yet.",
+    "A passkey is required before the profile becomes active and replaces a password. Device approval is not available in this local slice yet.",
   passkeyLabel: "Passkey label",
   passkeyRevokeCopy:
     "Revoking a passkey is permanent and requires a fresh passkey check. The key protecting this session cannot be selected.",
@@ -69,9 +69,19 @@ const english = {
   recoveryCodesGenerate: "Generate new recovery codes",
   recoveryCodesGenerating: "Checking passkey and generating codes…",
   recoveryCodesOnce:
-    "Save every code now in a secure place. They disappear when you leave or reload this page. Recovery sign-in is not enabled in this local slice yet.",
+    "Save every code now in a secure place. They disappear when you leave or reload this page. Each code can be used once to register a replacement passkey.",
   recoveryCodesReplaced: "Previous recovery codes are invalid. Save these ten new codes now.",
   recoveryCodesTitle: "Recovery codes",
+  recoverAccount: "Use a recovery code",
+  recoveryCodeHelp:
+    "Enter one saved code exactly. It is consumed before the new passkey is created.",
+  recoveryCodeLabel: "Recovery code",
+  recoveryContinue: "Verify code and create passkey",
+  recovering: "Verifying code…",
+  recoveryPasskeyLabel: "Replacement passkey label",
+  recoverySignInCopy:
+    "A valid one-time code opens only a short replacement-passkey step. It does not sign you in until the new passkey is registered.",
+  recoverySignInTitle: "Recover your profile",
   profileHidden: "Public profile is off. It will not appear in the Community race.",
   profileDeletionCopy:
     "This permanently starts deletion. Your profile is hidden immediately and all sessions, passkeys, and connected-device access are revoked. Primary-data removal is queued; this local build does not run the purge worker yet.",
@@ -171,7 +181,7 @@ const russian: Record<JoinTranslationKey, string> = {
   noActiveDevices: "Источники пока не подключены.",
   noSourceActiveDevices: "У этого источника не осталось активных прав устройства.",
   passkeyCopy:
-    "До активации профиля нужен ключ доступа, заменяющий пароль. Подключение устройств и вход через восстановление в этом локальном срезе пока недоступны.",
+    "До активации профиля нужен ключ доступа, заменяющий пароль. Подключение устройств в этом локальном срезе пока недоступно.",
   passkeyLabel: "Название ключа",
   passkeyRevokeCopy:
     "Отзыв ключа необратим и требует свежей проверки ключом доступа. Ключ, защищающий эту сессию, выбрать нельзя.",
@@ -188,10 +198,20 @@ const russian: Record<JoinTranslationKey, string> = {
   recoveryCodesGenerate: "Создать новые коды восстановления",
   recoveryCodesGenerating: "Проверяем ключ доступа и создаём коды…",
   recoveryCodesOnce:
-    "Сохраните все коды сейчас в надёжном месте. После ухода или перезагрузки страницы они исчезнут. Вход через восстановление в этом локальном срезе пока не включён.",
+    "Сохраните все коды сейчас в надёжном месте. После ухода или перезагрузки страницы они исчезнут. Каждый код можно использовать один раз для регистрации нового ключа доступа.",
   recoveryCodesReplaced:
     "Прежние коды восстановления недействительны. Сохраните эти десять новых кодов сейчас.",
   recoveryCodesTitle: "Коды восстановления",
+  recoverAccount: "Использовать код восстановления",
+  recoveryCodeHelp:
+    "Введите сохранённый код точно. Он становится недействительным до создания нового ключа доступа.",
+  recoveryCodeLabel: "Код восстановления",
+  recoveryContinue: "Проверить код и создать ключ",
+  recovering: "Проверяем код…",
+  recoveryPasskeyLabel: "Название нового ключа доступа",
+  recoverySignInCopy:
+    "Верный одноразовый код открывает только короткий этап замены ключа доступа. Вход произойдёт лишь после регистрации нового ключа.",
+  recoverySignInTitle: "Восстановление профиля",
   profileHidden: "Публичный профиль выключен и не появится в гонке сообщества.",
   profileDeletionCopy:
     "Это необратимо запускает удаление. Профиль сразу скрывается, все сессии, ключи доступа и доступ подключённых устройств отзываются. Удаление основных данных ставится в очередь; локальная сборка пока не запускает задачу очистки.",

@@ -235,6 +235,125 @@ describe("pairing database pool", () => {
     ]);
   });
 
+  it("uses only the fixed restricted-recovery lookup, start, and completion statements", async () => {
+    const recoveryCodeId = "00000000-0000-4000-8000-000000000711";
+    const returnedRows = [
+      [{ recovery_code_id: recoveryCodeId, verifier_phc: "synthetic-phc" }],
+      [{ started: true }],
+      [
+        {
+          handle: "pixel_driver",
+          locale: "en",
+          profile_id: "00000000-0000-4000-8000-000000000712",
+        },
+      ],
+    ];
+    const snapshots: { text: string; values: unknown[] }[] = [];
+    const driverClient = {
+      query(query: { text: string; values: unknown[] }): Promise<{ rows: unknown }> {
+        snapshots.push({
+          text: query.text,
+          values: query.values.map((value) =>
+            Buffer.isBuffer(value) ? Buffer.from(value) : value,
+          ),
+        });
+        return Promise.resolve({ rows: returnedRows.shift() });
+      },
+      release: vi.fn(),
+    };
+    const pool = createPairingDatabasePool(config, undefined, () => ({
+      connect: () => Promise.resolve(driverClient),
+      end: () => Promise.resolve(),
+      on() {
+        return this;
+      },
+    }));
+    const client = await pool.connect();
+    const authorityDigest = Buffer.alloc(32, 0x71);
+    const challengeDigest = Buffer.alloc(32, 0x72);
+    const contextDigest = Buffer.alloc(32, 0x73);
+    const credentialId = Buffer.alloc(32, 0x74);
+    const cosePublicKey = Buffer.alloc(77, 0x75);
+    const sessionDigest = Buffer.alloc(32, 0x76);
+
+    await expect(client.readRecoveryCodeVerificationMaterial(recoveryCodeId)).resolves.toEqual([
+      { recovery_code_id: recoveryCodeId, verifier_phc: "synthetic-phc" },
+    ]);
+    await expect(
+      client.startRecovery({
+        auditEventId: "00000000-0000-4000-8000-000000000713",
+        authorityId: "00000000-0000-4000-8000-000000000714",
+        authorityVerifierDigest: authorityDigest,
+        challengeDigest,
+        contextDigest,
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        recoveryCodeId,
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+      }),
+    ).resolves.toEqual([{ started: true }]);
+    await expect(
+      client.completeRecoveryRegistration({
+        auditEventId: "00000000-0000-4000-8000-000000000715",
+        authorityId: "00000000-0000-4000-8000-000000000714",
+        authorityVerifierDigest: authorityDigest,
+        backupEligible: true,
+        backupState: false,
+        challengeDigest,
+        contextDigest,
+        cosePublicKey,
+        credentialId,
+        label: "Replacement passkey",
+        passkeyId: "00000000-0000-4000-8000-000000000716",
+        requestId: "req_BBBBBBBBBBBBBBBBBBBBBB",
+        sessionExpiresAt: "2026-08-15T10:00:00.000Z",
+        sessionId: "00000000-0000-4000-8000-000000000717",
+        sessionVerifierDigest: sessionDigest,
+        signCount: 0,
+      }),
+    ).resolves.toEqual([
+      {
+        handle: "pixel_driver",
+        locale: "en",
+        profile_id: "00000000-0000-4000-8000-000000000712",
+      },
+    ]);
+
+    expect(snapshots).toHaveLength(3);
+    expect(snapshots[0]?.text).toContain("read_recovery_code_verification_material");
+    expect(snapshots[0]?.values).toEqual([recoveryCodeId]);
+    expect(snapshots[1]?.text).toContain("start_recovery");
+    expect(snapshots[1]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[1]?.values).toEqual([
+      recoveryCodeId,
+      "00000000-0000-4000-8000-000000000714",
+      authorityDigest,
+      challengeDigest,
+      contextDigest,
+      "2026-07-16T10:05:00.000Z",
+      "00000000-0000-4000-8000-000000000713",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
+    expect(snapshots[2]?.text).toContain("complete_recovery_registration_session");
+    expect(snapshots[2]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000714",
+      authorityDigest,
+      challengeDigest,
+      contextDigest,
+      "00000000-0000-4000-8000-000000000716",
+      credentialId,
+      cosePublicKey,
+      "Replacement passkey",
+      0,
+      true,
+      false,
+      "00000000-0000-4000-8000-000000000717",
+      sessionDigest,
+      "2026-08-15T10:00:00.000Z",
+      "00000000-0000-4000-8000-000000000715",
+      "req_BBBBBBBBBBBBBBBBBBBBBB",
+    ]);
+  });
+
   it("reports idle-driver failures only through the stable non-reflective signal", () => {
     const privateValue = "private-driver-error-that-must-not-be-reflected";
     const signals: PairingDatabasePoolSignal[] = [];

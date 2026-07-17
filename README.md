@@ -24,10 +24,10 @@ session-scoped passkey inventory, an active account page, immediate public-profi
 and active-device inventory, immediate source pause, fresh-passkey paused-source reactivation,
 device revoke, backup-passkey addition and fresh-passkey terminal source unlink, non-current-passkey
 revocation, fresh-passkey recovery-code rotation with one-time display, an exact-handle
-fresh-passkey profile-deletion request, and logout. It is locally tested only: the repository
-supplies no invite issuer UI, recovery sign-in or replacement-passkey flow, OAuth registration, real
-secret, live OAuth/authenticator/database credentials, deletion purge worker, edge abuse controls,
-or live-user evidence.
+fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey sign-in, and
+logout. It is locally tested only: the repository supplies no invite issuer UI, OAuth registration,
+real secret, live OAuth/authenticator/database credentials, deletion purge worker, distributed edge
+abuse controls, recovery cleanup or notifications, or live-user evidence.
 
 The authenticated account page now also renders the current Community week's seven derived daily
 scores and bounded summary from one combined server-side visibility/score checkout. Hidden profiles
@@ -152,14 +152,14 @@ discovery/path or artifact/version admission, real Codex execution, cross-platfo
 source/device context provider, secure key generation/store, browser-approval application, connector
 pairing HTTP client, public pairing route, signed upload, live protected key injection, edge signer,
 direct-origin denial, host/port/TLS configuration, distributed client-rate policy, monitoring,
-operational connector, live database connection, load evidence, or deployment. Eighteen SQL
-migrations now add 24 private identity, passkey, restricted-recovery, source, device, pairing,
-audit, deletion, replay, usage, and Community scoring tables with deny-by-default runtime roles,
-forced RLS, state-machine constraints, checksum drift detection, and an isolated PostgreSQL
-capability test. A narrow procedure boundary implements invite issuance, atomic enrollment,
-session-bound initial-passkey challenges, credential-derived login, bounded multi-passkey
-management, session rotation/revocation, the immediate lock-down portion of profile deletion,
-one-time new/existing-source device pairing, private source/device inventory, source
+operational connector, live database connection, load evidence, or deployment. Twenty SQL migrations
+now add 24 private identity, passkey, restricted-recovery, source, device, pairing, audit, deletion,
+replay, usage, and Community scoring tables with deny-by-default runtime roles, forced RLS,
+state-machine constraints, checksum drift detection, and an isolated PostgreSQL capability test. A
+narrow procedure boundary implements invite issuance, atomic enrollment, session-bound
+initial-passkey challenges, credential-derived login, bounded multi-passkey management, session
+rotation/revocation, the immediate lock-down portion of profile deletion, one-time
+new/existing-source device pairing, private source/device inventory, source
 pause/reactivation/unlink, immediate device revoke, passkey-protected recovery-code rotation, and
 short-lived recovery-only replacement-passkey authority. Pairing creates only opaque user-declared
 sources: it never reads or stores Codex account email or claims account uniqueness. Source pause is
@@ -214,11 +214,16 @@ its validated current-week response with a credential-free same-origin request a
 synthetic fallback. Canonical `/?profile=handle#profile` links select only an exact public handle in
 that page, and a missing current top-32 row is not replaced with another participant. There is now a
 local invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
-rotation, and a fresh-passkey profile-deletion request flow, but there is still no recovery-code
-verification or replacement-passkey route, WebAuthn pairing approval, pairing start/poll HTTP route,
-deployed Ingest/score API, operational connector, cleanup/scoring scheduler, audited correction
-flow, asynchronous purge worker, live OAuth/authenticator/Ingest/Jobs database integration, or
-deployed database.
+rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey profile-deletion
+request flow. Recovery lookup returns only the selected unused PHC; admitted attempts use bounded
+Argon2id work, a protected pepper, generic responses, a configured minimum response floor, and a
+four-call local no-queue limit. A valid code creates only the sealed five-minute replacement-passkey
+continuation; the normal session is returned only after exact WebAuthn verification and atomic
+database completion. There is still no WebAuthn pairing approval, pairing start/poll HTTP route,
+deployed Ingest/score API, operational connector, distributed recovery attempt policy,
+abandoned-state cleanup or notification, cleanup/scoring scheduler, audited correction flow,
+asynchronous purge worker, live OAuth/authenticator/Ingest/Jobs database integration, or deployed
+database.
 
 ## Run and verify the synthetic prototype
 

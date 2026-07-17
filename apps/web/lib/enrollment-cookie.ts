@@ -14,7 +14,7 @@ const nonceBytes = 12;
 const tagBytes = 16;
 const segmentPattern = /^[A-Za-z0-9_-]+$/;
 
-export type EnrollmentCookieKind = "login" | "oauth" | "passkey" | "session";
+export type EnrollmentCookieKind = "login" | "oauth" | "passkey" | "recovery" | "session";
 export type EnrollmentRandomBytes = (size: number) => Uint8Array;
 
 export interface EnrollmentCookieCodec {
@@ -57,6 +57,7 @@ export function createEnrollmentCookieCodec(
     login: deriveKey(masterKey, "login"),
     oauth: deriveKey(masterKey, "oauth"),
     passkey: deriveKey(masterKey, "passkey"),
+    recovery: deriveKey(masterKey, "recovery"),
     session: deriveKey(masterKey, "session"),
   } as const;
 

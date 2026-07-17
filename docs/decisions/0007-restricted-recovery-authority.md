@@ -1,6 +1,6 @@
 # ADR 0007: Restricted recovery authority and passkey replacement
 
-- Status: Accepted (database capability and account-side rotation implemented; recovery use pending)
+- Status: Accepted (database capability, account-side rotation, and local recovery use implemented)
 - Date: 2026-07-15
 - Decision owners: Web/Auth, Database, Security, and Privacy
 - Supersedes: None
@@ -36,8 +36,9 @@ material is immediately scrubbed.
 Recovery proceeds through a separate authority:
 
 1. Web/Auth receives the opaque selector and secret, obtains only that selector's unused PHC
-   material, and performs bounded Argon2id verification with generic response shaping and rate
-   limits.
+   material, and performs bounded Argon2id verification with generic response shaping, local
+   no-queue admission, and a configured minimum response floor. A distributed edge attempt policy
+   remains required before deployment.
 2. After successful verification, one database capability consumes and scrubs that code and creates
    a single authority for the profile. The authority expires within ten minutes and is bound to an
    exact WebAuthn registration challenge and context.
@@ -81,7 +82,9 @@ that Argon2id or WebAuthn verification succeeded. Unbounded selector lookup can 
 exhaustion or offline guessing against returned PHCs. Timing, status, and body differences can
 become an account-existence oracle. These risks require body limits, keyed/slow verification,
 perimeter and service rate controls, generic responses, bounded cleanup, monitoring, and
-application-level cryptographic tests before any public endpoint is enabled.
+application-level cryptographic tests before public deployment. The local endpoint now supplies the
+bounded application checks, generic results, four-call no-queue admission, and configured floor; it
+does not claim a distributed perimeter or operational monitoring.
 
 Compromise of both all passkeys and all recovery material can still take over one profile. There is
 no email or routine support override. Any future manually governed exceptional recovery is a new
@@ -112,9 +115,12 @@ VR-ABUSE-RECOVERY-ORACLE.
 
 Revision 0006 adds the forced-RLS `recovery_authorities` table, terminal state triggers, restricted
 procedure grants, bounded audit enums, recovery-code verifier scrubbing, and deletion revocation.
-The local account application now adds only passkey-protected batch rotation and one-time display;
-it does not select production Argon2id parameters, accept a recovery code, or enable
-replacement-passkey recovery.
+Revision 0020 composes successful recovery completion with a minimal profile ID, handle, and locale
+result for sealing the new session cookie. The local account application implements
+passkey-protected batch rotation and one-time display plus exact-code Argon2id verification,
+five-minute restricted-authority continuation, replacement WebAuthn verification, and normal-session
+creation only after atomic completion. Tracked pepper, work-factor, and response-floor settings are
+deliberately non-working placeholders rather than production values.
 
 The migration is forward-only. Before a shared environment exists, a disposable database can be
 rebuilt. After deployment, repair defects with a reviewed forward migration. An incident can disable
@@ -145,13 +151,16 @@ Local Web/Auth evidence additionally covers ten-code generation through Node's b
 path, a distinct protected pepper, exact work-factor/configuration parsing, fresh
 session/profile/RP/origin-bound WebAuthn verification, atomic challenge consumption and batch
 replacement, narrow no-store cookies/responses, one-time EN/RU display,
-malformed/replay/cross-session denial, and the fixed database adapter calls. It uses synthetic
+malformed/replay/cross-session denial, and the fixed database adapter calls. Recovery-use tests also
+cover exact code parsing, matching and dummy Argon2id work, generic bounded HTTP decisions, the
+configured response floor, purpose-separated cookies, exact replacement registration, no database
+completion after failed WebAuthn, and minimal post-commit profile mapping. They use synthetic
 secrets, authenticator responses, and database results only.
 
-The repository still lacks application recovery-code lookup and Argon2id verification, restricted
-authority and replacement-passkey HTTP handling, anonymous endpoint rate limiting and timing
-normalization, cleanup, notifications, and hosted operational evidence. Recovery sign-in is not
-launch-ready until those controls are implemented and tested.
+The repository still lacks distributed/edge anonymous attempt controls, cleanup for abandoned and
+terminal recovery state, notifications, production secrets and timing values, live
+authenticator/database integration, monitoring, and hosted operational evidence. Recovery sign-in is
+locally implemented but not launch-ready until those controls are implemented and tested.
 
 ## References
 

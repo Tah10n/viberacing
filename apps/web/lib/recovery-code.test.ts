@@ -3,7 +3,13 @@ import { argon2, type Argon2Parameters } from "node:crypto";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { createRecoveryCodeGenerator, validRecoveryArgon2Configuration } from "./recovery-code";
+import {
+  clearRecoveryCode,
+  createRecoveryCodeGenerator,
+  createRecoveryCodeVerifier,
+  readRecoveryCode,
+  validRecoveryArgon2Configuration,
+} from "./recovery-code";
 
 const configuration = Object.freeze({ memoryKib: 19_456, parallelism: 2, passes: 2 });
 
@@ -128,5 +134,65 @@ describe("recovery code generation", () => {
       randomUuid: () => "00000000-0000-4000-8000-000000000001",
     });
     await expect(invalidDerived()).rejects.toThrow("Recovery codes are unavailable.");
+  });
+});
+
+describe("recovery code verification", () => {
+  it("parses one exact code and clears its decoded secret", () => {
+    const secret = Buffer.alloc(32, 0x51);
+    const plaintext = `vrr1_00000000-0000-4000-8000-000000000901_${secret.toString("base64url")}`;
+    const parsed = readRecoveryCode(plaintext);
+
+    expect(parsed).toMatchObject({ codeId: "00000000-0000-4000-8000-000000000901" });
+    expect(parsed?.secret).toEqual(secret);
+    clearRecoveryCode(parsed);
+    expect(parsed?.secret).toEqual(Buffer.alloc(32));
+    expect(readRecoveryCode(` ${plaintext}`)).toBeUndefined();
+    expect(readRecoveryCode(plaintext.replace("vrr1", "vrr2"))).toBeUndefined();
+    expect(readRecoveryCode(plaintext.slice(0, -1))).toBeUndefined();
+  });
+
+  it("accepts only the matching canonical bounded PHC", async () => {
+    const secret = Buffer.alloc(32, 0x52);
+    const salt = Buffer.alloc(16, 0x53);
+    const expectedTag = Buffer.alloc(32, 0x54);
+    const observedMessages: Buffer[] = [];
+    const derive = vi.fn((parameters: Argon2Parameters) => {
+      const message = Buffer.from(parameters.message as Uint8Array);
+      observedMessages.push(message);
+      expect(Buffer.from(parameters.nonce as Uint8Array)).toEqual(salt);
+      expect(Buffer.from(parameters.secret as Uint8Array)).toEqual(Buffer.alloc(32, 0x55));
+      return Promise.resolve(
+        message.equals(secret) ? Buffer.from(expectedTag) : Buffer.alloc(32, 0x59),
+      );
+    });
+    const verify = createRecoveryCodeVerifier(configuration, Buffer.alloc(32, 0x55), {
+      argon2: derive,
+    });
+    const phc =
+      `$argon2id$v=19$m=19456,t=2,p=2$${salt.toString("base64").replace(/=+$/u, "")}` +
+      `$${expectedTag.toString("base64").replace(/=+$/u, "")}`;
+
+    await expect(verify(secret, phc)).resolves.toBe(true);
+    await expect(verify(Buffer.alloc(32, 0x56), phc)).resolves.toBe(false);
+    expect(derive).toHaveBeenCalledTimes(2);
+    expect(observedMessages[0]).toEqual(secret);
+  });
+
+  it("performs one bounded dummy derivation for unknown or malformed material", async () => {
+    const derive = vi.fn((parameters: Argon2Parameters) => {
+      expect(parameters).toMatchObject({ memory: 19_456, parallelism: 2, passes: 2 });
+      expect(Buffer.from(parameters.nonce as Uint8Array)).toEqual(
+        Buffer.from("viberacing-dummy", "ascii"),
+      );
+      return Promise.resolve(Buffer.alloc(32, 0x61));
+    });
+    const verify = createRecoveryCodeVerifier(configuration, Buffer.alloc(32, 0x62), {
+      argon2: derive,
+    });
+
+    await expect(verify(Buffer.alloc(32, 0x63), undefined)).resolves.toBe(false);
+    await expect(verify(undefined, "$argon2id$invalid")).resolves.toBe(false);
+    expect(derive).toHaveBeenCalledTimes(2);
   });
 });

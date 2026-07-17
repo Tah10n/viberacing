@@ -582,6 +582,49 @@ SELECT
   AND pg_catalog.count(*) = 1 AS replaced
 FROM recovery_code_replacement`;
 
+const readRecoveryCodeVerificationMaterialQuery = `SELECT
+  material.recovery_code_id::text AS recovery_code_id,
+  material.verifier_phc AS verifier_phc
+FROM viberacing_api.read_recovery_code_verification_material($1::uuid) AS material`;
+
+const startRecoveryQuery = `WITH recovery_start AS MATERIALIZED (
+  SELECT viberacing_api.start_recovery(
+    $1::uuid,
+    $2::uuid,
+    $3::bytea,
+    $4::bytea,
+    $5::bytea,
+    $6::timestamptz,
+    $7::uuid,
+    $8::text
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS started
+FROM recovery_start`;
+
+const completeRecoveryRegistrationQuery = `SELECT
+  completed.profile_id::text AS profile_id,
+  completed.handle AS handle,
+  completed.locale AS locale
+FROM viberacing_api.complete_recovery_registration_session(
+  $1::uuid,
+  $2::bytea,
+  $3::bytea,
+  $4::bytea,
+  $5::uuid,
+  $6::bytea,
+  $7::bytea,
+  $8::text,
+  $9::bigint,
+  $10::boolean,
+  $11::boolean,
+  $12::uuid,
+  $13::bytea,
+  $14::timestamptz,
+  $15::uuid,
+  $16::text
+) AS completed`;
+
 export interface PairingDatabaseActivation {
   readonly auditEventId: string;
   readonly deviceId: string;
@@ -844,6 +887,36 @@ export interface EnrollmentDatabaseRecoveryCodeReplacement {
   readonly verifiedPasskeyId: string;
 }
 
+export interface EnrollmentDatabaseRecoveryStart {
+  readonly auditEventId: string;
+  readonly authorityId: string;
+  readonly authorityVerifierDigest: Uint8Array;
+  readonly challengeDigest: Uint8Array;
+  readonly contextDigest: Uint8Array;
+  readonly expiresAt: string;
+  readonly recoveryCodeId: string;
+  readonly requestId: string;
+}
+
+export interface EnrollmentDatabaseRecoveryCompletion {
+  readonly auditEventId: string;
+  readonly authorityId: string;
+  readonly authorityVerifierDigest: Uint8Array;
+  readonly backupEligible: boolean;
+  readonly backupState: boolean;
+  readonly challengeDigest: Uint8Array;
+  readonly contextDigest: Uint8Array;
+  readonly cosePublicKey: Uint8Array;
+  readonly credentialId: Uint8Array;
+  readonly label: string;
+  readonly passkeyId: string;
+  readonly requestId: string;
+  readonly sessionExpiresAt: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly signCount: number;
+}
+
 export type PairingDatabasePoolSignal = "idle_client_error";
 export type PairingDatabasePoolSignalSink = (
   signal: PairingDatabasePoolSignal,
@@ -863,6 +936,7 @@ export interface EnrollmentDatabaseClient {
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown>;
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<unknown>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown>;
+  completeRecoveryRegistration(input: EnrollmentDatabaseRecoveryCompletion): Promise<unknown>;
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<unknown>;
   completeRecoveryCodeReplacement(
     input: EnrollmentDatabaseRecoveryCodeReplacement,
@@ -889,11 +963,13 @@ export interface EnrollmentDatabaseClient {
   ): Promise<unknown>;
   readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown>;
+  readRecoveryCodeVerificationMaterial(recoveryCodeId: string): Promise<unknown>;
   readProfileVisibility(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
   release(destroy?: boolean): void;
   revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<unknown>;
   revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown>;
   setProfileVisibility(input: EnrollmentDatabaseProfileVisibilityUpdate): Promise<unknown>;
+  startRecovery(input: EnrollmentDatabaseRecoveryStart): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
 }
 
@@ -1061,6 +1137,43 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         challengeDigest.fill(0);
         contextDigest.fill(0);
         credentialId.fill(0);
+        sessionVerifierDigest.fill(0);
+      }
+    },
+    async completeRecoveryRegistration(
+      input: EnrollmentDatabaseRecoveryCompletion,
+    ): Promise<unknown> {
+      const authorityVerifierDigest = Buffer.from(input.authorityVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      const credentialId = Buffer.from(input.credentialId);
+      const cosePublicKey = Buffer.from(input.cosePublicKey);
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(completeRecoveryRegistrationQuery, [
+          input.authorityId,
+          authorityVerifierDigest,
+          challengeDigest,
+          contextDigest,
+          input.passkeyId,
+          credentialId,
+          cosePublicKey,
+          input.label,
+          input.signCount,
+          input.backupEligible,
+          input.backupState,
+          input.sessionId,
+          sessionVerifierDigest,
+          input.sessionExpiresAt,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        authorityVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+        credentialId.fill(0);
+        cosePublicKey.fill(0);
         sessionVerifierDigest.fill(0);
       }
     },
@@ -1387,6 +1500,9 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         credential.fill(0);
       }
     },
+    readRecoveryCodeVerificationMaterial(recoveryCodeId: string): Promise<unknown> {
+      return fixedQuery(readRecoveryCodeVerificationMaterialQuery, [recoveryCodeId]);
+    },
     async pauseSource(input: EnrollmentDatabaseSourcePause): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       try {
@@ -1503,6 +1619,27 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         userCodeDigest.fill(0);
         pairingChallenge.fill(0);
         publicKey.fill(0);
+      }
+    },
+    async startRecovery(input: EnrollmentDatabaseRecoveryStart): Promise<unknown> {
+      const authorityVerifierDigest = Buffer.from(input.authorityVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(startRecoveryQuery, [
+          input.recoveryCodeId,
+          input.authorityId,
+          authorityVerifierDigest,
+          challengeDigest,
+          contextDigest,
+          input.expiresAt,
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        authorityVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
       }
     },
     async revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown> {

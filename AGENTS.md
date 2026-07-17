@@ -47,20 +47,23 @@ same-origin public-profile hide/show, a session-derived active-device inventory,
 pause, passkey-protected paused-source reactivation, immediate owned-device revoke,
 passkey-protected terminal source unlink, backup-passkey addition, revocation of an owned
 non-current passkey, fresh-passkey recovery-code rotation with one-time plaintext display, an
-exact-handle fresh-passkey profile-deletion request, and logout through the same probed read-write
-Web/Auth pool. Login options retain their profile-free challenge only in a purpose-separated cookie;
-valid proof atomically creates and consumes its database challenge while minting the session. It has
+exact-handle fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey
+sign-in, and logout through the same probed read-write Web/Auth pool. Login options retain their
+profile-free challenge only in a purpose-separated cookie; valid proof atomically creates and
+consumes its database challenge while minting the session. Recovery performs bounded Argon2id
+verification under a protected pepper, creates only a five-minute restricted authority, verifies the
+replacement WebAuthn ceremony, and returns a normal session only after atomic completion. It has
 only injected/synthetic evidence and no invite issuer UI, working OAuth or database credential,
-recovery sign-in or replacement-passkey application, deletion purge worker, edge abuse controls, or
-deployment. A library-only Rust connector foundation now implements a bounded stable App Server
-JSONL handshake and a candidate-only `0.144.4` account/usage parser with checked schema/fixture
-evidence. A one-shot supervisor composes that sequence with fixed local pipes, arguments, deadlines,
-output budgets, ambient-environment clearing, and reap-before-success behavior, but its
-reviewed-launch capability has no public constructor. An exact-body composer now consumes that
-minimized usage behind a second inaccessible reviewed context and fixes the versioned JSON/digest/LF
-message. An isolated one-use signer consumes that otherwise inaccessible material with a
-device-bound key capability that also has no public constructor, returning only the same body and
-five exact signed header values. A separate inaccessible pending-key/challenge signer and pure
+distributed recovery attempt controls, abandoned-state cleanup or notification, deletion purge
+worker, edge abuse controls, or deployment. A library-only Rust connector foundation now implements
+a bounded stable App Server JSONL handshake and a candidate-only `0.144.4` account/usage parser with
+checked schema/fixture evidence. A one-shot supervisor composes that sequence with fixed local
+pipes, arguments, deadlines, output budgets, ambient-environment clearing, and reap-before-success
+behavior, but its reviewed-launch capability has no public constructor. An exact-body composer now
+consumes that minimized usage behind a second inaccessible reviewed context and fixes the versioned
+JSON/digest/LF message. An isolated one-use signer consumes that otherwise inaccessible material
+with a device-bound key capability that also has no public constructor, returning only the same body
+and five exact signed header values. A separate inaccessible pending-key/challenge signer and pure
 server-only Web verifier now agree on one exact synthetic pairing-possession proof. A dormant
 transport-free Web/Auth start application creates nine-minute pending transactions from closed
 device metadata with fresh server IDs, poll tokens, challenges, 60-bit human codes, and separate
@@ -69,10 +72,10 @@ performs protected poll lookup, runs the strict proof, and alone invokes exact a
 server-owned IDs behind fixed admission and timing. There is no executable discovery/admission, live
 Codex launch path, supported version, source/device context provider, key generation/store, browser
 approval/HTTP route or connector client, upload, CLI, or release. Do not claim that deployed
-browser/session HTTP authentication, recovery sign-in or remaining critical-action Argon2id/WebAuthn
-verification, real-user ingestion, an operational connector, a Jobs scheduler or deployed
-public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted security
-control exists until its implementation and verification are present in the working tree.
+browser/session HTTP authentication, production-ready recovery or remaining unimplemented
+critical-action verification, real-user ingestion, an operational connector, a Jobs scheduler or
+deployed public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted
+security control exists until its implementation and verification are present in the working tree.
 
 ## Repository map
 
@@ -85,9 +88,9 @@ control exists until its implementation and verification are present in the work
   allowlist as a workaround for a failing check.
 - `apps/web/` contains the synthetic Next.js frontend, local public-score route/adapter, bounded
   invite/OAuth/initial-passkey enrollment, returning-passkey login, private account controls, and
-  passkey-protected recovery-code rotation, plus the pure pairing-possession verifier, dormant
-  pairing activation application/adapter, and nested agent guidance. Read `apps/web/AGENTS.md`
-  before editing it.
+  passkey-protected recovery-code rotation and replacement-passkey sign-in, plus the pure
+  pairing-possession verifier, dormant pairing activation application/adapter, and nested agent
+  guidance. Read `apps/web/AGENTS.md` before editing it.
 - `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
   least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL
@@ -107,9 +110,9 @@ control exists until its implementation and verification are present in the work
   Read `crates/connector/AGENTS.md` before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
-- The Ingest host/port/TLS deployment entry point, recovery-code verification/replacement-passkey
-  application, and operational connector layers are not present yet; follow `docs/PROJECT_PLAN.md`
-  when they are introduced.
+- The Ingest host/port/TLS deployment entry point, distributed recovery perimeter and cleanup, and
+  operational connector layers are not present yet; follow `docs/PROJECT_PLAN.md` when they are
+  introduced.
 
 ## Verified commands
 

@@ -6,7 +6,7 @@ import { createConfiguredEnrollmentDatabase } from "./enrollment-database";
 import { createEnrollmentService, type EnrollmentService } from "./enrollment-service";
 
 export type EnrollmentRuntimeConfig = Readonly<
-  Pick<EnrollmentConfig, "publicOrigin" | "secureCookies">
+  Pick<EnrollmentConfig, "publicOrigin" | "recoveryMinimumResponseMs" | "secureCookies">
 >;
 
 export interface EnrollmentRuntime {
@@ -25,6 +25,7 @@ export function getEnrollmentRuntime(): EnrollmentRuntime {
       const service = createEnrollmentService({ config, cookieCodec, database });
       const publicConfig: EnrollmentRuntimeConfig = Object.freeze({
         publicOrigin: config.publicOrigin,
+        recoveryMinimumResponseMs: config.recoveryMinimumResponseMs,
         secureCookies: config.secureCookies,
       });
       return Object.freeze({ config: publicConfig, service });

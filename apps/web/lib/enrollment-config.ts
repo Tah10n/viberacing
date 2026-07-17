@@ -22,6 +22,7 @@ export type EnrollmentConfigurationErrorCode =
   | "public_origin_invalid"
   | "recovery_argon2_invalid"
   | "recovery_pepper_invalid"
+  | "recovery_timing_invalid"
   | "webauthn_origin_invalid"
   | "webauthn_rp_id_invalid";
 
@@ -43,6 +44,7 @@ export interface EnrollmentConfig {
   readonly publicOrigin: string;
   readonly recoveryArgon2: RecoveryArgon2Configuration;
   readonly recoveryPepper: Uint8Array;
+  readonly recoveryMinimumResponseMs: number;
   readonly secureCookies: boolean;
   readonly webauthnOrigin: string;
   readonly webauthnRpId: string;
@@ -88,6 +90,17 @@ function exactInteger(value: string | undefined): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || String(parsed) !== value) {
     fail("recovery_argon2_invalid");
+  }
+  return parsed;
+}
+
+function exactRecoveryTiming(value: string | undefined): number {
+  if (value === undefined || !/^[1-9][0-9]{2,3}$/.test(value)) {
+    fail("recovery_timing_invalid");
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || String(parsed) !== value || parsed < 100 || parsed > 5_000) {
+    fail("recovery_timing_invalid");
   }
   return parsed;
 }
@@ -171,6 +184,9 @@ export function resolveEnrollmentConfig(environment: Environment = process.env):
       publicOrigin: publicUrl.origin,
       recoveryArgon2,
       recoveryPepper,
+      recoveryMinimumResponseMs: exactRecoveryTiming(
+        environment.VIBERACING_RECOVERY_MINIMUM_RESPONSE_MS,
+      ),
       secureCookies: publicUrl.protocol === "https:",
       webauthnOrigin: webauthnUrl.origin,
       webauthnRpId: rpId,

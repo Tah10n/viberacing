@@ -10,7 +10,7 @@ import { joinTranslations } from "@/lib/join-i18n";
 
 import { AccountExperience } from "./account-experience";
 import { JoinExperience } from "./join-experience";
-import { PasskeyLogin, PasskeySetup } from "./passkey-setup";
+import { PasskeyLogin, PasskeySetup, RecoveryExperience } from "./passkey-setup";
 
 const webauthn = vi.hoisted(() => ({
   browserSupportsWebAuthn: vi.fn(() => false),
@@ -157,6 +157,63 @@ describe("enrollment experience", () => {
       response: { id: "synthetic-login" },
     });
     expect(mounted.container.textContent).toContain("Не удалось завершить запрос");
+    expect(mounted.container.querySelector('a[href="/recover"]')).not.toBeNull();
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
+  it("keeps a recovery code transient and registers a replacement passkey", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const fetchMock = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ challenge: "synthetic-recovery" }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(<RecoveryExperience />);
+    const code =
+      `vrr1_00000000-0000-4000-8000-000000000701_` + Buffer.alloc(32, 0x71).toString("base64url");
+    const codeInput = mounted.container.querySelector<HTMLInputElement>('input[name="code"]');
+    const labelInput = mounted.container.querySelector<HTMLInputElement>('input[name="label"]');
+    if (codeInput === null || labelInput === null) {
+      throw new Error("expected recovery fields");
+    }
+    codeInput.value = code;
+    labelInput.value = "Replacement passkey";
+
+    await act(async () => {
+      mounted.container
+        .querySelector("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      "/auth/recovery/options",
+      "/auth/recovery/verify",
+    ]);
+    const startBody = fetchMock.mock.calls[0]?.[1].body;
+    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
+    if (typeof startBody !== "string" || typeof verificationBody !== "string") {
+      throw new Error("expected serialized recovery bodies");
+    }
+    expect(JSON.parse(startBody)).toEqual({
+      code,
+      label: "Replacement passkey",
+    });
+    expect(JSON.parse(verificationBody)).toEqual({
+      response: { id: "synthetic" },
+    });
+    expect(webauthn.startRegistration).toHaveBeenCalledOnce();
+    expect(codeInput.value).toBe("");
+    expect(
+      Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index)),
+    ).not.toContain("recoveryCode");
+    expect(mounted.container.textContent).toContain("could not be completed");
     act(() => {
       mounted.root.unmount();
     });
@@ -681,6 +738,7 @@ describe("enrollment experience", () => {
         />,
       ),
       renderToStaticMarkup(<PasskeyLogin />),
+      renderToStaticMarkup(<RecoveryExperience />),
       renderToStaticMarkup(<PasskeySetup handle="pixel_driver" locale="en" />),
     ]) {
       document.body.innerHTML = markup;

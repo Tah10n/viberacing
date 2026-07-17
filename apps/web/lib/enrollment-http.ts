@@ -8,6 +8,7 @@ import { parseJoinRequest } from "./enrollment-domain";
 import type { EnrollmentRuntime } from "./enrollment-runtime";
 import { enrollmentCookieNames } from "./enrollment-service";
 import { createPublicProblemResponse, createPublicRequestId } from "./public-http-problem";
+import { createRecoveryTiming } from "./recovery-timing";
 
 const formContentTypePattern = /^application\/x-www-form-urlencoded(?:;\s*charset=utf-8)?$/i;
 const jsonContentTypePattern = /^application\/json(?:;\s*charset=utf-8)?$/i;
@@ -19,6 +20,7 @@ const enrollmentCookiePaths = Object.freeze({
   passkeyAdd: "/auth/passkeys/add",
   passkeyRevoke: "/auth/passkeys/revoke",
   profileDeletion: "/auth/profile/delete",
+  recovery: "/auth/recovery",
   recoveryCodes: "/auth/recovery-codes",
   session: "/",
   sourceReactivation: "/auth/sources/reactivate",
@@ -40,6 +42,8 @@ export interface EnrollmentHttp {
   profileDeletionOptions(request: Request): Promise<Response>;
   profileDeletionVerify(request: Request): Promise<Response>;
   profileVisibility(request: Request): Promise<Response>;
+  recoveryOptions(request: Request): Promise<Response>;
+  recoveryVerify(request: Request): Promise<Response>;
   recoveryCodeOptions(request: Request): Promise<Response>;
   recoveryCodeVerify(request: Request): Promise<Response>;
   sourcePause(request: Request): Promise<Response>;
@@ -677,6 +681,134 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         lease.release();
       }
     },
+    async recoveryOptions(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/recovery/options") ||
+        !contentType(request, jsonContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      let timing: ReturnType<typeof createRecoveryTiming>;
+      let startedAt: number;
+      try {
+        timing = createRecoveryTiming(currentRuntime.config.recoveryMinimumResponseMs);
+        startedAt = timing.start();
+      } catch {
+        discardBody(request);
+        lease.release();
+        return problem("temporarily_unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 512);
+        if (body === undefined) {
+          return problem("invalid_request");
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
+          return problem("invalid_request");
+        }
+        const decision = await currentRuntime.service.beginRecovery(parsed);
+        if (decision === undefined) {
+          return problem("unauthorized");
+        }
+        return new Response(JSON.stringify(decision.options), {
+          headers: noStoreHeaders({
+            "content-type": "application/json; charset=utf-8",
+            "set-cookie": serializeEnrollmentCookie(
+              enrollmentCookieNames.recovery,
+              decision.recoveryCookie,
+              300,
+              currentRuntime.config.secureCookies,
+              enrollmentCookiePaths.recovery,
+            ),
+          }),
+          status: 200,
+        });
+      } finally {
+        try {
+          await timing.settle(startedAt);
+        } finally {
+          lease.release();
+        }
+      }
+    },
+    async recoveryVerify(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/recovery/verify") ||
+        !contentType(request, jsonContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 16_384);
+        if (body === undefined) {
+          return problem("invalid_request");
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
+          return problem("invalid_request");
+        }
+        const recoveryCookie = readCookie(
+          request.headers.get("cookie"),
+          enrollmentCookieNames.recovery,
+        );
+        if (recoveryCookie === undefined) {
+          return problem("unauthorized");
+        }
+        const decision = await currentRuntime.service.completeRecovery(recoveryCookie, parsed);
+        if (decision === undefined) {
+          return problem("unauthorized");
+        }
+        const headers = noStoreHeaders();
+        headers.append(
+          "set-cookie",
+          clearEnrollmentCookie(
+            enrollmentCookieNames.recovery,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.recovery,
+          ),
+        );
+        headers.append(
+          "set-cookie",
+          serializeEnrollmentCookie(
+            enrollmentCookieNames.session,
+            decision.sessionCookie,
+            30 * 24 * 60 * 60,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.session,
+          ),
+        );
+        return new Response(null, { headers, status: 204 });
+      } finally {
+        lease.release();
+      }
+    },
     async recoveryCodeOptions(request: Request): Promise<Response> {
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
@@ -919,6 +1051,11 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
             enrollmentCookieNames.profileDeletion,
             currentRuntime.config.secureCookies,
             enrollmentCookiePaths.profileDeletion,
+          ),
+          clearEnrollmentCookie(
+            enrollmentCookieNames.recovery,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.recovery,
           ),
           clearEnrollmentCookie(
             enrollmentCookieNames.recoveryCodes,
@@ -1264,6 +1401,11 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           enrollmentCookieNames.profileDeletion,
           currentRuntime.config.secureCookies,
           enrollmentCookiePaths.profileDeletion,
+        ),
+        clearEnrollmentCookie(
+          enrollmentCookieNames.recovery,
+          currentRuntime.config.secureCookies,
+          enrollmentCookiePaths.recovery,
         ),
         clearEnrollmentCookie(
           enrollmentCookieNames.recoveryCodes,

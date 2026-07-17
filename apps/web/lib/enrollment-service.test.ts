@@ -14,6 +14,8 @@ import { createEnrollmentCookieCodec } from "./enrollment-cookie";
 import type { EnrollmentDatabase } from "./enrollment-database";
 import type { JoinRequest } from "./enrollment-domain";
 import { createEnrollmentService } from "./enrollment-service";
+import type { RegisteredPasskey } from "./passkey-registration";
+import type { RecoveryCodeVerifier } from "./recovery-code";
 import type {
   EnrollmentDatabaseLoginCompletion,
   EnrollmentDatabaseAccountOverviewRequest,
@@ -31,6 +33,8 @@ import type {
   EnrollmentDatabaseProfileVisibilityUpdate,
   EnrollmentDatabaseRecoveryCodeChallenge,
   EnrollmentDatabaseRecoveryCodeReplacement,
+  EnrollmentDatabaseRecoveryCompletion,
+  EnrollmentDatabaseRecoveryStart,
   EnrollmentDatabaseSourcePause,
   EnrollmentDatabaseSourceReactivation,
   EnrollmentDatabaseSourceReactivationChallenge,
@@ -49,6 +53,7 @@ const config = resolveEnrollmentConfig({
   VIBERACING_RECOVERY_ARGON2_MEMORY_KIB: "19456",
   VIBERACING_RECOVERY_ARGON2_PARALLELISM: "2",
   VIBERACING_RECOVERY_ARGON2_PASSES: "2",
+  VIBERACING_RECOVERY_MINIMUM_RESPONSE_MS: "250",
   VIBERACING_RECOVERY_PEPPER: Buffer.alloc(32, 0x32).toString("base64url"),
   WEBAUTHN_ORIGIN: "https://race.example.com",
   WEBAUTHN_RP_ID: "race.example.com",
@@ -91,6 +96,8 @@ function createFixture() {
   let deletionProfileRefDigestInput: Uint8Array | undefined;
   let recoveryChallengeWrite: EnrollmentDatabaseRecoveryCodeChallenge | undefined;
   let recoveryReplacementWrite: EnrollmentDatabaseRecoveryCodeReplacement | undefined;
+  let recoveryCompletionWrite: EnrollmentDatabaseRecoveryCompletion | undefined;
+  let recoveryStartWrite: EnrollmentDatabaseRecoveryStart | undefined;
   let visibilityRead: EnrollmentDatabaseProfileVisibilityRequest | undefined;
   let visibilityReadDigestInput: Uint8Array | undefined;
   let visibilityWrite: EnrollmentDatabaseProfileVisibilityUpdate | undefined;
@@ -111,6 +118,22 @@ function createFixture() {
     }),
     completePasskeyLogin: vi.fn((input: EnrollmentDatabaseLoginCompletion) => {
       loginCompletion = input;
+      return Promise.resolve({
+        handle: "pixel_driver",
+        locale: "en" as const,
+        profileId: join.inviteId,
+      });
+    }),
+    completeRecoveryRegistration: vi.fn((input: EnrollmentDatabaseRecoveryCompletion) => {
+      recoveryCompletionWrite = {
+        ...input,
+        authorityVerifierDigest: Buffer.from(input.authorityVerifierDigest),
+        challengeDigest: Buffer.from(input.challengeDigest),
+        contextDigest: Buffer.from(input.contextDigest),
+        cosePublicKey: Buffer.from(input.cosePublicKey),
+        credentialId: Buffer.from(input.credentialId),
+        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+      };
       return Promise.resolve({
         handle: "pixel_driver",
         locale: "en" as const,
@@ -296,6 +319,7 @@ function createFixture() {
         signCount: 3,
       });
     }),
+    readRecoveryCodeVerificationMaterial: vi.fn(() => Promise.resolve(undefined)),
     readProfileVisibility: vi.fn((input: EnrollmentDatabaseProfileVisibilityRequest) => {
       visibilityReadDigestInput = input.sessionVerifierDigest;
       visibilityRead = {
@@ -328,6 +352,15 @@ function createFixture() {
       };
       return Promise.resolve(input.publiclyVisible ? ("public" as const) : ("hidden" as const));
     }),
+    startRecovery: vi.fn((input: EnrollmentDatabaseRecoveryStart) => {
+      recoveryStartWrite = {
+        ...input,
+        authorityVerifierDigest: Buffer.from(input.authorityVerifierDigest),
+        challengeDigest: Buffer.from(input.challengeDigest),
+        contextDigest: Buffer.from(input.contextDigest),
+      };
+      return Promise.resolve(true);
+    }),
   };
   const uuids = [
     "00000000-0000-4000-8000-000000000502",
@@ -353,8 +386,9 @@ function createFixture() {
   } as PublicKeyCredentialRequestOptionsJSON;
   const exchangeGithub = vi.fn(() => Promise.resolve(123_456));
   const createOptions = vi.fn(() => Promise.resolve(options));
+  const createRecoveryOptions = vi.fn(() => Promise.resolve(options));
   const createLoginOptions = vi.fn(() => Promise.resolve(loginOptions));
-  const verifyPasskey = vi.fn(() =>
+  const verifyPasskey = vi.fn((): Promise<RegisteredPasskey | undefined> =>
     Promise.resolve({
       backupEligible: true,
       backupState: false,
@@ -393,6 +427,7 @@ function createFixture() {
     }),
   );
   const generateRecoveryCodes = vi.fn(() => Promise.resolve(recoveryCodeRecords));
+  const verifyRecoveryCode = vi.fn<RecoveryCodeVerifier>(() => Promise.resolve(true));
   let randomFill = 0x21;
   const cookieCodec = createEnrollmentCookieCodec(config.cookieKey, (size) =>
     Buffer.alloc(size, 0x21),
@@ -402,6 +437,7 @@ function createFixture() {
     cookieCodec,
     createLoginOptions,
     createOptions,
+    createRecoveryOptions,
     createRequestId: () => "req_AAAAAAAAAAAAAAAAAAAAAA",
     database,
     exchangeGithub,
@@ -411,6 +447,7 @@ function createFixture() {
     randomUuid: () => uuids.shift() ?? "invalid",
     verifyLogin,
     verifyPasskey,
+    verifyRecoveryCode,
   });
   return {
     accountOverviewDigestInput: () => accountOverviewDigestInput,
@@ -424,6 +461,7 @@ function createFixture() {
     challengeSessionDigestInput: () => challengeSessionDigestInput,
     cookieCodec,
     createOptions,
+    createRecoveryOptions,
     createLoginOptions,
     database,
     deletionChallengeWrite: () => deletionChallengeWrite,
@@ -439,8 +477,10 @@ function createFixture() {
     inventorySessionDigestInput: () => inventorySessionDigestInput,
     generateRecoveryCodes,
     recoveryChallengeWrite: () => recoveryChallengeWrite,
+    recoveryCompletionWrite: () => recoveryCompletionWrite,
     recoveryCodeRecords,
     recoveryReplacementWrite: () => recoveryReplacementWrite,
+    recoveryStartWrite: () => recoveryStartWrite,
     revokeChallengeWrite: () => revokeChallengeWrite,
     registrationChallenge,
     revocationWrite: () => revocationWrite,
@@ -452,6 +492,7 @@ function createFixture() {
     sourceUnlinkWrite: () => sourceUnlinkWrite,
     verifyPasskey,
     verifyLogin,
+    verifyRecoveryCode,
     verifiedLoginCredential: () => verifiedLoginCredential,
     visibilityRead: () => visibilityRead,
     visibilityReadDigestInput: () => visibilityReadDigestInput,
@@ -1151,6 +1192,146 @@ describe("enrollment service", () => {
     expect(database.completeRecoveryCodeReplacement).toHaveBeenCalledTimes(2);
   });
 
+  it("turns one verified recovery code into a replacement passkey before creating a session", async () => {
+    const {
+      cookieCodec,
+      createRecoveryOptions,
+      database,
+      recoveryCodeRecords,
+      recoveryCompletionWrite,
+      recoveryStartWrite,
+      registrationChallenge,
+      service,
+      verifyPasskey,
+      verifyRecoveryCode,
+    } = createFixture();
+    const recoveryCode = recoveryCodeRecords[0];
+    expect(recoveryCode).toBeDefined();
+    vi.mocked(database.readRecoveryCodeVerificationMaterial).mockResolvedValue({
+      recoveryCodeId: recoveryCode?.codeId ?? "",
+      verifierPhc: recoveryCode?.verifierPhc ?? "",
+    });
+    let verifiedSecret: Buffer | undefined;
+    vi.mocked(verifyRecoveryCode).mockImplementation((secret, verifierPhc) => {
+      verifiedSecret = secret === undefined ? undefined : Buffer.from(secret);
+      expect(verifierPhc).toBe(recoveryCode?.verifierPhc);
+      return Promise.resolve(true);
+    });
+
+    const started = await service.beginRecovery({
+      code: recoveryCode?.plaintext,
+      label: "Replacement passkey",
+    });
+
+    expect(started?.options.challenge).toBe(registrationChallenge);
+    expect(createRecoveryOptions).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000502",
+      config.webauthnRpId,
+    );
+    expect(verifiedSecret).toEqual(
+      Buffer.from(recoveryCode?.plaintext.split("_").at(-1) ?? "", "base64url"),
+    );
+    expect(recoveryStartWrite()).toMatchObject({
+      auditEventId: "00000000-0000-4000-8000-000000000503",
+      authorityId: "00000000-0000-4000-8000-000000000502",
+      expiresAt: "2026-07-16T10:05:00.000Z",
+      recoveryCodeId: recoveryCode?.codeId,
+      requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+    });
+    expect(recoveryStartWrite()?.contextDigest).toEqual(
+      createHash("sha256")
+        .update(
+          `viberacing-recovery-passkey-v1\n00000000-0000-4000-8000-000000000502\nReplacement passkey\n${registrationChallenge}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
+          "utf8",
+        )
+        .digest(),
+    );
+    const sealed = cookieCodec.open("recovery", started?.recoveryCookie ?? "") as Record<
+      string,
+      unknown
+    >;
+    expect(sealed).toMatchObject({
+      authorityId: "00000000-0000-4000-8000-000000000502",
+      challenge: registrationChallenge,
+      label: "Replacement passkey",
+      version: 1,
+    });
+    expect(JSON.stringify(sealed)).not.toContain(recoveryCode?.plaintext ?? "missing");
+
+    const completed = await service.completeRecovery(started?.recoveryCookie ?? "", {
+      response: {},
+    });
+
+    expect(verifyPasskey).toHaveBeenCalledWith(
+      {},
+      registrationChallenge,
+      config.webauthnOrigin,
+      config.webauthnRpId,
+    );
+    expect(recoveryCompletionWrite()).toMatchObject({
+      auditEventId: "00000000-0000-4000-8000-000000000506",
+      authorityId: "00000000-0000-4000-8000-000000000502",
+      backupEligible: true,
+      backupState: false,
+      label: "Replacement passkey",
+      passkeyId: "00000000-0000-4000-8000-000000000504",
+      requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+      sessionExpiresAt: "2026-08-15T10:00:00.000Z",
+      sessionId: "00000000-0000-4000-8000-000000000505",
+      signCount: 3,
+    });
+    expect(service.readSession(completed?.sessionCookie)).toMatchObject({
+      handle: join.handle,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId: "00000000-0000-4000-8000-000000000505",
+    });
+  });
+
+  it("creates no session or replacement key when recovery WebAuthn verification fails", async () => {
+    const { cookieCodec, database, service, verifyPasskey } = createFixture();
+    const recoveryCookie = cookieCodec.seal("recovery", {
+      authorityId: "00000000-0000-4000-8000-000000000601",
+      authoritySecret: Buffer.alloc(32, 0x61).toString("base64url"),
+      challenge: Buffer.alloc(32, 0x62).toString("base64url"),
+      expiresAt: Math.floor(now.valueOf() / 1000) + 300,
+      label: "Replacement passkey",
+      version: 1,
+    });
+    vi.mocked(verifyPasskey).mockResolvedValueOnce(undefined);
+
+    await expect(
+      service.completeRecovery(recoveryCookie, { response: { id: "invalid" } }),
+    ).resolves.toBeUndefined();
+
+    expect(verifyPasskey).toHaveBeenCalledOnce();
+    expect(database.completeRecoveryRegistration).not.toHaveBeenCalled();
+    expect(database.revokeSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps unknown, wrong, and malformed recovery attempts outside restricted authority", async () => {
+    const { database, recoveryCodeRecords, service, verifyRecoveryCode } = createFixture();
+    const recoveryCode = recoveryCodeRecords[0];
+    vi.mocked(verifyRecoveryCode).mockResolvedValue(false);
+
+    await expect(
+      service.beginRecovery({ code: recoveryCode?.plaintext, label: "Replacement passkey" }),
+    ).resolves.toBeUndefined();
+    await expect(service.beginRecovery({ code: "bad", extra: true })).resolves.toBeUndefined();
+
+    expect(database.readRecoveryCodeVerificationMaterial).toHaveBeenNthCalledWith(
+      1,
+      recoveryCode?.codeId,
+    );
+    expect(database.readRecoveryCodeVerificationMaterial).toHaveBeenNthCalledWith(
+      2,
+      "00000000-0000-4000-8000-000000000000",
+    );
+    expect(verifyRecoveryCode).toHaveBeenCalledTimes(2);
+    expect(database.startRecovery).not.toHaveBeenCalled();
+    expect(database.completeRecoveryRegistration).not.toHaveBeenCalled();
+  });
+
   it("requires an exact handle and fresh passkey before atomically requesting deletion", async () => {
     const {
       cookieCodec,
@@ -1369,6 +1550,13 @@ describe("enrollment service", () => {
           profileId: join.inviteId,
         }),
       ),
+      completeRecoveryRegistration: vi.fn(() =>
+        Promise.resolve({
+          handle: "pixel_driver",
+          locale: "en" as const,
+          profileId: join.inviteId,
+        }),
+      ),
       completePasskeyRevocation: vi.fn(() => Promise.resolve(true)),
       completeProfileDeletion: vi.fn(() => Promise.resolve(true)),
       completeRecoveryCodeReplacement: vi.fn(() => Promise.resolve(true)),
@@ -1389,10 +1577,12 @@ describe("enrollment service", () => {
       readActiveDeviceInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),
+      readRecoveryCodeVerificationMaterial: vi.fn(() => Promise.resolve(undefined)),
       readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
       revokeDevice: vi.fn(() => Promise.resolve(true)),
       revokeSession: vi.fn(() => Promise.resolve(true)),
       setProfileVisibility: vi.fn(() => Promise.resolve("hidden" as const)),
+      startRecovery: vi.fn(() => Promise.resolve(true)),
     };
     const seconds = Math.floor(now.valueOf() / 1000);
     const state = Buffer.alloc(32, 3).toString("base64url");

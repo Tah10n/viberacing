@@ -71,6 +71,14 @@ const sourceActionChallengeKeys = new Set([
   "sourceId",
   "version",
 ]);
+const recoveryAuthorityKeys = new Set([
+  "authorityId",
+  "authoritySecret",
+  "challenge",
+  "expiresAt",
+  "label",
+  "version",
+]);
 
 export interface JoinRequest {
   readonly handle: string;
@@ -126,6 +134,15 @@ export interface ProfileDeletionChallenge extends PasskeyRegistrationChallenge {
 
 export interface SourceActionChallenge extends PasskeyRegistrationChallenge {
   readonly sourceId: string;
+}
+
+export interface RecoveryAuthorityChallenge {
+  readonly authorityId: string;
+  readonly authoritySecret: string;
+  readonly challenge: string;
+  readonly expiresAt: number;
+  readonly label: string;
+  readonly version: 1;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -383,6 +400,32 @@ export function readPasskeyAddChallenge(
     return undefined;
   }
   return Object.freeze(value as unknown as PasskeyAddChallenge);
+}
+
+export function readRecoveryAuthorityChallenge(
+  value: unknown,
+  nowSeconds: number,
+): RecoveryAuthorityChallenge | undefined {
+  if (
+    !isPlainObject(value) ||
+    !exactKeys(value, recoveryAuthorityKeys) ||
+    value.version !== 1 ||
+    typeof value.authorityId !== "string" ||
+    !uuidV4Pattern.test(value.authorityId) ||
+    !canonicalBase64Url32(value.authoritySecret) ||
+    !canonicalBase64Url32(value.challenge) ||
+    typeof value.label !== "string" ||
+    value.label.length < 1 ||
+    value.label.length > 64 ||
+    value.label !== value.label.trim() ||
+    value.label !== value.label.normalize("NFC") ||
+    unsafePasskeyLabelPattern.test(value.label) ||
+    Array.from(value.label).length > 64 ||
+    !futureExpiry(value.expiresAt, nowSeconds, 600)
+  ) {
+    return undefined;
+  }
+  return Object.freeze(value as unknown as RecoveryAuthorityChallenge);
 }
 
 export const enrollmentPatterns = Object.freeze({ handle: handlePattern, uuidV4: uuidV4Pattern });

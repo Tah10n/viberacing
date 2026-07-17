@@ -636,25 +636,33 @@ RESET ROLE;
 SET LOCAL ROLE viberacing_web;
 
 SELECT pg_temp.assert_true(
-  viberacing_api.complete_recovery_registration(
-    '00000000-0000-4000-8000-000000006911',
-    pg_catalog.decode(pg_catalog.repeat('91', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('92', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('93', 32), 'hex'),
-    '00000000-0000-4000-8000-000000006312',
-    pg_catalog.decode(pg_catalog.repeat('37', 32), 'hex'),
-    pg_catalog.decode(pg_catalog.repeat('47', 64), 'hex'),
-    'Recovered passkey',
-    0,
-    true,
-    false,
-    '00000000-0000-4000-8000-000000006212',
-    pg_catalog.decode(pg_catalog.repeat('57', 32), 'hex'),
-    pg_catalog.statement_timestamp() + INTERVAL '1 hour',
-    '00000000-0000-4000-8000-000000006907',
-    'req_' || pg_catalog.repeat('G', 22)
-  ) = '00000000-0000-4000-8000-000000006101',
-  'verified recovery registration atomically returns the recovered profile'
+  (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.bool_and(
+        profile_id = '00000000-0000-4000-8000-000000006101'
+        AND handle = 'recovery-alpha'
+        AND locale = 'en'
+      )
+    FROM viberacing_api.complete_recovery_registration_session(
+      '00000000-0000-4000-8000-000000006911',
+      pg_catalog.decode(pg_catalog.repeat('91', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('92', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('93', 32), 'hex'),
+      '00000000-0000-4000-8000-000000006312',
+      pg_catalog.decode(pg_catalog.repeat('37', 32), 'hex'),
+      pg_catalog.decode(pg_catalog.repeat('47', 64), 'hex'),
+      'Recovered passkey',
+      0,
+      true,
+      false,
+      '00000000-0000-4000-8000-000000006212',
+      pg_catalog.decode(pg_catalog.repeat('57', 32), 'hex'),
+      pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+      '00000000-0000-4000-8000-000000006907',
+      'req_' || pg_catalog.repeat('G', 22)
+    )
+  ),
+  'verified recovery registration atomically returns only session-cookie profile fields'
 );
 
 RESET ROLE;

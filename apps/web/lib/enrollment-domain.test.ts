@@ -11,6 +11,7 @@ import {
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
   readProfileDeletionChallenge,
+  readRecoveryAuthorityChallenge,
   readSourceActionChallenge,
 } from "./enrollment-domain";
 
@@ -101,6 +102,14 @@ describe("enrollment domain", () => {
       registrationChallenge: Buffer.alloc(32, 0x45).toString("base64url"),
       version: 1,
     } as const;
+    const recoveryAuthority = {
+      authorityId: "00000000-0000-4000-8000-000000000106",
+      authoritySecret: Buffer.alloc(32, 0x46).toString("base64url"),
+      challenge: challenge.challenge,
+      expiresAt: now + 300,
+      label: "Replacement passkey",
+      version: 1,
+    } as const;
 
     expect(readPendingEnrollment(pending, now)).toEqual(pending);
     expect(readEnrollmentSession(session, now)).toEqual(session);
@@ -113,6 +122,7 @@ describe("enrollment domain", () => {
     expect(readSourceActionChallenge(sourceReactivationChallenge, now)).toEqual(
       sourceReactivationChallenge,
     );
+    expect(readRecoveryAuthorityChallenge(recoveryAuthority, now)).toEqual(recoveryAuthority);
     expect(readPendingEnrollment({ ...pending, extra: true }, now)).toBeUndefined();
     expect(readEnrollmentSession({ ...session, expiresAt: now }, now)).toBeUndefined();
     expect(readPasskeyChallenge({ ...challenge, challenge: "bad" }, now)).toBeUndefined();
@@ -149,6 +159,16 @@ describe("enrollment domain", () => {
     ).toBeUndefined();
     expect(
       readSourceActionChallenge({ ...sourceReactivationChallenge, extra: true }, now),
+    ).toBeUndefined();
+    expect(readRecoveryAuthorityChallenge(challenge, now)).toBeUndefined();
+    expect(
+      readRecoveryAuthorityChallenge({ ...recoveryAuthority, authoritySecret: "bad" }, now),
+    ).toBeUndefined();
+    expect(
+      readRecoveryAuthorityChallenge({ ...recoveryAuthority, label: " Replacement" }, now),
+    ).toBeUndefined();
+    expect(
+      readRecoveryAuthorityChallenge({ ...recoveryAuthority, expiresAt: now + 601 }, now),
     ).toBeUndefined();
   });
 });

@@ -24,6 +24,8 @@ import {
   type EnrollmentDatabaseProfileVisibilityUpdate,
   type EnrollmentDatabaseRecoveryCodeChallenge,
   type EnrollmentDatabaseRecoveryCodeReplacement,
+  type EnrollmentDatabaseRecoveryCompletion,
+  type EnrollmentDatabaseRecoveryStart,
   type EnrollmentDatabaseSessionRevocation,
   type EnrollmentDatabaseSourcePause,
   type EnrollmentDatabaseSourceReactivation,
@@ -44,6 +46,7 @@ const loginMaterialColumns = new Set([
   "sign_count",
 ]);
 const loginProfileColumns = new Set(["handle", "locale", "profile_id"]);
+const recoveryMaterialColumns = new Set(["recovery_code_id", "verifier_phc"]);
 const passkeyInventoryColumns = new Set([
   "created_on",
   "current_authenticator",
@@ -88,6 +91,8 @@ const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
 const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
 const connectorVersionPattern = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
+const recoveryPhcPattern =
+  /^\$argon2id\$v=19\$m=[1-9][0-9]{0,5},t=[1-9][0-9]?,p=[1-9][0-9]?\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}$/;
 
 export type EnrollmentDatabaseErrorCode =
   | "connection_release_failed"
@@ -111,6 +116,9 @@ export interface EnrollmentDatabase {
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<boolean>;
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<boolean>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile>;
+  completeRecoveryRegistration(
+    input: EnrollmentDatabaseRecoveryCompletion,
+  ): Promise<PasskeyLoginProfile>;
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<boolean>;
   completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<boolean>;
   completeRecoveryCodeReplacement(
@@ -139,6 +147,9 @@ export interface EnrollmentDatabase {
     input: EnrollmentDatabasePasskeyInventoryRequest,
   ): Promise<readonly PasskeyInventoryItem[]>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined>;
+  readRecoveryCodeVerificationMaterial(
+    recoveryCodeId: string,
+  ): Promise<RecoveryCodeVerificationMaterial | undefined>;
   readProfileVisibility(
     input: EnrollmentDatabaseProfileVisibilityRequest,
   ): Promise<ProfileVisibility>;
@@ -147,6 +158,7 @@ export interface EnrollmentDatabase {
   setProfileVisibility(
     input: EnrollmentDatabaseProfileVisibilityUpdate,
   ): Promise<ProfileVisibility>;
+  startRecovery(input: EnrollmentDatabaseRecoveryStart): Promise<boolean>;
 }
 
 export type ProfileVisibility = "hidden" | "public";
@@ -178,6 +190,11 @@ export interface PasskeyLoginProfile {
   readonly handle: string;
   readonly locale: "en" | "ru";
   readonly profileId: string;
+}
+
+export interface RecoveryCodeVerificationMaterial {
+  readonly recoveryCodeId: string;
+  readonly verifierPhc: string;
 }
 
 export interface PasskeyInventoryItem {
@@ -414,6 +431,37 @@ function exactLoginProfile(value: unknown): PasskeyLoginProfile {
     fail("result_invalid");
   }
   return Object.freeze({ handle: row.handle, locale: row.locale, profileId: row.profile_id });
+}
+
+function exactRecoveryMaterial(
+  value: unknown,
+  expectedRecoveryCodeId: string,
+): RecoveryCodeVerificationMaterial | undefined {
+  if (!Array.isArray(value) || value.length > 1) {
+    fail("result_invalid");
+  }
+  if (value.length === 0) {
+    return undefined;
+  }
+  const row: unknown = value[0];
+  if (!isRecord(row)) {
+    fail("result_invalid");
+  }
+  const keys = Object.keys(row);
+  if (
+    keys.length !== recoveryMaterialColumns.size ||
+    keys.some((key) => !recoveryMaterialColumns.has(key)) ||
+    row.recovery_code_id !== expectedRecoveryCodeId ||
+    typeof row.verifier_phc !== "string" ||
+    !recoveryPhcPattern.test(row.verifier_phc) ||
+    row.verifier_phc.length > 255
+  ) {
+    fail("result_invalid");
+  }
+  return Object.freeze({
+    recoveryCodeId: expectedRecoveryCodeId,
+    verifierPhc: row.verifier_phc,
+  });
 }
 
 function canonicalDate(value: unknown): value is string {
@@ -662,6 +710,11 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
     completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile> {
       return execute((client) => client.completePasskeyLogin(input), exactLoginProfile);
     },
+    completeRecoveryRegistration(
+      input: EnrollmentDatabaseRecoveryCompletion,
+    ): Promise<PasskeyLoginProfile> {
+      return execute((client) => client.completeRecoveryRegistration(input), exactLoginProfile);
+    },
     completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<boolean> {
       return execute(
         (client) => client.completePasskeyRevocation(input),
@@ -776,6 +829,14 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
     readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined> {
       return execute((client) => client.readPasskeyLoginMaterial(credentialId), exactLoginMaterial);
     },
+    readRecoveryCodeVerificationMaterial(
+      recoveryCodeId: string,
+    ): Promise<RecoveryCodeVerificationMaterial | undefined> {
+      return execute(
+        (client) => client.readRecoveryCodeVerificationMaterial(recoveryCodeId),
+        (value) => exactRecoveryMaterial(value, recoveryCodeId),
+      );
+    },
     readProfileVisibility(
       input: EnrollmentDatabaseProfileVisibilityRequest,
     ): Promise<ProfileVisibility> {
@@ -805,6 +866,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
           }
           return visibility;
         },
+      );
+    },
+    startRecovery(input: EnrollmentDatabaseRecoveryStart): Promise<boolean> {
+      return execute(
+        (client) => client.startRecovery(input),
+        (value) => exactBooleanRow(value, "started"),
       );
     },
   });

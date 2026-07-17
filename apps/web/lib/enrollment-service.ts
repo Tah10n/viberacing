@@ -27,6 +27,7 @@ import {
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
   readProfileDeletionChallenge,
+  readRecoveryAuthorityChallenge,
   readSourceActionChallenge,
   type EnrollmentSession,
   type JoinRequest,
@@ -35,6 +36,7 @@ import {
   type PasskeyRevokeChallenge,
   type PendingEnrollment,
   type ProfileDeletionChallenge,
+  type RecoveryAuthorityChallenge,
   type SourceActionChallenge,
 } from "./enrollment-domain";
 import {
@@ -45,6 +47,7 @@ import {
 import {
   createPasskeyLoginOptions,
   createPasskeyRegistrationOptions,
+  createRecoveryPasskeyRegistrationOptions,
   passkeyChallengeDigest,
   passkeyAddContextDigest,
   passkeyContextDigest,
@@ -53,6 +56,7 @@ import {
   passkeyRevokeContextDigest,
   profileDeletionContextDigest,
   recoveryCodeRotationContextDigest,
+  recoveryPasskeyContextDigest,
   sourceReactivationContextDigest,
   sourceUnlinkContextDigest,
   verifyInitialPasskey,
@@ -62,9 +66,13 @@ import {
 import { currentCommunitySeasonStart } from "./public-community-race";
 import { createPublicRequestId } from "./public-http-problem";
 import {
+  clearRecoveryCode,
   createRecoveryCodeGenerator,
+  createRecoveryCodeVerifier,
+  readRecoveryCode,
   type RecoveryCodeGenerator,
   type RecoveryCodeRecord,
+  type RecoveryCodeVerifier,
 } from "./recovery-code";
 
 const oauthLifetimeSeconds = 600;
@@ -79,6 +87,7 @@ const addStartBodyKeys = new Set(["label"]);
 const addBodyKeys = new Set(["authentication", "registration"]);
 const revokeTargetBodyKeys = new Set(["passkeyId"]);
 const profileDeletionStartBodyKeys = new Set(["handle"]);
+const recoveryStartBodyKeys = new Set(["code", "label"]);
 const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
 const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
 const sourceControlBodyKeys = new Set(["sourceControl"]);
@@ -86,6 +95,7 @@ const sourceControlKeys = new Set(["expiresAt", "sessionId", "sourceId", "versio
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 const recoveryCodePattern =
   /^vrr1_([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})_[A-Za-z0-9_-]{43}$/;
+const dummyRecoveryCodeId = "00000000-0000-4000-8000-000000000000";
 
 export const enrollmentCookieNames = Object.freeze({
   login: "viberacing_login",
@@ -94,6 +104,7 @@ export const enrollmentCookieNames = Object.freeze({
   passkeyAdd: "viberacing_passkey_add",
   passkeyRevoke: "viberacing_passkey_revoke",
   profileDeletion: "viberacing_profile_deletion",
+  recovery: "viberacing_recovery",
   recoveryCodes: "viberacing_recovery_codes",
   session: "viberacing_session",
   sourceReactivation: "viberacing_source_reactivation",
@@ -147,6 +158,15 @@ export interface RecoveryCodeCompletionDecision {
   readonly recoveryCodes: readonly string[];
 }
 
+export interface RecoveryStartDecision {
+  readonly options: Awaited<ReturnType<typeof createRecoveryPasskeyRegistrationOptions>>;
+  readonly recoveryCookie: string;
+}
+
+export interface RecoveryCompletionDecision {
+  readonly sessionCookie: string;
+}
+
 export interface ProfileDeletionOptionsDecision {
   readonly options: Awaited<ReturnType<typeof createPasskeyLoginOptions>>;
   readonly profileDeletionCookie: string;
@@ -187,6 +207,7 @@ export interface EnrollmentService {
   beginRecoveryCodeRotation(
     sessionCookie: string,
   ): Promise<RecoveryCodeOptionsDecision | undefined>;
+  beginRecovery(body: unknown): Promise<RecoveryStartDecision | undefined>;
   beginSourceReactivation(
     sessionCookie: string,
     body: unknown,
@@ -231,6 +252,10 @@ export interface EnrollmentService {
     recoveryCodeCookie: string,
     body: unknown,
   ): Promise<RecoveryCodeCompletionDecision | undefined>;
+  completeRecovery(
+    recoveryCookie: string,
+    body: unknown,
+  ): Promise<RecoveryCompletionDecision | undefined>;
   completeSourceReactivation(
     sessionCookie: string,
     sourceReactivationCookie: string,
@@ -261,6 +286,7 @@ interface EnrollmentServiceDependencies {
   readonly config: EnrollmentConfig;
   readonly cookieCodec: EnrollmentCookieCodec;
   readonly createOptions?: typeof createPasskeyRegistrationOptions;
+  readonly createRecoveryOptions?: typeof createRecoveryPasskeyRegistrationOptions;
   readonly createLoginOptions?: typeof createPasskeyLoginOptions;
   readonly createRequestId?: () => string;
   readonly database: EnrollmentDatabase;
@@ -271,6 +297,7 @@ interface EnrollmentServiceDependencies {
   readonly randomUuid?: () => string;
   readonly verifyPasskey?: typeof verifyInitialPasskey;
   readonly verifyLogin?: typeof verifyPasskeyLogin;
+  readonly verifyRecoveryCode?: RecoveryCodeVerifier;
 }
 
 interface RegistrationBody {
@@ -297,6 +324,11 @@ interface PasskeyRevokeTargetBody {
 
 interface ProfileDeletionStartBody {
   readonly handle: string;
+}
+
+interface RecoveryStartBody {
+  readonly code: string;
+  readonly label: string;
 }
 
 interface SourceControlBody {
@@ -512,6 +544,31 @@ function readProfileDeletionStartBody(value: unknown): ProfileDeletionStartBody 
   return Object.freeze({ handle: record.handle });
 }
 
+function readRecoveryStartBody(value: unknown): RecoveryStartBody | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  const label = readPasskeyLabel(record.label);
+  if (
+    keys.length !== recoveryStartBodyKeys.size ||
+    keys.some((key) => !recoveryStartBodyKeys.has(key)) ||
+    typeof record.code !== "string" ||
+    record.code.length < 1 ||
+    record.code.length > 128 ||
+    label === undefined
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ code: record.code, label });
+}
+
 function readSourceControlBody(value: unknown): SourceControlBody | undefined {
   if (
     value === null ||
@@ -644,6 +701,7 @@ export function createEnrollmentService(
     database,
     createLoginOptions = createPasskeyLoginOptions,
     createOptions = createPasskeyRegistrationOptions,
+    createRecoveryOptions = createRecoveryPasskeyRegistrationOptions,
     createRequestId = () => createPublicRequestId().value,
     exchangeGithub = exchangeGithubUserId,
     generateRecoveryCodes = createRecoveryCodeGenerator(
@@ -655,6 +713,7 @@ export function createEnrollmentService(
     randomUuid = nodeRandomUUID,
     verifyPasskey = verifyInitialPasskey,
     verifyLogin = verifyPasskeyLogin,
+    verifyRecoveryCode = createRecoveryCodeVerifier(config.recoveryArgon2, config.recoveryPepper),
   } = dependencies;
 
   function currentSeconds(): number | undefined {
@@ -901,6 +960,84 @@ export function createEnrollmentService(
         return Object.freeze({ loginCookie, options });
       } catch {
         return undefined;
+      }
+    },
+    async beginRecovery(body: unknown): Promise<RecoveryStartDecision | undefined> {
+      const seconds = currentSeconds();
+      const input = readRecoveryStartBody(body);
+      const recoveryCode = readRecoveryCode(input?.code);
+      let authoritySecret: Buffer | undefined;
+      let authorityVerifierDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        const material = await database.readRecoveryCodeVerificationMaterial(
+          recoveryCode?.codeId ?? dummyRecoveryCodeId,
+        );
+        const verified = await verifyRecoveryCode(recoveryCode?.secret, material?.verifierPhc);
+        if (
+          !verified ||
+          input === undefined ||
+          recoveryCode === undefined ||
+          seconds === undefined
+        ) {
+          return undefined;
+        }
+        const authorityId = randomUuid();
+        const auditEventId = randomUuid();
+        if (
+          !enrollmentPatterns.uuidV4.test(authorityId) ||
+          !enrollmentPatterns.uuidV4.test(auditEventId) ||
+          authorityId === auditEventId
+        ) {
+          return undefined;
+        }
+        authoritySecret = randomSecret(randomBytes);
+        if (authoritySecret === undefined) {
+          return undefined;
+        }
+        const options = await createRecoveryOptions(authorityId, config.webauthnRpId);
+        if (!base64Url32Pattern.test(options.challenge)) {
+          return undefined;
+        }
+        const expiresAt = seconds + passkeyLifetimeSeconds;
+        authorityVerifierDigest = createHash("sha256").update(authoritySecret).digest();
+        challengeDigest = passkeyChallengeDigest(options.challenge);
+        contextDigest = recoveryPasskeyContextDigest(
+          authorityId,
+          input.label,
+          options.challenge,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        const challenge: RecoveryAuthorityChallenge = Object.freeze({
+          authorityId,
+          authoritySecret: authoritySecret.toString("base64url"),
+          challenge: options.challenge,
+          expiresAt,
+          label: input.label,
+          version: 1,
+        });
+        const recoveryCookie = cookieCodec.seal("recovery", challenge);
+        const started = await database.startRecovery({
+          auditEventId,
+          authorityId,
+          authorityVerifierDigest,
+          challengeDigest,
+          contextDigest,
+          expiresAt: new Date(expiresAt * 1000).toISOString(),
+          recoveryCodeId: recoveryCode.codeId,
+          requestId: createRequestId(),
+        });
+        return started ? Object.freeze({ options, recoveryCookie }) : undefined;
+      } catch {
+        return undefined;
+      } finally {
+        clearRecoveryCode(recoveryCode);
+        authoritySecret?.fill(0);
+        authorityVerifierDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
       }
     },
     async beginPasskey(sessionCookie: string): Promise<PasskeyOptionsDecision | undefined> {
@@ -1452,6 +1589,115 @@ export function createEnrollmentService(
       } finally {
         credentialId?.fill(0);
         clearLoginMaterial(material);
+        sessionSecret?.fill(0);
+        sessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+      }
+    },
+    async completeRecovery(
+      recoveryCookie: string,
+      body: unknown,
+    ): Promise<RecoveryCompletionDecision | undefined> {
+      const seconds = currentSeconds();
+      const registration = readAuthenticationBody(body);
+      const challenge =
+        seconds === undefined
+          ? undefined
+          : readRecoveryAuthorityChallenge(cookieCodec.open("recovery", recoveryCookie), seconds);
+      if (seconds === undefined || registration === undefined || challenge === undefined) {
+        return undefined;
+      }
+      let registered: RegisteredPasskey | undefined;
+      let authoritySecret: Buffer | undefined;
+      let authorityVerifierDigest: Buffer | undefined;
+      let sessionSecret: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        registered = await verifyPasskey(
+          registration.response,
+          challenge.challenge,
+          config.webauthnOrigin,
+          config.webauthnRpId,
+        );
+        authoritySecret = digestBase64Url(challenge.authoritySecret);
+        sessionSecret = randomSecret(randomBytes);
+        if (
+          registered === undefined ||
+          authoritySecret === undefined ||
+          sessionSecret === undefined
+        ) {
+          return undefined;
+        }
+        const passkeyId = randomUuid();
+        const sessionId = randomUuid();
+        const auditEventId = randomUuid();
+        const cleanupAuditEventId = randomUuid();
+        const generatedIds = [passkeyId, sessionId, auditEventId, cleanupAuditEventId];
+        if (
+          generatedIds.some((id) => !enrollmentPatterns.uuidV4.test(id)) ||
+          new Set([...generatedIds, challenge.authorityId]).size !== generatedIds.length + 1
+        ) {
+          return undefined;
+        }
+        const expiresAt = seconds + activeSessionLifetimeSeconds;
+        authorityVerifierDigest = createHash("sha256").update(authoritySecret).digest();
+        sessionDigest = createHash("sha256").update(sessionSecret).digest();
+        challengeDigest = passkeyChallengeDigest(challenge.challenge);
+        contextDigest = recoveryPasskeyContextDigest(
+          challenge.authorityId,
+          challenge.label,
+          challenge.challenge,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        const profile = await database.completeRecoveryRegistration({
+          auditEventId,
+          authorityId: challenge.authorityId,
+          authorityVerifierDigest,
+          backupEligible: registered.backupEligible,
+          backupState: registered.backupState,
+          challengeDigest,
+          contextDigest,
+          cosePublicKey: registered.cosePublicKey,
+          credentialId: registered.credentialId,
+          label: challenge.label,
+          passkeyId,
+          requestId: createRequestId(),
+          sessionExpiresAt: new Date(expiresAt * 1000).toISOString(),
+          sessionId,
+          sessionVerifierDigest: sessionDigest,
+          signCount: registered.signCount,
+        });
+        const session: EnrollmentSession = Object.freeze({
+          expiresAt,
+          handle: profile.handle,
+          locale: profile.locale,
+          passkeyRegistered: true,
+          profileId: profile.profileId,
+          sessionId,
+          sessionVerifier: sessionSecret.toString("base64url"),
+          version: 1,
+        });
+        try {
+          return Object.freeze({ sessionCookie: cookieCodec.seal("session", session) });
+        } catch {
+          await database.revokeSession({
+            auditEventId: cleanupAuditEventId,
+            requestId: createRequestId(),
+            sessionId,
+            sessionVerifierDigest: sessionDigest,
+          });
+          return undefined;
+        }
+      } catch {
+        return undefined;
+      } finally {
+        clearRegisteredPasskey(registered);
+        authoritySecret?.fill(0);
+        authorityVerifierDigest?.fill(0);
         sessionSecret?.fill(0);
         sessionDigest?.fill(0);
         challengeDigest?.fill(0);

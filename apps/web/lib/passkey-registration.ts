@@ -73,6 +73,13 @@ export async function createPasskeyRegistrationOptions(
   }
 }
 
+export function createRecoveryPasskeyRegistrationOptions(
+  recoveryAuthorityId: string,
+  rpId: string,
+): Promise<PublicKeyCredentialCreationOptionsJSON> {
+  return createPasskeyRegistrationOptions(recoveryAuthorityId, "Vibe Racing recovery", rpId);
+}
+
 export function passkeyContextDigest(
   profileId: string,
   handle: string,
@@ -162,6 +169,21 @@ export function recoveryCodeRotationContextDigest(
   return createHash("sha256")
     .update(
       `viberacing-recovery-code-rotation-v1\n${sessionId}\n${profileId}\n${rpId}\n${origin}`,
+      "utf8",
+    )
+    .digest();
+}
+
+export function recoveryPasskeyContextDigest(
+  recoveryAuthorityId: string,
+  label: string,
+  registrationChallenge: string,
+  rpId: string,
+  origin: string,
+): Buffer {
+  return createHash("sha256")
+    .update(
+      `viberacing-recovery-passkey-v1\n${recoveryAuthorityId}\n${label}\n${registrationChallenge}\n${rpId}\n${origin}`,
       "utf8",
     )
     .digest();
