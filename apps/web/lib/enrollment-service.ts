@@ -96,7 +96,8 @@ const recoveryStartBodyKeys = new Set(["code", "label"]);
 const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
 const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
 const sourceControlBodyKeys = new Set(["sourceControl"]);
-const pairingCodeBodyKeys = new Set(["userCode"]);
+const pairingNewSourceBodyKeys = new Set(["sourceChoice", "userCode"]);
+const pairingExistingSourceBodyKeys = new Set(["sourceChoice", "sourceControl", "userCode"]);
 const sourceControlKeys = new Set(["expiresAt", "sessionId", "sourceId", "version"]);
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 const recoveryCodePattern =
@@ -367,9 +368,16 @@ interface SourceControlBody {
   readonly sourceControl: string;
 }
 
-interface PairingCodeBody {
-  readonly userCode: unknown;
-}
+type PairingCodeBody =
+  | Readonly<{
+      sourceChoice: "new";
+      userCode: unknown;
+    }>
+  | Readonly<{
+      sourceChoice: "existing";
+      sourceControl: string;
+      userCode: unknown;
+    }>;
 
 interface SourceControl {
   readonly expiresAt: number;
@@ -652,13 +660,27 @@ function readPairingCodeBody(value: unknown): PairingCodeBody | undefined {
   }
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
+  if (record.sourceChoice === "new") {
+    return keys.length === pairingNewSourceBodyKeys.size &&
+      keys.every((key) => pairingNewSourceBodyKeys.has(key))
+      ? Object.freeze({ sourceChoice: "new", userCode: record.userCode })
+      : undefined;
+  }
   if (
-    keys.length !== pairingCodeBodyKeys.size ||
-    keys.some((key) => !pairingCodeBodyKeys.has(key))
+    record.sourceChoice !== "existing" ||
+    keys.length !== pairingExistingSourceBodyKeys.size ||
+    keys.some((key) => !pairingExistingSourceBodyKeys.has(key)) ||
+    typeof record.sourceControl !== "string" ||
+    record.sourceControl.length < 1 ||
+    record.sourceControl.length > 512
   ) {
     return undefined;
   }
-  return Object.freeze({ userCode: record.userCode });
+  return Object.freeze({
+    sourceChoice: "existing",
+    sourceControl: record.sourceControl,
+    userCode: record.userCode,
+  });
 }
 
 function readSourceControl(
@@ -839,13 +861,23 @@ export function createEnrollmentService(
       ) {
         return undefined;
       }
+      const sourceId =
+        pairingCode.sourceChoice === "new"
+          ? randomSourceId(randomBytes)
+          : readSourceControl(
+              cookieCodec.open("passkey", pairingCode.sourceControl),
+              seconds,
+              session.sessionId,
+            )?.sourceId;
+      if (sourceId === undefined) {
+        return undefined;
+      }
       const options = await createLoginOptions(config.webauthnRpId);
       if (!base64Url32Pattern.test(options.challenge)) {
         return undefined;
       }
       const challengeId = randomUuid();
-      const sourceId = randomSourceId(randomBytes);
-      if (!enrollmentPatterns.uuidV4.test(challengeId) || sourceId === undefined) {
+      if (!enrollmentPatterns.uuidV4.test(challengeId)) {
         return undefined;
       }
       const expiresAt = Math.min(seconds + passkeyLifetimeSeconds, pairingExpiresAtSeconds);
@@ -878,6 +910,7 @@ export function createEnrollmentService(
         pairingId: material.pairingId,
         sessionId: session.sessionId,
         sessionVerifierDigest: sessionDigest,
+        sourceChoice: pairingCode.sourceChoice,
         sourceId,
         userCodeDigest: selectedCodeDigest,
       });

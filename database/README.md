@@ -10,18 +10,19 @@ source/device inventory, source pause/reactivation/unlink, and immediate device-
 now consumes only fixed Web/Auth capabilities with injected or synthetic dependencies. The same
 local boundary also performs bounded recovery-code Argon2id verification and replacement WebAuthn
 verification before fixed recovery calls. It now also performs session-rate-limited browser pairing
-review and fresh-passkey new-source approval. Closed local start/poll routes now consume the pairing
-applications through the same protected Web capability; no production credential or deployed
-database consumes them. A Web/Auth boundary creates bounded pairing material through one fixed start
-call; a second composes keyed pairing lookup, strict Ed25519 possession proof, and exact activation
-through the same mock-tested fixed-query pool, but neither has a live login or transport. A local
-Ingest kernel verifies a bounded exact-body origin/device request, and a separate fixed-query
-adapter maps origin replay plus its output to three capabilities through a probed least-privileged
-pool. Mock tests do not call PostgreSQL or supply a working login. One local public-score route and
-one local one-shot Jobs runner wrap narrow capabilities without a working database login. The
-database-only ingest and Jobs-only ingest-retention, pairing-retention, open-season scoring, and
-terminal finalization procedures plus Web-only public and exact-session private score projections
-are implemented; HTTP ingest, scheduled execution, audited corrections, and broader purge are not.
+review and fresh-passkey approval for an explicit new or active existing source. Closed local
+start/poll routes now consume the pairing applications through the same protected Web capability; no
+production credential or deployed database consumes them. A Web/Auth boundary creates bounded
+pairing material through one fixed start call; a second composes keyed pairing lookup, strict
+Ed25519 possession proof, and exact activation through the same mock-tested fixed-query pool, but
+neither has a live login or transport. A local Ingest kernel verifies a bounded exact-body
+origin/device request, and a separate fixed-query adapter maps origin replay plus its output to
+three capabilities through a probed least-privileged pool. Mock tests do not call PostgreSQL or
+supply a working login. One local public-score route and one local one-shot Jobs runner wrap narrow
+capabilities without a working database login. The database-only ingest and Jobs-only
+ingest-retention, pairing-retention, open-season scoring, and terminal finalization procedures plus
+Web-only public and exact-session private score projections are implemented; HTTP ingest, scheduled
+execution, audited corrections, and broader purge are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed

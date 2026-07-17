@@ -584,6 +584,7 @@ describe("enrollment database", () => {
         pairingId: row.pairing_id,
         sessionId: profile.sessionId,
         sessionVerifierDigest: new Uint8Array(32),
+        sourceChoice: "new",
         sourceId: `src_${"A".repeat(22)}`,
         userCodeDigest: new Uint8Array(32),
       }),

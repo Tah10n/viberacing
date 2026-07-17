@@ -21,6 +21,37 @@ export async function readEnrollmentPageSession(): Promise<EnrollmentSession | u
   }
 }
 
+export interface EnrollmentPageConnect {
+  readonly activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
+  readonly session: EnrollmentSession;
+}
+
+export async function readEnrollmentPageConnect(): Promise<EnrollmentPageConnect | undefined> {
+  try {
+    const requestHeaders = await headers();
+    const sessionCookie = readCookie(requestHeaders.get("cookie"), enrollmentCookieNames.session);
+    if (sessionCookie === undefined) {
+      return undefined;
+    }
+    const service = getEnrollmentRuntime().service;
+    const session = service.readSession(sessionCookie);
+    if (session === undefined) {
+      return undefined;
+    }
+    let activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
+    if (session.passkeyRegistered) {
+      try {
+        activeDeviceInventory = await service.readActiveDeviceInventory(sessionCookie);
+      } catch {
+        activeDeviceInventory = undefined;
+      }
+    }
+    return Object.freeze({ activeDeviceInventory, session });
+  } catch {
+    return undefined;
+  }
+}
+
 export interface EnrollmentPageAccount {
   readonly activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
   readonly passkeys: readonly PasskeyInventoryItem[] | undefined;

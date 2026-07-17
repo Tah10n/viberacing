@@ -159,15 +159,19 @@ dominates old-code start, and completion leaves only the replacement passkey/ses
 concurrent old-passkey login. [ADR 0007](0007-restricted-recovery-authority.md) defines the narrow
 authority and remaining application boundary.
 
-Revision 0021 and the local `/connect` application now supply the browser pairing step for one new
-source. Every admitted code lookup first increments a bounded window on the exact active session,
-then probes the primary and optional rotation verifier in one closed function. The UI renders only
-bounded pending-device metadata and the full public-key fingerprint; a separate fresh user-verified
-assertion is bound to session, pairing, server-generated source, RP, and origin before one atomic
-consume-and-approve statement. Unit, component, HTTP, fixed-query, and isolated PostgreSQL tests
-cover malformed code, cross-origin and duplicate-cookie denial, key rotation, attempt
-exhaustion/reset, replay-resistant step-up, and first-winner settlement. This is not a connector
-start/poll transport, live authenticator/database result, or deployment claim.
+Revision 0021 and the local `/connect` application now supply the browser pairing step for an
+explicitly selected new or active existing opaque source. Every admitted code lookup first
+increments a bounded window on the exact active session, then probes the primary and optional
+rotation verifier in one closed function. The UI renders only bounded pending-device metadata, the
+full public-key fingerprint, active source ordinals/device labels, and encrypted session-bound
+source controls. A separate fresh user-verified assertion is bound to session, pairing, exact source
+choice and ID, RP, and origin before one atomic consume-and-approve statement rechecks ownership and
+active state. Unit, component, HTTP, fixed-query, and isolated PostgreSQL tests cover malformed
+code, opaque existing-source selection and tamper, cross-origin and duplicate-cookie denial, key
+rotation, attempt exhaustion/reset, replay-resistant step-up, and first-winner settlement. The exact
+local start/poll routes and native-store connector client now compose this synthetic journey, but
+there is no live authenticator/database result, supported connector, trusted edge, or deployment
+claim.
 
 Remaining application and protocol evidence includes:
 

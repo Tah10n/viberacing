@@ -231,15 +231,16 @@ request flow. Recovery lookup returns only the selected unused PHC; admitted att
 Argon2id work, a protected pepper, generic responses, a configured minimum response floor, and a
 four-call local no-queue limit. A valid code creates only the sealed five-minute replacement-passkey
 continuation; the normal session is returned only after exact WebAuthn verification and atomic
-database completion. The local `/connect` flow now reviews and fresh-passkey approves one pending
-new-source device under a database-backed session attempt window; the local start/poll routes and
-native-store Rust client complete that synthetic connection path. The separate candidate-only
-Windows sync command now joins the reviewed local collector, signer, and one bounded upload, but no
-repository test runs a real Codex account or deployed service. There is still no deployed
-Ingest/score/pairing API, supported sync connector, trusted edge limit or direct-origin policy,
-anonymous recovery edge policy, abandoned-state cleanup or notification, cleanup/scoring scheduler,
-audited correction flow, asynchronous purge worker, live OAuth/authenticator/Web/Ingest/Jobs
-database integration, cross-platform connector evidence, released binary, or deployed database.
+database completion. The local `/connect` flow now reviews one pending device, explicitly selects a
+new or active owned opaque source without exposing its raw ID, and fresh-passkey approves that exact
+choice under a database-backed session attempt window; the local start/poll routes and native-store
+Rust client complete that synthetic connection path. The separate candidate-only Windows sync
+command now joins the reviewed local collector, signer, and one bounded upload, but no repository
+test runs a real Codex account or deployed service. There is still no deployed Ingest/score/pairing
+API, supported sync connector, trusted edge limit or direct-origin policy, anonymous recovery edge
+policy, abandoned-state cleanup or notification, cleanup/scoring scheduler, audited correction flow,
+asynchronous purge worker, live OAuth/authenticator/Web/Ingest/Jobs database integration,
+cross-platform connector evidence, released binary, or deployed database.
 
 ## Run and verify the synthetic prototype
 

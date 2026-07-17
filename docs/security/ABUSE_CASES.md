@@ -133,14 +133,17 @@ material availability cost.
   database call, four-call admission, and generic local failure. Revision 0021 and the local
   `/connect` flow add exact-session primary/secondary code lookup, a persisted attempt window shared
   across Web instances, bounded device/fingerprint rendering, explicit fresh-passkey approval, and
-  one atomic new-source action. Malformed and non-matching codes return the same generic decision.
-  ADR 0030 adds exact bounded start/poll routes, one shared four-call service, a native-store Rust
-  client, and revision 0022's fixed operation-global plus 64-bucket rate windows. The client ID is
-  self-asserted rate shaping only; rotating it still consumes the global row and creates no database
-  row. Revision 0013 adds a separate Jobs-only 1-to-1000 cleanup for expired `pending`, `approved`,
-  and `cancelled` transactions plus their exact still-pending keys; activated bindings and live rows
-  are excluded. Live login/TLS integration, trusted edge controls, capacity evidence, cleanup
-  scheduling, cross-platform execution, and release remain absent.
+  one atomic new-source or active existing-source action. The browser uses only an encrypted
+  session-bound source control, while the fixed database function rechecks source ownership and
+  state and binds the exact choice against swapping. Malformed and non-matching codes return the
+  same generic decision. ADR 0030 adds exact bounded start/poll routes, one shared four-call
+  service, a native-store Rust client, and revision 0022's fixed operation-global plus 64-bucket
+  rate windows. The client ID is self-asserted rate shaping only; rotating it still consumes the
+  global row and creates no database row. Revision 0013 adds a separate Jobs-only 1-to-1000 cleanup
+  for expired `pending`, `approved`, and `cancelled` transactions plus their exact still-pending
+  keys; activated bindings and live rows are excluded. Live login/TLS integration, trusted edge
+  controls, capacity evidence, cleanup scheduling, cross-platform execution, and release remain
+  absent.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the

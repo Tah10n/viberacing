@@ -70,8 +70,9 @@ fresh server IDs, poll tokens, challenges, 60-bit human codes, and separate prot
 verifiers through the fixed read-write Web pool. A second activation application performs protected
 poll lookup, runs the strict proof, and alone invokes exact activation with server-owned IDs behind
 fixed admission and timing. A local signed-in `/connect` flow now counts pending-code attempts on
-the exact session, renders bounded device metadata plus a full public-key fingerprint, and requires
-a separate fresh passkey assertion before atomic new-source approval. A closed local start/poll HTTP
+the exact session, renders bounded device metadata plus a full public-key fingerprint, offers a new
+source or an active owned source through an encrypted session-bound control, and requires a separate
+fresh passkey assertion before atomic new/existing-source approval. A closed local start/poll HTTP
 boundary now shares four-call admission, applies a fixed-storage global-and-64-bucket PostgreSQL
 rate policy, and serializes only the versioned contracts. A bounded Rust `connect` command generates
 one Ed25519 key through the OS CSPRNG, stores its versioned state only in the native credential

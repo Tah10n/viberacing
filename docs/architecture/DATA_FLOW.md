@@ -33,22 +33,23 @@ transaction from closed device metadata. A second application performs protected
 mandates that proof, and invokes only exact atomic activation behind local admission/timing. The
 local signed-in `/connect` flow counts pending-code attempts on the exact session, renders bounded
 device evidence plus the full public-key fingerprint, and consumes a fresh WebAuthn assertion into
-atomic new-source approval. ADR 0030 adds exact start/poll HTTP routes, fixed-storage aggregate
-admission, and one pairing-only Rust command that creates and retains its device key only in a
-native OS credential store. ADR 0031 adds a separate Windows candidate command that can construct
-the otherwise inaccessible launch/context/key capabilities only after exact artifact and active-
-record review, then performs one fixed signed upload. There is still no supported version,
-cross-platform result, scheduling, or released connector. A local Ingest kernel now verifies the
-bounded exact-body origin/device request, while the separate adapter maps origin replay, device
-lookup, and submission through fixed calls. PostgreSQL now proves atomic origin replay consumption
-and bounded cleanup. A transport-free application now composes those exact local capabilities and
-validates only closed acknowledgement/problem decisions. A bounded local Fastify factory preserves
-exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes only revalidated
-contracts. There is no edge/live-database/deployment integration. No host/port/TLS entry point,
-deployment login, certificate, edge signer/direct-origin policy, or live route/Jobs evidence is
-supplied. Data labels refer to the classifications in the
-[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
-and Prohibited.
+atomic approval for an explicitly selected new or active existing opaque source. Existing choices
+use only encrypted session-bound controls; raw source IDs stay server-only. ADR 0030 adds exact
+start/poll HTTP routes, fixed-storage aggregate admission, and one pairing-only Rust command that
+creates and retains its device key only in a native OS credential store. ADR 0031 adds a separate
+Windows candidate command that can construct the otherwise inaccessible launch/context/key
+capabilities only after exact artifact and active- record review, then performs one fixed signed
+upload. There is still no supported version, cross-platform result, scheduling, or released
+connector. A local Ingest kernel now verifies the bounded exact-body origin/device request, while
+the separate adapter maps origin replay, device lookup, and submission through fixed calls.
+PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
+application now composes those exact local capabilities and validates only closed
+acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. There is
+no edge/live-database/deployment integration. No host/port/TLS entry point, deployment login,
+certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data labels
+refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md): Public,
+Account, Security, Usage, Operational, and Prohibited.
 
 ## Enrollment and passkey bootstrap
 
@@ -254,11 +255,11 @@ sequenceDiagram
   Connector->>Connector: Keep plaintext poll token local until expiry
   User->>Browser: Enter or confirm short code
   Browser->>Web: Authenticated pairing lookup
-  Web-->>Browser: Show key fingerprint, device, platform, version, and source choice
-  User->>Browser: Choose new source or existing source
+  Web-->>Browser: Show key fingerprint, device, platform, version, and opaque source choices
+  User->>Browser: Choose new source or active existing source
   Web->>Authenticator: Fresh transaction-bound step-up
   Authenticator-->>Web: User-verified response
-  Web->>DB: Approve exact pending transaction and source choice
+  Web->>DB: Recheck and approve exact pending transaction and source choice
   Connector->>Web: Poll token plus Ed25519 proof over bound challenge
   Web->>DB: Atomically activate public key for exactly one source
   Web-->>Connector: Public device ID after verifier and possession checks

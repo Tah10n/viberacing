@@ -229,6 +229,7 @@ describe("pairing database pool", () => {
         pairingId: "00000000-0000-4000-8000-000000001001",
         sessionId: "00000000-0000-4000-8000-000000000201",
         sessionVerifierDigest: sessionDigest,
+        sourceChoice: "existing",
         sourceId: `src_${"N".repeat(22)}`,
         userCodeDigest: primaryCodeDigest,
       }),
@@ -260,7 +261,9 @@ describe("pairing database pool", () => {
       600,
     ]);
     expect(snapshots[1]?.text).toContain("create_pairing_approval_challenge");
-    expect(snapshots[1]?.text).toContain("'new'::text");
+    expect(snapshots[1]?.text).not.toContain("'new'::text");
+    expect(snapshots[1]?.values[4]).toBe("existing");
+    expect(snapshots[1]?.values[5]).toBe(`src_${"N".repeat(22)}`);
     expect(snapshots[2]?.text).toContain("consume_passkey_challenge");
     expect(snapshots[2]?.text).toContain("approve_pairing");
     expect(sessionDigest).toEqual(Buffer.alloc(32, 0x61));

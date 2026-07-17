@@ -146,19 +146,20 @@ device-signature message. Изолированный one-use signer потреб
 точных header values. Общий synthetic vector проверяет exact public key/signature между Rust и
 production Ingest verifier. Отдельные pairing signer и Web verifier согласованы по точному
 domain-separated possession message. Локальная signed-in страница `/connect` принимает короткий код,
-показывает ограниченные metadata и полный fingerprint публичного ключа, а перед атомарным одобрением
-нового opaque source требует свежий passkey assertion. Два закрытых локальных POST route открывают
-versioned pairing start/poll contracts через общий лимит в четыре вызова, фиксированную глобальную и
-64-bucket PostgreSQL rate policy, ограниченные body и generic `no-store` ответы. Локальная
-Rust-команда `connect` получает Ed25519 key и анонимный rate ID из OS CSPRNG, сохраняет
-prepared/pending/active record только в нативном credential store, доказывает владение ключом и
-возобновляет прерванный poll, не печатая key, token, challenge, source или device ID. Отдельная
-Windows x86_64 команда `sync` canonicalize-ит и hash-проверяет один exact `0.144.5` executable,
-запускает его в новом пустом working directory, создаёт свежие request time/ID/nonce из active
-record, один раз отправляет точное signed body на фиксированный sync path и принимает только closed
-acknowledgement. Она не ищет binary автоматически, не повторяет ambiguous POST и не отправляет edge
-origin proof. Всё ещё нет macOS/Linux admission, live database connection, capacity evidence,
-packaging, release, поддерживаемого sync connector и deployment.
+показывает ограниченные metadata и полный fingerprint публичного ключа, явно выбирает новый или
+активный существующий opaque source без раскрытия его raw ID, а перед атомарным одобрением точного
+выбора требует свежий passkey assertion. Два закрытых локальных POST route открывают versioned
+pairing start/poll contracts через общий лимит в четыре вызова, фиксированную глобальную и 64-bucket
+PostgreSQL rate policy, ограниченные body и generic `no-store` ответы. Локальная Rust-команда
+`connect` получает Ed25519 key и анонимный rate ID из OS CSPRNG, сохраняет prepared/pending/active
+record только в нативном credential store, доказывает владение ключом и возобновляет прерванный
+poll, не печатая key, token, challenge, source или device ID. Отдельная Windows x86_64 команда
+`sync` canonicalize-ит и hash-проверяет один exact `0.144.5` executable, запускает его в новом
+пустом working directory, создаёт свежие request time/ID/nonce из active record, один раз отправляет
+точное signed body на фиксированный sync path и принимает только closed acknowledgement. Она не ищет
+binary автоматически, не повторяет ambiguous POST и не отправляет edge origin proof. Всё ещё нет
+macOS/Linux admission, live database connection, capacity evidence, packaging, release,
+поддерживаемого sync connector и deployment.
 
 Также добавлены двадцать две SQL migrations: 25 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring tables,

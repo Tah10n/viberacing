@@ -1,6 +1,6 @@
 # ADR 0002: Opaque multi-source profiles with one profile cap
 
-- Status: Accepted (database aggregation/projection implemented; services and HTTP pending)
+- Status: Accepted (local multi-source pairing implemented; live evidence pending)
 - Date: 2026-07-14
 - Decision owners: Product, Pairing, Ingest, Scoring, and Database
 - Supersedes: None
@@ -92,7 +92,8 @@ automatically from inferred personal data.
   score projection, without identifiers. The local Jobs runner now invokes only the reviewed
   refresh/finalization functions; the scheduler, complete HTTP race DTO, correction, and capacity
   evidence remain pending.
-- UI/API assertions for opaque wording and public source count without identifiers.
+- Local UI/application/HTTP assertions for explicit new/existing opaque selection without raw source
+  identifiers, plus public-source-count assertions without identifiers.
 - Privacy tests proving account email has no connector egress, schema, log, fixture, or support
   path.
 

@@ -15,43 +15,44 @@ rotate a ten-code recovery batch after a fresh passkey assertion. A separate loc
 performs bounded exact-code/dummy Argon2id work, creates only a five-minute restricted authority,
 and requires exact replacement WebAuthn registration before a normal session exists. It has no
 working invite/OAuth/database credential or live-authenticator evidence. A local `/connect` page
-adds session-rate-limited pending-code review and fresh-passkey new-source approval with synthetic
-evidence. Distributed recovery/anonymous pairing edge controls, cleanup, a Jobs scheduler, real-user
-ingestion, audited correction, and an operational connector remain absent. A library-only Rust crate
-implements the bounded stable App Server initialization exchange and a candidate `0.144.5`
-account/usage parser with fixed methods, discarded account/summary fields, and bounded normalized
-daily output. A one-shot supervisor now composes those states with a fixed child argument, local
-pipes, cleared ambient environment, output/deadline limits, and reap-before-success behavior. One
-explicit Windows x86_64 development command can construct that private launch only after the
-selected absolute path matches the exact `0.144.5` artifact size and SHA-256. It then uses the
-active native credential to build the previously inaccessible context/key, sign the exact bounded
-sync JSON, and make one fixed upload. It does not discover a binary, retry the POST, or establish
-support. A separate inaccessible pending-key/challenge signer and pure Web verifier agree on an
-exact synthetic pairing-possession proof. Two transport-free Web/Auth applications create bounded
-pending material and later handle protected poll-verifier derivation, a fixed approved-row lookup
-through a separately probed read-write pool, that strict proof, and exact atomic activation with
-server-owned IDs behind local admission/timing. They cannot perform pairing browser or WebAuthn
-approval themselves; the separate `/connect` flow supplies only that intervening step. Two exact
-local POST routes now compose those applications behind fixed distributed global/client-bucket
-admission, and a one-command Rust client generates a device key through the OS CSPRNG, stores
-resumable pairing state in the native credential store, and performs the exact start/poll proof. No
-supported Codex version, macOS/Linux admission, real-account/deployed sync result, package, release,
-or deployment exists. A local Ingest kernel bounds and authenticates a synthetic exact-body sync
-request, and a separate adapter constrains origin replay, database lookup, and submission mapping
-with mock-pool evidence. A transport-free application composes those exact boundaries, generates a
-server request ID, and validates the acknowledgement/problem decision; isolated PostgreSQL tests
-separately prove atomic replay and cleanup. A bounded local Fastify factory now preserves exact raw
-HTTP evidence, applies no-queue and deadline policy, and serializes only revalidated contracts, but
-it has no host/port/TLS launch entry point. There is no working database login/certificate, live
-end-to-end PostgreSQL flow, edge path, supported connector adapter, or deployment. A bounded local
-one-shot Jobs process now wraps only cleanup/refresh/finalization, but has no live login, scheduler,
-monitor, or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
-implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
-certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
-boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
-database role isolation; it does not prove a live adapter, deployed API, or production flow. The
-Ingest server tests bind only ephemeral loopback sockets and use synthetic requests; no development
-command exposes it to the LAN or Internet.
+adds session-rate-limited pending-code review, opaque new or active existing source selection, and
+fresh-passkey approval with synthetic evidence. Distributed recovery/anonymous pairing edge
+controls, cleanup, a Jobs scheduler, real-user ingestion, audited correction, and an operational
+connector remain absent. A library-only Rust crate implements the bounded stable App Server
+initialization exchange and a candidate `0.144.5` account/usage parser with fixed methods, discarded
+account/summary fields, and bounded normalized daily output. A one-shot supervisor now composes
+those states with a fixed child argument, local pipes, cleared ambient environment, output/deadline
+limits, and reap-before-success behavior. One explicit Windows x86_64 development command can
+construct that private launch only after the selected absolute path matches the exact `0.144.5`
+artifact size and SHA-256. It then uses the active native credential to build the previously
+inaccessible context/key, sign the exact bounded sync JSON, and make one fixed upload. It does not
+discover a binary, retry the POST, or establish support. A separate inaccessible
+pending-key/challenge signer and pure Web verifier agree on an exact synthetic pairing-possession
+proof. Two transport-free Web/Auth applications create bounded pending material and later handle
+protected poll-verifier derivation, a fixed approved-row lookup through a separately probed
+read-write pool, that strict proof, and exact atomic activation with server-owned IDs behind local
+admission/timing. They cannot perform pairing browser or WebAuthn approval themselves; the separate
+`/connect` flow supplies only that intervening step. Two exact local POST routes now compose those
+applications behind fixed distributed global/client-bucket admission, and a one-command Rust client
+generates a device key through the OS CSPRNG, stores resumable pairing state in the native
+credential store, and performs the exact start/poll proof. No supported Codex version, macOS/Linux
+admission, real-account/deployed sync result, package, release, or deployment exists. A local Ingest
+kernel bounds and authenticates a synthetic exact-body sync request, and a separate adapter
+constrains origin replay, database lookup, and submission mapping with mock-pool evidence. A
+transport-free application composes those exact boundaries, generates a server request ID, and
+validates the acknowledgement/problem decision; isolated PostgreSQL tests separately prove atomic
+replay and cleanup. A bounded local Fastify factory now preserves exact raw HTTP evidence, applies
+no-queue and deadline policy, and serializes only revalidated contracts, but it has no host/port/TLS
+launch entry point. There is no working database login/certificate, live end-to-end PostgreSQL flow,
+edge path, supported connector adapter, or deployment. A bounded local one-shot Jobs process now
+wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor, or deployment. A
+bounded server-only Web PostgreSQL adapter and local public-score GET are implemented and
+unit/build-tested, but this repository supplies no working deployment login or TLS certificate. A
+successful setup proves repository gates, synthetic frontend behavior, route/adapter boundaries, SQL
+constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and database role
+isolation; it does not prove a live adapter, deployed API, or production flow. The Ingest server
+tests bind only ephemeral loopback sockets and use synthetic requests; no development command
+exposes it to the LAN or Internet.
 
 ## Prerequisites
 

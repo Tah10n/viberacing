@@ -769,9 +769,72 @@ describe("enrollment experience", () => {
       "/auth/pairing/options",
       "/auth/pairing/verify",
     ]);
-    expect(fetchMock.mock.calls[0]?.[1].body).toBe('{"userCode":"7K9M-P2QR-W4XY"}');
+    expect(fetchMock.mock.calls[0]?.[1].body).toBe(
+      '{"sourceChoice":"new","userCode":"7K9M-P2QR-W4XY"}',
+    );
     expect(fetchMock.mock.calls[1]?.[1].body).toBe('{"response":{"id":"synthetic-login"}}');
     expect(mounted.container.textContent).toContain("Device approved");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
+  it("selects an existing source without exposing its raw identifier", async () => {
+    const challenge = Buffer.alloc(32, 0x33).toString("base64url");
+    const fingerprint = `SHA256:${Buffer.alloc(32, 0x34).toString("base64url")}`;
+    const fetchMock = vi.fn<(input: string, init: RequestInit) => Promise<Response>>(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            options: { challenge },
+            pairing: {
+              architecture: "x86_64",
+              connectorVersion: "1.2.3",
+              deviceLabel: "Laptop",
+              expiresAt: "2026-07-16T10:09:00.000Z",
+              osFamily: "windows",
+              publicKeyFingerprint: fingerprint,
+            },
+          }),
+          { headers: { "content-type": "application/json; charset=utf-8" } },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(
+      <ConnectExperience
+        existingSources={[
+          {
+            deviceLabels: ["Studio PC"],
+            sourceControl: "opaque-source-control",
+            sourceNumber: 2,
+          },
+        ]}
+        initialLocale="en"
+        signedIn
+      />,
+    );
+    const sourceChoice = mounted.container.querySelector<HTMLInputElement>(
+      'input[value="opaque-source-control"]',
+    );
+    const codeInput = mounted.container.querySelector<HTMLInputElement>('input[name="userCode"]');
+    if (sourceChoice === null || codeInput === null) {
+      throw new Error("expected existing source and pairing code inputs");
+    }
+    act(() => {
+      sourceChoice.click();
+    });
+    codeInput.value = "7K9M-P2QR-W4XY";
+    await act(async () => {
+      codeInput.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(fetchMock.mock.calls[0]?.[1].body).toBe(
+      '{"sourceChoice":"existing","sourceControl":"opaque-source-control","userCode":"7K9M-P2QR-W4XY"}',
+    );
+    expect(webauthn.startAuthentication).not.toHaveBeenCalled();
+    expect(mounted.container.textContent).toContain("Existing source 2");
+    expect(mounted.container.innerHTML).not.toContain("src_");
     act(() => {
       mounted.root.unmount();
     });
@@ -829,7 +892,19 @@ describe("enrollment experience", () => {
       renderToStaticMarkup(<PasskeyLogin />),
       renderToStaticMarkup(<RecoveryExperience />),
       renderToStaticMarkup(<PasskeySetup handle="pixel_driver" locale="en" />),
-      renderToStaticMarkup(<ConnectExperience initialLocale="en" signedIn />),
+      renderToStaticMarkup(
+        <ConnectExperience
+          existingSources={[
+            {
+              deviceLabels: ["Studio PC"],
+              sourceControl: "opaque-source-control",
+              sourceNumber: 1,
+            },
+          ]}
+          initialLocale="en"
+          signedIn
+        />,
+      ),
     ]) {
       document.body.innerHTML = markup;
       const results = await axe.run(document.documentElement, {

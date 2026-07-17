@@ -571,14 +571,17 @@ exists.
   pairing approval. A passkey-registered session submits one canonical code, revision 0021 counts
   the admitted attempt on the session across application instances under deployment-private bounds,
   and the browser receives only bounded device metadata plus a full SHA-256 public-key fingerprint.
-  WebAuthn begins only after a second explicit approval action; its challenge binds the session,
-  pairing, server-generated new source, RP, and origin, and one fixed statement consumes it while
-  approving atomically. The code is cleared from the form after lookup, the raw public key never
-  reaches the client, and the pairing/source IDs exist only inside the encrypted HttpOnly
-  continuation rather than client-readable state or logs. This is HTTP/runtime evidence only, not
-  visual browser, OAuth-provider, authenticator, or database E2E. There is no invite issuer UI,
-  anonymous pairing-start or recovery edge attempt policy, abandoned-state cleanup or notification,
-  live OAuth/authenticator/database integration, monitoring, or deployment evidence.
+  The same session-derived bounded inventory supplies only active source ordinals, active device
+  labels, and encrypted session-bound source controls, so the form can explicitly select a new or
+  existing owned source while raw source IDs remain server-only. WebAuthn begins only after a second
+  explicit approval action; its challenge binds the session, pairing, exact source choice and ID,
+  RP, and origin, and one fixed statement rechecks and consumes it while approving atomically. The
+  code is cleared from the form after lookup, the raw public key never reaches the client, and raw
+  pairing/source IDs exist only inside encrypted source-control or HttpOnly approval continuations
+  rather than client-readable plaintext or logs. This is HTTP/runtime evidence only, not visual
+  browser, OAuth-provider, authenticator, or database E2E. There is no invite issuer UI, anonymous
+  pairing-start or recovery edge attempt policy, abandoned-state cleanup or notification, live
+  OAuth/authenticator/database integration, monitoring, or deployment evidence.
 - A private current-week account score slice now reuses the exact possessed session and one combined
   Web/Auth pool checkout for visibility plus revision 0019's derived-score read. The server-only
   mapper accepts one empty sentinel or exactly seven consecutive 0–1000 daily scores with coherent

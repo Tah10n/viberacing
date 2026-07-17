@@ -164,9 +164,18 @@ Versioning where its guarantees are applicable.
   fixed four-client read-write pool wrapper probes the exact Web role/login/search path, one fixed
   query selects at most one approved transaction, and the high-level adapter alone invokes exact
   atomic activation after proof with server-owned device, audit, and request IDs. Four-call
-  admission plus a 250-millisecond floor produces only generic local failure decisions. There is no
-  browser approval/HTTP route, connector client, distributed rate policy, live login, real key, or
-  deployment.
+  admission plus a 250-millisecond floor produces only generic local failure decisions. This
+  injected boundary alone provides no live login, real key, capacity, monitoring, or deployment
+  evidence.
+- A local signed-in `/connect` approval flow with persisted exact-session code-attempt bounds,
+  bounded device/fingerprint review, and an explicit new-source or active existing-source choice.
+  Existing choices expose only source ordinals, device labels, and encrypted session-bound controls;
+  raw source IDs remain server-only. A separate fresh passkey assertion binds the exact pairing,
+  source choice, source ID, RP, and origin before one fixed atomic approval. Component, application,
+  HTTP, and fixed-query tests cover exact body shapes, opaque selection, token tamper, replay, and
+  first-winner settlement. Exact local start/poll routes and the native-store Rust client complete
+  only a synthetic journey; there is no live authenticator/database result, trusted edge, release,
+  or deployment evidence.
 - A local invite-to-passkey enrollment vertical slice with EN/RU join/account UI, exact bounded
   same-origin POST routes, state plus S256 PKCE and no extra GitHub scope, purpose-separated
   AES-256-GCM HttpOnly cookies, fixed atomic enrollment/challenge/passkey/session database calls,

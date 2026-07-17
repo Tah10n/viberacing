@@ -699,6 +699,7 @@ describe("enrollment service", () => {
     });
 
     const start = await service.beginPairingApproval(sessionCookie, {
+      sourceChoice: "new",
       userCode: "7K9M-P2QR-W4XY",
     });
     expect(start).toMatchObject({
@@ -724,6 +725,7 @@ describe("enrollment service", () => {
         challengeId: "00000000-0000-4000-8000-000000000502",
         pairingId,
         sessionId,
+        sourceChoice: "new",
       }),
     );
     const approvalChallengeInput = vi.mocked(database.createPairingApprovalChallenge).mock
@@ -783,9 +785,92 @@ describe("enrollment service", () => {
       publicKey: Buffer.alloc(32, 0x65),
     });
     await expect(
-      service.beginPairingApproval(sessionCookie, { userCode: "not-a-code" }),
+      service.beginPairingApproval(sessionCookie, {
+        sourceChoice: "new",
+        userCode: "not-a-code",
+      }),
     ).resolves.toBeUndefined();
     expect(database.readPairingApproval).toHaveBeenCalledTimes(2);
+    expect(database.createPairingApprovalChallenge).toHaveBeenCalledOnce();
+  });
+
+  it("binds an existing active source through only its session-bound opaque control", async () => {
+    derivePairingCode.mockClear();
+    const { authenticationChallenge, cookieCodec, database, service } = createFixture();
+    const sessionId = "00000000-0000-4000-8000-000000000512";
+    const sourceId = `src_${"B".repeat(22)}`;
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId,
+      sessionVerifier: Buffer.alloc(32, 0x47).toString("base64url"),
+      version: 1,
+    });
+    const sourceControl = cookieCodec.seal("passkey", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 15 * 60,
+      sessionId,
+      sourceId,
+      version: 1,
+    });
+    const otherSessionSourceControl = cookieCodec.seal("passkey", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 15 * 60,
+      sessionId: "00000000-0000-4000-8000-000000000513",
+      sourceId,
+      version: 1,
+    });
+    const material = {
+      architecture: "x86_64" as const,
+      candidateIndex: 1 as const,
+      connectorVersion: "1.2.3",
+      deviceLabel: "Laptop",
+      expiresAt: "2026-07-16T10:09:00.000Z",
+      osFamily: "windows" as const,
+      pairingId: "00000000-0000-4000-8000-000000001001",
+      publicKey: Buffer.alloc(32, 0x66),
+    };
+    vi.mocked(database.readPairingApproval)
+      .mockResolvedValueOnce(material)
+      .mockResolvedValueOnce({ ...material, publicKey: Buffer.alloc(32, 0x67) })
+      .mockResolvedValueOnce({ ...material, publicKey: Buffer.alloc(32, 0x68) });
+
+    const start = await service.beginPairingApproval(sessionCookie, {
+      sourceChoice: "existing",
+      sourceControl,
+      userCode: "7K9M-P2QR-W4XY",
+    });
+    expect(start?.options.challenge).toBe(authenticationChallenge);
+    expect(database.createPairingApprovalChallenge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pairingId: material.pairingId,
+        sessionId,
+        sourceChoice: "existing",
+        sourceId,
+      }),
+    );
+    expect(cookieCodec.open("passkey", start?.pairingApprovalCookie ?? "")).toMatchObject({
+      pairingId: material.pairingId,
+      sourceId,
+    });
+    expect(start?.pairingApprovalCookie).not.toContain(sourceId);
+
+    await expect(
+      service.beginPairingApproval(sessionCookie, {
+        sourceChoice: "existing",
+        sourceControl: otherSessionSourceControl,
+        userCode: "7K9M-P2QR-W4XY",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.beginPairingApproval(sessionCookie, {
+        sourceChoice: "existing",
+        sourceControl: `${sourceControl}tampered`,
+        userCode: "7K9M-P2QR-W4XY",
+      }),
+    ).resolves.toBeUndefined();
+    expect(database.readPairingApproval).toHaveBeenCalledTimes(3);
     expect(database.createPairingApprovalChallenge).toHaveBeenCalledOnce();
   });
 

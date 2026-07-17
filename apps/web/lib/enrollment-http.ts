@@ -469,7 +469,7 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         return problem("temporarily_unavailable");
       }
       try {
-        const body = await boundedBody(request, 512);
+        const body = await boundedBody(request, 1024);
         if (body === undefined) {
           return problem("invalid_request");
         }

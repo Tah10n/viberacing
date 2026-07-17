@@ -26,33 +26,33 @@ bounded pending-transaction material, separate protected poll/code verifiers, an
 call. A second application composes protected keyed poll lookup, strict proof, and exact atomic
 activation through the separately probed read-write pool with local admission/timing. Between those
 boundaries, a local `/connect` flow performs session-rate-limited pending-code lookup, exact
-device/fingerprint review, and fresh-passkey atomic new-source approval. Exact local start/poll
-routes now add closed framing/contracts, shared four-call admission, and fixed global/client-bucket
-PostgreSQL windows. The one-command Rust client generates and stores a pairing key through the
-native OS credential store, signs the exact proof, and persists activation before success output. No
-Codex launch or sync-context capability has a public constructor. A separate private Windows x86_64
-development command can construct them only after exact explicit-path artifact admission and
-active-record review, then sends one fixed signed sync without retry or edge credentials. It cannot
-discover a binary, admit another platform/version, or create a support claim. Its database-only
-Community ingest and bounded ingest-retention boundaries have synthetic executable evidence. The
-kernel has raw-envelope, origin-proof, bounded-parser, contract, and strict device-signature
-evidence; the adapter has configuration, fixed-query, role-probe, mapper, and failure evidence with
-mock pools. A local server factory now has loopback framing and injection evidence, but no live HTTP
-edge, host/port/TLS deployment entry point, or working database login/TLS connection. One signed
-synthetic request now exercises their required local composition through a mock pool and validated
-result/problem decisions. The public score route has request/response, admission, production-build,
-and visible browser-consumer/fallback evidence, while the Jobs runner has strict
-command/config/pool/role/result evidence. The identity slice has exact-origin/body/cookie,
-state/PKCE, token minimization, initial-registration, returning-login, session-derived passkey
-inventory, non-current-key revocation, backup-key addition, exact-handle profile-deletion request,
-source inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile
-PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI
-evidence with injected dependencies. Raw source IDs stay server-only; source controls receive only a
-15-minute encrypted token bound to the active session. None has a live database login, OAuth app,
-authenticator, edge, scheduler, purge execution, or network deployment. Controls below are marked
-**implemented** only when executable evidence exists in
-[implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
-security claims about the current tree.
+device/fingerprint review, opaque new or active existing source selection, and fresh-passkey atomic
+approval of that exact choice. Exact local start/poll routes now add closed framing/contracts,
+shared four-call admission, and fixed global/client-bucket PostgreSQL windows. The one-command Rust
+client generates and stores a pairing key through the native OS credential store, signs the exact
+proof, and persists activation before success output. No Codex launch or sync-context capability has
+a public constructor. A separate private Windows x86_64 development command can construct them only
+after exact explicit-path artifact admission and active-record review, then sends one fixed signed
+sync without retry or edge credentials. It cannot discover a binary, admit another platform/version,
+or create a support claim. Its database-only Community ingest and bounded ingest-retention
+boundaries have synthetic executable evidence. The kernel has raw-envelope, origin-proof,
+bounded-parser, contract, and strict device-signature evidence; the adapter has configuration,
+fixed-query, role-probe, mapper, and failure evidence with mock pools. A local server factory now
+has loopback framing and injection evidence, but no live HTTP edge, host/port/TLS deployment entry
+point, or working database login/TLS connection. One signed synthetic request now exercises their
+required local composition through a mock pool and validated result/problem decisions. The public
+score route has request/response, admission, production-build, and visible browser-consumer/fallback
+evidence, while the Jobs runner has strict command/config/pool/role/result evidence. The identity
+slice has exact-origin/body/cookie, state/PKCE, token minimization, initial-registration,
+returning-login, session-derived passkey inventory, non-current-key revocation, backup-key addition,
+exact-handle profile-deletion request, source inventory/pause/reactivation/unlink, and active-device
+revoke including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only
+OAuth `form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay
+server-only; source controls receive only a 15-minute encrypted token bound to the active session.
+None has a live database login, OAuth app, authenticator, edge, scheduler, purge execution, or
+network deployment. Controls below are marked **implemented** only when executable evidence exists
+in [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements,
+not security claims about the current tree.
 
 ### Assets and security objectives
 

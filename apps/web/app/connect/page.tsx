@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { ConnectExperience } from "@/components/connect-experience";
-import { readEnrollmentPageSession } from "@/lib/enrollment-page-session";
+import { readEnrollmentPageConnect } from "@/lib/enrollment-page-session";
 
 export const metadata: Metadata = {
   description: "Review and approve one Vibe Racing connector device with a passkey.",
@@ -9,11 +9,28 @@ export const metadata: Metadata = {
 };
 
 export default async function ConnectPage() {
-  const session = await readEnrollmentPageSession();
+  const connect = await readEnrollmentPageConnect();
+  const existingSources =
+    connect?.activeDeviceInventory === undefined
+      ? undefined
+      : Object.freeze(
+          connect.activeDeviceInventory.flatMap((source, sourceIndex) =>
+            source.state === "active"
+              ? [
+                  Object.freeze({
+                    deviceLabels: Object.freeze(source.devices.map((device) => device.label)),
+                    sourceControl: source.sourceControl,
+                    sourceNumber: sourceIndex + 1,
+                  }),
+                ]
+              : [],
+          ),
+        );
   return (
     <ConnectExperience
-      initialLocale={session?.locale ?? "en"}
-      signedIn={session?.passkeyRegistered === true}
+      {...(existingSources === undefined ? {} : { existingSources })}
+      initialLocale={connect?.session.locale ?? "en"}
+      signedIn={connect?.session.passkeyRegistered === true}
     />
   );
 }

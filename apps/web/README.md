@@ -20,8 +20,9 @@ fresh-passkey recovery-code rotation with one-time display, one-time recovery-co
 replacement-passkey sign-in, and logout. It fails closed without externally provisioned
 configuration. A signed-in `/connect` page also performs one session-rate-limited pending-code
 lookup, displays only bounded device evidence and a full public-key fingerprint, then requires a
-separate fresh passkey assertion before atomic new-source approval. These flows have no live-user or
-deployment evidence.
+separate fresh passkey assertion before atomic approval for an explicitly selected new or active
+existing source. Existing-source controls are encrypted and session-bound; raw source IDs do not
+enter HTML. These flows have no live-user or deployment evidence.
 
 The private account render now combines visibility with the exact session's current Community week
 in one existing Web/Auth pool checkout. Its closed mapper accepts one empty sentinel or exactly
@@ -279,11 +280,14 @@ repository publishes no production values.
 
 Only the bounded NFC device label, syntactic connector version, OS, architecture, expiry, and full
 SHA-256 public-key fingerprint reach the review screen. Looking up a code does not invoke WebAuthn.
-A separate user action requests a required-user-verification assertion bound to the exact session,
-pairing ID, server-generated new source ID, RP ID, and origin. One fixed statement consumes that
-challenge and approves the pairing atomically. The raw code and public key are not stored in a
-browser cookie, log, cache, local storage, or client state after lookup. Existing-source selection
-remains Phase 3 work.
+The form explicitly offers a server-generated new source or any active source from the exact
+session's bounded inventory. Existing options expose only source ordinal, active device labels, and
+an encrypted session-bound control token; raw source IDs remain server-only. A separate user action
+requests a required-user-verification assertion bound to the exact session, pairing ID, selected
+source ID and choice, RP ID, and origin. One fixed statement consumes that challenge and approves
+the pairing atomically after PostgreSQL rechecks source ownership and active state. The raw code and
+public key are not stored in a browser cookie, log, cache, local storage, or client state after
+lookup.
 
 This is local application and synthetic PostgreSQL evidence. The separate Rust workspace now
 provides a native-store connector client and the Web workspace provides start/poll endpoints, but

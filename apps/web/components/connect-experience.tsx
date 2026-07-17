@@ -6,14 +6,19 @@ import { useEffect, useState } from "react";
 import { connectTranslations } from "@/lib/connect-i18n";
 import type { Locale } from "@/lib/i18n";
 
-import { PairingApprovalForm } from "./passkey-setup";
+import { PairingApprovalForm, type PairingExistingSourceChoice } from "./passkey-setup";
 
 interface ConnectExperienceProps {
+  readonly existingSources?: readonly PairingExistingSourceChoice[];
   readonly initialLocale: Locale;
   readonly signedIn: boolean;
 }
 
-export function ConnectExperience({ initialLocale, signedIn }: ConnectExperienceProps) {
+export function ConnectExperience({
+  existingSources,
+  initialLocale,
+  signedIn,
+}: ConnectExperienceProps) {
   const [locale, setLocale] = useState(initialLocale);
   const copy = connectTranslations[locale];
 
@@ -69,7 +74,10 @@ export function ConnectExperience({ initialLocale, signedIn }: ConnectExperience
           {copy.noRelease}
         </p>
         {signedIn ? (
-          <PairingApprovalForm locale={locale} />
+          <PairingApprovalForm
+            {...(existingSources === undefined ? {} : { existingSources })}
+            locale={locale}
+          />
         ) : (
           <section aria-labelledby="pairing-sign-in-title" className="account-security">
             <h2 id="pairing-sign-in-title">{copy.signIn}</h2>

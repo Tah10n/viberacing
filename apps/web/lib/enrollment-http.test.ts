@@ -839,7 +839,11 @@ describe("enrollment HTTP boundary", () => {
     const options = await http.pairingApprovalOptions(
       post(
         "/auth/pairing/options",
-        JSON.stringify({ userCode: "7K9M-P2QR-W4XY" }),
+        JSON.stringify({
+          sourceChoice: "existing",
+          sourceControl: "opaque-source-control",
+          userCode: "7K9M-P2QR-W4XY",
+        }),
         "application/json",
         "viberacing_session=opaque-session",
       ),
@@ -861,6 +865,8 @@ describe("enrollment HTTP boundary", () => {
       },
     });
     expect(service.beginPairingApproval).toHaveBeenCalledWith("opaque-session", {
+      sourceChoice: "existing",
+      sourceControl: "opaque-source-control",
       userCode: "7K9M-P2QR-W4XY",
     });
 
@@ -883,12 +889,23 @@ describe("enrollment HTTP boundary", () => {
 
     const crossOrigin = post(
       "/auth/pairing/options",
-      JSON.stringify({ userCode: "7K9M-P2QR-W4XY" }),
+      JSON.stringify({ sourceChoice: "new", userCode: "7K9M-P2QR-W4XY" }),
       "application/json",
       "viberacing_session=opaque-session",
     );
     crossOrigin.headers.set("origin", "https://attacker.example");
     await expect(http.pairingApprovalOptions(crossOrigin)).resolves.toMatchObject({ status: 400 });
+    await expect(
+      http.pairingApprovalOptions(
+        post(
+          "/auth/pairing/options",
+          "x".repeat(1025),
+          "application/json",
+          "viberacing_session=opaque-session",
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 400 });
+    expect(service.beginPairingApproval).toHaveBeenCalledOnce();
     await expect(
       http.pairingApprovalVerify(
         post(

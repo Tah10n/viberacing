@@ -61,6 +61,20 @@ interface PairingReview {
   }>;
 }
 
+export interface PairingExistingSourceChoice {
+  readonly deviceLabels: readonly string[];
+  readonly sourceControl: string;
+  readonly sourceNumber: number;
+}
+
+type PairingReviewTarget =
+  Readonly<{ kind: "new" }> | Readonly<{ kind: "existing"; sourceNumber: number }>;
+
+interface PairingReviewState {
+  readonly review: PairingReview;
+  readonly target: PairingReviewTarget;
+}
+
 function plainRecord(value: unknown): value is Record<string, unknown> {
   return (
     value !== null &&
@@ -824,15 +838,16 @@ export function SourceUnlinkButton(props: SourceActionButtonProps) {
 }
 
 interface PairingApprovalFormProps {
+  readonly existingSources?: readonly PairingExistingSourceChoice[];
   readonly locale: Locale;
 }
 
-export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
+export function PairingApprovalForm({ existingSources, locale }: PairingApprovalFormProps) {
   const copy = connectTranslations[locale];
   const [approved, setApproved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<"generic" | "unsupported" | undefined>();
-  const [review, setReview] = useState<PairingReview>();
+  const [reviewState, setReviewState] = useState<PairingReviewState>();
 
   async function findPairing(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -842,17 +857,40 @@ export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const enteredCode = form.get("userCode");
-    if (typeof enteredCode !== "string") {
+    const selectedTarget = form.get("sourceTarget");
+    formElement.reset();
+    if (typeof enteredCode !== "string" || typeof selectedTarget !== "string") {
       setError("generic");
       return;
     }
     const userCode = enteredCode.trim().toUpperCase();
-    formElement.reset();
+    let requestBody:
+      | Readonly<{ sourceChoice: "new"; userCode: string }>
+      | Readonly<{ sourceChoice: "existing"; sourceControl: string; userCode: string }>;
+    let target: PairingReviewTarget;
+    if (selectedTarget === "new") {
+      requestBody = Object.freeze({ sourceChoice: "new", userCode });
+      target = Object.freeze({ kind: "new" });
+    } else {
+      const existingSource = existingSources?.find(
+        (source) => source.sourceControl === selectedTarget,
+      );
+      if (existingSource === undefined) {
+        setError("generic");
+        return;
+      }
+      requestBody = Object.freeze({
+        sourceChoice: "existing",
+        sourceControl: existingSource.sourceControl,
+        userCode,
+      });
+      target = Object.freeze({ kind: "existing", sourceNumber: existingSource.sourceNumber });
+    }
     setBusy(true);
     setError(undefined);
     try {
       const response = await fetch("/auth/pairing/options", {
-        body: JSON.stringify({ userCode }),
+        body: JSON.stringify(requestBody),
         cache: "no-store",
         credentials: "same-origin",
         headers: { accept: "application/json", "content-type": "application/json" },
@@ -866,7 +904,7 @@ export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
       if (parsed === undefined) {
         throw new Error("pairing response invalid");
       }
-      setReview(parsed);
+      setReviewState(Object.freeze({ review: parsed, target }));
     } catch {
       setError("generic");
     } finally {
@@ -876,7 +914,7 @@ export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
 
   async function approvePairing(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (busy || review === undefined) {
+    if (busy || reviewState === undefined) {
       return;
     }
     if (!browserSupportsWebAuthn()) {
@@ -886,7 +924,7 @@ export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
     setBusy(true);
     setError(undefined);
     try {
-      const response = await startAuthentication({ optionsJSON: review.options });
+      const response = await startAuthentication({ optionsJSON: reviewState.review.options });
       const verification = await fetch("/auth/pairing/verify", {
         body: JSON.stringify({ response }),
         cache: "no-store",
@@ -899,7 +937,7 @@ export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
         throw new Error("pairing approval failed");
       }
       setApproved(true);
-      setReview(undefined);
+      setReviewState(undefined);
     } catch {
       setError("generic");
     } finally {
@@ -919,7 +957,7 @@ export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
     );
   }
 
-  if (review === undefined) {
+  if (reviewState === undefined) {
     return (
       <form className="auth-form" onSubmit={(event) => void findPairing(event)}>
         <label>
@@ -939,6 +977,37 @@ export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
           />
           <small>{copy.codeHint}</small>
         </label>
+        <fieldset className="pairing-source-options">
+          <legend>{copy.sourceChoice}</legend>
+          <label className="pairing-source-option">
+            <input defaultChecked name="sourceTarget" type="radio" value="new" />
+            <span>
+              <strong>{copy.newSource}</strong>
+              <small>{copy.newSourceCopy}</small>
+            </span>
+          </label>
+          {existingSources?.map((source) => (
+            <label className="pairing-source-option" key={source.sourceControl}>
+              <input name="sourceTarget" type="radio" value={source.sourceControl} />
+              <span>
+                <strong>
+                  {copy.existingSource} {source.sourceNumber}
+                </strong>
+                <small>{copy.existingSourceCopy}</small>
+                <small>
+                  {source.deviceLabels.length === 0
+                    ? copy.noSourceDevices
+                    : `${copy.sourceDevices}: ${source.deviceLabels.join(", ")}`}
+                </small>
+              </span>
+            </label>
+          ))}
+          {existingSources === undefined ? (
+            <small className="auth-status">{copy.existingSourcesUnavailable}</small>
+          ) : existingSources.length === 0 ? (
+            <small className="auth-status">{copy.noExistingSources}</small>
+          ) : null}
+        </fieldset>
         <button className="primary-action" disabled={busy} type="submit">
           {busy ? copy.searching : copy.submitCode}
         </button>
@@ -948,6 +1017,8 @@ export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
       </form>
     );
   }
+
+  const { review, target } = reviewState;
 
   const platform =
     review.pairing.osFamily === "macos"
@@ -976,6 +1047,14 @@ export function PairingApprovalForm({ locale }: PairingApprovalFormProps) {
         <div>
           <dt>{copy.architecture}</dt>
           <dd>{review.pairing.architecture}</dd>
+        </div>
+        <div>
+          <dt>{copy.source}</dt>
+          <dd>
+            {target.kind === "new"
+              ? copy.newSource
+              : `${copy.existingSource} ${String(target.sourceNumber)}`}
+          </dd>
         </div>
         <div>
           <dt>{copy.expires}</dt>

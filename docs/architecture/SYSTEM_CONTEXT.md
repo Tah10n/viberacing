@@ -126,12 +126,13 @@ pairing-possession message. ADR 0027 composes protected poll lookup, that proof,
 activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
 material and one fixed database call; ADR 0029 supplies bounded Jobs-only physical cleanup after
 expiry. A separate local `/connect` flow supplies session-rate-limited pending-code review and
-fresh-passkey new-source approval. ADR 0030 now exposes only the pairing journey through one Rust
-`connect` command, exact local start/poll routes, fixed-storage database admission, and native OS
-credential custody. App Server launch and sync capabilities still have no public constructor, so ADR
-0031 lets only the private Windows x86_64 command construct them after exact explicit-path artifact
-admission and active-record review. It creates fresh context and performs one fixed signed upload.
-Automatic discovery, macOS/Linux admission, scheduling, and release remain absent. The host/port/TLS
+fresh-passkey approval for an explicitly selected new or active existing opaque source, without
+exposing raw source IDs. ADR 0030 now exposes only the pairing journey through one Rust `connect`
+command, exact local start/poll routes, fixed-storage database admission, and native OS credential
+custody. App Server launch and sync capabilities still have no public constructor, so ADR 0031 lets
+only the private Windows x86_64 command construct them after exact explicit-path artifact admission
+and active-record review. It creates fresh context and performs one fixed signed upload. Automatic
+discovery, macOS/Linux admission, scheduling, and release remain absent. The host/port/TLS
 deployment entry point, live secret-manager/edge key injection, working deployment
 login/certificate, composed live end-to-end flow, edge/capacity evidence, Cloudflare/Railway path,
 released sync connector, Jobs scheduler/monitoring, public cache, and audited correction authority

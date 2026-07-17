@@ -180,9 +180,10 @@ flowchart LR
   activation boundary owns protected poll lookup, strict possession proof, server-owned activation
   IDs, and fixed admission/timing. The local `/connect` slice now supplies the intervening browser
   step: exact-session code lookup with a database-backed attempt window, bounded device/fingerprint
-  review, and fresh-passkey atomic new-source approval. Existing-source choice, distributed
-  recovery/anonymous edge attempt policy, abandoned-state cleanup and notification, live
-  provider/database credentials, and deployment remain separate gates.
+  review, explicit new-source or active existing-source selection through an encrypted session-bound
+  control, and fresh-passkey atomic approval. Distributed recovery/anonymous edge attempt policy,
+  abandoned-state cleanup and notification, live provider/database credentials, and deployment
+  remain separate gates.
 - Authenticated score view: the account server render reuses the exact possessed session and one
   combined Web/Auth pool checkout to read visibility plus the current Monday's existing seven
   derived daily scores and bounded summary. Hidden profiles return no score; raw usage, private
@@ -409,10 +410,13 @@ event.
 4. The connector starts a transaction with its immutable public key and safe metadata. The server
    returns a high-entropy poll token, a transaction challenge, and a short user code; only keyed
    verifiers are persisted.
-5. The browser accepts the code and displays the public-key fingerprint, fixed new-source choice,
-   connector version, platform, and device label. Existing-source choice remains Phase 3 work.
-6. An authenticated session plus fresh passkey approves the exact pending transaction and
-   server-generated new source.
+5. The browser accepts the code and displays the public-key fingerprint, connector version,
+   platform, device label, and an explicit new-source or active existing-source choice. Existing
+   options expose only source ordinals, active device labels, and an encrypted session-bound
+   control; the raw source ID stays server-only.
+6. An authenticated session plus fresh passkey approves the exact pending transaction and selected
+   source. The server generates a fresh source ID for `new` or recovers the owned source from the
+   encrypted control for `existing`; PostgreSQL rechecks ownership and active state atomically.
 7. The connector presents the poll token and proves private-key possession by signing the bound
    challenge.
 8. The server atomically activates the binding and issues a public device ID tied to that public key
@@ -911,7 +915,9 @@ measurements exist.
 
 ### Phase 3 — Multi-source and lifecycle hardening
 
-- Add explicit new-source versus existing-source pairing.
+- Explicit new-source versus active existing-source pairing is implemented in the local browser and
+  Web/Auth boundary; live authenticator/database/connector evidence and deployment controls remain
+  gates.
 - Complete aggregation, same-source device dedup, source count, quarantine, retention, and
   finalized-season immutability.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches.

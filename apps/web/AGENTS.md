@@ -106,8 +106,10 @@ apply.
   must count against the exact possessed session in PostgreSQL, probe fixed primary/optional
   secondary candidates, return only bounded metadata plus the full public-key fingerprint, and start
   no WebAuthn ceremony until the user confirms. Bind the fresh assertion to the session, pairing,
-  server-generated new source, RP, and origin; consume and approve in one fixed statement. Keep the
-  raw code/key out of cookies, logs, cache, and persistence, and keep errors generic.
+  exact new or active existing source choice, RP, and origin; consume and approve in one fixed
+  statement. Existing-source selection must use the encrypted session-bound source control and keep
+  the raw source ID out of HTML. Keep the raw code/key out of cookies, logs, cache, and persistence,
+  and keep errors generic.
 - Keep pairing start/poll on the two exact versioned POST routes. Validate framing, client ID, and
   generated contracts before constructing the shared four-call service; retain one global plus one
   fixed client-bucket PostgreSQL admission per request, generic problems, bounded bodies/deadlines,

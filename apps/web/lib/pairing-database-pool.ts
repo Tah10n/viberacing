@@ -141,12 +141,12 @@ const createPairingApprovalChallengeQuery = `WITH challenge_creation AS MATERIAL
     $2::bytea,
     $3::uuid,
     $4::bytea,
-    'new'::text,
     $5::text,
-    $6::uuid,
-    $7::bytea,
+    $6::text,
+    $7::uuid,
     $8::bytea,
-    $9::timestamptz
+    $9::bytea,
+    $10::timestamptz
   ) AS ignored
 )
 SELECT pg_catalog.count(*) = 1 AS created
@@ -861,6 +861,7 @@ export interface EnrollmentDatabasePairingApprovalChallenge {
   readonly pairingId: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
+  readonly sourceChoice: "existing" | "new";
   readonly sourceId: string;
   readonly userCodeDigest: Uint8Array;
 }
@@ -1522,6 +1523,7 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           sessionVerifierDigest,
           input.pairingId,
           userCodeDigest,
+          input.sourceChoice,
           input.sourceId,
           input.challengeId,
           challengeDigest,
