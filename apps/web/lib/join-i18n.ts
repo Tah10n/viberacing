@@ -52,7 +52,7 @@ const english = {
   noActiveDevices: "No source is connected yet.",
   noSourceActiveDevices: "No active device credential remains on this source.",
   passkeyCopy:
-    "A passkey is required before the profile becomes active and replaces a password. Device approval and recovery are not available in this local slice yet.",
+    "A passkey is required before the profile becomes active and replaces a password. Device approval and recovery sign-in are not available in this local slice yet.",
   passkeyLabel: "Passkey label",
   passkeyRevokeCopy:
     "Revoking a passkey is permanent and requires a fresh passkey check. The key protecting this session cannot be selected.",
@@ -64,6 +64,14 @@ const english = {
   privacyNote:
     "Email, repositories, prompts, conversations, Codex credentials, and exact token totals are neither retained nor used.",
   primaryPasskey: "Primary passkey",
+  recoveryCodesCopy:
+    "A fresh passkey check replaces every previous recovery code. The site stores only protected verifiers and shows the codes once without logging or saving them.",
+  recoveryCodesGenerate: "Generate new recovery codes",
+  recoveryCodesGenerating: "Checking passkey and generating codes…",
+  recoveryCodesOnce:
+    "Save every code now in a secure place. They disappear when you leave or reload this page. Recovery sign-in is not enabled in this local slice yet.",
+  recoveryCodesReplaced: "Previous recovery codes are invalid. Save these ten new codes now.",
+  recoveryCodesTitle: "Recovery codes",
   profileHidden: "Public profile is off. It will not appear in the Community race.",
   profileDeletionCopy:
     "This permanently starts deletion. Your profile is hidden immediately and all sessions, passkeys, and connected-device access are revoked. Primary-data removal is queued; this local build does not run the purge worker yet.",
@@ -163,7 +171,7 @@ const russian: Record<JoinTranslationKey, string> = {
   noActiveDevices: "Источники пока не подключены.",
   noSourceActiveDevices: "У этого источника не осталось активных прав устройства.",
   passkeyCopy:
-    "До активации профиля нужен ключ доступа, заменяющий пароль. Подключение устройств и восстановление в этом локальном срезе пока недоступны.",
+    "До активации профиля нужен ключ доступа, заменяющий пароль. Подключение устройств и вход через восстановление в этом локальном срезе пока недоступны.",
   passkeyLabel: "Название ключа",
   passkeyRevokeCopy:
     "Отзыв ключа необратим и требует свежей проверки ключом доступа. Ключ, защищающий эту сессию, выбрать нельзя.",
@@ -175,6 +183,15 @@ const russian: Record<JoinTranslationKey, string> = {
   privacyNote:
     "Email, репозитории, промпты, диалоги, данные входа Codex и точное число токенов не сохраняются и не используются.",
   primaryPasskey: "Основной ключ доступа",
+  recoveryCodesCopy:
+    "После свежей проверки ключа доступа все прежние коды восстановления становятся недействительными. Сайт хранит только защищённые проверочные значения и показывает коды один раз, не записывая их или содержимое в логи.",
+  recoveryCodesGenerate: "Создать новые коды восстановления",
+  recoveryCodesGenerating: "Проверяем ключ доступа и создаём коды…",
+  recoveryCodesOnce:
+    "Сохраните все коды сейчас в надёжном месте. После ухода или перезагрузки страницы они исчезнут. Вход через восстановление в этом локальном срезе пока не включён.",
+  recoveryCodesReplaced:
+    "Прежние коды восстановления недействительны. Сохраните эти десять новых кодов сейчас.",
+  recoveryCodesTitle: "Коды восстановления",
   profileHidden: "Публичный профиль выключен и не появится в гонке сообщества.",
   profileDeletionCopy:
     "Это необратимо запускает удаление. Профиль сразу скрывается, все сессии, ключи доступа и доступ подключённых устройств отзываются. Удаление основных данных ставится в очередь; локальная сборка пока не запускает задачу очистки.",

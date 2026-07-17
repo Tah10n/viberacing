@@ -22,6 +22,8 @@ import {
   type EnrollmentDatabaseProfileDeletionChallenge,
   type EnrollmentDatabaseProfileVisibilityRequest,
   type EnrollmentDatabaseProfileVisibilityUpdate,
+  type EnrollmentDatabaseRecoveryCodeChallenge,
+  type EnrollmentDatabaseRecoveryCodeReplacement,
   type EnrollmentDatabaseSessionRevocation,
   type EnrollmentDatabaseSourcePause,
   type EnrollmentDatabaseSourceReactivation,
@@ -111,6 +113,9 @@ export interface EnrollmentDatabase {
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile>;
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<boolean>;
   completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<boolean>;
+  completeRecoveryCodeReplacement(
+    input: EnrollmentDatabaseRecoveryCodeReplacement,
+  ): Promise<boolean>;
   completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<boolean>;
   completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<boolean>;
   createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean>;
@@ -119,6 +124,7 @@ export interface EnrollmentDatabase {
   createProfileDeletionChallenge(
     input: EnrollmentDatabaseProfileDeletionChallenge,
   ): Promise<boolean>;
+  createRecoveryCodeChallenge(input: EnrollmentDatabaseRecoveryCodeChallenge): Promise<boolean>;
   createSourceReactivationChallenge(
     input: EnrollmentDatabaseSourceReactivationChallenge,
   ): Promise<boolean>;
@@ -668,6 +674,14 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "deleted"),
       );
     },
+    completeRecoveryCodeReplacement(
+      input: EnrollmentDatabaseRecoveryCodeReplacement,
+    ): Promise<boolean> {
+      return execute(
+        (client) => client.completeRecoveryCodeReplacement(input),
+        (value) => exactBooleanRow(value, "replaced"),
+      );
+    },
     completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<boolean> {
       return execute(
         (client) => client.completeSourceReactivation(input),
@@ -705,6 +719,12 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
     ): Promise<boolean> {
       return execute(
         (client) => client.createProfileDeletionChallenge(input),
+        (value) => exactBooleanRow(value, "created"),
+      );
+    },
+    createRecoveryCodeChallenge(input: EnrollmentDatabaseRecoveryCodeChallenge): Promise<boolean> {
+      return execute(
+        (client) => client.createRecoveryCodeChallenge(input),
         (value) => exactBooleanRow(value, "created"),
       );
     },

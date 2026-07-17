@@ -140,6 +140,15 @@ batch; regeneration and profile deletion revoke active recovery authority. The t
 row stores only opaque IDs, keyed/challenge/context digests, state, and timestamps. A bounded public
 retention and cleanup rule is required before a real endpoint is enabled.
 
+The local account rotation application generates exactly ten selector/secret codes only after a
+fresh passkey assertion. It derives PHCs sequentially under a distinct recovery-only pepper, sends
+only selectors and PHCs to the fixed database call, and returns plaintext only after atomic
+replacement succeeds. The HTTP response is `no-store`; the account component keeps the codes only in
+memory for one display and adds no log, audit field, cache, download, analytics, or browser
+persistence. The decoded configuration buffer is overwritten after the generator copies its
+process-lifetime pepper. Tracked pepper and work-factor values are non-working placeholders. No
+recovery-code verification endpoint exists yet.
+
 Revision 0007 implements the database-only Usage/Security rows named above. It stores an exact
 private daily value, opaque device/source/sync identifiers, bounded connector/Codex versions, body
 and nonce digests, the submitted signature, closed outcome/reason state, and server timestamps. It

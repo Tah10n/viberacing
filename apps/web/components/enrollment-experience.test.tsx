@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 import axe from "axe-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -214,6 +216,7 @@ describe("enrollment experience", () => {
       />,
     );
     expect(markup).toContain("Your passkeys");
+    expect(markup).toContain("Recovery codes");
     expect(markup).toContain("Sources and connected devices");
     expect(markup).toContain("Studio PC");
     expect(markup).toContain('action="/auth/devices/revoke"');
@@ -223,6 +226,7 @@ describe("enrollment experience", () => {
     expect(markup).toContain("Unlink source permanently");
     expect(markup).toContain('dateTime="2026-07-14"');
     expect(markup).not.toContain(sourceId);
+    expect(markup).not.toContain("vrr1_");
     expect(markup).toContain("Public profile");
     expect(markup).toContain("Delete profile");
     expect(markup).toContain('name="handle"');
@@ -355,6 +359,74 @@ describe("enrollment experience", () => {
       registration: { id: "synthetic" },
     });
     expect(mounted.container.textContent).toContain("could not be completed");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
+  it("shows a validated recovery-code batch only after a fresh browser assertion", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    webauthn.startAuthentication.mockClear();
+    const recoveryCodes = Array.from(
+      { length: 10 },
+      (_, index) =>
+        `vrr1_50000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}_${Buffer.from(
+          new Uint8Array(32).fill(index + 1),
+        ).toString("base64url")}`,
+    );
+    const fetchMock = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ challenge: "recovery" }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ recoveryCodes }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(
+      <AccountExperience
+        activeDeviceInventory={[]}
+        handle="pixel_driver"
+        locale="en"
+        passkeys={[]}
+        visibility="public"
+      />,
+    );
+    const button = [...mounted.container.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent === "Generate new recovery codes",
+    );
+    await act(async () => {
+      button
+        ?.closest("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(webauthn.startAuthentication).toHaveBeenCalledWith({
+      optionsJSON: { challenge: "recovery" },
+    });
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      "/auth/recovery-codes/options",
+      "/auth/recovery-codes/verify",
+    ]);
+    expect(fetchMock.mock.calls[0]?.[1].body).toBe("{}");
+    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
+    expect(typeof verificationBody).toBe("string");
+    if (typeof verificationBody !== "string") {
+      throw new Error("expected serialized recovery-code request body");
+    }
+    expect(JSON.parse(verificationBody)).toEqual({
+      response: { id: "synthetic-login" },
+    });
+    expect(mounted.container.querySelectorAll(".recovery-code-list code")).toHaveLength(10);
+    expect(mounted.container.textContent).toContain(recoveryCodes[0]);
+    expect(mounted.container.textContent).toContain(
+      "Previous recovery codes are invalid. Save these ten new codes now.",
+    );
     act(() => {
       mounted.root.unmount();
     });

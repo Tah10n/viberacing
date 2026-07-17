@@ -30,6 +30,7 @@ export function getEnrollmentRuntime(): EnrollmentRuntime {
       return Object.freeze({ config: publicConfig, service });
     } finally {
       config.cookieKey.fill(0);
+      config.recoveryPepper.fill(0);
     }
   })();
   return configuredRuntime;

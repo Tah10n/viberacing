@@ -22,9 +22,11 @@ enrollment, обязательную регистрацию passkey, повто�
 устройств, немедленную паузу источника, восстановление paused-источника после свежей проверки
 passkey, необратимое отключение источника со свежей проверкой passkey, немедленный отзыв устройства,
 добавление резервного passkey, защищённый отзыв не текущего passkey, запрос удаления профиля после
-точного ввода handle и свежей проверки passkey, а также logout. Репозиторий не предоставляет рабочий
-invite issuer, OAuth registration, реальные secrets, live OAuth/authenticator/database credentials,
-deletion purge worker, edge abuse controls или evidence с реальным пользователем.
+точного ввода handle и свежей проверки passkey, ротацию кодов восстановления с одноразовым показом
+после свежей проверки passkey, а также logout. Репозиторий не предоставляет рабочий invite issuer,
+вход по коду восстановления или замену passkey, OAuth registration, реальные secrets, live
+OAuth/authenticator/database credentials, deletion purge worker, edge abuse controls или evidence с
+реальным пользователем.
 
 Страница аккаунта теперь также рендерит семь derived-баллов по дням текущей Community-недели и
 bounded summary через один объединённый server-side visibility/score checkout. Hidden-профиль не
@@ -185,22 +187,24 @@ non-current passkey страница отправляет только opaque ID
 ключ удалить нельзя. Отдельный add-flow заранее валидирует и шифрует label, затем требует
 независимые assertion существующим ключом и регистрацию нового; один database statement атомарно
 consume-ит step-up и добавляет credential в пределах lifetime cap 32. Application verifier для
-recovery, WebAuthn pairing approval и edge rate limits для анонимного login и recovery lookup пока
-отсутствуют. Database-only Community ingest capability уже выдаёт минимальный материал активного
-устройства и принимает bounded source-bound snapshots с exact retry, nonce replay, monotonic
-source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only procedure независимо
-удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots, сохраняя current
-source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup, scoring refresh
-или finalization через отдельный least-privileged config, single-client pool, проверку
-role/login/search path, fixed deadlines, prepared parameters, closed result validation и стабильный
-non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel, adapter и
-application объединены на synthetic/mock-pool evidence, а Fastify boundary отдельно проверена через
-injection/loopback с mock application. Полный HTTP-to-PostgreSQL path не проверен через реальный
-login. Deployed HTTP ingest route, pairing-possession verifier, operational connector,
-cleanup/scoring scheduler, live Ingest/Jobs login/TLS integration, monitoring backend, deployed
-public score read, audited correction flow, purge worker и deployed database ещё не реализованы,
-поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
-данных пока нет.
+ротации кодов восстановления теперь после свежего passkey assertion создаёт десять кодов, атомарно
+сохраняет только защищённые verifier values и показывает plaintext один раз. Проверка recovery-кода,
+replacement-passkey flow, WebAuthn pairing approval и edge rate limits для анонимного login и
+recovery lookup пока отсутствуют. Database-only Community ingest capability уже выдаёт минимальный
+материал активного устройства и принимает bounded source-bound snapshots с exact retry, nonce
+replay, monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only
+procedure независимо удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots,
+сохраняя current source/day values. Локальный one-shot Jobs runner теперь вызывает только cleanup,
+scoring refresh или finalization через отдельный least-privileged config, single-client pool,
+проверку role/login/search path, fixed deadlines, prepared parameters, closed result validation и
+стабильный non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel,
+adapter и application объединены на synthetic/mock-pool evidence, а Fastify boundary отдельно
+проверена через injection/loopback с mock application. Полный HTTP-to-PostgreSQL path не проверен
+через реальный login. Deployed HTTP ingest route, pairing-possession verifier, operational
+connector, cleanup/scoring scheduler, live Ingest/Jobs login/TLS integration, monitoring backend,
+deployed public score read, audited correction flow, purge worker и deployed database ещё не
+реализованы, поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма
+реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

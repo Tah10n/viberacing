@@ -15,6 +15,7 @@ import {
   PasskeyAddForm,
   PasskeyRevokeButton,
   ProfileDeletionForm,
+  RecoveryCodeRotation,
   SourceReactivationButton,
   SourceUnlinkButton,
 } from "./passkey-setup";
@@ -263,6 +264,11 @@ export function AccountExperience({
               </ul>
             </>
           )}
+        </section>
+        <section aria-labelledby="recovery-codes-title" className="account-security">
+          <h2 id="recovery-codes-title">{copy.recoveryCodesTitle}</h2>
+          <p>{copy.recoveryCodesCopy}</p>
+          <RecoveryCodeRotation locale={locale} />
         </section>
         <section aria-labelledby="profile-deletion-title" className="account-security">
           <h2 id="profile-deletion-title">{copy.profileDeletionTitle}</h2>

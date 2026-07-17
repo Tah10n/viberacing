@@ -13,6 +13,7 @@ import {
   passkeyLoginCredentialId,
   passkeyRevokeContextDigest,
   profileDeletionContextDigest,
+  recoveryCodeRotationContextDigest,
   sourceReactivationContextDigest,
   sourceUnlinkContextDigest,
   verifyInitialPasskey,
@@ -230,6 +231,21 @@ describe("passkey login", () => {
         "00000000-0000-4000-8000-000000000101",
         "00000000-0000-4000-8000-000000000102",
         "other_driver",
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    );
+    expect(
+      recoveryCodeRotationContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000102",
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    ).not.toEqual(
+      recoveryCodeRotationContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000103",
         "race.example.com",
         "https://race.example.com",
       ),

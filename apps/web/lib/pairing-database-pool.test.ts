@@ -142,6 +142,99 @@ describe("pairing database pool", () => {
     expect(Object.isFrozen(pool)).toBe(true);
   });
 
+  it("composes recovery-code challenge consumption and replacement in one fixed statement", async () => {
+    const returnedRows = [[{ created: true }], [{ replaced: true }]];
+    const snapshots: { text: string; values: unknown[] }[] = [];
+    const driverClient = {
+      query(query: { text: string; values: unknown[] }): Promise<{ rows: unknown }> {
+        snapshots.push({
+          text: query.text,
+          values: query.values.map((value) =>
+            Buffer.isBuffer(value) ? Buffer.from(value) : value,
+          ),
+        });
+        return Promise.resolve({ rows: returnedRows.shift() });
+      },
+      release: vi.fn(),
+    };
+    const pool = createPairingDatabasePool(config, undefined, () => ({
+      connect: () => Promise.resolve(driverClient),
+      end: () => Promise.resolve(),
+      on() {
+        return this;
+      },
+    }));
+    const client = await pool.connect();
+    const digest = Buffer.alloc(32, 0x61);
+    const context = Buffer.alloc(32, 0x62);
+    const recoveryCodeIds = Array.from(
+      { length: 10 },
+      (_, index) => `40000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    );
+    const verifierPhcs = Array.from(
+      { length: 10 },
+      (_, index) =>
+        `$argon2id$v=19$m=19456,t=2,p=2$${"A".repeat(22)}$${String(index)}${"B".repeat(42)}`,
+    );
+
+    await expect(
+      client.createRecoveryCodeChallenge({
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000701",
+        contextDigest: context,
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: "00000000-0000-4000-8000-000000000702",
+        sessionVerifierDigest: digest,
+      }),
+    ).resolves.toEqual([{ created: true }]);
+    await expect(
+      client.completeRecoveryCodeReplacement({
+        auditEventId: "00000000-0000-4000-8000-000000000704",
+        backupState: true,
+        batchId: "00000000-0000-4000-8000-000000000703",
+        challengeDigest: digest,
+        challengeId: "00000000-0000-4000-8000-000000000701",
+        contextDigest: context,
+        observedSignCount: 9,
+        recoveryCodeIds,
+        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+        sessionId: "00000000-0000-4000-8000-000000000702",
+        sessionVerifierDigest: digest,
+        verifierPhcs,
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000705",
+      }),
+    ).resolves.toEqual([{ replaced: true }]);
+
+    expect(snapshots[0]?.text).toContain("create_recovery_change_challenge");
+    expect(snapshots[0]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000702",
+      digest,
+      "00000000-0000-4000-8000-000000000701",
+      digest,
+      context,
+      "2026-07-16T10:05:00.000Z",
+    ]);
+    expect(snapshots[1]?.text).toContain("consume_passkey_challenge");
+    expect(snapshots[1]?.text).toContain("'recovery_change'::text");
+    expect(snapshots[1]?.text).toContain("replace_recovery_codes");
+    expect(snapshots[1]?.text).toContain("AS MATERIALIZED");
+    expect(snapshots[1]?.values).toEqual([
+      "00000000-0000-4000-8000-000000000702",
+      digest,
+      "00000000-0000-4000-8000-000000000701",
+      digest,
+      context,
+      "00000000-0000-4000-8000-000000000705",
+      9,
+      true,
+      "00000000-0000-4000-8000-000000000703",
+      recoveryCodeIds,
+      verifierPhcs,
+      "00000000-0000-4000-8000-000000000704",
+      "req_AAAAAAAAAAAAAAAAAAAAAA",
+    ]);
+  });
+
   it("reports idle-driver failures only through the stable non-reflective signal", () => {
     const privateValue = "private-driver-error-that-must-not-be-reflected";
     const signals: PairingDatabasePoolSignal[] = [];

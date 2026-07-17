@@ -23,10 +23,11 @@ enrollment, required WebAuthn registration, returning discoverable-credential lo
 session-scoped passkey inventory, an active account page, immediate public-profile hide/show, source
 and active-device inventory, immediate source pause, fresh-passkey paused-source reactivation,
 device revoke, backup-passkey addition and fresh-passkey terminal source unlink, non-current-passkey
-revocation, an exact-handle fresh-passkey profile-deletion request, and logout. It is locally tested
-only: the repository supplies no invite issuer UI, OAuth registration, real secret, live
-OAuth/authenticator/database credentials, deletion purge worker, edge abuse controls, or live-user
-evidence.
+revocation, fresh-passkey recovery-code rotation with one-time display, an exact-handle
+fresh-passkey profile-deletion request, and logout. It is locally tested only: the repository
+supplies no invite issuer UI, recovery sign-in or replacement-passkey flow, OAuth registration, real
+secret, live OAuth/authenticator/database credentials, deletion purge worker, edge abuse controls,
+or live-user evidence.
 
 The authenticated account page now also renders the current Community week's seven derived daily
 scores and bounded summary from one combined server-side visibility/score checkout. Hidden profiles
@@ -212,11 +213,12 @@ the local score route. The visible race, leaderboard, and selectable participant
 its validated current-week response with a credential-free same-origin request and an explicit
 synthetic fallback. Canonical `/?profile=handle#profile` links select only an exact public handle in
 that page, and a missing current top-32 row is not replaced with another participant. There is now a
-local invite/OAuth/initial-passkey enrollment, returning-passkey login, and fresh-passkey
-profile-deletion request flow, but there is still no recovery route, Argon2id recovery verifier,
-WebAuthn pairing approval, pairing start/poll HTTP route, deployed Ingest/score API, operational
-connector, cleanup/scoring scheduler, audited correction flow, asynchronous purge worker, live
-OAuth/authenticator/Ingest/Jobs database integration, or deployed database.
+local invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
+rotation, and a fresh-passkey profile-deletion request flow, but there is still no recovery-code
+verification or replacement-passkey route, WebAuthn pairing approval, pairing start/poll HTTP route,
+deployed Ingest/score API, operational connector, cleanup/scoring scheduler, audited correction
+flow, asynchronous purge worker, live OAuth/authenticator/Ingest/Jobs database integration, or
+deployed database.
 
 ## Run and verify the synthetic prototype
 

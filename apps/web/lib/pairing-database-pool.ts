@@ -537,6 +537,51 @@ SELECT
   AND pg_catalog.count(*) = 1 AS revoked
 FROM passkey_revocation`;
 
+const createRecoveryCodeChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
+  SELECT viberacing_api.create_recovery_change_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    $4::bytea,
+    $5::bytea,
+    $6::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS created
+FROM challenge_creation`;
+
+const completeRecoveryCodeReplacementQuery = `WITH challenge_consumption AS MATERIALIZED (
+  SELECT viberacing_api.consume_passkey_challenge(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    'recovery_change'::text,
+    $4::bytea,
+    $5::bytea,
+    $6::uuid,
+    $7::bigint,
+    $8::boolean
+  ) AS consumed
+), recovery_code_replacement AS MATERIALIZED (
+  SELECT viberacing_api.replace_recovery_codes(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    $5::bytea,
+    $9::uuid,
+    $10::uuid[],
+    $11::text[],
+    $12::uuid,
+    $13::text
+  ) AS ignored
+  FROM challenge_consumption
+  WHERE consumed
+)
+SELECT
+  (SELECT consumed FROM challenge_consumption)
+  AND pg_catalog.count(*) = 1 AS replaced
+FROM recovery_code_replacement`;
+
 export interface PairingDatabaseActivation {
   readonly auditEventId: string;
   readonly deviceId: string;
@@ -774,6 +819,31 @@ export interface EnrollmentDatabasePasskeyRevocation {
   readonly verifiedPasskeyId: string;
 }
 
+export interface EnrollmentDatabaseRecoveryCodeChallenge {
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly expiresAt: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+}
+
+export interface EnrollmentDatabaseRecoveryCodeReplacement {
+  readonly auditEventId: string;
+  readonly backupState: boolean;
+  readonly batchId: string;
+  readonly challengeDigest: Uint8Array;
+  readonly challengeId: string;
+  readonly contextDigest: Uint8Array;
+  readonly observedSignCount: number;
+  readonly recoveryCodeIds: readonly string[];
+  readonly requestId: string;
+  readonly sessionId: string;
+  readonly sessionVerifierDigest: Uint8Array;
+  readonly verifierPhcs: readonly string[];
+  readonly verifiedPasskeyId: string;
+}
+
 export type PairingDatabasePoolSignal = "idle_client_error";
 export type PairingDatabasePoolSignalSink = (
   signal: PairingDatabasePoolSignal,
@@ -794,6 +864,9 @@ export interface EnrollmentDatabaseClient {
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<unknown>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown>;
   completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<unknown>;
+  completeRecoveryCodeReplacement(
+    input: EnrollmentDatabaseRecoveryCodeReplacement,
+  ): Promise<unknown>;
   completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<unknown>;
   completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<unknown>;
   completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<unknown>;
@@ -803,6 +876,7 @@ export interface EnrollmentDatabaseClient {
   createProfileDeletionChallenge(
     input: EnrollmentDatabaseProfileDeletionChallenge,
   ): Promise<unknown>;
+  createRecoveryCodeChallenge(input: EnrollmentDatabaseRecoveryCodeChallenge): Promise<unknown>;
   createSourceReactivationChallenge(
     input: EnrollmentDatabaseSourceReactivationChallenge,
   ): Promise<unknown>;
@@ -1014,6 +1088,34 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         contextDigest.fill(0);
       }
     },
+    async completeRecoveryCodeReplacement(
+      input: EnrollmentDatabaseRecoveryCodeReplacement,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(completeRecoveryCodeReplacementQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.verifiedPasskeyId,
+          input.observedSignCount,
+          input.backupState,
+          input.batchId,
+          [...input.recoveryCodeIds],
+          [...input.verifierPhcs],
+          input.auditEventId,
+          input.requestId,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
     async completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       const challengeDigest = Buffer.from(input.challengeDigest);
@@ -1162,6 +1264,27 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
       const contextDigest = Buffer.from(input.contextDigest);
       try {
         return await fixedQuery(createProfileDeletionChallengeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          challengeDigest,
+          contextDigest,
+          input.expiresAt,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
+    async createRecoveryCodeChallenge(
+      input: EnrollmentDatabaseRecoveryCodeChallenge,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(createRecoveryCodeChallengeQuery, [
           input.sessionId,
           sessionVerifierDigest,
           input.challengeId,

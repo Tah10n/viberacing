@@ -162,16 +162,20 @@ flowchart LR
   user-verified assertion bound to that session, target, RP, origin, and one atomically consumed
   challenge. It can also add a backup key after independent existing-key assertion and registration
   ceremonies whose validated label and challenges reach one atomic consume-and-add statement. Its
-  deletion control accepts the exact typed handle before a fresh assertion bound to
-  session/profile/handle/RP/origin, then atomically consumes that challenge while immediately hiding
-  the profile, revoking authority, unlinking sources, and queueing one opaque purge job. The purge
-  worker, cache invalidation, and restore replay remain separate gates. A dormant transport-free
-  pairing start boundary now owns fresh server IDs/token/challenge/code, separate protected
-  poll/code verifiers, closed device metadata, nine-minute expiry, and one fixed call through a
-  separate probed read-write pool wrapper. A second dormant boundary owns protected poll lookup,
-  strict possession proof, server-owned activation IDs, and fixed admission/timing. Pairing browser
-  approval, recovery, edge attempt policy, live provider/database credentials, and deployment remain
-  separate gates.
+  recovery-code control now requires a fresh user-verified assertion bound to the active
+  session/profile/RP/origin, derives ten independent Argon2id PHCs sequentially under a distinct
+  protected pepper, atomically replaces the previous batch, and returns plaintext once only after
+  commit. It does not yet verify a recovery code or register a replacement key. The deletion control
+  accepts the exact typed handle before a fresh assertion bound to session/profile/handle/RP/origin,
+  then atomically consumes that challenge while immediately hiding the profile, revoking authority,
+  unlinking sources, and queueing one opaque purge job. The purge worker, cache invalidation, and
+  restore replay remain separate gates. A dormant transport-free pairing start boundary now owns
+  fresh server IDs/token/challenge/code, separate protected poll/code verifiers, closed device
+  metadata, nine-minute expiry, and one fixed call through a separate probed read-write pool
+  wrapper. A second dormant boundary owns protected poll lookup, strict possession proof,
+  server-owned activation IDs, and fixed admission/timing. Pairing browser approval, recovery-code
+  use and replacement-passkey registration, edge attempt policy, live provider/database credentials,
+  and deployment remain separate gates.
 - Authenticated score view: the account server render reuses the exact possessed session and one
   combined Web/Auth pool checkout to read visibility plus the current Monday's existing seven
   derived daily scores and bounded summary. Hidden profiles return no score; raw usage, private

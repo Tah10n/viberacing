@@ -1,6 +1,6 @@
 # ADR 0007: Restricted recovery authority and passkey replacement
 
-- Status: Accepted (database capability implemented; application verification pending)
+- Status: Accepted (database capability and account-side rotation implemented; recovery use pending)
 - Date: 2026-07-15
 - Decision owners: Web/Auth, Database, Security, and Privacy
 - Supersedes: None
@@ -22,10 +22,11 @@ is established.
 ## Decision
 
 Recovery-code generation and display belong to Web/Auth. A regenerated batch contains between 8 and
-16 independently generated codes. Plaintext is shown once and never sent to logs, audit, support, or
-another service. The database stores an opaque random selector and an Argon2id PHC verifier for each
-unused code. Deployment-specific work factors, pepper material, response timing, and attempt
-thresholds remain protected configuration rather than public repository values.
+16 independently generated codes; the local application fixes its batch at ten. Plaintext is shown
+once and never sent to logs, audit, support, or another service. The database stores an opaque
+random selector and an Argon2id PHC verifier for each unused code. Deployment-specific work factors,
+pepper material, response timing, and attempt thresholds remain protected configuration rather than
+public repository values.
 
 Regenerating a batch requires an active browser session plus a fresh, exact-passkey
 `recovery_change` step-up. Replacement is atomic: the old batch is deleted and every active
@@ -110,9 +111,10 @@ VR-ABUSE-RECOVERY-ORACLE.
 ## Migration and rollback
 
 Revision 0006 adds the forced-RLS `recovery_authorities` table, terminal state triggers, restricted
-procedure grants, bounded audit enums, recovery-code verifier scrubbing, and deletion revocation. It
-does not create an HTTP route, select production Argon2id parameters, or enable recovery in the
-synthetic web application.
+procedure grants, bounded audit enums, recovery-code verifier scrubbing, and deletion revocation.
+The local account application now adds only passkey-protected batch rotation and one-time display;
+it does not select production Argon2id parameters, accept a recovery code, or enable
+replacement-passkey recovery.
 
 The migration is forward-only. Before a shared environment exists, a disposable database can be
 rebuilt. After deployment, repair defects with a reviewed forward migration. An incident can disable
@@ -139,9 +141,16 @@ Current PostgreSQL evidence covers:
 - observed cross-connection races for one recovery-code winner, code rotation versus old-code start,
   and completion versus old-passkey login.
 
-The repository still lacks application Argon2id/pepper handling, WebAuthn RP ID/origin/signature/UV
-verification, cookies and CSRF, endpoint rate limiting, response timing normalization, cleanup,
-notifications, recovery inventory UI, and hosted operational evidence. The recovery flow is not
+Local Web/Auth evidence additionally covers ten-code generation through Node's bounded Argon2id
+path, a distinct protected pepper, exact work-factor/configuration parsing, fresh
+session/profile/RP/origin-bound WebAuthn verification, atomic challenge consumption and batch
+replacement, narrow no-store cookies/responses, one-time EN/RU display,
+malformed/replay/cross-session denial, and the fixed database adapter calls. It uses synthetic
+secrets, authenticator responses, and database results only.
+
+The repository still lacks application recovery-code lookup and Argon2id verification, restricted
+authority and replacement-passkey HTTP handling, anonymous endpoint rate limiting and timing
+normalization, cleanup, notifications, and hosted operational evidence. Recovery sign-in is not
 launch-ready until those controls are implemented and tested.
 
 ## References

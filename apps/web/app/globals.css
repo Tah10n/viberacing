@@ -235,6 +235,22 @@ a {
   margin: 0;
 }
 
+.recovery-code-result {
+  margin-block-start: 1rem;
+}
+
+.recovery-code-list {
+  display: grid;
+  gap: 0.55rem;
+  padding-inline-start: 1.5rem;
+}
+
+.recovery-code-list code {
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  user-select: all;
+}
+
 .auth-card .primary-action,
 .auth-card .secondary-action,
 .auth-card .danger-action {

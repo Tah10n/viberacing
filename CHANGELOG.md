@@ -165,14 +165,14 @@ Versioning where its guarantees are applicable.
   session to a fresh passkey-bound session, logout, no-queue admission, and generic
   no-store/no-referrer failures. SimpleWebAuthn server/browser packages are exact-pinned, confined
   to one owner each, license/advisory/asset-reviewed, and covered through injected production paths.
-  No invite issuer UI, recovery, live OAuth/authenticator/database credential, edge rate policy,
-  cleanup schedule, monitoring, or deployment is implied.
+  No invite issuer UI, recovery sign-in, live OAuth/authenticator/database credential, edge rate
+  policy, cleanup schedule, monitoring, or deployment is implied.
 - A local returning-passkey login slice with EN/RU UI, same-origin bounded POST routes, a
   discoverable profile-free WebAuthn challenge held only in a purpose-separated encrypted cookie,
   exact active-credential lookup, RP/origin/type/UV/signature verification, and one atomic
   challenge-create/consume plus passkey-provenance session call. Failed cookie sealing revokes the
   just-minted session; the route adds no anonymous database state before valid proof. Distributed
-  attempt limits, live OAuth/authenticator/database credentials, recovery, monitoring, and
+  attempt limits, live OAuth/authenticator/database credentials, recovery sign-in, monitoring, and
   deployment remain separate gates.
 - The authenticated account page now reads a session-scoped passkey inventory through one existing
   fixed Web/Auth capability and renders only label, active/revoked state, rounded creation date, and
@@ -191,6 +191,13 @@ Versioning where its guarantees are applicable.
   and a separate registration ceremony. The validated label and two independent five-minute
   challenges are session/profile/RP/origin-bound; one fixed statement atomically consumes the
   step-up and inserts the new credential under the existing lifetime cap.
+- An authenticated account can now rotate exactly ten recovery codes after a fresh required-UV
+  passkey assertion. Web/Auth generates independent selector/secrets, derives Argon2id PHCs
+  sequentially under a separate protected pepper, and atomically consumes the five-minute challenge
+  while replacing every old code and active recovery authority. Plaintext is returned only after
+  commit in one no-store response and held only in page memory for one EN/RU display. Tracked secret
+  and work-factor settings are non-working placeholders; recovery-code verification and
+  replacement-passkey registration remain separate work.
 - SQL-first identity/source/device/pairing/deletion persistence with a checksum-ledgered migration,
   deterministic synthetic invariant fixtures, and an isolated PostgreSQL CI integration gate.
 - Procedure-only identity lifecycle capabilities for bounded invite issuance, atomic enrollment,

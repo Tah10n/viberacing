@@ -68,6 +68,12 @@ apply.
   assertion and registration challenges, bind both to the active session/profile/RP/origin, and
   consume-plus-add atomically under the existing lifetime cap. Profile UUID may enter only the
   authenticated registration options required by the user's authenticator.
+- Recovery-code rotation must require the exact active session and one fresh required-UV assertion
+  bound to that session/profile/RP/origin. Generate exactly ten independent selector/secret codes,
+  derive their Argon2id PHCs sequentially under the protected recovery-only pepper, and atomically
+  consume the challenge while replacing the batch. Return plaintext only after commit in one
+  no-store response, keep it out of logs and browser persistence, and never describe rotation as a
+  working recovery sign-in or replacement-passkey flow.
 - Profile deletion must require the exact active session, exact typed handle, and a fresh
   required-UV assertion bound to that session, profile, handle, RP, origin, and five-minute
   challenge. Consume the challenge and invoke the existing atomic hide/revoke/unlink/enqueue
@@ -90,7 +96,7 @@ apply.
   start procedure.
 - Do not add a pairing route, its browser/session approval, a connector client, or a pairing
   WebAuthn claim without complete transport admission, distributed rate/deadline policy, contracts,
-  and negative tests. Do not describe the local identity slices as recovery, deployed
+  and negative tests. Do not describe the local identity slices as complete recovery, deployed
   authentication, or live-user evidence.
 
 ## Commands

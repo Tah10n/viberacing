@@ -52,6 +52,7 @@ import {
   passkeyLoginCredentialId,
   passkeyRevokeContextDigest,
   profileDeletionContextDigest,
+  recoveryCodeRotationContextDigest,
   sourceReactivationContextDigest,
   sourceUnlinkContextDigest,
   verifyInitialPasskey,
@@ -60,6 +61,11 @@ import {
 } from "./passkey-registration";
 import { currentCommunitySeasonStart } from "./public-community-race";
 import { createPublicRequestId } from "./public-http-problem";
+import {
+  createRecoveryCodeGenerator,
+  type RecoveryCodeGenerator,
+  type RecoveryCodeRecord,
+} from "./recovery-code";
 
 const oauthLifetimeSeconds = 600;
 const passkeyLifetimeSeconds = 300;
@@ -78,6 +84,8 @@ const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
 const sourceControlBodyKeys = new Set(["sourceControl"]);
 const sourceControlKeys = new Set(["expiresAt", "sessionId", "sourceId", "version"]);
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
+const recoveryCodePattern =
+  /^vrr1_([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})_[A-Za-z0-9_-]{43}$/;
 
 export const enrollmentCookieNames = Object.freeze({
   login: "viberacing_login",
@@ -86,6 +94,7 @@ export const enrollmentCookieNames = Object.freeze({
   passkeyAdd: "viberacing_passkey_add",
   passkeyRevoke: "viberacing_passkey_revoke",
   profileDeletion: "viberacing_profile_deletion",
+  recoveryCodes: "viberacing_recovery_codes",
   session: "viberacing_session",
   sourceReactivation: "viberacing_source_reactivation",
   sourceUnlink: "viberacing_source_unlink",
@@ -129,6 +138,15 @@ export interface PasskeyAddOptionsDecision {
   readonly registrationOptions: Awaited<ReturnType<typeof createPasskeyRegistrationOptions>>;
 }
 
+export interface RecoveryCodeOptionsDecision {
+  readonly options: Awaited<ReturnType<typeof createPasskeyLoginOptions>>;
+  readonly recoveryCodeCookie: string;
+}
+
+export interface RecoveryCodeCompletionDecision {
+  readonly recoveryCodes: readonly string[];
+}
+
 export interface ProfileDeletionOptionsDecision {
   readonly options: Awaited<ReturnType<typeof createPasskeyLoginOptions>>;
   readonly profileDeletionCookie: string;
@@ -166,6 +184,9 @@ export interface EnrollmentService {
     sessionCookie: string,
     body: unknown,
   ): Promise<ProfileDeletionOptionsDecision | undefined>;
+  beginRecoveryCodeRotation(
+    sessionCookie: string,
+  ): Promise<RecoveryCodeOptionsDecision | undefined>;
   beginSourceReactivation(
     sessionCookie: string,
     body: unknown,
@@ -205,6 +226,11 @@ export interface EnrollmentService {
     profileDeletionCookie: string,
     body: unknown,
   ): Promise<boolean>;
+  completeRecoveryCodeRotation(
+    sessionCookie: string,
+    recoveryCodeCookie: string,
+    body: unknown,
+  ): Promise<RecoveryCodeCompletionDecision | undefined>;
   completeSourceReactivation(
     sessionCookie: string,
     sourceReactivationCookie: string,
@@ -239,6 +265,7 @@ interface EnrollmentServiceDependencies {
   readonly createRequestId?: () => string;
   readonly database: EnrollmentDatabase;
   readonly exchangeGithub?: typeof exchangeGithubUserId;
+  readonly generateRecoveryCodes?: RecoveryCodeGenerator;
   readonly now?: () => Date;
   readonly randomBytes?: EnrollmentRandomBytes;
   readonly randomUuid?: () => string;
@@ -551,6 +578,63 @@ function clearLoginMaterial(material: PasskeyLoginMaterial | undefined): void {
   material?.cosePublicKey.fill(0);
 }
 
+function validRecoveryCodeBatch(
+  records: unknown,
+  config: EnrollmentConfig,
+): records is readonly RecoveryCodeRecord[] {
+  if (!Array.isArray(records) || records.length !== 10) {
+    return false;
+  }
+  const candidates = records as readonly unknown[];
+  const ids = new Set<string>();
+  const plaintexts = new Set<string>();
+  const phcs = new Set<string>();
+  const expectedPhcPrefix =
+    `$argon2id$v=19$m=${String(config.recoveryArgon2.memoryKib)},` +
+    `t=${String(config.recoveryArgon2.passes)},p=${String(config.recoveryArgon2.parallelism)}$`;
+  for (const candidate of candidates) {
+    if (
+      candidate === null ||
+      typeof candidate !== "object" ||
+      Array.isArray(candidate) ||
+      Object.getPrototypeOf(candidate) !== Object.prototype
+    ) {
+      return false;
+    }
+    const record = candidate as Record<string, unknown>;
+    const codeId = record.codeId;
+    const plaintext = record.plaintext;
+    const verifierPhc = record.verifierPhc;
+    const plaintextMatch =
+      typeof plaintext === "string" ? recoveryCodePattern.exec(plaintext) : null;
+    if (
+      Object.keys(record).length !== 3 ||
+      !Object.hasOwn(record, "codeId") ||
+      !Object.hasOwn(record, "plaintext") ||
+      !Object.hasOwn(record, "verifierPhc") ||
+      typeof codeId !== "string" ||
+      !enrollmentPatterns.uuidV4.test(codeId) ||
+      typeof plaintext !== "string" ||
+      plaintextMatch?.[1] !== codeId ||
+      typeof verifierPhc !== "string" ||
+      !verifierPhc.startsWith(expectedPhcPrefix) ||
+      !/^\$argon2id\$v=19\$m=[0-9]+,t=[0-9]+,p=[0-9]+\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}$/.test(
+        verifierPhc,
+      ) ||
+      verifierPhc.length > 255 ||
+      ids.has(codeId) ||
+      plaintexts.has(plaintext) ||
+      phcs.has(verifierPhc)
+    ) {
+      return false;
+    }
+    ids.add(codeId);
+    plaintexts.add(plaintext);
+    phcs.add(verifierPhc);
+  }
+  return true;
+}
+
 export function createEnrollmentService(
   dependencies: EnrollmentServiceDependencies,
 ): EnrollmentService {
@@ -562,6 +646,10 @@ export function createEnrollmentService(
     createOptions = createPasskeyRegistrationOptions,
     createRequestId = () => createPublicRequestId().value,
     exchangeGithub = exchangeGithubUserId,
+    generateRecoveryCodes = createRecoveryCodeGenerator(
+      config.recoveryArgon2,
+      config.recoveryPepper,
+    ),
     now = () => new Date(),
     randomBytes = nodeRandomBytes,
     randomUuid = nodeRandomUUID,
@@ -1017,6 +1105,64 @@ export function createEnrollmentService(
           targetPasskeyId: target.passkeyId,
         });
         return created ? Object.freeze({ options, passkeyRevokeCookie }) : undefined;
+      } catch {
+        return undefined;
+      } finally {
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+      }
+    },
+    async beginRecoveryCodeRotation(
+      sessionCookie: string,
+    ): Promise<RecoveryCodeOptionsDecision | undefined> {
+      const session = readSession(sessionCookie);
+      const seconds = currentSeconds();
+      if (!session?.passkeyRegistered || seconds === undefined) {
+        return undefined;
+      }
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        const options = await createLoginOptions(config.webauthnRpId);
+        if (!base64Url32Pattern.test(options.challenge)) {
+          return undefined;
+        }
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (sessionVerifier === undefined) {
+          return undefined;
+        }
+        const challengeId = randomUuid();
+        if (!enrollmentPatterns.uuidV4.test(challengeId)) {
+          return undefined;
+        }
+        const expiresAt = seconds + passkeyLifetimeSeconds;
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        challengeDigest = passkeyChallengeDigest(options.challenge);
+        contextDigest = recoveryCodeRotationContextDigest(
+          session.sessionId,
+          session.profileId,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        const recoveryCodeCookie = cookieCodec.seal("passkey", {
+          challenge: options.challenge,
+          challengeId,
+          expiresAt,
+          version: 1,
+        } satisfies PasskeyRegistrationChallenge);
+        const created = await database.createRecoveryCodeChallenge({
+          challengeDigest,
+          challengeId,
+          contextDigest,
+          expiresAt: new Date(expiresAt * 1000).toISOString(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+        });
+        return created ? Object.freeze({ options, recoveryCodeCookie }) : undefined;
       } catch {
         return undefined;
       } finally {
@@ -1610,6 +1756,114 @@ export function createEnrollmentService(
         });
       } catch {
         return false;
+      } finally {
+        credentialId?.fill(0);
+        clearLoginMaterial(material);
+        sessionVerifier?.fill(0);
+        sessionDigest?.fill(0);
+        challengeDigest?.fill(0);
+        contextDigest?.fill(0);
+      }
+    },
+    async completeRecoveryCodeRotation(
+      sessionCookie: string,
+      recoveryCodeCookie: string,
+      body: unknown,
+    ): Promise<RecoveryCodeCompletionDecision | undefined> {
+      const session = readSession(sessionCookie);
+      const seconds = currentSeconds();
+      const authentication = readAuthenticationBody(body);
+      const challenge =
+        seconds === undefined
+          ? undefined
+          : readPasskeyChallenge(cookieCodec.open("passkey", recoveryCodeCookie), seconds);
+      if (
+        !session?.passkeyRegistered ||
+        seconds === undefined ||
+        authentication === undefined ||
+        challenge === undefined
+      ) {
+        return undefined;
+      }
+      let credentialId: Buffer | undefined;
+      let material: PasskeyLoginMaterial | undefined;
+      let sessionVerifier: Buffer | undefined;
+      let sessionDigest: Buffer | undefined;
+      let challengeDigest: Buffer | undefined;
+      let contextDigest: Buffer | undefined;
+      try {
+        credentialId = passkeyLoginCredentialId(authentication.response);
+        sessionVerifier = digestBase64Url(session.sessionVerifier);
+        if (credentialId === undefined || sessionVerifier === undefined) {
+          return undefined;
+        }
+        material = await database.readPasskeyLoginMaterial(credentialId);
+        if (material === undefined) {
+          return undefined;
+        }
+        const verified = await verifyLogin(
+          authentication.response,
+          challenge.challenge,
+          config.webauthnOrigin,
+          config.webauthnRpId,
+          {
+            backupEligible: material.backupEligible,
+            cosePublicKey: material.cosePublicKey,
+            credentialId,
+            signCount: material.signCount,
+          },
+        );
+        if (verified === undefined) {
+          return undefined;
+        }
+        const records = await generateRecoveryCodes();
+        if (!validRecoveryCodeBatch(records, config)) {
+          return undefined;
+        }
+        const batchId = randomUuid();
+        const auditEventId = randomUuid();
+        const codeIds = new Set(records.map(({ codeId }) => codeId));
+        if (
+          !enrollmentPatterns.uuidV4.test(batchId) ||
+          !enrollmentPatterns.uuidV4.test(auditEventId) ||
+          batchId === auditEventId ||
+          batchId === challenge.challengeId ||
+          auditEventId === challenge.challengeId ||
+          codeIds.has(batchId) ||
+          codeIds.has(auditEventId)
+        ) {
+          return undefined;
+        }
+        sessionDigest = createHash("sha256").update(sessionVerifier).digest();
+        challengeDigest = passkeyChallengeDigest(challenge.challenge);
+        contextDigest = recoveryCodeRotationContextDigest(
+          session.sessionId,
+          session.profileId,
+          config.webauthnRpId,
+          config.webauthnOrigin,
+        );
+        const replaced = await database.completeRecoveryCodeReplacement({
+          auditEventId,
+          backupState: verified.backupState,
+          batchId,
+          challengeDigest,
+          challengeId: challenge.challengeId,
+          contextDigest,
+          observedSignCount: verified.signCount,
+          recoveryCodeIds: records.map(({ codeId }) => codeId),
+          requestId: createRequestId(),
+          sessionId: session.sessionId,
+          sessionVerifierDigest: sessionDigest,
+          verifierPhcs: records.map(({ verifierPhc }) => verifierPhc),
+          verifiedPasskeyId: material.passkeyId,
+        });
+        return replaced
+          ? Object.freeze({
+              recoveryCodes: Object.freeze(records.map(({ plaintext }) => plaintext)),
+            })
+          : undefined;
+      } catch {
+        return undefined;
       } finally {
         credentialId?.fill(0);
         clearLoginMaterial(material);

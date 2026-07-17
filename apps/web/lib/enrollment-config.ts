@@ -4,6 +4,10 @@ import { Buffer } from "node:buffer";
 import { isIP } from "node:net";
 
 import { parsePublicOrigin, resolvePublicOrigin } from "./public-origin";
+import {
+  validRecoveryArgon2Configuration,
+  type RecoveryArgon2Configuration,
+} from "./recovery-code";
 
 const base64UrlPattern = /^[A-Za-z0-9_-]+$/;
 const githubClientIdPattern = /^[A-Za-z0-9_-]{10,128}$/;
@@ -16,6 +20,8 @@ export type EnrollmentConfigurationErrorCode =
   | "github_client_id_invalid"
   | "github_client_secret_invalid"
   | "public_origin_invalid"
+  | "recovery_argon2_invalid"
+  | "recovery_pepper_invalid"
   | "webauthn_origin_invalid"
   | "webauthn_rp_id_invalid";
 
@@ -35,6 +41,8 @@ export interface EnrollmentConfig {
   readonly githubClientId: string;
   readonly githubClientSecret: string;
   readonly publicOrigin: string;
+  readonly recoveryArgon2: RecoveryArgon2Configuration;
+  readonly recoveryPepper: Uint8Array;
   readonly secureCookies: boolean;
   readonly webauthnOrigin: string;
   readonly webauthnRpId: string;
@@ -58,16 +66,30 @@ function exactSecret(
   return candidate;
 }
 
-function cookieKey(value: string | undefined): Buffer {
+function canonicalKey(
+  value: string | undefined,
+  code: "cookie_key_invalid" | "recovery_pepper_invalid",
+): Buffer {
   if (value?.length !== 43 || !base64UrlPattern.test(value) || value.trim() !== value) {
-    fail("cookie_key_invalid");
+    fail(code);
   }
   const decoded = Buffer.from(value, "base64url");
   if (decoded.length !== 32 || decoded.toString("base64url") !== value) {
     decoded.fill(0);
-    fail("cookie_key_invalid");
+    fail(code);
   }
   return decoded;
+}
+
+function exactInteger(value: string | undefined): number {
+  if (value === undefined || !/^[1-9][0-9]{0,6}$/.test(value)) {
+    fail("recovery_argon2_invalid");
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || String(parsed) !== value) {
+    fail("recovery_argon2_invalid");
+  }
+  return parsed;
 }
 
 export function resolveEnrollmentConfig(environment: Environment = process.env): EnrollmentConfig {
@@ -117,22 +139,53 @@ export function resolveEnrollmentConfig(environment: Environment = process.env):
     githubClientSecretPattern,
     "github_client_secret_invalid",
   );
-  const key = cookieKey(environment.SESSION_SECRET);
-  const config = {
-    cookieKey: key,
-    githubCallbackUrl: new URL("/auth/github/callback", publicUrl).href,
-    githubClientId,
-    githubClientSecret,
-    publicOrigin: publicUrl.origin,
-    secureCookies: publicUrl.protocol === "https:",
-    webauthnOrigin: webauthnUrl.origin,
-    webauthnRpId: rpId,
-  } satisfies EnrollmentConfig;
-  Object.defineProperty(config, "cookieKey", { enumerable: false });
-  Object.defineProperty(config, "githubClientSecret", { enumerable: false });
-  Object.defineProperty(config, "toJSON", {
-    enumerable: false,
-    value: () => ({ redacted: true }),
-  });
-  return Object.freeze(config);
+  const key = canonicalKey(environment.SESSION_SECRET, "cookie_key_invalid");
+  let recoveryPepper: Buffer | undefined;
+  try {
+    recoveryPepper = canonicalKey(
+      environment.VIBERACING_RECOVERY_PEPPER,
+      "recovery_pepper_invalid",
+    );
+    if (key.equals(recoveryPepper)) {
+      fail("recovery_pepper_invalid");
+    }
+    const recoveryArgon2 = Object.freeze({
+      memoryKib: exactInteger(environment.VIBERACING_RECOVERY_ARGON2_MEMORY_KIB),
+      parallelism: exactInteger(environment.VIBERACING_RECOVERY_ARGON2_PARALLELISM),
+      passes: exactInteger(environment.VIBERACING_RECOVERY_ARGON2_PASSES),
+    });
+    if (
+      !validRecoveryArgon2Configuration(
+        recoveryArgon2.memoryKib,
+        recoveryArgon2.passes,
+        recoveryArgon2.parallelism,
+      )
+    ) {
+      fail("recovery_argon2_invalid");
+    }
+    const config = {
+      cookieKey: key,
+      githubCallbackUrl: new URL("/auth/github/callback", publicUrl).href,
+      githubClientId,
+      githubClientSecret,
+      publicOrigin: publicUrl.origin,
+      recoveryArgon2,
+      recoveryPepper,
+      secureCookies: publicUrl.protocol === "https:",
+      webauthnOrigin: webauthnUrl.origin,
+      webauthnRpId: rpId,
+    } satisfies EnrollmentConfig;
+    Object.defineProperty(config, "cookieKey", { enumerable: false });
+    Object.defineProperty(config, "githubClientSecret", { enumerable: false });
+    Object.defineProperty(config, "recoveryPepper", { enumerable: false });
+    Object.defineProperty(config, "toJSON", {
+      enumerable: false,
+      value: () => ({ redacted: true }),
+    });
+    return Object.freeze(config);
+  } catch (error) {
+    key.fill(0);
+    recoveryPepper?.fill(0);
+    throw error;
+  }
 }

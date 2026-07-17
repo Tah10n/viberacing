@@ -43,12 +43,14 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     ),
     completePasskeyRevocation: vi.fn(() => Promise.resolve([{ revoked: true }])),
     completeProfileDeletion: vi.fn(() => Promise.resolve([{ deleted: true }])),
+    completeRecoveryCodeReplacement: vi.fn(() => Promise.resolve([{ replaced: true }])),
     completeSourceReactivation: vi.fn(() => Promise.resolve([{ reactivated: true }])),
     completeSourceUnlink: vi.fn(() => Promise.resolve([{ unlinked: true }])),
     createPasskeyAddChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createProfileDeletionChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
+    createRecoveryCodeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createSourceReactivationChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createSourceUnlinkChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
@@ -283,6 +285,40 @@ describe("enrollment database", () => {
       }),
     ).resolves.toBe(true);
     await expect(
+      database.createRecoveryCodeChallenge({
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000413",
+        contextDigest: new Uint8Array(32),
+        expiresAt: "2026-07-16T10:05:00.000Z",
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      database.completeRecoveryCodeReplacement({
+        auditEventId: profile.auditEventId,
+        backupState: false,
+        batchId: "00000000-0000-4000-8000-000000000414",
+        challengeDigest: new Uint8Array(32),
+        challengeId: "00000000-0000-4000-8000-000000000413",
+        contextDigest: new Uint8Array(32),
+        observedSignCount: 3,
+        recoveryCodeIds: Array.from(
+          { length: 10 },
+          (_, index) => `00000000-0000-4000-8000-${String(500 + index).padStart(12, "0")}`,
+        ),
+        requestId: profile.requestId,
+        sessionId: profile.sessionId,
+        sessionVerifierDigest: new Uint8Array(32),
+        verifierPhcs: Array.from(
+          { length: 10 },
+          (_, index) =>
+            `$argon2id$v=19$m=19456,t=2,p=2$${"A".repeat(22)}$${String(index)}${"B".repeat(42)}`,
+        ),
+        verifiedPasskeyId: "00000000-0000-4000-8000-000000000406",
+      }),
+    ).resolves.toBe(true);
+    await expect(
       database.createProfileDeletionChallenge({
         challengeDigest: new Uint8Array(32),
         challengeId: "00000000-0000-4000-8000-000000000413",
@@ -437,8 +473,8 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(23);
-    expect(releases).toEqual(Array.from({ length: 23 }, () => false));
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(25);
+    expect(releases).toEqual(Array.from({ length: 25 }, () => false));
   });
 
   it("accepts only an exact bounded account score projection", async () => {

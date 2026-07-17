@@ -29,6 +29,10 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_WEB_DATABASE_PORT", "54329"],
   ["VIBERACING_WEB_DATABASE_TLS_MODE", "disable"],
   ["VIBERACING_WEB_DATABASE_USER", "replace_with_local_web_login"],
+  ["VIBERACING_RECOVERY_ARGON2_MEMORY_KIB", "replace-with-reviewed-memory-kib"],
+  ["VIBERACING_RECOVERY_ARGON2_PARALLELISM", "replace-with-reviewed-parallelism"],
+  ["VIBERACING_RECOVERY_ARGON2_PASSES", "replace-with-reviewed-pass-count"],
+  ["VIBERACING_RECOVERY_PEPPER", "replace-with-distinct-32-byte-base64url-value"],
   [
     "VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL",
     "replace-with-random-32-byte-base64url-key",

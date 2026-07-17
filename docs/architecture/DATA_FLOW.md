@@ -89,8 +89,8 @@ endpoints, streaming body limits, exact RP/origin/type/user-verification checks,
 calls. The pending session lasts at most 15 minutes; successful passkey registration atomically
 rotates it to a fresh 30-day passkey-bound session. The suite uses injected GitHub,
 authenticator-verifier, and database capabilities; there is no live OAuth app, invite issuer UI,
-real key/login, edge proof, aggregate/distributed attempt limit, abandoned-state cleanup, recovery,
-or deployment evidence.
+real key/login, edge proof, aggregate/distributed attempt limit, abandoned-state cleanup, recovery
+sign-in, or deployment evidence.
 
 ## Passkey login and credential management
 
@@ -185,7 +185,7 @@ sequenceDiagram
     User->>Browser: Regenerate recovery-code batch
     Web->>Authenticator: Fresh recovery-change step-up
     Authenticator-->>Web: Exact user-verified assertion
-    Web->>DB: Record exact passkey and atomically replace 8-16 PHCs
+    Web->>DB: Record exact passkey and atomically replace ten PHCs
     DB->>DB: Revoke authority derived from every old code
     Web-->>Browser: Show plaintext batch once; never log or persist it
   else User has no available passkey
@@ -202,7 +202,15 @@ sequenceDiagram
   end
 ```
 
-Revision 0006 implements only this database boundary. Lookup returns an opaque selector and PHC,
+Revision 0006 implements the complete database boundary. The local Web/Auth application now
+implements only the passkey-possessed rotation branch: an exact active session starts one
+five-minute required-UV challenge bound to session/profile/RP/origin, then a valid assertion causes
+ten independent selector/secret codes to be hashed sequentially with Argon2id and a separate
+protected pepper. One statement consumes that challenge and atomically replaces the old batch; only
+commit returns plaintext in a no-store response, and the account page keeps it only in memory for
+one display.
+
+The no-passkey recovery branch remains database-only. Lookup returns an opaque selector and PHC,
 never a profile identifier. Starting recovery consumes one code, immediately removes its verifier,
 and creates no session. Completion requires the exact authority verifier, challenge, and context; it
 registers one replacement passkey, revokes previous passkeys and browser sessions, cancels
@@ -214,9 +222,9 @@ Code rotation and completion serialize on the profile row and take terminal time
 acquisition. Observed cross-connection tests prove rotation dominates a concurrent start with an old
 code and completion dominates a concurrent login with an old passkey. Completion fails closed at the
 32-lifetime-passkey provenance ceiling until bounded cleanup exists. The repository still lacks
-application Argon2id and pepper handling, recovery WebAuthn verification, recovery cookies/CSRF,
-generic HTTP timing and response shaping, rate limits, cleanup, notifications, inventory UI, and
-deployment evidence; therefore no recovery endpoint is launch-ready.
+recovery-code lookup/verification application handling, the restricted-authority HTTP flow,
+replacement-passkey registration, anonymous timing/rate controls, cleanup, notifications, and
+deployment evidence; therefore recovery sign-in is not launch-ready.
 
 ## Device pairing and source choice
 

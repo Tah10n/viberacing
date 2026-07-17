@@ -272,21 +272,27 @@ material availability cost.
   five-minute existing-key assertion and registration challenges, verifies both exact ceremonies,
   and atomically consumes the session/profile/label/RP/origin-bound step-up while inserting the new
   credential. Closed shapes, mixed challenge-cookie types, replay-shaped failure, lifetime cap, and
-  duplicate credentials fail closed. The deletion path accepts only the session's exact typed handle
-  before prompting, binds a five-minute fresh assertion to session/profile/handle/RP/origin, and
-  uses one statement to consume the challenge with the existing atomic hide/revoke/unlink/enqueue
-  call. Source pause accepts only the encrypted session-bound control token through a same-origin
-  form. Reactivation binds a fresh required-UV assertion to the session, source, RP ID, and origin,
-  then atomically consumes the challenge and reactivates only `paused`; tests reject token
-  tampering, cross-session use, replay-shaped failure, quarantine, and malformed request shapes. A
-  distinct fresh context atomically unlinks only active, paused, or quarantined owned sources and
-  recursively revokes active source devices. All source controls remain available while the profile
-  is hidden without publishing it. Recovery verification, aggregate edge rate policy, abandoned
-  consumed-state cleanup, live OAuth/authenticator/database integration, deletion purge execution,
-  and deployment remain absent. The account read additionally revalidates exact session possession
-  and accepts at most 32 closed, ordered rows with one current active authenticator; it renders no
-  credential ID, key, sign counter, exact activity timestamp, or profile ID. Only a revocable
-  target's opaque passkey ID enters the authenticated control and options request.
+  duplicate credentials fail closed. Recovery-code rotation binds a separate five-minute challenge
+  to the exact active session/profile/RP/origin, requires a fresh exact assertion, derives ten
+  independent Argon2id PHCs sequentially under a recovery-only protected pepper, and atomically
+  consumes the challenge while replacing every previous code and active authority. Only commit
+  returns the plaintext batch in a no-store response; the page holds it only in memory for one
+  display. Cross-session, malformed, replay-shaped, and invalid-generator outcomes fail generically.
+  The deletion path accepts only the session's exact typed handle before prompting, binds a
+  five-minute fresh assertion to session/profile/handle/RP/origin, and uses one statement to consume
+  the challenge with the existing atomic hide/revoke/unlink/enqueue call. Source pause accepts only
+  the encrypted session-bound control token through a same-origin form. Reactivation binds a fresh
+  required-UV assertion to the session, source, RP ID, and origin, then atomically consumes the
+  challenge and reactivates only `paused`; tests reject token tampering, cross-session use,
+  replay-shaped failure, quarantine, and malformed request shapes. A distinct fresh context
+  atomically unlinks only active, paused, or quarantined owned sources and recursively revokes
+  active source devices. All source controls remain available while the profile is hidden without
+  publishing it. Recovery verification, aggregate edge rate policy, abandoned consumed-state
+  cleanup, live OAuth/authenticator/database integration, deletion purge execution, and deployment
+  remain absent. The account read additionally revalidates exact session possession and accepts at
+  most 32 closed, ordered rows with one current active authenticator; it renders no credential ID,
+  key, sign counter, exact activity timestamp, or profile ID. Only a revocable target's opaque
+  passkey ID enters the authenticated control and options request.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a

@@ -16,8 +16,8 @@ redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations, init
 registration, returning login, a session-scoped passkey inventory, an account page, public-profile
 hide/show, source inventory/pause/reactivation/unlink, active-device revoke, fresh backup-passkey
 addition, revocation of an owned non-current passkey, an exact-handle fresh-passkey profile-deletion
-request, and logout. It fails closed without externally provisioned configuration and has no
-live-user or deployment evidence.
+request, fresh-passkey recovery-code rotation with one-time display, and logout. It fails closed
+without externally provisioned configuration and has no live-user or deployment evidence.
 
 The private account render now combines visibility with the exact session's current Community week
 in one existing Web/Auth pool checkout. Its closed mapper accepts one empty sentinel or exactly
@@ -44,8 +44,10 @@ built artifact, and the root `pnpm run verify` runs all of them.
 To exercise enrollment manually, use an ignored environment with `/auth/github/callback` on the
 configured `localhost` origin as the exact OAuth callback, a dedicated GitHub OAuth app, a fresh
 canonical 32-byte `SESSION_SECRET`, matching `VIBERACING_PUBLIC_ORIGIN`/`WEBAUTHN_ORIGIN` and
-hostname `WEBAUTHN_RP_ID`, and a separately provisioned `viberacing_web` login. The repository
-provides no valid invite or working credential. See `.env.example` and the local-development guide.
+hostname `WEBAUTHN_RP_ID`, a distinct protected 32-byte recovery pepper plus deployment-reviewed
+Argon2id settings, and a separately provisioned `viberacing_web` login. The repository provides no
+valid invite or working credential; the tracked recovery settings are deliberately non-working
+placeholders. See `.env.example` and the local-development guide.
 
 ## Module map
 
@@ -59,13 +61,14 @@ provides no valid invite or working credential. See `.env.example` and the local
 | `lib/public-community-score-route.ts`              | Parses and serializes the public score HTTP boundary             | Closed query/Accept, exact errors, admission, deadlines, and no CORS               |
 | `lib/public-score-admission.ts`                    | Enforces the no-queue public-read concurrency ceiling            | Four active reads; lease held until adapter settlement                             |
 | `lib/public-http-problem.ts`                       | Generates opaque request IDs and closed public error responses   | Server-only; validates the contract; no inbound ID, CORS, detail, or cause         |
-| `app/join`, `app/login`, `app/account`, `app/auth` | Routes enrollment, account controls, deletion, and logout        | Thin entrypoints; no recovery, pairing approval, or admin                          |
-| `components/account-experience.tsx`                | Renders visibility, devices, passkeys, deletion, and logout      | Closed state and opaque targets; no key/profile ID or exact time                   |
-| `lib/enrollment-http.ts`                           | Owns the twenty local identity HTTP decisions                    | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
-| `lib/enrollment-service.ts`                        | Composes OAuth, login, sources, devices, passkeys, and deletion  | Server IDs/secrets only; fixed database capabilities; generic failure              |
+| `app/join`, `app/login`, `app/account`, `app/auth` | Routes enrollment, account controls, rotation, deletion, logout  | Thin entrypoints; no recovery sign-in, pairing approval, or admin                  |
+| `components/account-experience.tsx`                | Renders visibility, devices, passkeys, recovery codes, deletion  | Closed state and opaque targets; plaintext codes exist only after explicit action  |
+| `lib/enrollment-http.ts`                           | Owns the twenty-two local identity HTTP decisions                | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue       |
+| `lib/enrollment-service.ts`                        | Composes OAuth, login, account security, and deletion            | Server IDs/secrets only; fixed database capabilities; generic failure              |
 | `lib/enrollment-cookie.ts`                         | Seals login, OAuth, passkey, and session continuations           | AES-GCM with purpose-separated keys, bounded expiry, HttpOnly, and narrow paths    |
 | `lib/github-oauth.ts`                              | Resolves one GitHub numeric user ID                              | State plus PKCE, no extra scope, fixed endpoints, token and other fields discarded |
 | `lib/passkey-registration.ts`                      | Creates and verifies registration and login ceremonies           | Exact RP/origin/type, required UV, fixed algorithms, and bounded output            |
+| `lib/recovery-code.ts`                             | Generates the fixed ten-code batch and Argon2id PHCs             | Server-only; protected separate pepper, sequential work, one-time plaintext        |
 | `lib/enrollment-database.ts`                       | Owns fixed identity database operations                          | Reuses the probed Web/Auth pool; no general query or reflected database detail     |
 | `lib/pairing-possession-verifier.ts`               | Strictly verifies one approved pending-device proof              | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence    |
 | `lib/pairing-poll-verifier.ts`                     | Derives fixed poll-verifier candidates under protected keys      | Primary plus optional secondary; no raw key container; close clears key copies     |
@@ -219,6 +222,16 @@ continuations, and replay fail generically. The profile UUID appears only as the
 registration options' pseudonymous WebAuthn user ID required by the authenticator; it is not added
 to account HTML or the verify request.
 
+Recovery-code rotation is an account security action, not a recovery login. The account starts one
+five-minute required-UV assertion bound to its exact active session, profile, RP ID, and origin.
+Only a valid fresh passkey proof generates ten independent selector/secret codes. Web/Auth derives
+their Argon2id PHCs sequentially under a recovery-only protected pepper, then one materialized
+statement consumes the challenge and replaces every old code and active recovery authority. Only a
+successful commit returns the plaintext batch in a no-store response; the page keeps it in memory,
+shows it once, and does not log, cache, download, or persist it. The tracked pepper and work-factor
+settings are non-working placeholders, and this slice does not accept a code or create a replacement
+passkey.
+
 Profile deletion requires the exact typed handle before the browser prompts. The
 `POST /auth/profile/delete/options` route revalidates the active passkey-provenance session, creates
 one five-minute required-UV assertion challenge, and binds it to that session, profile, handle, RP
@@ -229,10 +242,11 @@ sources, cancels approved pairing, and queues one opaque deletion job. Only succ
 local auth cookie and redirects home. This local slice does not execute the queued primary-data
 purge, clear a future public cache, or prove backup restore replay.
 
-This is not a launch-ready authentication system. There is no invite-issuance UI, recovery, passkey
-profile mutation beyond the listed controls, aggregate/distributed edge rate policy, cleanup for
-abandoned enrollment state, deletion purge worker, live OAuth/authenticator/database-login evidence,
-monitoring, or deployment. The tracked environment values are non-working placeholders.
+This is not a launch-ready authentication system. There is no invite-issuance UI, recovery-code
+verification or replacement-passkey flow, passkey profile mutation beyond the listed controls,
+aggregate/distributed edge rate policy, cleanup for abandoned enrollment state, deletion purge
+worker, live OAuth/authenticator/database-login evidence, monitoring, or deployment. The tracked
+environment values are non-working placeholders.
 
 ## Pairing start and activation boundaries
 
@@ -328,8 +342,8 @@ aggregate source count; it does not pair or verify accounts.
   Next.js's type-only reference, while lint policy forbids importing the absent runtime.
 
 These controls reduce current risk; they do not make Community claims authoritative or replace the
-remaining Phase 2 recovery and pairing controls, ingestion, retention, deletion-purge, and edge
-abuse-control gates.
+remaining Phase 2 recovery sign-in and pairing controls, ingestion, retention, deletion-purge, and
+edge abuse-control gates.
 
 ## Test strategy
 

@@ -14,6 +14,37 @@ import {
 import type { Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
+const recoveryCodePattern =
+  /^vrr1_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}_[A-Za-z0-9_-]{43}$/;
+
+function readRecoveryCodesResponse(value: unknown): readonly string[] | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const candidateCodes = record.recoveryCodes;
+  if (
+    Object.keys(record).length !== 1 ||
+    !Array.isArray(candidateCodes) ||
+    candidateCodes.length !== 10
+  ) {
+    return undefined;
+  }
+  const recoveryCodes = candidateCodes as readonly unknown[];
+  if (
+    recoveryCodes.some((code) => typeof code !== "string" || !recoveryCodePattern.test(code)) ||
+    new Set(recoveryCodes).size !== recoveryCodes.length
+  ) {
+    return undefined;
+  }
+  return Object.freeze([...recoveryCodes]) as readonly string[];
+}
+
 interface PasskeySetupProps {
   readonly handle: string;
   readonly locale: Locale;
@@ -384,6 +415,94 @@ export function PasskeyRevokeButton({ label, locale, passkeyId }: PasskeyRevokeB
         {error ? copy.genericError : ""}
       </span>
     </form>
+  );
+}
+
+interface RecoveryCodeRotationProps {
+  readonly locale: Locale;
+}
+
+export function RecoveryCodeRotation({ locale }: RecoveryCodeRotationProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState<readonly string[]>();
+  const copy = joinTranslations[locale];
+
+  async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (busy) {
+      return;
+    }
+    if (!browserSupportsWebAuthn()) {
+      setError(true);
+      return;
+    }
+    setBusy(true);
+    setError(false);
+    setRecoveryCodes(undefined);
+    try {
+      const optionsResponse = await fetch("/auth/recovery-codes/options", {
+        body: "{}",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (!optionsResponse.ok) {
+        throw new Error("options unavailable");
+      }
+      const options = (await optionsResponse.json()) as PublicKeyCredentialRequestOptionsJSON;
+      const response = await startAuthentication({ optionsJSON: options });
+      const verification = await fetch("/auth/recovery-codes/verify", {
+        body: JSON.stringify({ response }),
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        method: "POST",
+        redirect: "error",
+      });
+      if (!verification.ok) {
+        throw new Error("verification failed");
+      }
+      const codes = readRecoveryCodesResponse((await verification.json()) as unknown);
+      if (codes === undefined) {
+        throw new Error("response invalid");
+      }
+      setRecoveryCodes(codes);
+      setBusy(false);
+    } catch {
+      setError(true);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <form className="auth-form" onSubmit={(event) => void submit(event)}>
+        <button className="primary-action" disabled={busy} type="submit">
+          {busy ? copy.recoveryCodesGenerating : copy.recoveryCodesGenerate}
+        </button>
+        <span aria-live="polite" className={error ? "auth-error" : "auth-status"}>
+          {error ? copy.genericError : ""}
+        </span>
+      </form>
+      {recoveryCodes === undefined ? null : (
+        <div className="recovery-code-result">
+          <p className="auth-status" role="status">
+            {copy.recoveryCodesReplaced}
+          </p>
+          <ol className="recovery-code-list">
+            {recoveryCodes.map((code) => (
+              <li key={code}>
+                <code dir="ltr">{code}</code>
+              </li>
+            ))}
+          </ol>
+          <p className="auth-privacy">{copy.recoveryCodesOnce}</p>
+        </div>
+      )}
+    </>
   );
 }
 
