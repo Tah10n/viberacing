@@ -15,9 +15,11 @@ pairing and proposal verifiers, one local connector command with native OS key c
 start/poll routes, one explicit Windows candidate command that admits, collects, signs, and uploads
 a single sync, and one fixed proposal-only command that starts no Codex process. It also has one
 opt-in synthetic loopback integration through the emitted Ingest host and a disposable
-least-privileged PostgreSQL login. It still has no deployed application service, operational sync
-connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway deployment,
-live OAuth or database login, or production database. Component status is tracked in
+least-privileged PostgreSQL login, plus a separate synthetic integration through all eight emitted
+Jobs commands and a disposable narrow login with a widened-login negative control. It still has no
+deployed application service, operational sync connector, supported Codex version, distributed
+recovery perimeter, Cloudflare/Railway deployment, live OAuth or production database login, or
+production database. Component status is tracked in
 [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
 not deployed evidence.
 
@@ -111,7 +113,9 @@ contract and optionally project only the current active recipe. These capabiliti
 contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a local one-shot Jobs
 adapter/CLI; ADRs 0029, 0032, 0034, 0036, and 0042 extend it to exactly five cleanup commands, one
 primary purge, one refresh, and one finalization command with the same role/login probe, one-client
-pool, and fixed deadlines. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and
+pool, and fixed deadlines. A separate opt-in synthetic integration now runs all eight emitted
+commands against disposable PostgreSQL, proves the narrow login and extra-membership denial, and
+checks exact stored state. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and
 JSON parser, verifies a replay-consumed body-bound origin proof before parsing, validates the sync
 contract, and verifies the exact source-bound device request under strict Ed25519 semantics. ADR
 0016 adds a fixed-query four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest

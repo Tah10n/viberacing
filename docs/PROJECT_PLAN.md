@@ -206,10 +206,12 @@ flowchart LR
   distributed rate/backpressure controls, deployment login/certificate, capacity evidence, real-user
   end-to-end integration, and deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
-  The local runner now wraps only the reviewed authentication/ingest/pairing cleanup, primary
-  profile purge, Community refresh, and finalization procedures; scheduling, monitoring, live
-  credentials, capacity, cache/backup/tombstone purge, restore replay, and deployment remain
-  separate gates.
+  The local runner now wraps only the five reviewed authentication/CarRecipe-proposal/ingest/
+  pairing/session cleanup procedures, primary profile purge, Community refresh, and finalization.
+  One opt-in synthetic integration applies the reviewed migrations to disposable PostgreSQL, runs
+  every emitted command through a narrow login, rejects an extra-membership login before mutation,
+  and verifies exact state. Scheduling, monitoring, production credentials/TLS, capacity,
+  cache/backup/tombstone purge, restore replay, and deployment remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.

@@ -16,7 +16,7 @@ otherwise retain expired proposal state indefinitely.
 The database already gives Jobs separate bounded retention capabilities and ADR 0014 forbids generic
 SQL. This slice needs the smallest physical-deletion capability for expired proposals. It must
 preserve every live proposal and active recipe, serialize workers, remain least-privileged, and
-avoid claiming a scheduler, production cadence, live Jobs login, or deployment.
+avoid claiming a scheduler, production cadence, production Jobs login/TLS, or deployment.
 
 ## Decision
 
@@ -57,9 +57,9 @@ re-evaluates the row. Cleanup cannot activate a recipe and does not grant Jobs a
 device, or direct-table capability.
 
 Residual risk remains: no scheduler, cadence, retry/overlap policy, monitoring, capacity result,
-live Jobs login/TLS connection, backup-expiry proof, or deployed retention policy exists. Active
-recipes remain until replacement or profile deletion. The separate public active-recipe projection,
-device proposal ingress, and local agent orchestration were later accepted in
+production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy exists.
+Active recipes remain until replacement or profile deletion. The separate public active-recipe
+projection, device proposal ingress, and local agent orchestration were later accepted in
 [ADR 0037](0037-bounded-public-community-race-projection.md),
 [ADR 0038](0038-bounded-device-car-recipe-proposal-ingress.md), and
 [ADR 0039](0039-bounded-agent-car-proposal-orchestration.md); scheduling and deployed retention
@@ -110,9 +110,10 @@ Acceptance evidence recorded for this decision included:
 - 144 focused Jobs tests with 100% statement, branch, function, and line coverage plus strict lint,
   type checking, and production build.
 
-The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project. Jobs tests use an
-injected pool. They do not prove a Node-to-PostgreSQL login, scheduler, production cadence,
-monitoring, backup purge, capacity, or deployment.
+The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project. Focused Jobs tests
+use an injected pool; the shared opt-in Jobs integration additionally proves this emitted command
+through one disposable narrow login and exact stored state. Neither proves a scheduler, production
+cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
 
 ## References
 

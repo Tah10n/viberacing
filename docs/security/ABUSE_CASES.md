@@ -102,8 +102,10 @@ material availability cost.
   order; a second observed race proves opposing multi-season payload orders both lock seasons in
   ascending order. A local one-shot Jobs runner now admits only canonical refresh/finalization
   commands, probes the exact role/login boundary, calls one prepared function, holds one client
-  through settlement, and discards invalid results. Correction authority, scheduling, live database
-  integration, and operational reconciliation remain unimplemented.
+  through settlement, and discards invalid results. The shared synthetic integration runs both
+  emitted scoring commands through a disposable narrow login, rejects an extra-membership login, and
+  checks open/finalized database state. Correction authority, scheduling, production database
+  login/TLS, and operational reconciliation remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -531,10 +533,11 @@ material availability cost.
   inputs, copies mutable values, accepts only closed rows, and destroys failed clients without
   forwarding driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
-  migration workflow. Web and Jobs deployment login/TLS integration and live adapters have not been
-  exercised. Ingest now has a disposable synthetic least-privileged loopback login and full HTTP
-  integration result, but no deployment credential/certificate, external TLS/edge route, capacity,
-  or real-user evidence.
+  migration workflow. Web deployment login/TLS integration has not been exercised. Jobs now has a
+  disposable synthetic least-privileged login, all eight emitted commands, a widened-login denial,
+  and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged loopback
+  login and full HTTP integration result. Neither proves a deployment credential/certificate,
+  external TLS/edge route, capacity, scheduler, monitoring, or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -688,25 +691,26 @@ material availability cost.
   pairing cleanup exists as a separate local capability, but scheduling and edge controls are still
   pending. The local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client
   deadlines, five fixed 1000-row cleanup commands, one fixed maximum-10 primary-purge command,
-  canonical season validation, closed one-row results, and destructive release on failure. The
-  kernel itself has no socket/ stream authority. The separate Ingest adapter adds a four-client
-  ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime recycling, exact
-  one-row origin consume, zero-or-one device lookup, and one-row submission results, with
-  destructive release on failure. The transport-free application generates request correlation
-  before verification, submits only after verification, waits for settlement, and contains
-  dependency failures without a retry loop. The local Fastify boundary caps the raw body at 8192
-  bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests per
-  socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
-  keep-alive, admits four unsettled application calls without a queue, holds each lease through
-  settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and partial
-  requests; injection tests cover overload and response policy. The separate host closes that
-  composition under a 36-second first- signal deadline, forces failure on a second
-  signal/deadline/close error, and requires the Railway drain declaration to leave at least four
-  seconds beyond its local close bound. There is no live identity or deployment database
-  integration, distributed rate/backpressure policy, monitoring, or combined capacity evidence. The
-  full synthetic Ingest gate proves correctness under four sequential signed requests, not load
-  capacity. Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and production
-  load evidence remain unimplemented.
+  canonical season validation, closed one-row results, and destructive release on failure. Its
+  synthetic integration executes those commands sequentially against one disposable database and
+  therefore proves no parallel scheduler or production-load capacity. The kernel itself has no
+  socket/stream authority. The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
+  checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row origin consume,
+  zero-or-one device lookup, and one-row submission results, with destructive release on failure.
+  The transport-free application generates request correlation before verification, submits only
+  after verification, waits for settlement, and contains dependency failures without a retry loop.
+  The local Fastify boundary caps the raw body at 8192 bytes, parsed headers at 16384 bytes, raw
+  header pairs at 64, connections at 32, and requests per socket at 16; it sets 5/33/34-second
+  request/handler/connection deadlines and a five-second keep-alive, admits four unsettled
+  application calls without a queue, holds each lease through settlement, and returns generic 503 on
+  exhaustion. Real loopback tests close malformed and partial requests; injection tests cover
+  overload and response policy. The separate host closes that composition under a 36-second
+  first-signal deadline, forces failure on a second signal/deadline/close error, and requires the
+  Railway drain declaration to leave at least four seconds beyond its local close bound. There is no
+  live identity or deployment database integration, distributed rate/backpressure policy,
+  monitoring, or combined capacity evidence. The full synthetic Ingest gate proves correctness under
+  four sequential signed requests, not load capacity. Scheduling, cache, scoring/read capacity
+  evidence, quotas, edge shaping, and production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

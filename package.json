@@ -69,6 +69,7 @@
     "test:license-check": "node scripts/test-license-check.mjs",
     "test:jobs": "pnpm --filter @viberacing/jobs run test",
     "test:jobs:coverage": "pnpm --filter @viberacing/jobs run test:coverage",
+    "test:jobs:postgres-integration": "node scripts/test-jobs-postgres-integration.mjs",
     "test:publication-check": "node scripts/test-publication-check.mjs",
     "test:png-content-policy": "node scripts/test-png-content-policy.mjs",
     "test:public-check": "node scripts/test-public-file-check.mjs",

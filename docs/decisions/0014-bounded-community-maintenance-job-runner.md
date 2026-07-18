@@ -1,6 +1,6 @@
 # ADR 0014: Bounded Community maintenance job runner
 
-- Status: Accepted (local runner; scheduler pending)
+- Status: Accepted (local synthetic PostgreSQL integration; scheduler pending)
 - Date: 2026-07-15
 - Decision owners: Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
@@ -98,12 +98,13 @@ then discards them when the process exits. Stable CLI outcomes are operational c
 analytics or retention sink. Production scheduler metadata, run history, alerts, and aggregate
 metrics still require a privacy-map and retention review before collection.
 
-Residual risk remains: no live login/certificate path or application-to-PostgreSQL integration test
-proves deployment membership; no scheduler enforces cadence, backoff, overlap, or alerting; cleanup
-does not cover every expiring identity state; no correction, purge schedule, cache/backup purge, or
-restore replay exists; and no capacity test proves the selected deadlines under production load. A
-compromised Jobs login still has all eight database capabilities, so principal separation and
-revocation remain required.
+A local synthetic integration now proves the emitted application can use one disposable narrow login
+for all eight capabilities and that an extra-membership login fails the runtime probe before
+mutation. Residual risk remains: no production login/certificate path proves deployment membership;
+no scheduler enforces cadence, backoff, overlap, or alerting; cleanup does not cover every expiring
+identity state; no correction, purge schedule, cache/backup purge, or restore replay exists; and no
+capacity test proves the selected deadlines under production load. A compromised Jobs login still
+has all eight database capabilities, so principal separation and revocation remain required.
 
 Affected invariants are VR-PUBLIC-001, VR-INGEST-002, VR-ABUSE-001, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-SEASON-RACE, VR-ABUSE-DATABASE-ROLE,
@@ -156,14 +157,19 @@ Current local evidence includes:
 - CLI rejection before configuration, pool close after success or failure, stable output, writer
   failure containment, and no reflected command/error detail;
 - 156 unit tests with 100% statement, branch, function, and line coverage, including a lint-policy
-  regression that keeps direct `pg` imports inside the fixed pool adapter; and
+  regression that keeps direct `pg` imports inside the fixed pool adapter;
+- one opt-in Docker integration that revalidates and applies the migration manifest, runs all eight
+  built commands through a synthetic narrow login, rejects a deliberately widened login before
+  mutation, validates constant process output and exact stored state, and removes its container,
+  network, and storage; and
 - strict lint, type checking, production TypeScript build, dependency/license inventory, root
   deterministic verification, and staged public-data review.
 
-The SQL integration suite separately proves the eight procedure bodies and concurrency behavior in
-ephemeral PostgreSQL. It does not exercise the Node adapter with a real Jobs login. Such an
-application integration test, scheduler behavior, production TLS/login, capacity, monitoring, and
-deployment evidence remain required before those behaviors may be claimed.
+The general SQL integration suite separately proves the eight procedure bodies and concurrency
+behavior in portless ephemeral PostgreSQL. The Jobs integration proves one synthetic loopback
+Node-to-PostgreSQL application path only. Scheduler behavior, production TLS/login, capacity,
+monitoring, real-user retention, and deployment evidence remain required before those behaviors may
+be claimed.
 
 ## References
 

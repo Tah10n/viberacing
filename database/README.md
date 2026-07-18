@@ -495,8 +495,10 @@ server time, rejects null, zero, negative, or over-1000 batch sizes, serializes 
 private owner-only mutex row plus a five-second lock timeout, and leaves live rows untouched. The
 procedure and observed two-worker race are deletion evidence for the isolated SQL boundary only: no
 production scheduler, monitoring, retention policy, or real-user purge evidence exists. ADR 0014's
-local runner can invoke one fixed maximum-size batch only after its Jobs-role probe; no live login
-or Node-to-PostgreSQL integration is supplied.
+local runner can invoke one fixed maximum-size batch only after its Jobs-role probe. The shared
+opt-in integration now proves that emitted command through one disposable narrow login and exact
+stored state, but supplies no production login/TLS, scheduler, monitoring, capacity, or real-user
+purge evidence.
 
 Revision 0009 materializes only an open Community season. It binds each ISO Monday-through-Sunday
 season to immutable `community_v1` parameters, sums current eligible source/day values with numeric
@@ -517,9 +519,10 @@ terminal transition rematerializes once, records its immutable timestamp, suppor
 idempotent retry, and rejects direct metadata or projection mutation. Profile purge can still
 cascade personal score rows without reopening the non-personal season record. A closed no-data week
 stores one terminal season, bounded to the ISO weeks reachable from the contract's `20xx` dates. No
-correction record, Jobs scheduler/monitor, live integration, or production capacity claim is
+correction record, Jobs scheduler/monitor, production login/TLS integration, or capacity claim is
 implemented. The local one-shot runner selects only the prepared refresh/finalization call after a
-closed canonical-season command and a least-privilege session probe.
+closed canonical-season command and a least-privilege session probe; the shared synthetic
+integration now proves both emitted calls and their exact open/finalized state.
 
 Revision 0011 exposes only a bounded score projection to the Web role. It filters current profile
 state to `active`, then recomputes shared rank and contiguous display position so hide/purge leaves
@@ -595,8 +598,9 @@ exists in terminal used/scrubbed form; unused recovery codes remain credentials.
 server time after its private Jobs mutex and locks candidate profiles in stable order before
 authority/code rows, matching recovery and deletion transitions. Observed worker and recovery-start
 races prove serialization, live-authority preservation, and the profile-first lock order in isolated
-PostgreSQL. No scheduler, live Jobs login, backup purge, monitoring, public retention cadence, or
-deployment is implied.
+PostgreSQL. The shared synthetic integration proves the emitted command through a disposable narrow
+login. No scheduler, production Jobs login/TLS, backup purge, monitoring, public retention cadence,
+or deployment is implied.
 
 Revision 0024 physically removes at most ten due `deletion_pending` profiles per invocation. It
 locks every current maintenance mutex in stable name order before queue/profile rows, including the
@@ -605,8 +609,9 @@ cannot deadlock a concurrent Jobs capability. It removes every profile-bound res
 first and deletes only a still-pending source-free key directly; source-bound keys leave through the
 profile cascade. The exact job becomes terminal inside the same transaction before its profile
 foreign key is nulled, while audit linkage is redacted. The opaque job remains. No keyed identity
-tombstone, cache/backup purge, restore replay, scheduler, live Jobs login, monitoring, capacity, or
-deployment is implied.
+tombstone, cache/backup purge, restore replay, scheduler, production Jobs login/TLS, monitoring,
+capacity, or deployment is implied. The shared synthetic integration proves only one emitted local
+purge and its exact terminal job/profile state.
 
 Revision 0025 stores only the exact `CarRecipeV1` columns, with database checks repeating every
 version, enum, and seed bound. Both tables are forced-RLS and have no runtime table grants. Web may
@@ -635,7 +640,9 @@ uses `FOR UPDATE SKIP LOCKED` around concurrent Web decisions, rechecks expiry a
 returns only one bounded count. Active recipes and live proposals are never candidates. Web, Ingest,
 Admin, `PUBLIC`, and direct table access remain denied. The observed two-worker race proves
 serialization, exact expired-row progress, and live-row preservation only in isolated PostgreSQL; no
-scheduler, cadence, live Jobs login, monitoring, backup purge, capacity, or deployment is implied.
+scheduler, cadence, production Jobs login/TLS, monitoring, backup purge, capacity, or deployment is
+implied. The shared synthetic integration proves only the emitted command through a disposable
+narrow login and exact stored state.
 
 Revision 0027 adds no table, retained field, or write authority. Its Web-only function calls the
 unchanged public score projection, resolves only the current `active` profile behind each visible
@@ -664,7 +671,9 @@ approval provenance. It uses the existing authentication mutex, a full expiry in
 pairing-reference index, oldest-first row locks with `SKIP LOCKED`, and repeated delete predicates.
 Deleting a session cascades only its now-unusable session-bound challenges. Activated-pairing
 provenance and live sessions remain; the observed worker race proves local serialization, not a
-schedule, complete device-history policy, backup purge, or deployment.
+schedule, complete device-history policy, backup purge, or deployment. The shared synthetic
+integration additionally proves the emitted cleanup command through a disposable narrow login and
+exact stored state, not production login/TLS, monitoring, capacity, or real-user retention.
 
 The local account application consumes those capabilities through the same probed read-write pool.
 Its combined overview query reads visibility and the current week's derived score with one checkout,

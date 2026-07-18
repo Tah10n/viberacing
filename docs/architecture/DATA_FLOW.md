@@ -485,36 +485,36 @@ Revisions 0008 and 0012 give Jobs a server-time, 1-to-1000 batch procedure for e
 nonces, device nonces, and raw snapshots. It serializes callers, caps each class independently,
 cascades raw entries, preserves current source/day values, and clears only their deleted raw
 reference. The expiry columns still do not delete rows by themselves. The local one-shot Jobs
-command can invoke one fixed 1000-row batch, but no scheduler, monitor, live login, or deployment
-invokes it automatically.
+command can invoke one fixed 1000-row batch, but no scheduler, monitor, production login/TLS path,
+or deployment invokes it automatically.
 
 Revision 0013 adds a separate private mutex and oldest-first 1-to-1000 batch for expired `pending`,
 `approved`, or `cancelled` pairing transactions whose exact key is still pending and unbound. It
 deletes transaction-bound approval challenges by cascade, then the key, while contended rows wait
 for a later invocation and activated/live state remains. The local Jobs runner exposes a second
-fixed 1000-row cleanup command; no scheduler, live login, monitoring, or retention cadence invokes
-it automatically.
+fixed 1000-row cleanup command; no scheduler, production login/TLS path, monitoring, or retention
+cadence invokes it automatically.
 
 Revision 0023 adds a third fixed 1000-row cleanup command for expired authentication challenges and
 an independently bounded set of expired restricted recovery authorities. It deletes only an exact
 still-present source code in used/scrubbed form, preserves live ceremonies and unused codes, and
 locks candidate profiles before authorities/codes to match recovery transitions. Worker and
-recovery-start races are observed locally; no scheduler, live login, monitor, backup purge, or
-retention cadence invokes it automatically.
+recovery-start races are observed locally; no scheduler, production login/TLS path, monitor, backup
+purge, or retention cadence invokes it automatically.
 
-Revision 0024 adds a separate fixed maximum-10 primary-profile purge command. The database locks the
-its fixed five maintenance mutexes in stable order, selects only due queued/retry work, requires
+Revision 0024 adds a separate fixed maximum-10 primary-profile purge command. The database locks its
+fixed five maintenance mutexes in stable order, selects only due queued/retry work, requires
 committed `deletion_pending` state, removes restrictive pairing references and authority-free
 pending keys, terminally settles the opaque job, then cascades the exact profile in one transaction.
 Two purge workers and purge versus authentication cleanup are observed serializing locally. No
-scheduler, live login, cache/backup purge, keyed tombstone, restore replay, monitor, capacity
-result, or retention cadence invokes or completes the broader deletion sequence.
+scheduler, production login/TLS path, cache/backup purge, keyed tombstone, restore replay, monitor,
+capacity result, or retention cadence invokes or completes the broader deletion sequence.
 
 Revision 0026 adds a fourth fixed 1000-row cleanup command for expired CarRecipe proposals. It
 serializes workers through a separate private mutex, captures the cutoff after that lock, deletes
 oldest-first with `SKIP LOCKED`, and preserves every live proposal and active recipe. One observed
-two-worker race proves exact deletion and live-state preservation; no scheduler, live login,
-monitoring, backup-purge proof, or deployed cadence invokes it automatically.
+two-worker race proves exact deletion and live-state preservation; no scheduler, production
+login/TLS path, monitoring, backup-purge proof, or deployed cadence invokes it automatically.
 
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct
@@ -538,8 +538,12 @@ rows, the preference, and private identifiers remain private. ADRs 0014, 0029, 0
 0042 make the local one-shot Jobs process invoke exactly one of eight reviewed
 functions—authentication cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup,
 session cleanup, primary profile purge, refresh, or finalization—after a per-checkout
-least-privilege probe; no scheduler, live login/certificate, application database integration,
-audited correction, tombstone/restore replay, deployed route, or public cache exists.
+least-privilege probe. One opt-in synthetic integration applies all reviewed migrations to a
+disposable loopback PostgreSQL container, runs each emitted command through a narrow login, rejects
+an extra-membership login before mutation, observes only generic process output, verifies exact
+stored state, and removes the container, network, and storage. No scheduler, production
+login/certificate, audited correction, tombstone/restore replay, deployed route, or public cache
+exists.
 
 ## CarRecipe proposal origins and browser approval
 

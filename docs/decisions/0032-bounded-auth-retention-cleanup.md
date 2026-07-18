@@ -19,7 +19,8 @@ The database already has separate Jobs-only cleanup for ingest and pairing state
 forbids generic Jobs SQL. This slice needs the smallest bounded deletion capability for expired
 authentication state without deleting live ceremonies, unused recovery codes, sessions, passkeys,
 audit evidence, pairing/device provenance, or profile state. It must also preserve the established
-recovery lock order and must not claim a scheduler, deployed retention policy, or live Jobs login.
+recovery lock order and must not claim a scheduler, deployed retention policy, or production Jobs
+login/TLS path.
 
 ## Decision
 
@@ -72,8 +73,8 @@ overlap between cleanup workers, while profile locks serialize cleanup with reco
 without granting Jobs any direct table access.
 
 Residual risk remains: no scheduler, cadence, overlap/retry policy, monitoring, capacity result,
-live Jobs login/TLS connection, backup-expiry proof, or deployed retention policy exists. ADR 0042
-now covers eligible expired sessions; pairing-referenced session provenance, deletion
+production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy exists. ADR
+0042 now covers eligible expired sessions; pairing-referenced session provenance, deletion
 jobs/tombstones, historical passkey provenance, pairing rate windows, and any future expiring class
 still require separate reviewed rules. Recovery also still needs distributed attempt controls and
 deployment-owned pepper/timing evidence.
@@ -128,9 +129,10 @@ Acceptance evidence recorded for this decision included:
 - 120 focused Jobs tests with 100% statement, branch, function, and line coverage plus strict lint,
   type checking, and production build.
 
-The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project. Jobs tests use an
-injected pool. They do not prove a Node-to-PostgreSQL login, scheduler, production cadence,
-monitoring, backup purge, capacity, or deployment.
+The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project. Focused Jobs tests
+use an injected pool; the shared opt-in Jobs integration additionally proves this emitted command
+through one disposable narrow login, generic output, and exact stored state. Neither proves a
+scheduler, production cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
 
 ## References
 

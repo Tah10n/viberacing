@@ -36,6 +36,7 @@ pnpm run lint:jobs
 pnpm run typecheck:jobs
 pnpm run test:jobs:coverage
 pnpm run build:jobs
+pnpm run test:jobs:postgres-integration
 pnpm run verify
 ```
 

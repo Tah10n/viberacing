@@ -14,22 +14,23 @@ returning-passkey login plus private passkey/source/device inventory, source
 pause/reactivation/unlink, device/passkey revocation, fresh-passkey recovery-code rotation, and
 fresh-passkey profile-deletion-request slice plus one-time recovery-code replacement-passkey sign-in
 with encrypted cookies and logout, one local one-shot Jobs runner with five bounded cleanup
-capabilities plus primary profile purge, and local Community sync verification plus
-PostgreSQL-adapter, transport-free composition, and bounded Fastify HTTP boundaries; it does not yet
-contain a Jobs scheduler, cache/backup/tombstone purge, restore replay, deployed Ingest service,
-operational connector, deployment, or production data. A library-only Rust connector foundation now
-bounds and validates the stable App Server initialization and candidate account/usage exchanges,
-then composes them through a synthetic one-shot child supervisor and produces exact sync material
-behind a second inaccessible reviewed context. An isolated one-use signer consumes that material
-only with a third inaccessible device-bound key capability and returns a closed signed envelope. A
-separate pending-key/challenge signer and pure Web verifier agree on an exact pairing-possession
-proof. A Web/Auth start application generates bounded pending-transaction material, separate
-protected poll/code verifiers, and one fixed database call. A second application composes protected
-keyed poll lookup, strict proof, and exact atomic activation through the separately probed
-read-write pool with local admission/timing. Between those boundaries, a local `/connect` flow
-performs session-rate-limited pending-code lookup, exact device/fingerprint review, opaque new or
-active existing source selection, and fresh-passkey atomic approval of that exact choice. Exact
-local start/poll routes now add closed framing/contracts, shared four-call admission, and fixed
+capabilities plus primary profile purge, and a synthetic disposable PostgreSQL integration for all
+eight Jobs commands, plus local Community sync verification, PostgreSQL-adapter, transport-free
+composition, and bounded Fastify HTTP boundaries; it does not yet contain a Jobs scheduler,
+cache/backup/tombstone purge, restore replay, deployed Ingest service, operational connector,
+deployment, or production data. A library-only Rust connector foundation now bounds and validates
+the stable App Server initialization and candidate account/usage exchanges, then composes them
+through a synthetic one-shot child supervisor and produces exact sync material behind a second
+inaccessible reviewed context. An isolated one-use signer consumes that material only with a third
+inaccessible device-bound key capability and returns a closed signed envelope. A separate
+pending-key/challenge signer and pure Web verifier agree on an exact pairing-possession proof. A
+Web/Auth start application generates bounded pending-transaction material, separate protected
+poll/code verifiers, and one fixed database call. A second application composes protected keyed poll
+lookup, strict proof, and exact atomic activation through the separately probed read-write pool with
+local admission/timing. Between those boundaries, a local `/connect` flow performs
+session-rate-limited pending-code lookup, exact device/fingerprint review, opaque new or active
+existing source selection, and fresh-passkey atomic approval of that exact choice. Exact local
+start/poll routes now add closed framing/contracts, shared four-call admission, and fixed
 global/client-bucket PostgreSQL windows. The bounded Rust client generates and stores a pairing key
 through the native OS credential store, signs the exact proof, persists activation before success
 output, and can delete only the exact local origin/label record with an explicit warning that server
@@ -48,14 +49,15 @@ emitted host and a disposable least-privileged PostgreSQL login with exact store
 verification. It proves no live HTTP edge, trusted external TLS route, deployment credential/TLS
 connection, real-user result, or capacity. The public score/race/status routes have
 request/response, admission, production-build, and visible browser-consumer/fallback evidence, while
-the Jobs runner has strict command/config/pool/role/result evidence. The identity slice has
+the Jobs runner has strict command/config/pool/role/result evidence plus a synthetic
+CLI-to-PostgreSQL path with a widened-login denial and exact-state checks. The identity slice has
 exact-origin/body/cookie, state/PKCE, token minimization, initial-registration, returning-login,
 session-derived passkey inventory, non-current-key revocation, backup-key addition, exact-handle
 profile-deletion request, source inventory/pause/reactivation/unlink, and active-device revoke
 including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth
 `form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay server-only;
 source controls receive only a 15-minute encrypted token bound to the active session. None has a
-live database login, OAuth app, authenticator, edge, scheduler, cache/backup purge,
+production database login, OAuth app, authenticator, edge, scheduler, cache/backup purge,
 tombstone/restore replay, or network deployment. Controls below are marked **implemented** only when
 executable evidence exists in [implementation status](../IMPLEMENTATION_STATUS.md). Other controls
 are release requirements, not security claims about the current tree.
@@ -174,7 +176,7 @@ and migration or rollback where applicable.
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                                         | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                                                         | Local signer/vector, verifier, replay stores, application, and HTTP tested; operational/live planned                              |
 | Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                                          | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                                                   | Local verifier/config/replay/server/host tested; edge injection, trusted route, direct-origin planned                             |
 | Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections                                  | Strict versioned schema, bounded bodies, fixed adapter, stored procedure, non-owner role, constraints, deadlines, backpressure                                    | Full synthetic loopback HTTP-to-PostgreSQL plus isolated SQL tested; deployment operations planned                                |
-| Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work                      | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons                                         | SQL, cleanup, primary purge, and local runner tested; live login, scheduler, correction planned                                   |
+| Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work                      | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons                                         | SQL plus synthetic CLI-to-PostgreSQL cleanup/purge/scoring tested; production login, scheduler, correction planned                |
 | CarRecipe and assets                | A proposal, agent shell, or public row smuggles a URL, command, markup, executable value, copyrighted binary, or nondeterminism | Enum-only schema, checked one-command agent reducer, signed proposal-only device authority, browser-only decision, exact public projection, provenance, snapshots | Local agent/browser/device/DB/public race and Jobs cleanup tested; schedule, release, edge, deployment pending                    |
 | Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                | Invite role/reason/reference implemented; hosted controls planned                                                                 |
 | Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                                          | Immediate hide/revoke, idempotent purge, bounded tombstone, backup expiry, deletion replay after restore                                                          | Request, immediate lock-down, and bounded primary purge tested; cache/tombstone/backup/restore planned                            |
@@ -261,10 +263,12 @@ and migration or rollback where applicable.
    fixed authentication/CarRecipe-proposal/ingest/pairing/session cleanup, primary-profile purge, or
    canonical-season refresh/finalization commands, probes its exact least-privileged login/session
    before one prepared function call, holds one client through settlement, and emits no input or
-   database detail. Eligible expired sessions are removed only when no retained predecessor or
-   activated-pairing provenance requires the row. Live deployment login/TLS and edge evidence, a
-   Jobs scheduler, audited correction authority, client-rate policy, and capacity evidence are still
-   required before publishing durable results.
+   database detail. A synthetic integration runs every emitted command against disposable
+   PostgreSQL, rejects an extra-membership login before mutation, and checks exact stored state.
+   Eligible expired sessions are removed only when no retained predecessor or activated-pairing
+   provenance requires the row. Production login/TLS and edge evidence, a Jobs scheduler, audited
+   correction authority, client-rate policy, and capacity evidence are still required before
+   publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes.

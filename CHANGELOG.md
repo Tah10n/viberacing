@@ -306,8 +306,11 @@ Versioning where its guarantees are applicable.
   terminal-finalization capabilities, with strict command/object/result parsing, a distinct redacted
   database namespace, one-client pool, fixed deadlines, an exact role/login/capability/search-path
   probe, prepared procedure calls, destructive failure release, stable non-reflective CLI output,
-  production build, and 156 tests at 100% coverage. It adds no scheduler, live credential,
-  monitoring, retry loop, or deployment claim.
+  production build, and 156 tests at 100% coverage. A separate opt-in Docker gate now applies every
+  reviewed migration, runs all eight emitted commands through one synthetic least-privileged login,
+  rejects a deliberately widened login before mutation, verifies generic output and exact stored
+  state, and cleans up its container, network, and storage. It adds no scheduler, production
+  credential/TLS path, monitoring, retry loop, capacity result, or deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.

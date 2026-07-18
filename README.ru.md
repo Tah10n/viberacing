@@ -96,8 +96,9 @@ pnpm install --frozen-lockfile --ignore-scripts
 pnpm run dev:web
 ```
 
-Полный синтетический loopback Ingest path отдельно проверяется командой
-`pnpm run test:ingest:postgres-integration`; она требует Docker и не является deployment evidence.
+Полные синтетические loopback Ingest и Jobs paths отдельно проверяются командами
+`pnpm run test:ingest:postgres-integration` и `pnpm run test:jobs:postgres-integration`; они требуют
+Docker и не являются deployment evidence.
 
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.
@@ -248,20 +249,25 @@ lifecycle-race enforcement. Отдельная Jobs-only procedure незави�
 challenges/restricted recovery authorities, сохраняя live ceremonies, unused recovery codes,
 sessions, passkeys и audit evidence. Ещё одна Jobs-only procedure удаляет не более 1000 expired
 CarRecipe proposals за вызов под отдельным private mutex и не затрагивает active recipes. Отдельная
-Jobs-only procedure теперь атомарно удаляет до 10 due `deletion_pending` профилей, сначала снимает
-restrictive pairing references, terminally settles opaque job и не создаёт неподтверждённый
-tombstone. Локальный one-shot Jobs runner вызывает только одну из семи fixed capabilities:
-auth/CarRecipe-proposal/ingest/pairing cleanup, primary profile purge, scoring refresh или
+Jobs-only procedure bounded batches удаляет eligible expired browser sessions без retained rotation
+predecessor или pairing approval provenance, сохраняя live и referenced sessions. Ещё одна Jobs-only
+procedure атомарно удаляет до 10 due `deletion_pending` профилей, сначала снимает restrictive
+pairing references, terminally settles opaque job и не создаёт неподтверждённый tombstone. Локальный
+one-shot Jobs runner вызывает только одну из восьми fixed capabilities:
+auth/CarRecipe-proposal/ingest/pairing/session cleanup, primary profile purge, scoring refresh или
 finalization через отдельный least-privileged config, single-client pool, проверку role/login/search
 path, fixed deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI
-output. Сама база не проверяет wire signature; локальные kernel, adapter и application объединены на
-synthetic/mock-pool evidence. Отдельный opt-in loopback scenario теперь проводит независимо
-подписанный HTTP request через emitted host и одноразовый least-privileged PostgreSQL login, включая
-duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed HTTP ingest route,
-operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs login/TLS integration,
-monitoring backend, deployed public score read, audited correction flow, cache/backup/tombstone
-purge, restore replay и scheduled deletion execution ещё не реализованы, поэтому локальный
-enrollment ещё не является готовой production-авторизацией, а приёма реальных данных пока нет.
+output. Отдельный opt-in Jobs scenario применяет reviewed migrations к одноразовой PostgreSQL,
+запускает все восемь emitted commands через узкий synthetic login, отклоняет login с лишней role
+membership до мутации и проверяет точное состояние перед очисткой. Сама база не проверяет wire
+signature; локальные kernel, adapter и application объединены на synthetic/mock-pool evidence.
+Отдельный opt-in loopback Ingest scenario теперь проводит независимо подписанный HTTP request через
+emitted host и одноразовый least-privileged PostgreSQL login, включая duplicate/replay/revoke и
+точную проверку сохранённого состояния. Deployed HTTP ingest route, operational sync connector,
+cleanup/scoring scheduler, deployment Ingest/Jobs login/TLS integration, monitoring backend,
+deployed public score read, audited correction flow, cache/backup/tombstone purge, restore replay и
+scheduled deletion execution ещё не реализованы, поэтому локальный enrollment ещё не является
+готовой production-авторизацией, а приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

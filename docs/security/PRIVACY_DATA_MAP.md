@@ -428,14 +428,18 @@ non-personal terminal season definition. A no-data closed week stores only that 
 public serializer/cache, audited correction record, finalized public-history retention rule, Jobs
 deployment/scheduler, or monitoring backend exists.
 
-ADRs 0014 and 0029 store no user data. The local Jobs process transiently receives only one of two
-fixed cleanup batches or one Public season-start label, plus the private aggregate counts already
-returned by the procedures. It validates and discards those values within one process invocation.
-The CLI emits only one constant completion/failure sentence; it does not log the command, date,
-counts, identifiers, SQL, environment, exception, or stack. The optional pool hook receives only the
-closed Operational signal `idle_client_error` and has no built-in storage or network sink. A future
-scheduler, run history, metric, alert, retry record, or monitoring backend must map its exact
-fields, access, retention, and deletion behavior here before collection.
+ADRs 0014, 0029, 0032, 0034, 0036, and 0042 store no user data. The local Jobs process transiently
+receives only one of five fixed 1000-row cleanup batches, one fixed maximum-10 profile purge, or one
+Public season-start label, plus the private aggregate counts already returned by the procedures. It
+validates and discards those values within one process invocation. The CLI emits only one constant
+completion/failure sentence; it does not log the command, date, counts, identifiers, SQL,
+environment, exception, or stack. The optional pool hook receives only the closed Operational signal
+`idle_client_error` and has no built-in storage or network sink. The opt-in integration adds no
+retained field: it creates obviously synthetic fixture IDs and passwords inside one disposable local
+PostgreSQL container, observes only the constant process sentences, asserts state in memory, and
+removes the container, network, and storage. A future scheduler, run history, metric, alert, retry
+record, or monitoring backend must map its exact fields, access, retention, and deletion behavior
+here before collection.
 
 Revision 0011 stores no new data. One owner-defined function gives only the Web role a fixed
 ten-field score projection: season dates/version/finalized state, handle, weekly score, active days,

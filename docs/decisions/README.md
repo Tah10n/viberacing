@@ -22,7 +22,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0011](0011-bounded-web-postgresql-score-adapter.md)           | Bounded least-privileged Web PostgreSQL score adapter               | Accepted; server-only adapter implemented              |
 | [0012](0012-bounded-public-http-problem-boundary.md)           | Bounded request IDs and public HTTP problem responses               | Accepted; server-only factory implemented              |
 | [0013](0013-public-community-score-http-contract.md)           | Closed query and local Community score GET                          | Accepted; implemented locally; deployment pending      |
-| [0014](0014-bounded-community-maintenance-job-runner.md)       | Bounded one-shot Community maintenance runner                       | Accepted; local runner; scheduler pending              |
+| [0014](0014-bounded-community-maintenance-job-runner.md)       | Bounded one-shot Community maintenance runner                       | Accepted; local integration; scheduler pending         |
 | [0015](0015-bounded-community-sync-verification-kernel.md)     | Bounded Community sync request verification kernel                  | Accepted; local kernel; integration pending            |
 | [0016](0016-bounded-ingest-postgresql-adapter.md)              | Bounded least-privileged Ingest PostgreSQL adapter                  | Accepted; local adapter; live integration pending      |
 | [0017](0017-protected-ingest-origin-key-configuration.md)      | Protected two-key Ingest origin proof configuration                 | Accepted; local reader; deployment pending             |

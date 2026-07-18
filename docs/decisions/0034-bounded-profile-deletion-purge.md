@@ -73,8 +73,8 @@ cross-capability deadlock paths.
 This decision does not create a security tombstone. The queued `profile_ref_digest` is random and
 cannot safely stand in for a keyed identity digest; the repository has no reviewed tombstone key,
 expiry, restore consumer, or backup policy. Cache invalidation, disclosed tombstone retention,
-restore replay, backup expiry, scheduler/cadence, monitoring, alerting, live Jobs login, capacity,
-and deployment remain launch-blocking gates.
+restore replay, backup expiry, scheduler/cadence, monitoring, alerting, production Jobs login/TLS,
+capacity, and deployment remain launch-blocking gates.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-003, VR-INGEST-001, VR-INGEST-002, VR-DATA-001, and
 VR-DELETE-001. Primary attacker stories are VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION,
@@ -127,9 +127,11 @@ Current evidence includes:
   denials, and 34 cross-capability checks, plus 132 focused Jobs tests at 100% statement, branch,
   function, and line coverage with strict lint, type checking, and production build.
 
-The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project. Jobs tests use an
-injected pool. They do not prove a Node-to-PostgreSQL login, scheduler, published deletion window,
-monitoring, backup expiry, tombstone/restore replay, cache invalidation, capacity, or deployment.
+The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project. Focused Jobs tests
+use an injected pool; the shared opt-in Jobs integration additionally proves this emitted command
+through one disposable narrow login and exact terminal job/profile state. Neither proves a
+scheduler, published deletion window, production login/TLS, monitoring, backup expiry,
+tombstone/restore replay, cache invalidation, capacity, or deployment.
 
 ## References
 

@@ -35,59 +35,61 @@ passkey-verifier, database, and browser evidence is injected or synthetic; no wo
 OAuth registration, secret, live authenticator/database login, distributed edge abuse control,
 scheduled recovery/deletion cleanup, cache/backup/tombstone purge, restore replay, notification, or
 deployment is supplied. A local one-shot Jobs runner invokes only the eight existing maintenance
-procedures through a bounded least-privileged adapter. A local Ingest kernel now bounds and
-authenticates the exact Community sync envelope, consumes an injected origin nonce, parses bounded
-JSON, validates the generated contract, and strictly verifies the source-bound device request. A
-separate bounded Ingest PostgreSQL adapter revalidates that output and exposes only atomic
-origin-nonce consumption, device lookup, and submission through a probed least-privileged pool. A
-protected local reader supplies one mandatory and one optional rotation origin key directly to the
-verifier without returning raw configuration. A forced-RLS replay tuple, Ingest-only atomic consume,
-and separate Jobs ingest, pairing, authentication, session cleanup, and primary profile deletion
-paths now have real isolated PostgreSQL evidence. A transport-free Ingest application now composes
-those exact verifier and database capabilities, generates a server-owned request ID, waits for
-submission, and returns only a validated acknowledgement or generic problem decision. A bounded
-local Fastify server factory now preserves exact raw HTTP evidence, admits four application calls
-without a queue, applies fixed parser/header/connection/deadline policies, and serializes only
-revalidated sync acknowledgement/problem contracts. A library-only Rust connector foundation now
-bounds the stable App Server handshake and a candidate `0.144.5` account/usage parser, discarding
-account/summary fields and returning only bounded normalized daily usage in caller memory. An
-inaccessible one-shot supervisor composes those exact states through fixed local pipes, a fixed
-child argument, no ambient environment, bounded stdout/stderr/time, terminal-event draining, and
-reap-before-success cleanup. An inaccessible reviewed sync context now lets a candidate-only
-composer consume those minimized entries into the exact bounded JSON body, SHA-256 digest, nonce
-encoding, and device-signature message shared with the production Ingest verifier. An isolated
-one-use signer removes public unsigned access, consumes that value only with an inaccessible
-device-bound key capability, and returns the same body plus five exact signed header values. The
-shared synthetic vector is strictly verified across Rust and Ingest. A second inaccessible signer
-and pure Web verifier now agree on an exact synthetic pairing-possession proof. A transport-free
-Web/Auth start application now generates fresh server identifiers, 32-byte poll/challenge material,
-a 60-bit human code, separate protected poll/code verifiers, and a nine-minute pending transaction
-from closed device metadata through one fixed call on the probed read-write Web pool. A second
-activation application derives two fixed-shape HMAC poll-verifier candidates, selects at most one
-approved row, runs that strict proof, and alone invokes exact atomic activation with server-owned
-identifiers behind four-call admission and a 250-millisecond settlement floor. The authenticated
-`/connect` flow supplies browser approval. Two closed local POST routes now compose both
-applications behind one shared four-call admission boundary, versioned request/response validation,
-generic problems, and revision 0022's fixed global-and-64-bucket distributed rate windows. A bounded
-Rust `connect` command generates a key and client rate ID with the OS CSPRNG, persists resumable
-state only in a native credential store, and performs the exact start/proof/poll sequence. A
-separate Windows x86_64 `sync` command now canonicalizes and hash-admits one explicit exact
-`0.144.5` artifact, holds its file against write substitution through launch, uses a fresh empty
-working directory and the existing bounded supervisor, creates fresh context from the active native
-record, and sends one exact signed body to the fixed endpoint without retry or edge-origin headers.
-Its loopback HTTP evidence validates only the five device headers and closed acknowledgement. A
-separate exact `forget-local` command derives the same native-store account from a canonical origin
-and bounded label, invokes only idempotent credential deletion, and emits one fixed warning that
-server device authority was not revoked. It does not load the record, construct a signer, start
-Codex, or make a network call. No live database connection, real-account end-to-end result, released
-artifact, or deployment is claimed. Candidate release, schema, fixture, synthetic-process,
-admission, composer, pairing, signer, and loopback-upload evidence does not populate the support
-matrix. Phase 0 hosted-publication controls remain blocked on real maintainer identities and GitHub
-configuration. No production-ready anonymous edge perimeter, distributed recovery perimeter or
-cleanup, production secret-manager/edge key injection, trusted external Ingest TLS/edge route,
-production deployment, live Web/Jobs/Ingest database login/TLS integration, released or operational
-connector, supported Codex version, real-user ingestion, end-to-end public ranking, or finalization
-scheduler exists.
+procedures through a bounded least-privileged adapter. One opt-in synthetic integration applies the
+reviewed migrations to disposable PostgreSQL, runs every emitted Jobs command through a narrow
+login, rejects an extra-membership login before mutation, and verifies exact stored state. A local
+Ingest kernel now bounds and authenticates the exact Community sync envelope, consumes an injected
+origin nonce, parses bounded JSON, validates the generated contract, and strictly verifies the
+source-bound device request. A separate bounded Ingest PostgreSQL adapter revalidates that output
+and exposes only atomic origin-nonce consumption, device lookup, and submission through a probed
+least-privileged pool. A protected local reader supplies one mandatory and one optional rotation
+origin key directly to the verifier without returning raw configuration. A forced-RLS replay tuple,
+Ingest-only atomic consume, separate Jobs cleanup paths for ingest, pairing, authentication,
+sessions, and CarRecipe proposals, and primary profile deletion now have real isolated PostgreSQL
+evidence. A transport-free Ingest application now composes those exact verifier and database
+capabilities, generates a server-owned request ID, waits for submission, and returns only a
+validated acknowledgement or generic problem decision. A bounded local Fastify server factory now
+preserves exact raw HTTP evidence, admits four application calls without a queue, applies fixed
+parser/header/connection/deadline policies, and serializes only revalidated sync
+acknowledgement/problem contracts. A library-only Rust connector foundation now bounds the stable
+App Server handshake and a candidate `0.144.5` account/usage parser, discarding account/summary
+fields and returning only bounded normalized daily usage in caller memory. An inaccessible one-shot
+supervisor composes those exact states through fixed local pipes, a fixed child argument, no ambient
+environment, bounded stdout/stderr/time, terminal-event draining, and reap-before-success cleanup.
+An inaccessible reviewed sync context now lets a candidate-only composer consume those minimized
+entries into the exact bounded JSON body, SHA-256 digest, nonce encoding, and device-signature
+message shared with the production Ingest verifier. An isolated one-use signer removes public
+unsigned access, consumes that value only with an inaccessible device-bound key capability, and
+returns the same body plus five exact signed header values. The shared synthetic vector is strictly
+verified across Rust and Ingest. A second inaccessible signer and pure Web verifier now agree on an
+exact synthetic pairing-possession proof. A transport-free Web/Auth start application now generates
+fresh server identifiers, 32-byte poll/challenge material, a 60-bit human code, separate protected
+poll/code verifiers, and a nine-minute pending transaction from closed device metadata through one
+fixed call on the probed read-write Web pool. A second activation application derives two
+fixed-shape HMAC poll-verifier candidates, selects at most one approved row, runs that strict proof,
+and alone invokes exact atomic activation with server-owned identifiers behind four-call admission
+and a 250-millisecond settlement floor. The authenticated `/connect` flow supplies browser approval.
+Two closed local POST routes now compose both applications behind one shared four-call admission
+boundary, versioned request/response validation, generic problems, and revision 0022's fixed
+global-and-64-bucket distributed rate windows. A bounded Rust `connect` command generates a key and
+client rate ID with the OS CSPRNG, persists resumable state only in a native credential store, and
+performs the exact start/proof/poll sequence. A separate Windows x86_64 `sync` command now
+canonicalizes and hash-admits one explicit exact `0.144.5` artifact, holds its file against write
+substitution through launch, uses a fresh empty working directory and the existing bounded
+supervisor, creates fresh context from the active native record, and sends one exact signed body to
+the fixed endpoint without retry or edge-origin headers. Its loopback HTTP evidence validates only
+the five device headers and closed acknowledgement. A separate exact `forget-local` command derives
+the same native-store account from a canonical origin and bounded label, invokes only idempotent
+credential deletion, and emits one fixed warning that server device authority was not revoked. It
+does not load the record, construct a signer, start Codex, or make a network call. No live database
+connection, real-account end-to-end result, released artifact, or deployment is claimed. Candidate
+release, schema, fixture, synthetic-process, admission, composer, pairing, signer, and
+loopback-upload evidence does not populate the support matrix. Phase 0 hosted-publication controls
+remain blocked on real maintainer identities and GitHub configuration. No production-ready anonymous
+edge perimeter, distributed recovery perimeter or cleanup, production secret-manager/edge key
+injection, trusted external Ingest TLS/edge route, production deployment, production Web/Jobs/Ingest
+database login/TLS integration, released or operational connector, supported Codex version,
+real-user ingestion, end-to-end public ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -219,7 +221,7 @@ scheduler exists.
   derives the schema/CLI expectations from production sources, and twelve mutation cases prove enum,
   shell, invocation-allowlist, retry, authority, output, front matter, and UI-metadata drift fail
   closed. No released connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and forty-one accepted design decisions covering Community trust,
+- An ADR lifecycle/template and forty-two accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -320,8 +322,8 @@ scheduler exists.
   changed-row mismatch. Live pending and activated rows, bound devices, sources, profiles,
   credentials, and audit events remain. Static scenarios and an observed two-worker race prove
   bounds, idempotency, role isolation, serialization, and live/activated preservation. No scheduler,
-  live Jobs login, production cadence, backup proof, capacity result, or broader ceremony cleanup is
-  claimed.
+  production Jobs login/TLS path, production cadence, backup proof, capacity result, or broader
+  ceremony cleanup is claimed.
 - A bounded authentication-retention database boundary. Revision 0023 gives only Jobs one 1-to-1000
   cleanup under a separate private mutex and independently caps expired challenge and
   restricted-recovery-authority deletion. It removes an authority's source recovery code only when
@@ -330,8 +332,8 @@ scheduler exists.
   locked in stable order before authority/code rows, matching recovery and deletion transitions.
   Static scenarios, an observed two-worker race, and an observed cleanup-versus-recovery-start race
   prove bounds, role isolation, live-state preservation, worker serialization, and the
-  cross-capability lock order. No scheduler, live Jobs login, production cadence, backup proof,
-  capacity result, or deployed retention policy is claimed.
+  cross-capability lock order. No scheduler, production Jobs login/TLS path, production cadence,
+  backup proof, capacity result, or deployed retention policy is claimed.
 - A bounded expired-session retention database boundary. Revision 0030 gives only Jobs one 1-to-1000
   oldest-first cleanup under the existing private authentication mutex. It selects only expired
   sessions with no retained rotation predecessor and no pairing approval reference, locks one
@@ -340,8 +342,8 @@ scheduler exists.
   sessions and immutable activated-pairing provenance remain. Static scenarios and an observed
   two-worker race prove active/revoked/rotated deletion, bounds, role isolation, idempotency,
   rotation-chain progress, shared-mutex serialization, and live/provenance preservation. No
-  scheduler, live Jobs login, complete device-history policy, backup purge, capacity, or deployment
-  is claimed.
+  scheduler, production Jobs login/TLS path, complete device-history policy, backup purge, capacity,
+  or deployment is claimed.
 - A bounded primary profile deletion database boundary. Revision 0024 gives only Jobs one maximum-10
   due queue/retry purge under stable acquisition of its fixed five maintenance mutexes. It requires
   committed `deletion_pending` state, removes every restrictive profile-bound pairing and only its
@@ -350,9 +352,9 @@ scheduler exists.
   rows in the same transaction. Audit and job profile links are nulled; the opaque terminal job
   remains and no unkeyed tombstone is invented. End-to-end request/purge, batch, retry/future,
   state-drift rollback, role-denial, idempotency, two-worker, and purge-versus-auth- cleanup
-  scenarios pass in real isolated PostgreSQL. No scheduler, live Jobs login, published deletion
-  window, terminal-job retention, cache/backup purge, keyed tombstone, restore replay, monitoring,
-  capacity result, or deployment is claimed.
+  scenarios pass in real isolated PostgreSQL. No scheduler, production Jobs login/TLS path,
+  published deletion window, terminal-job retention, cache/backup purge, keyed tombstone, restore
+  replay, monitoring, capacity result, or deployment is claimed.
 - A transport-free Community sync application boundary. Its configured factory creates one bounded
   Ingest database object, injects that same object's atomic origin consume and minimal device lookup
   into the protected-key verifier, binds its submission capability, closes the pool after startup
@@ -778,9 +780,14 @@ scheduler exists.
   exact SQL parameters, role mismatch, settlement/release/close, CLI output, and failure translation
   at 100% statement/branch/function/line coverage. A lint-policy regression also prevents every
   production module except the fixed pool adapter from importing `pg`. A TypeScript production build
-  passes. No live Jobs login, Node-to-PostgreSQL integration, scheduler, monitoring backend,
-  automatic retry policy, capacity result, correction, cache/backup/tombstone purge, restore replay,
-  or deployment is claimed.
+  passes. A separate opt-in Docker integration applies every checksum-validated migration to one
+  disposable PostgreSQL container, creates a synthetic narrow Jobs login and a negative-control
+  login with one extra group membership, runs all eight emitted CLI commands as separate processes,
+  proves the widened login returns only the generic failure before mutation, and verifies generic
+  success plus exact cleanup, purge, refresh, and finalization state before removing the container,
+  network, and storage. No production Jobs login/TLS path, scheduler, monitoring backend, automatic
+  retry policy, capacity result, correction, cache/backup/tombstone purge, restore replay, or
+  deployment is claimed.
 - Thirty deterministic cross-connection races hold a relevant invite, challenge, session, source,
   device, pairing, or profile row, or a season advisory lock; tag every session; and observe every
   contender in the holder's transitive PostgreSQL blocker chain before releasing it. Protective
@@ -879,6 +886,15 @@ pairing-retention, authentication-retention, session-retention, primary-profile 
 proposal/approval and retention, scoring, finalization, and public score/race/status scenarios, then
 removed its portless container, network, and ephemeral storage.
 
+The separate Jobs integration also reached `healthy`, revalidated and applied revisions 0001 through
+0030, created only synthetic non-owner logins, rejected the one login with an extra group membership
+before its requested cleanup changed state, and ran all eight built Jobs commands through the narrow
+login. It observed only the constant success/failure sentences and verified the exact
+authentication/CarRecipe-proposal/ingest/pairing/session cleanup, profile-purge, current-season
+refresh, and closed-season finalization state before removing the loopback-published container,
+network, and storage. This is local synthetic application evidence, not a scheduler, production
+credential/TLS result, capacity result, real-user purge, monitoring backend, or deployment.
+
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
 GitHub secret scanning. Deterministic verification validates external-link policy but does not make
@@ -911,12 +927,12 @@ trusted Ingest edge routing/external TLS and direct-origin denial, live secret-m
 injection, the Ingest deployment PostgreSQL credential/TLS connection, distributed rate/backpressure
 controls and load evidence, scheduled execution/monitoring of authentication-, CarRecipe-proposal-,
 ingest-, pairing-, and session-retention cleanup and primary deletion, cleanup for remaining
-expiring state, the Jobs scheduler/live login and application-to-PostgreSQL integration, audited
-corrections, deployed public-score delivery, cache/backup/tombstone purge and restore replay,
-connector automatic discovery and macOS/Linux executable admission, clean-machine live Codex/privacy
-evidence, supported operational account/usage integration, deployed signed-upload egress, credential
-rotation and automated server-revoke composition, packaging, release signing, deployment, and public
-beta operations remain proposed. The local Ingest key reader, kernel, adapter, application composer,
+expiring state, the Jobs scheduler and production login/TLS path, audited corrections, deployed
+public-score delivery, cache/backup/tombstone purge and restore replay, connector automatic
+discovery and macOS/Linux executable admission, clean-machine live Codex/privacy evidence, supported
+operational account/usage integration, deployed signed-upload egress, credential rotation and
+automated server-revoke composition, packaging, release signing, deployment, and public beta
+operations remain proposed. The local Ingest key reader, kernel, adapter, application composer,
 Fastify server, and separate host now prove bounded protected configuration, raw-envelope/JSON/HTTP
 framing, origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query,
 orchestration, no-queue/deadline policy, exact listener modes, bounded startup/shutdown,
@@ -950,6 +966,7 @@ pnpm run build:ingest
 pnpm run test:ingest:postgres-integration
 pnpm run test:jobs:coverage
 pnpm run build:jobs
+pnpm run test:jobs:postgres-integration
 cargo test --workspace --all-targets --all-features --locked
 pnpm run check:web-build
 pnpm run check:public:staged

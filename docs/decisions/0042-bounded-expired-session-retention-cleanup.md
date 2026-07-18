@@ -70,9 +70,9 @@ claim, but those verifier digests and identifiers remain stored until the relate
 implemented or the profile is purged.
 
 Residual risk remains: there is no scheduler, cadence, overlap/retry policy, monitoring, capacity
-result, live Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. Activated
-pairing-referenced sessions, deletion jobs/tombstones, historical passkey/device provenance, and
-fixed pairing-rate windows still need separate reviewed retention or reset evidence.
+result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy.
+Activated pairing-referenced sessions, deletion jobs/tombstones, historical passkey/device
+provenance, and fixed pairing-rate windows still need separate reviewed retention or reset evidence.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -125,9 +125,10 @@ Acceptance evidence recorded for this decision includes:
 - 156 focused Jobs tests plus strict lint and type checking for the command, fixed query, closed
   result, hostile input, and one-capability dispatch paths.
 
-The SQL evidence uses only synthetic rows in a portless ephemeral PostgreSQL project. Jobs tests use
-an injected pool. They do not prove a Node-to-PostgreSQL login, scheduler, production cadence,
-monitoring, backup purge, capacity, or deployment.
+The SQL evidence uses only synthetic rows in a portless ephemeral PostgreSQL project. Focused Jobs
+tests use an injected pool; the shared opt-in Jobs integration additionally proves this emitted
+command through one disposable narrow login and exact stored state. Neither proves a scheduler,
+production cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
 
 ## References
 

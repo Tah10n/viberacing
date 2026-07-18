@@ -260,12 +260,15 @@ now wraps exactly one of eight fixed functions: authentication cleanup, CarRecip
 ingest cleanup, pairing cleanup, session cleanup, primary profile purge, refresh, or finalization.
 It uses a distinct least-privileged configuration namespace, one-client pool, per-checkout
 role/login/search-path probe, fixed deadlines and prepared parameters, closed result validation,
-destructive release after failure, and stable non-reflective CLI output. It has no scheduler, live
-login/certificate, monitoring backend, retry loop, application-to-PostgreSQL integration result, or
-deployment. Revision 0011 gives only the Web database role a bounded active-profile score projection
-containing no raw values, private identifiers, or exact timestamps. The score response component and
-Web PostgreSQL adapter preserve only that public allowlist through the local score route. The
-visible race, leaderboard, and selectable participant summary now consume its validated current-week
+destructive release after failure, and stable non-reflective CLI output. An opt-in synthetic
+integration now builds that runner, applies the reviewed migration manifest to one disposable
+PostgreSQL container, proves all eight commands through a narrow login, rejects a deliberately
+widened login before mutation, and verifies exact stored state before cleanup. It has no scheduler,
+production login/certificate, monitoring backend, retry loop, capacity result, or deployment.
+Revision 0011 gives only the Web database role a bounded active-profile score projection containing
+no raw values, private identifiers, or exact timestamps. The score response component and Web
+PostgreSQL adapter preserve only that public allowlist through the local score route. The visible
+race, leaderboard, and selectable participant summary now consume its validated current-week
 response with a credential-free same-origin request and an explicit synthetic fallback. Canonical
 `/?profile=handle#profile` links select only an exact public handle in that page, and a missing
 current top-32 row is not replaced with another participant. There is now a local
@@ -294,10 +297,11 @@ pnpm install --frozen-lockfile --ignore-scripts
 pnpm run dev:web
 pnpm run verify
 pnpm run test:ingest:postgres-integration
+pnpm run test:jobs:postgres-integration
 ```
 
-The final command is an opt-in Docker-backed synthetic loopback integration; it is also required in
-CI but is intentionally outside the deterministic offline `verify` command.
+The final two commands are opt-in Docker-backed synthetic loopback integrations; CI requires both,
+but they are intentionally outside the deterministic offline `verify` command.
 
 `pnpm run check:publication` is a separate fail-closed gate. It is expected to fail in the current
 pre-public state and must pass only after real hosted identities and controls are configured.

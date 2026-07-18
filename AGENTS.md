@@ -27,7 +27,9 @@ Community usage-ingest, Jobs-only ingest/pairing/auth/session/CarRecipe-proposal
 profile deletion, session-owned CarRecipe proposal/approval, and open-season Community scoring plus
 terminal finalization and bounded public score-projection database slices. A local one-shot Jobs
 runner now invokes only those eight reviewed maintenance functions through a probed least-privileged
-login contract. A local Ingest kernel bounds the raw sync envelope and parser, verifies an injected
+login contract. An opt-in synthetic integration runs all eight emitted CLI commands against one
+disposable least-privileged PostgreSQL login and proves a widened-login denial plus exact stored
+state. A local Ingest kernel bounds the raw sync envelope and parser, verifies an injected
 replay-consumed origin proof, validates the sync contract, and strictly verifies the source-bound
 device request. A protected local reader supplies one mandatory and one optional rotation proof key
 from exact namespaced configuration without returning a reusable key container. A separate bounded
@@ -195,8 +197,13 @@ implementation and verification are present in the working tree.
   focused gates do not replace root verification.
 - `pnpm run lint:jobs`, `pnpm run typecheck:jobs`, `pnpm run test:jobs:coverage`, and
   `pnpm run build:jobs` verify the local one-shot Jobs boundary, including bounded session cleanup.
-  They use injected fakes and do not prove a live Jobs login, scheduler, production TLS, monitoring,
-  capacity, or deployment.
+  They use injected fakes and do not by themselves prove a database login, scheduler, production
+  TLS, monitoring, capacity, or deployment.
+- `pnpm run test:jobs:postgres-integration` uses one disposable PostgreSQL container with a
+  synthetic narrow Jobs login. It runs all eight emitted CLI commands, proves an extra-membership
+  login fails before mutation, validates generic process output and exact stored state, and removes
+  the container, network, and storage. It proves no scheduler, production credential/TLS path,
+  monitoring, capacity, real-user retention, or deployment.
 - `pnpm run lint:ingest`, `pnpm run typecheck:ingest`, `pnpm run test:ingest:coverage`, and
   `pnpm run build:ingest` verify the local sync kernel, adapter, application, and HTTP factory. They
   are focused synthetic-key/mock-pool/loopback checks and do not by themselves prove edge delivery,
@@ -227,8 +234,9 @@ These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`.
 and Jobs tests use synthetic/injected data and do not prove authentication, real-user ingestion,
 connector, scheduler, live edge or deployment integration, or production behavior. The general
 database integration proves only its isolated SQL boundary; the separate Ingest integration proves
-one synthetic loopback HTTP-to-PostgreSQL path only. Rust process tests execute only a target-built
-synthetic child, not a discovered or installed Codex binary. Install dependencies with
+one synthetic loopback HTTP-to-PostgreSQL path only, and the separate Jobs integration proves one
+synthetic CLI-to-PostgreSQL path only. Rust process tests execute only a target-built synthetic
+child, not a discovered or installed Codex binary. Install dependencies with
 `pnpm install --frozen-lockfile --ignore-scripts`.
 
 ## Public repository boundary

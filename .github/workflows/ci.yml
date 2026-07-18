@@ -60,6 +60,9 @@ jobs:
       - name: Exercise the local Ingest HTTP-to-PostgreSQL path
         run: pnpm run test:ingest:postgres-integration
 
+      - name: Exercise the local Jobs CLI-to-PostgreSQL path
+        run: pnpm run test:jobs:postgres-integration
+
       - name: Audit the locked dependency graph
         run: pnpm audit --audit-level high --registry=https://registry.npmjs.org/
 

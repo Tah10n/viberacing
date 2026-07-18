@@ -71,8 +71,8 @@ is preferable to racing a live security transition. The separate private mutex p
 workers from selecting overlapping batches.
 
 Residual risk remains: there is no scheduler, cadence, retry/overlap policy, alert, capacity result,
-live Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. ADR 0032 now
-covers expired authentication challenges and restricted recovery authorities, while ADR 0042 now
+production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. ADR 0032
+now covers expired authentication challenges and restricted recovery authorities, while ADR 0042 now
 covers eligible expired sessions. Pairing-referenced session provenance, jobs, passkey provenance,
 and tombstones still need separate bounded cleanup or retention policy. Anonymous pairing start also
 still needs an HTTP contract, browser approval, connector client, distributed edge/service limits,
@@ -126,9 +126,11 @@ Acceptance evidence recorded for this decision included:
 - 120 focused Jobs tests, including the pairing cleanup command/query/result path, plus strict lint
   and type checking.
 
-The SQL evidence uses only synthetic rows in a portless ephemeral PostgreSQL project. Jobs tests use
-an injected pool. They do not prove a Node-to-PostgreSQL login, scheduler, production retention
-cadence, capacity, monitoring, backup purge, anonymous route, or deployment.
+The SQL evidence uses only synthetic rows in a portless ephemeral PostgreSQL project. Focused Jobs
+tests use an injected pool; the shared opt-in Jobs integration additionally proves this emitted
+command through one disposable narrow login and exact stored state. Neither proves a scheduler,
+production retention cadence/login/TLS, capacity, monitoring, backup purge, anonymous route, or
+deployment.
 
 ## References
 

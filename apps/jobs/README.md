@@ -39,8 +39,9 @@ VIBERACING_JOBS_DATABASE_TLS_MODE
 
 `VIBERACING_JOBS_DATABASE_TLS_MODE` is either `verify-full`, or `disable` only for an explicit
 development/test loopback connection. Configuration objects redact the password from enumeration and
-JSON serialization. The repository does not contain login creation, passwords, certificates, or
-production environment values.
+JSON serialization. The repository contains no production login provisioning, certificate, or
+environment value. Its integration harness creates only obviously synthetic logins and passwords
+inside one disposable local PostgreSQL container and removes that container and storage afterward.
 
 ## Build and invoke
 
@@ -48,6 +49,7 @@ From the repository root:
 
 ```text
 pnpm run build:jobs
+pnpm run test:jobs:postgres-integration
 pnpm --filter @viberacing/jobs start -- cleanup-expired-auth-state
 pnpm --filter @viberacing/jobs start -- cleanup-expired-car-recipe-proposals
 pnpm --filter @viberacing/jobs start -- cleanup-expired-ingest-state
@@ -61,6 +63,13 @@ pnpm --filter @viberacing/jobs start -- finalize-community-season 2026-07-06
 The dates above are synthetic examples. A valid command prints only a stable completion sentence;
 all failures print only a stable failure sentence and return a nonzero exit code. Neither path
 prints the command input, affected counts, configuration, SQL, or exception detail.
+
+The Docker-backed integration command applies the checksum-validated migration manifest, creates a
+least-privileged synthetic Jobs login plus a deliberately widened negative-control login, runs all
+eight built CLI commands as separate processes, verifies their generic output and exact database
+effects, and cleans up its container, network, and storage. It proves only the local
+CLI-to-PostgreSQL boundary; it does not prove production TLS/credentials, a scheduler, monitoring,
+capacity, real-user retention, or deployment.
 
 The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
 Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package
