@@ -125,6 +125,12 @@ export function parseJobsCommand(value: unknown): CommunityMaintenanceJob {
       kind: "cleanup_expired_pairing_state",
     });
   }
+  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-sessions") {
+    return Object.freeze({
+      batchSize: maximumCleanupBatchSize,
+      kind: "cleanup_expired_sessions",
+    });
+  }
   if (argumentsValue.length === 1 && argumentsValue[0] === "purge-profile-deletions") {
     return Object.freeze({
       batchSize: maximumProfileDeletionPurgeBatchSize,

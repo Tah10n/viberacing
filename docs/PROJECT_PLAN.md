@@ -393,7 +393,9 @@ event.
   key's sessions, unused ceremonies, and approved-but-not-activated pairing authority. Activated
   devices remain explicit separately revocable credentials.
 - Public database safety ceilings allow at most 32 retained passkey records and 32 active unexpired
-  browser sessions per profile; edge limits and expiry cleanup remain independently required.
+  browser sessions per profile. Revision 0030 adds bounded cleanup for expired rows with no retained
+  predecessor or pairing approval reference; scheduling, pairing-provenance history policy, and edge
+  limits remain independently required.
 - Recovery uses a short-lived restricted authority and cannot become a normal browser session until
   a replacement passkey is safely established.
 - Recovery-code regeneration requires an exact active-session passkey step-up and atomically
@@ -668,13 +670,18 @@ Jobs-only deletion capability and local one-shot command. This is isolated SQL/a
 not a production retention schedule. Expired authentication challenges and restricted recovery
 authorities now have a second bounded Jobs-only deletion capability; it also removes only an exact
 still-present used code whose verifier was already scrubbed and follows the recovery profile lock
-order. Revision 0024 adds a maximum-10 Jobs-only primary-profile purge: it serializes against every
-current maintenance capability, accepts only due queued/retry work for committed `deletion_pending`
-profiles, removes restrictive pairing references first, terminally settles the opaque job, and
-cascades primary identity/credential/source/device/usage/personal-score data in one transaction. It
-retains only the opaque terminal job and redacted audit reference. Remaining expiry classes, keyed
-tombstone policy, cache/backup purge, and restore replay still require their own reviewed
-implementation and public policy, and no implemented cleanup has a scheduler or deployed cadence.
+order. Expired CarRecipe proposals have a separate maximum-1000 cleanup under their own private
+mutex. Revision 0030 adds a maximum-1000 oldest-first cleanup for expired browser sessions only when
+no retained rotation predecessor or pairing approval provenance references the row; selected session
+challenges cascade, while activated-pairing provenance remains. Revision 0024 adds a maximum-10
+Jobs-only primary-profile purge: it serializes against every intersecting maintenance capability,
+accepts only due queued/retry work for committed `deletion_pending` profiles, removes restrictive
+pairing references first, terminally settles the opaque job, and cascades primary
+identity/credential/source/device/usage/personal-score data in one transaction. It retains only the
+opaque terminal job and redacted audit reference. Pairing-referenced sessions, remaining expiry
+classes, keyed tombstone policy, cache/backup purge, and restore replay still require their own
+reviewed implementation and public policy, and no implemented cleanup has a scheduler or deployed
+cadence.
 
 ## Administration and operations
 

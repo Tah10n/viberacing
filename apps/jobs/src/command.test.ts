@@ -51,6 +51,7 @@ describe("Jobs command", () => {
       ["cleanup-expired-pairing-state"],
       { batchSize: 1_000, kind: "cleanup_expired_pairing_state" },
     ],
+    [["cleanup-expired-sessions"], { batchSize: 1_000, kind: "cleanup_expired_sessions" }],
     [["purge-profile-deletions"], { batchSize: 10, kind: "purge_profile_deletions" }],
     [
       ["refresh-community-season", "2026-07-13"],
@@ -74,6 +75,7 @@ describe("Jobs command", () => {
     ["cleanup-expired-car-recipe-proposals", "unexpected"],
     ["cleanup-expired-ingest-state", "unexpected"],
     ["cleanup-expired-pairing-state", "unexpected"],
+    ["cleanup-expired-sessions", "unexpected"],
     ["purge-profile-deletions", "unexpected"],
     ["refresh-community-season", "2026-07-13", "unexpected"],
     ["refresh-community-season"],

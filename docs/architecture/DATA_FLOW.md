@@ -7,13 +7,13 @@ addition, non-current-passkey revocation, recovery-code rotation/replacement-pas
 immediate profile-deletion-request, source inventory/pause/reactivation/unlink, active-device
 revoke, and pairing-approval sequences below plus the public race-status consumer are now locally
 implemented boundaries; none has live credentials, distributed edge policy, scheduled purge, or
-deployment evidence. Revisions 0001 through 0029 provide private
+deployment evidence. Revisions 0001 through 0030 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
 immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
-ingest, bounded ingest-, pairing-, authentication-, and CarRecipe-proposal-retention cleanup,
-primary profile deletion, open-season scoring refresh, late-ingest closure, terminal season
+ingest, bounded ingest-, pairing-, authentication-, session-, and CarRecipe-proposal-retention
+cleanup, primary profile deletion, open-season scoring refresh, late-ingest closure, terminal season
 finalization, a Web-only public score projection, a separate compatible current-recipe race
 projection, and a third compatible rounded-freshness/optional-streak status projection. Local
 score/race/status GETs construct their bounded adapters lazily after closed request admission. The
@@ -22,8 +22,8 @@ validates the public score, rounded freshness, optional preference-gated streak,
 recipe, lets one canonical public-handle URL select a same-page summary from only those fields, and
 retains a clearly labeled synthetic fallback on failure. A public signed-in account links to that
 URL; invalid, duplicate, and unranked selections grant no authority and add no score query field or
-browser persistence. One local one-shot Jobs runner can invoke exactly one of seven fixed functions:
-any of the four cleanup functions, primary profile purge, refresh, or finalization, but no broader
+browser persistence. One local one-shot Jobs runner can invoke exactly one of eight fixed functions:
+any of the five cleanup functions, primary profile purge, refresh, or finalization, but no broader
 recovery/step-up, deployed ingest endpoint, operational connector, purge
 schedule/cache/backup/tombstone handling, Jobs monitor, audited correction, or deployed service
 executes the complete sequences. A library-only Rust connector foundation validates the bounded
@@ -530,16 +530,16 @@ purge to remove personal rows. Ingest and Jobs share the canonical
 read that filters current profile visibility before re-ranking and omits private identifiers, raw
 values, daily detail, and exact timestamps. Revision 0027 calls that unchanged read and separately
 left-joins only the current active recipe for the active profile behind each visible handle. It
-returns no proposal identity, state, or timestamp and creates no historical recipe snapshot. ADRs
+returns no proposal identity, state, or timestamp and creates no historical recipe snapshot.
 Revision 0029 calls that compatible race read and derives only saturated complete-UTC-day freshness
 plus a consecutive positive-score streak from retained accepted receipt times and materialized daily
 scores. The streak is omitted unless the current active profile enables it; exact timestamps, daily
-rows, the preference, and private identifiers remain private. ADRs 0014, 0029, 0032, 0034, and 0036
-make the local one-shot Jobs process invoke exactly one of seven reviewed functions—authentication
-cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup, primary profile purge,
-refresh, or finalization—after a per-checkout least-privilege probe; no scheduler, live
-login/certificate, application database integration, audited correction, tombstone/restore replay,
-deployed route, or public cache exists.
+rows, the preference, and private identifiers remain private. ADRs 0014, 0029, 0032, 0034, 0036, and
+0042 make the local one-shot Jobs process invoke exactly one of eight reviewed
+functions—authentication cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup,
+session cleanup, primary profile purge, refresh, or finalization—after a per-checkout
+least-privilege probe; no scheduler, live login/certificate, application database integration,
+audited correction, tombstone/restore replay, deployed route, or public cache exists.
 
 ## CarRecipe proposal origins and browser approval
 

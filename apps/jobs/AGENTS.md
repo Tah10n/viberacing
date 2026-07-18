@@ -13,8 +13,8 @@ staged-review rules all apply.
 - Keep the database pool at one client. A job invocation calls exactly one reviewed `viberacing_api`
   function with positional parameters; do not add a generic query, migration, table, owner, Web,
   Ingest, Admin, or interactive-auth capability.
-- Authentication, CarRecipe-proposal, ingest, and pairing cleanup each accept only the fixed
-  1000-row CLI batch. Scoring commands accept one canonical Monday season inside the database
+- Authentication, CarRecipe-proposal, ingest, pairing, and session cleanup each accept only the
+  fixed 1000-row CLI batch. Scoring commands accept one canonical Monday season inside the database
   contract. Primary profile purge accepts only the separate fixed 10-profile CLI batch. Unknown
   commands, fields, arguments, result columns, rows, accessors, and prototypes fail before they can
   widen work.

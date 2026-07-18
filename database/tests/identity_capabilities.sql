@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 60
+    SELECT pg_catalog.count(*) = 61
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 17
+    SELECT pg_catalog.count(*) = 18
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -73,6 +73,7 @@ SELECT pg_temp.assert_true(
         'cleanup_expired_car_recipe_proposals',
         'cleanup_expired_ingest_state',
         'cleanup_expired_pairing_state',
+        'cleanup_expired_sessions',
         'purge_profile_deletions',
         'propose_car_recipe',
         'propose_car_recipe_from_device',
@@ -105,7 +106,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 8
+    SELECT pg_catalog.count(*) = 9
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -117,6 +118,7 @@ SELECT pg_temp.assert_true(
         'cleanup_expired_car_recipe_proposals',
         'cleanup_expired_ingest_state',
         'cleanup_expired_pairing_state',
+        'cleanup_expired_sessions',
         'purge_profile_deletions',
         'submit_community_sync',
         'refresh_community_season',
@@ -209,6 +211,7 @@ SELECT pg_temp.assert_true(
           'cleanup_expired_car_recipe_proposals',
           'cleanup_expired_ingest_state',
           'cleanup_expired_pairing_state',
+          'cleanup_expired_sessions',
           'purge_profile_deletions',
           'read_pairing_for_approval',
           'refresh_community_season',
@@ -248,6 +251,7 @@ SELECT pg_temp.assert_true(
           'cleanup_expired_car_recipe_proposals',
           'cleanup_expired_ingest_state',
           'cleanup_expired_pairing_state',
+          'cleanup_expired_sessions',
           'purge_profile_deletions',
           'refresh_community_season',
           'finalize_community_season'

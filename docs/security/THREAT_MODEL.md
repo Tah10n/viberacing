@@ -13,23 +13,23 @@ public score/race/status routes, one local invite/OAuth/initial-passkey enrollme
 returning-passkey login plus private passkey/source/device inventory, source
 pause/reactivation/unlink, device/passkey revocation, fresh-passkey recovery-code rotation, and
 fresh-passkey profile-deletion-request slice plus one-time recovery-code replacement-passkey sign-in
-with encrypted cookies and logout, one local one-shot Jobs runner with bounded primary profile
-purge, and local Community sync verification plus PostgreSQL-adapter, transport-free composition,
-and bounded Fastify HTTP boundaries; it does not yet contain a Jobs scheduler,
-cache/backup/tombstone purge, restore replay, deployed Ingest service, operational connector,
-deployment, or production data. A library-only Rust connector foundation now bounds and validates
-the stable App Server initialization and candidate account/usage exchanges, then composes them
-through a synthetic one-shot child supervisor and produces exact sync material behind a second
-inaccessible reviewed context. An isolated one-use signer consumes that material only with a third
-inaccessible device-bound key capability and returns a closed signed envelope. A separate
-pending-key/challenge signer and pure Web verifier agree on an exact pairing-possession proof. A
-Web/Auth start application generates bounded pending-transaction material, separate protected
-poll/code verifiers, and one fixed database call. A second application composes protected keyed poll
-lookup, strict proof, and exact atomic activation through the separately probed read-write pool with
-local admission/timing. Between those boundaries, a local `/connect` flow performs
-session-rate-limited pending-code lookup, exact device/fingerprint review, opaque new or active
-existing source selection, and fresh-passkey atomic approval of that exact choice. Exact local
-start/poll routes now add closed framing/contracts, shared four-call admission, and fixed
+with encrypted cookies and logout, one local one-shot Jobs runner with five bounded cleanup
+capabilities plus primary profile purge, and local Community sync verification plus
+PostgreSQL-adapter, transport-free composition, and bounded Fastify HTTP boundaries; it does not yet
+contain a Jobs scheduler, cache/backup/tombstone purge, restore replay, deployed Ingest service,
+operational connector, deployment, or production data. A library-only Rust connector foundation now
+bounds and validates the stable App Server initialization and candidate account/usage exchanges,
+then composes them through a synthetic one-shot child supervisor and produces exact sync material
+behind a second inaccessible reviewed context. An isolated one-use signer consumes that material
+only with a third inaccessible device-bound key capability and returns a closed signed envelope. A
+separate pending-key/challenge signer and pure Web verifier agree on an exact pairing-possession
+proof. A Web/Auth start application generates bounded pending-transaction material, separate
+protected poll/code verifiers, and one fixed database call. A second application composes protected
+keyed poll lookup, strict proof, and exact atomic activation through the separately probed
+read-write pool with local admission/timing. Between those boundaries, a local `/connect` flow
+performs session-rate-limited pending-code lookup, exact device/fingerprint review, opaque new or
+active existing source selection, and fresh-passkey atomic approval of that exact choice. Exact
+local start/poll routes now add closed framing/contracts, shared four-call admission, and fixed
 global/client-bucket PostgreSQL windows. The bounded Rust client generates and stores a pairing key
 through the native OS credential store, signs the exact proof, persists activation before success
 output, and can delete only the exact local origin/label record with an explicit warning that server
@@ -257,12 +257,14 @@ and migration or rollback where applicable.
    no-store/same-origin posture, four-request no-queue admission, adapter deadline policy, generic
    error translation, and bounded response matrix. The visible home race requests the
    server-selected current week without credentials, accepts only closed public fields, and keeps a
-   labeled synthetic fallback on error. A local one-shot Jobs runner now validates one fixed
-   authentication/ingest/pairing cleanup or canonical-season refresh/finalization command, probes
-   its exact least-privileged login/session before one prepared function call, holds one client
-   through settlement, and emits no input or database detail. Live deployment login/TLS and edge
-   evidence, a Jobs scheduler, audited correction authority, client-rate policy, and capacity
-   evidence are still required before publishing durable results.
+   labeled synthetic fallback on error. A local one-shot Jobs runner now validates one of eight
+   fixed authentication/CarRecipe-proposal/ingest/pairing/session cleanup, primary-profile purge, or
+   canonical-season refresh/finalization commands, probes its exact least-privileged login/session
+   before one prepared function call, holds one client through settlement, and emits no input or
+   database detail. Eligible expired sessions are removed only when no retained predecessor or
+   activated-pairing provenance requires the row. Live deployment login/TLS and edge evidence, a
+   Jobs scheduler, audited correction authority, client-rate policy, and capacity evidence are still
+   required before publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes.

@@ -174,6 +174,12 @@
       "name": "community_public_race_status",
       "path": "database/migrations/0029_community_public_race_status.sql",
       "sha256": "798c2ddc93ef01b1a50a9ad7053fcc7b952e485f9eec761cfa0b0e11697ed8f7"
+    },
+    {
+      "revision": 30,
+      "name": "session_retention_cleanup",
+      "path": "database/migrations/0030_session_retention_cleanup.sql",
+      "sha256": "d31ce4f52433fb671a833998663dddbccf8e132c56065579003d211d1e859468"
     }
   ]
 }

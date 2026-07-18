@@ -97,7 +97,8 @@ state.
 Revision 0007 implements the database-only Usage submission capability; revision 0008 gives Jobs
 bounded expired ingest-state cleanup; revision 0013 separately gives Jobs bounded expired
 non-activated pairing/key cleanup; revision 0023 adds bounded authentication cleanup; revision 0024
-adds bounded primary profile deletion; revision 0009 gives Jobs an isolated open-season scoring
+adds bounded primary profile deletion; revision 0026 adds CarRecipe-proposal cleanup; revision 0030
+adds eligible expired-session cleanup; revision 0009 gives Jobs an isolated open-season scoring
 refresh; and revision 0010 adds server-time late-ingest quarantine plus immutable Jobs-only
 finalization. Revision 0011 gives Web only a bounded, active-profile score projection, and ADR 0010
 adds its response-only top-32 contract. A server-only Web mapper now enforces the exact projection
@@ -108,12 +109,12 @@ verification. ADR 0013 adds a locally implemented request/admission/response rou
 0037 and revision 0027 add a separate compatible response, route, and query that preserve the score
 contract and optionally project only the current active recipe. These capabilities have role,
 contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a local one-shot Jobs
-adapter/CLI; ADRs 0029, 0032, 0034, and 0036 extend it to exactly four cleanup, one primary purge,
-one refresh, and one finalization command with the same role/login probe, one-client pool, and fixed
-deadlines. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and JSON parser,
-verifies a replay-consumed body-bound origin proof before parsing, validates the sync contract, and
-verifies the exact source-bound device request under strict Ed25519 semantics. ADR 0016 adds a
-fixed-query four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest
+adapter/CLI; ADRs 0029, 0032, 0034, 0036, and 0042 extend it to exactly five cleanup commands, one
+primary purge, one refresh, and one finalization command with the same role/login probe, one-client
+pool, and fixed deadlines. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and
+JSON parser, verifies a replay-consumed body-bound origin proof before parsing, validates the sync
+contract, and verifies the exact source-bound device request under strict Ed25519 semantics. ADR
+0016 adds a fixed-query four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest
 role/login/search-path verification, closed device/submission mappers, copied parameters, and
 destructive failure release. ADR 0017 adds an exact primary/secondary origin-key reader and
 config-backed verifier factory without exposing a reusable key container. ADR 0018 adds persistent

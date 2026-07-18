@@ -237,34 +237,36 @@ snapshots while preserving current source/day values. A separate Jobs-only proce
 expired non-activated pairing transactions plus their still-pending keys, while preserving live and
 activated bindings. A third cleanup procedure independently deletes expired authentication
 challenges and restricted recovery authorities plus an exact still-present used code whose verifier
-was already scrubbed. It preserves live ceremonies, unused recovery codes, sessions, passkeys, and
-audit evidence, and serializes on profile locks against recovery transitions. The database does not
-verify a wire signature; the local kernel and adapter are composed locally and exercised together
-with a signed synthetic request. The opt-in loopback integration now carries an independently signed
-request through the emitted host and a disposable least-privileged PostgreSQL login, including
-duplicate, replay, revoke, response, and stored-state checks. Another Jobs-only procedure serializes
-an atomic refresh of one open ISO-week Community season: it sums distinct eligible sources before
-one profile daily cap, stores an immutable formula and season binding, shares rank on equal score
-and active days, and persists no raw token or source identifier in the score tables. Revision 0024
-adds a separate Jobs-only maximum-10 primary deletion procedure. It accepts only due queued/retry
-work linked to committed `deletion_pending` profiles, locks its fixed five-capability maintenance
-set in stable order, removes restrictive pairings and authority-free pending keys first, terminally
-settles the opaque job, and cascades identity, credentials, sources, devices, usage, and personal
-score rows atomically. It deliberately creates no unkeyed tombstone. Revision 0010 adds a public
-48-hour server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization
-procedure whose terminal metadata and score projection reject silent rewrites while profile purge
-can still remove personal rows. One local one-shot Jobs runner now wraps exactly one of seven fixed
-functions: authentication cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup,
-primary profile purge, refresh, or finalization. It uses a distinct least-privileged configuration
-namespace, one-client pool, per-checkout role/login/search-path probe, fixed deadlines and prepared
-parameters, closed result validation, destructive release after failure, and stable non-reflective
-CLI output. It has no scheduler, live login/certificate, monitoring backend, retry loop,
-application-to-PostgreSQL integration result, or deployment. Revision 0011 gives only the Web
-database role a bounded active-profile score projection containing no raw values, private
-identifiers, or exact timestamps. The score response component and Web PostgreSQL adapter preserve
-only that public allowlist through the local score route. The visible race, leaderboard, and
-selectable participant summary now consume its validated current-week response with a
-credential-free same-origin request and an explicit synthetic fallback. Canonical
+was already scrubbed. It preserves live ceremonies, unused recovery codes, passkeys, and audit
+evidence, and serializes on profile locks against recovery transitions. A fourth bounded procedure
+physically deletes expired sessions only after rotation and pairing references permit it, cascading
+their unusable challenges while preserving live sessions and activated-pairing provenance. The
+database does not verify a wire signature; the local kernel and adapter are composed locally and
+exercised together with a signed synthetic request. The opt-in loopback integration now carries an
+independently signed request through the emitted host and a disposable least-privileged PostgreSQL
+login, including duplicate, replay, revoke, response, and stored-state checks. Another Jobs-only
+procedure serializes an atomic refresh of one open ISO-week Community season: it sums distinct
+eligible sources before one profile daily cap, stores an immutable formula and season binding,
+shares rank on equal score and active days, and persists no raw token or source identifier in the
+score tables. Revision 0024 adds a separate Jobs-only maximum-10 primary deletion procedure. It
+accepts only due queued/retry work linked to committed `deletion_pending` profiles, locks its fixed
+five-capability maintenance set in stable order, removes restrictive pairings and authority-free
+pending keys first, terminally settles the opaque job, and cascades identity, credentials, sources,
+devices, usage, and personal score rows atomically. It deliberately creates no unkeyed tombstone.
+Revision 0010 adds a public 48-hour server-time grace rule, late-snapshot quarantine, and a
+Jobs-only idempotent finalization procedure whose terminal metadata and score projection reject
+silent rewrites while profile purge can still remove personal rows. One local one-shot Jobs runner
+now wraps exactly one of eight fixed functions: authentication cleanup, CarRecipe-proposal cleanup,
+ingest cleanup, pairing cleanup, session cleanup, primary profile purge, refresh, or finalization.
+It uses a distinct least-privileged configuration namespace, one-client pool, per-checkout
+role/login/search-path probe, fixed deadlines and prepared parameters, closed result validation,
+destructive release after failure, and stable non-reflective CLI output. It has no scheduler, live
+login/certificate, monitoring backend, retry loop, application-to-PostgreSQL integration result, or
+deployment. Revision 0011 gives only the Web database role a bounded active-profile score projection
+containing no raw values, private identifiers, or exact timestamps. The score response component and
+Web PostgreSQL adapter preserve only that public allowlist through the local score route. The
+visible race, leaderboard, and selectable participant summary now consume its validated current-week
+response with a credential-free same-origin request and an explicit synthetic fallback. Canonical
 `/?profile=handle#profile` links select only an exact public handle in that page, and a missing
 current top-32 row is not replaced with another participant. There is now a local
 invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code

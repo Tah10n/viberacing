@@ -40,6 +40,12 @@ probe, output, or generic-query prohibitions.
 [ADR 0034](0034-bounded-profile-deletion-purge.md) adds a sixth fixed command,
 `purge-profile-deletions`, with its separate maximum-10 profile batch under those same boundaries.
 
+[ADR 0036](0036-bounded-car-recipe-proposal-cleanup.md) adds a seventh fixed command,
+`cleanup-expired-car-recipe-proposals`, with the fixed maximum batch of 1000.
+
+[ADR 0042](0042-bounded-expired-session-retention-cleanup.md) adds an eighth fixed command,
+`cleanup-expired-sessions`, with the fixed maximum batch of 1000 and the same one-shot boundary.
+
 Season input must be one canonical Monday from `1999-12-27` through `2099-12-28`. Unknown commands,
 arguments, fields, sparse or exotic arrays, accessors, prototypes, and values fail before database
 configuration or connection. Programmatic job objects are separately revalidated as closed plain
@@ -61,14 +67,15 @@ Every checkout first verifies all of the following in one fixed query:
 - it has no other group membership; and
 - the search path is exactly `pg_catalog,pg_temp`.
 
-The second and only capability query is selected in code from a closed set of six fixed
+The second and only capability query is selected in code from a closed set of eight fixed
 parameterized SQL strings: the original three plus ADR 0029's pairing-retention cleanup, ADR 0032's
-authentication cleanup, and ADR 0034's primary profile deletion purge. There is no generic query,
-table access, migration, owner, Web, Ingest, Admin, interactive auth, or correction capability. The
-returned array and row must contain exactly one plain dense row and the allowlisted integer columns.
-Cleanup counts cannot exceed the requested batch; scoring counts must fit PostgreSQL `integer`.
-Accessors, extra columns, missing rows, invalid counts, and driver/runtime exceptions produce one
-stable error type without reflecting values.
+authentication cleanup, ADR 0034's primary profile deletion purge, ADR 0036's CarRecipe-proposal
+cleanup, and ADR 0042's session-retention cleanup. There is no generic query, table access,
+migration, owner, Web, Ingest, Admin, interactive auth, or correction capability. The returned array
+and row must contain exactly one plain dense row and the allowlisted integer columns. Cleanup counts
+cannot exceed the requested batch; scoring counts must fit PostgreSQL `integer`. Accessors, extra
+columns, missing rows, invalid counts, and driver/runtime exceptions produce one stable error type
+without reflecting values.
 
 The CLI prints only one stable success or failure sentence. It does not print the command, season,
 counts, configuration, SQL, exception, or stack. The pool monitoring seam accepts only the closed
@@ -95,7 +102,7 @@ Residual risk remains: no live login/certificate path or application-to-PostgreS
 proves deployment membership; no scheduler enforces cadence, backoff, overlap, or alerting; cleanup
 does not cover every expiring identity state; no correction, purge schedule, cache/backup purge, or
 restore replay exists; and no capacity test proves the selected deadlines under production load. A
-compromised Jobs login still has all six database capabilities, so principal separation and
+compromised Jobs login still has all eight database capabilities, so principal separation and
 revocation remain required.
 
 Affected invariants are VR-PUBLIC-001, VR-INGEST-002, VR-ABUSE-001, VR-DATA-001, and VR-DELETE-001.
@@ -144,16 +151,16 @@ Current local evidence includes:
 - canonical season and batch bounds, closed object/array/result allowlists, sparse/exotic/accessor/
   proxy rejection, aggregate count bounds, and non-reflective failures;
 - effective-role/login/capability/search-path rejection before every procedure call;
-- exact prepared parameters for all five functions, healthy versus destructive release, connection
+- exact prepared parameters for all eight functions, healthy versus destructive release, connection
   and query translation, and a deferred query proving release occurs only after settlement;
 - CLI rejection before configuration, pool close after success or failure, stable output, writer
   failure containment, and no reflected command/error detail;
-- 120 unit tests with 100% statement, branch, function, and line coverage, including a lint-policy
+- 156 unit tests with 100% statement, branch, function, and line coverage, including a lint-policy
   regression that keeps direct `pg` imports inside the fixed pool adapter; and
 - strict lint, type checking, production TypeScript build, dependency/license inventory, root
   deterministic verification, and staged public-data review.
 
-The SQL integration suite separately proves the five procedure bodies and concurrency behavior in
+The SQL integration suite separately proves the eight procedure bodies and concurrency behavior in
 ephemeral PostgreSQL. It does not exercise the Node adapter with a real Jobs login. Such an
 application integration test, scheduler behavior, production TLS/login, capacity, monitoring, and
 deployment evidence remain required before those behaviors may be claimed.
@@ -173,3 +180,6 @@ deployment evidence remain required before those behaviors may be claimed.
 - [Community season grace and finalization](0008-community-season-grace-and-finalization.md)
 - [Bounded pairing retention cleanup](0029-bounded-pairing-retention-cleanup.md)
 - [Bounded authentication retention cleanup](0032-bounded-auth-retention-cleanup.md)
+- [Bounded primary profile deletion purge](0034-bounded-profile-deletion-purge.md)
+- [Bounded CarRecipe proposal retention cleanup](0036-bounded-car-recipe-proposal-cleanup.md)
+- [Bounded expired session retention cleanup](0042-bounded-expired-session-retention-cleanup.md)

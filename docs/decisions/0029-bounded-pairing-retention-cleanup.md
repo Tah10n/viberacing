@@ -72,10 +72,11 @@ workers from selecting overlapping batches.
 
 Residual risk remains: there is no scheduler, cadence, retry/overlap policy, alert, capacity result,
 live Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. ADR 0032 now
-covers expired authentication challenges and restricted recovery authorities; expired sessions,
-jobs, passkey provenance, and tombstones still need separate bounded cleanup. Anonymous pairing
-start also still needs an HTTP contract, browser approval, connector client, distributed
-edge/service limits, monitoring, and real-key custody.
+covers expired authentication challenges and restricted recovery authorities, while ADR 0042 now
+covers eligible expired sessions. Pairing-referenced session provenance, jobs, passkey provenance,
+and tombstones still need separate bounded cleanup or retention policy. Anonymous pairing start also
+still needs an HTTP contract, browser approval, connector client, distributed edge/service limits,
+monitoring, and real-key custody.
 
 Affected invariants are VR-DEVICE-001, VR-DATA-001, and VR-ABUSE-001. Primary attacker stories are
 VR-ABUSE-PAIRING-GUESS, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
