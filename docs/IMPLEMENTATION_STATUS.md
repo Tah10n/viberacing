@@ -881,18 +881,24 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   enforces the exact matrix, dimensions, byte limits, SHA-256 manifest, and public PNG policy, and
   fifteen CLI guardrail cases, ten request-policy assertions, four exact-environment assertions, six
   pixel-result assertions, five keyboard-policy assertions, six accessibility-tree-policy
-  assertions, five forced-colors-policy assertions, and eleven checker mutations prove the entry
-  points fail closed. A separate no-write local gate requires the manifest's exact browser
-  product/platform, re-renders all states, decodes both PNGs inside that isolated browser, and
-  rejects one changed pixel channel. The current Chrome 150.0.7871.129 `win32-x64` pair passed all
-  18 semantic comparisons without changing the manifest. That exact no-write run also dispatched
-  real CDP keyboard events over the closed 13-target order, proved skip-link focus transfer and
-  Space-driven pause restoration, validated named landmarks, links, buttons, comboboxes, race image,
-  and trust-captioned table from Chromium's full accessibility tree, then repeated the focus order
-  under forced colors while checking reviewed borders, horizontal bounds, and the semantic canvas
-  alternative. The executable itself is operator-reviewed rather than provenance/digest-pinned or
-  provisioned in CI. This is not native screen-reader, operating-system High Contrast,
-  cross-browser, or cross-platform evidence.
+  assertions, five forced-colors-policy assertions, fourteen web-vitals-policy assertions, and
+  eleven checker mutations prove the entry points fail closed. A separate no-write local gate
+  requires the manifest's exact browser product/platform, re-renders all states, decodes both PNGs
+  inside that isolated browser, and rejects one changed pixel channel. The current Chrome
+  150.0.7871.129 `win32-x64` pair passed all 18 semantic comparisons without changing the manifest.
+  That exact no-write run also dispatched real CDP keyboard events over the closed 13-target order,
+  proved skip-link focus transfer and Space-driven pause restoration, validated named landmarks,
+  links, buttons, comboboxes, race image, and trust-captioned table from Chromium's full
+  accessibility tree, then repeated the focus order under forced colors while checking reviewed
+  borders, horizontal bounds, and the semantic canvas alternative. It finally disabled Chromium's
+  network cache and collected three samples per mode on the exact 1280 by 720 English Classic Grand
+  Prix state. Animation-on maxima were 88.0 milliseconds LCP, 0.000 CLS, and 16.0 milliseconds for
+  the one controlled interaction; reduced-motion maxima were 52.0 milliseconds, 0.000, and 16.0
+  milliseconds. Closed local regression ceilings are 2,500 milliseconds, 0.1, and 200 milliseconds.
+  They are not beta SLOs. The executable itself is operator-reviewed rather than
+  provenance/digest-pinned or provisioned in CI. This is not native screen-reader, operating-system
+  High Contrast, cross-browser, cross-platform, field Core Web Vitals, representative network/CPU,
+  or staging evidence.
 
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
@@ -923,10 +929,11 @@ definition is locally parsed and policy-tested but has not run on GitHub because
 repository is configured yet.
 
 Local responsive, computed-contrast, interaction, browser-console, development-header,
-production-header, exact stored viewport, keyboard, accessibility-tree, and forced-colors
-observations are recorded in the [Phase 1 browser matrix](testing/PHASE1_BROWSER_MATRIX.md),
-including the light-theme contrast and compact-navigation defects found and corrected during review.
-The report names its local-only limitations.
+production-header, exact stored viewport, keyboard, accessibility-tree, forced-colors, and
+animation-on/reduced-motion lab-performance observations are recorded in the
+[Phase 1 browser matrix](testing/PHASE1_BROWSER_MATRIX.md), including the light-theme contrast and
+compact-navigation defects found and corrected during review. The report names its local-only
+limitations.
 
 ## Phase 0 still pending
 
@@ -942,7 +949,9 @@ The report names its local-only limitations.
 - Native screen-reader, operating-system High Contrast, and cross-browser release evidence. The
   exact local Chrome CDP keyboard/accessibility-tree/forced-colors gate does not claim these
   results.
-- Runtime Core Web Vitals for animation-on and reduced-motion modes.
+- Field Core Web Vitals at the real-user 75th percentile and staging performance measurements under
+  representative network/CPU conditions. The exact local gate now covers only three
+  cold-browser-cache lab samples per animation state and one controlled interaction per sample.
 
 ## Not implemented yet
 

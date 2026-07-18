@@ -148,9 +148,10 @@ pnpm run verify:phase1-visual-baselines -- --origin <loopback-http-origin> --bro
 
 The baseline check is offline. The explicit local verify command uses a temporary profile, requires
 the committed exact browser product/platform, compares decoded pixels without writing, and audits
-the canonical keyboard order, skip-target focus, accessibility tree, and forced-colors state. It
-still relies on an operator-reviewed executable and does not replace native screen-reader or
-cross-browser evidence. Regeneration uses the root `capture:phase1-visual-baselines` command only
+the canonical keyboard order, skip-target focus, accessibility tree, forced-colors state, and closed
+animation-on/reduced-motion lab performance samples. It still relies on an operator-reviewed
+executable and does not replace native screen-reader, cross-browser, field Core Web Vitals, or
+staging SLO evidence. Regeneration uses the root `capture:phase1-visual-baselines` command only
 against the same explicit loopback production build; it does not replace manual image review or
 cross-browser release evidence.
 

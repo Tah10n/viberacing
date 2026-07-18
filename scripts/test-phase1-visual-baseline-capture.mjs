@@ -7,9 +7,13 @@ import {
   classifyPhase1AccessibilityTree,
   classifyPhase1ForcedColorsAudit,
   classifyPhase1KeyboardAudit,
+  classifyPhase1WebVitalsAudit,
   phase1KeyboardFocusSelectors,
   phase1RequiredAccessibilityNodes,
-} from "./lib/phase1-browser-accessibility-policy.mjs";
+  phase1WebVitalsBudgets,
+  phase1WebVitalsModes,
+  phase1WebVitalsSampleCount,
+} from "./lib/phase1-browser-evidence-policy.mjs";
 import {
   classifyPhase1PixelComparison,
   isAllowedPhase1PageRequest,
@@ -238,6 +242,102 @@ assert.equal(
   "invalid",
 );
 
+const webVitalsSample = {
+  cumulativeLayoutShift: 0,
+  interactionToNextPaintMilliseconds: 32,
+  largestContentfulPaintMilliseconds: 400,
+};
+const webVitalsAudit = phase1WebVitalsModes.map((mode) => ({
+  entryTypesSupported: true,
+  interactionApplied: true,
+  mode,
+  samples: Array.from({ length: phase1WebVitalsSampleCount }, () => ({ ...webVitalsSample })),
+}));
+function replaceFirstWebVitalsSample(replacement) {
+  return webVitalsAudit.map((modeAudit, modeIndex) => ({
+    ...modeAudit,
+    samples: modeAudit.samples.map((sample, sampleIndex) =>
+      modeIndex === 0 && sampleIndex === 0 ? { ...sample, ...replacement } : { ...sample },
+    ),
+  }));
+}
+assert.equal(classifyPhase1WebVitalsAudit(webVitalsAudit), "valid");
+assert.equal(classifyPhase1WebVitalsAudit(webVitalsAudit.slice(1)), "invalid");
+assert.equal(classifyPhase1WebVitalsAudit([...webVitalsAudit].reverse()), "invalid");
+assert.equal(
+  classifyPhase1WebVitalsAudit([
+    { ...webVitalsAudit[0], samples: webVitalsAudit[0].samples.slice(1) },
+    webVitalsAudit[1],
+  ]),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1WebVitalsAudit([
+    { ...webVitalsAudit[0], entryTypesSupported: false },
+    webVitalsAudit[1],
+  ]),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1WebVitalsAudit([
+    { ...webVitalsAudit[0], interactionApplied: false },
+    webVitalsAudit[1],
+  ]),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1WebVitalsAudit(
+    replaceFirstWebVitalsSample({
+      cumulativeLayoutShift: phase1WebVitalsBudgets.cumulativeLayoutShift + 0.001,
+    }),
+  ),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1WebVitalsAudit(
+    replaceFirstWebVitalsSample({
+      interactionToNextPaintMilliseconds:
+        phase1WebVitalsBudgets.interactionToNextPaintMilliseconds + 1,
+    }),
+  ),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1WebVitalsAudit(
+    replaceFirstWebVitalsSample({
+      largestContentfulPaintMilliseconds:
+        phase1WebVitalsBudgets.largestContentfulPaintMilliseconds + 1,
+    }),
+  ),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1WebVitalsAudit(replaceFirstWebVitalsSample({ cumulativeLayoutShift: -0.001 })),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1WebVitalsAudit(
+    replaceFirstWebVitalsSample({ interactionToNextPaintMilliseconds: 0 }),
+  ),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1WebVitalsAudit(
+    replaceFirstWebVitalsSample({ largestContentfulPaintMilliseconds: 0 }),
+  ),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1WebVitalsAudit(
+    replaceFirstWebVitalsSample({ largestContentfulPaintMilliseconds: Number.NaN }),
+  ),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1WebVitalsAudit(replaceFirstWebVitalsSample({ unexpected: true })),
+  "invalid",
+);
+
 try {
   const nonExecutableBrowser = resolve(temporaryRoot, "not-a-browser.txt");
   writeFileSync(nonExecutableBrowser, "synthetic non-executable fixture\n");
@@ -336,5 +436,5 @@ try {
 console.log(
   `Phase 1 visual-baseline capture guardrail tests passed (${caseCount} CLI cases, ` +
     "10 request-policy, 4 environment-policy, 6 pixel-policy, 5 keyboard-policy, " +
-    "6 accessibility-tree-policy, and 5 forced-colors-policy assertions).",
+    "6 accessibility-tree-policy, 5 forced-colors-policy, and 14 web-vitals-policy assertions).",
 );

@@ -17,8 +17,11 @@ import {
   classifyPhase1AccessibilityTree,
   classifyPhase1ForcedColorsAudit,
   classifyPhase1KeyboardAudit,
+  classifyPhase1WebVitalsAudit,
   phase1KeyboardFocusSelectors,
-} from "./lib/phase1-browser-accessibility-policy.mjs";
+  phase1WebVitalsModes,
+  phase1WebVitalsSampleCount,
+} from "./lib/phase1-browser-evidence-policy.mjs";
 import { verifyPhase1BaselineDirectory } from "./lib/phase1-visual-baseline-integrity.mjs";
 import {
   classifyPhase1PixelComparison,
@@ -31,7 +34,7 @@ import {
 } from "./lib/phase1-visual-baseline-policy.mjs";
 import { inspectPublicPng, readPngDimensions } from "./lib/png-content-policy.mjs";
 
-// cspell:ignore breakpad describedby lede WINDIR
+// cspell:ignore breakpad contentful describedby lede WINDIR
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const outputRoot = resolve(repositoryRoot, phase1BaselineRoot);
@@ -330,7 +333,7 @@ async function dispatchTab(connection, sessionId, backwards = false) {
 }
 
 async function dispatchEnter(connection, sessionId) {
-  await dispatchKey(connection, sessionId, "Enter", "Enter", 13);
+  await dispatchKey(connection, sessionId, "Enter", "Enter", 13, 0, "\r");
 }
 
 async function dispatchSpace(connection, sessionId) {
@@ -572,6 +575,249 @@ async function runPhase1ForcedColorsAudit(connection, sessionId) {
   }
 }
 
+function createPhase1WebVitalsInitializer(motion) {
+  return `(() => {
+    localStorage.setItem("viberacing.theme", "classic-grand-prix");
+    localStorage.setItem("viberacing.locale", "en");
+    localStorage.setItem("viberacing.motion", ${JSON.stringify(motion)});
+    const requiredEntryTypes = ["event", "first-input", "largest-contentful-paint", "layout-shift"];
+    const supportedEntryTypes = PerformanceObserver.supportedEntryTypes ?? [];
+    const state = {
+      cumulativeLayoutShift: 0,
+      entryTypesSupported: requiredEntryTypes.every((type) => supportedEntryTypes.includes(type)),
+      firstInputDurationMilliseconds: null,
+      interactions: Object.create(null),
+      largestContentfulPaintMilliseconds: null,
+      layoutShiftWindowLastTime: null,
+      layoutShiftWindowStartTime: null,
+      layoutShiftWindowValue: 0,
+      observers: []
+    };
+    Object.defineProperty(window, "__viberacingPhase1WebVitals", { value: state });
+    if (!state.entryTypesSupported) return;
+
+    const layoutShiftObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry.hadRecentInput === true) continue;
+        const startsNewWindow =
+          state.layoutShiftWindowLastTime === null ||
+          entry.startTime - state.layoutShiftWindowLastTime > 1000 ||
+          entry.startTime - state.layoutShiftWindowStartTime > 5000;
+        if (startsNewWindow) {
+          state.layoutShiftWindowStartTime = entry.startTime;
+          state.layoutShiftWindowValue = entry.value;
+        } else {
+          state.layoutShiftWindowValue += entry.value;
+        }
+        state.layoutShiftWindowLastTime = entry.startTime;
+        state.cumulativeLayoutShift = Math.max(
+          state.cumulativeLayoutShift,
+          state.layoutShiftWindowValue
+        );
+      }
+    });
+    layoutShiftObserver.observe({ buffered: true, type: "layout-shift" });
+
+    const largestContentfulPaintObserver = new PerformanceObserver((list) => {
+      const entries = list.getEntries();
+      const latest = entries.at(-1);
+      if (latest) state.largestContentfulPaintMilliseconds = latest.startTime;
+    });
+    largestContentfulPaintObserver.observe({ buffered: true, type: "largest-contentful-paint" });
+
+    const firstInputObserver = new PerformanceObserver((list) => {
+      const first = list.getEntries().at(0);
+      if (first) state.firstInputDurationMilliseconds = first.duration;
+    });
+    firstInputObserver.observe({ buffered: true, type: "first-input" });
+
+    const eventObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (!Number.isSafeInteger(entry.interactionId) || entry.interactionId <= 0) continue;
+        const key = String(entry.interactionId);
+        state.interactions[key] = Math.max(state.interactions[key] ?? 0, entry.duration);
+      }
+    });
+    eventObserver.observe({ buffered: true, durationThreshold: 16, type: "event" });
+    state.observers.push(
+      layoutShiftObserver,
+      largestContentfulPaintObserver,
+      firstInputObserver,
+      eventObserver
+    );
+  })()`;
+}
+
+async function waitForPhase1WebVitalsSample(connection, sessionId) {
+  const deadline = Date.now() + commandTimeoutMilliseconds;
+  let lastResult;
+  while (Date.now() < deadline) {
+    const result = await evaluate(
+      connection,
+      sessionId,
+      `(() => {
+        const state = window.__viberacingPhase1WebVitals;
+        const durations = state ? Object.values(state.interactions).filter(Number.isFinite) : [];
+        const interactionToNextPaint =
+          durations.length > 0
+            ? Math.max(...durations)
+            : state?.firstInputDurationMilliseconds;
+        const pause = document.querySelector(".race-section .pixel-button");
+        return {
+          entryTypesSupported: state?.entryTypesSupported === true,
+          interactionApplied: pause?.getAttribute("aria-pressed") === "true",
+          sample: {
+            cumulativeLayoutShift:
+              typeof state?.cumulativeLayoutShift === "number" ? state.cumulativeLayoutShift : null,
+            interactionToNextPaintMilliseconds:
+              typeof interactionToNextPaint === "number" ? interactionToNextPaint : null,
+            largestContentfulPaintMilliseconds:
+              typeof state?.largestContentfulPaintMilliseconds === "number"
+                ? state.largestContentfulPaintMilliseconds
+                : null
+          }
+        };
+      })()`,
+    );
+    lastResult = result;
+    if (result?.entryTypesSupported !== true) {
+      throw new Error("isolated browser lacks the reviewed Web Vitals performance entry types");
+    }
+    if (
+      result.interactionApplied === true &&
+      Number.isFinite(result.sample?.cumulativeLayoutShift) &&
+      Number.isFinite(result.sample?.interactionToNextPaintMilliseconds) &&
+      Number.isFinite(result.sample?.largestContentfulPaintMilliseconds)
+    ) {
+      return result;
+    }
+    await delay(50);
+  }
+  throw new Error(
+    "isolated browser did not produce the closed Web Vitals sample before deadline " +
+      `(${JSON.stringify({
+        cumulativeLayoutShift: Number.isFinite(lastResult?.sample?.cumulativeLayoutShift),
+        entryTypesSupported: lastResult?.entryTypesSupported === true,
+        interactionApplied: lastResult?.interactionApplied === true,
+        interactionToNextPaint: Number.isFinite(
+          lastResult?.sample?.interactionToNextPaintMilliseconds,
+        ),
+        largestContentfulPaint: Number.isFinite(
+          lastResult?.sample?.largestContentfulPaintMilliseconds,
+        ),
+      })})`,
+  );
+}
+
+async function runPhase1WebVitalsAudit(connection, sessionId, settleRequestActions) {
+  await connection.send("Network.enable", {}, sessionId);
+  await connection.send("Network.setCacheDisabled", { cacheDisabled: true }, sessionId);
+  await connection.send(
+    "Emulation.setDeviceMetricsOverride",
+    {
+      deviceScaleFactor: 1,
+      height: 720,
+      mobile: false,
+      screenHeight: 720,
+      screenWidth: 1280,
+      width: 1280,
+    },
+    sessionId,
+  );
+
+  const audits = [];
+  for (const mode of phase1WebVitalsModes) {
+    const motion = mode === "animation-on" ? "on" : "off";
+    const reducedMotion = mode === "reduced-motion" ? "reduce" : "no-preference";
+    const samples = [];
+    let entryTypesSupported = true;
+    let interactionApplied = true;
+    for (let index = 0; index < phase1WebVitalsSampleCount; index += 1) {
+      await connection.send(
+        "Emulation.setEmulatedMedia",
+        { features: [{ name: "prefers-reduced-motion", value: reducedMotion }], media: "screen" },
+        sessionId,
+      );
+      await connection.send("Network.clearBrowserCache", {}, sessionId);
+      const initializer = await connection.send(
+        "Page.addScriptToEvaluateOnNewDocument",
+        { source: createPhase1WebVitalsInitializer(motion) },
+        sessionId,
+      );
+      if (typeof initializer.identifier !== "string") {
+        throw new Error("isolated browser did not register the Web Vitals initializer");
+      }
+      await reload(connection, sessionId);
+      await connection.send(
+        "Page.removeScriptToEvaluateOnNewDocument",
+        { identifier: initializer.identifier },
+        sessionId,
+      );
+      await waitForStableState(connection, sessionId, {
+        file: `phase1-web-vitals-${mode}-${index + 1}`,
+        height: 720,
+        locale: "en",
+        motion,
+        theme: "classic-grand-prix",
+        width: 1280,
+      });
+      await settleRequestActions();
+      const pauseReady = await evaluate(
+        connection,
+        sessionId,
+        `(() => {
+          const pause = document.querySelector(".race-section .pixel-button");
+          if (!(pause instanceof HTMLButtonElement) || pause.disabled) return false;
+          pause.focus();
+          return document.activeElement === pause && pause.getAttribute("aria-pressed") === "false";
+        })()`,
+      );
+      if (pauseReady !== true) {
+        throw new Error("isolated browser could not prepare the Web Vitals interaction target");
+      }
+      await dispatchEnter(connection, sessionId);
+      await evaluate(
+        connection,
+        sessionId,
+        `(async () => {
+          await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
+          await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+          return true;
+        })()`,
+      );
+      const result = await waitForPhase1WebVitalsSample(connection, sessionId);
+      entryTypesSupported &&= result.entryTypesSupported === true;
+      interactionApplied &&= result.interactionApplied === true;
+      samples.push(result.sample);
+    }
+    audits.push({ entryTypesSupported, interactionApplied, mode, samples });
+  }
+  if (classifyPhase1WebVitalsAudit(audits) !== "valid") {
+    throw new Error("Web Vitals samples violate the closed Phase 1 performance policy");
+  }
+  return audits;
+}
+
+function formatPhase1WebVitalsMaxima(audits) {
+  return audits
+    .map((audit) => {
+      const largestContentfulPaint = Math.max(
+        ...audit.samples.map((sample) => sample.largestContentfulPaintMilliseconds),
+      );
+      const cumulativeLayoutShift = Math.max(
+        ...audit.samples.map((sample) => sample.cumulativeLayoutShift),
+      );
+      const interactionToNextPaint = Math.max(
+        ...audit.samples.map((sample) => sample.interactionToNextPaintMilliseconds),
+      );
+      return (
+        `${audit.mode} LCP ${largestContentfulPaint.toFixed(1)} ms, ` +
+        `CLS ${cumulativeLayoutShift.toFixed(3)}, interaction ${interactionToNextPaint.toFixed(1)} ms`
+      );
+    })
+    .join("; ");
+}
+
 async function compareDecodedPngPixels(
   connection,
   sessionId,
@@ -648,6 +894,7 @@ async function compareDecodedPngPixels(
 }
 
 async function waitForStableState(connection, sessionId, expected) {
+  const expectedMotion = expected.motion ?? "off";
   const deadline = Date.now() + commandTimeoutMilliseconds;
   let lastState;
   while (Date.now() < deadline) {
@@ -690,10 +937,11 @@ async function waitForStableState(connection, sessionId, expected) {
     if (
       state?.ready === true &&
       state.appTheme === expected.theme &&
-      state.appMotion === "off" &&
+      state.appMotion === expectedMotion &&
       state.lang === expected.locale &&
       state.dataSource === "synthetic" &&
-      JSON.stringify(state.controls) === JSON.stringify([expected.theme, expected.locale, "off"])
+      JSON.stringify(state.controls) ===
+        JSON.stringify([expected.theme, expected.locale, expectedMotion])
     ) {
       if (
         state.innerWidth !== expected.width ||
@@ -965,6 +1213,7 @@ async function main() {
 
     const captures = [];
     let totalCaptureBytes = 0;
+    let webVitalsAudits;
     for (let index = 0; index < expectedEntries.length; index += 1) {
       const expected = expectedEntries[index];
       await connection.send(
@@ -1113,6 +1362,7 @@ async function main() {
       await waitForStableState(connection, sessionId, accessibilityState);
       await settleRequestActions();
       await runPhase1ForcedColorsAudit(connection, sessionId);
+      webVitalsAudits = await runPhase1WebVitalsAudit(connection, sessionId, settleRequestActions);
     }
     stopObserving();
     await settleRequestActions();
@@ -1121,7 +1371,8 @@ async function main() {
       console.log(
         `Verified ${expectedEntries.length} page-only re-renders against the committed decoded ` +
           `pixels with ${version.product}; keyboard, accessibility-tree, and forced-colors audits ` +
-          "passed; no baseline files were written.",
+          `passed; Web Vitals lab maxima across ${phase1WebVitalsSampleCount} cold-cache samples ` +
+          `per mode: ${formatPhase1WebVitalsMaxima(webVitalsAudits)}; no baseline files were written.`,
       );
     } else {
       await ensureOutputBoundary();

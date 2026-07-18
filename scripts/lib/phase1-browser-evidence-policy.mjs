@@ -1,4 +1,5 @@
-// cspell:ignore contentinfo menuitemcheckbox menuitemradio spinbutton
+// Closed classifiers for the explicit local Phase 1 Chrome evidence gate.
+// cspell:ignore contentful contentinfo menuitemcheckbox menuitemradio spinbutton
 
 export const phase1KeyboardFocusSelectors = Object.freeze([
   ".skip-link",
@@ -15,6 +16,14 @@ export const phase1KeyboardFocusSelectors = Object.freeze([
   ".race-controls label:nth-of-type(3) select",
   ".table-region",
 ]);
+
+export const phase1WebVitalsBudgets = Object.freeze({
+  cumulativeLayoutShift: 0.1,
+  interactionToNextPaintMilliseconds: 200,
+  largestContentfulPaintMilliseconds: 2_500,
+});
+export const phase1WebVitalsModes = Object.freeze(["animation-on", "reduced-motion"]);
+export const phase1WebVitalsSampleCount = 3;
 
 export const phase1RequiredAccessibilityNodes = Object.freeze([
   Object.freeze({
@@ -126,6 +135,10 @@ function nodeKey(node) {
   return JSON.stringify([node.role, node.name, node.disabled, node.pressed]);
 }
 
+function isFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 export function classifyPhase1KeyboardAudit(value) {
   if (
     !hasExactKeys(value, [
@@ -232,6 +245,47 @@ export function classifyPhase1ForcedColorsAudit(value) {
     value.reviewedBordersVisible !== true
   ) {
     return "invalid";
+  }
+  return "valid";
+}
+
+export function classifyPhase1WebVitalsAudit(value) {
+  if (!Array.isArray(value) || value.length !== phase1WebVitalsModes.length) {
+    return "invalid";
+  }
+  for (const [index, modeAudit] of value.entries()) {
+    if (
+      !hasExactKeys(modeAudit, ["entryTypesSupported", "interactionApplied", "mode", "samples"]) ||
+      modeAudit.entryTypesSupported !== true ||
+      modeAudit.interactionApplied !== true ||
+      modeAudit.mode !== phase1WebVitalsModes[index] ||
+      !Array.isArray(modeAudit.samples) ||
+      modeAudit.samples.length !== phase1WebVitalsSampleCount
+    ) {
+      return "invalid";
+    }
+    for (const sample of modeAudit.samples) {
+      if (
+        !hasExactKeys(sample, [
+          "cumulativeLayoutShift",
+          "interactionToNextPaintMilliseconds",
+          "largestContentfulPaintMilliseconds",
+        ]) ||
+        !isFiniteNumber(sample.cumulativeLayoutShift) ||
+        sample.cumulativeLayoutShift < 0 ||
+        sample.cumulativeLayoutShift > phase1WebVitalsBudgets.cumulativeLayoutShift ||
+        !isFiniteNumber(sample.interactionToNextPaintMilliseconds) ||
+        sample.interactionToNextPaintMilliseconds <= 0 ||
+        sample.interactionToNextPaintMilliseconds >
+          phase1WebVitalsBudgets.interactionToNextPaintMilliseconds ||
+        !isFiniteNumber(sample.largestContentfulPaintMilliseconds) ||
+        sample.largestContentfulPaintMilliseconds <= 0 ||
+        sample.largestContentfulPaintMilliseconds >
+          phase1WebVitalsBudgets.largestContentfulPaintMilliseconds
+      ) {
+        return "invalid";
+      }
+    }
   }
   return "valid";
 }

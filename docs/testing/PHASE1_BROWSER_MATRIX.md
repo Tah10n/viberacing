@@ -52,16 +52,17 @@ same-origin assets/API reads plus external origins, different ports, malformed a
 URLs, and credential-bearing headers. Four environment-policy assertions cover exact match and
 product/platform drift; six pixel-result assertions cover exact, different, dimension-drifted,
 widened, contradictory, and arithmetic-overflow summaries. Five keyboard-policy, six
-accessibility-tree-policy, and five forced-colors-policy assertions reject missing, widened, or
-contradictory browser audit summaries.
+accessibility-tree-policy, five forced-colors-policy, and fourteen web-vitals-policy assertions
+reject missing, widened, over-budget, or contradictory browser audit summaries.
 
 The explicit `verify:phase1-visual-baselines` mode first applies that shared integrity boundary,
 requires the browser's exact reported product and local platform to equal the committed manifest,
 re-renders all 18 states, decodes each stored/rendered PNG inside the isolated browser, and permits
-zero changed pixel channels. It then runs the keyboard, accessibility-tree, and forced-colors audit
-described below. It writes no baseline file. A local run with the recorded Chrome 150.0.7871.129
-`win32-x64` pair passed all comparisons and browser audits on 2026-07-18. This pins observable
-product/platform behavior, not the provenance or digest of the operator-supplied executable.
+zero changed pixel channels. It then runs the keyboard, accessibility-tree, forced-colors, and local
+lab-performance audits described below. It writes no baseline file. A local run with the recorded
+Chrome 150.0.7871.129 `win32-x64` pair passed all comparisons and browser audits on 2026-07-18. This
+pins observable product/platform behavior, not the provenance or digest of the operator-supplied
+executable.
 
 To verify or intentionally regenerate the evidence, build and start the production frontend on an
 explicit loopback port in one terminal, then use an absolute path to a reviewed Chromium executable
@@ -130,6 +131,27 @@ This is exact local Chrome keyboard and accessibility-tree evidence. It is not a
 screen-reader session, operating-system High Contrast certification, or evidence for another
 browser.
 
+## Local Web Vitals lab signals
+
+The same no-write gate installs Performance Observers before navigation, disables and clears
+Chromium's network cache before each reload, and collects three samples on the 1280 by 720 English
+Classic Grand Prix state. Animation-on pairs the explicit `on` preference with
+`prefers-reduced-motion: no-preference`; reduced-motion pairs `off` with `reduce`. Each sample
+focuses the pause control without input, sends one trusted CDP Enter interaction, confirms the
+control changed state, and reads LCP, CLS, and the controlled interaction's Event Timing duration.
+With one interaction in the sample, that duration is a local INP lab signal, not a field percentile.
+
+| State          | Maximum LCP | Maximum CLS | Maximum controlled interaction |
+| -------------- | ----------: | ----------: | -----------------------------: |
+| Animation on   |     88.0 ms |       0.000 |                        16.0 ms |
+| Reduced motion |     52.0 ms |       0.000 |                        16.0 ms |
+
+The closed local regression ceilings are 2,500 milliseconds LCP, 0.1 CLS, and 200 milliseconds for
+the controlled interaction. These are test ceilings, not published beta SLOs. The browser process,
+operating-system caches, and loopback production server were already warm; no representative network
+or CPU throttling was applied. Six desktop lab samples cannot establish real-user 75th-percentile
+Core Web Vitals, route distribution, cross-machine behavior, or staging capacity.
+
 ## Computed color contrast
 
 Contrast was calculated from the actual computed CSS variables with the WCAG sRGB relative luminance
@@ -188,7 +210,9 @@ leakage, missing standalone output, total/application budget overruns, and font-
   does not launch Chromium and no provenance/digest-pinned browser artifact is provisioned.
 - Native screen-reader smoke testing and operating-system High Contrast confirmation remain
   required; the local CDP accessibility-tree/forced-colors audit does not claim either result.
-- Runtime Core Web Vitals must be measured with animation enabled and with reduced motion.
+- Field Core Web Vitals and staging measurements under representative network/CPU conditions remain
+  required; the local gate covers only three cold-browser-cache samples per animation state and one
+  controlled interaction per sample.
 - Safari and Firefox release evidence has not been collected.
 
 Do not reinterpret these gaps as passing results. They remain listed in

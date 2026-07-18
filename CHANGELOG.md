@@ -60,10 +60,14 @@ Versioning where its guarantees are applicable.
   public PNG policy. The same no-write mode now proves the exact 13-target keyboard order,
   skip-target focus transfer, Space activation and restoration of the pause control, named
   accessibility-tree landmarks/controls/table/canvas, and a forced-colors pass with visible focus,
-  reviewed borders, no outer overflow, and a semantic canvas alternative. Five keyboard-policy, six
-  accessibility-tree-policy, and five forced-colors-policy assertions reject drift. The reported
-  product/platform is pinned, but executable artifact provenance, native screen-reader, CI
-  provisioning, and cross-browser evidence remain open.
+  reviewed borders, no outer overflow, and a semantic canvas alternative. It now also collects three
+  cold-browser-cache LCP/CLS/controlled-interaction samples in both animation-on and reduced-motion
+  states. The latest recorded local maxima are respectively `88.0 ms / 0.000 / 16.0 ms` and
+  `52.0 ms / 0.000 / 16.0 ms`, bounded by local regression ceilings rather than published as SLOs.
+  Five keyboard-policy, six accessibility-tree-policy, five forced-colors-policy, and fourteen
+  web-vitals-policy assertions reject drift. The reported product/platform is pinned, but executable
+  artifact provenance, native screen-reader, CI provisioning, cross-browser evidence, field Core Web
+  Vitals, and staging SLOs remain open.
 - A documented AI-generated social preview, accessible alternative text, reproducible metadata
   sanitation, and a fail-closed PNG structure/chunk policy with regression coverage.
 - Strict server-only public-origin validation for absolute social metadata, with HTTPS-only hosted

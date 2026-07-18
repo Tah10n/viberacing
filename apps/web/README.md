@@ -56,8 +56,10 @@ drift, decodes both images inside isolated Chromium, and requires zero changed p
 writing repository files. It then dispatches browser keyboard events through CDP, requires the
 closed 13-target focus order plus skip-target transfer and pause-button activation, validates named
 landmarks/controls/table/canvas in Chromium's accessibility tree, and repeats the focus/border
-checks with forced colors active. It does not authenticate the supplied executable or replace a
-native screen-reader or cross-browser pass. Regeneration is a separate local browser task: build and
+checks with forced colors active. Finally, it disables Chromium's network cache and takes three LCP,
+CLS, and controlled-interaction duration samples in both animation-on and reduced-motion states. It
+does not authenticate the supplied executable or replace a native screen-reader, cross-browser,
+field Core Web Vitals, or staging SLO pass. Regeneration is a separate local browser task: build and
 start this workspace on loopback, then run
 `pnpm run capture:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium> --write`.
 The capture creates its own temporary browser profile and rejects non-loopback page resources; it
@@ -491,8 +493,8 @@ not prove their framework integration. Local responsive, contrast, interaction, 
 artifact-budget, and exact stored viewport evidence is recorded in
 `docs/testing/PHASE1_BROWSER_MATRIX.md`. The stored bytes are protected by an offline integrity gate
 and the explicit local exact-product re-render performs a zero-tolerance decoded-pixel diff.
-Browser-binary provenance/CI provisioning, native screen-reader and cross-browser passes, and
-runtime Core Web Vitals remain open and are listed honestly in `docs/IMPLEMENTATION_STATUS.md`.
+Browser-binary provenance/CI provisioning, native screen-reader and cross-browser passes, and field
+Core Web Vitals remain open and are listed honestly in `docs/IMPLEMENTATION_STATUS.md`.
 
 ## Change checklist
 
