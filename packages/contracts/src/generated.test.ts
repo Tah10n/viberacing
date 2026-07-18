@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import * as publicApi from "./index";
 import {
   communityRacePageV1Schema,
+  communityRaceStatusPageV1Schema,
   communityScorePageV1Schema,
   communityScoreQueryV1Schema,
   connectorCarProposalResultV1Schema,
   connectorSyncV1Schema,
   validateCarRecipeV1,
   validateCommunityRacePageV1,
+  validateCommunityRaceStatusPageV1,
   validateCommunityScorePageV1,
   validateCommunityScoreQueryV1,
   validateConnectorCarProposalResultV1,
@@ -64,6 +66,18 @@ function validRacePage() {
     participants: scorePage.participants.map((participant) => ({
       ...participant,
       carRecipe: validCarRecipe(),
+    })),
+  };
+}
+
+function validRaceStatusPage() {
+  const racePage = validRacePage();
+  return {
+    ...racePage,
+    participants: racePage.participants.map((participant) => ({
+      ...participant,
+      freshnessDays: 2,
+      streakDays: 13,
     })),
   };
 }
@@ -713,6 +727,90 @@ describe("generated Community race response contract", () => {
       validateCommunityScorePageV1({
         ...scorePage,
         participants: [{ ...participant, carRecipe: validCarRecipe() }],
+      }).ok,
+    ).toBe(false);
+  });
+});
+
+describe("generated Community race status response contract", () => {
+  it("accepts bounded freshness and an optional profile-visible streak", () => {
+    const input = validRaceStatusPage();
+    const result = validateCommunityRaceStatusPageV1(input);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toBe(input);
+      expect(result.value.participants[0]?.freshnessDays).toBe(2);
+      expect(result.value.participants[0]?.streakDays).toBe(13);
+    }
+
+    const participant = input.participants[0];
+    if (!participant) {
+      throw new Error("valid race status fixture is missing its participant");
+    }
+    expect(
+      validateCommunityRaceStatusPageV1({
+        ...input,
+        participants: [{ ...participant, streakDays: 36_533 }],
+      }).ok,
+    ).toBe(true);
+    const { carRecipe, streakDays, ...participantWithoutOptionals } = participant;
+    expect(carRecipe).toEqual(validCarRecipe());
+    expect(streakDays).toBe(13);
+    expect(
+      validateCommunityRaceStatusPageV1({
+        ...input,
+        participants: [participantWithoutOptionals],
+      }).ok,
+    ).toBe(true);
+    expect(Object.isFrozen(communityRaceStatusPageV1Schema)).toBe(true);
+  });
+
+  it("rejects missing or out-of-range status, exact timestamps, and private detail", () => {
+    const input = validRaceStatusPage();
+    const participant = input.participants[0];
+    if (!participant) {
+      throw new Error("valid race status fixture is missing its participant");
+    }
+    const { freshnessDays: _freshnessDays, ...withoutFreshness } = participant;
+    void _freshnessDays;
+
+    for (const invalidParticipant of [
+      withoutFreshness,
+      { ...participant, freshnessDays: -1 },
+      { ...participant, freshnessDays: 65_536 },
+      { ...participant, streakDays: -1 },
+      { ...participant, streakDays: 36_534 },
+      { ...participant, streakDays: null },
+      { ...participant, receivedAt: "2026-07-18T12:34:56.789Z" },
+      { ...participant, dailyScores: [100, 200] },
+      { ...participant, profileId: "private-profile" },
+    ]) {
+      expect(
+        validateCommunityRaceStatusPageV1({
+          ...input,
+          participants: [invalidParticipant],
+        }).ok,
+      ).toBe(false);
+    }
+  });
+
+  it("keeps both earlier closed response components unchanged", () => {
+    const statusPage = validRaceStatusPage();
+    const participant = statusPage.participants[0];
+    if (!participant) {
+      throw new Error("valid race status fixture is missing its participant");
+    }
+    expect(
+      validateCommunityRacePageV1({
+        ...statusPage,
+        participants: [participant],
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateCommunityScorePageV1({
+        ...statusPage,
+        participants: [participant],
       }).ok,
     ).toBe(false);
   });

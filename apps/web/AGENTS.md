@@ -21,10 +21,12 @@ apply.
   signed route after active source/device revalidation and nonce consumption; they cannot read,
   approve, reject, or activate it. Physical expired-row cleanup is a separate bounded Jobs
   capability. The public race projection may expose only the exact current active recipe for an
-  `active` profile; keep proposal identity, state, and timestamps private and the stable score
-  contract unchanged. The repository Agent Skill is only a local reducer into the same fixed device
-  command and creates no Web route or authority. Do not claim a cleanup schedule, additional agent
-  service ingress, live login, or deployment until separate evidence exists.
+  `active` profile. The separate status projection may add only complete-UTC-day freshness and the
+  preference-gated derived streak; keep exact receipt time, daily scores, preferences, proposal
+  identity, state, and timestamps private and both older contracts unchanged. The repository Agent
+  Skill is only a local reducer into the same fixed device command and creates no Web route or
+  authority. Do not claim a cleanup schedule, additional agent service ingress, live login, or
+  deployment until separate evidence exists.
 - Browser persistence is limited to locale, theme, and motion. Do not add trackers, analytics,
   fingerprinting, or account state to local storage.
 - Preserve per-navigation nonce CSP and repository-root build isolation. Do not add a CSP origin,
@@ -32,7 +34,8 @@ apply.
 - Keep compose `DATABASE_*` owner credentials out of Web code. The public-score adapter uses only
   `VIBERACING_WEB_DATABASE_*`, strict TLS/config parsing, a dedicated bounded pool, and an effective
   Web-role/login-capability probe before every query. Do not bypass the store with generic SQL or
-  wire it outside the exact `/v1/community/scores` boundary.
+  wire it outside the three exact `/v1/community/scores`, `/v1/community/race`, and
+  `/v1/community/race/status` boundaries.
 - Pairing reuses that environment-owned Web/Auth login only through its separate read-write pool.
   Preserve the exact role/login/search-path/read-write probe, two fixed verifier candidates,
   protected primary/secondary HMAC capability, strict proof-before-activation sequence, server-owned

@@ -81,6 +81,10 @@ const expectedFields = new Map([
     ["schemaVersion", "trustTier", "selfReported", "participants"],
   ],
   [
+    "community-race-status-page.schema.json",
+    ["schemaVersion", "trustTier", "selfReported", "participants"],
+  ],
+  [
     "community-score-page.schema.json",
     ["schemaVersion", "trustTier", "selfReported", "participants"],
   ],
@@ -159,6 +163,23 @@ const publicProblemTitles = [
   "Validation failed",
 ];
 const implementedLocalEvidencePaths = new Map([
+  [
+    "getCommunityRaceStatusV1",
+    [
+      "apps/web/app/v1/community/race/status/route.test.ts",
+      "apps/web/app/v1/community/race/status/route.ts",
+      "apps/web/lib/public-community-race.test.ts",
+      "apps/web/lib/public-community-race.ts",
+      "apps/web/lib/public-community-score-mapper.test.ts",
+      "apps/web/lib/public-community-score-mapper.ts",
+      "apps/web/lib/public-community-score-route.test.ts",
+      "apps/web/lib/public-community-score-route.ts",
+      "apps/web/lib/public-community-score-store.test.ts",
+      "apps/web/lib/public-community-score-store.ts",
+      "database/migrations/0029_community_public_race_status.sql",
+      "database/tests/public_score_read.sql",
+    ],
+  ],
   [
     "getCommunityRaceV1",
     [
@@ -939,13 +960,15 @@ if (sources !== undefined) {
     }
     if (
       entry.file === "community-race-page.schema.json" ||
+      entry.file === "community-race-status-page.schema.json" ||
       entry.file === "community-score-page.schema.json"
     ) {
-      const isRacePage = entry.file === "community-race-page.schema.json";
+      const isRacePage = entry.file !== "community-score-page.schema.json";
+      const isStatusPage = entry.file === "community-race-status-page.schema.json";
       const participantArray = schema?.properties?.participants;
       const participantProperties = participantArray?.items?.properties ?? {};
       const participantFields = Object.keys(participantProperties);
-      const requiredParticipantFields = [
+      const scoreParticipantFields = [
         "seasonStart",
         "seasonEnd",
         "scoreVersion",
@@ -957,7 +980,10 @@ if (sources !== undefined) {
         "rankPosition",
         "displayPosition",
       ];
-      const expectedParticipantFields = isRacePage
+      const requiredParticipantFields = isStatusPage
+        ? [...scoreParticipantFields, "freshnessDays"]
+        : scoreParticipantFields;
+      const expectedParticipantFields = isStatusPage
         ? [
             "seasonStart",
             "seasonEnd",
@@ -970,8 +996,24 @@ if (sources !== undefined) {
             "sourceCount",
             "rankPosition",
             "displayPosition",
+            "freshnessDays",
+            "streakDays",
           ]
-        : requiredParticipantFields;
+        : isRacePage
+          ? [
+              "seasonStart",
+              "seasonEnd",
+              "scoreVersion",
+              "seasonFinalized",
+              "handle",
+              "carRecipe",
+              "weeklyScore",
+              "activeDays",
+              "sourceCount",
+              "rankPosition",
+              "displayPosition",
+            ]
+          : requiredParticipantFields;
       if (
         schema?.properties?.trustTier?.const !== "community" ||
         schema?.properties?.selfReported?.const !== true
@@ -1023,12 +1065,29 @@ if (sources !== undefined) {
           report(scope, "Community race CarRecipe differs from the canonical optional recipe");
         }
       }
+      if (
+        isStatusPage &&
+        (participantArray?.items?.required?.includes("streakDays") ||
+          !participantArray?.items?.required?.includes("freshnessDays") ||
+          !sameEntries(participantArray?.items?.["x-viberacing-optionalProperties"] ?? [], [
+            "carRecipe",
+            "streakDays",
+          ]))
+      ) {
+        report(scope, "Community race status visibility fields differ from the reviewed boundary");
+      }
       const exactIntegerBounds = [
         ["weeklyScore", 0, 7000],
         ["activeDays", 0, 7],
         ["sourceCount", 0, 32],
         ["rankPosition", 1, 32],
         ["displayPosition", 1, 32],
+        ...(isStatusPage
+          ? [
+              ["freshnessDays", 0, 65535],
+              ["streakDays", 0, 36533],
+            ]
+          : []),
       ];
       if (
         exactIntegerBounds.some(([name, minimum, maximum]) => {
@@ -1145,9 +1204,35 @@ if (sources !== undefined) {
     }
   }
 
-  const publicRaceOperation = operations[0];
+  const publicRaceStatusOperation = operations[0];
   if (
-    operations.length !== 6 ||
+    operations.length !== 7 ||
+    publicRaceStatusOperation?.entry.method !== "get" ||
+    publicRaceStatusOperation.entry.path !== "/v1/community/race/status" ||
+    publicRaceStatusOperation.entry.operationId !== "getCommunityRaceStatusV1" ||
+    publicRaceStatusOperation.entry.implementationStatus !== "implemented-local" ||
+    publicRaceStatusOperation.entry.summary !== "Read one bounded Community race status page" ||
+    publicRaceStatusOperation.entry.admissionPolicy !== "no-queue-4" ||
+    publicRaceStatusOperation.entry.authenticationContract !== "none" ||
+    publicRaceStatusOperation.entry.querySchema !== "CommunityScoreQueryV1" ||
+    publicRaceStatusOperation.entry.requestSchema !== "none" ||
+    publicRaceStatusOperation.entry.responseSchema !== "CommunityRaceStatusPageV1" ||
+    publicRaceStatusOperation.entry.problemSchema !== "ProblemDetailsV1" ||
+    !sameEntries(publicRaceStatusOperation.entry.problemStatuses, [400, 406, 429, 500, 503]) ||
+    publicRaceStatusOperation.entry.queryPolicy !== "closed-single-value" ||
+    publicRaceStatusOperation.entry.requestBodyPolicy !== "none" ||
+    publicRaceStatusOperation.entry.cacheControl !== "no-store" ||
+    publicRaceStatusOperation.entry.corsPolicy !== "same-origin"
+  ) {
+    report(
+      "contracts/v1/manifest.json",
+      "public Community race status operation differs from the reviewed HTTP contract",
+    );
+  }
+
+  const publicRaceOperation = operations[1];
+  if (
+    operations.length !== 7 ||
     publicRaceOperation?.entry.method !== "get" ||
     publicRaceOperation.entry.path !== "/v1/community/race" ||
     publicRaceOperation.entry.operationId !== "getCommunityRaceV1" ||
@@ -1171,9 +1256,9 @@ if (sources !== undefined) {
     );
   }
 
-  const publicScoreOperation = operations[1];
+  const publicScoreOperation = operations[2];
   if (
-    operations.length !== 6 ||
+    operations.length !== 7 ||
     publicScoreOperation?.entry.method !== "get" ||
     publicScoreOperation.entry.path !== "/v1/community/scores" ||
     publicScoreOperation.entry.operationId !== "getCommunityScoresV1" ||
@@ -1197,9 +1282,9 @@ if (sources !== undefined) {
     );
   }
 
-  const communitySyncOperation = operations[2];
+  const communitySyncOperation = operations[3];
   if (
-    operations.length !== 6 ||
+    operations.length !== 7 ||
     communitySyncOperation?.entry.method !== "post" ||
     communitySyncOperation.entry.path !== "/v1/community/sync" ||
     communitySyncOperation.entry.operationId !== "postCommunitySyncV1" ||
@@ -1226,7 +1311,7 @@ if (sources !== undefined) {
     );
   }
 
-  const carProposalOperation = operations[3];
+  const carProposalOperation = operations[4];
   if (
     carProposalOperation?.entry.method !== "post" ||
     carProposalOperation.entry.path !== "/v1/connector/cars/proposals" ||
@@ -1252,7 +1337,7 @@ if (sources !== undefined) {
     report("contracts/v1/manifest.json", "connector car proposal operation differs from review");
   }
 
-  const pairingPollOperation = operations[4];
+  const pairingPollOperation = operations[5];
   if (
     pairingPollOperation?.entry.method !== "post" ||
     pairingPollOperation.entry.path !== "/v1/connector/pairing/poll" ||
@@ -1274,7 +1359,7 @@ if (sources !== undefined) {
     report("contracts/v1/manifest.json", "pairing poll operation differs from review");
   }
 
-  const pairingStartOperation = operations[5];
+  const pairingStartOperation = operations[6];
   if (
     pairingStartOperation?.entry.method !== "post" ||
     pairingStartOperation.entry.path !== "/v1/connector/pairing/start" ||

@@ -35,13 +35,20 @@ closed stable `CommunityScorePageV1`; ADR 0037 adds a separate `CommunityRacePag
 `GET /v1/community/race` rather than weakening strict score clients. That response may omit
 `carRecipe`, but any present object must match exact version 1.
 
+ADR 0040 follows the same rule for public status. `CommunityRaceStatusPageV1` and
+`GET /v1/community/race/status` preserve the race semantics but separately require bounded
+`freshnessDays` and permit preference-gated `streakDays`. Neither field is added to
+`CommunityScorePageV1` or `CommunityRacePageV1`; strict legacy clients continue to reject them. The
+relative freshness value is defined in complete UTC calendar days, and streak is a read-time
+informational projection that never changes score, rank, authority, or finalized score state.
+
 Revision 0011's internal PostgreSQL score projection is not itself a public HTTP contract. ADR 0010
 defines a closed response-only v1 component and generated derivatives, while ADR 0013 now adds the
 local path, request validation, exact mapping, response headers, no-store policy, and compatibility
 evidence. Deployment, edge behavior, and any future cache remain separate compatibility surfaces. A
-new recipe field/version, proposal metadata, or historical snapshot semantics require another
-reviewed component/version and migration path; they are not additive changes to either closed v1
-response.
+new recipe field/version, status meaning, proposal metadata, or historical snapshot semantics
+require another reviewed component/version and migration path; they are not additive changes to any
+closed v1 response.
 
 ## Codex App Server contract
 
@@ -133,6 +140,9 @@ through local timezone conversion.
   documented and tested to ignore them safely.
 - `CommunityScorePageV1` is closed and its generated consumers reject unknown fields; extend it only
   through a separately reviewed component/version, not an unannounced additive response field.
+- `CommunityRacePageV1` and `CommunityRaceStatusPageV1` are also independently closed. The status
+  route is the only one that carries `freshnessDays` or `streakDays`; changing their UTC-day,
+  visibility, or streak-anchor semantics requires a reviewed compatibility decision.
 - The reviewed `x-viberacing-dateMinimum`, `x-viberacing-dateMaximum`, and `x-viberacing-isoWeekday`
   keywords are executable contract semantics. A consumer that treats them as inert annotations
   cannot be the server admission validator for a score season.
@@ -141,9 +151,9 @@ through local timezone conversion.
 - Errors use a versioned bounded problem-details shape and request ID without stack, SQL, hostname,
   secret, or record disclosure. The common server-only factory now enforces the closed mapping,
   generated opaque ID, runtime validation, and no-store response baseline. The manifest-generated
-  public score operation and local Web route enforce the same query, response, status, cache,
-  same-origin, and implementation-status contract. This does not claim deployment or make future
-  `/v1` operations implicitly compatible.
+  three public score/race/status operations and local Web routes enforce their own query, response,
+  status, cache, same-origin, and implementation-status contracts. This does not claim deployment or
+  make future `/v1` operations implicitly compatible.
 - Generated OpenAPI, TypeScript, Rust fixtures, and documentation identify their canonical schema
   source; CI rejects drift.
 

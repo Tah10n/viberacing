@@ -13,13 +13,13 @@ const english = {
     "Scores are self-reported by participating users. They are not audited or endorsed by OpenAI.",
   communityDataBadge: "Community standings",
   communityDataSecurityNote:
-    "Community standings contain only public derived scores. Cars are visual markers until profile recipes exist. This page uses no trackers, remote fonts, account credentials, or raw token totals.",
+    "Community standings contain only public derived scores and day-rounded status. Cars are visual markers until profile recipes exist. This page uses no trackers, remote fonts, account credentials, or raw token totals.",
   communityCarCopy:
     "This car is a stable visual marker for the standings, not a published profile recipe.",
   communityNotice: "Community leaderboard",
   communityProfile: "Community profile",
   communityProfilePrivacy:
-    "Daily detail, exact token totals, device counts, and source identifiers stay private.",
+    "Daily detail, exact sync time, token totals, device counts, and source identifiers stay private.",
   communityWeek: "Current Community week",
   currentWeek: "Current demo week",
   dailyActivity: "Daily score",
@@ -42,7 +42,7 @@ const english = {
   liveRace: "Weekly race",
   methodology: "Scoring method",
   methodologyCopy:
-    "Each day uses a capped logarithmic score. Weekly rank uses score, then active days; equal results share a rank.",
+    "Each day uses a capped logarithmic score. Weekly rank uses score, then active days; equal results share a rank. Streak and freshness are informational only.",
   motion: "Motion",
   motionOff: "Reduced",
   motionOn: "On",
@@ -92,13 +92,13 @@ const russian: Record<TranslationKey, string> = {
     "Результаты заявляют сами участники. Они не проверяются и не подтверждаются OpenAI.",
   communityDataBadge: "Рейтинг сообщества",
   communityDataSecurityNote:
-    "В рейтинге сообщества отображаются только публичные производные баллы. Машины служат визуальными маркерами, пока нет рецептов профиля. Здесь нет трекеров, внешних шрифтов, данных входа и точных токенов.",
+    "В рейтинге сообщества отображаются только публичные производные баллы и округлённый до дня статус. Машины служат визуальными маркерами, пока нет рецептов профиля. Здесь нет трекеров, внешних шрифтов, данных входа и точных токенов.",
   communityCarCopy:
     "Эта машина — постоянный визуальный маркер в таблице, а не опубликованный рецепт профиля.",
   communityNotice: "Рейтинг сообщества",
   communityProfile: "Профиль сообщества",
   communityProfilePrivacy:
-    "Баллы по дням, точные токены, число устройств и идентификаторы источников остаются приватными.",
+    "Баллы по дням, точное время синхронизации, токены, число устройств и идентификаторы источников остаются приватными.",
   communityWeek: "Текущая неделя сообщества",
   currentWeek: "Текущая демо-неделя",
   dailyActivity: "Баллы по дням",
@@ -121,7 +121,7 @@ const russian: Record<TranslationKey, string> = {
   liveRace: "Недельная гонка",
   methodology: "Формула баллов",
   methodologyCopy:
-    "За день начисляются ограниченные логарифмические баллы. Ранг зависит от суммы и активных дней; равные результаты делят место.",
+    "За день начисляются ограниченные логарифмические баллы. Ранг зависит от суммы и активных дней; равные результаты делят место. Серия и обновление носят только справочный характер.",
   motion: "Анимация",
   motionOff: "Снижена",
   motionOn: "Включена",

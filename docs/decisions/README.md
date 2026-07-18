@@ -48,6 +48,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0037](0037-bounded-public-community-race-projection.md)       | Bounded public active-CarRecipe race projection                     | Accepted; local Web/DB slice; deployment pending       |
 | [0038](0038-bounded-device-car-recipe-proposal-ingress.md)     | Bounded device CarRecipe proposal ingress                           | Accepted; local vertical slice; deployment pending     |
 | [0039](0039-bounded-agent-car-proposal-orchestration.md)       | Bounded agent CarRecipe proposal orchestration                      | Accepted; local skill; connector release pending       |
+| [0040](0040-bounded-public-community-race-status.md)           | Bounded public Community race status projection                     | Accepted; local Web/DB slice; deployment pending       |
 
 ## Lifecycle
 

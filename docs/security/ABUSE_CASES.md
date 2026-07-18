@@ -380,15 +380,18 @@ material availability cost.
   query, body/method/media handling, no-store/same-origin semantics, admission, generic errors, and
   final response validation. Revision 0027 and `CommunityRacePageV1` add a separate compatible route
   that repeats those fields and may include only one exact current active enum recipe; proposal
-  state and timestamps remain private. The visible browser consumer lazily validates the complete
-  race response, omits unavailable streak/freshness, uses fixed project-owned presentation cars for
-  recipe absence, sends no credentials, and falls back to explicitly synthetic rows after any
-  invalid or unavailable response. Revision 0015 lets only the exact possessed session read and set
-  the closed `public`/`hidden` state; the same-origin form carries no profile ID and repeated state
-  is a no-op. Because the public read already filters current state, a committed hide removes the
-  profile from the next no-store response while source sync may continue. Deployment, enumeration
-  controls, rounded freshness, cache purge, edge rate policy, and monitoring are still
-  unimplemented.
+  state and timestamps remain private. Revision 0029 and `CommunityRaceStatusPageV1` add a third
+  compatible route that derives complete-UTC-day freshness from accepted server receipt time and
+  exposes a consecutive positive-score streak only when the active profile enables it. Exact
+  timestamps, daily score rows, the preference, and private IDs remain absent. The visible browser
+  consumer lazily validates that complete status response, uses fixed project-owned presentation
+  cars for recipe absence, sends no credentials, and falls back to explicitly synthetic rows after
+  any invalid or unavailable response. Revision 0015 lets only the exact possessed session read and
+  set the closed `public`/`hidden` state; the same-origin form carries no profile ID and repeated
+  state is a no-op. Because the public read already filters current state, a committed hide removes
+  the profile from the next no-store response while source sync may continue. Deployment,
+  enumeration controls, cache purge, edge rate policy, query-plan/load evidence, and monitoring are
+  still unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 

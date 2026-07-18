@@ -10,42 +10,44 @@ The Phase 2 language-neutral contract and SQL persistence foundations now includ
 passkey login, multi-passkey management, restricted recovery, Community usage ingest, bounded
 ingest- and authentication-retention cleanup, primary profile deletion, open-season scoring,
 terminal season finalization, a public score-only database projection, and a separate compatible
-active-CarRecipe race projection plus their server-only projection-to-contract mappers; Phase 3
-database-only source/device lifecycle, same-source deduplication, and bounded pairing-retention
-cleanup have also started. A server-only public problem-response factory, closed query/OpenAPI
-operations, and locally implemented public score/race GETs now exist. The visible home race requests
-the current server-selected Community week from the separate same-origin race route, replaces only
-its race/leaderboard after closed browser-side validation, uses an exact current approved recipe or
-repository-owned absence fallback, lets a handle select a same-page summary from only those public
-fields, exposes that selection through a canonical public-handle URL and public-account link, and
-retains a labeled synthetic fallback on failure. Local identity slices now implement exact
-same-origin bounded forms, GitHub OAuth state and S256 PKCE with no extra scope, purpose-separated
-encrypted HttpOnly continuations, atomic profile/session creation, required initial WebAuthn
-registration, returning discoverable-credential login, a session-scoped minimal passkey inventory,
-an active account page, immediate public-profile hide/show, source inventory and pause,
-fresh-passkey paused-source reactivation and terminal unlink, fresh backup-passkey addition,
-revocation of an owned non-current passkey, a bounded active-device inventory with immediate
-owned-device revoke, fresh-passkey recovery-code rotation with one-time display, an exact-handle
-fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey sign-in, and
-database-backed logout. Login options retain the profile-free challenge only in a separate encrypted
-cookie; valid proof alone reaches one atomic create-consume-session call. Its GitHub,
-passkey-verifier, database, and browser evidence is injected or synthetic; no working invite issuer,
-OAuth registration, secret, live authenticator/database login, distributed edge abuse control,
-scheduled recovery/deletion cleanup, cache/backup/tombstone purge, restore replay, notification, or
-deployment is supplied. A local one-shot Jobs runner invokes only the seven existing maintenance
-procedures through a bounded least-privileged adapter. A local Ingest kernel now bounds and
-authenticates the exact Community sync envelope, consumes an injected origin nonce, parses bounded
-JSON, validates the generated contract, and strictly verifies the source-bound device request. A
-separate bounded Ingest PostgreSQL adapter revalidates that output and exposes only atomic
-origin-nonce consumption, device lookup, and submission through a probed least-privileged pool. A
-protected local reader supplies one mandatory and one optional rotation origin key directly to the
-verifier without returning raw configuration. A forced-RLS replay tuple, Ingest-only atomic consume,
-and separate Jobs ingest, pairing, authentication cleanup, and primary profile deletion paths now
-have real isolated PostgreSQL evidence. A transport-free Ingest application now composes those exact
-verifier and database capabilities, generates a server-owned request ID, waits for submission, and
-returns only a validated acknowledgement or generic problem decision. A bounded local Fastify server
-factory now preserves exact raw HTTP evidence, admits four application calls without a queue,
-applies fixed parser/header/connection/deadline policies, and serializes only revalidated sync
+active-CarRecipe race projection plus a third compatible rounded-freshness/optional-streak status
+projection and their server-only projection-to-contract mappers; Phase 3 database-only source/device
+lifecycle, same-source deduplication, and bounded pairing-retention cleanup have also started. A
+server-only public problem-response factory, closed query/OpenAPI operations, and locally
+implemented public score/race/status GETs now exist. The visible home race requests the current
+server-selected Community week from the separate same-origin status route, replaces only its
+race/leaderboard after closed browser-side validation, uses an exact current approved recipe or
+repository-owned absence fallback, shows only complete-UTC-day freshness and an optional
+preference-gated streak, lets a handle select a same-page summary from those public fields, exposes
+that selection through a canonical public-handle URL and public-account link, and retains a labeled
+synthetic fallback on failure. Local identity slices now implement exact same-origin bounded forms,
+GitHub OAuth state and S256 PKCE with no extra scope, purpose-separated encrypted HttpOnly
+continuations, atomic profile/session creation, required initial WebAuthn registration, returning
+discoverable-credential login, a session-scoped minimal passkey inventory, an active account page,
+immediate public-profile hide/show, source inventory and pause, fresh-passkey paused-source
+reactivation and terminal unlink, fresh backup-passkey addition, revocation of an owned non-current
+passkey, a bounded active-device inventory with immediate owned-device revoke, fresh-passkey
+recovery-code rotation with one-time display, an exact-handle fresh-passkey profile-deletion
+request, one-time recovery-code replacement-passkey sign-in, and database-backed logout. Login
+options retain the profile-free challenge only in a separate encrypted cookie; valid proof alone
+reaches one atomic create-consume-session call. Its GitHub, passkey-verifier, database, and browser
+evidence is injected or synthetic; no working invite issuer, OAuth registration, secret, live
+authenticator/database login, distributed edge abuse control, scheduled recovery/deletion cleanup,
+cache/backup/tombstone purge, restore replay, notification, or deployment is supplied. A local
+one-shot Jobs runner invokes only the seven existing maintenance procedures through a bounded
+least-privileged adapter. A local Ingest kernel now bounds and authenticates the exact Community
+sync envelope, consumes an injected origin nonce, parses bounded JSON, validates the generated
+contract, and strictly verifies the source-bound device request. A separate bounded Ingest
+PostgreSQL adapter revalidates that output and exposes only atomic origin-nonce consumption, device
+lookup, and submission through a probed least-privileged pool. A protected local reader supplies one
+mandatory and one optional rotation origin key directly to the verifier without returning raw
+configuration. A forced-RLS replay tuple, Ingest-only atomic consume, and separate Jobs ingest,
+pairing, authentication cleanup, and primary profile deletion paths now have real isolated
+PostgreSQL evidence. A transport-free Ingest application now composes those exact verifier and
+database capabilities, generates a server-owned request ID, waits for submission, and returns only a
+validated acknowledgement or generic problem decision. A bounded local Fastify server factory now
+preserves exact raw HTTP evidence, admits four application calls without a queue, applies fixed
+parser/header/connection/deadline policies, and serializes only revalidated sync
 acknowledgement/problem contracts. A library-only Rust connector foundation now bounds the stable
 App Server handshake and a candidate `0.144.5` account/usage parser, discarding account/summary
 fields and returning only bounded normalized daily usage in caller memory. An inaccessible one-shot
@@ -213,7 +215,7 @@ or finalization scheduler exists.
   derives the schema/CLI expectations from production sources, and eleven mutation cases prove enum,
   shell, invocation-allowlist, retry, authority, output, front matter, and UI-metadata drift fail
   closed. No released connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and thirty-nine accepted design decisions covering Community trust,
+- An ADR lifecycle/template and forty accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -227,37 +229,37 @@ or finalization scheduler exists.
   one-shot candidate Community sync, bounded authentication cleanup, the local Railway-shaped Ingest
   host, bounded primary deletion purge, the session-owned CarRecipe proposal boundary, and bounded
   CarRecipe-proposal cleanup, public active-recipe projection, bounded device proposal ingress, and
-  bounded local agent proposal orchestration.
+  bounded local agent proposal orchestration, and the bounded public race-status projection.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
 - Agent-skill validation and eleven black-box regressions for schema/CLI drift, command widening,
   contradictory invocation input, unsafe shell input, retry permission, stale success output,
   front-matter widening, and UI metadata.
-- Twelve canonical JSON Schema 2020-12 contracts for bounded Community connector sync and pairing
+- Thirteen canonical JSON Schema 2020-12 contracts for bounded Community connector sync and pairing
   start/poll requests and responses, a non-sensitive sync acknowledgement, stable problem details, a
   one-field public score season query, a response-only top-32 Community score page with constant
-  trust metadata, a separate compatible race page with one optional exact recipe, plus the exact
-  nine-field `CarRecipeV1`. Every object is closed; scalar and collection values are bounded; the
-  recipe accepts only project-owned enums and a 0-to-65535 seed; reviewed date-range/ISO-weekday
-  extensions make the score calendar executable; connector input has an executable writable-field
-  allowlist that excludes identity, trust, rank, score, season, moderation, credentials, and
-  prohibited data.
+  trust metadata, a separate compatible race page with one optional exact recipe, a third compatible
+  status page with required rounded freshness and optional streak, plus the exact nine-field
+  `CarRecipeV1`. Every object is closed; scalar and collection values are bounded; the recipe
+  accepts only project-owned enums and a 0-to-65535 seed; reviewed date-range/ISO-weekday extensions
+  make the score calendar executable; connector input has an executable writable-field allowlist
+  that excludes identity, trust, rank, score, season, moderation, credentials, and prohibited data.
 - Deterministically generated readonly TypeScript types, embedded validator wrappers, source digest,
-  and an OpenAPI 3.1 document with six explicitly `implemented-local` Community score/race/sync,
-  device CarRecipe proposal, and connector pairing start/poll operations. Their exact
-  method-specific query/body, response/problem, admission, authentication-reference, `no-store`,
-  `Vary: Accept`, generated request ID, and same-origin CORS policies are manifest-driven without
-  claiming deployment. All four inventoried authentication/transport policies participate in the
-  generated source digest. A manifest/schema/drift checker has 49 black-box cases covering generated
-  operation/status/evidence semantics, unsafe/duplicate/drifted operations, unknown fields, missing
-  bounds, client-derived score aliases, Community trust/problem/date drift, private response fields,
-  unlisted/path-traversing schemas, unsupported keywords, missing date deduplication, and stale
-  generated output.
+  and an OpenAPI 3.1 document with seven explicitly `implemented-local` Community
+  score/race/status/sync, device CarRecipe proposal, and connector pairing start/poll operations.
+  Their exact method-specific query/body, response/problem, admission, authentication-reference,
+  `no-store`, `Vary: Accept`, generated request ID, and same-origin CORS policies are
+  manifest-driven without claiming deployment. All four inventoried authentication/transport
+  policies participate in the generated source digest. A manifest/schema/drift checker has 53
+  black-box cases covering generated operation/status/evidence semantics, unsafe/duplicate/drifted
+  operations, unknown fields, missing bounds, client-derived score aliases, Community
+  trust/problem/date drift, private response fields, unlisted/path-traversing schemas, unsupported
+  keywords, missing date deduplication, and stale generated output.
 - A dependency-free runtime contract validator with fail-closed reflection handling; strict
   calendar/range/ISO-weekday/UTC timestamp and safe-integer checks; depth, node, key, item, and
   issue budgets; and privacy-safe issue output that never echoes unknown property names or submitted
-  values. Twenty-nine unit/security cases cover valid/invalid query boundaries, hostile structures,
+  values. Thirty-two unit/security cases cover valid/invalid query boundaries, hostile structures,
   response trust/privacy, connector input, and validator resource limits at 100% statement/line/
   function and 97.22% branch coverage.
 - A pure local Community sync verifier over a closed copied raw request envelope. It admits only
@@ -396,31 +398,33 @@ or finalization scheduler exists.
   `application/problem+json`, `no-store`, and matching `x-request-id` headers. It accepts no inbound
   ID string, CORS setting, cookie, title, status, detail, or cause;
   malformed/accessor-backed/revoked inputs, inherited `toJSON`, and internal failures are
-  non-reflective. The local score/race routes consume the factory; no log sink retains the token.
-- Dynamic Node.js `GET /v1/community/scores` and `GET /v1/community/race` routes share one boundary
-  with independent fixed response validators and database calls. Each creates one request token at
-  entry, rejects bodies and every wrong path or missing/duplicate/unknown/non-canonical query,
-  validates the one-field contract, performs bounded JSON `Accept` negotiation, and dispatches every
-  other supported method through a closed 405 plus `Allow: GET`. Each acquires one of four no-queue
-  leases before lazily constructing its store, holds the lease until adapter work and serialization
-  settle, revalidates the final page, and emits only `no-store`, `Vary: Accept`, request-ID, and
-  content-type headers without CORS. Adapter/configuration availability and admission exhaustion map
-  to 503; projection/invariant or unknown failures map to a non-reflective 500. The deadline policy
-  uses the existing two-second connect, six-second client-query, and five-second PostgreSQL
-  statement ceilings rather than returning early from an outer promise race. The reserved 429 does
-  not claim a client-rate limiter.
+  non-reflective. The local score/race/status routes consume the factory; no log sink retains the
+  token.
+- Dynamic Node.js `GET /v1/community/scores`, `GET /v1/community/race`, and
+  `GET /v1/community/race/status` routes share one boundary with independent fixed response
+  validators and database calls. Each creates one request token at entry, rejects bodies and every
+  wrong path or missing/duplicate/unknown/non-canonical query, validates the one-field contract,
+  performs bounded JSON `Accept` negotiation, and dispatches every other supported method through a
+  closed 405 plus `Allow: GET`. Each acquires one of four no-queue leases before lazily constructing
+  its store, holds the lease until adapter work and serialization settle, revalidates the final
+  page, and emits only `no-store`, `Vary: Accept`, request-ID, and content-type headers without
+  CORS. Adapter/configuration availability and admission exhaustion map to 503; projection/invariant
+  or unknown failures map to a non-reflective 500. The deadline policy uses the existing two-second
+  connect, six-second client-query, and five-second PostgreSQL statement ceilings rather than
+  returning early from an outer promise race. The reserved 429 does not claim a client-rate limiter.
 - A visible public-race consumer. The dynamic server page derives the current ISO Monday and passes
   only that public label to the client. After hydration, the browser lazily loads its compact
   independent validator and issues one credential-free, `no-store`, same-origin request to the exact
-  race route. It accepts at most 32 dense rows with the closed public field set, constant
-  Community/self-reported metadata, and at most one exact current active `CarRecipeV1`, then
-  replaces only the race and leaderboard. An absent recipe receives a fixed repository-owned
-  presentation fallback; streak and freshness remain unavailable. Invalid, oversized, non-JSON,
-  failed, or unavailable responses retain the clearly labeled synthetic preview. A Community handle
-  selects a same-page summary containing only weekly score, rank, active days, source count, and an
-  explicit visual-marker car; daily detail, device counts, exact usage, and identifiers remain
-  absent. The selection uses only one canonical `/?profile=handle#profile` URL value. A normal click
-  updates the summary and URL in place while modified clicks retain native behavior.
+  status route. It accepts at most 32 dense rows with the closed public field set, constant
+  Community/self-reported metadata, required complete-UTC-day freshness, optional preference-gated
+  streak, and at most one exact current active `CarRecipeV1`, then replaces only the race and
+  leaderboard. An absent recipe receives a fixed repository-owned presentation fallback; an omitted
+  streak remains absent. Invalid, oversized, non-JSON, failed, or unavailable responses retain the
+  clearly labeled synthetic preview. A Community handle selects a same-page summary containing only
+  weekly score, rank, active days, source count, rounded freshness, optional streak, and an explicit
+  visual-marker car; daily detail, device counts, exact usage or receipt time, and identifiers
+  remain absent. The selection uses only one canonical `/?profile=handle#profile` URL value. A
+  normal click updates the summary and URL in place while modified clicks retain native behavior.
   Invalid/duplicate values are ignored, a missing current top-32 row stays missing rather than
   selecting the leader, and only a public account renders its own link. The fallback demo garage
   stays synthetic, and no retry, cookie, browser persistence, analytics, or third-party destination
@@ -429,7 +433,7 @@ or finalization scheduler exists.
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- Twenty-seven checksum-ledgered, transactional SQL migrations with bounded lock/statement execution
+- Twenty-nine checksum-ledgered, transactional SQL migrations with bounded lock/statement execution
   and 27 forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and
   restricted authorities, session-bound challenges, opaque sources, pending/active/revoked device
   keys, pairing, bounded audit references, deletion work/tombstones, six fixed maintenance mutex
@@ -464,6 +468,15 @@ or finalization scheduler exists.
   approved recipe into an exact JSON object. Absence remains SQL `NULL`; proposal rows, IDs, state,
   timestamps, daily/raw usage, and arbitrary content are never returned. The function keeps the
   five-second deadline and 100-row database ceiling. Ingest, Jobs, Admin, and `PUBLIC` are denied.
+- A third Web-only Community race-status projection. Revision 0029 calls the unchanged race read,
+  derives saturated complete-UTC-day freshness from the latest accepted server receipt in the
+  requested season, and derives consecutive positive-score streak from materialized daily scores
+  through the closed Sunday or current-day/yesterday grace anchor. The streak crosses prior
+  materialized seasons but is omitted when the current active profile disables visibility. A future
+  season is suppressed even if score state is materialized outside the reviewed scoring lifecycle.
+  Exact timestamps, daily rows, preferences, and private identifiers remain absent. A partial
+  positive-score index supports the lookup; the function retains the five-second deadline and
+  100-row ceiling. Ingest, Jobs, Admin, and `PUBLIC` are denied.
 - A database policy checker with 23 black-box cases for migration drift/path/revision, transaction
   and timeout omissions, unsafe SQL features, `PUBLIC`/direct runtime grants, unsafe
   `SECURITY DEFINER`, role options, passwords, and owner membership. The real PostgreSQL gate runs
@@ -479,12 +492,13 @@ or finalization scheduler exists.
   source or revoke an owned device, and reactivate/unlink one exact source only after a fresh,
   consumed, source-bound step-up. Unlink atomically revokes all active source devices, cancels
   approved pairings, and invalidates unused source actions; normal user authority cannot lift
-  quarantine. Web additionally has bounded public Community score and compatible race projections.
-  Ingest has only atomic origin-nonce consumption, minimal active-device verification lookup, and
-  bounded Community sync submission; Jobs have only four bounded retention cleanup calls, primary
-  profile purge, Community scoring refresh, and finalization. Ingest has no identity, passkey,
-  recovery, pairing, admin, or direct-table capability. Profile-scoped functions derive identity
-  from an active session ID plus keyed verifier and do not accept a caller-selected profile ID.
+  quarantine. Web additionally has bounded public Community score, compatible race, and compatible
+  race-status projections. Ingest has only atomic origin-nonce consumption, minimal active-device
+  verification lookup, and bounded Community sync submission; Jobs have only four bounded retention
+  cleanup calls, primary profile purge, Community scoring refresh, and finalization. Ingest has no
+  identity, passkey, recovery, pairing, admin, or direct-table capability. Profile-scoped functions
+  derive identity from an active session ID plus keyed verifier and do not accept a caller-selected
+  profile ID.
 - The same boundary can create a five-minute profile-free login challenge, expose only minimal
   active-passkey verification material, atomically mint a passkey-bound session after application
   verification, and return only profile ID, handle, and locale after success. Revision 0014 composes
@@ -557,20 +571,23 @@ or finalization scheduler exists.
   empty results, bounds, unique display positions, private-field rejection, and generated drift. The
   separate compatible race response repeats those constraints, accepts only an optional exact
   `CarRecipeV1`, and rejects proposal/private/arbitrary fields while proving the score component
-  still rejects `carRecipe`. Server-only Web mappers additionally reject malformed or
-  accessor-backed adapter output, unknown ten/eleven-column rows, more than 32 rows before row
-  traversal, contract drift, inconsistent season metadata, non-contiguous display positions,
-  duplicate handles, invalid SQL rank/order semantics, and malformed nested recipes. They return
-  frozen canonical responses or throw one generic non-reflective message with a bounded cause code.
-  A server-only `pg` adapter now adds namespaced Web-login settings, loopback-only development
-  cleartext, certificate-verified production TLS, a four-connection pool, fixed
-  connect/query/statement/lock/idle/lifetime ceilings, and two fixed parameterized top-32 queries
-  with explicit date-to-text casts. It verifies the effective Web role, distinct non-privileged
-  login with only Web membership, database capability, search path, and read-only state before every
-  query; destroys a failed client; releases a healthy client before mapping; and returns only stable
-  non-reflective error/signal codes. Config, pool, and store tests cover positive and negative
-  boundaries without a live deployment credential. The local routes are wired to this adapter, but
-  no cache, live login/certificate, audited correction flow, or scheduler exists.
+  still rejects `carRecipe`. The third compatible status response adds required rounded freshness
+  and optional preference-gated streak, rejects exact timestamp/daily/private fields, and proves
+  both legacy components reject the new status fields. Server-only Web mappers additionally reject
+  malformed or accessor-backed adapter output, unknown ten/eleven/thirteen-column rows, more than 32
+  rows before row traversal, contract drift, inconsistent season metadata, non-contiguous display
+  positions, duplicate handles, invalid SQL rank/order semantics, malformed nested recipes, and
+  invalid status bounds. They return frozen canonical responses or throw one generic non-reflective
+  message with a bounded cause code. A server-only `pg` adapter now adds namespaced Web-login
+  settings, loopback-only development cleartext, certificate-verified production TLS, a
+  four-connection pool, fixed connect/query/statement/lock/idle/lifetime ceilings, and three fixed
+  parameterized top-32 queries with explicit date-to-text casts. It verifies the effective Web role,
+  distinct non-privileged login with only Web membership, database capability, search path, and
+  read-only state before every query; destroys a failed client; releases a healthy client before
+  mapping; and returns only stable non-reflective error/signal codes. Config, pool, and store tests
+  cover positive and negative boundaries without a live deployment credential. The local routes are
+  wired to this adapter, but no cache, live login/certificate, audited correction flow, or scheduler
+  exists.
 - A local server-only enrollment application now parses one exact 1 KiB invite form, immediately
   reduces the canonical 256-bit secret to SHA-256, and seals the digest/preferences with independent
   32-byte OAuth state and S256 PKCE material in a ten-minute callback-path AES-256-GCM cookie.
@@ -745,7 +762,7 @@ or finalization scheduler exists.
   `pg`. A TypeScript production build passes. No live Jobs login, Node-to-PostgreSQL integration,
   scheduler, monitoring backend, automatic retry policy, capacity result, correction,
   cache/backup/tombstone purge, restore replay, or deployment is claimed.
-- Twenty-eight deterministic cross-connection races hold a relevant invite, challenge, session,
+- Twenty-nine deterministic cross-connection races hold a relevant invite, challenge, session,
   source, device, pairing, or profile row, or a season advisory lock; tag every session; and observe
   every contender in the holder's transitive PostgreSQL blocker chain before releasing it.
   Protective races additionally prove the first contender is blocked before the competitor starts.
@@ -810,7 +827,7 @@ or finalization scheduler exists.
   lazily; the default preview still needs none of it.
 - Six hundred eighty-three unit, component, interaction, security-header, localization, scoring,
   HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
-  coverage gate currently reports 86.83% statements, 85.28% branches, 95.32% functions, and 86.94%
+  coverage gate currently reports 86.83% statements, 85.17% branches, 95.31% functions, and 86.95%
   lines over product components and libraries; framework entrypoints are verified by the production
   build instead of artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift; contract, Ingest, and
@@ -818,8 +835,8 @@ or finalization scheduler exists.
   checking, coverage, and a production Next.js build on every deterministic CI run.
 - A manifest-driven production artifact gate with nine black-box cases and enforced limits for
   initial raw/gzip bytes, application/CSS gzip bytes, asset count, source maps, fonts, path safety,
-  and standalone output. The current initial route is 184,429 gzip bytes across eight assets;
-  application JavaScript remains within its separate 10,000-byte budget at 8,750 gzip bytes and CSS
+  and standalone output. The current initial route is 184,559 gzip bytes across eight assets;
+  application JavaScript remains within its separate 10,000-byte budget at 8,880 gzip bytes and CSS
   remains within 5,000 bytes at 4,245 gzip bytes.
 - A lock-integrity-bound metadata cache for platform-specific npm packages, ten license-checker
   regression cases, and two expiring reviewed overrides: one resolves Next.js to patched
@@ -833,13 +850,13 @@ or finalization scheduler exists.
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0027 from the checksum manifest,
+reached `healthy`, validated and applied revisions 0001 through 0029 from the checksum manifest,
 passed 27-table state/ownership/RLS assertions, twenty-nine observed lock-wait races, twelve
 relation-denial checks, forty cross-capability denials, and the identity, passkey, recovery,
 pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention,
 pairing-retention, authentication-retention, primary-profile deletion, CarRecipe proposal/approval
-and retention, scoring, finalization, and public score/race scenarios, then removed its portless
-container, network, and ephemeral storage.
+and retention, scoring, finalization, and public score/race/status scenarios, then removed its
+portless container, network, and ephemeral storage.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -886,10 +903,12 @@ loopback persistence path, but not those deployed edge, secret, TLS, capacity, o
 boundaries. Bounded database score and compatible active-recipe race projections, versioned
 response-only schemas, fail-closed server mappers, bounded PostgreSQL adapters, and local HTTP
 routes now exist, including URL/media parsing, admission/deadline policy, store translation, and
-final serialization. Cache/invalidation, deployed device-proposal ingress, streak/freshness, profile
-detail, client-rate and production-capacity controls, monitoring backend, deployment login,
+final serialization. A third compatible local status projection/contract/route now supplies
+complete-UTC-day freshness and preference-gated streak without changing either older response.
+Cache/invalidation, deployed device-proposal ingress, authenticated profile detail, client-rate and
+production-capacity controls, query-plan evidence, monitoring backend, deployment login,
 certificate, edge policy, and live adapter integration do not. The visible web scoring and ranking
-experience now consumes a validated current-week race response from the local route when its
+experience now consumes a validated current-week status response from the local route when its
 separately provisioned database login works, but local defaults and every unavailable/error path
 remain clearly synthetic. No working database/OAuth login, deployed data, cache, or end-to-end
 real-user ranking evidence exists.

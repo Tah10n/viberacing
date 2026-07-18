@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  createCloseablePublicCommunityRaceStatusStore,
   createCloseablePublicCommunityScoreStore,
+  createConfiguredPublicCommunityRaceStatusStore,
   createConfiguredPublicCommunityScoreStore,
   createPublicCommunityRaceStore,
+  createPublicCommunityRaceStatusStore,
   createPublicCommunityScoreStore,
   PublicCommunityScoreStoreError,
   type PublicCommunityScoreStoreErrorCode,
@@ -24,6 +27,12 @@ interface ProjectionRow {
   readonly season_start: string;
   readonly source_count: number;
   readonly weekly_score: number;
+}
+
+interface RaceStatusProjectionRow extends ProjectionRow {
+  readonly car_recipe: unknown;
+  readonly freshness_days: number;
+  readonly streak_days: number | null;
 }
 
 interface QueryCall {
@@ -197,6 +206,44 @@ describe("public Community score store", () => {
     expect(raceCalls[0]?.text).toContain("race.car_recipe AS car_recipe");
     expect(raceCalls[0]?.text).not.toContain("list_public_community_scores");
     expect(testHarness.releases).toEqual([false, false]);
+  });
+
+  it("maps the fixed race-status query with rounded freshness and optional streak", async () => {
+    const statusRow: RaceStatusProjectionRow = {
+      ...baseProjectionRow,
+      car_recipe: null,
+      freshness_days: 2,
+      streak_days: 11,
+    };
+    const testHarness = harness([runtimeBoundary(), [statusRow]]);
+    const store = createPublicCommunityRaceStatusStore(testHarness.pool);
+
+    await expect(store.read("2026-07-13")).resolves.toMatchObject({
+      participants: [
+        {
+          handle: "alpha-driver",
+          freshnessDays: 2,
+          streakDays: 11,
+        },
+      ],
+    });
+
+    const statusCall = testHarness.calls.find(({ text }) =>
+      text.includes("list_public_community_race_status"),
+    );
+    expect(statusCall?.values).toEqual(["2026-07-13", 32]);
+    expect(statusCall?.text).toContain("status.freshness_days AS freshness_days");
+    expect(statusCall?.text).toContain("status.streak_days AS streak_days");
+    expect(statusCall?.text).not.toContain("list_public_community_race(");
+    expect(testHarness.releases).toEqual([false]);
+  });
+
+  it("rejects an invalid race-status season before acquiring a connection", async () => {
+    const testHarness = harness([]);
+    const store = createPublicCommunityRaceStatusStore(testHarness.pool);
+
+    await expectStoreError(store.read("2026-07-14"), "invalid_season");
+    expect(testHarness.connect).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -399,6 +446,29 @@ describe("public Community score store", () => {
 
     expect(Object.isFrozen(store)).toBe(true);
     await expect(store.close()).resolves.toBeUndefined();
+  });
+
+  it("creates and closes the separate configured race-status adapter lazily", async () => {
+    const store = createConfiguredPublicCommunityRaceStatusStore({
+      NODE_ENV: "development",
+      VIBERACING_WEB_DATABASE_HOST: "127.0.0.1",
+      VIBERACING_WEB_DATABASE_NAME: "viberacing_local",
+      VIBERACING_WEB_DATABASE_PASSWORD: "private-configured-status-store-password",
+      VIBERACING_WEB_DATABASE_PORT: "54329",
+      VIBERACING_WEB_DATABASE_TLS_MODE: "disable",
+      VIBERACING_WEB_DATABASE_USER: "viberacing_web_login",
+    });
+
+    expect(Object.isFrozen(store)).toBe(true);
+    await expect(store.close()).resolves.toBeUndefined();
+  });
+
+  it("closes a race-status store without opening a connection", async () => {
+    const testHarness = harness([]);
+    const store = createCloseablePublicCommunityRaceStatusStore(testHarness.pool);
+
+    await expect(store.close()).resolves.toBeUndefined();
+    expect(testHarness.connect).not.toHaveBeenCalled();
   });
 
   it("sanitizes a pool close failure", async () => {

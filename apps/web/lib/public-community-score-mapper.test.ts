@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   mapPublicCommunityRaceRows,
+  mapPublicCommunityRaceStatusRows,
   mapPublicCommunityScoreRows,
   PublicCommunityScoreMappingError,
   publicCommunityRacePageSize,
+  publicCommunityRaceStatusPageSize,
   publicCommunityScorePageSize,
   type PublicCommunityScoreMappingErrorCode,
 } from "./public-community-score-mapper";
@@ -25,6 +27,11 @@ interface ProjectionRow {
 
 interface RaceProjectionRow extends ProjectionRow {
   readonly car_recipe: unknown;
+}
+
+interface RaceStatusProjectionRow extends RaceProjectionRow {
+  readonly freshness_days: number;
+  readonly streak_days: number | null;
 }
 
 const baseRow: ProjectionRow = {
@@ -59,6 +66,20 @@ function raceRow(
   overrides: Partial<ProjectionRow> & { readonly car_recipe?: unknown } = {},
 ): RaceProjectionRow {
   return { ...row(overrides), car_recipe: overrides.car_recipe ?? null };
+}
+
+function raceStatusRow(
+  overrides: Partial<ProjectionRow> & {
+    readonly car_recipe?: unknown;
+    readonly freshness_days?: number;
+    readonly streak_days?: number | null;
+  } = {},
+): RaceStatusProjectionRow {
+  return {
+    ...raceRow(overrides),
+    freshness_days: overrides.freshness_days ?? 2,
+    streak_days: overrides.streak_days ?? null,
+  };
 }
 
 function expectMappingError(
@@ -363,5 +384,77 @@ describe("public Community score mapper", () => {
         mapPublicCommunityRaceRows,
       );
     }
+  });
+
+  it("maps the separate race-status projection and omits a hidden streak", () => {
+    const recipe = {
+      schemaVersion: 1,
+      chassis: "formula",
+      nose: "wedge",
+      cockpit: "canopy",
+      wing: "high",
+      wheels: "slick",
+      palette: "magenta",
+      trail: "spark",
+      seed: 303,
+    } as const;
+    const page = mapPublicCommunityRaceStatusRows([
+      raceStatusRow({ car_recipe: recipe, freshness_days: 1, streak_days: 13 }),
+      raceStatusRow({
+        handle: "beta-driver",
+        weekly_score: 400,
+        active_days: 4,
+        rank_position: 2,
+        display_position: 2,
+        freshness_days: 0,
+      }),
+    ]);
+
+    expect(page.participants).toEqual([
+      expect.objectContaining({
+        handle: "alpha-driver",
+        carRecipe: recipe,
+        freshnessDays: 1,
+        streakDays: 13,
+      }),
+      expect.objectContaining({ handle: "beta-driver", freshnessDays: 0 }),
+    ]);
+    expect(Object.hasOwn(page.participants[1] ?? {}, "carRecipe")).toBe(false);
+    expect(Object.hasOwn(page.participants[1] ?? {}, "streakDays")).toBe(false);
+    expect(Object.isFrozen(page)).toBe(true);
+    expect(Object.isFrozen(page.participants[0]?.carRecipe)).toBe(true);
+    expect(publicCommunityRaceStatusPageSize).toBe(publicCommunityRacePageSize);
+    expect(
+      mapPublicCommunityRaceStatusRows([
+        raceStatusRow({ freshness_days: 65_535, streak_days: 36_533 }),
+      ]).participants[0],
+    ).toMatchObject({ freshnessDays: 65_535, streakDays: 36_533 });
+  });
+
+  it("requires exact status columns, bounds, and legacy response separation", () => {
+    const valid = raceStatusRow({ freshness_days: 3, streak_days: 9 });
+    const { freshness_days: _freshnessDays, ...missingFreshness } = valid;
+    void _freshnessDays;
+
+    expectMappingError([missingFreshness], "invalid_projection", mapPublicCommunityRaceStatusRows);
+    expectMappingError(
+      [{ ...valid, received_at: "2026-07-18T12:34:56.789Z" }],
+      "invalid_projection",
+      mapPublicCommunityRaceStatusRows,
+    );
+    for (const override of [
+      { freshness_days: -1 },
+      { freshness_days: 65_536 },
+      { streak_days: -1 },
+      { streak_days: 36_534 },
+    ]) {
+      expectMappingError(
+        [{ ...valid, ...override }],
+        "contract_mismatch",
+        mapPublicCommunityRaceStatusRows,
+      );
+    }
+    expectMappingError([valid], "invalid_projection", mapPublicCommunityRaceRows);
+    expectMappingError([valid], "invalid_projection", mapPublicCommunityScoreRows);
   });
 });

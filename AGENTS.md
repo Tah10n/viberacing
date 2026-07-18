@@ -19,12 +19,12 @@ Read these files before changing the project:
     state.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync,
-Community score query/response, compatible race response, and CarRecipe contracts, locally
-implemented OpenAPI GET and POST operations, bounded server-only PostgreSQL score/race
-adapters/mappers, a closed public problem-response factory and request/admission route, and
-procedure-only identity, passkey, restricted-recovery, pairing, source/device lifecycle, Community
-usage-ingest, Jobs-only ingest/pairing/auth/CarRecipe- proposal retention, primary profile deletion,
-session-owned CarRecipe proposal/approval, and open-season Community scoring plus terminal
+Community score query/response, compatible race and race-status responses, and CarRecipe contracts,
+locally implemented OpenAPI GET and POST operations, bounded server-only PostgreSQL
+score/race/status adapters/mappers, a closed public problem-response factory and request/admission
+route, and procedure-only identity, passkey, restricted-recovery, pairing, source/device lifecycle,
+Community usage-ingest, Jobs-only ingest/pairing/auth/CarRecipe- proposal retention, primary profile
+deletion, session-owned CarRecipe proposal/approval, and open-season Community scoring plus terminal
 finalization and bounded public score-projection database slices. A local one-shot Jobs runner now
 invokes only those seven reviewed maintenance functions through a probed least-privileged login
 contract. A local Ingest kernel bounds the raw sync envelope and parser, verifies an injected
@@ -43,16 +43,17 @@ every partial startup, and handles SIGINT/SIGTERM under a fixed deadline without
 An opt-in synthetic loopback integration now builds that host, creates a disposable least-privileged
 Ingest login in one ephemeral PostgreSQL container, sends independently signed HTTP requests, and
 proves accepted, duplicate, persistent origin-replay, revoked-device, response-contract, and exact
-persistence behavior before removing the container. The public race route now has a visible
-current-week browser consumer with an explicit validated synthetic fallback; the stable score route
-remains unchanged. These local boundaries still have no deployment proof key or secret-manager
-binding, externally verified TLS/edge route, deployment database credential, capacity evidence,
-deployment, or real-data result. A separate local enrollment slice now implements exact invite
-parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted cookies,
-atomic profile enrollment, required initial WebAuthn registration plus pending-session rotation,
-returning discoverable-credential passkey login, a session-scoped minimal passkey inventory, an
-account page, same-origin public-profile hide/show, a session-derived active-device inventory,
-immediate source pause, passkey-protected paused-source reactivation, immediate owned-device revoke,
+persistence behavior before removing the container. The public race-status route now has a visible
+current-week browser consumer with rounded freshness, optional preference-gated streak, and an
+explicit validated synthetic fallback; the stable score and legacy race routes remain unchanged.
+These local boundaries still have no deployment proof key or secret-manager binding, externally
+verified TLS/edge route, deployment database credential, capacity evidence, deployment, or real-data
+result. A separate local enrollment slice now implements exact invite parsing, GitHub OAuth state
+plus PKCE with no extra scope, purpose-separated encrypted cookies, atomic profile enrollment,
+required initial WebAuthn registration plus pending-session rotation, returning
+discoverable-credential passkey login, a session-scoped minimal passkey inventory, an account page,
+same-origin public-profile hide/show, a session-derived active-device inventory, immediate source
+pause, passkey-protected paused-source reactivation, immediate owned-device revoke,
 passkey-protected terminal source unlink, backup-passkey addition, revocation of an owned
 non-current passkey, fresh-passkey recovery-code rotation with one-time plaintext display, an
 exact-handle fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey
@@ -122,11 +123,11 @@ implementation and verification are present in the working tree.
 - `scripts/` contains repository verification and black-box policy tests.
 - `config/` contains reviewed external-host and dependency-license policy; do not widen either
   allowlist as a workaround for a failing check.
-- `apps/web/` contains the synthetic Next.js frontend, local public score/race routes and adapters,
-  bounded invite/OAuth/initial-passkey enrollment, returning-passkey login, private account
-  controls, and passkey-protected recovery-code rotation and replacement-passkey sign-in, plus the
-  pure pairing- possession verifier, local pairing start/poll routes and applications, and nested
-  agent guidance. Read `apps/web/AGENTS.md` before editing it.
+- `apps/web/` contains the synthetic Next.js frontend, local public score/race/status routes and
+  adapters, bounded invite/OAuth/initial-passkey enrollment, returning-passkey login, private
+  account controls, and passkey-protected recovery-code rotation and replacement-passkey sign-in,
+  plus the pure pairing- possession verifier, local pairing start/poll routes and applications, and
+  nested agent guidance. Read `apps/web/AGENTS.md` before editing it.
 - `apps/jobs/` contains the bounded local one-shot Community maintenance runner and nested
   least-privilege guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL

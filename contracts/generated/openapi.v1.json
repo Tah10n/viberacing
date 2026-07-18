@@ -7,6 +7,205 @@
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "paths": {
+    "/v1/community/race/status": {
+      "get": {
+        "operationId": "getCommunityRaceStatusV1",
+        "summary": "Read one bounded Community race status page",
+        "description": "Implemented and verified in this repository. Its presence here does not prove deployment.",
+        "parameters": [
+          {
+            "name": "seasonStart",
+            "in": "query",
+            "required": true,
+            "description": "Inclusive Monday season start from 1999-12-27 through 2099-12-28.",
+            "schema": {
+              "description": "Inclusive Monday season start from 1999-12-27 through 2099-12-28.",
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 10,
+              "pattern": "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$",
+              "format": "date",
+              "x-viberacing-dateMinimum": "1999-12-27",
+              "x-viberacing-dateMaximum": "2099-12-28",
+              "x-viberacing-isoWeekday": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful bounded response.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CommunityRaceStatusPageV1" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "406": {
+            "description": "Not acceptable.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable.",
+            "headers": {
+              "Cache-Control": {
+                "description": "The response is not stored by browsers or shared caches.",
+                "schema": { "type": "string", "const": "no-store" }
+              },
+              "Vary": {
+                "description": "Representation negotiation varies on the Accept request header.",
+                "schema": { "type": "string", "const": "Accept" }
+              },
+              "x-request-id": {
+                "description": "Server-generated opaque request correlation identifier.",
+                "schema": {
+                  "type": "string",
+                  "minLength": 26,
+                  "maxLength": 26,
+                  "pattern": "^req_[A-Za-z0-9_-]{22}$"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetailsV1" }
+              }
+            }
+          }
+        },
+        "x-viberacing-admission-policy": "no-queue-4",
+        "x-viberacing-authentication-contract": "none",
+        "x-viberacing-cache-policy": "no-store",
+        "x-viberacing-cors-policy": "same-origin",
+        "x-viberacing-query-contract": { "$ref": "#/components/schemas/CommunityScoreQueryV1" },
+        "x-viberacing-query-policy": "closed-single-value",
+        "x-viberacing-request-body-policy": "none",
+        "x-viberacing-request-contract": "none",
+        "x-viberacing-status": "implemented-local"
+      }
+    },
     "/v1/community/race": {
       "get": {
         "operationId": "getCommunityRaceV1",
@@ -1560,6 +1759,145 @@
           }
         }
       },
+      "CommunityRaceStatusPageV1": {
+        "title": "CommunityRaceStatusPageV1",
+        "description": "Bounded response-only Community race status page. It preserves the compatible race fields, adds only server-derived UTC-day-rounded freshness and an optional user-visible derived streak, and contains no private identifier, exact timestamp, raw usage, or daily detail.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schemaVersion", "trustTier", "selfReported", "participants"],
+        "properties": {
+          "schemaVersion": { "type": "integer", "const": 1, "minimum": 1, "maximum": 1 },
+          "trustTier": { "type": "string", "const": "community", "minLength": 9, "maxLength": 9 },
+          "selfReported": { "type": "boolean", "const": true },
+          "participants": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 32,
+            "x-viberacing-uniqueBy": "displayPosition",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "x-viberacing-optionalProperties": ["carRecipe", "streakDays"],
+              "required": [
+                "seasonStart",
+                "seasonEnd",
+                "scoreVersion",
+                "seasonFinalized",
+                "handle",
+                "weeklyScore",
+                "activeDays",
+                "sourceCount",
+                "rankPosition",
+                "displayPosition",
+                "freshnessDays"
+              ],
+              "properties": {
+                "seasonStart": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 10,
+                  "pattern": "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$",
+                  "format": "date",
+                  "x-viberacing-dateMinimum": "1999-12-27",
+                  "x-viberacing-dateMaximum": "2099-12-28",
+                  "x-viberacing-isoWeekday": 1
+                },
+                "seasonEnd": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 10,
+                  "pattern": "^(?:20[0-9]{2}-[0-9]{2}-[0-9]{2}|2100-01-03)$",
+                  "format": "date",
+                  "x-viberacing-dateMinimum": "2000-01-02",
+                  "x-viberacing-dateMaximum": "2100-01-03",
+                  "x-viberacing-isoWeekday": 7
+                },
+                "scoreVersion": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 32,
+                  "pattern": "^[a-z][a-z0-9_]{2,31}$"
+                },
+                "seasonFinalized": { "type": "boolean" },
+                "handle": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 24,
+                  "pattern": "^[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]$"
+                },
+                "carRecipe": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "schemaVersion",
+                    "chassis",
+                    "nose",
+                    "cockpit",
+                    "wing",
+                    "wheels",
+                    "palette",
+                    "trail",
+                    "seed"
+                  ],
+                  "properties": {
+                    "schemaVersion": { "type": "integer", "const": 1, "minimum": 1, "maximum": 1 },
+                    "chassis": {
+                      "type": "string",
+                      "enum": ["formula", "rally", "roadster"],
+                      "minLength": 5,
+                      "maxLength": 8
+                    },
+                    "nose": {
+                      "type": "string",
+                      "enum": ["classic", "scoop", "wedge"],
+                      "minLength": 5,
+                      "maxLength": 7
+                    },
+                    "cockpit": {
+                      "type": "string",
+                      "enum": ["canopy", "open", "rally"],
+                      "minLength": 4,
+                      "maxLength": 6
+                    },
+                    "wing": {
+                      "type": "string",
+                      "enum": ["high", "low", "none"],
+                      "minLength": 3,
+                      "maxLength": 4
+                    },
+                    "wheels": {
+                      "type": "string",
+                      "enum": ["all-terrain", "slick", "street"],
+                      "minLength": 5,
+                      "maxLength": 11
+                    },
+                    "palette": {
+                      "type": "string",
+                      "enum": ["magenta", "mint", "redline", "sunburst", "turbo-blue"],
+                      "minLength": 4,
+                      "maxLength": 10
+                    },
+                    "trail": {
+                      "type": "string",
+                      "enum": ["grid", "none", "spark"],
+                      "minLength": 4,
+                      "maxLength": 5
+                    },
+                    "seed": { "type": "integer", "minimum": 0, "maximum": 65535 }
+                  }
+                },
+                "weeklyScore": { "type": "integer", "minimum": 0, "maximum": 7000 },
+                "activeDays": { "type": "integer", "minimum": 0, "maximum": 7 },
+                "sourceCount": { "type": "integer", "minimum": 0, "maximum": 32 },
+                "rankPosition": { "type": "integer", "minimum": 1, "maximum": 32 },
+                "displayPosition": { "type": "integer", "minimum": 1, "maximum": 32 },
+                "freshnessDays": { "type": "integer", "minimum": 0, "maximum": 65535 },
+                "streakDays": { "type": "integer", "minimum": 0, "maximum": 36533 }
+              }
+            }
+          }
+        }
+      },
       "CommunityScorePageV1": {
         "title": "CommunityScorePageV1",
         "description": "Bounded response-only Community score page with explicit self-reported trust metadata and no private identifiers, raw usage, daily detail, or exact timestamps.",
@@ -1990,6 +2328,6 @@
       }
     }
   },
-  "x-viberacing-contract-source": "sha256:e50a5b7ae5d361cc7caf6390850fb0abb2759f5696cb2308be1b45f7f4f00c46",
+  "x-viberacing-contract-source": "sha256:44f6fa5f23b7a41edcdc2d1833830a36ec04404a2e3a6af002fdbdebcbf77a75",
   "x-viberacing-status": "implemented-local"
 }

@@ -39,6 +39,30 @@ AS $function$
   SELECT pg_catalog.current_setting('viberacing.test_week_start')::date + p_day_offset
 $function$;
 
+CREATE FUNCTION pg_temp.public_score_utc_day_offset()
+RETURNS integer
+LANGUAGE sql
+STABLE
+AS $function$
+  SELECT pg_catalog.date_part(
+    'isodow',
+    pg_catalog.statement_timestamp() AT TIME ZONE 'UTC'
+  )::integer - 1
+$function$;
+
+CREATE FUNCTION pg_temp.public_score_received_at(p_max_age_days integer)
+RETURNS timestamptz
+LANGUAGE sql
+STABLE
+AS $function$
+  SELECT (
+    (
+      (pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date
+      - LEAST(pg_temp.public_score_utc_day_offset(), p_max_age_days)
+    )::timestamp AT TIME ZONE 'UTC'
+  )
+$function$;
+
 SET LOCAL ROLE viberacing_owner;
 
 INSERT INTO viberacing_private.profiles (
@@ -46,6 +70,7 @@ INSERT INTO viberacing_private.profiles (
   github_user_id,
   handle,
   state,
+  streak_visible,
   hidden_at,
   deletion_requested_at
 )
@@ -55,6 +80,7 @@ VALUES
     900000000000018101,
     'public_alpha',
     'active',
+    true,
     NULL,
     NULL
   ),
@@ -63,6 +89,7 @@ VALUES
     900000000000018102,
     'public_beta',
     'active',
+    false,
     NULL,
     NULL
   ),
@@ -71,6 +98,7 @@ VALUES
     900000000000018103,
     'public_gamma',
     'active',
+    true,
     NULL,
     NULL
   ),
@@ -79,6 +107,7 @@ VALUES
     900000000000018104,
     'hidden_driver',
     'hidden',
+    true,
     pg_catalog.statement_timestamp(),
     NULL
   ),
@@ -87,6 +116,7 @@ VALUES
     900000000000018105,
     'deleting_driver',
     'deletion_pending',
+    true,
     pg_catalog.statement_timestamp(),
     pg_catalog.statement_timestamp()
   ),
@@ -95,6 +125,7 @@ VALUES
     900000000000018106,
     'enrolling_driver',
     'enrolling',
+    true,
     NULL,
     NULL
   );
@@ -233,6 +264,151 @@ VALUES
     6,
     pg_catalog.statement_timestamp()
   );
+
+INSERT INTO viberacing_private.codex_sources (source_id, profile_id, state)
+VALUES
+  (
+    'src_AAAAAAAAAAAAAAAAAAAAAA',
+    '00000000-0000-4000-8000-000000018101',
+    'active'
+  ),
+  (
+    'src_BBBBBBBBBBBBBBBBBBBBBB',
+    '00000000-0000-4000-8000-000000018102',
+    'paused'
+  ),
+  (
+    'src_CCCCCCCCCCCCCCCCCCCCCC',
+    '00000000-0000-4000-8000-000000018103',
+    'unlinked'
+  );
+
+INSERT INTO viberacing_private.source_day_values (
+  source_id,
+  codex_reported_date,
+  tokens,
+  accepted_snapshot_id,
+  accepted_sync_id,
+  accepted_device_id,
+  first_accepted_at,
+  last_accepted_at
+)
+VALUES
+  (
+    'src_AAAAAAAAAAAAAAAAAAAAAA',
+    pg_temp.public_score_date(0),
+    1000,
+    NULL,
+    'syn_AAAAAAAAAAAAAAAAAAAAAA',
+    'dev_AAAAAAAAAAAAAAAAAAAAAA',
+    pg_temp.public_score_received_at(2),
+    pg_temp.public_score_received_at(2)
+  ),
+  (
+    'src_BBBBBBBBBBBBBBBBBBBBBB',
+    pg_temp.public_score_date(0),
+    900,
+    NULL,
+    'syn_BBBBBBBBBBBBBBBBBBBBBB',
+    'dev_BBBBBBBBBBBBBBBBBBBBBB',
+    pg_temp.public_score_received_at(1),
+    pg_temp.public_score_received_at(1)
+  ),
+  (
+    'src_CCCCCCCCCCCCCCCCCCCCCC',
+    pg_temp.public_score_date(0),
+    800,
+    NULL,
+    'syn_CCCCCCCCCCCCCCCCCCCCCC',
+    'dev_CCCCCCCCCCCCCCCCCCCCCC',
+    pg_temp.public_score_received_at(0),
+    pg_temp.public_score_received_at(0)
+  ),
+  (
+    'src_AAAAAAAAAAAAAAAAAAAAAA',
+    pg_temp.public_score_date(-1),
+    1000,
+    NULL,
+    'syn_DDDDDDDDDDDDDDDDDDDDDD',
+    'dev_AAAAAAAAAAAAAAAAAAAAAA',
+    pg_catalog.statement_timestamp() - INTERVAL '7 days',
+    pg_catalog.statement_timestamp() - INTERVAL '7 days'
+  );
+
+INSERT INTO viberacing_private.season_daily_scores (
+  season_start,
+  profile_id,
+  score_date,
+  daily_score
+)
+SELECT
+  pg_temp.public_score_date(0),
+  profile_score.profile_id,
+  pg_temp.public_score_date(day_record.day_offset),
+  CASE
+    WHEN day_record.day_offset < profile_score.positive_day_count THEN 100
+    ELSE 0
+  END::smallint
+FROM (
+  VALUES
+    ('00000000-0000-4000-8000-000000018101'::uuid, 6),
+    ('00000000-0000-4000-8000-000000018102'::uuid, 5),
+    ('00000000-0000-4000-8000-000000018103'::uuid, 5)
+) AS profile_score(profile_id, positive_day_count)
+CROSS JOIN pg_catalog.generate_series(0, 6) AS day_record(day_offset);
+
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  season_end,
+  score_version,
+  grace_ends_at
+)
+VALUES (
+  pg_temp.public_score_date(-7),
+  pg_temp.public_score_date(-1),
+  'community_v1',
+  viberacing_private.community_season_grace_ends_at(pg_temp.public_score_date(-7))
+);
+
+INSERT INTO viberacing_private.season_entries (
+  season_start,
+  profile_id,
+  weekly_score,
+  active_days,
+  contributing_source_count,
+  rank_position,
+  display_order,
+  computed_at
+)
+VALUES (
+  pg_temp.public_score_date(-7),
+  '00000000-0000-4000-8000-000000018101',
+  700,
+  7,
+  1,
+  1,
+  1,
+  pg_catalog.statement_timestamp()
+);
+
+INSERT INTO viberacing_private.season_daily_scores (
+  season_start,
+  profile_id,
+  score_date,
+  daily_score
+)
+SELECT
+  pg_temp.public_score_date(-7),
+  '00000000-0000-4000-8000-000000018101',
+  pg_temp.public_score_date(-7 + day_record.day_offset),
+  100
+FROM pg_catalog.generate_series(0, 6) AS day_record(day_offset);
+
+UPDATE viberacing_private.seasons
+SET refreshed_at = pg_catalog.statement_timestamp(),
+  state = 'finalized',
+  finalized_at = pg_catalog.statement_timestamp()
+WHERE season_start = pg_temp.public_score_date(-7);
 
 SET LOCAL ROLE viberacing_web;
 
@@ -394,6 +570,188 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
+    SELECT pg_catalog.count(*) = 3
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(0),
+      100
+    )
+  )
+  AND (
+    SELECT freshness_days = LEAST(pg_temp.public_score_utc_day_offset(), 2)
+      AND streak_days = 7 + LEAST(pg_temp.public_score_utc_day_offset() + 1, 6)
+      AND car_recipe ->> 'palette' = 'magenta'
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'public_alpha'
+  )
+  AND (
+    SELECT freshness_days = LEAST(pg_temp.public_score_utc_day_offset(), 1)
+      AND streak_days IS NULL
+      AND car_recipe IS NULL
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'public_beta'
+  )
+  AND (
+    SELECT freshness_days = 0
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'public_gamma'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'hidden_driver'
+  ),
+  'the status projection rounds accepted server time and respects cross-week streak visibility'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.array_agg(DISTINCT output_key.key ORDER BY output_key.key) = ARRAY[
+      'active_days',
+      'car_recipe',
+      'display_position',
+      'freshness_days',
+      'handle',
+      'rank_position',
+      'score_version',
+      'season_end',
+      'season_finalized',
+      'season_start',
+      'source_count',
+      'streak_days',
+      'weekly_score'
+    ]::text[]
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(0),
+      100
+    ) AS status_record
+    CROSS JOIN LATERAL pg_catalog.jsonb_object_keys(
+      pg_catalog.to_jsonb(status_record)
+    ) AS output_key(key)
+  ),
+  'the status projection contains only the reviewed public field allowlist'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT season_finalized
+      AND freshness_days = 7
+      AND streak_days = 7
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(-7),
+      100
+    )
+    WHERE handle = 'public_alpha'
+  ),
+  'a finalized past season anchors streak on Sunday and keeps freshness day-rounded'
+);
+
+SET LOCAL ROLE viberacing_owner;
+
+SAVEPOINT freshness_saturation_fixture;
+
+INSERT INTO viberacing_private.profiles (
+  profile_id,
+  github_user_id,
+  handle,
+  state,
+  streak_visible,
+  hidden_at,
+  deletion_requested_at
+)
+VALUES (
+  '00000000-0000-4000-8000-000000018107',
+  900000000000018107,
+  'public_delta',
+  'active',
+  true,
+  NULL,
+  NULL
+);
+
+INSERT INTO viberacing_private.codex_sources (source_id, profile_id, state)
+VALUES (
+  'src_DDDDDDDDDDDDDDDDDDDDDD',
+  '00000000-0000-4000-8000-000000018107',
+  'active'
+);
+
+INSERT INTO viberacing_private.source_day_values (
+  source_id,
+  codex_reported_date,
+  tokens,
+  accepted_snapshot_id,
+  accepted_sync_id,
+  accepted_device_id,
+  first_accepted_at,
+  last_accepted_at
+)
+VALUES (
+  'src_DDDDDDDDDDDDDDDDDDDDDD',
+  pg_temp.public_score_date(0),
+  100,
+  NULL,
+  'syn_EEEEEEEEEEEEEEEEEEEEEE',
+  'dev_DDDDDDDDDDDDDDDDDDDDDD',
+  pg_catalog.statement_timestamp() - INTERVAL '70000 days',
+  pg_catalog.statement_timestamp() - INTERVAL '70000 days'
+);
+
+INSERT INTO viberacing_private.season_entries (
+  season_start,
+  profile_id,
+  weekly_score,
+  active_days,
+  contributing_source_count,
+  rank_position,
+  display_order,
+  computed_at
+)
+VALUES (
+  pg_temp.public_score_date(0),
+  '00000000-0000-4000-8000-000000018107',
+  100,
+  1,
+  1,
+  7,
+  7,
+  pg_catalog.statement_timestamp()
+);
+
+SET LOCAL ROLE viberacing_web;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT freshness_days = 65535
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'public_delta'
+  ),
+  'freshness saturates at the public serialization bound'
+);
+
+SET LOCAL ROLE viberacing_owner;
+
+ROLLBACK TO SAVEPOINT freshness_saturation_fixture;
+RELEASE SAVEPOINT freshness_saturation_fixture;
+
+SET LOCAL ROLE viberacing_web;
+
+SELECT pg_temp.assert_true(
+  (
     SELECT pg_catalog.count(*) = 2
     FROM viberacing_api.list_public_community_scores(
       pg_temp.public_score_date(0),
@@ -477,6 +835,27 @@ SELECT pg_temp.assert_true(
     )
   ),
   'the race projection removes a hidden profile and its active recipe at read time'
+);
+
+SELECT pg_temp.assert_true(
+  NOT EXISTS (
+    SELECT 1
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(0),
+      100
+    )
+    WHERE handle = 'public_alpha'
+  )
+  AND (
+    SELECT pg_catalog.count(*) = 2
+      AND pg_catalog.min(display_position) = 1
+      AND pg_catalog.max(display_position) = 2
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(0),
+      100
+    )
+  ),
+  'the status projection removes a hidden profile and closes its display position at read time'
 );
 
 SET LOCAL ROLE viberacing_owner;
@@ -574,6 +953,82 @@ SELECT pg_temp.assert_true(
 SELECT pg_temp.assert_true(
   (
     SELECT pg_catalog.count(*) = 0
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(7),
+      100
+    )
+  ),
+  'a future season without materialized public state returns no status participants'
+);
+
+SET LOCAL ROLE viberacing_owner;
+
+SAVEPOINT future_status_fixture;
+
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  season_end,
+  score_version,
+  grace_ends_at
+)
+VALUES (
+  pg_temp.public_score_date(7),
+  pg_temp.public_score_date(13),
+  'community_v1',
+  viberacing_private.community_season_grace_ends_at(pg_temp.public_score_date(7))
+);
+
+INSERT INTO viberacing_private.season_entries (
+  season_start,
+  profile_id,
+  weekly_score,
+  active_days,
+  contributing_source_count,
+  rank_position,
+  display_order,
+  computed_at
+)
+VALUES (
+  pg_temp.public_score_date(7),
+  '00000000-0000-4000-8000-000000018102',
+  100,
+  1,
+  1,
+  1,
+  1,
+  pg_catalog.statement_timestamp()
+);
+
+SET LOCAL ROLE viberacing_web;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 1
+    FROM viberacing_api.list_public_community_race(
+      pg_temp.public_score_date(7),
+      100
+    )
+  )
+  AND (
+    SELECT pg_catalog.count(*) = 0
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(7),
+      100
+    )
+  ),
+  'the status projection suppresses a materialized future season without changing legacy race'
+);
+
+SET LOCAL ROLE viberacing_owner;
+
+ROLLBACK TO SAVEPOINT future_status_fixture;
+RELEASE SAVEPOINT future_status_fixture;
+
+SET LOCAL ROLE viberacing_web;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 0
     FROM viberacing_api.list_public_community_scores(DATE '1999-12-27', 100)
   )
   AND (
@@ -639,6 +1094,20 @@ SELECT pg_temp.expect_operation_failure(
     FROM viberacing_api.list_public_community_race(pg_temp.public_score_date(0), 101)
   $sql$,
   'a race result limit above the public ceiling fails closed through the score boundary'
+);
+SELECT pg_temp.expect_operation_failure(
+  $sql$SELECT * FROM viberacing_api.list_public_community_race_status(NULL, 100)$sql$,
+  'a null race status season fails closed through the score boundary'
+);
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT *
+    FROM viberacing_api.list_public_community_race_status(
+      pg_temp.public_score_date(0),
+      101
+    )
+  $sql$,
+  'a race status result limit above the public ceiling fails closed through the score boundary'
 );
 
 ROLLBACK;

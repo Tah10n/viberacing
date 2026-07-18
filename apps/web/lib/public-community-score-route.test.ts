@@ -1,13 +1,20 @@
-import type { CommunityRacePageV1, CommunityScorePageV1 } from "@viberacing/contracts";
+import type {
+  CommunityRacePageV1,
+  CommunityRaceStatusPageV1,
+  CommunityScorePageV1,
+} from "@viberacing/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import {
   acceptsPublicCommunityScoreJson,
   createPublicCommunityRaceRoute,
+  createPublicCommunityRaceStatusRoute,
   createPublicCommunityScoreRoute,
   parsePublicCommunityRaceQuery,
+  parsePublicCommunityRaceStatusQuery,
   parsePublicCommunityScoreQuery,
   publicCommunityRaceRoutePolicy,
+  publicCommunityRaceStatusRoutePolicy,
   publicCommunityScoreRoutePolicy,
 } from "./public-community-score-route";
 import { PublicCommunityScoreStoreError } from "./public-community-score-store";
@@ -17,6 +24,7 @@ import { createPublicScoreAdmission } from "./public-score-admission";
 
 const routeUrl = "https://viberacing.invalid/v1/community/scores";
 const raceRouteUrl = "https://viberacing.invalid/v1/community/race";
+const raceStatusRouteUrl = "https://viberacing.invalid/v1/community/race/status";
 const validQuery = "?seasonStart=2026-07-13";
 const emptyPage: CommunityScorePageV1 = Object.freeze({
   schemaVersion: 1,
@@ -33,6 +41,13 @@ function raceRequest(query = validQuery, headers?: HeadersInit): Request {
   return new Request(`${raceRouteUrl}${query}`, headers === undefined ? undefined : { headers });
 }
 
+function raceStatusRequest(query = validQuery, headers?: HeadersInit): Request {
+  return new Request(
+    `${raceStatusRouteUrl}${query}`,
+    headers === undefined ? undefined : { headers },
+  );
+}
+
 function createRoute(readScores: (seasonStart: string) => Promise<unknown>, admissionLimit = 4) {
   return createPublicCommunityScoreRoute({
     admission: createPublicScoreAdmission(admissionLimit),
@@ -46,6 +61,17 @@ function createRaceRoute(readRace: (seasonStart: string) => Promise<unknown>, ad
     admission: createPublicScoreAdmission(admissionLimit),
     createRequestId: createPublicRequestId,
     readRace,
+  });
+}
+
+function createRaceStatusRoute(
+  readRaceStatus: (seasonStart: string) => Promise<unknown>,
+  admissionLimit = 4,
+) {
+  return createPublicCommunityRaceStatusRoute({
+    admission: createPublicScoreAdmission(admissionLimit),
+    createRequestId: createPublicRequestId,
+    readRaceStatus,
   });
 }
 
@@ -455,8 +481,14 @@ describe("public Community race route", () => {
 
   it("keeps the new and stable score paths exact and independent", () => {
     expect(parsePublicCommunityRaceQuery(raceRequest())).toEqual({ seasonStart: "2026-07-13" });
+    expect(parsePublicCommunityRaceStatusQuery(raceStatusRequest())).toEqual({
+      seasonStart: "2026-07-13",
+    });
     expect(parsePublicCommunityRaceQuery(request())).toBeUndefined();
+    expect(parsePublicCommunityRaceQuery(raceStatusRequest())).toBeUndefined();
+    expect(parsePublicCommunityRaceStatusQuery(raceRequest())).toBeUndefined();
     expect(parsePublicCommunityScoreQuery(raceRequest())).toBeUndefined();
+    expect(parsePublicCommunityScoreQuery(raceStatusRequest())).toBeUndefined();
   });
 
   it("returns one validated no-store race page with the optional active recipe", async () => {
@@ -501,5 +533,33 @@ describe("public Community race route", () => {
       queryTimeoutMs: 6_000,
       statementTimeoutMs: 5_000,
     });
+  });
+
+  it("returns the separately validated race-status page without widening race v1", async () => {
+    const statusPage: CommunityRaceStatusPageV1 = {
+      ...racePage,
+      participants: racePage.participants.map((participant) => ({
+        ...participant,
+        freshnessDays: 2,
+        streakDays: 12,
+      })),
+    };
+    const readRaceStatus = vi.fn(() => Promise.resolve(statusPage));
+    const response = await createRaceStatusRoute(readRaceStatus).get(raceStatusRequest());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual(statusPage);
+    expect(readRaceStatus).toHaveBeenCalledWith("2026-07-13");
+
+    const legacyResponse = await createRaceRoute(() => Promise.resolve(statusPage)).get(
+      raceRequest(),
+    );
+    expect(legacyResponse.status).toBe(500);
+  });
+
+  it("shares the same bounded policy for the race-status operation", () => {
+    expect(publicCommunityRaceStatusRoutePolicy).toBe(publicCommunityScoreRoutePolicy);
+    expect(publicCommunityRaceStatusRoutePolicy).toBe(publicCommunityRaceRoutePolicy);
   });
 });

@@ -170,6 +170,7 @@ describe("RaceExperience interactions", () => {
               {
                 activeDays: 6,
                 displayPosition: 1,
+                freshnessDays: 0,
                 handle: "visible_driver",
                 rankPosition: 1,
                 scoreVersion: "community_v1",
@@ -177,6 +178,7 @@ describe("RaceExperience interactions", () => {
                 seasonFinalized: false,
                 seasonStart: "2026-07-13",
                 sourceCount: 2,
+                streakDays: 12,
                 weeklyScore: 6123,
               },
               {
@@ -193,6 +195,7 @@ describe("RaceExperience interactions", () => {
                   seed: 202,
                 },
                 displayPosition: 2,
+                freshnessDays: 1,
                 handle: "second_driver",
                 rankPosition: 2,
                 scoreVersion: "community_v1",
@@ -228,6 +231,7 @@ describe("RaceExperience interactions", () => {
     expect(profile?.textContent).toContain("second_driver");
     expect(profile?.textContent).toContain("4,096 pts");
     expect(profile?.textContent).toContain("#2");
+    expect(profile?.textContent).toContain("1 day");
     expect(profile?.querySelector(".daily-bars")).toBeNull();
     expect(profile?.querySelector('.car-swatch[data-paint="redline"]')).not.toBeNull();
 
@@ -247,12 +251,14 @@ describe("RaceExperience interactions", () => {
     });
     expect(firstProfile?.getAttribute("aria-current")).toBe("true");
     expect(profile?.textContent).toContain("visible_driver");
+    expect(profile?.textContent).toContain("today");
+    expect(profile?.textContent).toContain("12d");
     expect(window.location.pathname + window.location.search + window.location.hash).toBe(
       "/?profile=visible_driver#profile",
     );
     expect(scrollIntoView).toHaveBeenCalled();
     expect(fetchScore).toHaveBeenCalledWith(
-      "/v1/community/race?seasonStart=2026-07-13",
+      "/v1/community/race/status?seasonStart=2026-07-13",
       expect.objectContaining({ credentials: "omit", method: "GET" }),
     );
 

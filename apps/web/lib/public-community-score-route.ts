@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   validateCommunityRacePageV1,
+  validateCommunityRaceStatusPageV1,
   validateCommunityScorePageV1,
   validateCommunityScoreQueryV1,
   type CommunityScoreQueryV1,
@@ -26,6 +27,7 @@ import {
 import type { PublicScoreAdmission } from "./public-score-admission";
 
 const raceRoutePath = "/v1/community/race";
+const raceStatusRoutePath = "/v1/community/race/status";
 const scoreRoutePath = "/v1/community/scores";
 const queryPrefix = "?seasonStart=";
 const maximumUrlLength = 2_048;
@@ -49,6 +51,7 @@ export const publicCommunityScoreRoutePolicy = Object.freeze({
   statementTimeoutMs: publicScoreDatabaseStatementTimeoutMs,
 });
 export const publicCommunityRaceRoutePolicy = publicCommunityScoreRoutePolicy;
+export const publicCommunityRaceStatusRoutePolicy = publicCommunityScoreRoutePolicy;
 
 export interface PublicCommunityScoreRouteDependencies {
   readonly admission: PublicScoreAdmission;
@@ -60,6 +63,12 @@ export interface PublicCommunityRaceRouteDependencies {
   readonly admission: PublicScoreAdmission;
   readonly createRequestId: () => PublicRequestId;
   readonly readRace: (seasonStart: string) => Promise<unknown>;
+}
+
+export interface PublicCommunityRaceStatusRouteDependencies {
+  readonly admission: PublicScoreAdmission;
+  readonly createRequestId: () => PublicRequestId;
+  readonly readRaceStatus: (seasonStart: string) => Promise<unknown>;
 }
 
 export interface PublicCommunityScoreRoute {
@@ -265,6 +274,12 @@ export function parsePublicCommunityRaceQuery(request: Request): CommunityScoreQ
   return parsePublicCommunityQuery(request, raceRoutePath);
 }
 
+export function parsePublicCommunityRaceStatusQuery(
+  request: Request,
+): CommunityScoreQueryV1 | undefined {
+  return parsePublicCommunityQuery(request, raceStatusRoutePath);
+}
+
 function problemResponse(
   kind: PublicProblemKind,
   requestId: PublicRequestId,
@@ -376,5 +391,17 @@ export function createPublicCommunityRaceRoute(
     parseQuery: parsePublicCommunityRaceQuery,
     readPage: dependencies.readRace,
     validatePage: validateCommunityRacePageV1,
+  });
+}
+
+export function createPublicCommunityRaceStatusRoute(
+  dependencies: PublicCommunityRaceStatusRouteDependencies,
+): PublicCommunityScoreRoute {
+  return createPublicCommunityRoute({
+    admission: dependencies.admission,
+    createRequestId: dependencies.createRequestId,
+    parseQuery: parsePublicCommunityRaceStatusQuery,
+    readPage: dependencies.readRaceStatus,
+    validatePage: validateCommunityRaceStatusPageV1,
   });
 }

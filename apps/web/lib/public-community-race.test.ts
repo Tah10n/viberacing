@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { CommunityRacePageV1 } from "@viberacing/contracts";
+import type { CommunityRaceStatusPageV1 } from "@viberacing/contracts";
 
 import {
   currentCommunitySeasonStart,
   isPublicCommunityHandle,
   loadPublicCommunityRace,
-  mapCommunityRacePageToRace,
+  mapCommunityRaceStatusPageToRace,
 } from "./public-community-race";
 
 const seasonStart = "2026-07-13";
@@ -26,6 +26,7 @@ const validPage = {
     {
       activeDays: 7,
       displayPosition: 1,
+      freshnessDays: 0,
       handle: "community_one",
       carRecipe: activeRecipe,
       rankPosition: 1,
@@ -34,11 +35,13 @@ const validPage = {
       seasonFinalized: false,
       seasonStart,
       sourceCount: 2,
+      streakDays: 13,
       weeklyScore: 6400,
     },
     {
       activeDays: 7,
       displayPosition: 2,
+      freshnessDays: 2,
       handle: "community_two",
       rankPosition: 1,
       scoreVersion: "community_v1",
@@ -52,7 +55,7 @@ const validPage = {
   schemaVersion: 1,
   selfReported: true,
   trustTier: "community",
-} as const satisfies CommunityRacePageV1;
+} as const satisfies CommunityRaceStatusPageV1;
 
 function scoreResponse(value: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(value), {
@@ -87,18 +90,19 @@ describe("visible public Community race", () => {
   });
 
   it("maps only the validated requested season into public presentation fields", () => {
-    const participants = mapCommunityRacePageToRace(validPage, seasonStart);
+    const participants = mapCommunityRaceStatusPageToRace(validPage, seasonStart);
     expect(participants).toEqual([
       expect.objectContaining({
         car: activeRecipe,
-        freshnessDays: null,
+        freshnessDays: 0,
         handle: "community_one",
         id: "community-1",
         rank: 1,
-        streakDays: null,
+        streakDays: 13,
       }),
       expect.objectContaining({
         handle: "community_two",
+        freshnessDays: 2,
         id: "community-2",
         rank: 1,
       }),
@@ -116,6 +120,50 @@ describe("visible public Community race", () => {
       {
         ...validPage,
         participants: [{ ...validPage.participants[0], seasonStart: "2026-07-06" }],
+      },
+      seasonStart,
+    ],
+    [
+      {
+        ...validPage,
+        participants: validPage.participants.map((participant) => {
+          const { freshnessDays: _freshnessDays, ...withoutFreshness } = participant;
+          void _freshnessDays;
+          return withoutFreshness;
+        }),
+      },
+      seasonStart,
+    ],
+    [
+      {
+        ...validPage,
+        participants: [{ ...validPage.participants[0], freshnessDays: 65_536 }],
+      },
+      seasonStart,
+    ],
+    [
+      {
+        ...validPage,
+        participants: [{ ...validPage.participants[0], streakDays: null }],
+      },
+      seasonStart,
+    ],
+    [
+      {
+        ...validPage,
+        participants: [{ ...validPage.participants[0], streakDays: 36_534 }],
+      },
+      seasonStart,
+    ],
+    [
+      {
+        ...validPage,
+        participants: [
+          {
+            ...validPage.participants[0],
+            receivedAt: "2026-07-18T12:34:56.789Z",
+          },
+        ],
       },
       seasonStart,
     ],
@@ -148,13 +196,13 @@ describe("visible public Community race", () => {
       seasonStart,
     ],
   ])("fails closed for invalid or mismatched race pages", (page, expectedSeason) => {
-    expect(mapCommunityRacePageToRace(page, expectedSeason)).toBeUndefined();
+    expect(mapCommunityRaceStatusPageToRace(page, expectedSeason)).toBeUndefined();
   });
 
   it("reads the exact same-origin endpoint without credentials or caching", async () => {
     const controller = new AbortController();
     const fetchScore = vi.fn((input: string, init: RequestInit) => {
-      expect(input).toBe("/v1/community/race?seasonStart=2026-07-13");
+      expect(input).toBe("/v1/community/race/status?seasonStart=2026-07-13");
       expect(init).toMatchObject({
         cache: "no-store",
         credentials: "omit",

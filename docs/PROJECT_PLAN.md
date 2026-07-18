@@ -501,16 +501,24 @@ to each otherwise identical row. Revision 0027 projects that recipe only after c
 active-profile filtering. Proposal identity, state, timestamps, and private identifiers remain
 absent; a recipe is current presentation state, not an immutable historical season snapshot.
 
-The visible home race now uses the separate same-origin race operation for its current
+A third compatible read contract is `GET /v1/community/race/status?seasonStart=YYYY-MM-DD`. ADR 0040
+preserves both closed older components and adds only a required saturated complete-UTC-day freshness
+value plus an optional preference-gated consecutive positive-score streak to the race rows. Revision
+0029 derives them at read time from accepted server receipts and materialized daily scores. Exact
+timestamps, daily history, private identifiers, and the preference itself remain absent; status
+never changes score, rank, authority, or finalized state.
+
+The visible home race now uses that separate same-origin status operation for its current
 server-selected Monday. It accepts only the bounded Public response, loads its compact independent
 validator after hydration, uses no credentials or browser persistence, and keeps a clearly labeled
 synthetic fallback on any invalid or unavailable result. A participant without an active recipe uses
 a repository-owned visual fallback. Selecting a Community handle updates one same-page summary with
-only its weekly score, rank, active-day and source counts; the UI explicitly keeps daily detail,
-device counts, exact usage, proposal state, and identifiers out of that surface. The exact public
-handle can be shared as `/?profile=handle#profile`; invalid or duplicate values are ignored, and a
-missing top-32 row is never substituted with another profile. Streak, freshness, authenticated
-daily/profile detail, cache, live database integration, and deployment remain separate gates.
+only its weekly score, rank, active-day/source counts, rounded freshness, optional streak, and
+visual-marker car; the UI explicitly keeps daily detail, device counts, exact usage/receipt time,
+proposal state, and identifiers out of that surface. The exact public handle can be shared as
+`/?profile=handle#profile`; invalid or duplicate values are ignored, and a missing top-32 row is
+never substituted with another profile. Authenticated daily/profile detail, cache, live database
+integration, query-plan/load evidence, monitoring, and deployment remain separate gates.
 
 ### ConnectorSyncV1
 

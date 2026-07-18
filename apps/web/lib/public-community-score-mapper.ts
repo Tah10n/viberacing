@@ -2,10 +2,13 @@ import "server-only";
 
 import {
   communityRacePageV1Schema,
+  communityRaceStatusPageV1Schema,
   communityScorePageV1Schema,
   type CommunityRacePageV1,
+  type CommunityRaceStatusPageV1,
   type CommunityScorePageV1,
   validateCommunityRacePageV1,
+  validateCommunityRaceStatusPageV1,
   validateCommunityScorePageV1,
 } from "@viberacing/contracts";
 
@@ -22,14 +25,22 @@ const scoreProjectionColumns = [
   "display_position",
 ] as const;
 const raceProjectionColumns = [...scoreProjectionColumns, "car_recipe"] as const;
+const raceStatusProjectionColumns = [
+  ...raceProjectionColumns,
+  "freshness_days",
+  "streak_days",
+] as const;
 const scoreProjectionColumnSet = new Set<string>(scoreProjectionColumns);
 const raceProjectionColumnSet = new Set<string>(raceProjectionColumns);
+const raceStatusProjectionColumnSet = new Set<string>(raceStatusProjectionColumns);
 const millisecondsPerDay = 24 * 60 * 60 * 1_000;
 
 export const publicCommunityScorePageSize =
   communityScorePageV1Schema.properties.participants.maxItems;
 export const publicCommunityRacePageSize =
   communityRacePageV1Schema.properties.participants.maxItems;
+export const publicCommunityRaceStatusPageSize =
+  communityRaceStatusPageV1Schema.properties.participants.maxItems;
 
 export type PublicCommunityScoreMappingErrorCode =
   "contract_mismatch" | "invalid_projection" | "page_limit_exceeded" | "projection_invariant";
@@ -60,6 +71,7 @@ interface ProjectionRow {
   readonly active_days: unknown;
   readonly car_recipe?: unknown;
   readonly display_position: unknown;
+  readonly freshness_days?: unknown;
   readonly handle: unknown;
   readonly rank_position: unknown;
   readonly score_version: unknown;
@@ -67,10 +79,13 @@ interface ProjectionRow {
   readonly season_finalized: unknown;
   readonly season_start: unknown;
   readonly source_count: unknown;
+  readonly streak_days?: unknown;
   readonly weekly_score: unknown;
 }
 
-function readProjectionRow(value: unknown, includeCarRecipe: boolean): ProjectionRow {
+type ProjectionKind = "race" | "score" | "status";
+
+function readProjectionRow(value: unknown, kind: ProjectionKind): ProjectionRow {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail("invalid_projection");
   }
@@ -79,8 +94,18 @@ function readProjectionRow(value: unknown, includeCarRecipe: boolean): Projectio
     fail("invalid_projection");
   }
   const keys = Reflect.ownKeys(value);
-  const columns = includeCarRecipe ? raceProjectionColumns : scoreProjectionColumns;
-  const columnSet = includeCarRecipe ? raceProjectionColumnSet : scoreProjectionColumnSet;
+  const columns =
+    kind === "status"
+      ? raceStatusProjectionColumns
+      : kind === "race"
+        ? raceProjectionColumns
+        : scoreProjectionColumns;
+  const columnSet =
+    kind === "status"
+      ? raceStatusProjectionColumnSet
+      : kind === "race"
+        ? raceProjectionColumnSet
+        : scoreProjectionColumnSet;
   if (
     keys.length !== columns.length ||
     keys.some((key) => typeof key !== "string" || !columnSet.has(key))
@@ -100,7 +125,17 @@ function readProjectionRow(value: unknown, includeCarRecipe: boolean): Projectio
     rank_position: dataValue(value, "rank_position"),
     display_position: dataValue(value, "display_position"),
   };
-  return includeCarRecipe ? { ...row, car_recipe: dataValue(value, "car_recipe") } : row;
+  if (kind === "score") {
+    return row;
+  }
+  const raceRow = { ...row, car_recipe: dataValue(value, "car_recipe") };
+  return kind === "status"
+    ? {
+        ...raceRow,
+        freshness_days: dataValue(value, "freshness_days"),
+        streak_days: dataValue(value, "streak_days"),
+      }
+    : raceRow;
 }
 
 function isCanonicalArrayIndex(key: PropertyKey, length: number): boolean {
@@ -144,7 +179,9 @@ function hasValidSeasonWindow(seasonStart: string, seasonEnd: string): boolean {
   );
 }
 
-function assertProjectionInvariants(page: CommunityScorePageV1 | CommunityRacePageV1): void {
+function assertProjectionInvariants(
+  page: CommunityScorePageV1 | CommunityRacePageV1 | CommunityRaceStatusPageV1,
+): void {
   const first = page.participants[0];
   if (first === undefined) {
     return;
@@ -202,10 +239,9 @@ function mapParticipant(source: ProjectionRow) {
   };
 }
 
-function freezeProjection<T extends CommunityRacePageV1 | CommunityScorePageV1>(
-  page: T,
-  freezeRecipes: boolean,
-): T {
+function freezeProjection<
+  T extends CommunityRacePageV1 | CommunityRaceStatusPageV1 | CommunityScorePageV1,
+>(page: T, freezeRecipes: boolean): T {
   assertProjectionInvariants(page);
   for (const participant of page.participants) {
     if (freezeRecipes) {
@@ -222,7 +258,7 @@ function freezeProjection<T extends CommunityRacePageV1 | CommunityScorePageV1>(
 
 function mapScoreProjection(value: unknown): CommunityScorePageV1 {
   const participants = readProjectionRows(value, publicCommunityScorePageSize).map((row) =>
-    mapParticipant(readProjectionRow(row, false)),
+    mapParticipant(readProjectionRow(row, "score")),
   );
   const result = validateCommunityScorePageV1({
     schemaVersion: 1,
@@ -238,7 +274,7 @@ function mapScoreProjection(value: unknown): CommunityScorePageV1 {
 
 function mapRaceProjection(value: unknown): CommunityRacePageV1 {
   const participants = readProjectionRows(value, publicCommunityRacePageSize).map((row) => {
-    const source = readProjectionRow(row, true);
+    const source = readProjectionRow(row, "race");
     const participant = mapParticipant(source);
     if (source.car_recipe === null) {
       return participant;
@@ -249,6 +285,35 @@ function mapRaceProjection(value: unknown): CommunityRacePageV1 {
     return { ...participant, carRecipe: source.car_recipe };
   });
   const result = validateCommunityRacePageV1({
+    schemaVersion: 1,
+    trustTier: "community",
+    selfReported: true,
+    participants,
+  });
+  if (!result.ok) {
+    fail("contract_mismatch");
+  }
+  return freezeProjection(result.value, true);
+}
+
+function mapRaceStatusProjection(value: unknown): CommunityRaceStatusPageV1 {
+  const participants = readProjectionRows(value, publicCommunityRaceStatusPageSize).map((row) => {
+    const source = readProjectionRow(row, "status");
+    if (
+      source.car_recipe === undefined ||
+      source.freshness_days === undefined ||
+      source.streak_days === undefined
+    ) {
+      fail("invalid_projection");
+    }
+    return {
+      ...mapParticipant(source),
+      freshnessDays: source.freshness_days,
+      ...(source.car_recipe === null ? {} : { carRecipe: source.car_recipe }),
+      ...(source.streak_days === null ? {} : { streakDays: source.streak_days }),
+    };
+  });
+  const result = validateCommunityRaceStatusPageV1({
     schemaVersion: 1,
     trustTier: "community",
     selfReported: true,
@@ -274,6 +339,17 @@ export function mapPublicCommunityScoreRows(value: unknown): CommunityScorePageV
 export function mapPublicCommunityRaceRows(value: unknown): CommunityRacePageV1 {
   try {
     return mapRaceProjection(value);
+  } catch (error) {
+    if (error instanceof PublicCommunityScoreMappingError) {
+      throw error;
+    }
+    fail("invalid_projection");
+  }
+}
+
+export function mapPublicCommunityRaceStatusRows(value: unknown): CommunityRaceStatusPageV1 {
+  try {
+    return mapRaceStatusProjection(value);
   } catch (error) {
     if (error instanceof PublicCommunityScoreMappingError) {
       throw error;

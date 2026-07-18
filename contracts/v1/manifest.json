@@ -31,6 +31,11 @@
       "typeName": "CommunityRacePageV1"
     },
     {
+      "file": "community-race-status-page.schema.json",
+      "exportName": "communityRaceStatusPageV1",
+      "typeName": "CommunityRaceStatusPageV1"
+    },
+    {
       "file": "community-score-page.schema.json",
       "exportName": "communityScorePageV1",
       "typeName": "CommunityScorePageV1"
@@ -82,6 +87,24 @@
     }
   ],
   "operations": [
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "none",
+      "cacheControl": "no-store",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "implemented-local",
+      "method": "get",
+      "operationId": "getCommunityRaceStatusV1",
+      "path": "/v1/community/race/status",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 406, 429, 500, 503],
+      "queryPolicy": "closed-single-value",
+      "querySchema": "CommunityScoreQueryV1",
+      "requestBodyPolicy": "none",
+      "requestSchema": "none",
+      "responseSchema": "CommunityRaceStatusPageV1",
+      "summary": "Read one bounded Community race status page"
+    },
     {
       "admissionPolicy": "no-queue-4",
       "authenticationContract": "none",

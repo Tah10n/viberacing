@@ -1,11 +1,17 @@
 import "server-only";
 
-import type { CommunityRacePageV1, CommunityScorePageV1 } from "@viberacing/contracts";
+import type {
+  CommunityRacePageV1,
+  CommunityRaceStatusPageV1,
+  CommunityScorePageV1,
+} from "@viberacing/contracts";
 
 import {
   mapPublicCommunityRaceRows,
+  mapPublicCommunityRaceStatusRows,
   mapPublicCommunityScoreRows,
   publicCommunityRacePageSize,
+  publicCommunityRaceStatusPageSize,
   publicCommunityScorePageSize,
 } from "./public-community-score-mapper";
 import { resolvePublicScoreDatabaseConfig } from "./public-score-database-config";
@@ -93,6 +99,23 @@ const publicRaceQuery = `SELECT
 FROM viberacing_api.list_public_community_race($1::date, $2::integer) AS race
 ORDER BY race.display_position`;
 
+const publicRaceStatusQuery = `SELECT
+  status.season_start::text AS season_start,
+  status.season_end::text AS season_end,
+  status.score_version AS score_version,
+  status.season_finalized AS season_finalized,
+  status.handle AS handle,
+  status.weekly_score AS weekly_score,
+  status.active_days AS active_days,
+  status.source_count AS source_count,
+  status.rank_position AS rank_position,
+  status.display_position AS display_position,
+  status.car_recipe AS car_recipe,
+  status.freshness_days AS freshness_days,
+  status.streak_days AS streak_days
+FROM viberacing_api.list_public_community_race_status($1::date, $2::integer) AS status
+ORDER BY status.display_position`;
+
 export type PublicCommunityScoreStoreErrorCode =
   | "connection_release_failed"
   | "connection_unavailable"
@@ -125,6 +148,14 @@ export interface PublicCommunityRaceStore {
 }
 
 export interface ConfiguredPublicCommunityRaceStore extends PublicCommunityRaceStore {
+  close(): Promise<void>;
+}
+
+export interface PublicCommunityRaceStatusStore {
+  readonly read: (seasonStart: unknown) => Promise<CommunityRaceStatusPageV1>;
+}
+
+export interface ConfiguredPublicCommunityRaceStatusStore extends PublicCommunityRaceStatusStore {
   close(): Promise<void>;
 }
 
@@ -274,6 +305,29 @@ export function createPublicCommunityRaceStore(
   });
 }
 
+export function createPublicCommunityRaceStatusStore(
+  pool: PublicScoreDatabasePool,
+): PublicCommunityRaceStatusStore {
+  return Object.freeze({
+    async read(seasonStart: unknown): Promise<CommunityRaceStatusPageV1> {
+      if (!validSeasonStart(seasonStart)) {
+        fail("invalid_season");
+      }
+      const rows = await readRows(
+        pool,
+        seasonStart,
+        publicRaceStatusQuery,
+        publicCommunityRaceStatusPageSize,
+      );
+      try {
+        return mapPublicCommunityRaceStatusRows(rows);
+      } catch {
+        fail("projection_rejected");
+      }
+    },
+  });
+}
+
 export function createCloseablePublicCommunityScoreStore(
   pool: PublicScoreDatabasePool,
 ): ConfiguredPublicCommunityScoreStore {
@@ -306,6 +360,22 @@ export function createCloseablePublicCommunityRaceStore(
   });
 }
 
+export function createCloseablePublicCommunityRaceStatusStore(
+  pool: PublicScoreDatabasePool,
+): ConfiguredPublicCommunityRaceStatusStore {
+  const store = createPublicCommunityRaceStatusStore(pool);
+  return Object.freeze({
+    async close(): Promise<void> {
+      try {
+        await pool.close();
+      } catch {
+        fail("pool_close_failed");
+      }
+    },
+    read: store.read,
+  });
+}
+
 export function createConfiguredPublicCommunityScoreStore(
   environment: Readonly<Record<string, string | undefined>> = process.env,
   signalSink?: PublicScoreDatabasePoolSignalSink,
@@ -326,4 +396,15 @@ export function createConfiguredPublicCommunityRaceStore(
     signalSink,
   );
   return createCloseablePublicCommunityRaceStore(pool);
+}
+
+export function createConfiguredPublicCommunityRaceStatusStore(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+  signalSink?: PublicScoreDatabasePoolSignalSink,
+): ConfiguredPublicCommunityRaceStatusStore {
+  const pool = createPublicScoreDatabasePool(
+    resolvePublicScoreDatabaseConfig(environment),
+    signalSink,
+  );
+  return createCloseablePublicCommunityRaceStatusStore(pool);
 }

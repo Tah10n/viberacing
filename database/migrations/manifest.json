@@ -168,6 +168,12 @@
       "name": "connector_car_proposal_ingress",
       "path": "database/migrations/0028_connector_car_proposal_ingress.sql",
       "sha256": "f595b1097e0bf7ba584f12b1b5fd93529281ea8709c3a6e6174c1a11f0ef10b1"
+    },
+    {
+      "revision": 29,
+      "name": "community_public_race_status",
+      "path": "database/migrations/0029_community_public_race_status.sql",
+      "sha256": "798c2ddc93ef01b1a50a9ad7053fcc7b952e485f9eec761cfa0b0e11697ed8f7"
     }
   ]
 }

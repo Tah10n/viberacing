@@ -1,7 +1,7 @@
 import type { CarRecipe } from "./car-recipe";
 import type { PublicRaceParticipant } from "./race-types";
 
-const scorePath = "/v1/community/race";
+const scorePath = "/v1/community/race/status";
 const maximumResponseCharacters = 32_768;
 const minimumSeasonStart = "1999-12-27";
 const maximumSeasonStart = "2099-12-28";
@@ -9,6 +9,7 @@ const pageKeys = ["participants", "schemaVersion", "selfReported", "trustTier"] 
 const participantKeys = [
   "activeDays",
   "displayPosition",
+  "freshnessDays",
   "handle",
   "rankPosition",
   "scoreVersion",
@@ -19,6 +20,12 @@ const participantKeys = [
   "weeklyScore",
 ] as const;
 const participantKeysWithCarRecipe = [...participantKeys, "carRecipe"] as const;
+const participantKeysWithStreak = [...participantKeys, "streakDays"] as const;
+const participantKeysWithCarRecipeAndStreak = [
+  ...participantKeys,
+  "carRecipe",
+  "streakDays",
+] as const;
 const carRecipeKeys = [
   "schemaVersion",
   "chassis",
@@ -178,7 +185,7 @@ export function isPublicCommunityHandle(value: unknown): value is string {
   return typeof value === "string" && handlePattern.test(value);
 }
 
-export function mapCommunityRacePageToRace(
+export function mapCommunityRaceStatusPageToRace(
   value: unknown,
   expectedSeasonStart: string,
 ): readonly PublicRaceParticipant[] | undefined {
@@ -209,12 +216,29 @@ export function mapCommunityRacePageToRace(
       if (!isPlainObject(row)) {
         return undefined;
       }
-      const hasCarRecipe = hasExactDataKeys(row, participantKeysWithCarRecipe);
-      if (!hasCarRecipe && !hasExactDataKeys(row, participantKeys)) {
+      const carRecipeDescriptor = Object.getOwnPropertyDescriptor(row, "carRecipe");
+      const streakDescriptor = Object.getOwnPropertyDescriptor(row, "streakDays");
+      const hasCarRecipe =
+        carRecipeDescriptor !== undefined &&
+        "value" in carRecipeDescriptor &&
+        carRecipeDescriptor.enumerable;
+      const hasStreak =
+        streakDescriptor !== undefined &&
+        "value" in streakDescriptor &&
+        streakDescriptor.enumerable;
+      const exactParticipantKeys = hasCarRecipe
+        ? hasStreak
+          ? participantKeysWithCarRecipeAndStreak
+          : participantKeysWithCarRecipe
+        : hasStreak
+          ? participantKeysWithStreak
+          : participantKeys;
+      if (!hasExactDataKeys(row, exactParticipantKeys)) {
         return undefined;
       }
       const activeDays = dataValue(row, "activeDays");
       const displayPosition = dataValue(row, "displayPosition");
+      const freshnessDays = dataValue(row, "freshnessDays");
       const handle = dataValue(row, "handle");
       const rankPosition = dataValue(row, "rankPosition");
       const scoreVersion = dataValue(row, "scoreVersion");
@@ -222,10 +246,19 @@ export function mapCommunityRacePageToRace(
       const seasonFinalized = dataValue(row, "seasonFinalized");
       const rowSeasonStart = dataValue(row, "seasonStart");
       const sourceCount = dataValue(row, "sourceCount");
+      let streakDays: number | null = null;
+      if (hasStreak) {
+        const streakCandidate = dataValue(row, "streakDays");
+        if (!boundedInteger(streakCandidate, 0, 36_533)) {
+          return undefined;
+        }
+        streakDays = streakCandidate;
+      }
       const weeklyScore = dataValue(row, "weeklyScore");
       if (
         !boundedInteger(activeDays, 0, 7) ||
         displayPosition !== index + 1 ||
+        !boundedInteger(freshnessDays, 0, 65_535) ||
         !isPublicCommunityHandle(handle) ||
         !boundedInteger(rankPosition, 1, 32) ||
         typeof scoreVersion !== "string" ||
@@ -248,12 +281,12 @@ export function mapCommunityRacePageToRace(
         Object.freeze({
           activeDays,
           car,
-          freshnessDays: null,
+          freshnessDays,
           handle,
           id: `community-${String(displayPosition)}`,
           rank: rankPosition,
           sourceCount,
-          streakDays: null,
+          streakDays,
           weeklyScore,
         }),
       );
@@ -291,7 +324,7 @@ export async function loadPublicCommunityRace(
     if (body.length > maximumResponseCharacters) {
       return undefined;
     }
-    return mapCommunityRacePageToRace(JSON.parse(body) as unknown, seasonStart);
+    return mapCommunityRaceStatusPageToRace(JSON.parse(body) as unknown, seasonStart);
   } catch {
     return undefined;
   }

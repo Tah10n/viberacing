@@ -3,11 +3,11 @@
 ## Status
 
 This is the planned runtime architecture. The current repository contains a tested SQL persistence
-foundation, local public score/race routes with a visible validated race consumer and synthetic
-fallback, local invite/OAuth/initial-passkey enrollment, returning-passkey login, exact-session
-public-profile visibility, and private passkey-inventory/add/revocation slices with encrypted
-cookies, local recovery-code replacement-passkey sign-in, and logout, one local one-shot Jobs runner
-including bounded primary profile deletion, and local Ingest request-verification,
+foundation, local public score/race/status routes with a visible validated status consumer and
+synthetic fallback, local invite/OAuth/initial-passkey enrollment, returning-passkey login,
+exact-session public-profile visibility, and private passkey-inventory/add/revocation slices with
+encrypted cookies, local recovery-code replacement-passkey sign-in, and logout, one local one-shot
+Jobs runner including bounded primary profile deletion, and local Ingest request-verification,
 PostgreSQL-adapter, application-composition, and bounded HTTP-server boundaries, plus library-only
 connector initialization and candidate `0.144.5` account/usage parser boundaries, a synthetic
 one-shot supervisor, an exact-body sync composer, isolated pairing/sync/proposal signers, pure Web
@@ -155,19 +155,19 @@ authority shown in the design remain planned.
 
 ## Component responsibilities
 
-| Component        | Owns                                                                                                                     | Must not own                                                                                      | Primary trust boundary |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | ---------------------- |
-| Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                                      | Raw device key, connector execution, admin authority, private cache mixing                        | TB-01 and TB-02        |
-| Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                  | Profile authorization, score derivation, database credentials                                     | TB-01 and TB-06        |
-| Web/Auth         | Public score/race reads, OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion | Device private key, direct usage submission, schema ownership                                     | TB-02, TB-07, TB-08    |
-| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision      | OAuth, admin, invites, passkey/recovery, migrations, final score authority                        | TB-05, TB-06, TB-07    |
-| Ingest host      | Closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                           | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials     | TB-06 and TB-07        |
-| Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                             | Interactive auth, public request handling, schema ownership                                       | TB-07 and TB-11        |
-| PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                 | Public routing, connector trust, release credentials                                              | TB-07                  |
-| Rust connector   | Local App Server lifecycle, compatibility adapter, local key, canonical signing, safe scheduling                         | Website commands, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
-| Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                 | Normal user session reuse, shared identities, routine exact-usage access                          | TB-08                  |
-| CI               | Evaluate untrusted source without secrets; produce read-only evidence                                                    | Deployment, signing, package publication from pull requests                                       | TB-09                  |
-| Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                   | Unreviewed pull-request execution, long-lived broad credentials                                   | TB-10                  |
+| Component        | Owns                                                                                                                            | Must not own                                                                                      | Primary trust boundary |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------- |
+| Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                                             | Raw device key, connector execution, admin authority, private cache mixing                        | TB-01 and TB-02        |
+| Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                         | Profile authorization, score derivation, database credentials                                     | TB-01 and TB-06        |
+| Web/Auth         | Public score/race/status reads, OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion | Device private key, direct usage submission, schema ownership                                     | TB-02, TB-07, TB-08    |
+| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision             | OAuth, admin, invites, passkey/recovery, migrations, final score authority                        | TB-05, TB-06, TB-07    |
+| Ingest host      | Closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                                  | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials     | TB-06 and TB-07        |
+| Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                    | Interactive auth, public request handling, schema ownership                                       | TB-07 and TB-11        |
+| PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                        | Public routing, connector trust, release credentials                                              | TB-07                  |
+| Rust connector   | Local App Server lifecycle, compatibility adapter, local key, canonical signing, safe scheduling                                | Website commands, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
+| Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                        | Normal user session reuse, shared identities, routine exact-usage access                          | TB-08                  |
+| CI               | Evaluate untrusted source without secrets; produce read-only evidence                                                           | Deployment, signing, package publication from pull requests                                       | TB-09                  |
+| Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                          | Unreviewed pull-request execution, long-lived broad credentials                                   | TB-10                  |
 
 Trust-boundary IDs are defined in the [threat model](../security/THREAT_MODEL.md).
 
@@ -200,8 +200,10 @@ identity/expiry and exposes an encrypted session-bound decision control only to 
 PostgreSQL owns the atomic pending-to-active transition. A device can replace only the private
 pending recipe and cannot inspect, approve, reject, activate, publish, or administer it. The
 separate public race projection can expose only the exact current approved recipe for an `active`
-profile; proposal identity, state, and timestamps remain private, and the stable score response
-remains unchanged.
+profile. A third compatible projection may additionally expose complete-UTC-day freshness and the
+preference-gated consecutive positive-score streak; exact receipt timestamps, daily score rows, the
+preference itself, proposal identity, state, and timestamps remain private. Both older response
+components remain unchanged.
 
 The [privacy data map](../security/PRIVACY_DATA_MAP.md) defines field classification and retention.
 The [data-flow document](DATA_FLOW.md) defines enrollment, pairing, synchronization, public read,

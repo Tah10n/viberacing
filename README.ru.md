@@ -13,12 +13,14 @@ Vibe Racing — открытый пиксельный недельный рей�
 
 Сайт можно запустить локально без аккаунта, connector и базы: в этом случае он показывает явно
 помеченное синтетическое превью. Видимая гонка и таблица теперь также запрашивают текущую неделю у
-same-origin public race route и переключаются на Community results только после проверки ответа.
-Ответ может содержать текущий approved enum-only автомобиль; при его отсутствии браузер использует
-repository-owned presentation fallback. При ошибке остаётся синтетический fallback. Демо-профиль,
-три темы, русский/английский интерфейс и reduced-motion режим работают без реальных данных.
-Отдельный invite-only flow теперь локально соединяет GitHub OAuth со state и PKCE, зашифрованное
-краткоживущее продолжение, атомарное enrollment, обязательную регистрацию passkey, повторный
+same-origin public race-status route и переключаются на Community results только после проверки
+ответа. Ответ всегда содержит округлённую до полных UTC-дней freshness и может содержать текущий
+approved enum-only автомобиль и включённый пользователем streak; exact receipt time и underlying
+daily scores остаются private. При отсутствии автомобиля браузер использует repository-owned
+presentation fallback. При ошибке остаётся синтетический fallback. Демо-профиль, три темы,
+русский/английский интерфейс и reduced-motion режим работают без реальных данных. Отдельный
+invite-only flow теперь локально соединяет GitHub OAuth со state и PKCE, зашифрованное краткоживущее
+продолжение, атомарное enrollment, обязательную регистрацию passkey, повторный
 discoverable-credential вход, session-scoped список ключей доступа, страницу активного профиля,
 hide/show публичного профиля, список источников и устройств, немедленную паузу источника,
 восстановление paused-источника после свежей проверки passkey, необратимое отключение источника со
@@ -100,11 +102,12 @@ pnpm run dev:web
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.
 
-В репозитории уже есть двенадцать закрытых JSON Schemas, генерируемые TypeScript validators и
+В репозитории уже есть тринадцать закрытых JSON Schemas, генерируемые TypeScript validators и
 локально реализованные OpenAPI GET и POST: sync request/result, bounded problem details, запрос
 одного Community season, response-only top-32 Community score page и отдельный совместимый race page
-с optional exact `CarRecipeV1`. Score contract и route остаются неизменными. Server-only fail-closed
-mappers принимают только точные десяти- или одиннадцатиколоночные SQL projections и отклоняют
+с optional exact `CarRecipeV1`, а также третий совместимый race-status page с rounded freshness и
+optional streak. Два прежних contract и route остаются неизменными. Server-only fail-closed mappers
+принимают только точные десяти-, одиннадцати- или тринадцатиколоночные SQL projections и отклоняют
 malformed, inconsistent, oversized или contract-invalid результаты. Bounded server-only PostgreSQL
 adapter использует отдельный least-privileged Web login contract, certificate-verified production
 transport, four-connection pool, проверку role/read-only state при каждом checkout, фиксированные
@@ -198,60 +201,63 @@ derived score/rank/active-days/source-count без raw tokens и source IDs. Dat
 как quarantined evidence и делает terminal season неизменяемым, сохраняя profile-purge. Отдельная
 Web-only database projection возвращает только bounded active-profile score rows без raw values,
 private IDs и exact timestamps. Email и идентификатор Codex-аккаунта не читаются и не сохраняются.
-Response schema фиксирует тот же public allowlist, а server-only mapper, bounded Web PostgreSQL
-adapter и локальный score route проверяют форму, season/rank invariants, database role и contract до
-сериализации. Видимая гонка и таблица теперь запрашивают у этого route текущую server-selected
-неделю без credentials, проверяют только public поля и честно сохраняют synthetic fallback при
-недоступности. Локальные invite/OAuth/ initial-passkey/returning-login routes теперь существуют;
-login options хранят profile-free challenge только в encrypted cookie, а валидный assertion атомарно
-создаёт и тут же поглощает database challenge при выдаче сессии. Страница аккаунта по той же
-подтверждённой сессии показывает только названия ключей, active/revoked state, округлённую дату
-создания и отметку текущего authenticator; credential IDs и key material не рендерятся. Для owned
-non-current passkey страница отправляет только opaque ID, требует свежий user-verified assertion с
-привязкой к сессии и цели и вызывает атомарный consume-and-revoke; текущий или последний активный
-ключ удалить нельзя. Отдельный add-flow заранее валидирует и шифрует label, затем требует
-независимые assertion существующим ключом и регистрацию нового; один database statement атомарно
-consume-ит step-up и добавляет credential в пределах lifetime cap 32. Application verifier для
-ротации кодов восстановления теперь после свежего passkey assertion создаёт десять кодов, атомарно
-сохраняет только защищённые verifier values и показывает plaintext один раз. Локальные recovery-code
-sign-in, replacement-passkey и WebAuthn pairing approval реализованы только с injected/synthetic
-evidence; live authenticator/database integration, edge rate/capacity controls и deployment всё ещё
-отсутствуют. Отдельный локальный CarRecipe slice принимает только точный versioned enum-only объект,
-хранит не более одного приватного proposal на 24 часа для выведенного из сессии профиля, показывает
-его во всех трёх темах и требует явный зашифрованный session-bound approve или reject control.
-Approval атомарно заменяет active recipe. Отдельный device-authenticated Web route и фиксированная
-команда `propose-car` могут только создать или заменить тот же pending exact recipe для активного
-source-bound device; читать, approve, reject или activate его они не могут. Cross-profile и non-Web
-database capabilities запрещены. Проверяемый локальный Agent Skill сводит style request к точным
-recipe flags, требует явно переданные shell-safe origin/label, один раз вызывает только эту команду
-и не получает read или decision authority. Отдельная Jobs-only capability теперь bounded oldest-
-first batches физически удаляет expired proposal, сохраняя live proposals и active recipes.
-Отдельный совместимый public race contract показывает только текущий approved recipe активного
-профиля; proposal identity, state и timestamps остаются private, а стабильный score response не
-меняется. Schedule для cleanup, live credentials, release/packaging connector, edge controls и
-deployment остаются отдельными воротами. Database-only Community ingest capability уже выдаёт
-минимальный материал активного устройства и принимает bounded source-bound snapshots с exact retry,
-nonce replay, monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only
-procedure независимо удаляет bounded batches истёкших origin nonces, device nonces и raw snapshots,
-сохраняя current source/day values. Ещё две отдельные Jobs-only процедуры удаляют bounded expired
-pairing state и истёкшие auth challenges/restricted recovery authorities, сохраняя live ceremonies,
-unused recovery codes, sessions, passkeys и audit evidence. Ещё одна Jobs-only procedure удаляет не
-более 1000 expired CarRecipe proposals за вызов под отдельным private mutex и не затрагивает active
-recipes. Отдельная Jobs-only procedure теперь атомарно удаляет до 10 due `deletion_pending`
-профилей, сначала снимает restrictive pairing references, terminally settles opaque job и не создаёт
-неподтверждённый tombstone. Локальный one-shot Jobs runner вызывает только одну из семи fixed
-capabilities: auth/CarRecipe-proposal/ingest/pairing cleanup, primary profile purge, scoring refresh
-или finalization через отдельный least-privileged config, single-client pool, проверку
-role/login/search path, fixed deadlines, prepared parameters, closed result validation и стабильный
-non-reflective CLI output. Сама база не проверяет wire signature; локальные kernel, adapter и
-application объединены на synthetic/mock-pool evidence. Отдельный opt-in loopback scenario теперь
-проводит независимо подписанный HTTP request через emitted host и одноразовый least-privileged
-PostgreSQL login, включая duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed
-HTTP ingest route, operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs
-login/TLS integration, monitoring backend, deployed public score read, audited correction flow,
-cache/backup/tombstone purge, restore replay и scheduled deletion execution ещё не реализованы,
-поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
-данных пока нет.
+Response schemas фиксируют отдельные закрытые public allowlists, а server-only mappers, bounded Web
+PostgreSQL adapter и локальные score/race/status routes проверяют форму, season/rank invariants,
+database role и contract до сериализации. Status route добавляет только complete-UTC-day freshness и
+optional preference-gated streak без exact timestamps или daily rows. Видимая гонка и таблица
+запрашивают у него текущую server-selected неделю без credentials, проверяют только public поля и
+честно сохраняют synthetic fallback при недоступности. Локальные invite/OAuth/
+initial-passkey/returning-login routes теперь существуют; login options хранят profile-free
+challenge только в encrypted cookie, а валидный assertion атомарно создаёт и тут же поглощает
+database challenge при выдаче сессии. Страница аккаунта по той же подтверждённой сессии показывает
+только названия ключей, active/revoked state, округлённую дату создания и отметку текущего
+authenticator; credential IDs и key material не рендерятся. Для owned non-current passkey страница
+отправляет только opaque ID, требует свежий user-verified assertion с привязкой к сессии и цели и
+вызывает атомарный consume-and-revoke; текущий или последний активный ключ удалить нельзя. Отдельный
+add-flow заранее валидирует и шифрует label, затем требует независимые assertion существующим ключом
+и регистрацию нового; один database statement атомарно consume-ит step-up и добавляет credential в
+пределах lifetime cap 32. Application verifier для ротации кодов восстановления теперь после свежего
+passkey assertion создаёт десять кодов, атомарно сохраняет только защищённые verifier values и
+показывает plaintext один раз. Локальные recovery-code sign-in, replacement-passkey и WebAuthn
+pairing approval реализованы только с injected/synthetic evidence; live authenticator/database
+integration, edge rate/capacity controls и deployment всё ещё отсутствуют. Отдельный локальный
+CarRecipe slice принимает только точный versioned enum-only объект, хранит не более одного
+приватного proposal на 24 часа для выведенного из сессии профиля, показывает его во всех трёх темах
+и требует явный зашифрованный session-bound approve или reject control. Approval атомарно заменяет
+active recipe. Отдельный device-authenticated Web route и фиксированная команда `propose-car` могут
+только создать или заменить тот же pending exact recipe для активного source-bound device; читать,
+approve, reject или activate его они не могут. Cross-profile и non-Web database capabilities
+запрещены. Проверяемый локальный Agent Skill сводит style request к точным recipe flags, требует
+явно переданные shell-safe origin/label, один раз вызывает только эту команду и не получает read или
+decision authority. Отдельная Jobs-only capability теперь bounded oldest- first batches физически
+удаляет expired proposal, сохраняя live proposals и active recipes. Отдельный совместимый public
+race contract показывает только текущий approved recipe активного профиля. Третий совместимый public
+race-status contract отдельно добавляет округлённую freshness и включённый пользователем streak;
+proposal identity, state, exact timestamps, daily scores и private preference не выходят наружу, а
+стабильные score и прежний race response не меняются. Schedule для cleanup, live credentials,
+release/packaging connector, edge controls и deployment остаются отдельными воротами. Database-only
+Community ingest capability уже выдаёт минимальный материал активного устройства и принимает bounded
+source-bound snapshots с exact retry, nonce replay, monotonic source/date, quarantine и
+lifecycle-race enforcement. Отдельная Jobs-only procedure независимо удаляет bounded batches
+истёкших origin nonces, device nonces и raw snapshots, сохраняя current source/day values. Ещё две
+отдельные Jobs-only процедуры удаляют bounded expired pairing state и истёкшие auth
+challenges/restricted recovery authorities, сохраняя live ceremonies, unused recovery codes,
+sessions, passkeys и audit evidence. Ещё одна Jobs-only procedure удаляет не более 1000 expired
+CarRecipe proposals за вызов под отдельным private mutex и не затрагивает active recipes. Отдельная
+Jobs-only procedure теперь атомарно удаляет до 10 due `deletion_pending` профилей, сначала снимает
+restrictive pairing references, terminally settles opaque job и не создаёт неподтверждённый
+tombstone. Локальный one-shot Jobs runner вызывает только одну из семи fixed capabilities:
+auth/CarRecipe-proposal/ingest/pairing cleanup, primary profile purge, scoring refresh или
+finalization через отдельный least-privileged config, single-client pool, проверку role/login/search
+path, fixed deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI
+output. Сама база не проверяет wire signature; локальные kernel, adapter и application объединены на
+synthetic/mock-pool evidence. Отдельный opt-in loopback scenario теперь проводит независимо
+подписанный HTTP request через emitted host и одноразовый least-privileged PostgreSQL login, включая
+duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed HTTP ingest route,
+operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs login/TLS integration,
+monitoring backend, deployed public score read, audited correction flow, cache/backup/tombstone
+purge, restore replay и scheduled deletion execution ещё не реализованы, поэтому локальный
+enrollment ещё не является готовой production-авторизацией, а приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

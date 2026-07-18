@@ -55,6 +55,11 @@ capacity.
   `CarRecipeV1` per participant. Its absence means no approved active recipe. Proposal identity,
   state, timestamps, private IDs, daily/raw usage, and arbitrary content remain forbidden. The
   stable `CommunityScorePageV1` remains unchanged and rejects this additional field.
+- [`CommunityRaceStatusPageV1`](v1/community-race-status-page.schema.json) is a separate compatible
+  race component. It preserves the race fields, requires one UTC-day-rounded `freshnessDays`, and
+  permits `streakDays` only when the profile has enabled public streak visibility. Exact receipt
+  timestamps, underlying daily scores, preferences, private IDs, and proposal state remain
+  forbidden. Both older page components remain unchanged and reject these status fields.
 - [`CommunityScoreQueryV1`](v1/community-score-query.schema.json) accepts exactly one inclusive
   Monday `seasonStart` from `1999-12-27` through `2099-12-28`. The Web URL parser rejects duplicate,
   missing, encoded-name, and unknown parameters before applying the generated value validator.
@@ -104,9 +109,9 @@ capacity.
   status/title/retry mapping, validates the complete body, and emits `no-store`
   `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
 - [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
-  type/export names, closed authentication-policy inventory, and the locally implemented six
-  operations: `GET /v1/community/race`, `GET /v1/community/scores`, `POST /v1/community/sync`, and
-  `POST /v1/connector/cars/proposals` plus the two pairing start/poll POST routes, with
+  type/export names, closed authentication-policy inventory, and the locally implemented seven
+  operations: the three Community score/race/status GETs, `POST /v1/community/sync`,
+  `POST /v1/connector/cars/proposals`, and the two pairing start/poll POST routes, with
   method-specific query/body, response, problem, no-queue, authentication, cache, same-origin CORS,
   and repository-status policies.
 
@@ -126,7 +131,7 @@ trust fields exist only in the response component and never become writable conn
 
 `node scripts/generate-contracts.mjs` deterministically creates:
 
-- [`openapi.v1.json`](generated/openapi.v1.json), which documents the six locally implemented HTTP
+- [`openapi.v1.json`](generated/openapi.v1.json), which documents the seven locally implemented HTTP
   operations and explicitly states that repository implementation does not prove deployment;
 - [`packages/contracts/src/generated.ts`](../packages/contracts/src/generated.ts), containing
   readonly TypeScript shapes, embedded schemas, source digest, and validator wrappers.
