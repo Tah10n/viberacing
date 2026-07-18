@@ -29,6 +29,8 @@ describe("RaceExperience accessibility", () => {
         "They are not audited or endorsed by OpenAI.",
     );
     expect(document.querySelector('canvas[role="img"]')).not.toBeNull();
+    expect(document.querySelector("#simulator-heading")?.textContent).toBe("Score simulator");
+    expect(document.querySelector(".simulator-input")?.hasAttribute("name")).toBe(false);
     expect(document.querySelector("button:disabled")?.textContent).toContain("Unavailable");
     expect(document.body.textContent).toContain("Synthetic preview");
     expect(document.body.textContent).toContain("not audited or endorsed by OpenAI");

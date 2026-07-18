@@ -142,6 +142,9 @@ describe("RaceExperience interactions", () => {
     installMatchMedia(false);
     const mounted = mountExperience(undefined, true);
     const navigation = mounted.container.querySelector(".site-nav");
+    expect(navigation?.querySelector<HTMLAnchorElement>('a[href="#simulator"]')?.textContent).toBe(
+      "Score simulator",
+    );
     expect(navigation?.querySelector<HTMLAnchorElement>('a[href="/account"]')?.textContent).toBe(
       "Account",
     );
@@ -353,9 +356,12 @@ describe("RaceExperience interactions", () => {
     expect(app?.dataset.theme).toBe("cyber-rally");
     expect(app?.dataset.motion).toBe("off");
     expect(mounted.container.textContent).toContain("Синтетическое превью");
+    expect(mounted.container.querySelector("#simulator-heading")?.textContent).toBe(
+      "Симулятор баллов",
+    );
 
     const selects = mounted.container.querySelectorAll<HTMLSelectElement>("select");
-    expect(selects).toHaveLength(3);
+    expect(selects).toHaveLength(4);
     changeSelect(selects[0]!, "classic-grand-prix");
     changeSelect(selects[1]!, "en");
     changeSelect(selects[2]!, "system");

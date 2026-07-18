@@ -5,6 +5,7 @@ export const phase1KeyboardFocusSelectors = Object.freeze([
   ".skip-link",
   ".brand-lockup",
   '.site-nav a[href="#race"]',
+  '.site-nav a[href="#simulator"]',
   '.site-nav a[href="#leaderboard"]',
   '.site-nav a[href="#profile"]',
   '.site-nav a[href="/login"]',
@@ -14,6 +15,8 @@ export const phase1KeyboardFocusSelectors = Object.freeze([
   ".race-controls label:nth-of-type(1) select",
   ".race-controls label:nth-of-type(2) select",
   ".race-controls label:nth-of-type(3) select",
+  ".simulator-input",
+  ".simulator-controls label:nth-of-type(2) select",
   ".table-region",
 ]);
 
@@ -55,6 +58,18 @@ export const phase1RequiredAccessibilityNodes = Object.freeze([
   Object.freeze({ disabled: false, name: "MOTION", pressed: null, role: "combobox" }),
   Object.freeze({
     disabled: false,
+    name: "ACTIVE DAYS THIS WEEK",
+    pressed: null,
+    role: "combobox",
+  }),
+  Object.freeze({
+    disabled: false,
+    name: "HYPOTHETICAL TOKENS PER ACTIVE DAY",
+    pressed: null,
+    role: "textbox",
+  }),
+  Object.freeze({
+    disabled: false,
     name:
       "Community leaderboard: Leaderboard. Scores are self-reported by participating users. " +
       "They are not audited or endorsed by OpenAI.",
@@ -65,16 +80,29 @@ export const phase1RequiredAccessibilityNodes = Object.freeze([
   Object.freeze({ disabled: false, name: "", pressed: null, role: "contentinfo" }),
 ]);
 
-const exactInteractiveCounts = Object.freeze({ button: 2, combobox: 3, link: 8 });
+const exactInteractiveCounts = Object.freeze({ button: 2, combobox: 4, link: 9, textbox: 1 });
 const exactInteractiveNodes = Object.freeze([
   Object.freeze({ disabled: false, name: "PAUSE RACE", pressed: "false", role: "button" }),
   Object.freeze({ disabled: true, name: "UNAVAILABLE", pressed: null, role: "button" }),
   Object.freeze({ disabled: false, name: "THEME", pressed: null, role: "combobox" }),
   Object.freeze({ disabled: false, name: "LANGUAGE", pressed: null, role: "combobox" }),
   Object.freeze({ disabled: false, name: "MOTION", pressed: null, role: "combobox" }),
+  Object.freeze({
+    disabled: false,
+    name: "ACTIVE DAYS THIS WEEK",
+    pressed: null,
+    role: "combobox",
+  }),
+  Object.freeze({
+    disabled: false,
+    name: "HYPOTHETICAL TOKENS PER ACTIVE DAY",
+    pressed: null,
+    role: "textbox",
+  }),
   Object.freeze({ disabled: false, name: "View standings", pressed: null, role: "link" }),
   Object.freeze({ disabled: false, name: "Vibe Racing", pressed: null, role: "link" }),
   Object.freeze({ disabled: false, name: "Weekly race", pressed: null, role: "link" }),
+  Object.freeze({ disabled: false, name: "Score simulator", pressed: null, role: "link" }),
   Object.freeze({ disabled: false, name: "Leaderboard", pressed: null, role: "link" }),
   Object.freeze({ disabled: false, name: "Profile", pressed: null, role: "link" }),
   Object.freeze({ disabled: false, name: "Sign in", pressed: null, role: "link" }),
@@ -102,7 +130,6 @@ const unreviewedInteractiveRoles = new Set([
   "spinbutton",
   "switch",
   "tab",
-  "textbox",
   "treeitem",
 ]);
 

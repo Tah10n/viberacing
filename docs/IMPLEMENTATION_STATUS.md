@@ -20,36 +20,39 @@ status route, replaces only its race/leaderboard after closed browser-side valid
 current approved recipe or repository-owned absence fallback, shows only complete-UTC-day freshness
 and an optional preference-gated streak, lets a handle select a same-page summary from those public
 fields, exposes that selection through a canonical public-handle URL and public-account link, and
-retains a labeled synthetic fallback on failure. Local identity slices now implement exact
-same-origin bounded forms, GitHub OAuth state and S256 PKCE with no extra scope, purpose-separated
-encrypted HttpOnly continuations, atomic profile/session creation, required initial WebAuthn
-registration, returning discoverable-credential login, a session-scoped minimal passkey inventory,
-an active account page, immediate public-profile hide/show, source inventory and pause,
-fresh-passkey paused-source reactivation and terminal unlink, fresh backup-passkey addition,
-revocation of an owned non-current passkey, a bounded active-device inventory with immediate
-owned-device revoke, fresh-passkey recovery-code rotation with one-time display, an exact-handle
-fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey sign-in, and
-database-backed logout. Login options retain the profile-free challenge only in a separate encrypted
-cookie; valid proof alone reaches one atomic create-consume-session call. Its GitHub,
-passkey-verifier, database, and browser evidence is injected or synthetic; no working invite issuer,
-OAuth registration, secret, live authenticator/database login, distributed edge abuse control,
-scheduled recovery/deletion cleanup, cache/backup/tombstone purge, restore replay, notification, or
-deployment is supplied. A local one-shot Jobs runner invokes only the eight existing maintenance
-procedures through a bounded least-privileged adapter. One opt-in synthetic integration applies the
-reviewed migrations to disposable PostgreSQL, runs every emitted Jobs command through a narrow
-login, rejects an extra-membership login before mutation, and verifies exact stored state. A local
-Ingest kernel now bounds and authenticates the exact Community sync envelope, consumes an injected
-origin nonce, parses bounded JSON, validates the generated contract, and strictly verifies the
-source-bound device request. A separate bounded Ingest PostgreSQL adapter revalidates that output
-and exposes only atomic origin-nonce consumption, device lookup, and submission through a probed
-least-privileged pool. A protected local reader supplies one mandatory and one optional rotation
-origin key directly to the verifier without returning raw configuration. A forced-RLS replay tuple,
-Ingest-only atomic consume, separate Jobs cleanup paths for ingest, pairing, authentication,
-sessions, and CarRecipe proposals, and primary profile deletion now have real isolated PostgreSQL
-evidence. A transport-free Ingest application now composes those exact verifier and database
-capabilities, generates a server-owned request ID, waits for submission, and returns only a
-validated acknowledgement or generic problem decision. A bounded local Fastify server factory now
-preserves exact raw HTTP evidence, admits four application calls without a queue, applies fixed
+retains a labeled synthetic fallback on failure. The same public page now exposes a local-only EN/RU
+score simulator that validates one hypothetical daily token total, applies the production daily and
+weekly scoring functions for one to seven active days, and never requests, logs, stores, preloads,
+or submits that value or changes a standing. Local identity slices now implement exact same-origin
+bounded forms, GitHub OAuth state and S256 PKCE with no extra scope, purpose-separated encrypted
+HttpOnly continuations, atomic profile/session creation, required initial WebAuthn registration,
+returning discoverable-credential login, a session-scoped minimal passkey inventory, an active
+account page, immediate public-profile hide/show, source inventory and pause, fresh-passkey
+paused-source reactivation and terminal unlink, fresh backup-passkey addition, revocation of an
+owned non-current passkey, a bounded active-device inventory with immediate owned-device revoke,
+fresh-passkey recovery-code rotation with one-time display, an exact-handle fresh-passkey
+profile-deletion request, one-time recovery-code replacement-passkey sign-in, and database-backed
+logout. Login options retain the profile-free challenge only in a separate encrypted cookie; valid
+proof alone reaches one atomic create-consume-session call. Its GitHub, passkey-verifier, database,
+and browser evidence is injected or synthetic; no working invite issuer, OAuth registration, secret,
+live authenticator/database login, distributed edge abuse control, scheduled recovery/deletion
+cleanup, cache/backup/tombstone purge, restore replay, notification, or deployment is supplied. A
+local one-shot Jobs runner invokes only the eight existing maintenance procedures through a bounded
+least-privileged adapter. One opt-in synthetic integration applies the reviewed migrations to
+disposable PostgreSQL, runs every emitted Jobs command through a narrow login, rejects an
+extra-membership login before mutation, and verifies exact stored state. A local Ingest kernel now
+bounds and authenticates the exact Community sync envelope, consumes an injected origin nonce,
+parses bounded JSON, validates the generated contract, and strictly verifies the source-bound device
+request. A separate bounded Ingest PostgreSQL adapter revalidates that output and exposes only
+atomic origin-nonce consumption, device lookup, and submission through a probed least-privileged
+pool. A protected local reader supplies one mandatory and one optional rotation origin key directly
+to the verifier without returning raw configuration. A forced-RLS replay tuple, Ingest-only atomic
+consume, separate Jobs cleanup paths for ingest, pairing, authentication, sessions, and CarRecipe
+proposals, and primary profile deletion now have real isolated PostgreSQL evidence. A transport-free
+Ingest application now composes those exact verifier and database capabilities, generates a
+server-owned request ID, waits for submission, and returns only a validated acknowledgement or
+generic problem decision. A bounded local Fastify server factory now preserves exact raw HTTP
+evidence, admits four application calls without a queue, applies fixed
 parser/header/connection/deadline policies, and serializes only revalidated sync
 acknowledgement/problem contracts. A library-only Rust connector foundation now bounds the stable
 App Server handshake and a candidate `0.144.5` account/usage parser, discarding account/summary
@@ -853,9 +856,9 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   deployment without a real HTTPS DNS value remains forbidden. The separate enrollment slice stores
   account state only in encrypted HttpOnly cookies and reads its exact server-only configuration
   lazily; the default preview still needs none of it.
-- Six hundred ninety-eight unit, component, interaction, security-header, localization, scoring,
+- Seven hundred eight unit, component, interaction, security-header, localization, scoring,
   HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
-  coverage gate currently reports 86.83% statements, 85.17% branches, 95.31% functions, and 86.95%
+  coverage gate currently reports 86.87% statements, 85.23% branches, 95.34% functions, and 86.99%
   lines over product components and libraries; framework entrypoints are verified by the production
   build instead of artificial unit coverage.
 - A root verification pipeline that now includes contract generation/drift; contract, Ingest, and
@@ -863,9 +866,9 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   checking, coverage, and a production Next.js build on every deterministic CI run.
 - A manifest-driven production artifact gate with nine black-box cases and enforced limits for
   initial raw/gzip bytes, application/CSS gzip bytes, asset count, source maps, fonts, path safety,
-  and standalone output. The current initial route is 184,686 gzip bytes across eight assets;
-  application JavaScript remains within its separate 10,000-byte budget at 8,879 gzip bytes and CSS
-  remains within 5,000 bytes at 4,373 gzip bytes.
+  and standalone output. The current initial route is 185,834 gzip bytes across eight assets;
+  application JavaScript remains within its separate 10,000-byte budget at 9,862 gzip bytes and CSS
+  remains within 5,000 bytes at 4,533 gzip bytes.
 - A lock-integrity-bound metadata cache for platform-specific npm packages, ten license-checker
   regression cases, and two expiring reviewed overrides: one resolves Next.js to patched
   `postcss@8.5.19`, and one removes unused `sharp`/libvips code while Next.js image optimization
@@ -886,14 +889,15 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   requires the manifest's exact browser product/platform, re-renders all states, decodes both PNGs
   inside that isolated browser, and rejects one changed pixel channel. The current Chrome
   150.0.7871.129 `win32-x64` pair passed all 18 semantic comparisons without changing the manifest.
-  That exact no-write run also dispatched real CDP keyboard events over the closed 13-target order,
+  That exact no-write run also dispatched real CDP keyboard events over the closed 16-target order,
   proved skip-link focus transfer and Space-driven pause restoration, validated named landmarks,
-  links, buttons, comboboxes, race image, and trust-captioned table from Chromium's full
-  accessibility tree, then repeated the focus order under forced colors while checking reviewed
-  borders, horizontal bounds, and the semantic canvas alternative. It finally disabled Chromium's
-  network cache and collected three samples per mode on the exact 1280 by 720 English Classic Grand
-  Prix state. Animation-on maxima were 88.0 milliseconds LCP, 0.000 CLS, and 16.0 milliseconds for
-  the one controlled interaction; reduced-motion maxima were 52.0 milliseconds, 0.000, and 16.0
+  links, buttons, comboboxes, the simulator textbox, race image, and trust-captioned table from
+  Chromium's full accessibility tree, then repeated the focus order under forced colors while
+  checking reviewed borders, horizontal bounds, and the semantic canvas alternative. It finally
+  disabled Chromium's network cache and collected three samples per mode on the exact 1280 by 720
+  English Classic Grand Prix state using one trusted CDP pointer interaction per sample.
+  Animation-on maxima were 168.0 milliseconds LCP, 0.000 CLS, and 16.0 milliseconds for the
+  controlled interaction; reduced-motion maxima were 116.0 milliseconds, 0.000, and 40.0
   milliseconds. Closed local regression ceilings are 2,500 milliseconds, 0.1, and 200 milliseconds.
   They are not beta SLOs. The executable itself is operator-reviewed rather than
   provenance/digest-pinned or provisioned in CI. This is not native screen-reader, operating-system
@@ -980,8 +984,9 @@ authenticated profile detail, client-rate and production-capacity controls, quer
 monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
 The visible web scoring and ranking experience now consumes a validated current-week status response
 from the local route when its separately provisioned database login works, but local defaults and
-every unavailable/error path remain clearly synthetic. No working database/OAuth login, deployed
-data, cache, or end-to-end real-user ranking evidence exists.
+every unavailable/error path remain clearly synthetic. Its separate score simulator is explicitly
+hypothetical and never consumes that response or any account value. No working database/OAuth login,
+deployed data, cache, or end-to-end real-user ranking evidence exists.
 
 ## Evidence commands
 

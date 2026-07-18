@@ -19,18 +19,20 @@ approved enum-only автомобиль и включённый пользова
 daily scores остаются private. При отсутствии автомобиля браузер использует repository-owned
 presentation fallback. При ошибке остаётся синтетический fallback. Демо-профиль, три темы,
 русский/английский интерфейс и reduced-motion режим работают без реальных данных. Отдельный
-invite-only flow теперь локально соединяет GitHub OAuth со state и PKCE, зашифрованное краткоживущее
-продолжение, атомарное enrollment, обязательную регистрацию passkey, повторный
-discoverable-credential вход, session-scoped список ключей доступа, страницу активного профиля,
-hide/show публичного профиля, список источников и устройств, немедленную паузу источника,
-восстановление paused-источника после свежей проверки passkey, необратимое отключение источника со
-свежей проверкой passkey, немедленный отзыв устройства, добавление резервного passkey, защищённый
-отзыв не текущего passkey, запрос удаления профиля после точного ввода handle и свежей проверки
-passkey, ротацию кодов восстановления с одноразовым показом после свежей проверки passkey, а также
-logout. Репозиторий не предоставляет рабочий invite issuer, вход по коду восстановления или замену
-passkey, OAuth registration, реальные secrets, live OAuth/authenticator/database credentials,
-scheduled deletion purge, cache/backup/tombstone handling, restore replay, edge abuse controls или
-evidence с реальным пользователем.
+публичный EN/RU симулятор применяет production-формулу Community к условному дневному числу токенов
+и числу активных дней только в памяти компонента. Значение не отправляется, не сохраняется, не
+подставляется из аккаунта и не влияет на рейтинг. Отдельный invite-only flow теперь локально
+соединяет GitHub OAuth со state и PKCE, зашифрованное краткоживущее продолжение, атомарное
+enrollment, обязательную регистрацию passkey, повторный discoverable-credential вход, session-scoped
+список ключей доступа, страницу активного профиля, hide/show публичного профиля, список источников и
+устройств, немедленную паузу источника, восстановление paused-источника после свежей проверки
+passkey, необратимое отключение источника со свежей проверкой passkey, немедленный отзыв устройства,
+добавление резервного passkey, защищённый отзыв не текущего passkey, запрос удаления профиля после
+точного ввода handle и свежей проверки passkey, ротацию кодов восстановления с одноразовым показом
+после свежей проверки passkey, а также logout. Репозиторий не предоставляет рабочий invite issuer,
+вход по коду восстановления или замену passkey, OAuth registration, реальные secrets, live
+OAuth/authenticator/database credentials, scheduled deletion purge, cache/backup/tombstone handling,
+restore replay, edge abuse controls или evidence с реальным пользователем.
 
 Страница аккаунта теперь также рендерит семь derived-баллов по дням текущей Community-недели и
 bounded summary через один объединённый server-side visibility/score checkout. Hidden-профиль не

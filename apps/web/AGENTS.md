@@ -166,6 +166,10 @@ public-data, license, documentation, or staged-snapshot gates.
 - Prefer semantic HTML as the authoritative experience. Canvas is enhancement and must retain a
   useful accessible description and reduced-motion behavior.
 - Keep scoring/ranking deterministic, bounded, and covered at caps, invalid inputs, and ties.
+- Keep the public score simulator explicitly hypothetical and local-only. Accept one canonical
+  non-negative safe integer plus one to seven active days, call the production scoring functions,
+  and retain input only in component memory. Do not add a form name/action, fetch, logging,
+  persistence, account/race prefill, raw-token display outside the control, or standing mutation.
 - Exercise actual state changes and production code paths in tests. Do not lower coverage thresholds
   or disable axe rules except for jsdom's documented inability to measure visual contrast; browser
   evidence must cover that gap.

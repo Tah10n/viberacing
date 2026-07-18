@@ -27,6 +27,11 @@ Versioning where its guarantees are applicable.
   covering the exact npm lock graph, pinned Actions, and local PostgreSQL image.
 - Synthetic EN/RU Next.js race, leaderboard, demo profile, three code-native themes, reduced-motion
   controls, and deterministic pixel-car renderer.
+- A public EN/RU score simulator that validates one canonical hypothetical daily token total and one
+  to seven active days, delegates to the production daily/weekly formula, and retains input only in
+  component memory. It has no form action/name, request, logging, persistence, account/race prefill,
+  or standing mutation; unit/component tests cover boundaries, localization, privacy, and
+  rest/steady/mixed/capped synthetic distributions.
 - A canonical `CarRecipeV1` schema with seven closed project-owned enum axes and a bounded seed;
   generated validation; deterministic part/trail snapshots; code-native three-theme account
   previews; forced-RLS active/proposal tables; exact-session Web-only propose/read/approve/reject
@@ -57,17 +62,17 @@ Versioning where its guarantees are applicable.
   Fifteen CLI guardrail cases, ten request-policy assertions, four exact-environment assertions, six
   pixel-result assertions, and a shared offline gate with eleven checker mutations enforce the
   closed origin/browser intent, exact inventory, dimensions, byte limits, SHA-256 manifest, and
-  public PNG policy. The same no-write mode now proves the exact 13-target keyboard order,
+  public PNG policy. The same no-write mode now proves the exact 16-target keyboard order,
   skip-target focus transfer, Space activation and restoration of the pause control, named
-  accessibility-tree landmarks/controls/table/canvas, and a forced-colors pass with visible focus,
-  reviewed borders, no outer overflow, and a semantic canvas alternative. It now also collects three
-  cold-browser-cache LCP/CLS/controlled-interaction samples in both animation-on and reduced-motion
-  states. The latest recorded local maxima are respectively `88.0 ms / 0.000 / 16.0 ms` and
-  `52.0 ms / 0.000 / 16.0 ms`, bounded by local regression ceilings rather than published as SLOs.
-  Five keyboard-policy, six accessibility-tree-policy, five forced-colors-policy, and fourteen
-  web-vitals-policy assertions reject drift. The reported product/platform is pinned, but executable
-  artifact provenance, native screen-reader, CI provisioning, cross-browser evidence, field Core Web
-  Vitals, and staging SLOs remain open.
+  accessibility-tree landmarks/controls/simulator textbox/table/canvas, and a forced-colors pass
+  with visible focus, reviewed borders, no outer overflow, and a semantic canvas alternative. It now
+  also collects three cold-browser-cache LCP/CLS/trusted-pointer-interaction samples in both
+  animation-on and reduced-motion states. The latest recorded local maxima are respectively
+  `168.0 ms / 0.000 / 16.0 ms` and `116.0 ms / 0.000 / 40.0 ms`, bounded by local regression
+  ceilings rather than published as SLOs. Five keyboard-policy, six accessibility-tree-policy, five
+  forced-colors-policy, and fourteen web-vitals-policy assertions reject drift. The reported
+  product/platform is pinned, but executable artifact provenance, native screen-reader, CI
+  provisioning, cross-browser evidence, field Core Web Vitals, and staging SLOs remain open.
 - A documented AI-generated social preview, accessible alternative text, reproducible metadata
   sanitation, and a fail-closed PNG structure/chunk policy with regression coverage.
 - Strict server-only public-origin validation for absolute social metadata, with HTTPS-only hosted

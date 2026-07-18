@@ -13,7 +13,10 @@ are ignored, a missing current top-32 row is not replaced, and a public signed-i
 its current summary. An ordinary same-tab selection updates the summary and URL without a reload;
 modified clicks retain native link behavior. The fallback demo garage and default product shell
 remain synthetic and unauthenticated, with no working database login, real user data, or deployment.
-A separate local Phase 2 slice now implements invite redemption, GitHub OAuth state plus PKCE,
+The same page exposes an EN/RU score simulator backed by the production scoring functions. It
+accepts only one canonical non-negative safe integer and one to seven active days, keeps both values
+only in component memory, and never fetches, logs, persists, submits, or preloads account or race
+data. A separate local Phase 2 slice now implements invite redemption, GitHub OAuth state plus PKCE,
 encrypted HttpOnly continuations, initial passkey registration, returning login, a session-scoped
 passkey inventory, an account page, public-profile hide/show, source
 inventory/pause/reactivation/unlink, active-device revoke, fresh backup-passkey addition, revocation
@@ -54,13 +57,13 @@ verifies the exact PNG inventory, dimensions, digests, and public metadata polic
 explicit local `verify:phase1-visual-baselines` run additionally refuses browser product/platform
 drift, decodes both images inside isolated Chromium, and requires zero changed pixels without
 writing repository files. It then dispatches browser keyboard events through CDP, requires the
-closed 13-target focus order plus skip-target transfer and pause-button activation, validates named
+closed 16-target focus order plus skip-target transfer and pause-button activation, validates named
 landmarks/controls/table/canvas in Chromium's accessibility tree, and repeats the focus/border
 checks with forced colors active. Finally, it disables Chromium's network cache and takes three LCP,
-CLS, and controlled-interaction duration samples in both animation-on and reduced-motion states. It
-does not authenticate the supplied executable or replace a native screen-reader, cross-browser,
-field Core Web Vitals, or staging SLO pass. Regeneration is a separate local browser task: build and
-start this workspace on loopback, then run
+CLS, and trusted pointer-interaction duration samples in both animation-on and reduced-motion
+states. It does not authenticate the supplied executable or replace a native screen-reader,
+cross-browser, field Core Web Vitals, or staging SLO pass. Regeneration is a separate local browser
+task: build and start this workspace on loopback, then run
 `pnpm run capture:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium> --write`.
 The capture creates its own temporary browser profile and rejects non-loopback page resources; it
 never opens a contributor's normal browser profile. Review all rendered diffs manually because root
@@ -112,6 +115,7 @@ deliberately non-working placeholders. See `.env.example` and the local-developm
 | `lib/public-score-database-config.ts`                                            | Parses the dedicated Web login and TLS/pool contract                     | Owner settings are separate; production is verify-full; errors reflect no value     |
 | `lib/public-score-database-pool.ts`                                              | Wraps `pg` with narrow connect/query/release/close authority             | Four connections; bounded waits; stable idle-error signal only                      |
 | `lib/scoring.ts`                                                                 | Bounded daily/weekly score and deterministic rank calculation            | Treat all future device input as untrusted and validate before calling              |
+| `lib/score-simulator.ts`                                                         | Parses hypothetical input and projects daily/weekly score                | Canonical safe integer and one-to-seven days; delegates to production scoring       |
 | `lib/race-types.ts`                                                              | Client-safe participant and demo-profile shape                           | Must not gain raw tokens or source/account identifiers                              |
 | `lib/public-origin.ts`                                                           | Strict parser for the canonical social-metadata origin                   | Server-only; hosted origins require HTTPS DNS and no extra URL parts                |
 | `lib/car-recipe.ts`                                                              | Versioned closed-enum renderer and code-native sprites                   | Client-safe type/render data only; no schema runtime or arbitrary content           |
@@ -121,6 +125,7 @@ deliberately non-working placeholders. See `.env.example` and the local-developm
 | `lib/connector-car-proposal-http.ts`                                             | Owns the closed device proposal POST boundary                            | Exact path/body/headers, four-call no-queue admission, generic no-store result      |
 | `components/car-recipe-preview.tsx`                                              | Server-renders one exact recipe in all three themes                      | Semantic indexed pixels; no client script, inline user style, SVG, file, or URL     |
 | `components/pixel-race-canvas.tsx`                                               | Deterministic code-native renderer                                       | Draws fixed primitives only; semantic DOM description is mandatory                  |
+| `components/score-simulator.tsx`                                                 | Renders the local-only EN/RU public score simulator                      | Component memory only; no form, name, fetch, storage, log, account, or standing     |
 | `components/race-experience.tsx`                                                 | EN/RU race, selectable summary, theme, and motion controls               | Community summary uses closed public fields; storage is non-personal preferences    |
 | `proxy.ts`                                                                       | Per-response nonce CSP                                                   | Keep production CSP fail-closed and free of remote origins                          |
 | `next.config.ts`                                                                 | Static security headers and build isolation                              | Turbopack must remain pinned to this repository root                                |

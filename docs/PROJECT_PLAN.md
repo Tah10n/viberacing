@@ -144,47 +144,49 @@ flowchart LR
 
 ### Runtime components
 
-- Web/Auth: Next.js App Router and strict TypeScript. Local invite/OAuth/initial-passkey enrollment
-  and returning discoverable-credential login use purpose-separated encrypted cookies, exact
-  same-origin bounded routes, application WebAuthn verification, and fixed calls through the probed
-  read-write pool. Login options retain no database state; valid proof alone reaches atomic
-  challenge creation/consumption and passkey-provenance session minting. The account page now uses
-  that exact session for a bounded, server-rendered passkey inventory without credential or key
-  material and for an idempotent same-origin `public`/`hidden` profile control. Hiding affects
-  public score reads without pausing source sync. The same account view now projects only the
-  profile's at-most-32 sources and 64 active device credentials, preserves empty sources for
-  lifecycle control, rounds activation to a day, and hides source/internal identifiers. It can
-  immediately pause one source or revoke one exact owned device even while public visibility is
-  hidden. A paused source can be reactivated only after a fresh user-verified assertion bound to the
-  session, source, RP ID, and origin; raw source IDs never enter HTML. A separate fresh context can
-  terminally unlink an active, paused, or quarantined source and revoke all of its devices without
-  publishing a hidden profile. It can revoke an owned non-current active passkey only after a fresh
-  user-verified assertion bound to that session, target, RP, origin, and one atomically consumed
-  challenge. It can also add a backup key after independent existing-key assertion and registration
-  ceremonies whose validated label and challenges reach one atomic consume-and-add statement. Its
-  recovery-code control now requires a fresh user-verified assertion bound to the active
-  session/profile/RP/origin, derives ten independent Argon2id PHCs sequentially under a distinct
-  protected pepper, atomically replaces the previous batch, and returns plaintext once only after
-  commit. A separate local recovery page now accepts only the exact one-time code and replacement
-  label, obtains only that selector's PHC, performs bounded Argon2id verification under the
-  protected pepper, and normalizes admitted responses to a configured minimum floor under four-call
-  no-queue admission. Success consumes the code into a five-minute restricted authority, verifies
-  the exact replacement registration, and reaches atomic passkey replacement plus normal-session
-  creation; a code alone never creates a session. The deletion control accepts the exact typed
-  handle before a fresh assertion bound to session/profile/handle/RP/origin, then atomically
-  consumes that challenge while immediately hiding the profile, revoking authority, unlinking
-  sources, and queueing one opaque purge job. A separate local Jobs command now performs bounded
-  atomic primary purge; scheduling, cache invalidation, tombstone policy, backup expiry, and restore
-  replay remain separate gates. A transport-free pairing start boundary now owns fresh server
-  IDs/token/challenge/code, separate protected poll/code verifiers, closed device metadata,
-  nine-minute expiry, and one fixed call through a separate probed read-write pool wrapper. A second
-  activation boundary owns protected poll lookup, strict possession proof, server-owned activation
-  IDs, and fixed admission/timing. The local `/connect` slice now supplies the intervening browser
-  step: exact-session code lookup with a database-backed attempt window, bounded device/fingerprint
-  review, explicit new-source or active existing-source selection through an encrypted session-bound
-  control, and fresh-passkey atomic approval. Distributed recovery/anonymous edge attempt policy,
-  expired-state cleanup scheduling and notification, live provider/database credentials, and
-  deployment remain separate gates.
+- Web/Auth: Next.js App Router and strict TypeScript. The public home also exposes one local-only
+  EN/RU score simulator that passes canonical hypothetical input through the production Community
+  scoring functions without a request, account prefill, persistence, logging, or standing mutation.
+  Local invite/OAuth/initial-passkey enrollment and returning discoverable-credential login use
+  purpose-separated encrypted cookies, exact same-origin bounded routes, application WebAuthn
+  verification, and fixed calls through the probed read-write pool. Login options retain no database
+  state; valid proof alone reaches atomic challenge creation/consumption and passkey-provenance
+  session minting. The account page now uses that exact session for a bounded, server-rendered
+  passkey inventory without credential or key material and for an idempotent same-origin
+  `public`/`hidden` profile control. Hiding affects public score reads without pausing source sync.
+  The same account view now projects only the profile's at-most-32 sources and 64 active device
+  credentials, preserves empty sources for lifecycle control, rounds activation to a day, and hides
+  source/internal identifiers. It can immediately pause one source or revoke one exact owned device
+  even while public visibility is hidden. A paused source can be reactivated only after a fresh
+  user-verified assertion bound to the session, source, RP ID, and origin; raw source IDs never
+  enter HTML. A separate fresh context can terminally unlink an active, paused, or quarantined
+  source and revoke all of its devices without publishing a hidden profile. It can revoke an owned
+  non-current active passkey only after a fresh user-verified assertion bound to that session,
+  target, RP, origin, and one atomically consumed challenge. It can also add a backup key after
+  independent existing-key assertion and registration ceremonies whose validated label and
+  challenges reach one atomic consume-and-add statement. Its recovery-code control now requires a
+  fresh user-verified assertion bound to the active session/profile/RP/origin, derives ten
+  independent Argon2id PHCs sequentially under a distinct protected pepper, atomically replaces the
+  previous batch, and returns plaintext once only after commit. A separate local recovery page now
+  accepts only the exact one-time code and replacement label, obtains only that selector's PHC,
+  performs bounded Argon2id verification under the protected pepper, and normalizes admitted
+  responses to a configured minimum floor under four-call no-queue admission. Success consumes the
+  code into a five-minute restricted authority, verifies the exact replacement registration, and
+  reaches atomic passkey replacement plus normal-session creation; a code alone never creates a
+  session. The deletion control accepts the exact typed handle before a fresh assertion bound to
+  session/profile/handle/RP/origin, then atomically consumes that challenge while immediately hiding
+  the profile, revoking authority, unlinking sources, and queueing one opaque purge job. A separate
+  local Jobs command now performs bounded atomic primary purge; scheduling, cache invalidation,
+  tombstone policy, backup expiry, and restore replay remain separate gates. A transport-free
+  pairing start boundary now owns fresh server IDs/token/challenge/code, separate protected
+  poll/code verifiers, closed device metadata, nine-minute expiry, and one fixed call through a
+  separate probed read-write pool wrapper. A second activation boundary owns protected poll lookup,
+  strict possession proof, server-owned activation IDs, and fixed admission/timing. The local
+  `/connect` slice now supplies the intervening browser step: exact-session code lookup with a
+  database-backed attempt window, bounded device/fingerprint review, explicit new-source or active
+  existing-source selection through an encrypted session-bound control, and fresh-passkey atomic
+  approval. Distributed recovery/anonymous edge attempt policy, expired-state cleanup scheduling and
+  notification, live provider/database credentials, and deployment remain separate gates.
 - Authenticated score view: the account server render reuses the exact possessed session and one
   combined Web/Auth pool checkout to read visibility plus the current Monday's existing seven
   derived daily scores and bounded summary. Hidden profiles return no score; raw usage, private
@@ -610,7 +612,9 @@ Rules:
 - Display ordering inside a shared rank is deterministic per season and has no competitive meaning.
 - Streak is informational and does not increase score.
 - The scoring version is stored with each season and cannot change mid-season.
-- A public simulator and synthetic-distribution tests show the effect of the formula before beta.
+- The public EN/RU simulator now applies the production formula to one hypothetical daily token
+  total and one to seven active days entirely in component memory. Synthetic-distribution tests
+  cover rest, steady, mixed, and capped weeks through the production scoring path.
 - A season begins on Monday according to codexReportedDate grouping.
 - [ADR 0008](decisions/0008-community-season-grace-and-finalization.md) fixes the Community grace
   deadline at Wednesday 00:00 UTC after that ISO week, 48 hours after the next Monday begins.

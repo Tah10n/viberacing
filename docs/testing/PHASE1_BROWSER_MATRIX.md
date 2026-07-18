@@ -109,27 +109,27 @@ and `aria-pressed` states. The paused Russian control changed from `Остано
 
 The no-write gate resets the exact synthetic English Classic Grand Prix page at 1280 by 720 and
 dispatches real `Tab`, `Shift+Tab`, `Enter`, and `Space` key events through CDP. The closed forward
-order contains the skip link, brand, five primary-navigation links, hero action, pause button, three
-labelled selects, and keyboard-scrollable table region. Every target was in the viewport with its
-focus outline visible. Reverse traversal returned from the table to the motion select. The skip link
-became visible and transferred both the fragment and programmatic focus to the non-sequential
-leaderboard section. Space changed the pause control's `aria-pressed` state from `false` to `true`
-and back to `false`.
+order contains the skip link, brand, six primary-navigation links, hero action, pause button, three
+race selects, the simulator textbox and active-day select, and the keyboard-scrollable table region.
+Every target was in the viewport with its focus outline visible. Reverse traversal returned from the
+table to the simulator active-day select. The skip link became visible and transferred both the
+fragment and programmatic focus to the non-sequential leaderboard section. Space changed the pause
+control's `aria-pressed` state from `false` to `true` and back to `false`.
 
 The same run reads Chromium's full accessibility tree rather than inferring semantics from DOM
 attributes alone. It requires exactly one banner, primary navigation, main, and content-info
-landmark; eight named links; two named buttons including the disabled unavailable control; three
-named comboboxes; the named race image; the leaderboard table's full trust caption; and the hero
-heading. The exact link/button/combobox inventory and duplicate counts, an unnamed reviewed control,
-or an unreviewed input role fail closed.
+landmark; nine named links; two named buttons including the disabled unavailable control; four named
+comboboxes; one named simulator textbox; the named race image; the leaderboard table's full trust
+caption; and the hero heading. The exact link/button/combobox/textbox inventory and duplicate
+counts, an unnamed reviewed control, or an unreviewed input role fail closed.
 
-With `(forced-colors: active)` emulated, all 13 keyboard targets retained visible focus in the same
-order, the document retained its horizontal bounds, and ten reviewed control/panel/table/canvas
-surfaces retained explicit borders. Code-native canvas pixels use `forced-color-adjust: none`, while
-the separately exposed image name/description and semantic table remain authoritative alternatives.
-This is exact local Chrome keyboard and accessibility-tree evidence. It is not a native
-screen-reader session, operating-system High Contrast certification, or evidence for another
-browser.
+With `(forced-colors: active)` emulated, all 16 keyboard targets retained visible focus in the same
+order, the document retained its horizontal bounds, and every match across twelve reviewed
+control/panel/table/canvas selector groups retained explicit borders. Code-native canvas pixels use
+`forced-color-adjust: none`, while the separately exposed image name/description and semantic table
+remain authoritative alternatives. This is exact local Chrome keyboard and accessibility-tree
+evidence. It is not a native screen-reader session, operating-system High Contrast certification, or
+evidence for another browser.
 
 ## Local Web Vitals lab signals
 
@@ -137,14 +137,15 @@ The same no-write gate installs Performance Observers before navigation, disable
 Chromium's network cache before each reload, and collects three samples on the 1280 by 720 English
 Classic Grand Prix state. Animation-on pairs the explicit `on` preference with
 `prefers-reduced-motion: no-preference`; reduced-motion pairs `off` with `reduce`. Each sample
-focuses the pause control without input, sends one trusted CDP Enter interaction, confirms the
-control changed state, and reads LCP, CLS, and the controlled interaction's Event Timing duration.
-With one interaction in the sample, that duration is a local INP lab signal, not a field percentile.
+focuses the pause control without input, sends one trusted CDP primary-pointer interaction, confirms
+the control changed state, and reads LCP, CLS, and the controlled interaction's Event Timing
+duration. With one interaction in the sample, that duration is a local INP lab signal, not a field
+percentile.
 
 | State          | Maximum LCP | Maximum CLS | Maximum controlled interaction |
 | -------------- | ----------: | ----------: | -----------------------------: |
-| Animation on   |     88.0 ms |       0.000 |                        16.0 ms |
-| Reduced motion |     52.0 ms |       0.000 |                        16.0 ms |
+| Animation on   |    168.0 ms |       0.000 |                        16.0 ms |
+| Reduced motion |    116.0 ms |       0.000 |                        40.0 ms |
 
 The closed local regression ceilings are 2,500 milliseconds LCP, 0.1 CLS, and 200 milliseconds for
 the controlled interaction. These are test ceilings, not published beta SLOs. The browser process,
@@ -196,10 +197,10 @@ standalone output, or a budget overrun. The current artifact is:
 | Metric                        | Observed |  Budget |
 | ----------------------------- | -------: | ------: |
 | Initial assets                |        8 |      10 |
-| Initial raw bytes             |  612,748 | 700,000 |
-| Initial gzip bytes            |  184,686 | 215,000 |
-| Application client gzip bytes |    8,879 |  10,000 |
-| Stylesheet gzip bytes         |    4,373 |   5,000 |
+| Initial raw bytes             |  617,587 | 700,000 |
+| Initial gzip bytes            |  185,834 | 215,000 |
+| Application client gzip bytes |    9,862 |  10,000 |
+| Stylesheet gzip bytes         |    4,533 |   5,000 |
 
 Nine black-box fixture cases cover a valid artifact, missing/traversing/oversized assets, source-map
 leakage, missing standalone output, total/application budget overruns, and font-boundary drift.

@@ -651,6 +651,77 @@ h3 {
   text-transform: uppercase;
 }
 
+.simulator-copy {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.simulator-panel {
+  min-width: 0;
+  padding: 1.35rem;
+  border: 3px solid var(--border);
+  background: var(--panel);
+  box-shadow: 6px 6px 0 var(--shadow);
+}
+
+.simulator-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(8rem, 1fr);
+  gap: 1rem;
+}
+
+.simulator-controls label {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.simulator-input {
+  min-height: 2.75rem;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 2px solid var(--border);
+  border-radius: 0;
+  background: var(--background);
+  color: var(--text);
+}
+
+.simulator-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.simulator-error {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  padding-left: 0.75rem;
+  border-left: 4px solid var(--danger);
+  color: var(--text);
+}
+
+.simulator-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-block: 1.5rem;
+}
+
+.simulator-results > div {
+  min-width: 0;
+  padding: 0.85rem;
+  border: 2px solid var(--panel-2);
+}
+
+.simulator-results dd {
+  overflow-wrap: anywhere;
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+}
+
 select {
   min-height: 2.75rem;
   width: 100%;
@@ -1139,6 +1210,11 @@ dd {
     gap: 0.25rem;
   }
 
+  .simulator-controls,
+  .simulator-results {
+    grid-template-columns: 1fr;
+  }
+
   .recipe-list,
   .stat-pair {
     grid-template-columns: 1fr;
@@ -1168,6 +1244,9 @@ dd {
   .race-console,
   .race-canvas-shell,
   .race-canvas,
+  .simulator-input,
+  .simulator-panel,
+  .simulator-results > div,
   select,
   .table-region,
   .profile-grid article,

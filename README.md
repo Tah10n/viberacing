@@ -20,18 +20,21 @@ repository-owned presentation fallback. A Community handle selects a same-page p
 that same validated field set; daily detail, device counts, exact usage, and identifiers remain
 absent. Each selection has a canonical public-handle URL, and a signed-in public profile links to
 its current summary without adding browser storage. An unavailable route leaves the synthetic
-fallback visible; the demo garage remains synthetic. A separate invite-only join flow now composes
-GitHub OAuth with state and PKCE, one encrypted short-lived continuation, atomic profile enrollment,
-required WebAuthn registration, returning discoverable-credential login, a session-scoped passkey
-inventory, an active account page, immediate public-profile hide/show, source and active-device
-inventory, immediate source pause, fresh-passkey paused-source reactivation, device revoke,
-backup-passkey addition and fresh-passkey terminal source unlink, non-current-passkey revocation,
-fresh-passkey recovery-code rotation with one-time display, an exact-handle fresh-passkey
-profile-deletion request, one-time recovery-code replacement-passkey sign-in, and logout. It is
-locally tested only: the repository supplies no invite issuer UI, OAuth registration, real secret,
-live OAuth/authenticator/database credentials, scheduled deletion purge, cache/backup/tombstone
-handling, restore replay, distributed edge abuse controls, recovery cleanup or notifications, or
-live-user evidence.
+fallback visible; the demo garage remains synthetic. The same public page now includes an EN/RU
+score simulator that applies the production Community formula to one hypothetical daily token total
+and one to seven active days entirely in component memory. Its value is never sent, stored,
+prefilled from an account, or used to change a standing. A separate invite-only join flow now
+composes GitHub OAuth with state and PKCE, one encrypted short-lived continuation, atomic profile
+enrollment, required WebAuthn registration, returning discoverable-credential login, a
+session-scoped passkey inventory, an active account page, immediate public-profile hide/show, source
+and active-device inventory, immediate source pause, fresh-passkey paused-source reactivation,
+device revoke, backup-passkey addition and fresh-passkey terminal source unlink, non-current-passkey
+revocation, fresh-passkey recovery-code rotation with one-time display, an exact-handle
+fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey sign-in, and
+logout. It is locally tested only: the repository supplies no invite issuer UI, OAuth registration,
+real secret, live OAuth/authenticator/database credentials, scheduled deletion purge,
+cache/backup/tombstone handling, restore replay, distributed edge abuse controls, recovery cleanup
+or notifications, or live-user evidence.
 
 The authenticated account page now also renders the current Community week's seven derived daily
 scores and bounded summary from one combined server-side visibility/score checkout. Hidden profiles

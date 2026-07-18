@@ -336,6 +336,22 @@ async function dispatchEnter(connection, sessionId) {
   await dispatchKey(connection, sessionId, "Enter", "Enter", 13, 0, "\r");
 }
 
+async function dispatchPrimaryClick(connection, sessionId, point) {
+  const common = {
+    button: "left",
+    clickCount: 1,
+    x: point.x,
+    y: point.y,
+  };
+  await connection.send("Input.dispatchMouseEvent", { ...common, type: "mousePressed" }, sessionId);
+  await connection.send(
+    "Input.dispatchMouseEvent",
+    { ...common, type: "mouseReleased" },
+    sessionId,
+  );
+  await delay(25);
+}
+
 async function dispatchSpace(connection, sessionId) {
   await dispatchKey(connection, sessionId, " ", "Space", 32, 0, " ");
 }
@@ -434,6 +450,10 @@ async function runPhase1KeyboardAudit(connection, sessionId, expected) {
   let focusIndicatorsVisible = true;
   let focusedElementsVisible = true;
   let pausePressedStates;
+  const pauseButtonIndex = phase1KeyboardFocusSelectors.indexOf(".race-section .pixel-button");
+  if (pauseButtonIndex < 0) {
+    throw new Error("closed Phase 1 focus inventory has no pause control");
+  }
   for (let index = 0; index < phase1KeyboardFocusSelectors.length; index += 1) {
     await dispatchTab(connection, sessionId);
     const focused = await inspectFocusedElement(connection, sessionId);
@@ -441,7 +461,7 @@ async function runPhase1KeyboardAudit(connection, sessionId, expected) {
     focusIndicatorsVisible &&= focused?.focusIndicator === true;
     focusedElementsVisible &&= focused?.inViewport === true;
 
-    if (index === 8) {
+    if (index === pauseButtonIndex) {
       const before = await evaluate(
         connection,
         sessionId,
@@ -534,20 +554,24 @@ async function runPhase1ForcedColorsAudit(connection, sessionId) {
         ".trust-banner",
         ".race-console",
         ".race-canvas",
+        ".simulator-panel",
+        ".simulator-results > div",
         ".table-region",
         ".profile-grid article",
         ".method-grid article"
       ];
       const bordersVisible = reviewedBorders.every((selector) => {
-        const element = document.querySelector(selector);
-        if (!(element instanceof HTMLElement)) return false;
-        const style = getComputedStyle(element);
-        return (
-          style.borderTopStyle !== "none" &&
-          Number.parseFloat(style.borderTopWidth) >= 2 &&
-          style.borderTopColor !== "transparent" &&
-          style.borderTopColor !== "rgba(0, 0, 0, 0)"
-        );
+        const elements = [...document.querySelectorAll(selector)];
+        return elements.length > 0 && elements.every((element) => {
+          if (!(element instanceof HTMLElement)) return false;
+          const style = getComputedStyle(element);
+          return (
+            style.borderTopStyle !== "none" &&
+            Number.parseFloat(style.borderTopWidth) >= 2 &&
+            style.borderTopColor !== "transparent" &&
+            style.borderTopColor !== "rgba(0, 0, 0, 0)"
+          );
+        });
       });
       const canvas = document.querySelector(".race-canvas");
       const description = canvas?.getAttribute("aria-describedby");
@@ -762,20 +786,39 @@ async function runPhase1WebVitalsAudit(connection, sessionId, settleRequestActio
         width: 1280,
       });
       await settleRequestActions();
-      const pauseReady = await evaluate(
+      const pauseTarget = await evaluate(
         connection,
         sessionId,
         `(() => {
           const pause = document.querySelector(".race-section .pixel-button");
-          if (!(pause instanceof HTMLButtonElement) || pause.disabled) return false;
+          if (!(pause instanceof HTMLButtonElement) || pause.disabled) return null;
           pause.focus();
-          return document.activeElement === pause && pause.getAttribute("aria-pressed") === "false";
+          const bounds = pause.getBoundingClientRect();
+          if (
+            document.activeElement !== pause ||
+            pause.getAttribute("aria-pressed") !== "false" ||
+            bounds.width <= 0 ||
+            bounds.height <= 0 ||
+            bounds.top < 0 ||
+            bounds.left < 0 ||
+            bounds.bottom > window.innerHeight ||
+            bounds.right > window.innerWidth
+          ) return null;
+          return {
+            x: bounds.left + bounds.width / 2,
+            y: bounds.top + bounds.height / 2
+          };
         })()`,
       );
-      if (pauseReady !== true) {
+      if (
+        !Number.isFinite(pauseTarget?.x) ||
+        !Number.isFinite(pauseTarget?.y) ||
+        pauseTarget.x <= 0 ||
+        pauseTarget.y <= 0
+      ) {
         throw new Error("isolated browser could not prepare the Web Vitals interaction target");
       }
-      await dispatchEnter(connection, sessionId);
+      await dispatchPrimaryClick(connection, sessionId, pauseTarget);
       await evaluate(
         connection,
         sessionId,

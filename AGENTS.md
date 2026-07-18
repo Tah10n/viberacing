@@ -47,11 +47,12 @@ disposable least-privileged Ingest login in one ephemeral PostgreSQL container, 
 signed HTTP requests, and proves accepted, duplicate, persistent origin-replay, revoked-device,
 response-contract, and exact persistence behavior before removing the container. The public
 race-status route now has a visible current-week browser consumer with rounded freshness, optional
-preference-gated streak, and an explicit validated synthetic fallback; the stable score and legacy
-race routes remain unchanged. These local boundaries still have no deployment proof key or
-secret-manager binding, externally verified TLS/edge route, deployment database credential, capacity
-evidence, deployment, or real-data result. A separate local enrollment slice now implements exact
-invite parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted
+preference-gated streak, and an explicit validated synthetic fallback. The public home also has a
+local-only EN/RU score simulator that persists or transmits no hypothetical input; the stable score
+and legacy race routes remain unchanged. These local boundaries still have no deployment proof key
+or secret-manager binding, externally verified TLS/edge route, deployment database credential,
+capacity evidence, deployment, or real-data result. A separate local enrollment slice now implements
+exact invite parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted
 cookies, atomic profile enrollment, required initial WebAuthn registration plus pending-session
 rotation, returning discoverable-credential passkey login, a session-scoped minimal passkey
 inventory, an account page, same-origin public-profile hide/show, a session-derived active-device

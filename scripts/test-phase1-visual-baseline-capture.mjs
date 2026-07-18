@@ -167,7 +167,13 @@ assert.equal(
   "invalid",
 );
 assert.equal(classifyPhase1KeyboardAudit({ ...keyboardAudit, unexpected: true }), "invalid");
-assert.equal(classifyPhase1KeyboardAudit({ ...keyboardAudit, focusableCount: 12 }), "invalid");
+assert.equal(
+  classifyPhase1KeyboardAudit({
+    ...keyboardAudit,
+    focusableCount: phase1KeyboardFocusSelectors.length - 1,
+  }),
+  "invalid",
+);
 assert.equal(
   classifyPhase1KeyboardAudit({ ...keyboardAudit, pausePressedStates: ["false", "true", "true"] }),
   "invalid",
@@ -179,6 +185,7 @@ const accessibilityNodes = [
     "View standings",
     "Vibe Racing",
     "Weekly race",
+    "Score simulator",
     "Leaderboard",
     "Profile",
     "Sign in",

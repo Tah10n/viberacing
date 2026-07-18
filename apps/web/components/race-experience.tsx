@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 
 import { PixelRaceCanvas } from "@/components/pixel-race-canvas";
+import { ScoreSimulator } from "@/components/score-simulator";
 import { carRecipeKey } from "@/lib/car-recipe";
 import {
   dayLabels,
@@ -194,6 +195,7 @@ export function RaceExperience({
         </span>
         <nav aria-label={translation.primaryNavigation} className="site-nav">
           <a href="#race">{translation.liveRace}</a>
+          <a href="#simulator">{translation.simulator}</a>
           <a href="#leaderboard">{translation.leaderboard}</a>
           <a href="#profile">{translation.profile}</a>
           {accountSessionAvailable ? (
@@ -309,6 +311,8 @@ export function RaceExperience({
             {themeLabels[theme]}; {motionLabels[motionPreference]}
           </p>
         </section>
+
+        <ScoreSimulator locale={locale} />
 
         <section
           aria-labelledby="leaderboard-heading"
