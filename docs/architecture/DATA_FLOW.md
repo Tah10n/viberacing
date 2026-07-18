@@ -7,27 +7,27 @@ addition, non-current-passkey revocation, recovery-code rotation/replacement-pas
 immediate profile-deletion-request, source inventory/pause/reactivation/unlink, active-device
 revoke, and pairing-approval sequences below plus the public race-status consumer are now locally
 implemented boundaries; none has live credentials, distributed edge policy, scheduled purge, or
-deployment evidence. Revisions 0001 through 0030 provide private
+deployment evidence. Revisions 0001 through 0031 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
 immediate deletion lock-down, source-bound pairing, source/device lifecycle controls, and Community
-ingest, bounded ingest-, pairing-, authentication-, session-, and CarRecipe-proposal-retention
-cleanup, primary profile deletion, open-season scoring refresh, late-ingest closure, terminal season
-finalization, a Web-only public score projection, a separate compatible current-recipe race
-projection, and a third compatible rounded-freshness/optional-streak status projection. Local
-score/race/status GETs construct their bounded adapters lazily after closed request admission. The
-visible home race requests its current server-selected week from the exact same-origin status route,
-validates the public score, rounded freshness, optional preference-gated streak, and optional
-recipe, lets one canonical public-handle URL select a same-page summary from only those fields, and
-retains a clearly labeled synthetic fallback on failure. A public signed-in account links to that
-URL; invalid, duplicate, and unranked selections grant no authority and add no score query field or
-browser persistence. One local one-shot Jobs runner can invoke exactly one of eight fixed functions:
-any of the five cleanup functions, primary profile purge, refresh, or finalization, but no broader
-recovery/step-up, deployed ingest endpoint, operational connector, purge
-schedule/cache/backup/tombstone handling, Jobs monitor, audited correction, or deployed service
-executes the complete sequences. A library-only Rust connector foundation validates the bounded
-stable App Server initialization exchange and candidate `0.144.5` account/usage responses. A
+ingest, bounded ingest-, pairing-, authentication-, invite-, session-, and
+CarRecipe-proposal-retention cleanup, primary profile deletion, open-season scoring refresh,
+late-ingest closure, terminal season finalization, a Web-only public score projection, a separate
+compatible current-recipe race projection, and a third compatible rounded-freshness/optional-streak
+status projection. Local score/race/status GETs construct their bounded adapters lazily after closed
+request admission. The visible home race requests its current server-selected week from the exact
+same-origin status route, validates the public score, rounded freshness, optional preference-gated
+streak, and optional recipe, lets one canonical public-handle URL select a same-page summary from
+only those fields, and retains a clearly labeled synthetic fallback on failure. A public signed-in
+account links to that URL; invalid, duplicate, and unranked selections grant no authority and add no
+score query field or browser persistence. One local one-shot Jobs runner can invoke exactly one of
+nine fixed functions: any of the six cleanup functions, primary profile purge, refresh, or
+finalization, but no broader recovery/step-up, deployed ingest endpoint, operational connector,
+purge schedule/cache/backup/tombstone handling, Jobs monitor, audited correction, or deployed
+service executes the complete sequences. A library-only Rust connector foundation validates the
+bounded stable App Server initialization exchange and candidate `0.144.5` account/usage responses. A
 synthetic one-shot supervisor composes those states with fixed local process mechanics, while an
 exact-body composer and isolated one-use signer produce a synthetic signed envelope. A separate
 pending-key and challenge signer plus a pure server-only Web verifier agree on one exact
@@ -381,6 +381,8 @@ sequenceDiagram
   Edge-->>Connector: Forward bounded response without a private reason
   Jobs->>DB: Delete bounded expired origin/device nonce and raw-snapshot batches
   Jobs->>DB: Delete bounded expired non-activated pairing and pending-key pairs
+  Jobs->>DB: Delete bounded expired authentication and invite state
+  Jobs->>DB: Delete bounded expired proposals and eligible sessions
   Jobs->>DB: Aggregate sources then apply one profile daily cap
 ```
 
@@ -516,6 +518,14 @@ oldest-first with `SKIP LOCKED`, and preserves every live proposal and active re
 two-worker race proves exact deletion and live-state preservation; no scheduler, production
 login/TLS path, monitoring, backup-purge proof, or deployed cadence invokes it automatically.
 
+Revision 0030 adds a fifth fixed 1000-row cleanup command for expired browser sessions that have no
+retained rotation predecessor or pairing approval reference. It shares the authentication mutex,
+re-evaluates after each oldest-first delete so rotation chains can progress, and preserves live and
+pairing-referenced state. Revision 0031 adds a sixth fixed command under the same mutex for expired
+active or revoked invite verifier rows; live invites and redeemed enrollment provenance remain.
+Observed worker races prove local serialization only. No scheduler, production login/TLS path,
+monitoring, backup-purge proof, or deployed cadence invokes either command automatically.
+
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct
 sources before one profile daily cap, applies the immutable Community v1 formula, and writes derived
@@ -534,14 +544,14 @@ returns no proposal identity, state, or timestamp and creates no historical reci
 Revision 0029 calls that compatible race read and derives only saturated complete-UTC-day freshness
 plus a consecutive positive-score streak from retained accepted receipt times and materialized daily
 scores. The streak is omitted unless the current active profile enables it; exact timestamps, daily
-rows, the preference, and private identifiers remain private. ADRs 0014, 0029, 0032, 0034, 0036, and
-0042 make the local one-shot Jobs process invoke exactly one of eight reviewed
-functions—authentication cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup,
-session cleanup, primary profile purge, refresh, or finalization—after a per-checkout
-least-privilege probe. One opt-in synthetic integration applies all reviewed migrations to a
-disposable loopback PostgreSQL container, runs each emitted command through a narrow login, rejects
-an extra-membership login before mutation, observes only generic process output, verifies exact
-stored state, and removes the container, network, and storage. No scheduler, production
+rows, the preference, and private identifiers remain private. ADRs 0014, 0029, 0032, 0034, 0036,
+0042, and 0043 make the local one-shot Jobs process invoke exactly one of nine reviewed
+functions—authentication cleanup, invite cleanup, CarRecipe-proposal cleanup, ingest cleanup,
+pairing cleanup, session cleanup, primary profile purge, refresh, or finalization—after a
+per-checkout least-privilege probe. One opt-in synthetic integration applies all reviewed migrations
+to a disposable loopback PostgreSQL container, runs each emitted command through a narrow login,
+rejects an extra-membership login before mutation, observes only generic process output, verifies
+exact stored state, and removes the container, network, and storage. No scheduler, production
 login/certificate, audited correction, tombstone/restore replay, deployed route, or public cache
 exists.
 

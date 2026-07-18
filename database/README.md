@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains thirty SQL-first revisions for identity, passkey login and management,
+This directory contains thirty-one SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
 finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
 PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,
@@ -22,11 +22,11 @@ pool. Focused tests use mock pools. A separate opt-in integration creates a synt
 Ingest login, passes independently signed loopback HTTP through the emitted host, and verifies the
 exact database result. Local public score/race/status routes and one local one-shot Jobs runner wrap
 narrow capabilities without a working database login. The database-only ingest and Jobs-only
-ingest-retention, pairing-retention, authentication-retention, session-retention, CarRecipe-proposal
-retention, primary profile deletion, open-season scoring, and terminal finalization procedures plus
-Web-only public score/race/status and exact-session private score projections are implemented;
-deployed HTTP ingest, scheduled execution, audited corrections, cache/backup/tombstone purge, and
-restore replay are not.
+ingest-retention, pairing-retention, authentication-retention, invite-retention, session-retention,
+CarRecipe-proposal retention, primary profile deletion, open-season scoring, and terminal
+finalization procedures plus Web-only public score/race/status and exact-session private score
+projections are implemented; deployed HTTP ingest, scheduled execution, audited corrections,
+cache/backup/tombstone purge, and restore replay are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -124,6 +124,9 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
   expired sessions that are no longer retained by rotation or pairing provenance. It shares the
   authentication mutex, cascades unusable session challenges, and preserves live sessions and
   immutable activated-pairing provenance.
+- `migrations/0031_invite_retention_cleanup.sql` adds Jobs-only maximum-1000 physical deletion of
+  expired active or revoked invite verifier rows under the shared authentication mutex while
+  preserving live invites and redeemed enrollment provenance.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -159,6 +162,9 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 - `tests/auth_cleanup.sql` exercises independent challenge/authority bounds, consumed and terminal
   deletion, live and unused-code preservation, idempotency, full expiry indexes, mutex failure, and
   exact role denial.
+- `tests/invite_cleanup.sql` exercises oldest-first active/revoked invite deletion, idempotency,
+  live and redeemed preservation, invalid bounds, supporting index, mutex failure, and exact role
+  denial.
 - `tests/session_cleanup.sql` exercises oldest-first session bounds, active/revoked/rotated
   deletion, rotation-chain progress, challenge cascade, idempotency, live and pairing-provenance
   preservation, invalid batches, supporting indexes, mutex failure, and exact role denial.
@@ -204,6 +210,9 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 - `tests/session_cleanup_concurrency_setup.sql` and
   `tests/session_cleanup_concurrency_assertions.sql` prove two session-cleanup calls serialize on
   the shared auth mutex, remove each expired batch once, and preserve live authority.
+- `tests/invite_cleanup_concurrency_setup.sql` and `tests/invite_cleanup_concurrency_assertions.sql`
+  prove two invite-cleanup calls serialize on the shared auth mutex, remove each expired batch once,
+  and preserve live authority.
 - `tests/profile_deletion_purge_concurrency_setup.sql` and
   `tests/profile_deletion_purge_concurrency_assertions.sql` prove two purge calls serialize and that
   purge holds the authentication-cleanup mutex before any primary profile cascade.
@@ -242,7 +251,7 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 | `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                                   |
 | `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus score/race/status reads |
 | `viberacing_ingest` | No    | None           | Usage      | Origin replay, device verification, and Community sync only              |
-| `viberacing_jobs`   | No    | None           | Usage      | Four cleanup calls, profile purge, Community refresh/finalization        |
+| `viberacing_jobs`   | No    | None           | Usage      | Six cleanup calls, profile purge, Community refresh/finalization         |
 | `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                             |
 | `PUBLIC`            | N/A   | None           | None       | None                                                                     |
 
@@ -312,6 +321,9 @@ Runtime access must remain procedure-only and must have positive and negative in
   mutex, and deletes at most 1000 expired sessions in deterministic order only when no retained
   rotation predecessor or pairing approval references them. It repeats those predicates at delete,
   cascades their unusable challenges, and returns only one bounded count.
+- `cleanup_expired_invites` is Jobs-only, shares that private mutex, and deletes at most 1000
+  expired active or revoked invites in deterministic order. It repeats state and expiry at delete,
+  preserves every live or redeemed row, and returns only one bounded count.
 - `read_profile_visibility` maps only the possessed active session's current profile state to
   `public` or `hidden`. `set_profile_visibility` accepts no profile ID, moves only between active
   and hidden, preserves source sync, and treats repeated state as a no-op.
@@ -557,7 +569,7 @@ credential against the encrypted challenge continuation, one fixed function crea
 that five-minute profile-free challenge in the same transaction as the existing credential-derived
 session. It returns only profile ID, public handle, and locale so Web/Auth can seal its existing
 session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
-43 cross-capability denials. Physical challenge cleanup after expiry is supplied by revision 0023; a
+46 cross-capability denials. Physical challenge cleanup after expiry is supplied by revision 0023; a
 deployment login, edge attempt policy, monitoring, and live authenticator/database integration
 remain open.
 
@@ -675,6 +687,14 @@ schedule, complete device-history policy, backup purge, or deployment. The share
 integration additionally proves the emitted cleanup command through a disposable narrow login and
 exact stored state, not production login/TLS, monitoring, capacity, or real-user retention.
 
+Revision 0031 physically removes expired active or revoked invite rows only after the shared
+authentication mutex. It uses the ordered partial expiry index, server time captured after the
+mutex, `FOR UPDATE SKIP LOCKED`, and repeated state/expiry predicates. Redeemed enrollment
+provenance and live invite authority are never candidates. The observed worker race proves local
+serialization and exact progress; the shared synthetic integration proves only the emitted command
+through a disposable narrow login and exact stored state. Neither proves invite issuance UI, a
+scheduler, production login/TLS, monitoring, capacity, backup purge, or deployed retention.
+
 The local account application consumes those capabilities through the same probed read-write pool.
 Its combined overview query reads visibility and the current week's derived score with one checkout,
 then accepts only one all-null empty row or exactly seven consecutive, internally consistent daily
@@ -760,7 +780,7 @@ hard failure, not something the script silently broadens or repairs.
   review evidence, and provenance-preserving cleanup at the 32-passkey lifetime edge.
 - Add edge/service rate limiting for anonymous login, recovery, and pairing starts; do not encode
   deployable private thresholds in this repository. Schedule and monitor the implemented bounded
-  expired authentication and CarRecipe-proposal cleanup before exposure.
+  expired authentication, invite, session, and CarRecipe-proposal cleanup before exposure.
 - Deploy the local exact-byte Ingest HTTP/host boundary with live secret-manager/edge key injection,
   a deployment-provisioned least-privileged login and verified TLS, direct-origin denial,
   distributed backpressure/rate controls, monitoring, and load evidence. The synthetic loopback
@@ -773,10 +793,10 @@ hard failure, not something the script silently broadens or repairs.
   shaping, query-plan/load evidence, monitoring, and deployment verification.
 - Extend the separate profile surface only after authenticated profile detail has real persistence,
   privacy, compatibility, and lifecycle evidence; do not widen either closed legacy race response.
-- Schedule and monitor the implemented auth-, CarRecipe-proposal-, ingest-, pairing-, and
+- Schedule and monitor the implemented auth-, invite-, CarRecipe-proposal-, ingest-, pairing-, and
   session-retention procedures, and implement bounded cleanup or reset policy for pairing-referenced
   sessions, jobs, passkey/device provenance, pairing rate windows, and tombstones. Expiry columns
-  outside revisions 0008, 0012, 0013, 0023, 0026, and 0030 are not cleanup.
+  outside revisions 0008, 0012, 0013, 0023, 0026, 0030, and 0031 are not cleanup.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
   in isolated staging before real-user ingestion.

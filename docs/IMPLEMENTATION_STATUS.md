@@ -8,9 +8,9 @@ This page records only evidence that exists in the public working tree. The
 Phase 1 product code is locally complete, with the manual release-evidence items below still open.
 The Phase 2 language-neutral contract and SQL persistence foundations now include database-only
 passkey login, multi-passkey management, restricted recovery, Community usage ingest, bounded
-ingest-, authentication-, and session-retention cleanup, primary profile deletion, open-season
-scoring, terminal season finalization, a public score-only database projection, and a separate
-compatible active-CarRecipe race projection plus a third compatible
+ingest-, authentication-, invite-, and session-retention cleanup, primary profile deletion,
+open-season scoring, terminal season finalization, a public score-only database projection, and a
+separate compatible active-CarRecipe race projection plus a third compatible
 rounded-freshness/optional-streak status projection and their server-only projection-to-contract
 mappers; Phase 3 database-only source/device lifecycle, same-source deduplication, and bounded
 pairing-retention cleanup have also started. A server-only public problem-response factory, closed
@@ -37,7 +37,7 @@ proof alone reaches one atomic create-consume-session call. Its GitHub, passkey-
 and browser evidence is injected or synthetic; no working invite issuer, OAuth registration, secret,
 live authenticator/database login, distributed edge abuse control, scheduled recovery/deletion
 cleanup, cache/backup/tombstone purge, restore replay, notification, or deployment is supplied. A
-local one-shot Jobs runner invokes only the eight existing maintenance procedures through a bounded
+local one-shot Jobs runner invokes only the nine existing maintenance procedures through a bounded
 least-privileged adapter. One opt-in synthetic integration applies the reviewed migrations to
 disposable PostgreSQL, runs every emitted Jobs command through a narrow login, rejects an
 extra-membership login before mutation, and verifies exact stored state. A local Ingest kernel now
@@ -47,12 +47,12 @@ request. A separate bounded Ingest PostgreSQL adapter revalidates that output an
 atomic origin-nonce consumption, device lookup, and submission through a probed least-privileged
 pool. A protected local reader supplies one mandatory and one optional rotation origin key directly
 to the verifier without returning raw configuration. A forced-RLS replay tuple, Ingest-only atomic
-consume, separate Jobs cleanup paths for ingest, pairing, authentication, sessions, and CarRecipe
-proposals, and primary profile deletion now have real isolated PostgreSQL evidence. A transport-free
-Ingest application now composes those exact verifier and database capabilities, generates a
-server-owned request ID, waits for submission, and returns only a validated acknowledgement or
-generic problem decision. A bounded local Fastify server factory now preserves exact raw HTTP
-evidence, admits four application calls without a queue, applies fixed
+consume, separate Jobs cleanup paths for ingest, pairing, authentication, invites, sessions, and
+CarRecipe proposals, and primary profile deletion now have real isolated PostgreSQL evidence. A
+transport-free Ingest application now composes those exact verifier and database capabilities,
+generates a server-owned request ID, waits for submission, and returns only a validated
+acknowledgement or generic problem decision. A bounded local Fastify server factory now preserves
+exact raw HTTP evidence, admits four application calls without a queue, applies fixed
 parser/header/connection/deadline policies, and serializes only revalidated sync
 acknowledgement/problem contracts. A library-only Rust connector foundation now bounds the stable
 App Server handshake and a candidate `0.144.5` account/usage parser, discarding account/summary
@@ -224,7 +224,7 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   derives the schema/CLI expectations from production sources, and twelve mutation cases prove enum,
   shell, invocation-allowlist, retry, authority, output, front matter, and UI-metadata drift fail
   closed. No released connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and forty-two accepted design decisions covering Community trust,
+- An ADR lifecycle/template and forty-three accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -235,10 +235,11 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   inaccessible bounded one-shot process supervisor, exact-body sync composer, isolated one-use
   device signing boundary, bounded pairing-possession proof, bounded pairing activation/start
   compositions, bounded pairing cleanup, bounded connector pairing transport/native key custody,
-  one-shot candidate Community sync, bounded authentication cleanup, the local Railway-shaped Ingest
-  host, bounded primary deletion purge, the session-owned CarRecipe proposal boundary, and bounded
-  CarRecipe-proposal cleanup, public active-recipe projection, bounded device proposal ingress, and
-  bounded local agent proposal orchestration, and the bounded public race-status projection.
+  one-shot candidate Community sync, bounded authentication and invite cleanup, the local
+  Railway-shaped Ingest host, bounded primary deletion purge, the session-owned CarRecipe proposal
+  boundary, and bounded CarRecipe-proposal cleanup, public active-recipe projection, bounded device
+  proposal ingress, and bounded local agent proposal orchestration, and the bounded public
+  race-status projection.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -337,6 +338,13 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   prove bounds, role isolation, live-state preservation, worker serialization, and the
   cross-capability lock order. No scheduler, production Jobs login/TLS path, production cadence,
   backup proof, capacity result, or deployed retention policy is claimed.
+- A bounded invite-retention database boundary. Revision 0031 gives only Jobs one 1-to-1000
+  oldest-first cleanup under the shared authentication mutex. It selects only expired active or
+  revoked invites, locks candidates with `SKIP LOCKED`, repeats state and expiry at deletion, and
+  never selects live authority or redeemed enrollment provenance. Static scenarios and an observed
+  two-worker race prove bounds, deterministic progress, role isolation, idempotency, shared-mutex
+  serialization, and live/redeemed preservation. No invite issuer UI, scheduler, production Jobs
+  login/TLS path, backup purge, capacity, or deployed retention policy is claimed.
 - A bounded expired-session retention database boundary. Revision 0030 gives only Jobs one 1-to-1000
   oldest-first cleanup under the existing private authentication mutex. It selects only expired
   sessions with no retained rotation predecessor and no pairing approval reference, locks one
@@ -452,7 +460,7 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- Twenty-nine checksum-ledgered, transactional SQL migrations with bounded lock/statement execution
+- Thirty-one checksum-ledgered, transactional SQL migrations with bounded lock/statement execution
   and 27 forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and
   restricted authorities, session-bound challenges, opaque sources, pending/active/revoked device
   keys, pairing, bounded audit references, deletion work/tombstones, six fixed maintenance mutex
@@ -767,7 +775,7 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   runtime result, real HTTP/Web/database pairing result, key rotation, server-revoke composition,
   package, signed release, or support claim.
 - A private TypeScript Jobs workspace now accepts exactly either a fixed 1000-row
-  authentication/CarRecipe-proposal/ingest/pairing/session cleanup command, a separate fixed
+  authentication/invite/CarRecipe-proposal/ingest/pairing/session cleanup command, a separate fixed
   10-profile primary purge, or one canonical Monday refresh/finalization command. It revalidates
   closed plain job data, reads only redacted `VIBERACING_JOBS_DATABASE_*` configuration, permits
   cleartext only for explicit development/test loopback, and otherwise requires
@@ -775,27 +783,27 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   connect/statement/query deadlines are 2/31/32 seconds, outside the database functions' 30-second
   deadline. Every checkout probes the exact `viberacing_jobs` effective role, a distinct
   non-privileged login with only that membership, CONNECT without CREATE/TEMPORARY, and
-  `pg_catalog,pg_temp` search path. It then selects one of eight fixed prepared function calls,
+  `pg_catalog,pg_temp` search path. It then selects one of nine fixed prepared function calls,
   requires one exact allowlisted result row, holds the client through settlement, destroys it after
   failure, and closes the pool on every acquired CLI path. Success and failure output are stable
-  sentences without command/date/count/config/SQL/exception reflection. One hundred fifty-six
+  sentences without command/date/count/config/SQL/exception reflection. One hundred sixty-eight
   focused tests cover config, TLS, pool/signal behavior, hostile command/object/array/result inputs,
   exact SQL parameters, role mismatch, settlement/release/close, CLI output, and failure translation
   at 100% statement/branch/function/line coverage. A lint-policy regression also prevents every
   production module except the fixed pool adapter from importing `pg`. A TypeScript production build
   passes. A separate opt-in Docker integration applies every checksum-validated migration to one
   disposable PostgreSQL container, creates a synthetic narrow Jobs login and a negative-control
-  login with one extra group membership, runs all eight emitted CLI commands as separate processes,
+  login with one extra group membership, runs all nine emitted CLI commands as separate processes,
   proves the widened login returns only the generic failure before mutation, and verifies generic
   success plus exact cleanup, purge, refresh, and finalization state before removing the container,
   network, and storage. No production Jobs login/TLS path, scheduler, monitoring backend, automatic
   retry policy, capacity result, correction, cache/backup/tombstone purge, restore replay, or
   deployment is claimed.
-- Thirty deterministic cross-connection races hold a relevant invite, challenge, session, source,
-  device, pairing, or profile row, or a season advisory lock; tag every session; and observe every
-  contender in the holder's transitive PostgreSQL blocker chain before releasing it. Protective
-  races additionally prove the first contender is blocked before the competitor starts. PostgreSQL
-  proves exactly one winner for a shared invite, initial-passkey registration challenge,
+- Thirty-one deterministic cross-connection races hold a relevant invite, challenge, session,
+  source, device, pairing, or profile row, or a season advisory lock; tag every session; and observe
+  every contender in the holder's transitive PostgreSQL blocker chain before releasing it.
+  Protective races additionally prove the first contender is blocked before the competitor starts.
+  PostgreSQL proves exactly one winner for a shared invite, initial-passkey registration challenge,
   active-session rotation, pairing, concurrent creation at the 32-source ceiling, concurrent
   approval at the 64-live-authority ceiling, passkey-login challenge, and recovery code. Protective
   races prove profile deletion dominates concurrent session rotation, source pause dominates
@@ -814,13 +822,15 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   transaction/key pair once, and preserve live pending state. Authentication cleanup has a separate
   two-worker serialization race plus a cross-capability race proving cleanup waits on the same
   profile-first order as recovery start, removes only the old expired authority/code, and preserves
-  the new live authority. A separate session-cleanup race proves two bounded callers serialize on
-  that same private auth mutex, delete each expired one-row batch once, and preserve live authority.
-  Primary deletion has a two-worker race plus a cross-capability race proving purge locks its fixed
-  five maintenance mutexes in stable order before cascading a profile and before authentication
-  cleanup can proceed. A separate CarRecipe-proposal cleanup race proves two bounded workers
-  serialize, delete each expired proposal once, and preserve live proposal and active-recipe state.
-  A scoring race proves two Jobs refreshes serialize on a private mutex and converge on one semantic
+  the new live authority. A separate invite-cleanup race proves two bounded callers serialize on
+  that same private auth mutex, delete each expired one-row batch once, and preserve live invite
+  authority. A separate session-cleanup race proves two bounded callers serialize on that same
+  private auth mutex, delete each expired one-row batch once, and preserve live authority. Primary
+  deletion has a two-worker race plus a cross-capability race proving purge locks its fixed five
+  maintenance mutexes in stable order before cascading a profile and before authentication cleanup
+  can proceed. A separate CarRecipe-proposal cleanup race proves two bounded workers serialize,
+  delete each expired proposal once, and preserve live proposal and active-recipe state. A scoring
+  race proves two Jobs refreshes serialize on a private mutex and converge on one semantic
   open-season state. A finalization versus late Ingest race proves the shared
   `season → profile → source → device` lock order is deadlock-free, the final projection is
   terminal, and the late payload remains quarantined. No losing enrollment or rotation artifact
@@ -907,22 +917,23 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0030 from the checksum manifest,
-passed 27-table state/ownership/RLS assertions, thirty observed lock-wait races, twelve
-relation-denial checks, forty-three cross-capability denials, and the identity, passkey, recovery,
+reached `healthy`, validated and applied revisions 0001 through 0031 from the checksum manifest,
+passed 27-table state/ownership/RLS assertions, thirty-one observed lock-wait races, twelve
+relation-denial checks, forty-six cross-capability denials, and the identity, passkey, recovery,
 pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention,
-pairing-retention, authentication-retention, session-retention, primary-profile deletion, CarRecipe
-proposal/approval and retention, scoring, finalization, and public score/race/status scenarios, then
-removed its portless container, network, and ephemeral storage.
+pairing-retention, authentication-retention, invite-retention, session-retention, primary-profile
+deletion, CarRecipe proposal/approval and retention, scoring, finalization, and public
+score/race/status scenarios, then removed its portless container, network, and ephemeral storage.
 
 The separate Jobs integration also reached `healthy`, revalidated and applied revisions 0001 through
-0030, created only synthetic non-owner logins, rejected the one login with an extra group membership
-before its requested cleanup changed state, and ran all eight built Jobs commands through the narrow
+0031, created only synthetic non-owner logins, rejected the one login with an extra group membership
+before its requested cleanup changed state, and ran all nine built Jobs commands through the narrow
 login. It observed only the constant success/failure sentences and verified the exact
-authentication/CarRecipe-proposal/ingest/pairing/session cleanup, profile-purge, current-season
-refresh, and closed-season finalization state before removing the loopback-published container,
-network, and storage. This is local synthetic application evidence, not a scheduler, production
-credential/TLS result, capacity result, real-user purge, monitoring backend, or deployment.
+authentication/invite/CarRecipe-proposal/ingest/pairing/session cleanup, profile-purge,
+current-season refresh, and closed-season finalization state before removing the loopback-published
+container, network, and storage. This is local synthetic application evidence, not a scheduler,
+production credential/TLS result, capacity result, real-user purge, monitoring backend, or
+deployment.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -962,10 +973,10 @@ limitations.
 Invite issuance UI, trusted anonymous login/pairing/recovery edge limits, recovery notification,
 trusted Ingest edge routing/external TLS and direct-origin denial, live secret-manager/edge key
 injection, the Ingest deployment PostgreSQL credential/TLS connection, distributed rate/backpressure
-controls and load evidence, scheduled execution/monitoring of authentication-, CarRecipe-proposal-,
-ingest-, pairing-, and session-retention cleanup and primary deletion, cleanup for remaining
-expiring state, the Jobs scheduler and production login/TLS path, audited corrections, deployed
-public-score delivery, cache/backup/tombstone purge and restore replay, connector automatic
+controls and load evidence, scheduled execution/monitoring of authentication-, invite-,
+CarRecipe-proposal-, ingest-, pairing-, and session-retention cleanup and primary deletion, cleanup
+for remaining expiring state, the Jobs scheduler and production login/TLS path, audited corrections,
+deployed public-score delivery, cache/backup/tombstone purge and restore replay, connector automatic
 discovery and macOS/Linux executable admission, clean-machine live Codex/privacy evidence, supported
 operational account/usage integration, deployed signed-upload egress, credential rotation and
 automated server-revoke composition, packaging, release signing, deployment, and public beta

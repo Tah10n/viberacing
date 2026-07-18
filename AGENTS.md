@@ -23,34 +23,34 @@ Community score query/response, compatible race and race-status responses, and C
 locally implemented OpenAPI GET and POST operations, bounded server-only PostgreSQL
 score/race/status adapters/mappers, a closed public problem-response factory and request/admission
 route, and procedure-only identity, passkey, restricted-recovery, pairing, source/device lifecycle,
-Community usage-ingest, Jobs-only ingest/pairing/auth/session/CarRecipe-proposal retention, primary
-profile deletion, session-owned CarRecipe proposal/approval, and open-season Community scoring plus
-terminal finalization and bounded public score-projection database slices. A local one-shot Jobs
-runner now invokes only those eight reviewed maintenance functions through a probed least-privileged
-login contract. An opt-in synthetic integration runs all eight emitted CLI commands against one
-disposable least-privileged PostgreSQL login and proves a widened-login denial plus exact stored
-state. A local Ingest kernel bounds the raw sync envelope and parser, verifies an injected
-replay-consumed origin proof, validates the sync contract, and strictly verifies the source-bound
-device request. A protected local reader supplies one mandatory and one optional rotation proof key
-from exact namespaced configuration without returning a reusable key container. A separate bounded
-Ingest PostgreSQL adapter wraps only reviewed origin replay, device lookup, and submission
-procedures through a probed least-privileged login contract. A forced-RLS origin replay tuple and
-separate Jobs ingest/pairing/auth/session/CarRecipe-proposal cleanup capabilities have isolated
-PostgreSQL evidence. A transport-free Ingest application boundary now composes those exact
-capabilities, generates one server request ID, and returns only a validated sync acknowledgement or
-generic problem decision. A confined Fastify server factory now preserves raw body/header evidence,
-applies no-queue/deadline policy, and serializes only revalidated sync contracts. A separate local
-Ingest host now binds that exact composition under closed loopback or Railway-edge configuration,
-cleans up every partial startup, and handles SIGINT/SIGTERM under a fixed deadline without
-reflective output. An opt-in synthetic loopback integration now builds that host, creates a
-disposable least-privileged Ingest login in one ephemeral PostgreSQL container, sends independently
-signed HTTP requests, and proves accepted, duplicate, persistent origin-replay, revoked-device,
-response-contract, and exact persistence behavior before removing the container. The public
-race-status route now has a visible current-week browser consumer with rounded freshness, optional
-preference-gated streak, and an explicit validated synthetic fallback. The public home also has a
-local-only EN/RU score simulator that persists or transmits no hypothetical input; the stable score
-and legacy race routes remain unchanged. These local boundaries still have no deployment proof key
-or secret-manager binding, externally verified TLS/edge route, deployment database credential,
+Community usage-ingest, Jobs-only ingest/pairing/auth/invite/session/CarRecipe-proposal retention,
+primary profile deletion, session-owned CarRecipe proposal/approval, and open-season Community
+scoring plus terminal finalization and bounded public score-projection database slices. A local
+one-shot Jobs runner now invokes only those nine reviewed maintenance functions through a probed
+least-privileged login contract. An opt-in synthetic integration runs all nine emitted CLI commands
+against one disposable least-privileged PostgreSQL login and proves a widened-login denial plus
+exact stored state. A local Ingest kernel bounds the raw sync envelope and parser, verifies an
+injected replay-consumed origin proof, validates the sync contract, and strictly verifies the
+source-bound device request. A protected local reader supplies one mandatory and one optional
+rotation proof key from exact namespaced configuration without returning a reusable key container. A
+separate bounded Ingest PostgreSQL adapter wraps only reviewed origin replay, device lookup, and
+submission procedures through a probed least-privileged login contract. A forced-RLS origin replay
+tuple and separate Jobs ingest/pairing/auth/invite/session/CarRecipe-proposal cleanup capabilities
+have isolated PostgreSQL evidence. A transport-free Ingest application boundary now composes those
+exact capabilities, generates one server request ID, and returns only a validated sync
+acknowledgement or generic problem decision. A confined Fastify server factory now preserves raw
+body/header evidence, applies no-queue/deadline policy, and serializes only revalidated sync
+contracts. A separate local Ingest host now binds that exact composition under closed loopback or
+Railway-edge configuration, cleans up every partial startup, and handles SIGINT/SIGTERM under a
+fixed deadline without reflective output. An opt-in synthetic loopback integration now builds that
+host, creates a disposable least-privileged Ingest login in one ephemeral PostgreSQL container,
+sends independently signed HTTP requests, and proves accepted, duplicate, persistent origin-replay,
+revoked-device, response-contract, and exact persistence behavior before removing the container. The
+public race-status route now has a visible current-week browser consumer with rounded freshness,
+optional preference-gated streak, and an explicit validated synthetic fallback. The public home also
+has a local-only EN/RU score simulator that persists or transmits no hypothetical input; the stable
+score and legacy race routes remain unchanged. These local boundaries still have no deployment proof
+key or secret-manager binding, externally verified TLS/edge route, deployment database credential,
 capacity evidence, deployment, or real-data result. A separate local enrollment slice now implements
 exact invite parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted
 cookies, atomic profile enrollment, required initial WebAuthn registration plus pending-session
@@ -76,8 +76,8 @@ proposals locally, but has no schedule, live login, monitoring, or deployment. T
 has only injected/synthetic evidence and no invite issuer UI, working OAuth or database credential,
 distributed recovery attempt controls, cleanup/deletion scheduling or notification,
 cache/backup/tombstone purge, restore replay, edge abuse controls, or deployment. Bounded expired
-authentication/CarRecipe-proposal/session cleanup and primary profile deletion exist locally, but
-have no schedule or deployed retention evidence. A library-only Rust connector foundation now
+authentication/invite/CarRecipe-proposal/session cleanup and primary profile deletion exist locally,
+but have no schedule or deployed retention evidence. A library-only Rust connector foundation now
 bounded stable App Server JSONL handshake and a candidate-only `0.144.5` account/usage parser with
 checked schema/fixture evidence. A one-shot supervisor composes that sequence with fixed local
 pipes, arguments, deadlines, output budgets, ambient-environment clearing, and reap-before-success
@@ -214,7 +214,7 @@ implementation and verification are present in the working tree.
   They use injected fakes and do not by themselves prove a database login, scheduler, production
   TLS, monitoring, capacity, or deployment.
 - `pnpm run test:jobs:postgres-integration` uses one disposable PostgreSQL container with a
-  synthetic narrow Jobs login. It runs all eight emitted CLI commands, proves an extra-membership
+  synthetic narrow Jobs login. It runs all nine emitted CLI commands, proves an extra-membership
   login fails before mutation, validates generic process output and exact stored state, and removes
   the container, network, and storage. It proves no scheduler, production credential/TLS path,
   monitoring, capacity, real-user retention, or deployment.

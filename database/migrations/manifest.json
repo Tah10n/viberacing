@@ -180,6 +180,12 @@
       "name": "session_retention_cleanup",
       "path": "database/migrations/0030_session_retention_cleanup.sql",
       "sha256": "d31ce4f52433fb671a833998663dddbccf8e132c56065579003d211d1e859468"
+    },
+    {
+      "revision": 31,
+      "name": "invite_retention_cleanup",
+      "path": "database/migrations/0031_invite_retention_cleanup.sql",
+      "sha256": "2945729eb84ba5f80702d3072742ca0f642eff7056d544651f0a4cdfac733715"
     }
   ]
 }

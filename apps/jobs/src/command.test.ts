@@ -46,6 +46,7 @@ describe("Jobs command", () => {
       ["cleanup-expired-car-recipe-proposals"],
       { batchSize: 1_000, kind: "cleanup_expired_car_recipe_proposals" },
     ],
+    [["cleanup-expired-invites"], { batchSize: 1_000, kind: "cleanup_expired_invites" }],
     [["cleanup-expired-ingest-state"], { batchSize: 1_000, kind: "cleanup_expired_ingest_state" }],
     [
       ["cleanup-expired-pairing-state"],
@@ -73,6 +74,7 @@ describe("Jobs command", () => {
     [],
     ["cleanup-expired-auth-state", "unexpected"],
     ["cleanup-expired-car-recipe-proposals", "unexpected"],
+    ["cleanup-expired-invites", "unexpected"],
     ["cleanup-expired-ingest-state", "unexpected"],
     ["cleanup-expired-pairing-state", "unexpected"],
     ["cleanup-expired-sessions", "unexpected"],

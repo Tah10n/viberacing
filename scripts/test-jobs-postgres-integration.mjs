@@ -34,6 +34,7 @@ const fixture = Object.freeze({
   authChallengeId: "00000000-0000-4000-8000-000000031101",
   carProfileId: "00000000-0000-4000-8000-000000031201",
   carProposalId: "00000000-0000-4000-8000-000000031202",
+  inviteId: "00000000-0000-4000-8000-000000031701",
   pairingDeviceKeyId: "00000000-0000-4000-8000-000000031301",
   pairingId: "00000000-0000-4000-8000-000000031302",
   purgeJobId: "00000000-0000-4000-8000-000000031401",
@@ -240,6 +241,19 @@ VALUES (
   pg_catalog.decode(pg_catalog.repeat('12', 32), 'hex'),
   pg_catalog.statement_timestamp() - INTERVAL '10 minutes',
   pg_catalog.statement_timestamp() - INTERVAL '5 minutes'
+);
+
+INSERT INTO viberacing_private.invites (
+  invite_id,
+  verifier_digest,
+  created_at,
+  expires_at
+)
+VALUES (
+  '${fixture.inviteId}',
+  pg_catalog.decode(pg_catalog.repeat('71', 32), 'hex'),
+  pg_catalog.statement_timestamp() - INTERVAL '2 hours',
+  pg_catalog.statement_timestamp() - INTERVAL '1 hour'
 );
 
 INSERT INTO viberacing_private.profiles (profile_id, github_user_id, handle, state)
@@ -495,6 +509,7 @@ WHERE challenge_id = '${fixture.authChallengeId}';`,
     const commands = [
       ["cleanup-expired-auth-state"],
       ["cleanup-expired-car-recipe-proposals"],
+      ["cleanup-expired-invites"],
       ["cleanup-expired-ingest-state"],
       ["cleanup-expired-pairing-state"],
       ["cleanup-expired-sessions"],
@@ -520,6 +535,11 @@ SELECT pg_catalog.jsonb_build_object(
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.car_recipe_proposals
     WHERE proposal_id = '${fixture.carProposalId}'
+  ),
+  'inviteCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.invites
+    WHERE invite_id = '${fixture.inviteId}'
   ),
   'originNonceCount', (
     SELECT pg_catalog.count(*)::integer
@@ -607,6 +627,7 @@ SELECT pg_catalog.jsonb_build_object(
       finalizedAtSet: true,
       finalizedEntryCount: 0,
       finalizedSeasonState: "finalized",
+      inviteCount: 0,
       originNonceCount: 0,
       pairingCount: 0,
       pendingDeviceKeyCount: 0,
@@ -622,7 +643,7 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Jobs PostgreSQL integration passed (eight commands, least-privilege denial, generic output, and exact stored state).",
+      "Jobs PostgreSQL integration passed (nine commands, least-privilege denial, generic output, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

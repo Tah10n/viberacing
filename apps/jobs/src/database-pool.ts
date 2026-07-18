@@ -55,6 +55,10 @@ const carRecipeProposalCleanupQuery = `SELECT
   cleanup.deleted_proposals AS deleted_proposals
 FROM viberacing_api.cleanup_expired_car_recipe_proposals($1::integer) AS cleanup`;
 
+const inviteCleanupQuery = `SELECT
+  cleanup.deleted_invites AS deleted_invites
+FROM viberacing_api.cleanup_expired_invites($1::integer) AS cleanup`;
+
 const pairingCleanupQuery = `SELECT
   cleanup.deleted_pairings AS deleted_pairings,
   cleanup.deleted_pending_keys AS deleted_pending_keys
@@ -82,6 +86,7 @@ export type JobsDatabasePoolSignalSink = (signal: JobsDatabasePoolSignal) => Pro
 export interface JobsDatabaseClient {
   cleanupExpiredAuthState(batchSize: number): Promise<unknown>;
   cleanupExpiredCarRecipeProposals(batchSize: number): Promise<unknown>;
+  cleanupExpiredInvites(batchSize: number): Promise<unknown>;
   cleanupExpiredIngestState(batchSize: number): Promise<unknown>;
   cleanupExpiredPairingState(batchSize: number): Promise<unknown>;
   cleanupExpiredSessions(batchSize: number): Promise<unknown>;
@@ -140,6 +145,9 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
     },
     cleanupExpiredCarRecipeProposals(batchSize: number): Promise<unknown> {
       return fixedQuery(carRecipeProposalCleanupQuery, [batchSize]);
+    },
+    cleanupExpiredInvites(batchSize: number): Promise<unknown> {
+      return fixedQuery(inviteCleanupQuery, [batchSize]);
     },
     cleanupExpiredIngestState(batchSize: number): Promise<unknown> {
       return fixedQuery(cleanupQuery, [batchSize]);

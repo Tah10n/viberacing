@@ -15,7 +15,7 @@ pairing and proposal verifiers, one local connector command with native OS key c
 start/poll routes, one explicit Windows candidate command that admits, collects, signs, and uploads
 a single sync, and one fixed proposal-only command that starts no Codex process. It also has one
 opt-in synthetic loopback integration through the emitted Ingest host and a disposable
-least-privileged PostgreSQL login, plus a separate synthetic integration through all eight emitted
+least-privileged PostgreSQL login, plus a separate synthetic integration through all nine emitted
 Jobs commands and a disposable narrow login with a widened-login negative control. It still has no
 deployed application service, operational sync connector, supported Codex version, distributed
 recovery perimeter, Cloudflare/Railway deployment, live OAuth or production database login, or
@@ -100,37 +100,38 @@ Revision 0007 implements the database-only Usage submission capability; revision
 bounded expired ingest-state cleanup; revision 0013 separately gives Jobs bounded expired
 non-activated pairing/key cleanup; revision 0023 adds bounded authentication cleanup; revision 0024
 adds bounded primary profile deletion; revision 0026 adds CarRecipe-proposal cleanup; revision 0030
-adds eligible expired-session cleanup; revision 0009 gives Jobs an isolated open-season scoring
-refresh; and revision 0010 adds server-time late-ingest quarantine plus immutable Jobs-only
-finalization. Revision 0011 gives Web only a bounded, active-profile score projection, and ADR 0010
-adds its response-only top-32 contract. A server-only Web mapper now enforces the exact projection
-shape and its cross-row invariants before returning a validated frozen contract. ADR 0011 adds a
-bounded server-only PostgreSQL pool/config/store boundary around that read, including strict
-production TLS, fixed deadlines/query, and per-checkout effective-role and least-privileged-login
-verification. ADR 0013 adds a locally implemented request/admission/response route around it. ADR
-0037 and revision 0027 add a separate compatible response, route, and query that preserve the score
-contract and optionally project only the current active recipe. These capabilities have role,
-contract, route, adapter, mapping, and concurrency evidence. ADR 0014 adds a local one-shot Jobs
-adapter/CLI; ADRs 0029, 0032, 0034, 0036, and 0042 extend it to exactly five cleanup commands, one
-primary purge, one refresh, and one finalization command with the same role/login probe, one-client
-pool, and fixed deadlines. A separate opt-in synthetic integration now runs all eight emitted
-commands against disposable PostgreSQL, proves the narrow login and extra-membership denial, and
-checks exact stored state. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and
-JSON parser, verifies a replay-consumed body-bound origin proof before parsing, validates the sync
-contract, and verifies the exact source-bound device request under strict Ed25519 semantics. ADR
-0016 adds a fixed-query four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest
-role/login/search-path verification, closed device/submission mappers, copied parameters, and
-destructive failure release. ADR 0017 adds an exact primary/secondary origin-key reader and
-config-backed verifier factory without exposing a reusable key container. ADR 0018 adds persistent
-atomic origin replay, and ADR 0019 composes the same replay/device/submission adapter behind one
-transport-free validated application decision. ADR 0020 adds one confined Fastify server factory
-with exact raw-body/header preservation, closed POST/error serialization, local connection/deadline
-bounds, four-call no-queue admission, and no proxy/request-ID trust. ADR 0033 adds a separate local
-host with exact loopback/Railway listener declarations, one bind, complete partial-startup cleanup,
-and bounded signal-driven shutdown; its external-TLS declaration is not deployment evidence. The
-opt-in full-path gate composes those Ingest boundaries with a synthetic dedicated login in
-disposable PostgreSQL and verifies signed accepted/duplicate/replay/revoke HTTP behavior plus exact
-stored state. It remains local synthetic evidence, not external TLS, edge, secret-delivery,
+adds eligible expired-session cleanup; revision 0031 adds expired-unredeemed-invite cleanup;
+revision 0009 gives Jobs an isolated open-season scoring refresh; and revision 0010 adds server-time
+late-ingest quarantine plus immutable Jobs-only finalization. Revision 0011 gives Web only a
+bounded, active-profile score projection, and ADR 0010 adds its response-only top-32 contract. A
+server-only Web mapper now enforces the exact projection shape and its cross-row invariants before
+returning a validated frozen contract. ADR 0011 adds a bounded server-only PostgreSQL
+pool/config/store boundary around that read, including strict production TLS, fixed deadlines/query,
+and per-checkout effective-role and least-privileged-login verification. ADR 0013 adds a locally
+implemented request/admission/response route around it. ADR 0037 and revision 0027 add a separate
+compatible response, route, and query that preserve the score contract and optionally project only
+the current active recipe. These capabilities have role, contract, route, adapter, mapping, and
+concurrency evidence. ADR 0014 adds a local one-shot Jobs adapter/CLI; ADRs 0029, 0032, 0034, 0036,
+0042, and 0043 extend it to exactly six cleanup commands, one primary purge, one refresh, and one
+finalization command with the same role/login probe, one-client pool, and fixed deadlines. A
+separate opt-in synthetic integration now runs all nine emitted commands against disposable
+PostgreSQL, proves the narrow login and extra-membership denial, and checks exact stored state. ADR
+0015 adds a pure local Ingest kernel that bounds the raw envelope and JSON parser, verifies a
+replay-consumed body-bound origin proof before parsing, validates the sync contract, and verifies
+the exact source-bound device request under strict Ed25519 semantics. ADR 0016 adds a fixed-query
+four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest role/login/search-path
+verification, closed device/submission mappers, copied parameters, and destructive failure release.
+ADR 0017 adds an exact primary/secondary origin-key reader and config-backed verifier factory
+without exposing a reusable key container. ADR 0018 adds persistent atomic origin replay, and ADR
+0019 composes the same replay/device/submission adapter behind one transport-free validated
+application decision. ADR 0020 adds one confined Fastify server factory with exact raw-body/header
+preservation, closed POST/error serialization, local connection/deadline bounds, four-call no-queue
+admission, and no proxy/request-ID trust. ADR 0033 adds a separate local host with exact
+loopback/Railway listener declarations, one bind, complete partial-startup cleanup, and bounded
+signal-driven shutdown; its external-TLS declaration is not deployment evidence. The opt-in
+full-path gate composes those Ingest boundaries with a synthetic dedicated login in disposable
+PostgreSQL and verifies signed accepted/duplicate/replay/revoke HTTP behavior plus exact stored
+state. It remains local synthetic evidence, not external TLS, edge, secret-delivery,
 production-credential, capacity, or real-user evidence. The library-only ADR 0021 Rust foundation
 adds one bounded stable App Server JSONL initialization state machine and discards all server
 values. ADR 0022 adds the exact-version candidate account/usage adapter, and ADR 0023 composes both
@@ -143,7 +144,8 @@ one exact pairing-possession message. ADR 0027 composes protected poll lookup, t
 atomic activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
 material and one fixed database call; ADR 0029 supplies bounded Jobs-only physical cleanup after
 pairing expiry, while ADR 0032 separately cleans expired authentication challenges and restricted
-recovery authority under the recovery profile-lock order. ADR 0034 adds all-maintenance-serialized
+recovery authority under the recovery profile-lock order. ADR 0043 deletes only expired unredeemed
+invite verifier rows under the shared authentication mutex. ADR 0034 adds all-maintenance-serialized
 maximum-10 primary profile purge without inventing a tombstone policy. A separate local `/connect`
 flow supplies session-rate-limited pending-code review and fresh-passkey approval for an explicitly
 selected new or active existing opaque source, without exposing raw source IDs. ADR 0030 now exposes

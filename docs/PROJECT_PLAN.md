@@ -208,7 +208,7 @@ flowchart LR
   distributed rate/backpressure controls, deployment login/certificate, capacity evidence, real-user
   end-to-end integration, and deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
-  The local runner now wraps only the five reviewed authentication/CarRecipe-proposal/ingest/
+  The local runner now wraps only the six reviewed authentication/invite/CarRecipe-proposal/ingest/
   pairing/session cleanup procedures, primary profile purge, Community refresh, and finalization.
   One opt-in synthetic integration applies the reviewed migrations to disposable PostgreSQL, runs
   every emitted command through a narrow login, rejects an extra-membership login before mutation,
@@ -679,15 +679,17 @@ still-present used code whose verifier was already scrubbed and follows the reco
 order. Expired CarRecipe proposals have a separate maximum-1000 cleanup under their own private
 mutex. Revision 0030 adds a maximum-1000 oldest-first cleanup for expired browser sessions only when
 no retained rotation predecessor or pairing approval provenance references the row; selected session
-challenges cascade, while activated-pairing provenance remains. Revision 0024 adds a maximum-10
-Jobs-only primary-profile purge: it serializes against every intersecting maintenance capability,
-accepts only due queued/retry work for committed `deletion_pending` profiles, removes restrictive
-pairing references first, terminally settles the opaque job, and cascades primary
+challenges cascade, while activated-pairing provenance remains. Revision 0031 adds a maximum-1000
+oldest-first cleanup for expired active or revoked invite verifier rows under the shared
+authentication mutex; live invites and redeemed enrollment provenance remain. Revision 0024 adds a
+maximum-10 Jobs-only primary-profile purge: it serializes against every intersecting maintenance
+capability, accepts only due queued/retry work for committed `deletion_pending` profiles, removes
+restrictive pairing references first, terminally settles the opaque job, and cascades primary
 identity/credential/source/device/usage/personal-score data in one transaction. It retains only the
-opaque terminal job and redacted audit reference. Pairing-referenced sessions, remaining expiry
-classes, keyed tombstone policy, cache/backup purge, and restore replay still require their own
-reviewed implementation and public policy, and no implemented cleanup has a scheduler or deployed
-cadence.
+opaque terminal job and redacted audit reference. Pairing-referenced sessions, other remaining
+expiry classes, keyed tombstone policy, cache/backup purge, and restore replay still require their
+own reviewed implementation and public policy, and no implemented cleanup has a scheduler or
+deployed cadence.
 
 ## Administration and operations
 

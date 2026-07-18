@@ -191,7 +191,7 @@ closed acknowledgement. Она не ищет binary автоматически, 
 evidence, credential rotation, automatic server-revoke composition, packaging, release,
 поддерживаемого sync connector и deployment.
 
-Также добавлены двадцать девять SQL migrations: 27 приватных
+Также добавлена 31 SQL-миграция: 27 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring/CarRecipe
 tables, deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL.
 Узкая procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии
@@ -258,25 +258,27 @@ lifecycle-race enforcement. Отдельная Jobs-only procedure незави�
 challenges/restricted recovery authorities, сохраняя live ceremonies, unused recovery codes,
 sessions, passkeys и audit evidence. Ещё одна Jobs-only procedure удаляет не более 1000 expired
 CarRecipe proposals за вызов под отдельным private mutex и не затрагивает active recipes. Отдельная
-Jobs-only procedure bounded batches удаляет eligible expired browser sessions без retained rotation
-predecessor или pairing approval provenance, сохраняя live и referenced sessions. Ещё одна Jobs-only
-procedure атомарно удаляет до 10 due `deletion_pending` профилей, сначала снимает restrictive
-pairing references, terminally settles opaque job и не создаёт неподтверждённый tombstone. Локальный
-one-shot Jobs runner вызывает только одну из восьми fixed capabilities:
-auth/CarRecipe-proposal/ingest/pairing/session cleanup, primary profile purge, scoring refresh или
-finalization через отдельный least-privileged config, single-client pool, проверку role/login/search
-path, fixed deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI
-output. Отдельный opt-in Jobs scenario применяет reviewed migrations к одноразовой PostgreSQL,
-запускает все восемь emitted commands через узкий synthetic login, отклоняет login с лишней role
-membership до мутации и проверяет точное состояние перед очисткой. Сама база не проверяет wire
-signature; локальные kernel, adapter и application объединены на synthetic/mock-pool evidence.
-Отдельный opt-in loopback Ingest scenario теперь проводит независимо подписанный HTTP request через
-emitted host и одноразовый least-privileged PostgreSQL login, включая duplicate/replay/revoke и
-точную проверку сохранённого состояния. Deployed HTTP ingest route, operational sync connector,
-cleanup/scoring scheduler, deployment Ingest/Jobs login/TLS integration, monitoring backend,
-deployed public score read, audited correction flow, cache/backup/tombstone purge, restore replay и
-scheduled deletion execution ещё не реализованы, поэтому локальный enrollment ещё не является
-готовой production-авторизацией, а приёма реальных данных пока нет.
+Jobs-only procedure bounded batches удаляет истёкшие active/revoked invite verifier rows, сохраняя
+live invites и redeemed enrollment provenance. Ещё одна Jobs-only procedure bounded batches удаляет
+eligible expired browser sessions без retained rotation predecessor или pairing approval provenance,
+сохраняя live и referenced sessions. Ещё одна Jobs-only procedure атомарно удаляет до 10 due
+`deletion_pending` профилей, сначала снимает restrictive pairing references, terminally settles
+opaque job и не создаёт неподтверждённый tombstone. Локальный one-shot Jobs runner вызывает только
+одну из девяти fixed capabilities: auth/invite/CarRecipe-proposal/ingest/pairing/session cleanup,
+primary profile purge, scoring refresh или finalization через отдельный least-privileged config,
+single-client pool, проверку role/login/search path, fixed deadlines, prepared parameters, closed
+result validation и стабильный non-reflective CLI output. Отдельный opt-in Jobs scenario применяет
+reviewed migrations к одноразовой PostgreSQL, запускает все девять emitted commands через узкий
+synthetic login, отклоняет login с лишней role membership до мутации и проверяет точное состояние
+перед очисткой. Сама база не проверяет wire signature; локальные kernel, adapter и application
+объединены на synthetic/mock-pool evidence. Отдельный opt-in loopback Ingest scenario теперь
+проводит независимо подписанный HTTP request через emitted host и одноразовый least-privileged
+PostgreSQL login, включая duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed
+HTTP ingest route, operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs
+login/TLS integration, monitoring backend, deployed public score read, audited correction flow,
+cache/backup/tombstone purge, restore replay и scheduled deletion execution ещё не реализованы,
+поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
+данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

@@ -10,15 +10,15 @@ an exact-body composer, isolated pairing/request signers, a pure Web pairing ver
 applications/routes and bounded native-store connect/local-removal commands, a visible public-race
 consumer with a synthetic fallback, a browser-memory-only hypothetical score simulator, and bounded
 database/local Jobs ingest, pairing, authentication, CarRecipe-proposal, and eligible
-expired-session cleanup plus primary profile purge. A local invite/OAuth/initial-passkey enrollment,
-returning-passkey login, private passkey inventory, and private active-device inventory and revoke
-slice now add encrypted short-lived cookies, fixed Web/Auth database calls, an account page, and
-logout with injected/synthetic evidence, but there is no live OAuth app, authenticator-backed
-result, deployed application database, production service, operational connector, or real user data.
-This document remains the required inventory for implementation. A field may not be collected merely
-because it appears here: its schema, purpose, visibility, retention, deletion, and access tests must
-exist first. The implemented column-level mapping is documented in
-[`database/README.md`](../../database/README.md#data-and-privacy-map).
+expired-invite/session cleanup plus primary profile purge. A local invite/OAuth/initial-passkey
+enrollment, returning-passkey login, private passkey inventory, and private active-device inventory
+and revoke slice now add encrypted short-lived cookies, fixed Web/Auth database calls, an account
+page, and logout with injected/synthetic evidence, but there is no live OAuth app,
+authenticator-backed result, deployed application database, production service, operational
+connector, or real user data. This document remains the required inventory for implementation. A
+field may not be collected merely because it appears here: its schema, purpose, visibility,
+retention, deletion, and access tests must exist first. The implemented column-level mapping is
+documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
 
@@ -59,7 +59,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Hypothetical simulator token/day and active-day input                       | Usage                                  | Visitor; explain the public Community formula without account data                                                                           | Current browser component only; never Web, API, server, or log                                  | React component state only; no form name/action, request, cache, or persistence                                                                                | Discarded on reload/navigation; never transmitted, logged, cached, persisted, or prefilled                                                                                   |
 | Optional GitHub profile link                                                | Public                                 | User opt-in; distinguish an upstream public identity                                                                                         | Public only after explicit opt-in                                                               | `profiles` preference                                                                                                                                          | Until opt-out or deletion; purge public cache                                                                                                                                |
 | Profile visibility, locale, theme, motion, privacy preferences              | Account                                | User; product experience and visibility controls                                                                                             | User profile; only public effects are visible                                                   | `profiles`; Web maps lifecycle state only to closed `public`/`hidden`                                                                                          | Until reset or deletion                                                                                                                                                      |
-| Invite secret, verifier digest, and state                                   | Security                               | Operator-issued 256-bit secret; gate beta enrollment                                                                                         | Plaintext only in the initial bounded form; digest to Web/Auth and limited admin procedure      | SHA-256 verifier digest, status, expiry, and non-sensitive audit                                                                                               | Plaintext discarded during parsing; digest follows expiry/redemption plus a bounded audit window                                                                             |
+| Invite secret, verifier digest, and state                                   | Security                               | Operator-issued 256-bit secret; gate beta enrollment                                                                                         | Plaintext only in the initial bounded form; digest to Web/Auth and limited admin procedure      | SHA-256 verifier digest, status, expiry, and non-sensitive audit                                                                                               | Plaintext discarded during parsing; expired active/revoked rows are cleanup-eligible; redeemed provenance remains until profile purge                                        |
 | Session verifier, encrypted cookie, and metadata                            | Security                               | Web/Auth; maintain one browser session                                                                                                       | HttpOnly same-site browser cookie and Web/Auth only                                             | Purpose-keyed AES-GCM cookie; database stores SHA-256 verifier digest, expiry, state, and passkey provenance                                                   | At most 15 minutes pending or 30 days normal; bounded eligible-row cleanup; pairing provenance awaits history policy                                                         |
 | Enrollment cookie master key                                                | Security                               | Deployment; seal login, OAuth, passkey, and session continuations                                                                            | Web/Auth process memory only; four purpose keys are derived with HKDF                           | Protected environment/secret manager; exactly 32 canonical base64url bytes; never tracked or logged                                                            | Rotate on exposure; rotation invalidates outstanding continuations and sessions                                                                                              |
 | Web PostgreSQL deployment login and password                                | Security                               | Deployment; authorize only the Web score, identity, and pairing adapters                                                                     | Adapters and PostgreSQL driver process memory only                                              | Protected environment/secret manager; never tracked or logged                                                                                                  | Rotate on exposure/role change and remove when the adapters are disabled                                                                                                     |
@@ -408,6 +408,12 @@ local Jobs runner discards the count. Pairing-referenced expired sessions, Jobs 
 passkey/device provenance, backup expiry, scheduling, monitoring, and deployed real-user purge
 evidence remain outside this slice.
 
+Revision 0031 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of expired active
+or revoked invite rows after the shared authentication mutex. Candidate row locks and repeated
+state/expiry predicates preserve an in-flight redemption; live and redeemed rows are never eligible.
+The local Jobs mapper discards the count. Scheduling, production login/TLS, monitoring, capacity,
+backup purge, and deployed retention evidence remain outside this slice.
+
 Revision 0009 reads exact current values only inside an owner-defined Jobs procedure and writes a
 strictly smaller private derived set: daily and weekly score, active days, contributing-source
 count, shared rank, deterministic display order, ISO-week dates, and immutable Community formula
@@ -430,18 +436,18 @@ non-personal terminal season definition. A no-data closed week stores only that 
 public serializer/cache, audited correction record, finalized public-history retention rule, Jobs
 deployment/scheduler, or monitoring backend exists.
 
-ADRs 0014, 0029, 0032, 0034, 0036, and 0042 store no user data. The local Jobs process transiently
-receives only one of five fixed 1000-row cleanup batches, one fixed maximum-10 profile purge, or one
-Public season-start label, plus the private aggregate counts already returned by the procedures. It
-validates and discards those values within one process invocation. The CLI emits only one constant
-completion/failure sentence; it does not log the command, date, counts, identifiers, SQL,
-environment, exception, or stack. The optional pool hook receives only the closed Operational signal
-`idle_client_error` and has no built-in storage or network sink. The opt-in integration adds no
-retained field: it creates obviously synthetic fixture IDs and passwords inside one disposable local
-PostgreSQL container, observes only the constant process sentences, asserts state in memory, and
-removes the container, network, and storage. A future scheduler, run history, metric, alert, retry
-record, or monitoring backend must map its exact fields, access, retention, and deletion behavior
-here before collection.
+ADRs 0014, 0029, 0032, 0034, 0036, 0042, and 0043 store no user data. The local Jobs process
+transiently receives only one of six fixed 1000-row cleanup batches, one fixed maximum-10 profile
+purge, or one Public season-start label, plus the private aggregate counts already returned by the
+procedures. It validates and discards those values within one process invocation. The CLI emits only
+one constant completion/failure sentence; it does not log the command, date, counts, identifiers,
+SQL, environment, exception, or stack. The optional pool hook receives only the closed Operational
+signal `idle_client_error` and has no built-in storage or network sink. The opt-in integration adds
+no retained field: it creates obviously synthetic fixture IDs and passwords inside one disposable
+local PostgreSQL container, observes only the constant process sentences, asserts state in memory,
+and removes the container, network, and storage. A future scheduler, run history, metric, alert,
+retry record, or monitoring backend must map its exact fields, access, retention, and deletion
+behavior here before collection.
 
 Revision 0011 stores no new data. One owner-defined function gives only the Web role a fixed
 ten-field score projection: season dates/version/finalized state, handle, weekly score, active days,
@@ -580,12 +586,12 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   other-platform admission, log/export capability, package, or release; the candidate remains
   unsupported until clean-machine platform, privacy-egress, packaging, provenance, and release gates
   pass.
-- Jobs currently receive only bounded expired authentication-, ingest-, and pairing-state cleanup,
-  maximum-10 primary profile deletion, open-season Community scoring refresh, and terminal
-  finalization. The local one-shot adapter rechecks the exact Jobs-only login and invokes one
-  prepared capability without logging inputs or results. Correction, cache/backup purge,
-  tombstone/restore replay, and remaining retention capabilities require separate migrations and
-  tests; migrations use a different non-runtime owner.
+- Jobs currently receive only bounded expired authentication-, invite-, ingest-, pairing-, session-,
+  and CarRecipe-proposal-state cleanup, maximum-10 primary profile deletion, open-season Community
+  scoring refresh, and terminal finalization. The local one-shot adapter rechecks the exact
+  Jobs-only login and invokes one prepared capability without logging inputs or results. Correction,
+  cache/backup purge, tombstone/restore replay, and remaining retention capabilities require
+  separate migrations and tests; migrations use a different non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The

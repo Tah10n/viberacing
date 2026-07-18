@@ -26,6 +26,10 @@ export type CommunityMaintenanceJob =
     }>
   | Readonly<{
       batchSize: number;
+      kind: "cleanup_expired_invites";
+    }>
+  | Readonly<{
+      batchSize: number;
       kind: "cleanup_expired_ingest_state";
     }>
   | Readonly<{
@@ -59,6 +63,10 @@ export type CommunityMaintenanceResult =
   | Readonly<{
       deletedProposals: number;
       kind: "cleanup_expired_car_recipe_proposals";
+    }>
+  | Readonly<{
+      deletedInvites: number;
+      kind: "cleanup_expired_invites";
     }>
   | Readonly<{
       deletedNonces: number;
@@ -184,6 +192,7 @@ function readJob(value: unknown): CommunityMaintenanceJob {
     if (
       kind === "cleanup_expired_auth_state" ||
       kind === "cleanup_expired_car_recipe_proposals" ||
+      kind === "cleanup_expired_invites" ||
       kind === "cleanup_expired_ingest_state" ||
       kind === "cleanup_expired_pairing_state" ||
       kind === "cleanup_expired_sessions"
@@ -298,6 +307,14 @@ function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaint
     });
   }
 
+  if (job.kind === "cleanup_expired_invites") {
+    const row = readSingleRow(value, new Set(["deleted_invites"]));
+    return Object.freeze({
+      deletedInvites: readCount(row, "deleted_invites", job.batchSize),
+      kind: job.kind,
+    });
+  }
+
   if (job.kind === "cleanup_expired_ingest_state") {
     const row = readSingleRow(
       value,
@@ -374,6 +391,9 @@ function executeCapability(
   }
   if (job.kind === "cleanup_expired_car_recipe_proposals") {
     return client.cleanupExpiredCarRecipeProposals(job.batchSize);
+  }
+  if (job.kind === "cleanup_expired_invites") {
+    return client.cleanupExpiredInvites(job.batchSize);
   }
   if (job.kind === "cleanup_expired_ingest_state") {
     return client.cleanupExpiredIngestState(job.batchSize);

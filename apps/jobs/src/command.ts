@@ -119,6 +119,12 @@ export function parseJobsCommand(value: unknown): CommunityMaintenanceJob {
       kind: "cleanup_expired_car_recipe_proposals",
     });
   }
+  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-invites") {
+    return Object.freeze({
+      batchSize: maximumCleanupBatchSize,
+      kind: "cleanup_expired_invites",
+    });
+  }
   if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-pairing-state") {
     return Object.freeze({
       batchSize: maximumCleanupBatchSize,

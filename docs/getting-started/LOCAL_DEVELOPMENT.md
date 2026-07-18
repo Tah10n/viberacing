@@ -3,7 +3,7 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and twenty-nine checksum-ledgered database migrations. Repository verification uses synthetic data
+and thirty-one checksum-ledgered database migrations. Repository verification uses synthetic data
 and injected capabilities only. It has procedure-only identity, passkey login/management, restricted
 recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
 retention cleanup, bounded primary profile deletion, scoring, terminal finalization, and public
