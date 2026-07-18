@@ -1,6 +1,6 @@
 # ADR 0005: Enum-only deterministic car customization
 
-- Status: Accepted (version 1 and local browser/device proposal slices implemented)
+- Status: Accepted (version 1 and local browser/device/agent proposal slices implemented)
 - Date: 2026-07-14
 - Decision owners: Contracts, Web, UI, and Pixel Assets
 - Supersedes: None
@@ -64,14 +64,16 @@ content.
 - Deterministic visual snapshots cover every theme, reduced motion, and accessibility
   representation.
 - Proposal/approval authorization tests prove devices and agents cannot activate a car.
+- Agent-skill checks prove the conversational reducer matches the canonical enums and invokes only
+  the fixed proposal command once with shell-safe inputs.
 - Asset provenance, license, generated-drift, metadata, and trade-dress review gates pass.
 
 The local version 1 schema, TypeScript validator, deterministic renderer, three-theme account
 preview, exact-session proposal/read/approve/reject database functions, opaque decision control,
 bounded Jobs-only expired-proposal cleanup, public active-recipe projection, proposal-only signed
-device ingress, and negative authorization/injection tests now implement this decision through ADRs
-0035 through 0038. Conversational-agent orchestration, scheduled cleanup, operational metrics,
-trade-dress release review, released connector packaging, and deployment remain pending.
+device ingress, bounded local Agent Skill, and negative authorization/injection tests now implement
+this decision through ADRs 0035 through 0039. Scheduled cleanup, operational metrics, trade-dress
+release review, released connector packaging, and deployment remain pending.
 
 ## References
 
@@ -82,3 +84,4 @@ trade-dress release review, released connector packaging, and deployment remain 
 - [ADR 0036](0036-bounded-car-recipe-proposal-cleanup.md)
 - [ADR 0037](0037-bounded-public-community-race-projection.md)
 - [ADR 0038](0038-bounded-device-car-recipe-proposal-ingress.md)
+- [ADR 0039](0039-bounded-agent-car-proposal-orchestration.md)

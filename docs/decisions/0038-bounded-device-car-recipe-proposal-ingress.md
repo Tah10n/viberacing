@@ -43,6 +43,10 @@ loads one active source-bound key from the existing native credential record, cr
 nonce material, sends one signed request without retry through the proxy-free, redirect-free HTTP
 agent, validates the closed acknowledgement, and prints no identifier or recipe data.
 
+ADR 0039 adds a local Agent Skill above this command. It selects only those exact fields, validates
+explicit origin/label values under a narrower shell-safe grammar, invokes the command once, and
+receives no extra connector or service authority.
+
 This capability can only create or replace a pending proposal. It cannot read proposal state,
 approve, reject, activate, publish, hide, delete, pair, revoke, recover, or administer a profile.
 Approval and rejection remain exact possessed-browser-session actions under ADR 0035.
@@ -103,4 +107,5 @@ drop the two functions after callers are removed. Existing pending recipes remai
 - [CarRecipe reference](../reference/car-recipe.md)
 - [Authentication policy](../../contracts/v1/connector-car-proposal-authentication.json)
 - [Migration 0028](../../database/migrations/0028_connector_car_proposal_ingress.sql)
+- [ADR 0039](0039-bounded-agent-car-proposal-orchestration.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)

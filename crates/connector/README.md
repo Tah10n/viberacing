@@ -8,7 +8,8 @@ inaccessible reviewed capabilities. One runnable `connect` command completes the
 journey with native OS key custody. A second Windows x86_64 development command admits one exact
 Codex candidate, collects, signs, and uploads one bounded sync. It is not a supported, packaged, or
 released connector. A third fixed command signs one explicit enum-only CarRecipe proposal without
-starting Codex or receiving proposal decision authority.
+starting Codex or receiving proposal decision authority. A separate local repository Agent Skill can
+reduce a style request to that exact command; it adds no connector method or authority.
 
 The implemented surface is deliberately narrow:
 
@@ -101,8 +102,9 @@ Running `connect` creates a real local keyring entry even when the server later 
 connect process at a time. `sync` is Windows x86_64 candidate development behavior: it reads the
 active native record, starts only the exact admitted artifact, and sends private daily usage once to
 the explicit origin. `propose-car` uses the same active native record but starts no Codex process
-and can only create a private proposal for later browser review. No checked-in default server,
-credential, code, or released binary exists.
+and can only create a private proposal for later browser review. The Agent Skill requires explicit
+shell-safe origin/label values, invokes it once, and never forwards conversation text to Vibe
+Racing. No checked-in default server, credential, code, or released binary exists.
 
 Run the focused gate from the repository root:
 

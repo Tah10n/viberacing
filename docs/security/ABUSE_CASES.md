@@ -416,14 +416,15 @@ material availability cost.
 - **Impact:** XSS, SSRF, supply-chain content, nondeterminism, privacy leak, or legal exposure.
 - **Controls:** Versioned enum-only schema, project-owned assets, strict server validation, browser
   preview, explicit user approval, exact-session PostgreSQL authority, opaque decision control,
-  forced RLS, and deterministic snapshots.
+  forced RLS, a one-command agent workflow with shell-safe inputs, and deterministic snapshots.
 - **Current evidence:** Contract, HTTP/service, mapper/pool, renderer, role-denial, IDOR, replay,
   replacement, approval/rejection, hidden-profile, profile-purge, and separate public race tests
   pass locally. The stable score response rejects `carRecipe`; the race response rejects malformed
   or arbitrary nested content and exposes no proposal state. The dedicated device route and fixed
   connector command share one exact body/signature vector, reject prompt/free-text/unknown fields,
-  stale or replayed proof, inactive authority, and can replace only pending state. Conversational-
-  agent orchestration is absent.
+  stale or replayed proof, inactive authority, and can replace only pending state. The local Agent
+  Skill reduces styling intent to the canonical enums, rejects unsafe shell input, calls only that
+  command once, and has eleven fail-closed checker mutations. It never approves or activates.
 - **Detection:** Schema rejection metrics, generated-asset drift, provenance and license review;
   operational metrics and alerting are still pending.
 - **Recovery:** Reject or disable the recipe/version, restore a safe default, and remove invalid

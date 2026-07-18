@@ -191,14 +191,17 @@ The browser and connector can propose only fields declared in versioned contract
 profile identity, accepted source binding, server receipt time, season, score, rank, streak,
 freshness projection, moderation state, and deletion state are server-derived.
 
-The current `CarRecipeV1` proposal has two bounded origins. Web derives browser authority from an
-exact possessed session, while the dedicated signed route derives proposal-only authority from an
-active source-bound device. Web owns proposal identity/expiry and exposes an encrypted session-bound
-decision control only to the browser. PostgreSQL owns the atomic pending-to-active transition. A
-device can replace only the private pending recipe and cannot inspect, approve, reject, activate,
-publish, or administer it. The separate public race projection can expose only the exact current
-approved recipe for an `active` profile; proposal identity, state, and timestamps remain private,
-and the stable score response remains unchanged.
+The current `CarRecipeV1` proposal has two bounded service origins. Web derives browser authority
+from an exact possessed session, while the dedicated signed route derives proposal-only authority
+from an active source-bound device. A local repository Agent Skill may reduce an existing style
+request to the exact recipe and invoke that fixed connector command once; it creates no third route,
+does not forward conversation text, and receives no decision authority. Web owns proposal
+identity/expiry and exposes an encrypted session-bound decision control only to the browser.
+PostgreSQL owns the atomic pending-to-active transition. A device can replace only the private
+pending recipe and cannot inspect, approve, reject, activate, publish, or administer it. The
+separate public race projection can expose only the exact current approved recipe for an `active`
+profile; proposal identity, state, and timestamps remain private, and the stable score response
+remains unchanged.
 
 The [privacy data map](../security/PRIVACY_DATA_MAP.md) defines field classification and retention.
 The [data-flow document](DATA_FLOW.md) defines enrollment, pairing, synchronization, public read,

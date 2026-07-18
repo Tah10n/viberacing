@@ -62,6 +62,7 @@ keys, or arbitrary user-uploaded files.
 - [Web prototype](apps/web/README.md)
 - [Ingest verification kernel](apps/ingest/README.md)
 - [Connector protocol foundation](crates/connector/README.md)
+- [Local bounded car-proposal Agent Skill](.agents/skills/viberacing-propose-car/SKILL.md)
 - [Dependency policy](docs/security/DEPENDENCY_POLICY.md)
 - [Dependency inventory](docs/reference/dependency-inventory.json)
 - [Asset provenance](docs/reference/ASSET_PROVENANCE.md)
@@ -213,25 +214,27 @@ session-derived profile, previews it in all three themes, and requires an explic
 session-bound approve or reject control. Approval atomically replaces the active recipe. A separate
 device-authenticated Web route and fixed `propose-car` command can only create or replace the same
 pending exact recipe for an active source-bound device; they cannot read, approve, reject, or
-activate it. Cross-profile and non-Web database capabilities remain denied. A separate Jobs-only
-command now deletes bounded oldest-first batches of expired private proposals while preserving live
-and active recipes. A separate compatible public race contract now projects only the current
-approved recipe for an active profile; proposal identity, state, and timestamps stay private and the
-stable score response remains unchanged. Conversational-agent ingress, cleanup scheduling, live
-credentials, released connector packaging, edge controls, and deployment remain pending. A
-database-only Community ingest capability now exposes minimal active-device verification material
-and accepts bounded source-bound snapshots with exact retry, nonce replay, monotonic source/date,
-quarantine, and lifecycle-race enforcement. A Jobs-only procedure deletes independently bounded
-batches of expired origin nonces, device nonces, and raw snapshots while preserving current
-source/day values. A separate Jobs-only procedure deletes bounded expired non-activated pairing
-transactions plus their still-pending keys, while preserving live and activated bindings. A third
-cleanup procedure independently deletes expired authentication challenges and restricted recovery
-authorities plus an exact still-present used code whose verifier was already scrubbed. It preserves
-live ceremonies, unused recovery codes, sessions, passkeys, and audit evidence, and serializes on
-profile locks against recovery transitions. The database does not verify a wire signature; the local
-kernel and adapter are composed locally and exercised together with a signed synthetic request. The
-opt-in loopback integration now carries an independently signed request through the emitted host and
-a disposable least-privileged PostgreSQL login, including duplicate, replay, revoke, response, and
+activate it. A checked local Agent Skill reduces a styling request to the exact recipe flags,
+requires explicit shell-safe origin/label values, invokes only that command once, and receives no
+read or decision authority. Cross-profile and non-Web database capabilities remain denied. A
+separate Jobs-only command now deletes bounded oldest-first batches of expired private proposals
+while preserving live and active recipes. A separate compatible public race contract now projects
+only the current approved recipe for an active profile; proposal identity, state, and timestamps
+stay private and the stable score response remains unchanged. Cleanup scheduling, live credentials,
+released connector packaging, edge controls, and deployment remain pending. A database-only
+Community ingest capability now exposes minimal active-device verification material and accepts
+bounded source-bound snapshots with exact retry, nonce replay, monotonic source/date, quarantine,
+and lifecycle-race enforcement. A Jobs-only procedure deletes independently bounded batches of
+expired origin nonces, device nonces, and raw snapshots while preserving current source/day values.
+A separate Jobs-only procedure deletes bounded expired non-activated pairing transactions plus their
+still-pending keys, while preserving live and activated bindings. A third cleanup procedure
+independently deletes expired authentication challenges and restricted recovery authorities plus an
+exact still-present used code whose verifier was already scrubbed. It preserves live ceremonies,
+unused recovery codes, sessions, passkeys, and audit evidence, and serializes on profile locks
+against recovery transitions. The database does not verify a wire signature; the local kernel and
+adapter are composed locally and exercised together with a signed synthetic request. The opt-in
+loopback integration now carries an independently signed request through the emitted host and a
+disposable least-privileged PostgreSQL login, including duplicate, replay, revoke, response, and
 stored-state checks. Another Jobs-only procedure serializes an atomic refresh of one open ISO-week
 Community season: it sums distinct eligible sources before one profile daily cap, stores an
 immutable formula and season binding, shares rank on equal score and active days, and persists no

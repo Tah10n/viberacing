@@ -33,8 +33,11 @@ remain safe to publish verbatim.
 - [Connector protocol, candidate adapter, supervisor, pairing, and sync signers](../crates/connector/README.md)
   — bounded local App Server handshake, exact `0.144.5` account/usage parser, synthetic one-shot
   process evidence, exact sync material/signing, a native-store `connect` command, and one explicit
-  Windows exact-artifact `sync` command with synthetic loopback upload evidence; no supported
-  release, cross-platform result, or operational connector.
+  Windows exact-artifact `sync` command with synthetic loopback upload evidence, plus the fixed
+  proposal-only command; no supported release, cross-platform result, or operational connector.
+- [Bounded local car-proposal Agent Skill](../.agents/skills/viberacing-propose-car/SKILL.md) —
+  exact enum reduction, shell-safe invocation policy, browser-only decision boundary, and
+  production-derived drift checks without connector installation or release authority.
 - [Asset provenance](reference/ASSET_PROVENANCE.md) — generation/source records, integrity digests,
   metadata sanitation, accessibility text, and release-review status for non-code visuals.
 - [CarRecipe version 1](reference/car-recipe.md) — exact closed fields, local session-owned

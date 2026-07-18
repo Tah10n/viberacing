@@ -100,17 +100,21 @@ only after explicit exact `0.144.5` artifact and active-record admission, then s
 signed request and validates one closed acknowledgement without retry or edge-origin headers. A
 separate fixed `propose-car` command starts no Codex process, accepts only exact enum flags and a
 bounded seed, signs one fresh proposal-domain request with the same active native key, sends once
-without retry, and validates only a generic acknowledgement. There is still no automatic executable
-discovery, supported version, macOS/Linux admission, clean-machine real-account result, packaging,
-release, live pairing result, deployment Ingest credential/TLS result, edge deployment, or capacity
-evidence. Do not claim that deployed browser/session HTTP authentication, production-ready recovery
-or remaining unimplemented critical-action verification, real-user ingestion, an operational
-connector, a Jobs scheduler or deployed public-race read, season correction, scheduled or broader
-cleanup, deployment, or a hosted security control exists until its implementation and verification
-are present in the working tree.
+without retry, and validates only a generic acknowledgement. A checked local Agent Skill now reduces
+a styling request to those exact fields, requires explicit shell-safe origin/label values, invokes
+only that command once, and receives no read, approval, or activation authority. There is still no
+automatic executable discovery, supported version, macOS/Linux admission, clean-machine real-account
+result, packaging, release, live pairing result, deployment Ingest credential/TLS result, edge
+deployment, or capacity evidence. Do not claim that deployed browser/session HTTP authentication,
+production-ready recovery or remaining unimplemented critical-action verification, real-user
+ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
+correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
+implementation and verification are present in the working tree.
 
 ## Repository map
 
+- `.agents/skills/viberacing-propose-car/` contains the checked local conversational reducer for the
+  fixed proposal-only connector command. It is not an installer or released connector workflow.
 - `docs/` contains public canonical plans, status, threat/privacy/abuse models, architecture,
   compatibility, ADRs, and policy.
 - `.github/` contains read-only pull-request CI, dependency-update configuration, and structured
@@ -156,6 +160,9 @@ are present in the working tree.
   contract/Ingest/Jobs/frontend lint/type/coverage/production-build, and Rust formatting/check/test/
   Clippy gates.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
+- `pnpm run check:agent-skills` derives the local proposal skill's enum inventory, CLI flags,
+  generic output, and metadata from canonical sources. `pnpm run test:agent-skills-check` proves
+  eleven unsafe/drifted variants fail closed.
 - `pnpm run check:public:staged` scans the exact staged blobs before a commit.
 - `pnpm run check:community` validates governance and community-health files and forms.
 - `pnpm run check:architecture` validates required security/architecture contracts, structured abuse

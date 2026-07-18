@@ -22,8 +22,9 @@ apply.
   approve, reject, or activate it. Physical expired-row cleanup is a separate bounded Jobs
   capability. The public race projection may expose only the exact current active recipe for an
   `active` profile; keep proposal identity, state, and timestamps private and the stable score
-  contract unchanged. Do not claim a cleanup schedule, conversational-agent ingress, live login, or
-  deployment until separate evidence exists.
+  contract unchanged. The repository Agent Skill is only a local reducer into the same fixed device
+  command and creates no Web route or authority. Do not claim a cleanup schedule, additional agent
+  service ingress, live login, or deployment until separate evidence exists.
 - Browser persistence is limited to locale, theme, and motion. Do not add trackers, analytics,
   fingerprinting, or account state to local storage.
 - Preserve per-navigation nonce CSP and repository-root build isolation. Do not add a CSP origin,

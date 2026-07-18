@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and thirty-eight accepted ADRs.
+  fail-closed compatibility policy and matrix, and thirty-nine accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -37,7 +37,11 @@ Versioning where its guarantees are applicable.
   shared Rust/Web signature vector, and fixed native-store `propose-car` command now create or
   replace only the pending recipe and cannot approve/reject/activate it. An observed PostgreSQL race
   proves source pause serializes ahead of a queued proposal without retaining its proposal or nonce.
-  This local slice has no conversational-agent orchestration, cleanup schedule, live credential,
+  A self-contained local Agent Skill now reduces styling intent to only those exact fields, requires
+  explicit shell-safe origin/label values, invokes that command once, and never receives read or
+  decision authority. Its production-derived checker plus eleven black-box mutations reject
+  schema/CLI drift, command widening, contradictory invocation input, unsafe shell input, retries,
+  stale output, and metadata drift. This local slice still has no cleanup schedule, live credential,
   released connector, edge control, or deployment.
 - Strict frontend lint/type/build gates plus unit, interaction, accessibility, CSP/header, scoring,
   localization, and data-boundary tests with enforced coverage thresholds.

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Vibe Racing Car Proposal"
+  short_description: "Create a bounded private car proposal"
+  default_prompt:
+    "Use $viberacing-propose-car to turn my car style idea into a private Vibe Racing proposal for
+    browser review."

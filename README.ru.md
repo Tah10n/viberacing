@@ -62,6 +62,7 @@ Verified-лига останется выключенной до появлен�
 - [Веб-прототип и его границы (EN)](apps/web/README.md)
 - [Локальное Ingest verification kernel (EN)](apps/ingest/README.md)
 - [Connector protocol foundation (EN)](crates/connector/README.md)
+- [Локальный bounded Agent Skill для car proposal (EN)](.agents/skills/viberacing-propose-car/SKILL.md)
 - [Dependency policy (EN)](docs/security/DEPENDENCY_POLICY.md)
 - [Dependency inventory (EN)](docs/reference/dependency-inventory.json)
 - [Происхождение визуальных assets (EN)](docs/reference/ASSET_PROVENANCE.md)
@@ -221,11 +222,13 @@ evidence; live authenticator/database integration, edge rate/capacity controls �
 Approval атомарно заменяет active recipe. Отдельный device-authenticated Web route и фиксированная
 команда `propose-car` могут только создать или заменить тот же pending exact recipe для активного
 source-bound device; читать, approve, reject или activate его они не могут. Cross-profile и non-Web
-database capabilities запрещены. Отдельная Jobs-only capability теперь bounded oldest-first batches
-физически удаляет expired proposal, сохраняя live proposals и active recipes. Отдельный совместимый
-public race contract показывает только текущий approved recipe активного профиля; proposal identity,
-state и timestamps остаются private, а стабильный score response не меняется. Conversational-agent
-ingress, schedule для cleanup, live credentials, release/packaging connector, edge controls и
+database capabilities запрещены. Проверяемый локальный Agent Skill сводит style request к точным
+recipe flags, требует явно переданные shell-safe origin/label, один раз вызывает только эту команду
+и не получает read или decision authority. Отдельная Jobs-only capability теперь bounded oldest-
+first batches физически удаляет expired proposal, сохраняя live proposals и active recipes.
+Отдельный совместимый public race contract показывает только текущий approved recipe активного
+профиля; proposal identity, state и timestamps остаются private, а стабильный score response не
+меняется. Schedule для cleanup, live credentials, release/packaging connector, edge controls и
 deployment остаются отдельными воротами. Database-only Community ingest capability уже выдаёт
 минимальный материал активного устройства и принимает bounded source-bound snapshots с exact retry,
 nonce replay, monotonic source/date, quarantine и lifecycle-race enforcement. Отдельная Jobs-only

@@ -43,10 +43,11 @@ what it costs, how it is verified, and how it can be replaced.
 | [0032](0032-bounded-auth-retention-cleanup.md)                 | Bounded authentication retention cleanup                            | Accepted; database and local command; schedule pending |
 | [0033](0033-bounded-railway-ingest-host.md)                    | Bounded Railway Ingest host                                         | Accepted; local entry point; deployment pending        |
 | [0034](0034-bounded-profile-deletion-purge.md)                 | Bounded primary profile deletion purge                              | Accepted; database and local command; schedule pending |
-| [0035](0035-bounded-session-car-recipe-proposal.md)            | Bounded session-owned CarRecipe proposal and approval               | Accepted; local Web/DB slice; agent path pending       |
+| [0035](0035-bounded-session-car-recipe-proposal.md)            | Bounded session-owned CarRecipe proposal and approval               | Accepted; local Web/DB and agent path                  |
 | [0036](0036-bounded-car-recipe-proposal-cleanup.md)            | Bounded CarRecipe proposal retention cleanup                        | Accepted; database and local command; schedule pending |
 | [0037](0037-bounded-public-community-race-projection.md)       | Bounded public active-CarRecipe race projection                     | Accepted; local Web/DB slice; deployment pending       |
 | [0038](0038-bounded-device-car-recipe-proposal-ingress.md)     | Bounded device CarRecipe proposal ingress                           | Accepted; local vertical slice; deployment pending     |
+| [0039](0039-bounded-agent-car-proposal-orchestration.md)       | Bounded agent CarRecipe proposal orchestration                      | Accepted; local skill; connector release pending       |
 
 ## Lifecycle
 

@@ -120,8 +120,9 @@ Current repository evidence covers:
   cross-capability denials.
 
 There is still no live Web database credential, edge policy, cache, rate/load result, monitoring,
-real-user result, or deployment. ADR 0038 now supplies a separate local proposal-only device
-ingress; conversational-agent orchestration and the cleanup schedule remain Phase 4 gates.
+real-user result, or deployment. ADR 0038 now supplies a separate local proposal-only device ingress
+and ADR 0039 adds bounded local agent orchestration; cleanup scheduling, released packaging, and
+deployment remain Phase 4 gates.
 
 ## References
 

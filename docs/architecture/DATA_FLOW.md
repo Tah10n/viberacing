@@ -535,17 +535,20 @@ tombstone/restore replay, freshness/streak projection, deployed route, or public
 
 ## CarRecipe proposal origins and browser approval
 
-The local account page and the dedicated signed device route are the two current proposal origins.
-Both send the nine exact `CarRecipeV1` fields and no prompt, conversation, URL, file, arbitrary
-color, profile ID, source ID, or proposal ID. Browser authority comes from a passkey-registered
-session. Device authority comes only from an exact raw-body signature, fresh nonce/time, minimal
-active-device lookup, and an active source. Web generates the proposal ID and at-most-24-hour
-expiry. Revisions 0025 and 0028 derive the profile again from those separate proofs and keep the
-same at-most-one pending proposal.
+The local account page and the dedicated signed device route are the two current service proposal
+origins. Both send the nine exact `CarRecipeV1` fields and no prompt, conversation, URL, file,
+arbitrary color, profile ID, source ID, or proposal ID. The repository Agent Skill is a local
+reducer, not a third service origin: it maps existing styling intent to those exact fields and
+invokes the fixed connector command once. Browser authority comes from a passkey-registered session.
+Device authority comes only from an exact raw-body signature, fresh nonce/time, minimal active-
+device lookup, and an active source. Web generates the proposal ID and at-most-24-hour expiry.
+Revisions 0025 and 0028 derive the profile again from those separate proofs and keep the same at-
+most-one pending proposal.
 
 ```mermaid
 sequenceDiagram
   participant Browser
+  participant Agent as Local agent skill
   participant Connector
   participant Web as Web/Auth
   participant Validator as CarRecipeV1 validator
@@ -556,6 +559,8 @@ sequenceDiagram
   Validator-->>Web: Frozen allowlisted recipe
   Web->>DB: propose(session proof, server proposal ID, recipe, expiry)
   DB-->>Web: Proposed or generic failure
+  Agent->>Agent: Reduce intent to exact enums and seed
+  Agent->>Connector: One fixed propose-car argument vector
   Connector->>Web: POST exact recipe plus device signature
   Web->>Validator: Validate exact body and signature
   Web->>DB: propose(active device proof, nonce digest, server proposal ID, recipe)
@@ -577,10 +582,12 @@ row; rejection deletes only the matching pending row. A device cannot read that 
 either decision. Ingest, Jobs, Admin, direct-table, cross-profile, wrong-proof, stale, inactive, and
 replay paths are denied. Profile deletion cascades both recipe rows.
 
-This flow does not accept conversation text or provide conversational-agent orchestration. The
-active recipe is projected separately and locally; physical cleanup scheduling, live database login,
-distributed edge control, monitoring, capacity, released connector packaging, and deployment remain
-unproved.
+The local Agent Skill now provides bounded conversational orchestration without forwarding or
+retaining the request in Vibe Racing. It requires explicit shell-safe origin/label values, never
+discovers or installs a connector, invokes only `propose-car` once, accepts only its exact generic
+success line, and has no decision authority. The active recipe is projected separately and locally;
+physical cleanup scheduling, live database login, distributed edge control, monitoring, capacity,
+released connector packaging, and deployment remain unproved.
 
 ## Public race read
 

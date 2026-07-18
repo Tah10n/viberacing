@@ -294,8 +294,9 @@ capability can physically remove expired proposals locally. There is no cleanup 
 cadence. A separate `POST /v1/connector/cars/proposals` boundary verifies a proposal-specific exact
 raw-body signature from an active source-bound device and can only replace the same pending recipe;
 it exposes no proposal state or approve/reject/activate capability. Conversational-agent
-orchestration, distributed edge policy, live credential, monitoring, capacity result, released
-connector, and deployment remain absent.
+orchestration now exists only as a checked local Agent Skill that reduces style intent into the
+fixed connector command; it creates no additional Web origin or authority. Distributed edge policy,
+live credential, monitoring, capacity result, released connector, and deployment remain absent.
 
 This is not a launch-ready authentication system. There is no invite-issuance UI, passkey profile
 mutation beyond the listed controls, aggregate/distributed edge rate policy, cleanup or notification

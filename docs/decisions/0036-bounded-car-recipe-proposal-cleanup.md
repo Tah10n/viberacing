@@ -58,9 +58,12 @@ device, or direct-table capability.
 
 Residual risk remains: no scheduler, cadence, retry/overlap policy, monitoring, capacity result,
 live Jobs login/TLS connection, backup-expiry proof, or deployed retention policy exists. Active
-recipes remain until replacement or profile deletion. Agent/connector proposal ingress remains a
-separate Phase 4 gate; the separate public active-recipe projection was later accepted in
-[ADR 0037](0037-bounded-public-community-race-projection.md).
+recipes remain until replacement or profile deletion. The separate public active-recipe projection,
+device proposal ingress, and local agent orchestration were later accepted in
+[ADR 0037](0037-bounded-public-community-race-projection.md),
+[ADR 0038](0038-bounded-device-car-recipe-proposal-ingress.md), and
+[ADR 0039](0039-bounded-agent-car-proposal-orchestration.md); scheduling and deployed retention
+remain separate Phase 4 gates.
 
 Affected invariants are VR-CAR-001 and VR-DATA-001. Primary attacker stories are
 VR-ABUSE-CAR-INJECTION, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.

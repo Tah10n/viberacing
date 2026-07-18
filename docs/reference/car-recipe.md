@@ -5,9 +5,9 @@
 `CarRecipeV1` is implemented locally as a language-neutral JSON Schema, generated TypeScript type
 and validator, deterministic three-theme renderer, exact-session PostgreSQL proposal/approval
 boundary, signed-in account editor, bounded device-authenticated proposal ingress, a fixed
-native-store connector command, Jobs-only expired-proposal cleanup, and separate compatible public
-race projection. This is synthetic/local evidence; no cleanup schedule, released connector, live
-credential, edge control, or deployment is claimed.
+native-store connector command, a checked local Agent Skill, Jobs-only expired-proposal cleanup, and
+separate compatible public race projection. This is synthetic/local evidence; no cleanup schedule,
+released connector, live credential, edge control, or deployment is claimed.
 
 ## Closed shape
 
@@ -53,7 +53,8 @@ routes.
 
 1. Either a passkey-registered signed-in user submits the nine exact fields from `/account`, or the
    fixed `propose-car` command submits the same exact object under a fresh source-bound device
-   signature. No prompt, conversation, profile ID, source ID, or proposal ID is accepted.
+   signature. The local Agent Skill can reduce existing style intent to that one command, but sends
+   no prompt, conversation, profile ID, source ID, or proposal ID.
 2. Web validates the generated contract and derives authority from either the active session or an
    active device on an active source. It creates the proposal ID and at-most-24-hour expiry.
 3. PostgreSQL stores at most one private pending proposal per profile behind forced RLS.
@@ -89,11 +90,13 @@ meaning; a breaking visual change uses a new recipe version or an explicit revie
   through the dedicated signed route. It cannot read proposal state, approve, reject, activate, or
   administer the profile; paused, quarantined, unlinked, and revoked authority is denied.
 - The fixed connector command accepts only explicit enum flags and a bounded seed, sends once
-  without retry, and returns a generic acknowledgement. Any future conversational agent must reduce
-  its result locally to this exact object; conversation text never enters the service.
+  without retry, and returns a generic acknowledgement. The local Agent Skill reduces style intent
+  to this exact object, requires shell-safe explicit origin/label values, invokes only that command
+  once, and never forwards conversation text to Vibe Racing.
 
 See [ADR 0005](../decisions/0005-enum-only-car-recipe.md),
 [ADR 0035](../decisions/0035-bounded-session-car-recipe-proposal.md),
 [ADR 0037](../decisions/0037-bounded-public-community-race-projection.md), security invariant
-[ADR 0038](../decisions/0038-bounded-device-car-recipe-proposal-ingress.md), security invariant
+[ADR 0038](../decisions/0038-bounded-device-car-recipe-proposal-ingress.md),
+[ADR 0039](../decisions/0039-bounded-agent-car-proposal-orchestration.md), security invariant
 `VR-CAR-001`, and `VR-ABUSE-CAR-INJECTION`.

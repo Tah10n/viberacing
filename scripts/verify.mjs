@@ -44,6 +44,12 @@ const vitestBin = resolve(dirname(webRequire.resolve("vitest")), "vitest.mjs");
 const nodeOnly = process.argv.includes("--node-only");
 const checks = [
   [
+    "agent-skill checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-agent-skills-check.mjs")],
+  ],
+  ["agent skills", process.execPath, [resolve(import.meta.dirname, "check-agent-skills.mjs")]],
+  [
     "PNG content policy behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-png-content-policy.mjs")],

@@ -686,7 +686,8 @@ The planned public tree is:
 .
 |-- .agents/
 |   `-- skills/
-|       `-- viberacing-verify/
+|       |-- viberacing-propose-car/
+|       `-- viberacing-verify/ (planned)
 |-- .github/
 |   |-- ISSUE_TEMPLATE/
 |   |-- workflows/
@@ -812,8 +813,11 @@ Nested AGENTS.md files are introduced only for genuinely different areas:
 - docs when documentation tooling requires different commands.
 
 Repeatable verification becomes a repository skill under .agents/skills/viberacing-verify only after
-the real commands are stable. The end-user connect workflow is packaged separately as a
-distributable plugin or skill and invokes fixed connector commands only.
+the real commands are stable. The local `.agents/skills/viberacing-propose-car` workflow already
+reduces style intent to exact enums and invokes only the fixed proposal command; it is checked for
+schema/CLI drift and has no connector installation or release authority. The broader end-user
+connect workflow is packaged separately as a distributable plugin or skill only after the CLI and
+release identity are stable, and it invokes fixed connector commands only.
 
 No duplicated agent-instruction files are maintained manually for different vendors. If adapter
 files become necessary, they are generated from the canonical guidance and checked for drift.
@@ -866,7 +870,8 @@ files become necessary, they are generated from the canonical guidance and check
 - XSS, CSRF, IDOR, open redirect, cache leakage, CORS, CSP, SQL injection, origin bypass, and
   request smuggling defenses.
 - CarRecipe rejection of files, URLs, markup, unknown enums, and oversized input; deterministic
-  visual snapshots in every theme.
+  visual snapshots in every theme; agent-skill rejection of enum/CLI drift, shell-unsafe inputs,
+  retries, extra commands, and activation authority.
 - Deletion under retries, job crashes, backup restore, and partial outage.
 - Fork pull requests unable to access secrets or publish.
 - Connector artifact verification from a clean machine.
@@ -974,7 +979,9 @@ measurements exist.
   proposal/approval state, signed-in three-theme account preview, and separate compatible public
   active-recipe race projection are implemented locally. A separate bounded device-authenticated
   Web/PostgreSQL ingress and fixed native-store `propose-car` command now submit only that exact
-  private recipe without activation authority. Conversational-agent orchestration, cleanup
+  private recipe without activation authority. A checked local Agent Skill now reduces existing
+  style intent to the canonical fields, validates explicit shell-safe origin/label values, invokes
+  that command once, and never forwards conversation text or gains decision authority. Cleanup
   scheduling and deployed retention evidence, distributed edge policy, live database result,
   monitoring, capacity evidence, packaging, release, and deployment remain gates.
 - Add versioned CarRecipe, bounded proposal API, browser preview and approval, theme rendering,

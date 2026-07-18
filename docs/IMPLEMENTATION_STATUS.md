@@ -207,8 +207,13 @@ or finalization scheduler exists.
   canonical bounded seed, loads the active native device key, creates a fresh nonce/time, signs the
   proposal-specific exact body message, sends one no-retry fixed-path POST, and validates only a
   generic acknowledgement. Four Rust proposal cases share the exact body/message/key/signature
-  vector with Web. No released connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and thirty-eight accepted design decisions covering Community trust,
+  vector with Web. A self-contained repository Agent Skill now reduces an existing styling request
+  to only those exact enums and seed, requires explicit shell-safe origin/label values, invokes the
+  fixed command once, and recognizes only its exact generic success line. A dedicated checker
+  derives the schema/CLI expectations from production sources, and eleven mutation cases prove enum,
+  shell, invocation-allowlist, retry, authority, output, front matter, and UI-metadata drift fail
+  closed. No released connector, live endpoint, edge policy, or deployment is claimed.
+- An ADR lifecycle/template and thirty-nine accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -221,10 +226,14 @@ or finalization scheduler exists.
   compositions, bounded pairing cleanup, bounded connector pairing transport/native key custody,
   one-shot candidate Community sync, bounded authentication cleanup, the local Railway-shaped Ingest
   host, bounded primary deletion purge, the session-owned CarRecipe proposal boundary, and bounded
-  CarRecipe-proposal cleanup, public active-recipe projection, and bounded device proposal ingress.
+  CarRecipe-proposal cleanup, public active-recipe projection, bounded device proposal ingress, and
+  bounded local agent proposal orchestration.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
+- Agent-skill validation and eleven black-box regressions for schema/CLI drift, command widening,
+  contradictory invocation input, unsafe shell input, retry permission, stale success output,
+  front-matter widening, and UI metadata.
 - Twelve canonical JSON Schema 2020-12 contracts for bounded Community connector sync and pairing
   start/poll requests and responses, a non-sensitive sync acknowledgement, stable problem details, a
   one-field public score season query, a response-only top-32 Community score page with constant
@@ -786,8 +795,9 @@ or finalization scheduler exists.
   semantic code-native pixels in all three themes with deterministic snapshots. The schema runtime
   stays server-side. The separate public race response exposes only the current approved exact
   recipe of an active profile; proposal state stays private. A separate exact-body signed device
-  route can create or replace only the pending recipe and cannot inspect or decide it. No
-  conversational-agent ingress, live database credential, edge policy, monitoring, capacity result,
+  route can create or replace only the pending recipe and cannot inspect or decide it. The local
+  Agent Skill can reduce style intent to that fixed command but gains no read, decision, or
+  activation authority. No live database credential, edge policy, monitoring, capacity result,
   released connector, or deployment is claimed.
 - Per-response nonce CSP, browser-isolation and capability headers, no remote image patterns,
   globally disabled Next.js image optimization, production HSTS, disabled framework branding, and an
@@ -876,13 +886,13 @@ loopback persistence path, but not those deployed edge, secret, TLS, capacity, o
 boundaries. Bounded database score and compatible active-recipe race projections, versioned
 response-only schemas, fail-closed server mappers, bounded PostgreSQL adapters, and local HTTP
 routes now exist, including URL/media parsing, admission/deadline policy, store translation, and
-final serialization. Cache/invalidation, conversational-agent proposal orchestration, deployed
-device-proposal ingress, streak/freshness, profile detail, client-rate and production-capacity
-controls, monitoring backend, deployment login, certificate, edge policy, and live adapter
-integration do not. The visible web scoring and ranking experience now consumes a validated
-current-week race response from the local route when its separately provisioned database login
-works, but local defaults and every unavailable/error path remain clearly synthetic. No working
-database/OAuth login, deployed data, cache, or end-to-end real-user ranking evidence exists.
+final serialization. Cache/invalidation, deployed device-proposal ingress, streak/freshness, profile
+detail, client-rate and production-capacity controls, monitoring backend, deployment login,
+certificate, edge policy, and live adapter integration do not. The visible web scoring and ranking
+experience now consumes a validated current-week race response from the local route when its
+separately provisioned database login works, but local defaults and every unavailable/error path
+remain clearly synthetic. No working database/OAuth login, deployed data, cache, or end-to-end
+real-user ranking evidence exists.
 
 ## Evidence commands
 
@@ -890,6 +900,8 @@ Run from the repository root:
 
 ```text
 pnpm run verify
+pnpm run check:agent-skills
+pnpm run test:agent-skills-check
 pnpm run check:contracts
 pnpm run check:database
 pnpm run test:database:integration
