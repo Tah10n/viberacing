@@ -47,7 +47,9 @@ does not make the pull request trusted; review and protected-branch policy remai
 - Package installation uses the frozen lockfile, the official registry, and `--ignore-scripts`.
 - Phase 1 viewport evidence is checked as committed PNG bytes, dimensions, digests, and metadata
   only. Pull-request CI does not discover or launch a workstation browser, reuse a browser profile,
-  or regenerate visual evidence.
+  or regenerate visual evidence. The separate explicit local re-render gate requires the manifest's
+  exact reported browser product/platform and compares decoded pixels without writing, but its
+  operator-supplied executable has no CI provisioning or artifact-provenance claim.
 - The database job uses the same digest-pinned PostgreSQL artifact as local development, no host
   port or persistent volume, a uniquely named Compose project, synthetic credentials/data, and
   cleanup in `finally`. It remains untrusted-code execution on a disposable, secretless runner.

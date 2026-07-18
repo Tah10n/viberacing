@@ -32,6 +32,7 @@ gate even for project-authored combinations.
 | Created                     | 2026-07-18                                                                                                    |
 | Method                      | Repository-owned CDP capture of the local production build with motion disabled and a fresh temporary profile |
 | Browser evidence            | Chrome 150.0.7871.129 on `win32-x64`; this is local Chromium evidence, not a cross-browser result             |
+| Re-render verification      | All 18 exact-product/platform decoded-pixel comparisons passed with zero changed pixel channels on 2026-07-18 |
 | Dimensions                  | Six images each at 1280 by 720, 390 by 844, and 320 by 568 pixels                                             |
 | Integrity record            | `docs/testing/phase1-visual-baselines/manifest.json` contains all 18 byte counts and SHA-256 digests          |
 | Third-party source material | None; pixels are rendered only from the repository's synthetic HTML, CSS, canvas, and fixed fixtures          |
@@ -46,8 +47,10 @@ link until the responsive navigation was fixed.
 
 `scripts/check-phase1-visual-baselines.mjs` enforces the complete Cartesian inventory, dimensions,
 per-file and aggregate size limits, manifest digests, and the same public PNG chunk policy used for
-other assets. This protects the stored evidence but does not launch a pinned browser or approve a
-changed pixel. Regeneration requires the explicit command in the
+other assets. The separate verify-only command requires the manifest's exact reported browser
+product/platform, re-renders the matrix, decodes both sides inside the isolated browser, and rejects
+one changed pixel channel without writing. The executable remains operator-supplied rather than
+provenance/digest-pinned. Regeneration requires the explicit write command in the
 [browser matrix](../testing/PHASE1_BROWSER_MATRIX.md), inspection of all rendered diffs, and the
 normal staged public-data review.
 

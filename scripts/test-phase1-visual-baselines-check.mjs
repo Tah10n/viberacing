@@ -166,6 +166,18 @@ try {
     /dimensions do not match/,
   );
   expectFailure(
+    "oversized-capture",
+    (fixture) => {
+      const entry = fixture.manifest.entries[0];
+      refreshEntry(
+        fixture,
+        0,
+        png(entry.width, entry.height, [chunk("IDAT", Buffer.alloc(2 * 1024 * 1024))]),
+      );
+    },
+    /outside the reviewed per-capture limit/,
+  );
+  expectFailure(
     "unexpected-file",
     ({ root }) => writeFileSync(resolve(root, "notes.txt"), "not part of the baseline\n"),
     /unexpected entry/,

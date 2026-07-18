@@ -3,7 +3,11 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { isAllowedPhase1PageRequest } from "./lib/phase1-visual-baseline-policy.mjs";
+import {
+  classifyPhase1PixelComparison,
+  isAllowedPhase1PageRequest,
+  isMatchingPhase1VerificationEnvironment,
+} from "./lib/phase1-visual-baseline-policy.mjs";
 
 const capture = resolve(import.meta.dirname, "capture-phase1-visual-baselines.mjs");
 const temporaryRoot = mkdtempSync(join(tmpdir(), "viberacing-phase1-capture-check-"));
@@ -64,13 +68,88 @@ for (const request of [
   assert.equal(isAllowedPhase1PageRequest(request, "http://127.0.0.1:3317"), false);
 }
 
+const verificationSnapshot = {
+  browserProduct: "Chrome/150.0.7871.129",
+  capturePlatform: "win32-x64",
+};
+assert.equal(
+  isMatchingPhase1VerificationEnvironment(
+    verificationSnapshot,
+    "Chrome/150.0.7871.129",
+    "win32-x64",
+  ),
+  true,
+);
+assert.equal(
+  isMatchingPhase1VerificationEnvironment(
+    verificationSnapshot,
+    "Chrome/150.0.7871.130",
+    "win32-x64",
+  ),
+  false,
+);
+assert.equal(
+  isMatchingPhase1VerificationEnvironment(
+    verificationSnapshot,
+    "Chrome/150.0.7871.129",
+    "linux-x64",
+  ),
+  false,
+);
+assert.equal(
+  isMatchingPhase1VerificationEnvironment(null, "Chrome/150.0.7871.129", "win32-x64"),
+  false,
+);
+
+const exactPixelComparison = {
+  baselineHeight: 568,
+  baselineWidth: 320,
+  changedPixels: 0,
+  maxChannelDelta: 0,
+  renderedHeight: 568,
+  renderedWidth: 320,
+  totalChannelDelta: 0,
+  totalPixels: 320 * 568,
+};
+assert.equal(classifyPhase1PixelComparison(exactPixelComparison, 320, 568), "exact");
+assert.equal(
+  classifyPhase1PixelComparison(
+    { ...exactPixelComparison, changedPixels: 1, maxChannelDelta: 4, totalChannelDelta: 7 },
+    320,
+    568,
+  ),
+  "different",
+);
+assert.equal(
+  classifyPhase1PixelComparison({ ...exactPixelComparison, renderedWidth: 319 }, 320, 568),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1PixelComparison({ ...exactPixelComparison, unexpected: 1 }, 320, 568),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1PixelComparison({ ...exactPixelComparison, changedPixels: 1 }, 320, 568),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1PixelComparison(exactPixelComparison, Number.MAX_SAFE_INTEGER, 2),
+  "invalid",
+);
+
 try {
   const nonExecutableBrowser = resolve(temporaryRoot, "not-a-browser.txt");
   writeFileSync(nonExecutableBrowser, "synthetic non-executable fixture\n");
   expectFailure("missing arguments", [], /Usage:/, 2);
   expectFailure(
-    "missing explicit write",
+    "missing explicit mode",
     ["--origin", "http://127.0.0.1:3317/", "--browser", process.execPath],
+    /Usage:/,
+    2,
+  );
+  expectFailure(
+    "ambiguous write and verify modes",
+    ["--origin", "http://127.0.0.1:3317/", "--browser", process.execPath, "--write", "--verify"],
     /Usage:/,
     2,
   );
@@ -132,6 +211,11 @@ try {
     ["--origin", "http://localhost:3317/", ...browserArguments],
     /exited before opening DevTools/,
   );
+  expectFailure(
+    "verify mode with non-browser executable",
+    ["--origin", "http://127.0.0.1:3317/", "--browser", process.execPath, "--verify"],
+    /exited before opening DevTools/,
+  );
   const launchFailure = expectFailure(
     "non-executable browser file",
     ["--origin", "http://127.0.0.1:3317/", "--browser", nonExecutableBrowser, "--write"],
@@ -144,5 +228,5 @@ try {
 
 console.log(
   `Phase 1 visual-baseline capture guardrail tests passed (${caseCount} CLI cases, ` +
-    "10 request-policy assertions).",
+    "10 request-policy, 4 environment-policy, and 6 pixel-policy assertions).",
 );

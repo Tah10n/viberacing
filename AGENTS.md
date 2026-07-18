@@ -197,9 +197,13 @@ implementation and verification are present in the working tree.
   focused gates do not replace root verification.
 - `pnpm run check:phase1-visual-baselines` verifies the exact 18-image synthetic viewport matrix,
   dimensions, digests, byte limits, and public PNG policy without launching a browser.
+  `pnpm run verify:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium>`
+  is an explicit no-write re-render gate: it requires the manifest's exact browser product and
+  platform and zero changed decoded pixels, but does not authenticate or provision that executable.
   `pnpm run capture:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium> --write`
   is an explicit local regeneration command that uses a temporary profile and page-only output; it
-  is not a root or pull-request browser gate, and every rendered diff still requires manual review.
+  is not a root or pull-request browser gate, and every regenerated diff still requires manual
+  review.
 - `pnpm run lint:jobs`, `pnpm run typecheck:jobs`, `pnpm run test:jobs:coverage`, and
   `pnpm run build:jobs` verify the local one-shot Jobs boundary, including bounded session cleanup.
   They use injected fakes and do not by themselves prove a database login, scheduler, production

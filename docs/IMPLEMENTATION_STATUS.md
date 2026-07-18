@@ -879,10 +879,13 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   non-loopback page resources and reviewed header/hero overflow before writing; it found and blocked
   a clipped 320-pixel join link until the responsive navigation wrapped. An offline integrity gate
   enforces the exact matrix, dimensions, byte limits, SHA-256 manifest, and public PNG policy, and
-  twelve CLI capture-guardrail cases, ten production request-policy assertions, and ten checker
-  mutations prove both entry points fail closed. The current Chrome 150.0.7871.129 `win32-x64`
-  pixels are local visual evidence, not a pinned-browser, cross-platform, or automated semantic
-  pixel-diff result.
+  fourteen CLI guardrail cases, ten request-policy assertions, four exact-environment assertions,
+  six pixel-result assertions, and eleven checker mutations prove the entry points fail closed. A
+  separate no-write local gate requires the manifest's exact browser product/platform, re-renders
+  all states, decodes both PNGs inside that isolated browser, and rejects one changed pixel channel.
+  The current Chrome 150.0.7871.129 `win32-x64` pair passed all 18 semantic comparisons without
+  changing the manifest. The executable itself is operator-reviewed rather than
+  provenance/digest-pinned or provisioned in CI, and no cross-platform result is claimed.
 
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
@@ -926,8 +929,9 @@ limitations.
 
 ## Phase 1 still pending
 
-- A pinned-browser automated re-render and semantic pixel-diff gate; the exact current baseline
-  bytes are stored and integrity-checked, but root verification does not launch Chromium.
+- Provenance/digest-pinned browser-artifact provisioning for root or hosted re-render checks. The
+  explicit local gate now requires the manifest product/platform and performs the semantic pixel
+  diff, but it accepts an operator-supplied executable and root verification does not launch it.
 - Keyboard-only, screen-reader, forced-colors, and cross-browser release evidence.
 - Runtime Core Web Vitals for animation-on and reduced-motion modes.
 

@@ -52,7 +52,10 @@ The Phase 1 viewport baseline capture is narrower still: it accepts only an exac
 and an explicitly named Chromium executable, creates a temporary profile, permits only synthetic
 page state, and writes page-only PNGs. The committed manifest and offline checker protect matrix
 coverage, dimensions, digests, size, and PNG chunks; they do not replace inspection of every image
-or certify a visual change.
+or certify a visual change. Its separate verify-only mode first applies that integrity boundary,
+requires the manifest's exact reported browser product/platform, and rejects any decoded-pixel
+difference without changing repository files. The supplied executable still requires explicit
+operator and provenance review.
 
 ## Required review before a commit
 

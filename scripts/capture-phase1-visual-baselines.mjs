@@ -13,10 +13,15 @@ import {
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
+import { verifyPhase1BaselineDirectory } from "./lib/phase1-visual-baseline-integrity.mjs";
 import {
+  classifyPhase1PixelComparison,
   expectedPhase1BaselineEntries,
   isAllowedPhase1PageRequest,
+  isMatchingPhase1VerificationEnvironment,
   phase1BaselineRoot,
+  phase1MaximumCaptureBytes,
+  phase1MaximumMatrixBytes,
 } from "./lib/phase1-visual-baseline-policy.mjs";
 import { inspectPublicPng, readPngDimensions } from "./lib/png-content-policy.mjs";
 
@@ -30,17 +35,17 @@ const commandTimeoutMilliseconds = 15_000;
 function usage() {
   console.error(
     "Usage: node scripts/capture-phase1-visual-baselines.mjs " +
-      "--origin <loopback-url> --browser <absolute-chromium-path> --write",
+      "--origin <loopback-url> --browser <absolute-chromium-path> (--write|--verify)",
   );
   process.exit(2);
 }
 
 function parseArguments() {
-  const parsed = { browser: undefined, origin: undefined, write: false };
+  const parsed = { browser: undefined, mode: undefined, origin: undefined };
   for (let index = 2; index < process.argv.length; index += 1) {
     const argument = process.argv[index];
-    if (argument === "--write" && !parsed.write) {
-      parsed.write = true;
+    if ((argument === "--write" || argument === "--verify") && parsed.mode === undefined) {
+      parsed.mode = argument.slice(2);
       continue;
     }
     if ((argument === "--browser" || argument === "--origin") && process.argv[index + 1]) {
@@ -54,7 +59,7 @@ function parseArguments() {
     }
     usage();
   }
-  if (!parsed.browser || !parsed.origin || !parsed.write) {
+  if (!parsed.browser || !parsed.origin || !parsed.mode) {
     usage();
   }
   return parsed;
@@ -280,6 +285,81 @@ async function reload(connection, sessionId) {
   await Promise.all([loaded, connection.send("Page.reload", { ignoreCache: true }, sessionId)]);
 }
 
+async function compareDecodedPngPixels(
+  connection,
+  sessionId,
+  baselineBuffer,
+  renderedBuffer,
+  expected,
+) {
+  const baselineBase64 = JSON.stringify(baselineBuffer.toString("base64"));
+  const renderedBase64 = JSON.stringify(renderedBuffer.toString("base64"));
+  const comparison = await evaluate(
+    connection,
+    sessionId,
+    `(async () => {
+      const decode = async (base64) => {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+        const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+        const canvas = document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) throw new Error("canvas context unavailable");
+        context.drawImage(bitmap, 0, 0);
+        const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+        const result = { height: bitmap.height, pixels, width: bitmap.width };
+        bitmap.close();
+        return result;
+      };
+      const [baseline, rendered] = await Promise.all([
+        decode(${baselineBase64}),
+        decode(${renderedBase64})
+      ]);
+      let changedPixels = 0;
+      let maxChannelDelta = 0;
+      let totalChannelDelta = 0;
+      const comparableLength = Math.min(baseline.pixels.length, rendered.pixels.length);
+      for (let offset = 0; offset < comparableLength; offset += 4) {
+        let pixelChanged = false;
+        for (let channel = 0; channel < 4; channel += 1) {
+          const delta = Math.abs(baseline.pixels[offset + channel] - rendered.pixels[offset + channel]);
+          totalChannelDelta += delta;
+          maxChannelDelta = Math.max(maxChannelDelta, delta);
+          pixelChanged ||= delta !== 0;
+        }
+        changedPixels += pixelChanged ? 1 : 0;
+      }
+      return {
+        baselineHeight: baseline.height,
+        baselineWidth: baseline.width,
+        changedPixels,
+        maxChannelDelta,
+        renderedHeight: rendered.height,
+        renderedWidth: rendered.width,
+        totalChannelDelta,
+        totalPixels: baseline.width * baseline.height
+      };
+    })()`,
+  );
+  const outcome = classifyPhase1PixelComparison(comparison, expected.width, expected.height);
+  if (outcome === "invalid") {
+    throw new Error("isolated browser returned an out-of-policy semantic pixel comparison");
+  }
+  const totalPixels = expected.width * expected.height;
+  if (outcome === "different") {
+    throw new Error(
+      `${expected.file} differs from the committed decoded pixels ` +
+        `(${comparison.changedPixels} of ${totalPixels} pixels changed; ` +
+        `maximum channel delta ${comparison.maxChannelDelta})`,
+    );
+  }
+}
+
 async function waitForStableState(connection, sessionId, expected) {
   const deadline = Date.now() + commandTimeoutMilliseconds;
   let lastState;
@@ -398,6 +478,19 @@ async function stopChild(child) {
   }
 }
 
+async function removeTemporaryProfile(profilePath) {
+  try {
+    await rm(profilePath, {
+      force: true,
+      maxRetries: 10,
+      recursive: true,
+      retryDelay: 100,
+    });
+  } catch {
+    throw new Error("temporary browser profile cleanup failed after fixed retries");
+  }
+}
+
 async function ensureOutputBoundary() {
   await mkdir(outputRoot, { recursive: true });
   const stats = await lstat(outputRoot);
@@ -430,6 +523,8 @@ async function main() {
   if (!/^(?:darwin|linux|win32)-(?:arm64|x64)$/.test(capturePlatform)) {
     throw new Error("capture platform is outside the reviewed operating-system matrix");
   }
+  const verificationSnapshot =
+    arguments_.mode === "verify" ? verifyPhase1BaselineDirectory(outputRoot) : undefined;
   const temporaryParent = await realpath(tmpdir());
   const profilePath = await mkdtemp(join(temporaryParent, "viberacing-phase1-capture-"));
   if (
@@ -496,6 +591,18 @@ async function main() {
     const version = await connection.send("Browser.getVersion");
     if (!/^(?:Chrome|Chromium)\/\d+(?:\.\d+){3}$/.test(version.product ?? "")) {
       throw new Error("isolated browser did not report one exact Chromium product version");
+    }
+    if (
+      verificationSnapshot &&
+      !isMatchingPhase1VerificationEnvironment(
+        verificationSnapshot,
+        version.product,
+        capturePlatform,
+      )
+    ) {
+      throw new Error(
+        "verification browser product and platform must exactly match the committed manifest",
+      );
     }
 
     const { targetId } = await connection.send("Target.createTarget", { url: "about:blank" });
@@ -570,7 +677,9 @@ async function main() {
     }
 
     const captures = [];
-    for (const expected of expectedEntries) {
+    let totalCaptureBytes = 0;
+    for (let index = 0; index < expectedEntries.length; index += 1) {
+      const expected = expectedEntries[index];
       await connection.send(
         "Emulation.setDeviceMetricsOverride",
         {
@@ -613,6 +722,13 @@ async function main() {
         throw new Error(`${expected.file} did not return PNG bytes`);
       }
       const buffer = Buffer.from(screenshot.data, "base64");
+      totalCaptureBytes += buffer.length;
+      if (
+        buffer.length > phase1MaximumCaptureBytes ||
+        totalCaptureBytes > phase1MaximumMatrixBytes
+      ) {
+        throw new Error(`${expected.file} exceeds the reviewed visual-baseline byte limits`);
+      }
       const findings = inspectPublicPng(buffer);
       if (findings.length > 0) {
         throw new Error(`${expected.file} violates the public PNG policy: ${findings[0]}`);
@@ -621,49 +737,75 @@ async function main() {
       if (dimensions.width !== expected.width || dimensions.height !== expected.height) {
         throw new Error(`${expected.file} raster dimensions do not match its viewport`);
       }
-      captures.push({
-        buffer,
-        entry: {
-          ...expected,
-          bytes: buffer.length,
-          sha256: createHash("sha256").update(buffer).digest("hex"),
-        },
-      });
+      if (verificationSnapshot) {
+        await compareDecodedPngPixels(
+          connection,
+          sessionId,
+          verificationSnapshot.entries[index].buffer,
+          buffer,
+          expected,
+        );
+      } else {
+        captures.push({
+          buffer,
+          entry: {
+            ...expected,
+            bytes: buffer.length,
+            sha256: createHash("sha256").update(buffer).digest("hex"),
+          },
+        });
+      }
     }
     stopObserving();
     await settleRequestActions();
 
-    await ensureOutputBoundary();
-    for (const capture of captures) {
-      await writeFile(resolve(outputRoot, capture.entry.file), capture.buffer);
+    if (verificationSnapshot) {
+      console.log(
+        `Verified ${expectedEntries.length} page-only re-renders against the committed decoded ` +
+          `pixels with ${version.product}; no baseline files were written.`,
+      );
+    } else {
+      await ensureOutputBoundary();
+      for (const capture of captures) {
+        await writeFile(resolve(outputRoot, capture.entry.file), capture.buffer);
+      }
+      const manifest = {
+        browserProduct: version.product,
+        captureMethod: "isolated-headless-cdp",
+        capturePlatform,
+        capturedAt: new Date().toISOString().slice(0, 10),
+        content: "synthetic-fallback",
+        entries: captures.map(({ entry }) => entry),
+        motion: "off",
+        pageOnly: true,
+        schemaVersion: 1,
+      };
+      await writeFile(
+        resolve(outputRoot, "manifest.json"),
+        `${JSON.stringify(manifest, null, 2)}\n`,
+      );
+      console.log(
+        `Captured ${captures.length} page-only synthetic PNG baselines with ${version.product}; ` +
+          "review every rendered diff before staging.",
+      );
     }
-    const manifest = {
-      browserProduct: version.product,
-      captureMethod: "isolated-headless-cdp",
-      capturePlatform,
-      capturedAt: new Date().toISOString().slice(0, 10),
-      content: "synthetic-fallback",
-      entries: captures.map(({ entry }) => entry),
-      motion: "off",
-      pageOnly: true,
-      schemaVersion: 1,
-    };
-    await writeFile(resolve(outputRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-    console.log(
-      `Captured ${captures.length} page-only synthetic PNG baselines with ${version.product}; ` +
-        "review every rendered diff before staging.",
-    );
   } catch (error) {
     if (child && child.exitCode !== null && browserStderrObserved) {
       throw new Error(`${error.message}; isolated Chromium exited before capture completed`);
     }
     throw error;
   } finally {
-    connection?.close();
-    if (child) {
-      await stopChild(child);
+    try {
+      connection?.close();
+    } finally {
+      try {
+        if (child) {
+          await stopChild(child);
+        }
+      } finally {
+        await removeTemporaryProfile(profilePath);
+      }
     }
-    await rm(profilePath, { force: true, recursive: true });
   }
 }
 

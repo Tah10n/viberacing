@@ -85,7 +85,8 @@
     "typecheck:jobs": "pnpm --filter @viberacing/jobs run typecheck",
     "typecheck:web": "pnpm --filter @viberacing/web run typecheck",
     "verify": "node scripts/verify.mjs",
-    "verify:node": "node scripts/verify.mjs --node-only"
+    "verify:node": "node scripts/verify.mjs --node-only",
+    "verify:phase1-visual-baselines": "node scripts/capture-phase1-visual-baselines.mjs --verify"
   },
   "devDependencies": {
     "cspell": "10.0.1",

@@ -39,20 +39,30 @@ found that the English `/join` navigation item was clipped at 320 pixels. The re
 now wraps, and the complete matrix passed only after the production build was regenerated.
 
 `pnpm run check:phase1-visual-baselines` verifies the exact 18-file inventory, canonical dimensions,
-byte limits, manifest digests, and public PNG chunk policy without launching a browser. Ten
+byte limits, manifest digests, and public PNG chunk policy without launching a browser. Eleven
 black-box mutations cover missing or extra files, digest drift, unreviewed metadata, wrong raster
-dimensions, browser-version ambiguity, invalid dates, widened capture policy, reordered entries, and
-manifest schema widening.
+dimensions, per-capture size overflow, browser-version ambiguity, invalid dates, widened capture
+policy, reordered entries, and manifest schema widening.
 
-Twelve separate CLI capture-guardrail cases reject missing write intent, ambiguous arguments,
-non-loopback or credentialed origins, origin paths, privileged ports, missing, relative, directory,
-or non-executable browser paths, and an executable that is not Chromium before any baseline can be
+Fourteen separate CLI guardrail cases reject missing or ambiguous write/verify intent, non-loopback
+or credentialed origins, origin paths, privileged ports, missing, relative, directory, or
+non-executable browser paths, and an executable that is not Chromium before any baseline can be
 written. Ten production request-policy assertions cover same-origin assets/API reads plus external
-origins, different ports, malformed and credentialed URLs, and credential-bearing headers.
+origins, different ports, malformed and credentialed URLs, and credential-bearing headers. Four
+environment-policy assertions cover exact match and product/platform drift; six pixel-result
+assertions cover exact, different, dimension-drifted, widened, contradictory, and
+arithmetic-overflow summaries.
 
-To intentionally regenerate the evidence, build and start the production frontend on an explicit
-loopback port in one terminal, then use an absolute path to a reviewed Chromium executable in a
-second terminal:
+The explicit `verify:phase1-visual-baselines` mode first applies that shared integrity boundary,
+requires the browser's exact reported product and local platform to equal the committed manifest,
+re-renders all 18 states, decodes each stored/rendered PNG inside the isolated browser, and permits
+zero changed pixel channels. It writes no baseline file. A local run with the recorded Chrome
+150.0.7871.129 `win32-x64` pair passed all 18 comparisons on 2026-07-18. This pins observable
+product/platform behavior, not the provenance or digest of the operator-supplied executable.
+
+To verify or intentionally regenerate the evidence, build and start the production frontend on an
+explicit loopback port in one terminal, then use an absolute path to a reviewed Chromium executable
+in a second terminal:
 
 In the first terminal:
 
@@ -66,11 +76,18 @@ link:
 
 ```powershell
 $phase1Origin = [System.UriBuilder]::new("http", "127.0.0.1", 3317).Uri.AbsoluteUri
-pnpm run capture:phase1-visual-baselines -- --origin $phase1Origin --browser <absolute-path-to-reviewed-chromium> --write
+$browserPath = "<absolute-path-to-reviewed-chromium>"
+pnpm run verify:phase1-visual-baselines -- --origin $phase1Origin --browser $browserPath
+```
+
+Only to regenerate the stored evidence, use the write command and then the offline checker:
+
+```powershell
+pnpm run capture:phase1-visual-baselines -- --origin $phase1Origin --browser $browserPath --write
 pnpm run check:phase1-visual-baselines
 ```
 
-The capture command never discovers or opens a signed-in browser profile. Review all 18 rendered
+Neither browser command discovers or opens a signed-in browser profile. Review all 18 rendered
 images, the complete manifest diff, and the public staged snapshot before committing a refresh.
 
 ## Responsive and interaction observations
@@ -138,8 +155,8 @@ leakage, missing standalone output, total/application budget overruns, and font-
 
 ## Remaining manual gates
 
-- The committed bytes are integrity-checked, but root verification does not re-render or perform a
-  semantic pixel diff because no browser executable is pinned in the repository.
+- The explicit local gate performs the semantic re-render diff, but root/pull-request verification
+  does not launch Chromium and no provenance/digest-pinned browser artifact is provisioned.
 - Keyboard-only traversal, screen-reader smoke testing, and forced-colors/high-contrast testing
   remain required.
 - Runtime Core Web Vitals must be measured with animation enabled and with reduced motion.

@@ -123,9 +123,9 @@ pnpm run check:phase1-visual-baselines
 ```
 
 The baseline check is browser-free and validates the committed 18-image synthetic viewport matrix.
-To intentionally refresh those images, first build and start the production frontend on an explicit
-loopback port, then run the capture from another terminal with an absolute path to a reviewed
-Chromium executable:
+To re-render and compare those images without changing them, first build and start the production
+frontend on an explicit loopback port, then run verification from another terminal with an absolute
+path to a reviewed Chromium executable:
 
 In the first terminal:
 
@@ -139,7 +139,20 @@ link:
 
 ```powershell
 $phase1Origin = [System.UriBuilder]::new("http", "127.0.0.1", 3317).Uri.AbsoluteUri
-pnpm run capture:phase1-visual-baselines -- --origin $phase1Origin --browser <absolute-path-to-reviewed-chromium> --write
+$browserPath = "<absolute-path-to-reviewed-chromium>"
+pnpm run verify:phase1-visual-baselines -- --origin $phase1Origin --browser $browserPath
+```
+
+Verification first checks the committed manifest and PNGs, requires the reported browser product and
+local platform to match that manifest exactly, decodes both sides in isolated Chromium, and fails on
+one changed pixel channel. It does not write baseline files. The executable itself remains an
+explicit operator-reviewed input rather than a repository-provisioned artifact.
+
+Only when intentionally refreshing the reviewed evidence, use the separate write command and then
+the offline checker:
+
+```powershell
+pnpm run capture:phase1-visual-baselines -- --origin $phase1Origin --browser $browserPath --write
 pnpm run check:phase1-visual-baselines
 ```
 

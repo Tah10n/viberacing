@@ -50,12 +50,15 @@ built artifact, and the root `pnpm run verify` runs all of them.
 
 The separate stored viewport evidence covers every combination of three reviewed breakpoints, both
 locales, and all three themes with motion disabled. `pnpm run check:phase1-visual-baselines`
-verifies the exact PNG inventory, dimensions, digests, and public metadata policy offline.
-Regeneration is an explicit local browser task: build and start this workspace on loopback, then run
+verifies the exact PNG inventory, dimensions, digests, and public metadata policy offline. An
+explicit local `verify:phase1-visual-baselines` run additionally refuses browser product/platform
+drift, decodes both images inside isolated Chromium, and requires zero changed pixels without
+writing repository files. It does not authenticate the supplied executable. Regeneration is a
+separate local browser task: build and start this workspace on loopback, then run
 `pnpm run capture:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium> --write`.
 The capture creates its own temporary browser profile and rejects non-loopback page resources; it
 never opens a contributor's normal browser profile. Review all rendered diffs manually because root
-verification does not launch or pin Chromium.
+verification does not launch or provision Chromium.
 
 To exercise enrollment manually, use an ignored environment with `/auth/github/callback` on the
 configured `localhost` origin as the exact OAuth callback, a dedicated GitHub OAuth app, a fresh
@@ -482,8 +485,9 @@ Coverage thresholds apply to product components and libraries. Small framework e
 excluded from unit coverage and exercised by `next build`; counting imports as unit coverage would
 not prove their framework integration. Local responsive, contrast, interaction, runtime-header,
 artifact-budget, and exact stored viewport evidence is recorded in
-`docs/testing/PHASE1_BROWSER_MATRIX.md`. The stored bytes are protected by an offline integrity
-gate, but automated re-render comparison, keyboard/screen-reader/forced-colors and cross-browser
+`docs/testing/PHASE1_BROWSER_MATRIX.md`. The stored bytes are protected by an offline integrity gate
+and the explicit local exact-product re-render performs a zero-tolerance decoded-pixel diff.
+Browser-binary provenance/CI provisioning, keyboard/screen-reader/forced-colors and cross-browser
 passes, and runtime Core Web Vitals remain open and are listed honestly in
 `docs/IMPLEMENTATION_STATUS.md`.
 
