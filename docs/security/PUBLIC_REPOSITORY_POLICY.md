@@ -38,6 +38,12 @@ Use only synthetic identities and data. Email examples use RFC-reserved `example
 ranges. Identifiers are visibly fake and usage buckets cannot be mistaken for exports from a real
 account.
 
+Git identity metadata is the narrow exception. An author explicitly confirms a public
+GitHub-verified or GitHub-provided `noreply` address before it is used in Git Author/Committer
+headers and one exact author-matching DCO `Signed-off-by` trailer. The address remains forbidden in
+tracked files and ordinary commit-message text. Placeholder identities, missing or duplicate
+sign-offs, and author/sign-off mismatches fail the reachable-history check.
+
 Screenshots and generated assets require metadata and visible-content review. Do not publish a
 screenshot of a signed-in browser or a terminal containing a user-home path. Prefer deterministic
 fixtures rendered in an isolated profile.
@@ -58,6 +64,8 @@ remove it from Git history.
 
 - run `pnpm run verify` and require `pnpm run check:publication` to pass;
 - scan every reachable Git object, not only the current tree;
+- confirm every reachable commit has a non-placeholder public Git identity and one exact
+  author-matching DCO sign-off;
 - record real public maintainers and CODEOWNERS without copying private workstation identities;
 - confirm the remote owner, repository visibility, default branch, license, security policy, and
   private vulnerability reporting;
@@ -72,7 +80,9 @@ The initial publication is blocked until these checks have recorded evidence.
 ## Scanner limitations
 
 `scripts/check-public-files.mjs` deliberately rejects common secret shapes, personal-looking
-addresses, user-home paths, and risky filenames. Pattern matching cannot recognize every credential
-or private fact. Binary metadata, Git history, external systems, screenshots, and semantic
-disclosures require separate review. The scanner is one control in a layered publication process,
-not a confidentiality guarantee.
+addresses, user-home paths, and risky filenames. `scripts/check-git-history.mjs` exempts an address
+only after structurally validating the Author/Committer headers and exact author-matching DCO
+trailer; it still scans ordinary message text and every historical blob. Pattern matching cannot
+recognize every credential or private fact. Binary metadata, external systems, screenshots, and
+semantic disclosures require separate review. The scanners are controls in a layered publication
+process, not a confidentiality guarantee.

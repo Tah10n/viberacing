@@ -95,9 +95,16 @@ or finalization scheduler exists.
 - Black-box documentation cases for valid links, missing files and anchors, duplicate anchors, and
   attempts to escape the repository root.
 - Tracked symbolic links are rejected before repository checks can follow them.
-- A complete-reachable-history gate that refuses shallow clones and scans refs, commit messages,
-  every historical path/blob, forbidden modes, oversize objects, and printable binary metadata, with
-  six black-box cases including deleted-history and unreachable-object scope.
+- A complete-reachable-history gate that refuses shallow clones; structurally validates one
+  non-placeholder Author and Committer identity plus one exact author-matching final DCO sign-off;
+  and scans refs, ordinary commit-message text, every historical path/blob, forbidden modes,
+  oversize objects, and printable binary metadata. Eleven black-box cases include missing,
+  duplicate, mismatched, and placeholder DCO/identity state plus deleted-history and
+  unreachable-object scope.
+- The 67 pre-policy bootstrap commits now use the owner-confirmed public Git identity for Author,
+  Committer, and one exact matching DCO sign-off. The reviewed rewrite preserved every tree, parent,
+  author/committer date, subject/body, and the non-commit Codex capture ref; no remote was
+  configured during the rewrite.
 - Pinned Node, pnpm, and Rust toolchains with committed pnpm and Cargo lockfiles.
 - A pnpm workspace with release quarantine, trust and source policy, exact external direct
   dependencies in every bounded workspace, `workspace:*` internal references, private workspace

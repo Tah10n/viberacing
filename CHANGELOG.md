@@ -20,7 +20,9 @@ Versioning where its guarantees are applicable.
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
   paths, complete hostile-case inventory, and strict candidate/support-matrix separation.
-- Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection.
+- Complete reachable-history and printable binary-metadata leak scans with shallow-clone rejection,
+  non-placeholder public Git identity validation, and one exact author-matching DCO sign-off per
+  commit.
 - Offline spelling, reviewed external-link policy, and deterministic dependency/license inventory
   covering the exact npm lock graph, pinned Actions, and local PostgreSQL image.
 - Synthetic EN/RU Next.js race, leaderboard, demo profile, three code-native themes, reduced-motion

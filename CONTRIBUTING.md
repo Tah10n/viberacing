@@ -59,7 +59,9 @@ clones, but contributors must still rotate a real exposed credential before hist
    dependency inventory; regeneration alone is not approval.
 6. Sign off commits under the repository's [Developer Certificate of Origin](DCO.txt), kept
    byte-for-byte equivalent to the official [DCO 1.1](https://developercertificate.org/), with
-   `git commit -s`.
+   `git commit -s`. Use only an explicitly confirmed public GitHub-verified or GitHub-provided
+   `noreply` identity. That narrow Git metadata exception does not permit an email address in a
+   tracked file or ordinary commit-message text.
 
 ## Review requirements
 

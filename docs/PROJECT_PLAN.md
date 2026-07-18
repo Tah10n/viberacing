@@ -760,6 +760,19 @@ that participation is closed. Publication remains blocked until a real maintaine
 CODEOWNERS rules, and tested private reporting channels replace that status. Local workstation
 identity is never used as a substitute.
 
+Before owner-directed bootstrap work is committed, the project owner explicitly supplies and
+approves a public Git author name plus a GitHub-verified or GitHub-provided `noreply` email.
+Repository-local author and committer configuration and every DCO `Signed-off-by` trailer for that
+work use the approved identity. A coding agent pauses for the identity instead of inventing a
+generic maintainer or copying private workstation data. Independent contributors retain their own
+authorship and sign-off.
+
+Before configuring a public GitHub `origin`, audit every reachable commit for generic or placeholder
+bootstrap identities. With the owner's explicit attribution and DCO confirmation, correct any such
+unpublished history to the approved GitHub-linked identity, rerun the public-file, history, and DCO
+checks, and review the resulting commits before publication. Published protected history is not
+rewritten merely to change attribution; a later correction is documented transparently.
+
 Repository badges are added only after the corresponding check exists. The project does not display
 aspirational security, coverage, or compliance badges.
 
@@ -915,12 +928,16 @@ measurements exist.
 ### Phase 0 — Public foundation
 
 - Initialize Git with the public-safe baseline.
+- Establish the owner-approved GitHub-linked author, committer, and DCO identity for bootstrap work;
+  audit and correct any unpublished placeholder commits before configuring the public remote.
 - Add community health files, governance, DCO, issue forms, CODEOWNERS, branch rules, secret
   scanning, dependency policy, and initial CI.
 - Add threat model, abuse cases, privacy data map, compatibility policy, ADR template, and
   architecture diagrams.
 - Add pinned toolchains, lockfiles, environment schema, and disposable local PostgreSQL.
-- Gate: documentation and supply-chain checks pass without application code.
+- Gate: documentation and supply-chain checks pass without application code, and every bootstrap
+  commit has an explicitly approved GitHub-linked identity with a matching DCO sign-off and no
+  generic placeholder author.
 
 ### Phase 1 — Visual prototype with synthetic data
 

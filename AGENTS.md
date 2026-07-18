@@ -233,6 +233,11 @@ Never commit or paste:
 - screenshots that contain browser profiles, notifications, account details, or other identifying
   information.
 
+The sole email exception is an owner- or contributor-confirmed public GitHub-verified or
+GitHub-provided `noreply` identity in Git Author/Committer headers and its exact matching DCO
+`Signed-off-by` trailer. Never copy that address into a tracked file or ordinary commit-message
+text, and never infer it from the workstation.
+
 Use synthetic fixtures with reserved example domains and obviously fake IDs. Configuration examples
 must contain placeholders only. If a value might be sensitive, stop and ask before adding it.
 

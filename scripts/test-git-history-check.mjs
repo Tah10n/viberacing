@@ -6,6 +6,9 @@ import process from "node:process";
 
 const sourceRoot = resolve(import.meta.dirname, "..");
 const fixtureRoot = mkdtempSync(join(tmpdir(), "viberacing-history-check-"));
+const fixtureName = "History Test";
+const fixtureEmail = ["123456+history-test", "@", "users.noreply.github.com"].join("");
+const differentFixtureEmail = ["654321+different", "@", "users.noreply.github.com"].join("");
 
 function git(directory, ...args) {
   return execFileSync("git", args, {
@@ -13,6 +16,10 @@ function git(directory, ...args) {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+}
+
+function commit(directory, ...args) {
+  return git(directory, "commit", "--quiet", "-s", ...args);
 }
 
 function makeFixture(name) {
@@ -27,11 +34,11 @@ function makeFixture(name) {
     join(directory, "scripts", "lib", "public-content-policy.mjs"),
   );
   git(directory, "init", "--quiet", "--initial-branch=main", "--template=");
-  git(directory, "config", "user.name", "History Test");
-  git(directory, "config", "user.email", "history@example.invalid");
+  git(directory, "config", "user.name", fixtureName);
+  git(directory, "config", "user.email", fixtureEmail);
   writeFileSync(join(directory, "safe.txt"), "safe@example.com\n192.0.2.9\n", "utf8");
   git(directory, "add", "safe.txt", "scripts");
-  git(directory, "commit", "--quiet", "-m", "safe baseline");
+  commit(directory, "-m", "safe baseline");
   return directory;
 }
 
@@ -68,25 +75,25 @@ try {
   const fakeKey = ["sk", "-", "proj", "-", "H".repeat(24)].join("");
   writeFileSync(secretPath, `${fakeKey}\n`, "utf8");
   git(removedSecret, "add", "history.txt");
-  git(removedSecret, "commit", "--quiet", "-m", "add then remove test fixture");
+  commit(removedSecret, "-m", "add then remove test fixture");
   unlinkSync(secretPath);
   git(removedSecret, "add", "-u");
-  git(removedSecret, "commit", "--quiet", "-m", "remove test fixture");
+  commit(removedSecret, "-m", "remove test fixture");
   expectFailure("removed historical secret", run(removedSecret), "OpenAI-style secret key");
 
   const commitMessage = makeFixture("commit-message");
   const privateEmail = ["person", "@", "private-domain", ".com"].join("");
-  git(commitMessage, "commit", "--quiet", "--allow-empty", "-m", `contact ${privateEmail}`);
+  commit(commitMessage, "--allow-empty", "-m", `contact ${privateEmail}`);
   expectFailure("commit message data", run(commitMessage), "non-example email address");
 
   const forbiddenPath = makeFixture("forbidden-path");
   const environmentPath = join(forbiddenPath, ".env.production");
   writeFileSync(environmentPath, "EXAMPLE=true\n", "utf8");
   git(forbiddenPath, "add", ".env.production");
-  git(forbiddenPath, "commit", "--quiet", "-m", "historical forbidden path fixture");
+  commit(forbiddenPath, "-m", "historical forbidden path fixture");
   unlinkSync(environmentPath);
   git(forbiddenPath, "add", "-u");
-  git(forbiddenPath, "commit", "--quiet", "-m", "remove forbidden path fixture");
+  commit(forbiddenPath, "-m", "remove forbidden path fixture");
   expectFailure(
     "historical forbidden path",
     run(forbiddenPath),
@@ -101,7 +108,7 @@ try {
     Buffer.concat([Buffer.from([0, 1, 2, 3]), Buffer.from(fakeToken, "ascii")]),
   );
   git(binaryMetadata, "add", "fixture.bin");
-  git(binaryMetadata, "commit", "--quiet", "-m", "binary metadata fixture");
+  commit(binaryMetadata, "-m", "binary metadata fixture");
   expectFailure("binary metadata", run(binaryMetadata), "GitHub token");
 
   const unreachable = makeFixture("unreachable");
@@ -111,7 +118,68 @@ try {
   unlinkSync(unreachablePath);
   expectPass("unreachable object scope", run(unreachable));
 
-  console.log("Git history checker tests passed (6 cases).");
+  const missingDco = makeFixture("missing-dco");
+  git(missingDco, "commit", "--quiet", "--allow-empty", "-m", "unsigned change");
+  expectFailure("missing DCO", run(missingDco), "missing exact author DCO sign-off");
+
+  const mismatchedDco = makeFixture("mismatched-dco");
+  git(
+    mismatchedDco,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "mismatched sign-off",
+    "-m",
+    `Signed-off-by: Different Contributor <${differentFixtureEmail}>`,
+  );
+  expectFailure("mismatched DCO", run(mismatchedDco), "DCO sign-off does not match commit author");
+
+  const placeholderIdentity = makeFixture("placeholder-identity");
+  git(placeholderIdentity, "config", "user.name", "Vibe Racing Maintainer");
+  git(placeholderIdentity, "config", "user.email", "maintainer@viberacing.invalid");
+  commit(placeholderIdentity, "--allow-empty", "-m", "placeholder identity");
+  expectFailure(
+    "placeholder identity",
+    run(placeholderIdentity),
+    "placeholder author email is not publishable Git identity",
+  );
+
+  const duplicateDco = makeFixture("duplicate-dco");
+  git(
+    duplicateDco,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "duplicate sign-off",
+    "-m",
+    `Signed-off-by: ${fixtureName} <${fixtureEmail}>\nSigned-off-by: ${fixtureName} <${fixtureEmail}>`,
+  );
+  expectFailure(
+    "duplicate DCO",
+    run(duplicateDco),
+    "commit must contain exactly one Signed-off-by trailer",
+  );
+
+  const nonFinalDco = makeFixture("non-final-dco");
+  git(
+    nonFinalDco,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "misplaced sign-off",
+    "-m",
+    `Signed-off-by: ${fixtureName} <${fixtureEmail}>\nordinary body after the trailer`,
+  );
+  expectFailure(
+    "non-final DCO",
+    run(nonFinalDco),
+    "Signed-off-by must be the final commit trailer",
+  );
+
+  console.log("Git history checker tests passed (11 cases).");
 } finally {
   rmSync(fixtureRoot, { force: true, recursive: true });
 }
