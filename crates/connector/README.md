@@ -9,7 +9,9 @@ journey with native OS key custody. A second Windows x86_64 development command 
 Codex candidate, collects, signs, and uploads one bounded sync. It is not a supported, packaged, or
 released connector. A third fixed command signs one explicit enum-only CarRecipe proposal without
 starting Codex or receiving proposal decision authority. A separate local repository Agent Skill can
-reduce a style request to that exact command; it adds no connector method or authority.
+reduce a style request to that exact command; it adds no connector method or authority. A fourth
+local-only command removes one exact native credential without inspecting it or implying that the
+registered server device was revoked.
 
 The implemented surface is deliberately narrow:
 
@@ -58,6 +60,10 @@ The implemented surface is deliberately narrow:
   before success output; and
 - output limited to the exact `/connect` URL, human code, generic progress, and success without key,
   token, challenge, source, or device identifiers;
+- one exact `forget-local --origin <origin> --label <label>` command that derives the same native
+  account, invokes only credential deletion, and treats both deleted and absent entries as success;
+- one fixed identifier-free removal result that explicitly says server device authority was not
+  revoked, with no record load, signer construction, Codex process, HTTP request, or browser access;
 - one explicit `sync --origin <origin> --label <label> --codex <absolute-path>` command that
   requires an active record and never discovers a binary or accepts an environment path override;
 - Windows x86_64 admission for the exact `0.144.5` official artifact byte count and SHA-256 digest,
@@ -83,28 +89,33 @@ The implemented surface is deliberately narrow:
 private pairing command constructs only its two pending capabilities; the private sync command can
 construct the launch/context/key capabilities only after exact artifact and active-record review.
 There is no automatic discovery, macOS/Linux executable admission, WebSocket transport, generic
-JSON-RPC or HTTP method, scheduler, installer, credential rotation/uninstall, package, or release
-artifact. Browser approval and edge origin proof remain separate server-side boundaries. The
-checked-in [`0.144.5` candidate evidence](../../compat/codex/0.144.5/manifest.json) is development
-evidence only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty
-until clean-machine platform, privacy, packaging, provenance, and release evidence all pass.
+JSON-RPC or HTTP method, scheduler, installer, credential rotation, automatic server-revoke
+composition, package, or release artifact. Browser approval and edge origin proof remain separate
+server-side boundaries. The checked-in
+[`0.144.5` candidate evidence](../../compat/codex/0.144.5/manifest.json) is development evidence
+only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty until
+clean-machine platform, privacy, packaging, provenance, and release evidence all pass.
 
 The local command shapes are:
 
 ```text
 viberacing-connector connect --origin <https-origin> --label <device-label>
+viberacing-connector forget-local --origin <https-origin> --label <device-label>
 viberacing-connector sync --origin <https-origin> --label <device-label> --codex <absolute-path>
 viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>
 ```
 
 Plain HTTP with `localhost`, `127.0.0.1`, or `::1` is accepted only for explicit local development.
 Running `connect` creates a real local keyring entry even when the server later fails; use one
-connect process at a time. `sync` is Windows x86_64 candidate development behavior: it reads the
-active native record, starts only the exact admitted artifact, and sends private daily usage once to
-the explicit origin. `propose-car` uses the same active native record but starts no Codex process
-and can only create a private proposal for later browser review. The Agent Skill requires explicit
-shell-safe origin/label values, invokes it once, and never forwards conversation text to Vibe
-Racing. No checked-in default server, credential, code, or released binary exists.
+connect process at a time. `forget-local` deletes only the exact origin/label entry and is
+idempotent; it neither revokes the registered server device nor erases copied key material, so the
+user must reconcile and revoke that device separately in the authenticated account. `sync` is
+Windows x86_64 candidate development behavior: it reads the active native record, starts only the
+exact admitted artifact, and sends private daily usage once to the explicit origin. `propose-car`
+uses the same active native record but starts no Codex process and can only create a private
+proposal for later browser review. The Agent Skill requires explicit shell-safe origin/label values,
+invokes only `propose-car` once, and is forbidden from invoking local credential removal. No
+checked-in default server, credential, code, or released binary exists.
 
 Run the focused gate from the repository root:
 

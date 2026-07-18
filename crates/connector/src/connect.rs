@@ -36,7 +36,7 @@ const KEYRING_SERVICE: &str = "viberacing.connector.pairing.v1";
 const KEYRING_ACCOUNT_PREFIX: &str = "device-";
 const ACCOUNT_DOMAIN: &[u8] = b"viberacing-connector-keyring-account-v1\0";
 const ORIGIN_DOMAIN: &[u8] = b"viberacing-connector-origin-v1\0";
-const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector sync --origin <https-origin> --label <device-label> --codex <absolute-path>\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
+const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector forget-local --origin <https-origin> --label <device-label>\n  viberacing-connector sync --origin <https-origin> --label <device-label> --codex <absolute-path>\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
 const MAX_ORIGIN_BYTES: usize = 512;
 const MAX_LABEL_CHARACTERS: usize = 64;
 const MAX_REQUEST_BYTES: usize = 1024;
@@ -67,7 +67,7 @@ const RECORD_BYTES: usize = 264;
 /// Stable, non-reflective failures from the bounded connector command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConnectorCliError {
-    /// The command line does not match one of the three bounded commands.
+    /// The command line does not match one of the four bounded commands.
     InvalidArguments,
     /// The supplied server origin is not an HTTPS origin or permitted loopback HTTP origin.
     InvalidOrigin,
@@ -77,7 +77,7 @@ pub enum ConnectorCliError {
     UnsupportedPlatform,
     /// Operating-system cryptographic randomness was unavailable.
     EntropyUnavailable,
-    /// The platform credential store could not be opened, read, or written.
+    /// The platform credential store could not be opened, read, written, or cleared.
     SecureStorageUnavailable,
     /// The stored connector credential does not match the closed versioned record.
     SecureStorageInvalid,
@@ -148,6 +148,7 @@ impl std::error::Error for ConnectorCliError {}
 /// `connect` creates or resumes one device credential. `sync` admits one exact Codex candidate,
 /// collects only bounded daily usage, signs it with that active credential, and submits it once.
 /// `propose-car` signs and submits one exact enum-only `CarRecipe` with the same active credential.
+/// `forget-local` removes only the exact local origin/label credential and performs no server call.
 ///
 /// # Errors
 ///
@@ -172,6 +173,12 @@ pub fn run_connector_cli() -> Result<(), ConnectorCliError> {
                 &mut transport,
                 &mut io::stdout().lock(),
             )
+        }
+        ParsedCommand::ForgetLocal { label, origin } => {
+            let origin = Origin::parse(&origin)?;
+            validate_label(&label)?;
+            let mut store = OsCredentialStore::new(&origin, &label)?;
+            run_forget_local(&mut store, &mut io::stdout().lock())
         }
         ParsedCommand::Sync {
             codex_path,
@@ -204,6 +211,10 @@ pub fn run_connector_cli() -> Result<(), ConnectorCliError> {
 enum ParsedCommand {
     Help,
     Connect {
+        label: String,
+        origin: String,
+    },
+    ForgetLocal {
         label: String,
         origin: String,
     },
@@ -276,7 +287,7 @@ fn parse_command(
         .first()
         .map(String::as_str)
         .ok_or(ConnectorCliError::InvalidArguments)?;
-    if !matches!(command, "connect" | "sync" | "propose-car") {
+    if !matches!(command, "connect" | "forget-local" | "sync" | "propose-car") {
         return Err(ConnectorCliError::InvalidArguments);
     }
 
@@ -335,6 +346,9 @@ fn parse_command(
     match (command, origin, label, codex_path) {
         ("connect", Some(origin), Some(label), None) => {
             Ok(ParsedCommand::Connect { label, origin })
+        }
+        ("forget-local", Some(origin), Some(label), None) => {
+            Ok(ParsedCommand::ForgetLocal { label, origin })
         }
         ("sync", Some(origin), Some(label), Some(codex_path)) => Ok(ParsedCommand::Sync {
             codex_path,
@@ -665,6 +679,7 @@ trait CredentialStore {
         expected_origin: &[u8; 32],
     ) -> Result<Option<CredentialRecord>, ConnectorCliError>;
     fn save(&mut self, record: &CredentialRecord) -> Result<(), ConnectorCliError>;
+    fn delete(&mut self) -> Result<(), ConnectorCliError>;
 }
 
 struct OsCredentialStore {
@@ -703,6 +718,17 @@ impl CredentialStore for OsCredentialStore {
             .map_err(|_| ConnectorCliError::SecureStorageUnavailable);
         encoded.fill(0);
         result
+    }
+
+    fn delete(&mut self) -> Result<(), ConnectorCliError> {
+        map_credential_delete_result(&self.entry.delete_credential())
+    }
+}
+
+fn map_credential_delete_result(result: &keyring::Result<()>) -> Result<(), ConnectorCliError> {
+    match result {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(_) => Err(ConnectorCliError::SecureStorageUnavailable),
     }
 }
 
@@ -1230,6 +1256,17 @@ fn write_line(output: &mut dyn Write, value: &str) -> Result<(), ConnectorCliErr
     writeln!(output, "{value}").map_err(|_| ConnectorCliError::OutputUnavailable)
 }
 
+fn run_forget_local(
+    store: &mut dyn CredentialStore,
+    output: &mut dyn Write,
+) -> Result<(), ConnectorCliError> {
+    store.delete()?;
+    write_line(
+        output,
+        "No credential remains in this local store. This did not revoke server device authority; review your Vibe Racing account.",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1261,6 +1298,11 @@ mod tests {
         fn save(&mut self, record: &CredentialRecord) -> Result<(), ConnectorCliError> {
             self.bytes = Some(record.encode().to_vec());
             self.saves += 1;
+            Ok(())
+        }
+
+        fn delete(&mut self) -> Result<(), ConnectorCliError> {
+            self.bytes = None;
             Ok(())
         }
     }
@@ -1318,7 +1360,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_only_the_bounded_connect_command() {
+    fn parses_existing_bounded_commands() {
         let command = parse_command([
             "connect".into(),
             "--label".into(),
@@ -1418,6 +1460,140 @@ mod tests {
             parse_command(["--help".into()]),
             Ok(ParsedCommand::Help)
         ));
+    }
+
+    #[test]
+    fn parses_only_the_bounded_forget_local_command() {
+        let command = parse_command([
+            "forget-local".into(),
+            "--origin".into(),
+            "https://race.example".into(),
+            "--label".into(),
+            "Desktop".into(),
+        ])
+        .expect("exact local-forget arguments must parse");
+        assert!(matches!(command, ParsedCommand::ForgetLocal { .. }));
+
+        for arguments in [
+            vec![
+                "forget-local".into(),
+                "--origin".into(),
+                "https://race.example".into(),
+            ],
+            vec![
+                "forget-local".into(),
+                "--origin".into(),
+                "https://race.example".into(),
+                "--origin".into(),
+                "https://other.example".into(),
+                "--label".into(),
+                "Desktop".into(),
+            ],
+            vec![
+                "forget-local".into(),
+                "--origin".into(),
+                "https://race.example".into(),
+                "--label".into(),
+                "Desktop".into(),
+                "--codex".into(),
+                "C:\\synthetic\\codex.exe".into(),
+            ],
+        ] {
+            assert!(matches!(
+                parse_command(arguments),
+                Err(ConnectorCliError::InvalidArguments)
+            ));
+        }
+    }
+
+    struct DeleteOnlyStore {
+        deletes: usize,
+        fail: bool,
+    }
+
+    struct UnwritableOutput;
+
+    impl Write for UnwritableOutput {
+        fn write(&mut self, _buffer: &[u8]) -> io::Result<usize> {
+            Err(io::Error::other("synthetic unavailable output"))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Err(io::Error::other("synthetic unavailable output"))
+        }
+    }
+
+    impl CredentialStore for DeleteOnlyStore {
+        fn load(
+            &mut self,
+            _expected_origin: &[u8; 32],
+        ) -> Result<Option<CredentialRecord>, ConnectorCliError> {
+            unreachable!("local credential removal must not load key material")
+        }
+
+        fn save(&mut self, _record: &CredentialRecord) -> Result<(), ConnectorCliError> {
+            unreachable!("local credential removal must not write key material")
+        }
+
+        fn delete(&mut self) -> Result<(), ConnectorCliError> {
+            self.deletes += 1;
+            if self.fail {
+                Err(ConnectorCliError::SecureStorageUnavailable)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[test]
+    fn forgets_only_the_local_credential_with_non_reflective_output() {
+        let mut store = DeleteOnlyStore {
+            deletes: 0,
+            fail: false,
+        };
+        let mut output = Vec::new();
+        run_forget_local(&mut store, &mut output)
+            .expect("an exact local credential deletion must succeed");
+        assert_eq!(store.deletes, 1);
+        assert_eq!(
+            String::from_utf8(output).expect("output must be UTF-8"),
+            "No credential remains in this local store. This did not revoke server device authority; review your Vibe Racing account.\n"
+        );
+
+        let mut unavailable = DeleteOnlyStore {
+            deletes: 0,
+            fail: true,
+        };
+        let mut failed_output = Vec::new();
+        assert_eq!(
+            run_forget_local(&mut unavailable, &mut failed_output).err(),
+            Some(ConnectorCliError::SecureStorageUnavailable)
+        );
+        assert_eq!(unavailable.deletes, 1);
+        assert!(failed_output.is_empty());
+
+        let mut deleted_without_output = DeleteOnlyStore {
+            deletes: 0,
+            fail: false,
+        };
+        assert_eq!(
+            run_forget_local(&mut deleted_without_output, &mut UnwritableOutput).err(),
+            Some(ConnectorCliError::OutputUnavailable)
+        );
+        assert_eq!(deleted_without_output.deletes, 1);
+    }
+
+    #[test]
+    fn native_delete_mapping_is_idempotent_and_fail_closed() {
+        assert_eq!(map_credential_delete_result(&Ok(())), Ok(()));
+        assert_eq!(
+            map_credential_delete_result(&Err(keyring::Error::NoEntry)),
+            Ok(())
+        );
+        assert_eq!(
+            map_credential_delete_result(&Err(keyring::Error::BadEncoding(Vec::new()))),
+            Err(ConnectorCliError::SecureStorageUnavailable)
+        );
     }
 
     #[test]

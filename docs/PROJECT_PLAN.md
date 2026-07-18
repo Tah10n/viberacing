@@ -288,7 +288,7 @@ and ADR 0029 add the separate Jobs-side physical cleanup: at most 1000 expired n
 transactions and exact pending keys per call, with activated and live state preserved. ADR 0030 now
 closes the local connection journey with four versioned start/poll request/response contracts, exact
 no-store POST routes, one aggregate four-call application boundary, revision 0022's fixed
-global-and-64-bucket distributed rate windows, and a one-command Rust client. The client uses OS
+global-and-64-bucket distributed rate windows, and one pairing-only Rust command. The client uses OS
 randomness, native credential storage without a plaintext fallback, HTTPS with platform trust (or
 loopback HTTP for development), bounded bodies/time/retries, exact possession proof, resumable
 prepared/pending/active state, and non-reflective output. This evidence is still local and
@@ -297,7 +297,10 @@ execution matrix, released binary, Codex support, scheduler, or deployed result.
 next one-shot Windows development command: exact artifact admission, fresh context from the active
 record, the existing composer/signer, and one fixed no-proxy/no-redirect upload with a closed
 acknowledgement. It adds no automatic discovery, retry, edge proof, cross-platform evidence,
-package, release, or support claim.
+package, release, or support claim. ADR 0041 adds a separate exact `forget-local` command that
+deletes only the native origin/label record without reading it or contacting the service. It is
+idempotent and explicitly does not claim server revoke; rotation and revoke composition remain
+separate gates.
 
 ### Date semantics
 
@@ -450,6 +453,9 @@ separate gates.
 - User-scoped installation with no administrator or root requirement.
 - Keys live in Windows Credential Manager, macOS Keychain, or Linux Secret Service. No plaintext
   persistent fallback.
+- One explicit local-removal command deletes only the exact canonical origin/label entry and reports
+  that it did not revoke server device authority. Server revoke stays an authenticated account
+  action; key rotation is not inferred from local deletion.
 - The connector resolves links, hash-admits the exact Codex artifact while preventing write
   substitution, displays only the admitted exact version, and does not accept a silent
   environment-variable override.

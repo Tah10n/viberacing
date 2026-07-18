@@ -160,7 +160,8 @@ material availability cost.
 - **Impact:** Source-level score manipulation, pending-presentation replacement, and request cost
   until revocation; no recipe activation or profile administration.
 - **Controls:** OS credential store with no plaintext fallback, source-bound scope, nonce and
-  idempotency checks, proposal-only browser review, version visibility, revoke, and rotation.
+  idempotency checks, proposal-only browser review, version visibility, server revoke, bounded local
+  credential removal, and rotation.
 - **Detection:** Signature source, replay, platform/version, and unusual activity signals;
   user-visible device inventory.
 - **Recovery:** Immediate device revoke, optional source key rotation, quarantine affected
@@ -183,14 +184,17 @@ material availability cost.
   material after local activation/expiry. Exact HTTP start/poll and retry-safe activation are
   locally tested. A separate opt-in synthetic gate now carries independently signed requests through
   the emitted host and a disposable least-privileged PostgreSQL login, proving accepted/duplicate,
-  persistent replay, revoked-device denial, and exact stored state. Key rotation/uninstall, metrics,
+  persistent replay, revoked-device denial, and exact stored state. ADR 0041 adds one idempotent
+  `forget-local` command that deletes only the exact native origin/label entry without loading it or
+  contacting the service, and warns that it did not revoke server authority. Key rotation, metrics,
   cross-platform runtime evidence, deployment credentials/TLS, release, edge routing, and real-user
   operation remain unimplemented. ADR 0038 separately binds an exact enum recipe body, fresh
   nonce/time, and device ID under another signature domain. Web performs dummy-key work for unknown
   devices, and revision 0028 rechecks active profile/source/device state before replacing only the
   pending recipe; browser approval remains mandatory.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
-  using the same unlocked local identity.
+  using the same unlocked local identity. Local deletion cannot erase copied key material and does
+  not stop it until the registered server device is separately revoked.
 
 ### VR-ABUSE-DEVICE-ESCALATION — Device credential used as profile authority
 
@@ -213,7 +217,8 @@ material availability cost.
   approve/reject/activate call. The Web-role SQL function rechecks the active source-bound device,
   while every non-Web role is denied. The confined Ingest HTTP server exposes only the sync POST
   plus closed route/method failures, and the full synthetic loopback gate reaches only the three
-  reviewed Ingest procedures.
+  reviewed Ingest procedures. The local credential-removal command has no network or signer
+  capability and cannot inspect, revoke, or administer server state.
 - **Residual risk:** A future endpoint can accidentally reuse the wrong middleware; a scope matrix
   is required in CI.
 
@@ -242,13 +247,16 @@ material availability cost.
   size/digest, holds the file against write substitution, creates fresh context from an active
   native record, and sends one no-proxy/no-redirect/no-retry request to the fixed endpoint. The
   pairing command supplies OS key generation/native custody and only the two exact bounded
-  start/poll paths. The operational connector still requires automatic discovery policy,
+  start/poll paths. The separate `forget-local` command can only delete one derived native-store
+  account, uses identical output for present and absent entries, and explicitly distinguishes that
+  action from server revoke. The operational connector still requires automatic discovery policy,
   other-platform evidence, safe diagnostics, packaging, provenance, release, and clean-machine
   privacy evidence.
 - **Detection:** Local safe diagnostics for selected binary/version, bounded failure reason, and
   child cleanup verification without uploading content.
 - **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified
-  binary, and rotate the device key after suspected compromise.
+  binary, revoke the registered device after suspected compromise, remove the exact local
+  credential, and rotate the device key when that lifecycle exists.
 - **Residual risk:** A computer owner can replace all local components; official signing and clear
   diagnostics reduce accidental compromise, not owner control. Candidate schema/admission tests do
   not prove protected clean-machine provenance, real Codex account execution, cross-platform

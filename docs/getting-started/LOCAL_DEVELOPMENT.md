@@ -34,28 +34,29 @@ lookup through a separately probed read-write pool, that strict proof, and exact
 with server-owned IDs behind local admission/timing. They cannot perform pairing browser or WebAuthn
 approval themselves; the separate `/connect` flow supplies only that intervening step. Two exact
 local POST routes now compose those applications behind fixed distributed global/client-bucket
-admission, and a one-command Rust client generates a device key through the OS CSPRNG, stores
-resumable pairing state in the native credential store, and performs the exact start/poll proof. No
-supported Codex version, macOS/Linux admission, real-account/deployed sync result, package, release,
-or deployment exists. A local Ingest kernel bounds and authenticates a synthetic exact-body sync
-request, and a separate adapter constrains origin replay, database lookup, and submission mapping
-with mock-pool evidence. A transport-free application composes those exact boundaries, generates a
-server request ID, and validates the acknowledgement/problem decision; isolated PostgreSQL tests
-separately prove atomic replay and cleanup. A bounded local Fastify factory now preserves exact raw
-HTTP evidence, applies no-queue and deadline policy, and serializes only revalidated contracts. A
-separate local host now binds that exact composition only on loopback in development/test or under
-an explicit Railway-edge production declaration, with bounded partial-startup cleanup and process
-shutdown. A separate opt-in gate now proves one full synthetic loopback HTTP-to-PostgreSQL path
-through a disposable dedicated Ingest login. There is no deployment database credential/certificate,
-trusted external TLS/edge path, supported connector adapter, or deployment. A bounded local one-shot
-Jobs process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor,
-or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
-implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
-certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
-boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
-database role isolation; it does not prove a live adapter, deployed API, or production flow. The
-Ingest server tests bind only ephemeral loopback sockets and use synthetic requests; no development
-command exposes it to the LAN or Internet.
+admission, and one pairing-only Rust command generates a device key through the OS CSPRNG, stores
+resumable pairing state in the native credential store, and performs the exact start/poll proof. A
+separate exact local-only command deletes one origin/label native entry without reading it or
+revoking server authority. No supported Codex version, macOS/Linux admission, real-account/deployed
+sync result, package, release, or deployment exists. A local Ingest kernel bounds and authenticates
+a synthetic exact-body sync request, and a separate adapter constrains origin replay, database
+lookup, and submission mapping with mock-pool evidence. A transport-free application composes those
+exact boundaries, generates a server request ID, and validates the acknowledgement/problem decision;
+isolated PostgreSQL tests separately prove atomic replay and cleanup. A bounded local Fastify
+factory now preserves exact raw HTTP evidence, applies no-queue and deadline policy, and serializes
+only revalidated contracts. A separate local host now binds that exact composition only on loopback
+in development/test or under an explicit Railway-edge production declaration, with bounded
+partial-startup cleanup and process shutdown. A separate opt-in gate now proves one full synthetic
+loopback HTTP-to-PostgreSQL path through a disposable dedicated Ingest login. There is no deployment
+database credential/certificate, trusted external TLS/edge path, supported connector adapter, or
+deployment. A bounded local one-shot Jobs process now wraps only cleanup/refresh/finalization, but
+has no live login, scheduler, monitor, or deployment. A bounded server-only Web PostgreSQL adapter
+and local public-score GET are implemented and unit/build-tested, but this repository supplies no
+working deployment login or TLS certificate. A successful setup proves repository gates, synthetic
+frontend behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
+lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
+deployed API, or production flow. The Ingest server tests bind only ephemeral loopback sockets and
+use synthetic requests; no development command exposes it to the LAN or Internet.
 
 ## Prerequisites
 
@@ -324,6 +325,17 @@ This writes a real device credential to the current user's native OS credential 
 network start. Run only one connect process for an origin/label and do not use production or shared
 credentials in local development. The repository does not ship a valid invite, Web login, pairing
 HMAC key, database login, or released connector, so the command is not an end-to-end setup shortcut.
+
+To delete only that exact local origin/label record, use:
+
+```text
+cargo run -p viberacing-connector -- forget-local --origin <loopback-origin> --label "Local device"
+```
+
+The command is idempotent and does not inspect the record or contact the service. It does not revoke
+an activated server device or erase copied key material; review and revoke the matching device in
+the authenticated Vibe Racing account before reconnecting. Do not use it against a shared or
+production credential as a local-development cleanup shortcut.
 
 The one-shot Jobs runner independently uses only `VIBERACING_JOBS_DATABASE_*`. Its tracked
 user/password are separate non-working placeholders, and configuration checks reject reuse of the

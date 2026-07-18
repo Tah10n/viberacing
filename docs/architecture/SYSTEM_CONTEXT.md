@@ -143,31 +143,33 @@ maximum-10 primary profile purge without inventing a tombstone policy. A separat
 flow supplies session-rate-limited pending-code review and fresh-passkey approval for an explicitly
 selected new or active existing opaque source, without exposing raw source IDs. ADR 0030 now exposes
 only the pairing journey through one Rust `connect` command, exact local start/poll routes,
-fixed-storage database admission, and native OS credential custody. App Server launch and sync
-capabilities still have no public constructor, so ADR 0031 lets only the private Windows x86_64
-command construct them after exact explicit-path artifact admission and active-record review. It
-creates fresh context and performs one fixed signed upload. Automatic discovery, macOS/Linux
-admission, scheduling, and release remain absent. Trusted external TLS/edge routing, live
-secret-manager/edge key injection, working deployment login/certificate, composed live end-to-end
-flow, edge/capacity evidence, a verified Cloudflare/Railway path, released sync connector, Jobs
-scheduler/monitoring, public cache, backup/tombstone/restore replay, and audited correction
-authority shown in the design remain planned.
+fixed-storage database admission, and native OS credential custody. ADR 0041 separately adds exact,
+idempotent deletion of one local origin/label record with no credential read or server call; the
+registered device remains until authenticated revoke. App Server launch and sync capabilities still
+have no public constructor, so ADR 0031 lets only the private Windows x86_64 command construct them
+after exact explicit-path artifact admission and active-record review. It creates fresh context and
+performs one fixed signed upload. Automatic discovery, macOS/Linux admission, scheduling, and
+release remain absent. Trusted external TLS/edge routing, live secret-manager/edge key injection,
+working deployment login/certificate, composed live end-to-end flow, edge/capacity evidence, a
+verified Cloudflare/Railway path, released sync connector, Jobs scheduler/monitoring, public cache,
+backup/tombstone/restore replay, and audited correction authority shown in the design remain
+planned.
 
 ## Component responsibilities
 
-| Component        | Owns                                                                                                                            | Must not own                                                                                      | Primary trust boundary |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------- |
-| Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                                             | Raw device key, connector execution, admin authority, private cache mixing                        | TB-01 and TB-02        |
-| Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                         | Profile authorization, score derivation, database credentials                                     | TB-01 and TB-06        |
-| Web/Auth         | Public score/race/status reads, OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion | Device private key, direct usage submission, schema ownership                                     | TB-02, TB-07, TB-08    |
-| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision             | OAuth, admin, invites, passkey/recovery, migrations, final score authority                        | TB-05, TB-06, TB-07    |
-| Ingest host      | Closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                                  | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials     | TB-06 and TB-07        |
-| Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                    | Interactive auth, public request handling, schema ownership                                       | TB-07 and TB-11        |
-| PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                        | Public routing, connector trust, release credentials                                              | TB-07                  |
-| Rust connector   | Local App Server lifecycle, compatibility adapter, local key, canonical signing, safe scheduling                                | Website commands, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
-| Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                        | Normal user session reuse, shared identities, routine exact-usage access                          | TB-08                  |
-| CI               | Evaluate untrusted source without secrets; produce read-only evidence                                                           | Deployment, signing, package publication from pull requests                                       | TB-09                  |
-| Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                          | Unreviewed pull-request execution, long-lived broad credentials                                   | TB-10                  |
+| Component        | Owns                                                                                                                            | Must not own                                                                                                     | Primary trust boundary |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                                             | Raw device key, connector execution, admin authority, private cache mixing                                       | TB-01 and TB-02        |
+| Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                         | Profile authorization, score derivation, database credentials                                                    | TB-01 and TB-06        |
+| Web/Auth         | Public score/race/status reads, OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion | Device private key, direct usage submission, schema ownership                                                    | TB-02, TB-07, TB-08    |
+| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision             | OAuth, admin, invites, passkey/recovery, migrations, final score authority                                       | TB-05, TB-06, TB-07    |
+| Ingest host      | Closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                                  | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials                    | TB-06 and TB-07        |
+| Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                    | Interactive auth, public request handling, schema ownership                                                      | TB-07 and TB-11        |
+| PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                        | Public routing, connector trust, release credentials                                                             | TB-07                  |
+| Rust connector   | Local App Server lifecycle, compatibility adapter, local key custody/removal, canonical signing, safe scheduling                | Website commands, server revoke, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
+| Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                        | Normal user session reuse, shared identities, routine exact-usage access                                         | TB-08                  |
+| CI               | Evaluate untrusted source without secrets; produce read-only evidence                                                           | Deployment, signing, package publication from pull requests                                                      | TB-09                  |
+| Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                          | Unreviewed pull-request execution, long-lived broad credentials                                                  | TB-10                  |
 
 Trust-boundary IDs are defined in the [threat model](../security/THREAT_MODEL.md).
 

@@ -170,14 +170,18 @@ route открывают versioned pairing start/poll contracts через об�
 ответы. Локальная Rust-команда `connect` получает Ed25519 key и анонимный rate ID из OS CSPRNG,
 сохраняет prepared/pending/active record только в нативном credential store, доказывает владение
 ключом и возобновляет прерванный poll, не печатая key, token, challenge, source или device ID.
+Отдельная точная команда `forget-local` может удалить только эту нативную запись для canonical
+origin/label, не читая её и не обращаясь к Vibe Racing; фиксированный результат предупреждает, что
+команда не выполняет server device revoke: он остаётся отдельным authenticated account action.
 Отдельная Windows x86_64 команда `sync` canonicalize-ит и hash-проверяет один exact `0.144.5`
 executable, запускает его в новом пустом working directory, создаёт свежие request time/ID/nonce из
 active record, один раз отправляет точное signed body на фиксированный sync path и принимает только
 closed acknowledgement. Она не ищет binary автоматически, не повторяет ambiguous POST и не
 отправляет edge origin proof. Всё ещё нет macOS/Linux admission, live database connection, capacity
-evidence, packaging, release, поддерживаемого sync connector и deployment.
+evidence, credential rotation, automatic server-revoke composition, packaging, release,
+поддерживаемого sync connector и deployment.
 
-Также добавлены двадцать семь SQL migrations: 27 приватных
+Также добавлены двадцать девять SQL migrations: 27 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring/CarRecipe
 tables, deny-by-default runtime roles, forced RLS и интеграционный тест на одноразовом PostgreSQL.
 Узкая procedure boundary уже покрывает выдачу invite, атомарное enrollment, привязанный к сессии

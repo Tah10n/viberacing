@@ -75,15 +75,18 @@ canonicalizes and hash-admits one explicit exact `0.144.5` artifact, holds its f
 substitution through launch, uses a fresh empty working directory and the existing bounded
 supervisor, creates fresh context from the active native record, and sends one exact signed body to
 the fixed endpoint without retry or edge-origin headers. Its loopback HTTP evidence validates only
-the five device headers and closed acknowledgement. No live database connection, real-account
-end-to-end result, released artifact, or deployment is claimed. Candidate release, schema, fixture,
-synthetic-process, admission, composer, pairing, signer, and loopback-upload evidence does not
-populate the support matrix. Phase 0 hosted-publication controls remain blocked on real maintainer
-identities and GitHub configuration. No production-ready anonymous edge perimeter, distributed
-recovery perimeter or cleanup, production secret-manager/edge key injection, trusted external Ingest
-TLS/edge route, production deployment, live Web/Jobs/Ingest database login/TLS integration, released
-or operational connector, supported Codex version, real-user ingestion, end-to-end public ranking,
-or finalization scheduler exists.
+the five device headers and closed acknowledgement. A separate exact `forget-local` command derives
+the same native-store account from a canonical origin and bounded label, invokes only idempotent
+credential deletion, and emits one fixed warning that server device authority was not revoked. It
+does not load the record, construct a signer, start Codex, or make a network call. No live database
+connection, real-account end-to-end result, released artifact, or deployment is claimed. Candidate
+release, schema, fixture, synthetic-process, admission, composer, pairing, signer, and
+loopback-upload evidence does not populate the support matrix. Phase 0 hosted-publication controls
+remain blocked on real maintainer identities and GitHub configuration. No production-ready anonymous
+edge perimeter, distributed recovery perimeter or cleanup, production secret-manager/edge key
+injection, trusted external Ingest TLS/edge route, production deployment, live Web/Jobs/Ingest
+database login/TLS integration, released or operational connector, supported Codex version,
+real-user ingestion, end-to-end public ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -212,10 +215,10 @@ or finalization scheduler exists.
   vector with Web. A self-contained repository Agent Skill now reduces an existing styling request
   to only those exact enums and seed, requires explicit shell-safe origin/label values, invokes the
   fixed command once, and recognizes only its exact generic success line. A dedicated checker
-  derives the schema/CLI expectations from production sources, and eleven mutation cases prove enum,
+  derives the schema/CLI expectations from production sources, and twelve mutation cases prove enum,
   shell, invocation-allowlist, retry, authority, output, front matter, and UI-metadata drift fail
   closed. No released connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and forty accepted design decisions covering Community trust,
+- An ADR lifecycle/template and forty-one accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -738,11 +741,15 @@ or finalization scheduler exists.
   and 16-byte anonymous client ID through the OS CSPRNG, and stores one fixed versioned
   prepared/pending/active record only in the native credential store. It persists before displaying
   authority, resumes pending polling, signs the exact ADR 0026 message, clears pending material
-  after activation/expiry, and never prints key, token, challenge, source, or device IDs. Rust tests
-  cover command/origin/record/response and start-to-active behavior under format/check/Clippy. The
-  separate candidate sync path is documented above; there is no cross-platform runtime result, real
-  HTTP/Web/database pairing result, key rotation/uninstall command, package, signed release, or
-  support claim.
+  after activation/expiry, and never prints key, token, challenge, source, or device IDs. The
+  separate local-only `forget-local` command deletes the exact origin/label native entry without
+  loading or decoding it, treats an absent entry as the same success, and states that server revoke
+  remains separate. Rust tests cover command/origin/record/response, start-to-active behavior,
+  delete-only invocation, identifier-free output, missing/extra/duplicate arguments, and native
+  result mapping under format/check/Clippy. Tests use an injected store and do not touch a real OS
+  credential entry. The separate candidate sync path is documented above; there is no cross-platform
+  runtime result, real HTTP/Web/database pairing result, key rotation, server-revoke composition,
+  package, signed release, or support claim.
 - A private TypeScript Jobs workspace now accepts exactly either a fixed 1000-row
   authentication/CarRecipe-proposal/ingest/pairing cleanup command, a separate fixed 10-profile
   primary purge, or one canonical Monday refresh/finalization command. It revalidates closed plain
@@ -893,25 +900,25 @@ ingest-, and pairing-retention cleanup and primary deletion, cleanup for remaini
 the Jobs scheduler/live login and application-to-PostgreSQL integration, audited corrections,
 deployed public-score delivery, cache/backup/tombstone purge and restore replay, connector automatic
 discovery and macOS/Linux executable admission, clean-machine live Codex/privacy evidence, supported
-operational account/usage integration, deployed signed-upload egress, credential rotation/uninstall,
-packaging, release signing, deployment, and public beta operations remain proposed. The local Ingest
-key reader, kernel, adapter, application composer, Fastify server, and separate host now prove
-bounded protected configuration, raw-envelope/JSON/HTTP framing, origin-proof, contract, strict
-Ed25519 device, least-privileged pool, fixed-query, orchestration, no-queue/deadline policy, exact
-listener modes, bounded startup/shutdown, result/problem serialization, and one full synthetic
-loopback persistence path, but not those deployed edge, secret, TLS, capacity, or operational
-boundaries. Bounded database score and compatible active-recipe race projections, versioned
-response-only schemas, fail-closed server mappers, bounded PostgreSQL adapters, and local HTTP
-routes now exist, including URL/media parsing, admission/deadline policy, store translation, and
-final serialization. A third compatible local status projection/contract/route now supplies
-complete-UTC-day freshness and preference-gated streak without changing either older response.
-Cache/invalidation, deployed device-proposal ingress, authenticated profile detail, client-rate and
-production-capacity controls, query-plan evidence, monitoring backend, deployment login,
-certificate, edge policy, and live adapter integration do not. The visible web scoring and ranking
-experience now consumes a validated current-week status response from the local route when its
-separately provisioned database login works, but local defaults and every unavailable/error path
-remain clearly synthetic. No working database/OAuth login, deployed data, cache, or end-to-end
-real-user ranking evidence exists.
+operational account/usage integration, deployed signed-upload egress, credential rotation and
+automated server-revoke composition, packaging, release signing, deployment, and public beta
+operations remain proposed. The local Ingest key reader, kernel, adapter, application composer,
+Fastify server, and separate host now prove bounded protected configuration, raw-envelope/JSON/HTTP
+framing, origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query,
+orchestration, no-queue/deadline policy, exact listener modes, bounded startup/shutdown,
+result/problem serialization, and one full synthetic loopback persistence path, but not those
+deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database score and
+compatible active-recipe race projections, versioned response-only schemas, fail-closed server
+mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media parsing,
+admission/deadline policy, store translation, and final serialization. A third compatible local
+status projection/contract/route now supplies complete-UTC-day freshness and preference-gated streak
+without changing either older response. Cache/invalidation, deployed device-proposal ingress,
+authenticated profile detail, client-rate and production-capacity controls, query-plan evidence,
+monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
+The visible web scoring and ranking experience now consumes a validated current-week status response
+from the local route when its separately provisioned database login works, but local defaults and
+every unavailable/error path remain clearly synthetic. No working database/OAuth login, deployed
+data, cache, or end-to-end real-user ranking evidence exists.
 
 ## Evidence commands
 

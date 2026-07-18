@@ -537,6 +537,10 @@ mod tests {
         fn save(&mut self, _record: &CredentialRecord) -> Result<(), ConnectorCliError> {
             unreachable!("sync never creates a credential")
         }
+
+        fn delete(&mut self) -> Result<(), ConnectorCliError> {
+            unreachable!("sync never deletes a credential")
+        }
     }
 
     #[test]

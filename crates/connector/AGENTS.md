@@ -32,14 +32,17 @@ changing it.
   pending key/challenge capabilities inaccessible outside the crate, sign only the fixed
   domain-separated message, and keep poll-token custody, HTTP, and native storage in `connect.rs`;
   browser approval remains server-side.
+- Keep `forget-local` confined to exact canonical origin/label credential deletion. It must not load
+  or decode the record, construct a signer, contact a server, imply revoke, reveal whether an entry
+  existed, or become callable through the proposal-only Agent Skill.
 - A generated schema proves only the exact Codex CLI version that generated it. Do not mark a
   version supported until its checked-in fixtures and fail-closed compatibility tests pass.
 - Candidate schema/parser evidence is not support. Keep the public matrix empty until the manifest
   has no blockers and executable admission, official-artifact, platform, privacy-egress, packaging,
   and release evidence all pass.
-- Keep executable admission, sync upload, credential rotation/uninstall, packaging, and desktop UI
-  outside a parser/composer/signer or pairing-client change unless the task explicitly includes that
-  boundary.
+- Keep executable admission, sync upload, credential rotation, server-revoke composition, packaging,
+  and desktop UI outside a parser/composer/signer or pairing-client change unless the task
+  explicitly includes that boundary.
 
 Run `cargo test --workspace --all-targets --all-features --locked` while developing. Before handoff,
 run the root `pnpm run verify` gate.

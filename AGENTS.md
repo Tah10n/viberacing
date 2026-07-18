@@ -96,6 +96,8 @@ four-call admission, applies a fixed-storage global-and-64-bucket PostgreSQL rat
 serializes only the versioned contracts. A bounded Rust `connect` command generates one Ed25519 key
 through the OS CSPRNG, stores its versioned state only in the native credential store, resumes
 polling, and persists the activated binding without printing bearer or key material. A separate
+exact `forget-local` command deletes only the canonical origin/label native entry without loading it
+or contacting the service, and states that it did not revoke server device authority. A separate
 Windows x86_64 development `sync` command can construct the private launch/context/key capabilities
 only after explicit exact `0.144.5` artifact and active-record admission, then sends one fixed
 signed request and validates one closed acknowledgement without retry or edge-origin headers. A
@@ -105,12 +107,13 @@ without retry, and validates only a generic acknowledgement. A checked local Age
 a styling request to those exact fields, requires explicit shell-safe origin/label values, invokes
 only that command once, and receives no read, approval, or activation authority. There is still no
 automatic executable discovery, supported version, macOS/Linux admission, clean-machine real-account
-result, packaging, release, live pairing result, deployment Ingest credential/TLS result, edge
-deployment, or capacity evidence. Do not claim that deployed browser/session HTTP authentication,
-production-ready recovery or remaining unimplemented critical-action verification, real-user
-ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
-correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
-implementation and verification are present in the working tree.
+result, credential rotation or automatic server-revoke composition, packaging, release, live pairing
+result, deployment Ingest credential/TLS result, edge deployment, or capacity evidence. Do not claim
+that deployed browser/session HTTP authentication, production-ready recovery or remaining
+unimplemented critical-action verification, real-user ingestion, an operational connector, a Jobs
+scheduler or deployed public-race read, season correction, scheduled or broader cleanup, deployment,
+or a hosted security control exists until its implementation and verification are present in the
+working tree.
 
 ## Repository map
 
@@ -146,8 +149,9 @@ implementation and verification are present in the working tree.
 - `crates/connector/` contains the bounded App Server JSONL handshake, candidate exact-version
   account/usage parser, inaccessible one-shot child supervisor, synthetic process fixture,
   exact-body sync composer, isolated pairing/sync signers, the native-store `connect` command, the
-  exact-candidate one-shot `sync` command, fixed proposal-only `propose-car` command, and nested
-  connector security guidance. Read `crates/connector/AGENTS.md` before editing it.
+  local-only `forget-local` command, exact-candidate one-shot `sync` command, fixed proposal-only
+  `propose-car` command, and nested connector security guidance. Read `crates/connector/AGENTS.md`
+  before editing it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
 - Trusted Ingest edge routing/external TLS deployment, the distributed recovery perimeter and
@@ -163,7 +167,7 @@ implementation and verification are present in the working tree.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
 - `pnpm run check:agent-skills` derives the local proposal skill's enum inventory, CLI flags,
   generic output, and metadata from canonical sources. `pnpm run test:agent-skills-check` proves
-  eleven unsafe/drifted variants fail closed.
+  twelve unsafe/drifted variants fail closed.
 - `pnpm run check:public:staged` scans the exact staged blobs before a commit.
 - `pnpm run check:community` validates governance and community-health files and forms.
 - `pnpm run check:architecture` validates required security/architecture contracts, structured abuse

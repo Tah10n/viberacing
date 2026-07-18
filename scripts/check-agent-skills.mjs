@@ -18,7 +18,7 @@ const schemaPath = "contracts/v1/car-recipe.schema.json";
 const connectorPath = "crates/connector/src/connect.rs";
 const proposalCommandPath = "crates/connector/src/connect/car_proposal_command.rs";
 const expectedDescription =
-  "Turn a user's Vibe Racing pixel-car style request into one closed CarRecipeV1 and submit it through the already paired proposal-only connector command. Use when the user asks an agent to create, restyle, or propose their Vibe Racing car for later browser review; do not use it to connect, sync usage, inspect private state, approve, activate, publish, or administer a profile.";
+  "Turn a user's Vibe Racing pixel-car style request into one closed CarRecipeV1 and submit it through the already paired proposal-only connector command. Use when the user asks an agent to create, restyle, or propose their Vibe Racing car for later browser review; do not use it to connect, forget a local credential, sync usage, inspect private state, approve, activate, publish, or administer a profile.";
 const expectedDefaultPrompt =
   "Use $viberacing-propose-car to turn my car style idea into a private Vibe Racing proposal for browser review.";
 const failures = [];
@@ -119,7 +119,7 @@ if (skill !== null) {
     "local: authority = ^(?:localhost|127\\.0\\.0\\.1|\\[::1\\])(?::[0-9]{1,5})?$",
     "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
     "Make one attempt only. Do not retry",
-    "Do not invoke `connect`, `sync`, a direct HTTP client",
+    "Do not invoke `connect`, `forget-local`, `sync`, a direct HTTP client",
     "proposal may still be pending",
     "Do not echo raw process output",
   ]) {

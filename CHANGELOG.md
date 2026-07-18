@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and thirty-nine accepted ADRs.
+  fail-closed compatibility policy and matrix, and forty-one accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -39,7 +39,7 @@ Versioning where its guarantees are applicable.
   proves source pause serializes ahead of a queued proposal without retaining its proposal or nonce.
   A self-contained local Agent Skill now reduces styling intent to only those exact fields, requires
   explicit shell-safe origin/label values, invokes that command once, and never receives read or
-  decision authority. Its production-derived checker plus eleven black-box mutations reject
+  decision authority. Its production-derived checker plus twelve black-box mutations reject
   schema/CLI drift, command widening, contradictory invocation input, unsafe shell input, retries,
   stale output, and metadata drift. This local slice still has no cleanup schedule, live credential,
   released connector, edge control, or deployment.
@@ -214,6 +214,13 @@ Versioning where its guarantees are applicable.
   first-winner settlement. Exact local start/poll routes and the native-store Rust client complete
   only a synthetic journey; there is no live authenticator/database result, trusted edge, release,
   or deployment evidence.
+- An exact local-only `forget-local` connector command that derives one canonical origin/label
+  native-store account and invokes deletion without loading the credential, constructing a signer,
+  starting Codex, or contacting Vibe Racing. Deleted and absent entries share one identifier-free
+  result that explicitly distinguishes local removal from authenticated server device revoke. Rust
+  tests cover closed arguments, delete-only behavior, native `NoEntry` mapping, generic storage and
+  output failure, and idempotent retry; no real OS credential, rotation, server-revoke composition,
+  package, or release is exercised.
 - A local invite-to-passkey enrollment vertical slice with EN/RU join/account UI, exact bounded
   same-origin POST routes, state plus S256 PKCE and no extra GitHub scope, purpose-separated
   AES-256-GCM HttpOnly cookies, fixed atomic enrollment/challenge/passkey/session database calls,

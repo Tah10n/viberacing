@@ -4,7 +4,8 @@ description:
   Turn a user's Vibe Racing pixel-car style request into one closed CarRecipeV1 and submit it
   through the already paired proposal-only connector command. Use when the user asks an agent to
   create, restyle, or propose their Vibe Racing car for later browser review; do not use it to
-  connect, sync usage, inspect private state, approve, activate, publish, or administer a profile.
+  connect, forget a local credential, sync usage, inspect private state, approve, activate, publish,
+  or administer a profile.
 ---
 
 # Propose a Vibe Racing car
@@ -83,8 +84,8 @@ viberacing-connector propose-car --origin <origin> --label <label> --chassis <ch
 Prefer a tool interface that accepts an argument vector. If only a shell command string is
 available, render the command only after every value has passed the shell-safe grammar above. Do not
 add quoting, redirection, environment assignments, pipes, command substitution, extra flags, or a
-second command. Do not invoke `connect`, `sync`, a direct HTTP client, an App Server method, or any
-database or browser endpoint.
+second command. Do not invoke `connect`, `forget-local`, `sync`, a direct HTTP client, an App Server
+method, or any database or browser endpoint.
 
 Make one attempt only. Do not retry an ambiguous or failed submission. Treat success as proven only
 when the process exits successfully and emits exactly:

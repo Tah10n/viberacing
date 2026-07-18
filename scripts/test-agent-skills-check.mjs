@@ -121,6 +121,18 @@ expectFailure(
 );
 
 expectFailure(
+  "local credential removal permission",
+  (directory) =>
+    mutate(
+      directory,
+      sourcePaths[0] + "/SKILL.md",
+      "Do not invoke `connect`, `forget-local`, `sync`, a direct HTTP client",
+      "Do not invoke `connect`, `sync`, a direct HTTP client",
+    ),
+  /required fail-closed instruction is missing/,
+);
+
+expectFailure(
   "stale success output",
   (directory) =>
     mutate(
@@ -180,4 +192,4 @@ expectFailure(
   /required fail-closed instruction is missing/,
 );
 
-console.log("Agent-skill checker regressions passed (11 mutations).");
+console.log("Agent-skill checker regressions passed (12 mutations).");
