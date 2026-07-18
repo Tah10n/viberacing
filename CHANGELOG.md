@@ -54,10 +54,15 @@ Versioning where its guarantees are applicable.
   non-loopback resources and reviewed header/hero overflow; it exposed and blocked a clipped compact
   join link until responsive navigation wrapping was fixed. A separate no-write local re-render mode
   requires the manifest's exact browser product/platform and zero changed decoded pixel channels.
-  Fourteen CLI guardrail cases, ten request-policy assertions, four exact-environment assertions,
-  six pixel-result assertions, and a shared offline gate with eleven checker mutations enforce the
+  Fifteen CLI guardrail cases, ten request-policy assertions, four exact-environment assertions, six
+  pixel-result assertions, and a shared offline gate with eleven checker mutations enforce the
   closed origin/browser intent, exact inventory, dimensions, byte limits, SHA-256 manifest, and
-  public PNG policy. The reported product/platform is pinned, but executable artifact provenance, CI
+  public PNG policy. The same no-write mode now proves the exact 13-target keyboard order,
+  skip-target focus transfer, Space activation and restoration of the pause control, named
+  accessibility-tree landmarks/controls/table/canvas, and a forced-colors pass with visible focus,
+  reviewed borders, no outer overflow, and a semantic canvas alternative. Five keyboard-policy, six
+  accessibility-tree-policy, and five forced-colors-policy assertions reject drift. The reported
+  product/platform is pinned, but executable artifact provenance, native screen-reader, CI
   provisioning, and cross-browser evidence remain open.
 - A documented AI-generated social preview, accessible alternative text, reproducible metadata
   sanitation, and a fail-closed PNG structure/chunk policy with regression coverage.

@@ -4,6 +4,13 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+  classifyPhase1AccessibilityTree,
+  classifyPhase1ForcedColorsAudit,
+  classifyPhase1KeyboardAudit,
+  phase1KeyboardFocusSelectors,
+  phase1RequiredAccessibilityNodes,
+} from "./lib/phase1-browser-accessibility-policy.mjs";
+import {
   classifyPhase1PixelComparison,
   isAllowedPhase1PageRequest,
   isMatchingPhase1VerificationEnvironment,
@@ -137,6 +144,100 @@ assert.equal(
   "invalid",
 );
 
+const keyboardAudit = {
+  backwardFocus: phase1KeyboardFocusSelectors.at(-2),
+  focusIndicatorsVisible: true,
+  focusableCount: phase1KeyboardFocusSelectors.length,
+  focusedElementsVisible: true,
+  forwardFocus: [...phase1KeyboardFocusSelectors],
+  pausePressedStates: ["false", "true", "false"],
+  skipTargetFocused: true,
+  skipVisible: true,
+};
+assert.equal(classifyPhase1KeyboardAudit(keyboardAudit), "valid");
+assert.equal(
+  classifyPhase1KeyboardAudit({
+    ...keyboardAudit,
+    forwardFocus: keyboardAudit.forwardFocus.slice(1),
+  }),
+  "invalid",
+);
+assert.equal(classifyPhase1KeyboardAudit({ ...keyboardAudit, unexpected: true }), "invalid");
+assert.equal(classifyPhase1KeyboardAudit({ ...keyboardAudit, focusableCount: 12 }), "invalid");
+assert.equal(
+  classifyPhase1KeyboardAudit({ ...keyboardAudit, pausePressedStates: ["false", "true", "true"] }),
+  "invalid",
+);
+
+const accessibilityNodes = [
+  ...phase1RequiredAccessibilityNodes.map((node) => ({ ...node })),
+  ...[
+    "View standings",
+    "Vibe Racing",
+    "Weekly race",
+    "Leaderboard",
+    "Profile",
+    "Sign in",
+    "Join with invite",
+    "VIEW STANDINGS",
+  ].map((name) => ({ disabled: false, name, pressed: null, role: "link" })),
+];
+assert.equal(classifyPhase1AccessibilityTree(accessibilityNodes), "valid");
+assert.equal(classifyPhase1AccessibilityTree(accessibilityNodes.slice(1)), "invalid");
+assert.equal(
+  classifyPhase1AccessibilityTree(
+    accessibilityNodes.map((node) =>
+      node.role === "link" && node.name === "Vibe Racing" ? { ...node, name: "" } : node,
+    ),
+  ),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1AccessibilityTree([
+    ...accessibilityNodes,
+    { disabled: false, name: "", pressed: null, role: "main" },
+  ]),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1AccessibilityTree(
+    accessibilityNodes.map((node, index) => (index === 0 ? { ...node, unexpected: true } : node)),
+  ),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1AccessibilityTree([
+    ...accessibilityNodes,
+    { disabled: true, name: "", pressed: null, role: "checkbox" },
+  ]),
+  "invalid",
+);
+
+const forcedColorsAudit = {
+  active: true,
+  canvasAlternativePresent: true,
+  canvasPixelsPreserved: true,
+  focusIndicatorsVisible: true,
+  focusedElementsVisible: true,
+  forwardFocus: [...phase1KeyboardFocusSelectors],
+  horizontalBounds: true,
+  reviewedBordersVisible: true,
+};
+assert.equal(classifyPhase1ForcedColorsAudit(forcedColorsAudit), "valid");
+assert.equal(classifyPhase1ForcedColorsAudit({ ...forcedColorsAudit, active: false }), "invalid");
+assert.equal(
+  classifyPhase1ForcedColorsAudit({ ...forcedColorsAudit, forwardFocus: [] }),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1ForcedColorsAudit({ ...forcedColorsAudit, canvasPixelsPreserved: false }),
+  "invalid",
+);
+assert.equal(
+  classifyPhase1ForcedColorsAudit({ ...forcedColorsAudit, focusedElementsVisible: false }),
+  "invalid",
+);
+
 try {
   const nonExecutableBrowser = resolve(temporaryRoot, "not-a-browser.txt");
   writeFileSync(nonExecutableBrowser, "synthetic non-executable fixture\n");
@@ -150,6 +251,12 @@ try {
   expectFailure(
     "ambiguous write and verify modes",
     ["--origin", "http://127.0.0.1:3317/", "--browser", process.execPath, "--write", "--verify"],
+    /Usage:/,
+    2,
+  );
+  expectFailure(
+    "repeated package-manager separator",
+    ["--", "--", "--origin", "http://127.0.0.1:3317/", ...browserArguments],
     /Usage:/,
     2,
   );
@@ -208,7 +315,7 @@ try {
   );
   expectFailure(
     "non-browser executable",
-    ["--origin", "http://localhost:3317/", ...browserArguments],
+    ["--", "--origin", "http://localhost:3317/", ...browserArguments],
     /exited before opening DevTools/,
   );
   expectFailure(
@@ -228,5 +335,6 @@ try {
 
 console.log(
   `Phase 1 visual-baseline capture guardrail tests passed (${caseCount} CLI cases, ` +
-    "10 request-policy, 4 environment-policy, and 6 pixel-policy assertions).",
+    "10 request-policy, 4 environment-policy, 6 pixel-policy, 5 keyboard-policy, " +
+    "6 accessibility-tree-policy, and 5 forced-colors-policy assertions).",
 );

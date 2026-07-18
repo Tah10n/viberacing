@@ -13,6 +13,12 @@ import {
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
+import {
+  classifyPhase1AccessibilityTree,
+  classifyPhase1ForcedColorsAudit,
+  classifyPhase1KeyboardAudit,
+  phase1KeyboardFocusSelectors,
+} from "./lib/phase1-browser-accessibility-policy.mjs";
 import { verifyPhase1BaselineDirectory } from "./lib/phase1-visual-baseline-integrity.mjs";
 import {
   classifyPhase1PixelComparison,
@@ -25,7 +31,7 @@ import {
 } from "./lib/phase1-visual-baseline-policy.mjs";
 import { inspectPublicPng, readPngDimensions } from "./lib/png-content-policy.mjs";
 
-// cspell:ignore breakpad lede WINDIR
+// cspell:ignore breakpad describedby lede WINDIR
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const outputRoot = resolve(repositoryRoot, phase1BaselineRoot);
@@ -42,8 +48,13 @@ function usage() {
 
 function parseArguments() {
   const parsed = { browser: undefined, mode: undefined, origin: undefined };
+  let separatorSeen = false;
   for (let index = 2; index < process.argv.length; index += 1) {
     const argument = process.argv[index];
+    if (argument === "--" && !separatorSeen) {
+      separatorSeen = true;
+      continue;
+    }
     if ((argument === "--write" || argument === "--verify") && parsed.mode === undefined) {
       parsed.mode = argument.slice(2);
       continue;
@@ -283,6 +294,282 @@ async function evaluate(connection, sessionId, expression) {
 async function reload(connection, sessionId) {
   const loaded = connection.waitForEvent("Page.loadEventFired", sessionId);
   await Promise.all([loaded, connection.send("Page.reload", { ignoreCache: true }, sessionId)]);
+}
+
+async function dispatchKey(
+  connection,
+  sessionId,
+  key,
+  code,
+  virtualKeyCode,
+  modifiers = 0,
+  text = undefined,
+) {
+  const common = {
+    code,
+    key,
+    modifiers,
+    nativeVirtualKeyCode: virtualKeyCode,
+    windowsVirtualKeyCode: virtualKeyCode,
+  };
+  await connection.send(
+    "Input.dispatchKeyEvent",
+    {
+      ...common,
+      ...(text === undefined ? {} : { text, unmodifiedText: text }),
+      type: "keyDown",
+    },
+    sessionId,
+  );
+  await connection.send("Input.dispatchKeyEvent", { ...common, type: "keyUp" }, sessionId);
+  await delay(25);
+}
+
+async function dispatchTab(connection, sessionId, backwards = false) {
+  await dispatchKey(connection, sessionId, "Tab", "Tab", 9, backwards ? 8 : 0);
+}
+
+async function dispatchEnter(connection, sessionId) {
+  await dispatchKey(connection, sessionId, "Enter", "Enter", 13);
+}
+
+async function dispatchSpace(connection, sessionId) {
+  await dispatchKey(connection, sessionId, " ", "Space", 32, 0, " ");
+}
+
+async function clearDocumentFocus(connection, sessionId, clearHash = false) {
+  const cleared = await evaluate(
+    connection,
+    sessionId,
+    `(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      if (${clearHash ? "true" : "false"} && location.hash !== "") {
+        history.replaceState(history.state, "", location.pathname + location.search);
+      }
+      window.scrollTo(0, 0);
+      return document.activeElement === document.body;
+    })()`,
+  );
+  if (cleared !== true) {
+    throw new Error("isolated browser could not reset document focus");
+  }
+}
+
+async function inspectFocusedElement(connection, sessionId) {
+  const selectors = JSON.stringify(phase1KeyboardFocusSelectors);
+  return evaluate(
+    connection,
+    sessionId,
+    `(() => {
+      const selectors = ${selectors};
+      const active = document.activeElement;
+      if (!(active instanceof HTMLElement)) return null;
+      const style = getComputedStyle(active);
+      const rect = active.getBoundingClientRect();
+      const outlineWidth = Number.parseFloat(style.outlineWidth);
+      const outlineOffset = Number.parseFloat(style.outlineOffset);
+      const outlineExtent = outlineWidth + Math.max(outlineOffset, 0);
+      const outlineColor = style.outlineColor;
+      return {
+        focusIndicator:
+          active.matches(":focus-visible") &&
+          style.outlineStyle !== "none" &&
+          outlineWidth >= 2 &&
+          outlineColor !== "transparent" &&
+          outlineColor !== "rgba(0, 0, 0, 0)",
+        inViewport:
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.left - outlineExtent >= 0 &&
+          rect.top - outlineExtent >= 0 &&
+          rect.right + outlineExtent <= window.innerWidth &&
+          rect.bottom + outlineExtent <= window.innerHeight,
+        selector: selectors.find((selector) => active.matches(selector)) ?? null,
+        skipBounds:
+          !active.matches(".skip-link") ||
+          (rect.top >= 0 && rect.left >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight)
+      };
+    })()`,
+  );
+}
+
+async function runPhase1KeyboardAudit(connection, sessionId, expected) {
+  await clearDocumentFocus(connection, sessionId, true);
+  const focusableCount = await evaluate(
+    connection,
+    sessionId,
+    `(() => {
+      return Array.from(document.querySelectorAll("*")).filter((element) => {
+        if (!(element instanceof HTMLElement) || element.tabIndex < 0) return false;
+        if ("disabled" in element && element.disabled === true) return false;
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      }).length;
+    })()`,
+  );
+
+  await dispatchTab(connection, sessionId);
+  const skipFocus = await inspectFocusedElement(connection, sessionId);
+  await dispatchEnter(connection, sessionId);
+  const skipTargetFocused = await evaluate(
+    connection,
+    sessionId,
+    'location.hash === "#leaderboard" && document.activeElement?.id === "leaderboard"',
+  );
+
+  await clearDocumentFocus(connection, sessionId, true);
+  await reload(connection, sessionId);
+  await waitForStableState(connection, sessionId, expected);
+  await clearDocumentFocus(connection, sessionId);
+  const forwardFocus = [];
+  let focusIndicatorsVisible = true;
+  let focusedElementsVisible = true;
+  let pausePressedStates;
+  for (let index = 0; index < phase1KeyboardFocusSelectors.length; index += 1) {
+    await dispatchTab(connection, sessionId);
+    const focused = await inspectFocusedElement(connection, sessionId);
+    forwardFocus.push(focused?.selector ?? null);
+    focusIndicatorsVisible &&= focused?.focusIndicator === true;
+    focusedElementsVisible &&= focused?.inViewport === true;
+
+    if (index === 8) {
+      const before = await evaluate(
+        connection,
+        sessionId,
+        'document.activeElement?.getAttribute("aria-pressed")',
+      );
+      await dispatchSpace(connection, sessionId);
+      const pressed = await evaluate(
+        connection,
+        sessionId,
+        'document.activeElement?.getAttribute("aria-pressed")',
+      );
+      await dispatchSpace(connection, sessionId);
+      const restored = await evaluate(
+        connection,
+        sessionId,
+        'document.activeElement?.getAttribute("aria-pressed")',
+      );
+      pausePressedStates = [before, pressed, restored];
+    }
+  }
+
+  await dispatchTab(connection, sessionId, true);
+  const backward = await inspectFocusedElement(connection, sessionId);
+  const audit = {
+    backwardFocus: backward?.selector ?? null,
+    focusIndicatorsVisible,
+    focusableCount,
+    focusedElementsVisible,
+    forwardFocus,
+    pausePressedStates,
+    skipTargetFocused,
+    skipVisible:
+      skipFocus?.selector === phase1KeyboardFocusSelectors[0] &&
+      skipFocus.focusIndicator === true &&
+      skipFocus.inViewport === true &&
+      skipFocus.skipBounds === true,
+  };
+  if (classifyPhase1KeyboardAudit(audit) !== "valid") {
+    throw new Error("keyboard traversal violates the closed Phase 1 accessibility policy");
+  }
+}
+
+async function runPhase1AccessibilityTreeAudit(connection, sessionId) {
+  const tree = await connection.send("Accessibility.getFullAXTree", {}, sessionId);
+  if (!Array.isArray(tree.nodes)) {
+    throw new Error("isolated browser did not return an accessibility tree");
+  }
+  const nodes = tree.nodes
+    .filter((node) => node?.ignored !== true && typeof node?.role?.value === "string")
+    .map((node) => {
+      const properties = new Map(
+        Array.isArray(node.properties)
+          ? node.properties.map((property) => [property.name, property.value?.value])
+          : [],
+      );
+      const pressed = properties.get("pressed");
+      return {
+        disabled: properties.get("disabled") === true,
+        name: typeof node.name?.value === "string" ? node.name.value : "",
+        pressed: pressed === undefined ? null : String(pressed),
+        role: node.role.value,
+      };
+    });
+  if (classifyPhase1AccessibilityTree(nodes) !== "valid") {
+    throw new Error("accessibility tree violates the closed Phase 1 semantic policy");
+  }
+}
+
+async function runPhase1ForcedColorsAudit(connection, sessionId) {
+  await clearDocumentFocus(connection, sessionId);
+  const forwardFocus = [];
+  let focusIndicatorsVisible = true;
+  let focusedElementsVisible = true;
+  for (let index = 0; index < phase1KeyboardFocusSelectors.length; index += 1) {
+    await dispatchTab(connection, sessionId);
+    const focused = await inspectFocusedElement(connection, sessionId);
+    forwardFocus.push(focused?.selector ?? null);
+    focusIndicatorsVisible &&= focused?.focusIndicator === true;
+    focusedElementsVisible &&= focused?.inViewport === true;
+  }
+  const rendered = await evaluate(
+    connection,
+    sessionId,
+    `(() => {
+      const reviewedBorders = [
+        ".brand-pixels",
+        ".demo-badge",
+        ".primary-action",
+        ".pixel-button:not(:disabled)",
+        ".trust-banner",
+        ".race-console",
+        ".race-canvas",
+        ".table-region",
+        ".profile-grid article",
+        ".method-grid article"
+      ];
+      const bordersVisible = reviewedBorders.every((selector) => {
+        const element = document.querySelector(selector);
+        if (!(element instanceof HTMLElement)) return false;
+        const style = getComputedStyle(element);
+        return (
+          style.borderTopStyle !== "none" &&
+          Number.parseFloat(style.borderTopWidth) >= 2 &&
+          style.borderTopColor !== "transparent" &&
+          style.borderTopColor !== "rgba(0, 0, 0, 0)"
+        );
+      });
+      const canvas = document.querySelector(".race-canvas");
+      const description = canvas?.getAttribute("aria-describedby");
+      return {
+        active: matchMedia("(forced-colors: active)").matches,
+        canvasAlternativePresent:
+          canvas?.getAttribute("role") === "img" &&
+          Boolean(canvas.getAttribute("aria-label")) &&
+          Boolean(description && document.getElementById(description)?.textContent?.trim()),
+        canvasPixelsPreserved:
+          canvas instanceof HTMLCanvasElement && getComputedStyle(canvas).forcedColorAdjust === "none",
+        horizontalBounds: document.documentElement.scrollWidth <= window.innerWidth,
+        reviewedBordersVisible: bordersVisible
+      };
+    })()`,
+  );
+  const audit = {
+    ...rendered,
+    focusIndicatorsVisible,
+    focusedElementsVisible,
+    forwardFocus,
+  };
+  if (classifyPhase1ForcedColorsAudit(audit) !== "valid") {
+    throw new Error("forced-colors rendering violates the closed Phase 1 accessibility policy");
+  }
 }
 
 async function compareDecodedPngPixels(
@@ -756,13 +1043,85 @@ async function main() {
         });
       }
     }
+
+    if (verificationSnapshot) {
+      const accessibilityState = {
+        file: "phase1-browser-accessibility-audit",
+        height: 720,
+        locale: "en",
+        theme: "classic-grand-prix",
+        width: 1280,
+      };
+      await connection.send(
+        "Emulation.setDeviceMetricsOverride",
+        {
+          deviceScaleFactor: 1,
+          height: accessibilityState.height,
+          mobile: false,
+          screenHeight: accessibilityState.height,
+          screenWidth: accessibilityState.width,
+          width: accessibilityState.width,
+        },
+        sessionId,
+      );
+      await connection.send(
+        "Emulation.setEmulatedMedia",
+        { features: [{ name: "prefers-reduced-motion", value: "reduce" }], media: "screen" },
+        sessionId,
+      );
+      const preferenceScript = await connection.send(
+        "Page.addScriptToEvaluateOnNewDocument",
+        {
+          source:
+            'localStorage.setItem("viberacing.theme", "classic-grand-prix");' +
+            'localStorage.setItem("viberacing.locale", "en");' +
+            'localStorage.setItem("viberacing.motion", "off");',
+        },
+        sessionId,
+      );
+      if (typeof preferenceScript.identifier !== "string") {
+        throw new Error(
+          "isolated browser did not register the accessibility preference initializer",
+        );
+      }
+      await reload(connection, sessionId);
+      await connection.send(
+        "Page.removeScriptToEvaluateOnNewDocument",
+        { identifier: preferenceScript.identifier },
+        sessionId,
+      );
+      await waitForStableState(connection, sessionId, accessibilityState);
+      await settleRequestActions();
+      await connection.send("Target.activateTarget", { targetId });
+      await connection.send("Accessibility.enable", {}, sessionId);
+      await runPhase1AccessibilityTreeAudit(connection, sessionId);
+      await runPhase1KeyboardAudit(connection, sessionId, accessibilityState);
+      await settleRequestActions();
+
+      await connection.send(
+        "Emulation.setEmulatedMedia",
+        {
+          features: [
+            { name: "prefers-reduced-motion", value: "reduce" },
+            { name: "forced-colors", value: "active" },
+          ],
+          media: "screen",
+        },
+        sessionId,
+      );
+      await reload(connection, sessionId);
+      await waitForStableState(connection, sessionId, accessibilityState);
+      await settleRequestActions();
+      await runPhase1ForcedColorsAudit(connection, sessionId);
+    }
     stopObserving();
     await settleRequestActions();
 
     if (verificationSnapshot) {
       console.log(
         `Verified ${expectedEntries.length} page-only re-renders against the committed decoded ` +
-          `pixels with ${version.product}; no baseline files were written.`,
+          `pixels with ${version.product}; keyboard, accessibility-tree, and forced-colors audits ` +
+          "passed; no baseline files were written.",
       );
     } else {
       await ensureOutputBoundary();

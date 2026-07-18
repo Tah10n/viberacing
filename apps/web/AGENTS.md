@@ -147,10 +147,12 @@ pnpm run verify:phase1-visual-baselines -- --origin <loopback-http-origin> --bro
 ```
 
 The baseline check is offline. The explicit local verify command uses a temporary profile, requires
-the committed exact browser product/platform, compares decoded pixels without writing, and still
-relies on an operator-reviewed executable. Regeneration uses the root
-`capture:phase1-visual-baselines` command only against the same explicit loopback production build;
-it does not replace manual image review or cross-browser release evidence.
+the committed exact browser product/platform, compares decoded pixels without writing, and audits
+the canonical keyboard order, skip-target focus, accessibility tree, and forced-colors state. It
+still relies on an operator-reviewed executable and does not replace native screen-reader or
+cross-browser evidence. Regeneration uses the root `capture:phase1-visual-baselines` command only
+against the same explicit loopback production build; it does not replace manual image review or
+cross-browser release evidence.
 
 Run `pnpm run verify` before completion. The focused commands do not replace repository history,
 public-data, license, documentation, or staged-snapshot gates.

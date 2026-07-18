@@ -314,6 +314,7 @@ export function RaceExperience({
           aria-labelledby="leaderboard-heading"
           className="leaderboard-section"
           id="leaderboard"
+          tabIndex={-1}
         >
           <div className="section-heading-row">
             <div>
@@ -325,8 +326,7 @@ export function RaceExperience({
           <div className="table-region" tabIndex={0}>
             <table>
               <caption className="sr-only">
-                {translation.communityNotice}: {translation.leaderboard}.{" "}
-                {translation.communityDetail}
+                {`${translation.communityNotice}: ${translation.leaderboard}. ${translation.communityDetail}`}
               </caption>
               <thead>
                 <tr>

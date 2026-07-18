@@ -22,7 +22,12 @@ describe("RaceExperience accessibility", () => {
     });
     expect(results.violations).toEqual([]);
     expect(document.querySelectorAll("h1")).toHaveLength(1);
-    expect(document.querySelector("table caption")?.textContent).toContain("Community");
+    expect(document.querySelector<HTMLAnchorElement>(".skip-link")?.hash).toBe("#leaderboard");
+    expect(document.querySelector<HTMLElement>("#leaderboard")?.tabIndex).toBe(-1);
+    expect(document.querySelector("table caption")?.textContent).toBe(
+      "Community leaderboard: Leaderboard. Scores are self-reported by participating users. " +
+        "They are not audited or endorsed by OpenAI.",
+    );
     expect(document.querySelector('canvas[role="img"]')).not.toBeNull();
     expect(document.querySelector("button:disabled")?.textContent).toContain("Unavailable");
     expect(document.body.textContent).toContain("Synthetic preview");

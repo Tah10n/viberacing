@@ -199,7 +199,9 @@ implementation and verification are present in the working tree.
   dimensions, digests, byte limits, and public PNG policy without launching a browser.
   `pnpm run verify:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium>`
   is an explicit no-write re-render gate: it requires the manifest's exact browser product and
-  platform and zero changed decoded pixels, but does not authenticate or provision that executable.
+  platform and zero changed decoded pixels, then audits the closed keyboard order, skip-target
+  focus, named accessibility tree, and forced-colors presentation. It does not authenticate or
+  provision that executable and is not native screen-reader or cross-browser evidence.
   `pnpm run capture:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium> --write`
   is an explicit local regeneration command that uses a temporary profile and page-only output; it
   is not a root or pull-request browser gate, and every regenerated diff still requires manual

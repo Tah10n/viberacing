@@ -53,8 +53,12 @@ locales, and all three themes with motion disabled. `pnpm run check:phase1-visua
 verifies the exact PNG inventory, dimensions, digests, and public metadata policy offline. An
 explicit local `verify:phase1-visual-baselines` run additionally refuses browser product/platform
 drift, decodes both images inside isolated Chromium, and requires zero changed pixels without
-writing repository files. It does not authenticate the supplied executable. Regeneration is a
-separate local browser task: build and start this workspace on loopback, then run
+writing repository files. It then dispatches browser keyboard events through CDP, requires the
+closed 13-target focus order plus skip-target transfer and pause-button activation, validates named
+landmarks/controls/table/canvas in Chromium's accessibility tree, and repeats the focus/border
+checks with forced colors active. It does not authenticate the supplied executable or replace a
+native screen-reader or cross-browser pass. Regeneration is a separate local browser task: build and
+start this workspace on loopback, then run
 `pnpm run capture:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium> --write`.
 The capture creates its own temporary browser profile and rejects non-loopback page resources; it
 never opens a contributor's normal browser profile. Review all rendered diffs manually because root
@@ -487,9 +491,8 @@ not prove their framework integration. Local responsive, contrast, interaction, 
 artifact-budget, and exact stored viewport evidence is recorded in
 `docs/testing/PHASE1_BROWSER_MATRIX.md`. The stored bytes are protected by an offline integrity gate
 and the explicit local exact-product re-render performs a zero-tolerance decoded-pixel diff.
-Browser-binary provenance/CI provisioning, keyboard/screen-reader/forced-colors and cross-browser
-passes, and runtime Core Web Vitals remain open and are listed honestly in
-`docs/IMPLEMENTATION_STATUS.md`.
+Browser-binary provenance/CI provisioning, native screen-reader and cross-browser passes, and
+runtime Core Web Vitals remain open and are listed honestly in `docs/IMPLEMENTATION_STATUS.md`.
 
 ## Change checklist
 

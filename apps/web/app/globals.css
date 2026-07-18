@@ -1153,3 +1153,47 @@ dd {
     transition-duration: 0.001ms !important;
   }
 }
+
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
+
+  .brand-pixels,
+  .demo-badge,
+  .score-cap,
+  .primary-action,
+  .pixel-button,
+  .trust-banner,
+  .race-console,
+  .race-canvas-shell,
+  .race-canvas,
+  select,
+  .table-region,
+  .profile-grid article,
+  .method-grid article {
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+
+  .primary-action,
+  .pixel-button,
+  .skip-link {
+    background: ButtonFace;
+    color: ButtonText;
+  }
+
+  .pixel-button:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+
+  tbody .current-driver > :first-child {
+    box-shadow: inset 5px 0 0 CanvasText;
+  }
+
+  .race-canvas,
+  .car-swatch > span {
+    forced-color-adjust: none;
+  }
+}

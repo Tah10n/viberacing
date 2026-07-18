@@ -863,9 +863,9 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   checking, coverage, and a production Next.js build on every deterministic CI run.
 - A manifest-driven production artifact gate with nine black-box cases and enforced limits for
   initial raw/gzip bytes, application/CSS gzip bytes, asset count, source maps, fonts, path safety,
-  and standalone output. The current initial route is 184,562 gzip bytes across eight assets;
-  application JavaScript remains within its separate 10,000-byte budget at 8,880 gzip bytes and CSS
-  remains within 5,000 bytes at 4,248 gzip bytes.
+  and standalone output. The current initial route is 184,686 gzip bytes across eight assets;
+  application JavaScript remains within its separate 10,000-byte budget at 8,879 gzip bytes and CSS
+  remains within 5,000 bytes at 4,373 gzip bytes.
 - A lock-integrity-bound metadata cache for platform-specific npm packages, ten license-checker
   regression cases, and two expiring reviewed overrides: one resolves Next.js to patched
   `postcss@8.5.19`, and one removes unused `sharp`/libvips code while Next.js image optimization
@@ -879,13 +879,20 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   non-loopback page resources and reviewed header/hero overflow before writing; it found and blocked
   a clipped 320-pixel join link until the responsive navigation wrapped. An offline integrity gate
   enforces the exact matrix, dimensions, byte limits, SHA-256 manifest, and public PNG policy, and
-  fourteen CLI guardrail cases, ten request-policy assertions, four exact-environment assertions,
-  six pixel-result assertions, and eleven checker mutations prove the entry points fail closed. A
-  separate no-write local gate requires the manifest's exact browser product/platform, re-renders
-  all states, decodes both PNGs inside that isolated browser, and rejects one changed pixel channel.
-  The current Chrome 150.0.7871.129 `win32-x64` pair passed all 18 semantic comparisons without
-  changing the manifest. The executable itself is operator-reviewed rather than
-  provenance/digest-pinned or provisioned in CI, and no cross-platform result is claimed.
+  fifteen CLI guardrail cases, ten request-policy assertions, four exact-environment assertions, six
+  pixel-result assertions, five keyboard-policy assertions, six accessibility-tree-policy
+  assertions, five forced-colors-policy assertions, and eleven checker mutations prove the entry
+  points fail closed. A separate no-write local gate requires the manifest's exact browser
+  product/platform, re-renders all states, decodes both PNGs inside that isolated browser, and
+  rejects one changed pixel channel. The current Chrome 150.0.7871.129 `win32-x64` pair passed all
+  18 semantic comparisons without changing the manifest. That exact no-write run also dispatched
+  real CDP keyboard events over the closed 13-target order, proved skip-link focus transfer and
+  Space-driven pause restoration, validated named landmarks, links, buttons, comboboxes, race image,
+  and trust-captioned table from Chromium's full accessibility tree, then repeated the focus order
+  under forced colors while checking reviewed borders, horizontal bounds, and the semantic canvas
+  alternative. The executable itself is operator-reviewed rather than provenance/digest-pinned or
+  provisioned in CI. This is not native screen-reader, operating-system High Contrast,
+  cross-browser, or cross-platform evidence.
 
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
@@ -916,10 +923,10 @@ definition is locally parsed and policy-tested but has not run on GitHub because
 repository is configured yet.
 
 Local responsive, computed-contrast, interaction, browser-console, development-header,
-production-header, and exact stored viewport observations are recorded in the
-[Phase 1 browser matrix](testing/PHASE1_BROWSER_MATRIX.md), including the light-theme contrast and
-compact-navigation defects found and corrected during review. The report names its local-only
-limitations.
+production-header, exact stored viewport, keyboard, accessibility-tree, and forced-colors
+observations are recorded in the [Phase 1 browser matrix](testing/PHASE1_BROWSER_MATRIX.md),
+including the light-theme contrast and compact-navigation defects found and corrected during review.
+The report names its local-only limitations.
 
 ## Phase 0 still pending
 
@@ -932,7 +939,9 @@ limitations.
 - Provenance/digest-pinned browser-artifact provisioning for root or hosted re-render checks. The
   explicit local gate now requires the manifest product/platform and performs the semantic pixel
   diff, but it accepts an operator-supplied executable and root verification does not launch it.
-- Keyboard-only, screen-reader, forced-colors, and cross-browser release evidence.
+- Native screen-reader, operating-system High Contrast, and cross-browser release evidence. The
+  exact local Chrome CDP keyboard/accessibility-tree/forced-colors gate does not claim these
+  results.
 - Runtime Core Web Vitals for animation-on and reduced-motion modes.
 
 ## Not implemented yet

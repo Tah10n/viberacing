@@ -44,20 +44,23 @@ black-box mutations cover missing or extra files, digest drift, unreviewed metad
 dimensions, per-capture size overflow, browser-version ambiguity, invalid dates, widened capture
 policy, reordered entries, and manifest schema widening.
 
-Fourteen separate CLI guardrail cases reject missing or ambiguous write/verify intent, non-loopback
-or credentialed origins, origin paths, privileged ports, missing, relative, directory, or
-non-executable browser paths, and an executable that is not Chromium before any baseline can be
-written. Ten production request-policy assertions cover same-origin assets/API reads plus external
-origins, different ports, malformed and credentialed URLs, and credential-bearing headers. Four
-environment-policy assertions cover exact match and product/platform drift; six pixel-result
-assertions cover exact, different, dimension-drifted, widened, contradictory, and
-arithmetic-overflow summaries.
+Fifteen separate CLI guardrail cases reject missing or ambiguous write/verify intent, repeated
+package-manager separators, non-loopback or credentialed origins, origin paths, privileged ports,
+missing, relative, directory, or non-executable browser paths, and an executable that is not
+Chromium before any baseline can be written. Ten production request-policy assertions cover
+same-origin assets/API reads plus external origins, different ports, malformed and credentialed
+URLs, and credential-bearing headers. Four environment-policy assertions cover exact match and
+product/platform drift; six pixel-result assertions cover exact, different, dimension-drifted,
+widened, contradictory, and arithmetic-overflow summaries. Five keyboard-policy, six
+accessibility-tree-policy, and five forced-colors-policy assertions reject missing, widened, or
+contradictory browser audit summaries.
 
 The explicit `verify:phase1-visual-baselines` mode first applies that shared integrity boundary,
 requires the browser's exact reported product and local platform to equal the committed manifest,
 re-renders all 18 states, decodes each stored/rendered PNG inside the isolated browser, and permits
-zero changed pixel channels. It writes no baseline file. A local run with the recorded Chrome
-150.0.7871.129 `win32-x64` pair passed all 18 comparisons on 2026-07-18. This pins observable
+zero changed pixel channels. It then runs the keyboard, accessibility-tree, and forced-colors audit
+described below. It writes no baseline file. A local run with the recorded Chrome 150.0.7871.129
+`win32-x64` pair passed all comparisons and browser audits on 2026-07-18. This pins observable
 product/platform behavior, not the provenance or digest of the operator-supplied executable.
 
 To verify or intentionally regenerate the evidence, build and start the production frontend on an
@@ -101,6 +104,32 @@ Theme, locale, motion, and pause controls changed the rendered `data-theme`, `la
 and `aria-pressed` states. The paused Russian control changed from `Остановить гонку` to
 `Продолжить гонку`. The page reported no browser console warnings or errors during those checks.
 
+## Keyboard, accessibility-tree, and forced-colors evidence
+
+The no-write gate resets the exact synthetic English Classic Grand Prix page at 1280 by 720 and
+dispatches real `Tab`, `Shift+Tab`, `Enter`, and `Space` key events through CDP. The closed forward
+order contains the skip link, brand, five primary-navigation links, hero action, pause button, three
+labelled selects, and keyboard-scrollable table region. Every target was in the viewport with its
+focus outline visible. Reverse traversal returned from the table to the motion select. The skip link
+became visible and transferred both the fragment and programmatic focus to the non-sequential
+leaderboard section. Space changed the pause control's `aria-pressed` state from `false` to `true`
+and back to `false`.
+
+The same run reads Chromium's full accessibility tree rather than inferring semantics from DOM
+attributes alone. It requires exactly one banner, primary navigation, main, and content-info
+landmark; eight named links; two named buttons including the disabled unavailable control; three
+named comboboxes; the named race image; the leaderboard table's full trust caption; and the hero
+heading. The exact link/button/combobox inventory and duplicate counts, an unnamed reviewed control,
+or an unreviewed input role fail closed.
+
+With `(forced-colors: active)` emulated, all 13 keyboard targets retained visible focus in the same
+order, the document retained its horizontal bounds, and ten reviewed control/panel/table/canvas
+surfaces retained explicit borders. Code-native canvas pixels use `forced-color-adjust: none`, while
+the separately exposed image name/description and semantic table remain authoritative alternatives.
+This is exact local Chrome keyboard and accessibility-tree evidence. It is not a native
+screen-reader session, operating-system High Contrast certification, or evidence for another
+browser.
+
 ## Computed color contrast
 
 Contrast was calculated from the actual computed CSS variables with the WCAG sRGB relative luminance
@@ -114,8 +143,8 @@ light-theme accent and button-text token were changed, then all pairs were measu
 | Cyber Rally        |                                          6.06:1 |               15.37:1 |                         8.48:1 |
 
 The tested pairs cover text, muted text, accent text, buttons, disabled controls, panels, table
-headers, and focus color. This calculation does not replace a browser accessibility audit for every
-state, zoom level, forced-color mode, or composited pixel.
+headers, and focus color. The canonical forced-colors browser audit is separate; neither result
+covers every state, zoom level, operating-system palette, or composited pixel.
 
 ## Runtime response policy
 
@@ -145,10 +174,10 @@ standalone output, or a budget overrun. The current artifact is:
 | Metric                        | Observed |  Budget |
 | ----------------------------- | -------: | ------: |
 | Initial assets                |        8 |      10 |
-| Initial raw bytes             |  612,174 | 700,000 |
-| Initial gzip bytes            |  184,562 | 215,000 |
-| Application client gzip bytes |    8,880 |  10,000 |
-| Stylesheet gzip bytes         |    4,248 |   5,000 |
+| Initial raw bytes             |  612,748 | 700,000 |
+| Initial gzip bytes            |  184,686 | 215,000 |
+| Application client gzip bytes |    8,879 |  10,000 |
+| Stylesheet gzip bytes         |    4,373 |   5,000 |
 
 Nine black-box fixture cases cover a valid artifact, missing/traversing/oversized assets, source-map
 leakage, missing standalone output, total/application budget overruns, and font-boundary drift.
@@ -157,8 +186,8 @@ leakage, missing standalone output, total/application budget overruns, and font-
 
 - The explicit local gate performs the semantic re-render diff, but root/pull-request verification
   does not launch Chromium and no provenance/digest-pinned browser artifact is provisioned.
-- Keyboard-only traversal, screen-reader smoke testing, and forced-colors/high-contrast testing
-  remain required.
+- Native screen-reader smoke testing and operating-system High Contrast confirmation remain
+  required; the local CDP accessibility-tree/forced-colors audit does not claim either result.
 - Runtime Core Web Vitals must be measured with animation enabled and with reduced motion.
 - Safari and Firefox release evidence has not been collected.
 
