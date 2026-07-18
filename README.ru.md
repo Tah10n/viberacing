@@ -36,6 +36,12 @@ evidence с реальным пользователем.
 bounded summary через один объединённый server-side visibility/score checkout. Hidden-профиль не
 показывает score; raw usage, private identifiers, browser fetch и browser storage не добавлены.
 
+![Синтетическое desktop-превью Vibe Racing на русском языке в теме Cyber Rally](docs/testing/phase1-visual-baselines/desktop-1280x720-ru-cyber-rally.png)
+
+Это page-only изображение входит в синтетическую
+[браузерную матрицу Phase 1 (EN)](docs/testing/PHASE1_BROWSER_MATRIX.md) и не содержит browser
+chrome, данных аккаунта или реальной статистики.
+
 ## Модель доверия
 
 Community-статистика предоставляется локальными устройствами и не подтверждается OpenAI. Её нельзя
@@ -62,6 +68,7 @@ Verified-лига останется выключенной до появлен�
 - [Политика данных публичного репозитория (EN)](docs/security/PUBLIC_REPOSITORY_POLICY.md)
 - [Локальная разработка (EN)](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Веб-прототип и его границы (EN)](apps/web/README.md)
+- [Браузерная матрица Phase 1 (EN)](docs/testing/PHASE1_BROWSER_MATRIX.md)
 - [Локальное Ingest verification kernel (EN)](apps/ingest/README.md)
 - [Connector protocol foundation (EN)](crates/connector/README.md)
 - [Локальный bounded Agent Skill для car proposal (EN)](.agents/skills/viberacing-propose-car/SKILL.md)

@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { inspectPublicPng, parsePng, sanitizePublicPng } from "./lib/png-content-policy.mjs";
+import {
+  inspectPublicPng,
+  parsePng,
+  readPngDimensions,
+  sanitizePublicPng,
+} from "./lib/png-content-policy.mjs";
 
 const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
@@ -41,6 +46,7 @@ function fixture(extraChunks = []) {
 
 const safe = fixture([chunk("sRGB", Buffer.from([0]))]);
 assert.equal(parsePng(safe).length, 4);
+assert.deepEqual(readPngDimensions(safe), { height: 1, width: 1 });
 assert.deepEqual(inspectPublicPng(safe), []);
 
 const credential = fixture([chunk("caBX", Buffer.from("public certificate metadata", "utf8"))]);
@@ -58,4 +64,16 @@ assert.match(inspectPublicPng(corrupted)[0], /checksum is invalid/);
 assert.match(inspectPublicPng(Buffer.concat([safe, Buffer.from("trailing")]))[0], /trailing data/);
 assert.match(inspectPublicPng(Buffer.from("not a png"))[0], /signature/);
 
-console.log("PNG content-policy tests passed (7 assertions).");
+const zeroWidth = Buffer.from(safe);
+zeroWidth.writeUInt32BE(0, 16);
+const zeroWidthHeader = zeroWidth.subarray(12, 29);
+zeroWidth.writeUInt32BE(crc32(zeroWidthHeader), 29);
+assert.match(inspectPublicPng(zeroWidth)[0], /width is zero/);
+
+const zeroHeight = Buffer.from(safe);
+zeroHeight.writeUInt32BE(0, 20);
+const zeroHeightHeader = zeroHeight.subarray(12, 29);
+zeroHeight.writeUInt32BE(crc32(zeroHeightHeader), 29);
+assert.match(inspectPublicPng(zeroHeight)[0], /height is zero/);
+
+console.log("PNG content-policy tests passed (12 assertions).");

@@ -853,7 +853,7 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   deployment without a real HTTPS DNS value remains forbidden. The separate enrollment slice stores
   account state only in encrypted HttpOnly cookies and reads its exact server-only configuration
   lazily; the default preview still needs none of it.
-- Six hundred eighty-three unit, component, interaction, security-header, localization, scoring,
+- Six hundred ninety-eight unit, component, interaction, security-header, localization, scoring,
   HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
   coverage gate currently reports 86.83% statements, 85.17% branches, 95.31% functions, and 86.95%
   lines over product components and libraries; framework entrypoints are verified by the production
@@ -863,17 +863,26 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   checking, coverage, and a production Next.js build on every deterministic CI run.
 - A manifest-driven production artifact gate with nine black-box cases and enforced limits for
   initial raw/gzip bytes, application/CSS gzip bytes, asset count, source maps, fonts, path safety,
-  and standalone output. The current initial route is 184,559 gzip bytes across eight assets;
+  and standalone output. The current initial route is 184,562 gzip bytes across eight assets;
   application JavaScript remains within its separate 10,000-byte budget at 8,880 gzip bytes and CSS
-  remains within 5,000 bytes at 4,245 gzip bytes.
+  remains within 5,000 bytes at 4,248 gzip bytes.
 - A lock-integrity-bound metadata cache for platform-specific npm packages, ten license-checker
   regression cases, and two expiring reviewed overrides: one resolves Next.js to patched
   `postcss@8.5.19`, and one removes unused `sharp`/libvips code while Next.js image optimization
   remains disabled. The official registry audit reports zero known vulnerabilities after resolution.
 - A project-generated social preview with accessibility text, checksum/source record, explicit AI
   disclosure, and byte-preserving removal of service C2PA metadata. The public-file gate now parses
-  PNG structure and CRCs and rejects unreviewed ancillary chunks; seven focused policy assertions
+  PNG structure and CRCs and rejects unreviewed ancillary chunks; twelve focused policy assertions
   and a malformed-PNG black-box case cover the boundary.
+- Eighteen page-only production-rendered Phase 1 viewport baselines covering three viewports, both
+  locales, and all three themes with motion disabled. The isolated no-dependency CDP capture rejects
+  non-loopback page resources and reviewed header/hero overflow before writing; it found and blocked
+  a clipped 320-pixel join link until the responsive navigation wrapped. An offline integrity gate
+  enforces the exact matrix, dimensions, byte limits, SHA-256 manifest, and public PNG policy, and
+  twelve CLI capture-guardrail cases, ten production request-policy assertions, and ten checker
+  mutations prove both entry points fail closed. The current Chrome 150.0.7871.129 `win32-x64`
+  pixels are local visual evidence, not a pinned-browser, cross-platform, or automated semantic
+  pixel-diff result.
 
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
@@ -903,10 +912,11 @@ resolves public hosts through a non-public proxy address; it correctly failed cl
 definition is locally parsed and policy-tested but has not run on GitHub because no remote
 repository is configured yet.
 
-Local responsive, computed-contrast, interaction, browser-console, development-header, and
-production-header observations are recorded in the
-[Phase 1 browser matrix](testing/PHASE1_BROWSER_MATRIX.md), including the light-theme contrast
-defect found and corrected during review. The report names its local-only limitations.
+Local responsive, computed-contrast, interaction, browser-console, development-header,
+production-header, and exact stored viewport observations are recorded in the
+[Phase 1 browser matrix](testing/PHASE1_BROWSER_MATRIX.md), including the light-theme contrast and
+compact-navigation defects found and corrected during review. The report names its local-only
+limitations.
 
 ## Phase 0 still pending
 
@@ -916,7 +926,8 @@ defect found and corrected during review. The report names its local-only limita
 
 ## Phase 1 still pending
 
-- Browser-level responsive visual snapshots for all themes and both languages.
+- A pinned-browser automated re-render and semantic pixel-diff gate; the exact current baseline
+  bytes are stored and integrity-checked, but root verification does not launch Chromium.
 - Keyboard-only, screen-reader, forced-colors, and cross-browser release evidence.
 - Runtime Core Web Vitals for animation-on and reduced-motion modes.
 

@@ -24,8 +24,9 @@ remain safe to publish verbatim.
   TypeScript/OpenAPI artifacts, writable-field boundary, validation limits, and versioning rules.
 - [Database foundation](../database/README.md) — SQL migration ledger, privacy/table map,
   least-privilege role matrix, state constraints, test workflow, and remaining capability work.
-- [Phase 1 browser matrix](testing/PHASE1_BROWSER_MATRIX.md) — responsive, contrast, interaction,
-  runtime-header, artifact-budget evidence, and explicitly open manual gates.
+- [Phase 1 browser matrix](testing/PHASE1_BROWSER_MATRIX.md) — exact synthetic viewport baselines,
+  responsive, contrast, interaction, runtime-header, artifact-budget evidence, and open manual
+  gates.
 - [Dependency policy](security/DEPENDENCY_POLICY.md) — package, action, container, update, and
   supply-chain requirements.
 - [Dependency inventory](reference/dependency-inventory.json) — deterministic locked npm/Cargo and

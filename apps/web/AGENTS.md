@@ -142,7 +142,13 @@ pnpm run typecheck:web
 pnpm run test:web:coverage
 pnpm run build:web
 pnpm run check:web-build
+pnpm run check:phase1-visual-baselines
 ```
+
+The visual-baseline check is offline. Regeneration uses the root `capture:phase1-visual-baselines`
+command only against an explicit loopback production build and an absolute reviewed Chromium path;
+it creates a temporary profile and does not replace manual image review or cross-browser release
+evidence.
 
 Run `pnpm run verify` before completion. The focused commands do not replace repository history,
 public-data, license, documentation, or staged-snapshot gates.

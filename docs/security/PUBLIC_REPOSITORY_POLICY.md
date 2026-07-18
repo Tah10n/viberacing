@@ -48,6 +48,12 @@ Screenshots and generated assets require metadata and visible-content review. Do
 screenshot of a signed-in browser or a terminal containing a user-home path. Prefer deterministic
 fixtures rendered in an isolated profile.
 
+The Phase 1 viewport baseline capture is narrower still: it accepts only an exact loopback origin
+and an explicitly named Chromium executable, creates a temporary profile, permits only synthetic
+page state, and writes page-only PNGs. The committed manifest and offline checker protect matrix
+coverage, dimensions, digests, size, and PNG chunks; they do not replace inspection of every image
+or certify a visual change.
+
 ## Required review before a commit
 
 1. Stage only the intended files.

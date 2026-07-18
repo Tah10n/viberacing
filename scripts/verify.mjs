@@ -55,6 +55,21 @@ const checks = [
     [resolve(import.meta.dirname, "test-png-content-policy.mjs")],
   ],
   [
+    "Phase 1 visual-baseline capture guardrails",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-phase1-visual-baseline-capture.mjs")],
+  ],
+  [
+    "Phase 1 visual-baseline checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-phase1-visual-baselines-check.mjs")],
+  ],
+  [
+    "Phase 1 visual baselines",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-phase1-visual-baselines.mjs")],
+  ],
+  [
     "public-file checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-public-file-check.mjs")],

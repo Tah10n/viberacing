@@ -49,6 +49,14 @@ Versioning where its guarantees are applicable.
   unused Next.js image-optimization graph.
 - Manifest-driven production asset budgets with path, source-map, font, standalone-output, and
   black-box regression checks.
+- An isolated no-dependency CDP capture plus 18 stored page-only Phase 1 viewport baselines covering
+  three breakpoints, both locales, and all three themes with motion disabled. The capture rejects
+  non-loopback resources and reviewed header/hero overflow; it exposed and blocked a clipped compact
+  join link until responsive navigation wrapping was fixed. Twelve CLI guardrail cases, ten
+  production request-policy assertions, and a separate offline gate with ten checker mutations
+  enforce the closed origin/browser intent, exact inventory, dimensions, byte limits, SHA-256
+  manifest, and public PNG policy without claiming a pinned-browser visual diff or cross-browser
+  result.
 - A documented AI-generated social preview, accessible alternative text, reproducible metadata
   sanitation, and a fail-closed PNG structure/chunk policy with regression coverage.
 - Strict server-only public-origin validation for absolute social metadata, with HTTPS-only hosted

@@ -23,6 +23,34 @@ themes. No automotive logo, brand name, uploaded asset, arbitrary color, remote 
 metadata, or user drawing command enters this pipeline. Visual trade-dress review remains a release
 gate even for project-authored combinations.
 
+## Phase 1 responsive viewport baselines
+
+| Field                       | Record                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Repository path             | `docs/testing/phase1-visual-baselines/`                                                                       |
+| Purpose                     | Reviewable top-viewport evidence for every 3-viewport by 2-locale by 3-theme synthetic combination            |
+| Created                     | 2026-07-18                                                                                                    |
+| Method                      | Repository-owned CDP capture of the local production build with motion disabled and a fresh temporary profile |
+| Browser evidence            | Chrome 150.0.7871.129 on `win32-x64`; this is local Chromium evidence, not a cross-browser result             |
+| Dimensions                  | Six images each at 1280 by 720, 390 by 844, and 320 by 568 pixels                                             |
+| Integrity record            | `docs/testing/phase1-visual-baselines/manifest.json` contains all 18 byte counts and SHA-256 digests          |
+| Third-party source material | None; pixels are rendered only from the repository's synthetic HTML, CSS, canvas, and fixed fixtures          |
+| Distribution basis          | Project-authored page rendering distributed with the repository under Apache-2.0                              |
+
+The capture harness starts the reviewed browser with an isolated temporary profile, extensions and
+sync disabled, no proxy, and page requests restricted to the exact loopback origin. It selects only
+the existing locale, theme, and motion preferences before hydration. Browser chrome, local paths,
+account state, real activity, and remote resources are absent. The harness rejects reviewed
+header/hero elements outside the viewport; its first compact pass found and blocked a clipped join
+link until the responsive navigation was fixed.
+
+`scripts/check-phase1-visual-baselines.mjs` enforces the complete Cartesian inventory, dimensions,
+per-file and aggregate size limits, manifest digests, and the same public PNG chunk policy used for
+other assets. This protects the stored evidence but does not launch a pinned browser or approve a
+changed pixel. Regeneration requires the explicit command in the
+[browser matrix](../testing/PHASE1_BROWSER_MATRIX.md), inspection of all rendered diffs, and the
+normal staged public-data review.
+
 ## Social preview race scene
 
 | Field                       | Record                                                                                                                                                                   |

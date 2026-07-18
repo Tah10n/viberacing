@@ -119,7 +119,35 @@ pnpm run typecheck:web
 pnpm run test:web
 pnpm run test:web:coverage
 pnpm run build:web
+pnpm run check:phase1-visual-baselines
 ```
+
+The baseline check is browser-free and validates the committed 18-image synthetic viewport matrix.
+To intentionally refresh those images, first build and start the production frontend on an explicit
+loopback port, then run the capture from another terminal with an absolute path to a reviewed
+Chromium executable:
+
+In the first terminal:
+
+```text
+pnpm run build:web
+pnpm --filter @viberacing/web exec next start --hostname 127.0.0.1 --port 3317
+```
+
+In a second PowerShell terminal, construct the exact loopback origin without treating it as a public
+link:
+
+```powershell
+$phase1Origin = [System.UriBuilder]::new("http", "127.0.0.1", 3317).Uri.AbsoluteUri
+pnpm run capture:phase1-visual-baselines -- --origin $phase1Origin --browser <absolute-path-to-reviewed-chromium> --write
+pnpm run check:phase1-visual-baselines
+```
+
+The capture uses a new temporary profile, motion-off synthetic data, and page-only PNG output. It
+fails if page resources leave the exact loopback origin or reviewed header/hero elements exceed the
+viewport. It does not discover or reuse a signed-in browser. Inspect every image and manifest digest
+before staging; the offline root gate protects stored evidence but does not decide whether a visual
+change is acceptable.
 
 Contract-focused commands do not accept or read real account data:
 

@@ -78,6 +78,8 @@ export function parsePng(buffer) {
   assertPng(chunks.length > 0, "PNG contains no chunks");
   assertPng(chunks[0].type === "IHDR", "IHDR is not the first chunk");
   assertPng(chunks[0].dataLength === 13, "IHDR length is not 13 bytes");
+  assertPng(buffer.readUInt32BE(chunks[0].start + 8) > 0, "PNG width is zero");
+  assertPng(buffer.readUInt32BE(chunks[0].start + 12) > 0, "PNG height is zero");
   assertPng(
     chunks.filter(({ type }) => type === "IHDR").length === 1,
     "PNG has multiple IHDR chunks",
@@ -91,6 +93,14 @@ export function parsePng(buffer) {
   assertPng(offset === buffer.length, "PNG has trailing data after IEND");
 
   return chunks;
+}
+
+export function readPngDimensions(buffer) {
+  const [header] = parsePng(buffer);
+  return Object.freeze({
+    height: buffer.readUInt32BE(header.start + 12),
+    width: buffer.readUInt32BE(header.start + 8),
+  });
 }
 
 export function inspectPublicPng(buffer) {

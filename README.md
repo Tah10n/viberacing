@@ -37,6 +37,12 @@ The authenticated account page now also renders the current Community week's sev
 scores and bounded summary from one combined server-side visibility/score checkout. Hidden profiles
 show no score; raw usage, private identifiers, a browser fetch, and browser storage remain absent.
 
+![Synthetic Vibe Racing desktop preview in the Neon Night theme](docs/testing/phase1-visual-baselines/desktop-1280x720-en-neon-night.png)
+
+This page-only image is one member of the synthetic
+[Phase 1 browser matrix](docs/testing/PHASE1_BROWSER_MATRIX.md); it contains no browser chrome,
+account state, or real usage.
+
 ## Trust model
 
 Community results are self-reported by local devices. They are not verified by OpenAI and must never
@@ -62,6 +68,7 @@ keys, or arbitrary user-uploaded files.
 - [Architecture decisions](docs/decisions/README.md)
 - [Local development](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Web prototype](apps/web/README.md)
+- [Phase 1 browser matrix](docs/testing/PHASE1_BROWSER_MATRIX.md)
 - [Ingest verification kernel](apps/ingest/README.md)
 - [Connector protocol foundation](crates/connector/README.md)
 - [Local bounded car-proposal Agent Skill](.agents/skills/viberacing-propose-car/SKILL.md)
