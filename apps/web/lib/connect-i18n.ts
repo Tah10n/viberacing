@@ -38,6 +38,8 @@ const english = {
   signIn: "Sign in",
   source: "Source",
   sourceChoice: "Choose where this device belongs",
+  sourceCreationUnavailable:
+    "Creating a new source is temporarily unavailable. Choose an active existing source if one is shown.",
   sourceDevices: "Active devices",
   stepCode: "The connector displays a short pairing code and its own key fingerprint.",
   stepReview: "This page shows the same device, version, platform, expiry, and fingerprint.",
@@ -89,6 +91,8 @@ const russian: Record<ConnectTranslationKey, string> = {
   signIn: "Войти",
   source: "Источник",
   sourceChoice: "Выберите, к какому источнику относится устройство",
+  sourceCreationUnavailable:
+    "Создание нового источника временно недоступно. Выберите активный существующий источник, если он показан.",
   sourceDevices: "Активные устройства",
   stepCode: "Коннектор показывает короткий код подключения и отпечаток своего ключа.",
   stepReview: "Эта страница показывает то же устройство, версию, платформу, срок и отпечаток.",

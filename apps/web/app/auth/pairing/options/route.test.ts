@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const runtimeMock = vi.hoisted(() => ({
-  getEnrollmentRuntime: vi.fn(() => {
+  getEnrollmentRuntime: vi.fn<() => unknown>(() => {
     throw new Error("runtime-unavailable");
   }),
 }));
@@ -14,7 +14,10 @@ describe("pairing approval options Next.js entrypoint", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.resetModules();
-    runtimeMock.getEnrollmentRuntime.mockClear();
+    runtimeMock.getEnrollmentRuntime.mockReset();
+    runtimeMock.getEnrollmentRuntime.mockImplementation(() => {
+      throw new Error("runtime-unavailable");
+    });
   });
 
   it("fails closed before enrollment runtime construction when disabled", async () => {
@@ -38,4 +41,44 @@ describe("pairing approval options Next.js entrypoint", () => {
     });
     expect(runtimeMock.getEnrollmentRuntime).toHaveBeenCalledOnce();
   });
+
+  it.each([
+    ["false", false],
+    ["true", true],
+  ] as const)(
+    "forwards source-creation value %s as the literal decision %s",
+    async (environmentValue, expected) => {
+      const beginPairingApproval = vi.fn(() => Promise.resolve(undefined));
+      runtimeMock.getEnrollmentRuntime.mockReturnValue({
+        config: {
+          publicOrigin: "https://viberacing.invalid",
+          recoveryMinimumResponseMs: 250,
+          secureCookies: true,
+        },
+        service: { beginPairingApproval },
+      });
+      vi.stubEnv("VIBERACING_PAIRING_ENABLED", "true");
+      vi.stubEnv("VIBERACING_SOURCE_CREATION_ENABLED", environmentValue);
+      const route = await import("./route");
+      const response = await route.POST(
+        new Request(path, {
+          body: JSON.stringify({ sourceChoice: "new", userCode: "7K9M-P2QR-W4XY" }),
+          headers: {
+            "content-type": "application/json",
+            cookie: "viberacing_session=opaque-session",
+            host: "viberacing.invalid",
+            origin: "https://viberacing.invalid",
+          },
+          method: "POST",
+        }),
+      );
+
+      expect(response.status).toBe(401);
+      expect(beginPairingApproval).toHaveBeenCalledWith(
+        "opaque-session",
+        { sourceChoice: "new", userCode: "7K9M-P2QR-W4XY" },
+        expected,
+      );
+    },
+  );
 });

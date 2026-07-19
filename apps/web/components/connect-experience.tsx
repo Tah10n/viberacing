@@ -12,12 +12,14 @@ interface ConnectExperienceProps {
   readonly existingSources?: readonly PairingExistingSourceChoice[];
   readonly initialLocale: Locale;
   readonly signedIn: boolean;
+  readonly sourceCreationEnabled: boolean;
 }
 
 export function ConnectExperience({
   existingSources,
   initialLocale,
   signedIn,
+  sourceCreationEnabled,
 }: ConnectExperienceProps) {
   const [locale, setLocale] = useState(initialLocale);
   const copy = connectTranslations[locale];
@@ -77,6 +79,7 @@ export function ConnectExperience({
           <PairingApprovalForm
             {...(existingSources === undefined ? {} : { existingSources })}
             locale={locale}
+            sourceCreationEnabled={sourceCreationEnabled}
           />
         ) : (
           <section aria-labelledby="pairing-sign-in-title" className="account-security">

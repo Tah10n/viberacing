@@ -702,10 +702,14 @@ describe("enrollment service", () => {
       publicKey,
     });
 
-    const start = await service.beginPairingApproval(sessionCookie, {
-      sourceChoice: "new",
-      userCode: "7K9M-P2QR-W4XY",
-    });
+    const start = await service.beginPairingApproval(
+      sessionCookie,
+      {
+        sourceChoice: "new",
+        userCode: "7K9M-P2QR-W4XY",
+      },
+      true,
+    );
     expect(start).toMatchObject({
       options: { challenge: authenticationChallenge },
       pairing: {
@@ -740,6 +744,7 @@ describe("enrollment service", () => {
       challenge: authenticationChallenge,
       challengeId: "00000000-0000-4000-8000-000000000502",
       pairingId,
+      sourceChoice: "new",
       version: 1,
     });
     const sealedSourceId = (sealedChallenge as Record<string, unknown>).sourceId;
@@ -756,9 +761,12 @@ describe("enrollment service", () => {
       type: "public-key",
     };
     await expect(
-      service.completePairingApproval(sessionCookie, start?.pairingApprovalCookie ?? "", {
-        response,
-      }),
+      service.completePairingApproval(
+        sessionCookie,
+        start?.pairingApprovalCookie ?? "",
+        { response },
+        true,
+      ),
     ).resolves.toBe(true);
     expect(verifyLogin).toHaveBeenCalledWith(
       response,
@@ -789,13 +797,81 @@ describe("enrollment service", () => {
       publicKey: Buffer.alloc(32, 0x65),
     });
     await expect(
-      service.beginPairingApproval(sessionCookie, {
-        sourceChoice: "new",
-        userCode: "not-a-code",
-      }),
+      service.beginPairingApproval(
+        sessionCookie,
+        {
+          sourceChoice: "new",
+          userCode: "not-a-code",
+        },
+        true,
+      ),
     ).resolves.toBeUndefined();
     expect(database.readPairingApproval).toHaveBeenCalledTimes(2);
     expect(database.createPairingApprovalChallenge).toHaveBeenCalledOnce();
+  });
+
+  it("requires literal source enablement for both new-source approval steps", async () => {
+    derivePairingCode.mockClear();
+    const { cookieCodec, database, service, verifyLogin } = createFixture();
+    const sessionId = "00000000-0000-4000-8000-000000000512";
+    const sessionCookie = cookieCodec.seal("session", {
+      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
+      handle: join.handle,
+      locale: join.locale,
+      passkeyRegistered: true,
+      profileId: join.inviteId,
+      sessionId,
+      sessionVerifier: Buffer.alloc(32, 0x47).toString("base64url"),
+      version: 1,
+    });
+    const request = Object.freeze({
+      sourceChoice: "new" as const,
+      userCode: "7K9M-P2QR-W4XY",
+    });
+
+    for (const sourceCreationEnabled of [false, undefined, "true", 1]) {
+      await expect(
+        service.beginPairingApproval(sessionCookie, request, sourceCreationEnabled),
+      ).resolves.toBeUndefined();
+    }
+    expect(derivePairingCode).not.toHaveBeenCalled();
+    expect(database.readPairingApproval).not.toHaveBeenCalled();
+    expect(database.createPairingApprovalChallenge).not.toHaveBeenCalled();
+
+    vi.mocked(database.readPairingApproval).mockResolvedValueOnce({
+      architecture: "x86_64",
+      candidateIndex: 1,
+      connectorVersion: "1.2.3",
+      deviceLabel: "Studio PC",
+      expiresAt: "2026-07-16T10:09:00.000Z",
+      osFamily: "windows",
+      pairingId: "00000000-0000-4000-8000-000000001001",
+      publicKey: Buffer.alloc(32, 0x64),
+    });
+    const started = await service.beginPairingApproval(sessionCookie, request, true);
+    expect(started).toBeDefined();
+
+    const hostileBody = new Proxy(
+      {},
+      {
+        getPrototypeOf() {
+          throw new Error("authentication-body-must-not-run");
+        },
+      },
+    );
+    for (const sourceCreationEnabled of [false, undefined, "true", 1]) {
+      await expect(
+        service.completePairingApproval(
+          sessionCookie,
+          started?.pairingApprovalCookie ?? "",
+          hostileBody,
+          sourceCreationEnabled,
+        ),
+      ).resolves.toBe(false);
+    }
+    expect(database.readPasskeyLoginMaterial).not.toHaveBeenCalled();
+    expect(verifyLogin).not.toHaveBeenCalled();
+    expect(database.completePairingApproval).not.toHaveBeenCalled();
   });
 
   it("binds an existing active source through only its session-bound opaque control", async () => {
@@ -840,11 +916,15 @@ describe("enrollment service", () => {
       .mockResolvedValueOnce({ ...material, publicKey: Buffer.alloc(32, 0x67) })
       .mockResolvedValueOnce({ ...material, publicKey: Buffer.alloc(32, 0x68) });
 
-    const start = await service.beginPairingApproval(sessionCookie, {
-      sourceChoice: "existing",
-      sourceControl,
-      userCode: "7K9M-P2QR-W4XY",
-    });
+    const start = await service.beginPairingApproval(
+      sessionCookie,
+      {
+        sourceChoice: "existing",
+        sourceControl,
+        userCode: "7K9M-P2QR-W4XY",
+      },
+      false,
+    );
     expect(start?.options.challenge).toBe(authenticationChallenge);
     expect(database.createPairingApprovalChallenge).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -856,23 +936,50 @@ describe("enrollment service", () => {
     );
     expect(cookieCodec.open("passkey", start?.pairingApprovalCookie ?? "")).toMatchObject({
       pairingId: material.pairingId,
+      sourceChoice: "existing",
       sourceId,
     });
     expect(start?.pairingApprovalCookie).not.toContain(sourceId);
 
+    const credentialId = Buffer.alloc(32, 0x74);
     await expect(
-      service.beginPairingApproval(sessionCookie, {
-        sourceChoice: "existing",
-        sourceControl: otherSessionSourceControl,
-        userCode: "7K9M-P2QR-W4XY",
-      }),
+      service.completePairingApproval(
+        sessionCookie,
+        start?.pairingApprovalCookie ?? "",
+        {
+          response: {
+            id: credentialId.toString("base64url"),
+            rawId: credentialId.toString("base64url"),
+            response: {},
+            type: "public-key",
+          },
+        },
+        false,
+      ),
+    ).resolves.toBe(true);
+    expect(database.completePairingApproval).toHaveBeenCalledOnce();
+
+    await expect(
+      service.beginPairingApproval(
+        sessionCookie,
+        {
+          sourceChoice: "existing",
+          sourceControl: otherSessionSourceControl,
+          userCode: "7K9M-P2QR-W4XY",
+        },
+        false,
+      ),
     ).resolves.toBeUndefined();
     await expect(
-      service.beginPairingApproval(sessionCookie, {
-        sourceChoice: "existing",
-        sourceControl: `${sourceControl}tampered`,
-        userCode: "7K9M-P2QR-W4XY",
-      }),
+      service.beginPairingApproval(
+        sessionCookie,
+        {
+          sourceChoice: "existing",
+          sourceControl: `${sourceControl}tampered`,
+          userCode: "7K9M-P2QR-W4XY",
+        },
+        false,
+      ),
     ).resolves.toBeUndefined();
     expect(database.readPairingApproval).toHaveBeenCalledTimes(3);
     expect(database.createPairingApprovalChallenge).toHaveBeenCalledOnce();

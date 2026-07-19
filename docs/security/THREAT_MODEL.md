@@ -34,12 +34,15 @@ existing source selection, and fresh-passkey atomic approval of that exact choic
 start/poll routes now add closed framing/contracts, shared four-call admission, and fixed
 global/client-bucket PostgreSQL windows. All four pairing route modules now require one exact
 default-off enable decision before parsing, runtime/service construction, admission acquisition,
-protected configuration, or database work. The bounded Rust client generates and stores a pairing
-key through the native OS credential store, signs the exact proof, persists activation before
-success output, and can delete only the exact local origin/label record with an explicit warning
-that server authority was not revoked. No Codex launch or sync-context capability has a public
-constructor. A separate private Windows x86_64 development command can construct them only after
-active-record review and exact artifact admission selected through bounded fixed-name `PATH`
+protected configuration, or database work. A second exact default-off decision independently blocks
+new-source UI, approval initiation, and approval completion while active existing-source pairing
+remains available; sealed source choice and its v2 context digest close an in-flight new-source
+challenge after a disabled verification-module restart. The bounded Rust client generates and stores
+a pairing key through the native OS credential store, signs the exact proof, persists activation
+before success output, and can delete only the exact local origin/label record with an explicit
+warning that server authority was not revoked. No Codex launch or sync-context capability has a
+public constructor. A separate private Windows x86_64 development command can construct them only
+after active-record review and exact artifact admission selected through bounded fixed-name `PATH`
 discovery or an explicit path, then sends one fixed signed sync without retry or edge credentials.
 It cannot admit another platform/version or create a support claim. A separate explicit
 `check-codex` command performs only that admission without credential-store, process, account,
@@ -200,7 +203,7 @@ and migration or rollback where applicable.
 | Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections                                  | Default-off startup, strict schema, bounded bodies, fixed adapter/procedure, non-owner role, constraints, deadlines, backpressure                                      | Startup latch, full synthetic loopback HTTP-to-PostgreSQL, and isolated SQL tested; deployed operation planned                                |
 | Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work                      | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons                                              | SQL plus synthetic CLI-to-PostgreSQL cleanup/reset/purge/scoring tested; production login, scheduler, correction planned                      |
 | CarRecipe and assets                | A proposal, agent shell, or public row smuggles a URL, command, markup, executable value, copyrighted binary, or nondeterminism | Enum-only schema, checked one-command agent reducer, signed proposal-only device authority, browser-only decision, exact public projection, provenance, snapshots      | Local agent/browser/device/DB/public race and Jobs cleanup tested; schedule, release, edge, deployment pending                                |
-| Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                     | Invite role/reason/reference plus local Ingest, public-ranking, and pairing gates implemented; hosted controls planned                        |
+| Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                     | Invite role/reason/reference plus local Ingest, public-ranking, pairing, and new-source gates implemented; hosted controls planned            |
 | Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                                          | Immediate hide/revoke, idempotent purge, bounded tombstone, backup expiry, deletion replay after restore                                                               | Request, immediate lock-down, and bounded primary purge tested; cache/tombstone/backup/restore planned                                        |
 | Pull-request CI                     | A fork changes a workflow or package to steal a token or publish an artifact                                                    | Read-only secretless CI, no privileged environment, pinned inputs, no persisted checkout credentials, fixed no-upload Windows smoke, protected review                  | Workflow and policy implemented locally; hosted controls and Windows result pending                                                           |
 | Release and dependencies            | A compromised dependency or runner produces an official malicious connector                                                     | Exact locks, quarantine, review, isolated trusted build, signatures, SBOM, provenance, clean-machine verification                                                      | Dependency baseline and untrusted portable smoke implemented; trusted release path planned                                                    |
@@ -220,7 +223,10 @@ and migration or rollback where applicable.
    never a normal session. Code rotation and completion serialize against old-code start and
    old-passkey login; a session is minted only after the replacement credential exists. ADR 0057
    keeps connector start/poll and both approval operations default-off unless each route module
-   resolved the exact enable value; this is local evidence, not deployed route denial.
+   resolved the exact enable value. ADR 0058 separately requires exact new-source enablement at the
+   page and both approval steps, binds the choice into the sealed challenge and v2 digest, and
+   leaves active existing-source pairing available. These are local controls, not deployed route
+   denial or dynamic worker coordination.
 3. **Cross-source signed write.** A stolen or malicious device key changes `sourceId` and submits
    for another source. The local kernel binds method, path, exact-body digest and therefore source,
    device, nonce, timestamp, and idempotency key under strict Ed25519 verification, then compares

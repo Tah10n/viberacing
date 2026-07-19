@@ -98,6 +98,7 @@ describe("enrollment domain", () => {
     const pairingApprovalChallenge = {
       ...sourceReactivationChallenge,
       pairingId: "00000000-0000-4000-8000-000000000107",
+      sourceChoice: "new",
     } as const;
     const addChallenge = {
       authenticationChallenge: challenge.challenge,
@@ -172,6 +173,9 @@ describe("enrollment domain", () => {
     expect(readPairingApprovalChallenge(sourceReactivationChallenge, now)).toBeUndefined();
     expect(
       readPairingApprovalChallenge({ ...pairingApprovalChallenge, pairingId: "bad" }, now),
+    ).toBeUndefined();
+    expect(
+      readPairingApprovalChallenge({ ...pairingApprovalChallenge, sourceChoice: "other" }, now),
     ).toBeUndefined();
     expect(
       readPairingApprovalChallenge({ ...pairingApprovalChallenge, sourceId: "bad" }, now),

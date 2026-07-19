@@ -888,6 +888,7 @@ describe("enrollment HTTP boundary", () => {
       admission: createEnrollmentAdmission(),
       getRuntime: () => runtime,
       pairingEnabled: true,
+      sourceCreationEnabled: false,
     });
     const options = await http.pairingApprovalOptions(
       post(
@@ -917,11 +918,15 @@ describe("enrollment HTTP boundary", () => {
         osFamily: "windows",
       },
     });
-    expect(service.beginPairingApproval).toHaveBeenCalledWith("opaque-session", {
-      sourceChoice: "existing",
-      sourceControl: "opaque-source-control",
-      userCode: "7K9M-P2QR-W4XY",
-    });
+    expect(service.beginPairingApproval).toHaveBeenCalledWith(
+      "opaque-session",
+      {
+        sourceChoice: "existing",
+        sourceControl: "opaque-source-control",
+        userCode: "7K9M-P2QR-W4XY",
+      },
+      false,
+    );
 
     const verification = await http.pairingApprovalVerify(
       post(
@@ -938,6 +943,7 @@ describe("enrollment HTTP boundary", () => {
       "opaque-session",
       "opaque-pairing-approval",
       { response: { id: "synthetic" } },
+      false,
     );
 
     const crossOrigin = post(

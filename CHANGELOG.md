@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fifty-seven accepted ADRs.
+  fail-closed compatibility policy and matrix, and fifty-eight accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -282,8 +282,17 @@ Versioning where its guarantees are applicable.
   approval options/verification. Only `VIBERACING_PAIRING_ENABLED=true` permits request parsing,
   runtime/service construction, admission acquisition, or pairing storage work; disabled POST
   cancels any available body, returns the existing generic no-store 503, and leaves connector
-  non-POST handling at 405. The tracked example remains false, and no dynamic/deployed switch or
-  independent source-creation control is claimed.
+  non-POST handling at 405. The tracked example remains false, and no dynamic/deployed switch is
+  claimed.
+- An independent exact default-off source-creation gate for `/connect` and both browser pairing
+  approval steps. Only `VIBERACING_SOURCE_CREATION_ENABLED=true` permits a new opaque source;
+  disabled UI omits that choice in EN/RU, preserves active existing-source pairing, and disables
+  submission when no source is eligible. The service repeats literal-true enforcement before
+  new-source lookup/challenge work and before passkey verification/database completion. The sealed
+  five-minute challenge and v2 context digest now bind exact source choice, so an in-flight
+  new-source approval also fails closed after a restarted module resolves disabled. The tracked
+  example remains false; no dynamic/deployed switch, rate limit, cleanup, or worker-drain result is
+  claimed.
 - An exact local-only `forget-local` connector command that derives one canonical origin/label
   native-store account and invokes deletion without loading the credential, constructing a signer,
   starting Codex, or contacting Vibe Racing. Deleted and absent entries share one identifier-free

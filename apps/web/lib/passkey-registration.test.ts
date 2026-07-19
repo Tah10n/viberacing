@@ -240,6 +240,7 @@ describe("passkey login", () => {
       pairingApprovalContextDigest(
         "00000000-0000-4000-8000-000000000101",
         "00000000-0000-4000-8000-000000000102",
+        "new",
         `src_${"A".repeat(22)}`,
         "race.example.com",
         "https://race.example.com",
@@ -248,6 +249,26 @@ describe("passkey login", () => {
       pairingApprovalContextDigest(
         "00000000-0000-4000-8000-000000000101",
         "00000000-0000-4000-8000-000000000103",
+        "new",
+        `src_${"A".repeat(22)}`,
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    );
+    expect(
+      pairingApprovalContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000102",
+        "new",
+        `src_${"A".repeat(22)}`,
+        "race.example.com",
+        "https://race.example.com",
+      ),
+    ).not.toEqual(
+      pairingApprovalContextDigest(
+        "00000000-0000-4000-8000-000000000101",
+        "00000000-0000-4000-8000-000000000102",
+        "existing",
         `src_${"A".repeat(22)}`,
         "race.example.com",
         "https://race.example.com",

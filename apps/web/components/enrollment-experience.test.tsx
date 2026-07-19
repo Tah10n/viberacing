@@ -740,7 +740,7 @@ describe("enrollment experience", () => {
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
-    const mounted = mount(<ConnectExperience initialLocale="en" signedIn />);
+    const mounted = mount(<ConnectExperience initialLocale="en" signedIn sourceCreationEnabled />);
     const codeInput = mounted.container.querySelector<HTMLInputElement>('input[name="userCode"]');
     if (codeInput === null) {
       throw new Error("expected pairing code input");
@@ -812,6 +812,7 @@ describe("enrollment experience", () => {
         ]}
         initialLocale="en"
         signedIn
+        sourceCreationEnabled={false}
       />,
     );
     const sourceChoice = mounted.container.querySelector<HTMLInputElement>(
@@ -821,9 +822,11 @@ describe("enrollment experience", () => {
     if (sourceChoice === null || codeInput === null) {
       throw new Error("expected existing source and pairing code inputs");
     }
-    act(() => {
-      sourceChoice.click();
-    });
+    expect(sourceChoice.checked).toBe(true);
+    expect(mounted.container.querySelector('input[value="new"]')).toBeNull();
+    expect(mounted.container.textContent).toContain(
+      "Creating a new source is temporarily unavailable",
+    );
     codeInput.value = "7K9M-P2QR-W4XY";
     await act(async () => {
       codeInput.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -840,6 +843,22 @@ describe("enrollment experience", () => {
     });
   });
 
+  it("fails closed in EN and RU when neither new nor existing source selection is available", () => {
+    const english = renderToStaticMarkup(
+      <ConnectExperience initialLocale="en" signedIn sourceCreationEnabled={false} />,
+    );
+    const russian = renderToStaticMarkup(
+      <ConnectExperience initialLocale="ru" signedIn sourceCreationEnabled={false} />,
+    );
+
+    expect(english).toContain("Creating a new source is temporarily unavailable");
+    expect(russian).toContain("Создание нового источника временно недоступно");
+    expect(english).not.toContain('value="new"');
+    expect(russian).not.toContain('value="new"');
+    expect(english).toContain("disabled");
+    expect(russian).toContain("disabled");
+  });
+
   it("rejects malformed pairing review data before invoking WebAuthn", async () => {
     webauthn.browserSupportsWebAuthn.mockReturnValue(true);
     const fetchMock = vi.fn(() =>
@@ -850,7 +869,7 @@ describe("enrollment experience", () => {
       ),
     );
     vi.stubGlobal("fetch", fetchMock);
-    const mounted = mount(<ConnectExperience initialLocale="en" signedIn />);
+    const mounted = mount(<ConnectExperience initialLocale="en" signedIn sourceCreationEnabled />);
     const codeInput = mounted.container.querySelector<HTMLInputElement>('input[name="userCode"]');
     if (codeInput === null) {
       throw new Error("expected pairing code input");
@@ -903,6 +922,7 @@ describe("enrollment experience", () => {
           ]}
           initialLocale="en"
           signedIn
+          sourceCreationEnabled
         />,
       ),
     ]) {

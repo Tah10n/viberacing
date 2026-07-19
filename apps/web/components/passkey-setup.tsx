@@ -840,10 +840,17 @@ export function SourceUnlinkButton(props: SourceActionButtonProps) {
 interface PairingApprovalFormProps {
   readonly existingSources?: readonly PairingExistingSourceChoice[];
   readonly locale: Locale;
+  readonly sourceCreationEnabled: boolean;
 }
 
-export function PairingApprovalForm({ existingSources, locale }: PairingApprovalFormProps) {
+export function PairingApprovalForm({
+  existingSources,
+  locale,
+  sourceCreationEnabled,
+}: PairingApprovalFormProps) {
   const copy = connectTranslations[locale];
+  const canCreateSource = sourceCreationEnabled;
+  const canChooseSource = canCreateSource || (existingSources?.length ?? 0) > 0;
   const [approved, setApproved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<"generic" | "unsupported" | undefined>();
@@ -869,6 +876,10 @@ export function PairingApprovalForm({ existingSources, locale }: PairingApproval
       | Readonly<{ sourceChoice: "existing"; sourceControl: string; userCode: string }>;
     let target: PairingReviewTarget;
     if (selectedTarget === "new") {
+      if (!canCreateSource) {
+        setError("generic");
+        return;
+      }
       requestBody = Object.freeze({ sourceChoice: "new", userCode });
       target = Object.freeze({ kind: "new" });
     } else {
@@ -979,16 +990,25 @@ export function PairingApprovalForm({ existingSources, locale }: PairingApproval
         </label>
         <fieldset className="pairing-source-options">
           <legend>{copy.sourceChoice}</legend>
-          <label className="pairing-source-option">
-            <input defaultChecked name="sourceTarget" type="radio" value="new" />
-            <span>
-              <strong>{copy.newSource}</strong>
-              <small>{copy.newSourceCopy}</small>
-            </span>
-          </label>
-          {existingSources?.map((source) => (
+          {canCreateSource ? (
+            <label className="pairing-source-option">
+              <input defaultChecked name="sourceTarget" type="radio" value="new" />
+              <span>
+                <strong>{copy.newSource}</strong>
+                <small>{copy.newSourceCopy}</small>
+              </span>
+            </label>
+          ) : (
+            <small className="auth-status">{copy.sourceCreationUnavailable}</small>
+          )}
+          {existingSources?.map((source, sourceIndex) => (
             <label className="pairing-source-option" key={source.sourceControl}>
-              <input name="sourceTarget" type="radio" value={source.sourceControl} />
+              <input
+                defaultChecked={!canCreateSource && sourceIndex === 0}
+                name="sourceTarget"
+                type="radio"
+                value={source.sourceControl}
+              />
               <span>
                 <strong>
                   {copy.existingSource} {source.sourceNumber}
@@ -1003,12 +1023,14 @@ export function PairingApprovalForm({ existingSources, locale }: PairingApproval
             </label>
           ))}
           {existingSources === undefined ? (
-            <small className="auth-status">{copy.existingSourcesUnavailable}</small>
+            canCreateSource ? (
+              <small className="auth-status">{copy.existingSourcesUnavailable}</small>
+            ) : null
           ) : existingSources.length === 0 ? (
             <small className="auth-status">{copy.noExistingSources}</small>
           ) : null}
         </fieldset>
-        <button className="primary-action" disabled={busy} type="submit">
+        <button className="primary-action" disabled={busy || !canChooseSource} type="submit">
           {busy ? copy.searching : copy.submitCode}
         </button>
         <span aria-live="polite" className={error === undefined ? "auth-status" : "auth-error"}>

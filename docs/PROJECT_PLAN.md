@@ -194,7 +194,17 @@ flowchart LR
   unreadable value cancels an available request body and returns the existing generic 503 before
   request parsing, runtime/service construction, admission acquisition, protected configuration, or
   database work. The tracked example is false. This proves no deployed route denial, worker reload,
-  old-instance drain, dynamic switch, or independent source-creation control.
+  old-instance drain, or dynamic switch.
+- Source creation gate: `/connect` and both browser approval modules resolve exact
+  `VIBERACING_SOURCE_CREATION_ENABLED=true` once at module evaluation. Every alternate or unreadable
+  value omits the new-source UI, preserves active existing-source choices, and supplies a literal
+  false decision to both service steps. New-source options stop before pairing-code derivation,
+  pending lookup, entropy/WebAuthn work, or challenge storage; verification stops before WebAuthn
+  response parsing, credential lookup, proof, or database completion. Exact source choice is sealed
+  in the five-minute challenge and included in its v2 context digest, so a restarted disabled
+  verification module also rejects an in-flight new-source challenge. The tracked example is false.
+  This proves no deployed route denial, worker reload/drain, dynamic switch, operator policy, or
+  source-creation rate limit.
 - Public ranking reads: all three local score/race/status GET modules resolve exact
   `VIBERACING_PUBLIC_RANKING_ENABLED=true` once at module evaluation. Every other or unreadable
   value returns the existing generic 503 before query/header parsing, admission acquisition, or
@@ -326,22 +336,26 @@ non-reflective output. ADR 0057 places connector start/poll and both signed-in a
 behind exact `VIBERACING_PAIRING_ENABLED=true` at route-module evaluation. Disabled POST cancels an
 available body and returns generic no-store 503 before parsing, runtime/service construction,
 admission acquisition, protected configuration, or database work; explicit connector non-POST
-methods retain 405. The tracked example remains false. This evidence is still local and synthetic:
-there is no live Web login/database result, edge capacity policy, cross-platform execution matrix,
-released binary, Codex support, scheduler, or deployed result. ADR 0031 adds the next one-shot
-Windows development command: exact artifact admission, fresh context from the active record, the
-existing composer/signer, and one fixed no-proxy/no-redirect upload with a closed acknowledgement.
-ADR 0051 adds resource-bounded discovery through two fixed filenames and at most four exact-size
-hashes, plus the unchanged explicit path fallback. ADR 0052 adds a credential-free candidate
-artifact check that performs only that admission and emits an explicit unsupported result; the sync
-command still re-admits only after active-record validation. ADR 0053 then builds the locked Windows
-release profile, copies it under a bounded temporary root, checks only help and missing-candidate
-behavior with no ambient credential/network environment, and removes it. ADR 0054 adds the closed
-redacted stdout preview to the same candidate check without changing admission or support. These
-decisions add no retry, edge proof, cross-platform evidence, package, installer, release, or support
-claim. ADR 0041 adds a separate exact `forget-local` command that deletes only the native
-origin/label record without reading it or contacting the service. It is idempotent and explicitly
-does not claim server revoke; rotation and revoke composition remain separate gates.
+methods retain 405. The tracked example remains false. ADR 0058 separately requires exact
+`VIBERACING_SOURCE_CREATION_ENABLED=true` in `/connect` and both approval modules for a new source
+while preserving active existing-source pairing. The service repeats literal-true checks at options
+and verification; the sealed choice and v2 context digest close in-flight new-source completion
+after a disabled module reload. Both tracked flags remain false. This evidence is still local and
+synthetic: there is no live Web login/database result, edge capacity policy, cross-platform
+execution matrix, released binary, Codex support, scheduler, or deployed result. ADR 0031 adds the
+next one-shot Windows development command: exact artifact admission, fresh context from the active
+record, the existing composer/signer, and one fixed no-proxy/no-redirect upload with a closed
+acknowledgement. ADR 0051 adds resource-bounded discovery through two fixed filenames and at most
+four exact-size hashes, plus the unchanged explicit path fallback. ADR 0052 adds a credential-free
+candidate artifact check that performs only that admission and emits an explicit unsupported result;
+the sync command still re-admits only after active-record validation. ADR 0053 then builds the
+locked Windows release profile, copies it under a bounded temporary root, checks only help and
+missing-candidate behavior with no ambient credential/network environment, and removes it. ADR 0054
+adds the closed redacted stdout preview to the same candidate check without changing admission or
+support. These decisions add no retry, edge proof, cross-platform evidence, package, installer,
+release, or support claim. ADR 0041 adds a separate exact `forget-local` command that deletes only
+the native origin/label record without reading it or contacting the service. It is idempotent and
+explicitly does not claim server revoke; rotation and revoke composition remain separate gates.
 
 ### Date semantics
 
@@ -479,7 +493,12 @@ event.
 Steps 4 through 8 are unavailable at their four HTTP entry modules unless each resolved exact
 `VIBERACING_PAIRING_ENABLED=true` when loaded. Disabled POST reaches no pairing runtime, service,
 admission acquisition, protected key, WebAuthn ceremony, or database capability. This local decision
-is not a dynamic/deployed switch and does not implement the independent source-creation gate.
+is not a dynamic/deployed switch. Steps 5 and 6 additionally require exact
+`VIBERACING_SOURCE_CREATION_ENABLED=true` only for `new`; every alternate module decision omits that
+UI choice and makes both service steps fail closed while `existing` remains available. The encrypted
+approval challenge and its v2 context digest bind exact source choice so a new-source challenge
+cannot finish after a restarted verification module resolves disabled. This second local decision is
+also not a dynamic or deployed switch.
 
 The poll token is short-lived, one-time, and insufficient to approve or activate a device without
 the browser step-up and key-possession proof. The server stores only its keyed verifier; the
@@ -784,9 +803,9 @@ cleanup, redaction, or reset has a scheduler or deployed cadence.
 - Operators cannot retrieve Codex prompts or account email because those values are never collected.
 - Kill switches independently disable enrollment, pairing, source creation, ingestion, proposals,
   and public ranking. Local default-off gates now cover Ingest startup, the three public-ranking
-  route modules, and the four pairing route modules; deployed restart/route/cache-denial/runbook
-  behavior and every other capability switch remain separate gates. The pairing decision is not the
-  independent source-creation switch.
+  route modules, the four pairing route modules, and new-source creation at the page plus both
+  approval service steps; deployed restart/route/cache-denial/runbook behavior and every other
+  capability switch remain separate gates.
 - Operational logs are structured, redacted, retention-bounded, and avoid raw token values.
 - Alerts cover auth anomalies, pairing storms, source growth, signature and replay failures, ingest
   rejection, season jobs, deletion failures, database saturation, release events, and origin-proof
@@ -1089,8 +1108,9 @@ measurements exist.
 - Complete aggregation, same-source device dedup, source count, quarantine, retention, and
   finalized-season immutability.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
-  gates now cover Ingest startup, all three public-ranking routes, and all four pairing routes;
-  deployed operation and the independent switches for every other capability remain open.
+  gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
+  new-source creation while preserving active existing-source pairing; deployed operation and the
+  independent switches for every other capability remain open.
 - Gate: source multiplication cannot exceed the profile score cap or gain privilege, and
   infrastructure limits survive load tests.
 

@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 
 import { ConnectExperience } from "@/components/connect-experience";
 import { readEnrollmentPageConnect } from "@/lib/enrollment-page-session";
+import { resolveSourceCreationConfig } from "@/lib/source-creation-config";
 
 export const metadata: Metadata = {
   description: "Review and approve one Vibe Racing connector device with a passkey.",
   title: "Connect a device | Vibe Racing",
 };
+
+const sourceCreationConfig = resolveSourceCreationConfig();
 
 export default async function ConnectPage() {
   const connect = await readEnrollmentPageConnect();
@@ -31,6 +34,7 @@ export default async function ConnectPage() {
       {...(existingSources === undefined ? {} : { existingSources })}
       initialLocale={connect?.session.locale ?? "en"}
       signedIn={connect?.session.passkeyRegistered === true}
+      sourceCreationEnabled={sourceCreationConfig.enabled}
     />
   );
 }

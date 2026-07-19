@@ -38,7 +38,9 @@ with server-owned IDs behind local admission/timing. They cannot perform pairing
 approval themselves; the separate `/connect` flow supplies only that intervening step. Two exact
 local POST routes now compose those applications behind fixed distributed global/client-bucket
 admission. All four connector/browser pairing route modules remain default-off unless exact
-`VIBERACING_PAIRING_ENABLED=true` was resolved when each loaded. One pairing-only Rust command
+`VIBERACING_PAIRING_ENABLED=true` was resolved when each loaded. Creating a new source separately
+requires exact `VIBERACING_SOURCE_CREATION_ENABLED=true` in `/connect` and both approval modules;
+its default-off state preserves active existing-source pairing. One pairing-only Rust command
 generates a device key through the OS CSPRNG, stores resumable pairing state in the native
 credential store, and performs the exact start/poll proof. A separate exact local-only command
 deletes one origin/label native entry without reading it or revoking server authority. No supported
@@ -369,8 +371,17 @@ Connector pairing start/poll and signed-in approval options/verification remain 
 unavailable unless an ignored local environment sets exact `VIBERACING_PAIRING_ENABLED=true` before
 all four modules load. The tracked example stays false. Disabled POST cancels an available request
 body before request parsing, runtime/service construction, admission acquisition, protected
-configuration, or database work. This is not a dynamic/deployed switch and is separate from the
-still-unimplemented source-creation gate.
+configuration, or database work. This is not a dynamic/deployed switch.
+
+New-source selection and approval separately remain unavailable unless the ignored local environment
+sets exact `VIBERACING_SOURCE_CREATION_ENABLED=true` before `/connect` and both approval modules
+load. The tracked example stays false. While disabled, the EN/RU form omits the new-source choice,
+defaults to the first active existing source, and disables submission when none exists. The service
+also rejects new-source initiation before code/challenge work and rejects an in-flight new-source
+challenge before passkey/database completion; its encrypted choice and v2 context digest remain
+exactly bound. Existing-source pairing still requires the pairing flag but not this second flag.
+Changing either environment value does not reload an existing worker, stop an old enabled instance,
+or prove deployed route denial.
 
 The server-only score, enrollment, and local pairing adapters use only `VIBERACING_WEB_DATABASE_*`.
 Their tracked user/password are deliberately non-working placeholders and are checked against

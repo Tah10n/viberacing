@@ -46,7 +46,14 @@ apply.
   cancel its body but must return the existing generic 503 before request parsing, runtime/service
   construction, admission acquisition, protected configuration, or database work; connector non-POST
   methods remain 405 and the tracked example remains false. Do not treat this as a dynamic/deployed
-  switch or as the still-separate source-creation control.
+  switch or as the separate source-creation control.
+- Keep new-source selection and completion behind exact `VIBERACING_SOURCE_CREATION_ENABLED=true`,
+  independently resolved once by `/connect` and both browser approval modules. Every alternate or
+  unreadable value must omit the new-source UI, keep active existing-source pairing available, and
+  fail closed in the production service both before new-source challenge work and before
+  passkey/database completion. Preserve exact source choice in the purpose-separated encrypted
+  approval challenge and its context digest. Do not add a truthy or per-request parser, expose raw
+  source IDs, conflate this control with pairing, or claim dynamic or deployed disablement.
 - Pairing reuses that environment-owned Web/Auth login only through its separate read-write pool.
   Preserve the exact role/login/search-path/read-write probe, two fixed verifier candidates,
   protected primary/secondary HMAC capability, strict proof-before-activation sequence, server-owned

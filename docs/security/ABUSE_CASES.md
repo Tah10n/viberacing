@@ -52,7 +52,10 @@ material availability cost.
   the encrypted source-control token is session-bound and expires within 15 minutes. Quarantine
   remains outside normal reactivation authority. A distinct fresh context can terminally unlink an
   active, paused, or quarantined source and revoke all of its active devices without publishing a
-  hidden profile.
+  hidden profile. ADR 0058 additionally keeps new-source UI, approval initiation, and approval
+  completion default-off unless the page and both approval modules resolve exact enablement. Active
+  existing-source pairing remains available; this local gate is not a distributed source budget,
+  deployed worker control, or proof of external route denial.
 - **Residual risk:** Duplicate declarations remain possible without a server-verifiable upstream
   account identifier.
 
@@ -144,13 +147,16 @@ material availability cost.
   global row and creates no database row. ADR 0057 requires exact `VIBERACING_PAIRING_ENABLED=true`
   at each connector/browser pairing route module; disabled POST cancels an available body and
   reaches no parser, runtime/service, admission acquisition, protected key, WebAuthn, or database
-  work. It proves no deployed/dynamic route denial and is not the independent source-creation
-  control. Revision 0037 separately lets only Jobs reset a positive aggregate timestamp/count after
-  the maximum one-hour window while preserving every fixed row and accepting no caller-selected
-  scope. Revision 0013 adds a separate Jobs-only 1-to-1000 cleanup for expired `pending`,
-  `approved`, and `cancelled` transactions plus their exact still-pending keys; activated bindings
-  and live rows are excluded. Live login/TLS integration, trusted edge controls, capacity evidence,
-  cleanup scheduling, cross-platform execution, and release remain absent.
+  work. ADR 0058 separately requires exact source-creation enablement for `new` at the page plus
+  both approval steps. It preserves active existing-source pairing, binds the exact choice into the
+  sealed challenge and v2 digest, and blocks in-flight new-source completion after a disabled module
+  reload. Neither gate proves deployed/dynamic route denial. Revision 0037 separately lets only Jobs
+  reset a positive aggregate timestamp/count after the maximum one-hour window while preserving
+  every fixed row and accepting no caller-selected scope. Revision 0013 adds a separate Jobs-only
+  1-to-1000 cleanup for expired `pending`, `approved`, and `cancelled` transactions plus their exact
+  still-pending keys; activated bindings and live rows are excluded. Live login/TLS integration,
+  trusted edge controls, capacity evidence, cleanup scheduling, cross-platform execution, and
+  release remain absent.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the
@@ -741,7 +747,10 @@ material availability cost.
   local process ceilings, not distributed or client-identity rate limits. The four pairing routes
   first require exact `VIBERACING_PAIRING_ENABLED=true` at module load; disabled POST cancels an
   available body and returns generic 503 before parsing, runtime/service construction, admission
-  acquisition, protected configuration, or database work. Once enabled, the transport-free
+  acquisition, protected configuration, or database work. New-source growth separately requires
+  exact `VIBERACING_SOURCE_CREATION_ENABLED=true`; false UI and repeated service checks preserve
+  existing-source pairing while preventing new-source challenge and completion work. This is a local
+  gate, not a distributed creation rate limit. Once pairing is enabled, the transport-free
   pairing-start application bounds labels, metadata, keys, entropy, and HMAC work, admits four
   unsettled attempts without a queue, holds each lease through a 250-millisecond floor, and makes no
   database call for malformed input. Revision 0022 now adds one Web-only fixed-storage admission

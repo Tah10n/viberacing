@@ -76,6 +76,7 @@ const pairingApprovalChallengeKeys = new Set([
   "challengeId",
   "expiresAt",
   "pairingId",
+  "sourceChoice",
   "sourceId",
   "version",
 ]);
@@ -146,6 +147,7 @@ export interface SourceActionChallenge extends PasskeyRegistrationChallenge {
 
 export interface PairingApprovalChallenge extends SourceActionChallenge {
   readonly pairingId: string;
+  readonly sourceChoice: "existing" | "new";
 }
 
 export interface RecoveryAuthorityChallenge {
@@ -400,6 +402,7 @@ export function readPairingApprovalChallenge(
     !uuidV4Pattern.test(value.challengeId) ||
     typeof value.pairingId !== "string" ||
     !uuidV4Pattern.test(value.pairingId) ||
+    (value.sourceChoice !== "existing" && value.sourceChoice !== "new") ||
     typeof value.sourceId !== "string" ||
     !/^src_[A-Za-z0-9_-]{22}$/.test(value.sourceId) ||
     !futureExpiry(value.expiresAt, nowSeconds, 300)

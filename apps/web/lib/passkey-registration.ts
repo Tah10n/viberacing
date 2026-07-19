@@ -148,13 +148,14 @@ export function passkeyRevokeContextDigest(
 export function pairingApprovalContextDigest(
   sessionId: string,
   pairingId: string,
+  sourceChoice: "existing" | "new",
   sourceId: string,
   rpId: string,
   origin: string,
 ): Buffer {
   return createHash("sha256")
     .update(
-      `viberacing-pairing-approval-v1\n${sessionId}\n${pairingId}\n${sourceId}\n${rpId}\n${origin}`,
+      `viberacing-pairing-approval-v2\n${sessionId}\n${pairingId}\n${sourceChoice}\n${sourceId}\n${rpId}\n${origin}`,
       "utf8",
     )
     .digest();

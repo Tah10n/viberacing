@@ -75,6 +75,7 @@ interface EnrollmentHttpDependencies {
   readonly admission: EnrollmentAdmission;
   readonly getRuntime: () => EnrollmentRuntime;
   readonly pairingEnabled?: unknown;
+  readonly sourceCreationEnabled?: unknown;
 }
 
 function problem(kind: "invalid_request" | "temporarily_unavailable" | "unauthorized"): Response {
@@ -651,7 +652,11 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         if (sessionCookie === undefined) {
           return problem("unauthorized");
         }
-        const decision = await currentRuntime.service.beginPairingApproval(sessionCookie, parsed);
+        const decision = await currentRuntime.service.beginPairingApproval(
+          sessionCookie,
+          parsed,
+          dependencies.sourceCreationEnabled,
+        );
         if (decision === undefined) {
           return problem("unauthorized");
         }
@@ -721,6 +726,7 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           sessionCookie,
           pairingApprovalCookie,
           parsed,
+          dependencies.sourceCreationEnabled,
         );
         if (!approved) {
           return problem("unauthorized");

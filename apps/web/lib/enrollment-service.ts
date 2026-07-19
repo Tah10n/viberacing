@@ -226,6 +226,7 @@ export interface EnrollmentService {
   beginPairingApproval(
     sessionCookie: string,
     body: unknown,
+    sourceCreationEnabled: unknown,
   ): Promise<PairingApprovalOptionsDecision | undefined>;
   beginProfileDeletion(
     sessionCookie: string,
@@ -273,6 +274,7 @@ export interface EnrollmentService {
     sessionCookie: string,
     pairingApprovalCookie: string,
     body: unknown,
+    sourceCreationEnabled: unknown,
   ): Promise<boolean>;
   completeProfileDeletion(
     sessionCookie: string,
@@ -822,11 +824,17 @@ export function createEnrollmentService(
   async function beginPairingApproval(
     sessionCookie: string,
     body: unknown,
+    sourceCreationEnabled: unknown,
   ): Promise<PairingApprovalOptionsDecision | undefined> {
     const session = readSession(sessionCookie);
     const pairingCode = readPairingCodeBody(body);
     const seconds = currentSeconds();
-    if (!session?.passkeyRegistered || pairingCode === undefined || seconds === undefined) {
+    if (
+      !session?.passkeyRegistered ||
+      pairingCode === undefined ||
+      seconds === undefined ||
+      (pairingCode.sourceChoice === "new" && sourceCreationEnabled !== true)
+    ) {
       return undefined;
     }
     let candidates: ReturnType<PairingUserCodeVerifier["derive"]> | undefined;
@@ -885,6 +893,7 @@ export function createEnrollmentService(
       contextDigest = pairingApprovalContextDigest(
         session.sessionId,
         material.pairingId,
+        pairingCode.sourceChoice,
         sourceId,
         config.webauthnRpId,
         config.webauthnOrigin,
@@ -894,6 +903,7 @@ export function createEnrollmentService(
         challengeId,
         expiresAt,
         pairingId: material.pairingId,
+        sourceChoice: pairingCode.sourceChoice,
         sourceId,
         version: 1,
       });
@@ -948,10 +958,10 @@ export function createEnrollmentService(
     sessionCookie: string,
     pairingApprovalCookie: string,
     body: unknown,
+    sourceCreationEnabled: unknown,
   ): Promise<boolean> {
     const session = readSession(sessionCookie);
     const seconds = currentSeconds();
-    const authentication = readAuthenticationBody(body);
     const challenge =
       seconds === undefined
         ? undefined
@@ -959,9 +969,13 @@ export function createEnrollmentService(
     if (
       !session?.passkeyRegistered ||
       seconds === undefined ||
-      authentication === undefined ||
-      challenge === undefined
+      challenge === undefined ||
+      (challenge.sourceChoice === "new" && sourceCreationEnabled !== true)
     ) {
+      return false;
+    }
+    const authentication = readAuthenticationBody(body);
+    if (authentication === undefined) {
       return false;
     }
     let credentialId: Buffer | undefined;
@@ -1004,6 +1018,7 @@ export function createEnrollmentService(
       contextDigest = pairingApprovalContextDigest(
         session.sessionId,
         challenge.pairingId,
+        challenge.sourceChoice,
         challenge.sourceId,
         config.webauthnRpId,
         config.webauthnOrigin,

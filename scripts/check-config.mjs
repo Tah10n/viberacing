@@ -43,6 +43,7 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_INGEST_TLS_TERMINATION", "loopback-cleartext"],
   ["VIBERACING_PAIRING_ENABLED", "false"],
   ["VIBERACING_PUBLIC_RANKING_ENABLED", "false"],
+  ["VIBERACING_SOURCE_CREATION_ENABLED", "false"],
   ["VIBERACING_WEB_DATABASE_HOST", "127.0.0.1"],
   ["VIBERACING_WEB_DATABASE_NAME", "viberacing_local"],
   ["VIBERACING_WEB_DATABASE_PASSWORD", "replace-with-local-web-password"],

@@ -183,23 +183,26 @@ wrapper for protected poll lookup, verifies the exact approved proof, and alone 
 activation with server-owned identifiers behind four-call admission and a settlement floor. A local
 signed-in `/connect` page now accepts one pending human code, shows the exact bounded device
 metadata and full public-key fingerprint, and requires a separate fresh passkey assertion before
-atomically approving a new opaque source. Its PostgreSQL lookup counts attempts on the possessed
-session across Web instances under deployment-private limits. Two closed local POST routes now
-expose the versioned pairing start/poll contracts through shared four-call admission, a
+atomically approving a new or active existing opaque source. Its PostgreSQL lookup counts attempts
+on the possessed session across Web instances under deployment-private limits. Two closed local POST
+routes now expose the versioned pairing start/poll contracts through shared four-call admission, a
 fixed-storage global-and-64-bucket PostgreSQL rate policy, bounded bodies, generic failures, and
 no-store/no-CORS responses. Connector start/poll and signed-in approval options/verification each
 remain unavailable unless their route module resolves exact `VIBERACING_PAIRING_ENABLED=true`; the
-tracked default is false. A local Rust `connect` command generates an Ed25519 key and anonymous rate
-ID with the OS CSPRNG, persists a versioned prepared/pending/active record only in the native
-credential store, proves possession, and resumes an interrupted pending poll without printing key,
-token, challenge, source, or device IDs. A separate exact `forget-local` command can delete only
-that canonical origin/label native entry without reading it or contacting Vibe Racing; its fixed
-output warns that it does not revoke server device authority, which remains a separate authenticated
-account action. A separate explicit `check-codex` command performs only the same exact Windows
-candidate artifact admission without an origin, credential-store access, Codex process, account
-read, persistence, or network. Its fixed result is point-in-time candidate evidence and explicitly
-says no Codex version is supported. An optional `--diagnostic-preview` prints only a closed local v1
-summary of allowlisted version/admission/support state, retains failed-admission status, omits
+tracked default is false. New-source selection and completion separately require exact
+`VIBERACING_SOURCE_CREATION_ENABLED=true` in the `/connect` and browser approval modules; its
+tracked default is also false, while existing-source pairing remains available when pairing itself
+is enabled. A local Rust `connect` command generates an Ed25519 key and anonymous rate ID with the
+OS CSPRNG, persists a versioned prepared/pending/active record only in the native credential store,
+proves possession, and resumes an interrupted pending poll without printing key, token, challenge,
+source, or device IDs. A separate exact `forget-local` command can delete only that canonical
+origin/label native entry without reading it or contacting Vibe Racing; its fixed output warns that
+it does not revoke server device authority, which remains a separate authenticated account action. A
+separate explicit `check-codex` command performs only the same exact Windows candidate artifact
+admission without an origin, credential-store access, Codex process, account read, persistence, or
+network. Its fixed result is point-in-time candidate evidence and explicitly says no Codex version
+is supported. An optional `--diagnostic-preview` prints only a closed local v1 summary of
+allowlisted version/admission/support state, retains failed-admission status, omits
 workstation/account data, and is neither saved nor sent by the connector. A separate Windows x86_64
 `sync` command now requires an active record, then either discovers the exact `0.144.5` executable
 through a fixed-name, resource-bounded `PATH` policy or accepts an explicit path under the same
@@ -332,9 +335,11 @@ database completion. The local `/connect` flow now reviews one pending device, e
 new or active owned opaque source without exposing its raw ID, and fresh-passkey approves that exact
 choice under a database-backed session attempt window; the local start/poll routes and native-store
 Rust client complete that synthetic connection path only when all four pairing modules were
-explicitly enabled before load. This local control is not a dynamic/deployed switch and does not
-implement the independent source-creation gate. The separate candidate-only Windows sync command now
-joins the reviewed local collector, signer, and one bounded upload. A separate credential-free
+explicitly enabled before load. New-source review and completion additionally require the separate
+exact default-off source-creation decision; disabled UI retains active existing-source choices and
+the server rejects an in-flight new-source challenge before passkey or database completion. These
+local controls are not dynamic/deployed switches. The separate candidate-only Windows sync command
+now joins the reviewed local collector, signer, and one bounded upload. A separate credential-free
 `check-codex` command verifies only point-in-time exact candidate admission and never launches it,
 reads an account, or uses the network. Its explicit redacted preview gives a user one complete
 stdout result to inspect before sharing and still declares that no Codex version is supported. A

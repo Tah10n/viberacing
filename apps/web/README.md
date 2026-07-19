@@ -29,7 +29,10 @@ separate fresh passkey assertion before atomic approval for an explicitly select
 existing source. Existing-source controls are encrypted and session-bound; raw source IDs do not
 enter HTML. Connector start/poll and both signed-in approval routes remain unavailable unless each
 route module resolves exact `VIBERACING_PAIRING_ENABLED=true`; the tracked example stays false.
-These flows have no live-user or deployment evidence.
+Creating a new source additionally requires exact `VIBERACING_SOURCE_CREATION_ENABLED=true` in the
+page and both approval modules. Its tracked example stays false; active existing-source pairing
+remains available when pairing itself is enabled. These flows have no live-user or deployment
+evidence.
 
 The private account render now combines visibility with the exact session's current Community week
 in one existing Web/Auth pool checkout. Its closed mapper accepts one empty sentinel or exactly
@@ -82,7 +85,9 @@ Argon2id settings and response floor, and a separately provisioned `viberacing_w
 repository provides no valid invite or working credential; the tracked recovery settings are
 deliberately non-working placeholders. See `.env.example` and the local-development guide. Manual
 pairing additionally requires exact `VIBERACING_PAIRING_ENABLED=true` before all four pairing route
-modules load. Changing it afterward does not reload an existing worker.
+modules load. New-source pairing also requires exact `VIBERACING_SOURCE_CREATION_ENABLED=true`
+before the `/connect` page and both approval modules load. Changing either value afterward does not
+reload an existing worker.
 
 ## Module map
 
@@ -109,6 +114,7 @@ modules load. Changing it afterward does not reload an existing worker.
 | `lib/enrollment-database.ts`                                                     | Owns fixed identity database operations                                  | Reuses the probed Web/Auth pool; no general query or reflected database detail      |
 | `lib/pairing-possession-verifier.ts`                                             | Strictly verifies one approved pending-device proof                      | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence     |
 | `lib/pairing-config.ts`                                                          | Resolves one module-local default-off pairing decision                   | Exact own string value; no request/runtime/key/database field or reflection         |
+| `lib/source-creation-config.ts`                                                  | Resolves one module-local default-off new-source decision                | Exact own string value; no request/session/source/database field or reflection      |
 | `lib/pairing-poll-verifier.ts`                                                   | Derives fixed poll-verifier candidates under protected keys              | Primary plus optional secondary; no raw key container; close clears key copies      |
 | `lib/pairing-user-code-verifier.ts`                                              | Derives fixed human-code verifier candidates under separate keys         | Primary plus optional secondary; cross-purpose key reuse is rejected                |
 | `lib/pairing-start-material.ts`                                                  | Generates bounded pending-transaction material                           | Server IDs, 32-byte token/challenge, 60-bit code, and nine-minute expiry            |
@@ -367,6 +373,17 @@ the pairing atomically after PostgreSQL rechecks source ownership and active sta
 public key are not stored in a browser cookie, log, cache, local storage, or client state after
 lookup.
 
+The `/connect` page plus both approval route modules independently resolve exact
+`VIBERACING_SOURCE_CREATION_ENABLED=true` once at module load. Every alternate or unreadable value
+removes the new-source radio control, shows a localized availability note, defaults to the first
+active existing source, and disables submission when no existing choice is available. The service
+then repeats literal-true enforcement before new-source code/challenge work and before completion.
+Its purpose-separated five-minute cookie and v2 passkey context digest bind `new` or `existing` to
+the exact session, pairing, source, RP, and origin, so disabling a restarted verification module
+also closes a previously issued new-source challenge. Existing-source approval remains available
+under a disabled source-creation decision. The UI receives only the non-personal boolean and no raw
+source identifier.
+
 This is local application and synthetic PostgreSQL evidence. The separate Rust workspace now
 provides a native-store connector client and the Web workspace provides start/poll endpoints, but
 there is no live authenticator/database/TLS result, trusted edge policy, cross-platform client
@@ -413,7 +430,8 @@ and aggregate four-call admission boundary. The HTTP layer caps requests at 1024
 at 2048 bytes, rejects queries, duplicate decoded keys, unknown/nested fields, content encoding,
 unsupported media/Accept values, and noncanonical client IDs, and emits only revalidated success or
 generic problem bodies with `no-store`, no referrer, and no CORS headers. The module gate is neither
-a dynamic/deployed switch nor the still-separate source-creation control.
+a dynamic nor deployed switch. The separate source-creation gate above does not affect connector
+start or poll because those operations create only pending device state.
 
 Every accepted request increments one operation-global and one of 64 client buckets through the
 fixed revision 0022 PostgreSQL function before start/activation work. The raw 16-byte client ID and
