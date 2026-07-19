@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fifty-nine accepted ADRs.
+  fail-closed compatibility policy and matrix, and sixty accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -301,6 +301,14 @@ Versioning where its guarantees are applicable.
   active and private pending previews plus exact session-bound rejection while omitting editor and
   approval controls. The tracked example remains false; no dynamic/deployed switch, worker drain,
   monitoring, distributed rate limit, or cleanup schedule is claimed.
+- An exact default-off invite/OAuth/initial-passkey enrollment gate across `/join`, `/join/passkey`,
+  GitHub start/callback, and initial-passkey options/verification. Only
+  `VIBERACING_ENROLLMENT_ENABLED=true` permits the state machine. Disabled routes stop before
+  request/runtime/admission/private work, and four production service methods repeat literal-true
+  enforcement before OAuth/WebAuthn/database work. EN/RU pages omit enrollment forms while active
+  session redirects, returning login, and restricted recovery remain available. The tracked example
+  remains false; no dynamic/deployed switch, in-flight termination, abandoned-profile cleanup,
+  invite repair, worker drain, monitoring, or distributed rate limit is claimed.
 - An exact local-only `forget-local` connector command that derives one canonical origin/label
   native-store account and invokes deletion without loading the credential, constructing a signer,
   starting Codex, or contacting Vibe Racing. Deleted and absent entries share one identifier-free

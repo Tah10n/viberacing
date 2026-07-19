@@ -226,137 +226,141 @@ uniqueness. Source pause is immediate. Paused-source reactivation now requires a
 passkey assertion and one atomic challenge-consume/reactivate call. Terminal source unlink now uses
 its own fresh passkey context and one atomic consume/unlink call that revokes every active source
 device. The local identity flow verifies both initial passkey registration and returning
-discoverable-credential login. Login options keep the profile-free challenge only in an encrypted
-cookie; a valid assertion causes one atomic database create-consume-session call. Anonymous login
-still requires edge rate/capacity controls before exposure. The account page uses that same
-possessed session to read only passkey labels, active/revoked state, rounded creation dates, the
-current-authenticator marker, the closed `public`/`hidden` profile state, at most 32 opaque sources,
-and at most 64 active device labels/platforms/versions with rounded activation dates. Credential
-IDs, raw source IDs, internal keys, and profile IDs are not rendered; source actions receive only a
-15-minute encrypted token bound to the current session. A same-origin server form can hide the
-profile from the public score read or publish it again without stopping source sync. Another can
-immediately revoke one exact owned active device even while the profile is hidden. The same page can
-immediately pause a source and can reactivate only a paused source after a fresh required-UV passkey
-assertion; neither action changes hidden/public visibility or lifts quarantine. A separate
-destructive control permanently unlinks any non-terminal source after the same kind of fresh
-assertion, including while the profile is hidden; it does not publish the profile. An authenticated
-passkey revoke control sends only the selected opaque passkey ID, requires a fresh user-verified
-assertion bound to that session and target, and reaches one atomic consume-and-revoke call; the
-current or last active passkey cannot be removed. A separate add control validates and seals the
-label before prompting, requires an existing-key assertion plus an independent registration
-ceremony, and atomically consumes that step-up while inserting the new credential under the
-32-retained-record cap. A local CarRecipe slice now validates one exact versioned enum-only recipe,
-stores at most one private 24-hour proposal per session-derived profile, previews it in all three
-themes, and requires an explicit encrypted session-bound approve or reject control. Approval
-atomically replaces the active recipe. A separate device-authenticated Web route and fixed
-`propose-car` command can only create or replace the same pending exact recipe for an active
-source-bound device; they cannot read, approve, reject, or activate it. A checked local Agent Skill
-reduces a styling request to the exact recipe flags, requires explicit shell-safe origin/label
-values, invokes only that command once, and receives no read or decision authority. Cross-profile
-and non-Web database capabilities remain denied. Browser creation/approval and device ingress now
-remain unavailable unless their exact modules resolve `VIBERACING_CAR_PROPOSALS_ENABLED=true`; the
-tracked default is false. Disabled EN/RU account UI keeps active/private previews and exact
-session-bound rejection while omitting editor/approve, and both browser service mutations repeat
-literal-true enforcement. A separate Jobs-only command now deletes bounded oldest-first batches of
-expired private proposals while preserving live and active recipes. A separate compatible public
-race contract now projects only the current approved recipe for an active profile; proposal
-identity, state, and timestamps stay private and the stable score response remains unchanged.
-Cleanup scheduling, live credentials, released connector packaging, edge controls, and deployment
-remain pending. A database-only Community ingest capability now exposes minimal active-device
-verification material and accepts bounded source-bound snapshots with exact retry, nonce replay,
-monotonic source/date, quarantine, and lifecycle-race enforcement. A Jobs-only procedure deletes
-independently bounded batches of expired origin nonces, device nonces, and raw snapshots while
-preserving current source/day values. A separate Jobs-only procedure deletes bounded expired
-non-activated pairing transactions plus their still-pending keys, while preserving live and
-activated bindings. A third cleanup procedure independently deletes expired authentication
-challenges and restricted recovery authorities plus an exact still-present used code whose verifier
-was already scrubbed. It preserves live ceremonies, unused recovery codes, passkeys, and audit
-evidence, and serializes on profile locks against recovery transitions. A fourth bounded procedure
-physically deletes expired active or revoked invite verifiers while preserving live invites and
-redeemed enrollment provenance. A fifth bounded procedure physically deletes expired sessions only
-after rotation and pairing references permit it, cascading their unusable challenges while
-preserving live sessions and activated-pairing provenance. The database does not verify a wire
-signature; the local kernel and adapter are composed locally and exercised together with a signed
-synthetic request. The opt-in loopback integration now carries an independently signed request
-through the emitted host and a disposable least-privileged PostgreSQL login, including duplicate,
-replay, revoke, response, and stored-state checks. Another Jobs-only procedure serializes an atomic
-refresh of one open ISO-week Community season: it sums distinct eligible sources before one profile
-daily cap, stores an immutable formula and season binding, shares rank on equal score and active
-days, and persists no raw token or source identifier in the score tables. Revision 0024 adds a
-separate Jobs-only maximum-10 primary deletion procedure. It accepts only due queued/retry work
-linked to committed `deletion_pending` profiles, locks its fixed five-capability maintenance set in
-stable order, removes restrictive pairings and authority-free pending keys first, terminally settles
-the opaque job, and cascades identity, credentials, sources, devices, usage, and personal score rows
-atomically. It deliberately creates no unkeyed tombstone. A separate Jobs-only cleanup retains that
-opaque terminal job for at least 30 days after server-recorded completion, then permits bounded
-oldest-first batches while preserving recent and non-terminal deletion work. Revision 0033 adds a
-separate Jobs-only audit cleanup that retains each database audit reference for at least 180 days
-after server-recorded occurrence, then permits bounded oldest-first batches while preserving recent
-evidence. It does not supply an external append-only audit sink. Revision 0010 adds a public 48-hour
-server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization procedure
-whose terminal metadata and score projection reject silent rewrites while profile purge can still
-remove personal rows. Revision 0034 separately retains the exact session/passkey approval references
-on an activated pairing for at least 180 days, then permits bounded oldest-first redaction of only
-those two references while preserving the profile/source/device binding, pairing row, active device,
-and passkey. A later session-cleanup call can remove the now-unreferenced expired session. One local
-Revision 0035 separately removes at most 1000 passkey rows only after they have been revoked for 180
-days and have no retained session, verifying/authorized challenge, or pairing reference. Active and
-referenced credentials remain, while eligible deletion can free the unchanged 32-row recovery
-ceiling. Revision 0036 separately removes at most 1000 minimized activated pairings and their exact
-revoked device-key rows only after both activation and revocation are at least 180 days old,
-approval provenance has been redacted, and no authorization challenge, nonce, or raw snapshot
-remains. It preserves active, recent, and referenced device history and never cascades raw evidence.
-Revision 0037 adds a separate no-argument Jobs-only reset for positive anonymous pairing transport
-rate windows only after the maximum permitted one-hour duration. It preserves the fixed 130-row
-matrix and scrubs only aggregate timestamp/count state. One local one-shot Jobs runner now wraps
-exactly one of fifteen fixed functions: authentication cleanup, audit-event cleanup, invite cleanup,
-CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup, aged revoked-passkey cleanup, aged
-revoked-device cleanup, pairing approval-provenance redaction, pairing-rate-window reset, session
-cleanup, terminal deletion-job cleanup, primary profile purge, refresh, or finalization. It uses a
-distinct least-privileged configuration namespace, one-client pool, per-checkout
-role/login/search-path probe, fixed deadlines and prepared parameters, closed result validation,
-destructive release after failure, and stable non-reflective CLI output. An opt-in synthetic
-integration now builds that runner, applies the reviewed migration manifest to one disposable
-PostgreSQL container, proves all fifteen commands through a narrow login, rejects a deliberately
-widened login before mutation, and verifies exact stored state before cleanup. It has no external
-audit sink, scheduler, production login/certificate, monitoring backend, retry loop, capacity
-result, or deployment. Revision 0011 gives only the Web database role a bounded active-profile score
-projection containing no raw values, private identifiers, or exact timestamps. The score response
-component and Web PostgreSQL adapter preserve only that public allowlist through the local score
-route. All three public score/race/status routes require one exact default-off module-load gate
-before query/header parsing, admission acquisition, or storage work. The visible race, leaderboard,
-and selectable participant summary consume the validated current-week response only when enabled,
-using a credential-free same-origin request and an explicit synthetic fallback on disabled or failed
-state. Canonical `/?profile=handle#profile` links select only an exact public handle in that page,
-and a missing current top-32 row is not replaced with another participant. There is now a local
-invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
-rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey profile-deletion
-request flow. Recovery lookup returns only the selected unused PHC; admitted attempts use bounded
-Argon2id work, a protected pepper, generic responses, a configured minimum response floor, and a
-four-call local no-queue limit. A valid code creates only the sealed five-minute replacement-passkey
-continuation; the normal session is returned only after exact WebAuthn verification and atomic
-database completion. The local `/connect` flow now reviews one pending device, explicitly selects a
-new or active owned opaque source without exposing its raw ID, and fresh-passkey approves that exact
-choice under a database-backed session attempt window; the local start/poll routes and native-store
-Rust client complete that synthetic connection path only when all four pairing modules were
-explicitly enabled before load. New-source review and completion additionally require the separate
-exact default-off source-creation decision; disabled UI retains active existing-source choices and
-the server rejects an in-flight new-source challenge before passkey or database completion. These
-local controls are not dynamic/deployed switches. The separate candidate-only Windows sync command
-now joins the reviewed local collector, signer, and one bounded upload. A separate credential-free
-`check-codex` command verifies only point-in-time exact candidate admission and never launches it,
-reads an account, or uses the network. Its explicit redacted preview gives a user one complete
-stdout result to inspect before sharing and still declares that no Codex version is supported. A
-separate Windows release-profile smoke copies the `0.0.0` connector to an isolated temporary
-directory, checks the exact command surface and generic missing-candidate failure, then proves
-removal; secretless CI declares the same bounded job without uploading its binary. No repository
-test runs a real Codex account or deployed service, and no hosted Windows result is claimed from the
-local workflow definition. There is still no deployed Ingest/score/pairing API, supported sync
-connector, trusted edge limit or direct-origin policy, anonymous recovery edge policy, recovery
-notification, cleanup/scoring/deletion scheduler, audited correction flow, cache/backup/tombstone
-purge, restore replay, live OAuth/authenticator/Web/Jobs database integration, deployment Ingest
-credential/TLS integration, cross-platform connector evidence, installer, upgrade/revoke
-composition, credential rotation, released binary, or deployed database.
+discoverable-credential login. Invite/OAuth/initial-passkey enrollment is independently unavailable
+unless its two pages and four route modules resolve exact `VIBERACING_ENROLLMENT_ENABLED=true`; the
+tracked default is false. Disabled EN/RU UI omits both enrollment forms, all four service methods
+repeat literal-true enforcement before private or persistent work, and returning login/recovery stay
+available. Login options keep the profile-free challenge only in an encrypted cookie; a valid
+assertion causes one atomic database create-consume-session call. Anonymous login still requires
+edge rate/capacity controls before exposure. The account page uses that same possessed session to
+read only passkey labels, active/revoked state, rounded creation dates, the current-authenticator
+marker, the closed `public`/`hidden` profile state, at most 32 opaque sources, and at most 64 active
+device labels/platforms/versions with rounded activation dates. Credential IDs, raw source IDs,
+internal keys, and profile IDs are not rendered; source actions receive only a 15-minute encrypted
+token bound to the current session. A same-origin server form can hide the profile from the public
+score read or publish it again without stopping source sync. Another can immediately revoke one
+exact owned active device even while the profile is hidden. The same page can immediately pause a
+source and can reactivate only a paused source after a fresh required-UV passkey assertion; neither
+action changes hidden/public visibility or lifts quarantine. A separate destructive control
+permanently unlinks any non-terminal source after the same kind of fresh assertion, including while
+the profile is hidden; it does not publish the profile. An authenticated passkey revoke control
+sends only the selected opaque passkey ID, requires a fresh user-verified assertion bound to that
+session and target, and reaches one atomic consume-and-revoke call; the current or last active
+passkey cannot be removed. A separate add control validates and seals the label before prompting,
+requires an existing-key assertion plus an independent registration ceremony, and atomically
+consumes that step-up while inserting the new credential under the 32-retained-record cap. A local
+CarRecipe slice now validates one exact versioned enum-only recipe, stores at most one private
+24-hour proposal per session-derived profile, previews it in all three themes, and requires an
+explicit encrypted session-bound approve or reject control. Approval atomically replaces the active
+recipe. A separate device-authenticated Web route and fixed `propose-car` command can only create or
+replace the same pending exact recipe for an active source-bound device; they cannot read, approve,
+reject, or activate it. A checked local Agent Skill reduces a styling request to the exact recipe
+flags, requires explicit shell-safe origin/label values, invokes only that command once, and
+receives no read or decision authority. Cross-profile and non-Web database capabilities remain
+denied. Browser creation/approval and device ingress now remain unavailable unless their exact
+modules resolve `VIBERACING_CAR_PROPOSALS_ENABLED=true`; the tracked default is false. Disabled
+EN/RU account UI keeps active/private previews and exact session-bound rejection while omitting
+editor/approve, and both browser service mutations repeat literal-true enforcement. A separate
+Jobs-only command now deletes bounded oldest-first batches of expired private proposals while
+preserving live and active recipes. A separate compatible public race contract now projects only the
+current approved recipe for an active profile; proposal identity, state, and timestamps stay private
+and the stable score response remains unchanged. Cleanup scheduling, live credentials, released
+connector packaging, edge controls, and deployment remain pending. A database-only Community ingest
+capability now exposes minimal active-device verification material and accepts bounded source-bound
+snapshots with exact retry, nonce replay, monotonic source/date, quarantine, and lifecycle-race
+enforcement. A Jobs-only procedure deletes independently bounded batches of expired origin nonces,
+device nonces, and raw snapshots while preserving current source/day values. A separate Jobs-only
+procedure deletes bounded expired non-activated pairing transactions plus their still-pending keys,
+while preserving live and activated bindings. A third cleanup procedure independently deletes
+expired authentication challenges and restricted recovery authorities plus an exact still-present
+used code whose verifier was already scrubbed. It preserves live ceremonies, unused recovery codes,
+passkeys, and audit evidence, and serializes on profile locks against recovery transitions. A fourth
+bounded procedure physically deletes expired active or revoked invite verifiers while preserving
+live invites and redeemed enrollment provenance. A fifth bounded procedure physically deletes
+expired sessions only after rotation and pairing references permit it, cascading their unusable
+challenges while preserving live sessions and activated-pairing provenance. The database does not
+verify a wire signature; the local kernel and adapter are composed locally and exercised together
+with a signed synthetic request. The opt-in loopback integration now carries an independently signed
+request through the emitted host and a disposable least-privileged PostgreSQL login, including
+duplicate, replay, revoke, response, and stored-state checks. Another Jobs-only procedure serializes
+an atomic refresh of one open ISO-week Community season: it sums distinct eligible sources before
+one profile daily cap, stores an immutable formula and season binding, shares rank on equal score
+and active days, and persists no raw token or source identifier in the score tables. Revision 0024
+adds a separate Jobs-only maximum-10 primary deletion procedure. It accepts only due queued/retry
+work linked to committed `deletion_pending` profiles, locks its fixed five-capability maintenance
+set in stable order, removes restrictive pairings and authority-free pending keys first, terminally
+settles the opaque job, and cascades identity, credentials, sources, devices, usage, and personal
+score rows atomically. It deliberately creates no unkeyed tombstone. A separate Jobs-only cleanup
+retains that opaque terminal job for at least 30 days after server-recorded completion, then permits
+bounded oldest-first batches while preserving recent and non-terminal deletion work. Revision 0033
+adds a separate Jobs-only audit cleanup that retains each database audit reference for at least 180
+days after server-recorded occurrence, then permits bounded oldest-first batches while preserving
+recent evidence. It does not supply an external append-only audit sink. Revision 0010 adds a public
+48-hour server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization
+procedure whose terminal metadata and score projection reject silent rewrites while profile purge
+can still remove personal rows. Revision 0034 separately retains the exact session/passkey approval
+references on an activated pairing for at least 180 days, then permits bounded oldest-first
+redaction of only those two references while preserving the profile/source/device binding, pairing
+row, active device, and passkey. A later session-cleanup call can remove the now-unreferenced
+expired session. One local Revision 0035 separately removes at most 1000 passkey rows only after
+they have been revoked for 180 days and have no retained session, verifying/authorized challenge, or
+pairing reference. Active and referenced credentials remain, while eligible deletion can free the
+unchanged 32-row recovery ceiling. Revision 0036 separately removes at most 1000 minimized activated
+pairings and their exact revoked device-key rows only after both activation and revocation are at
+least 180 days old, approval provenance has been redacted, and no authorization challenge, nonce, or
+raw snapshot remains. It preserves active, recent, and referenced device history and never cascades
+raw evidence. Revision 0037 adds a separate no-argument Jobs-only reset for positive anonymous
+pairing transport rate windows only after the maximum permitted one-hour duration. It preserves the
+fixed 130-row matrix and scrubs only aggregate timestamp/count state. One local one-shot Jobs runner
+now wraps exactly one of fifteen fixed functions: authentication cleanup, audit-event cleanup,
+invite cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup, aged revoked-passkey
+cleanup, aged revoked-device cleanup, pairing approval-provenance redaction, pairing-rate-window
+reset, session cleanup, terminal deletion-job cleanup, primary profile purge, refresh, or
+finalization. It uses a distinct least-privileged configuration namespace, one-client pool,
+per-checkout role/login/search-path probe, fixed deadlines and prepared parameters, closed result
+validation, destructive release after failure, and stable non-reflective CLI output. An opt-in
+synthetic integration now builds that runner, applies the reviewed migration manifest to one
+disposable PostgreSQL container, proves all fifteen commands through a narrow login, rejects a
+deliberately widened login before mutation, and verifies exact stored state before cleanup. It has
+no external audit sink, scheduler, production login/certificate, monitoring backend, retry loop,
+capacity result, or deployment. Revision 0011 gives only the Web database role a bounded
+active-profile score projection containing no raw values, private identifiers, or exact timestamps.
+The score response component and Web PostgreSQL adapter preserve only that public allowlist through
+the local score route. All three public score/race/status routes require one exact default-off
+module-load gate before query/header parsing, admission acquisition, or storage work. The visible
+race, leaderboard, and selectable participant summary consume the validated current-week response
+only when enabled, using a credential-free same-origin request and an explicit synthetic fallback on
+disabled or failed state. Canonical `/?profile=handle#profile` links select only an exact public
+handle in that page, and a missing current top-32 row is not replaced with another participant.
+There is now a local invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey
+recovery-code rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey
+profile-deletion request flow. Recovery lookup returns only the selected unused PHC; admitted
+attempts use bounded Argon2id work, a protected pepper, generic responses, a configured minimum
+response floor, and a four-call local no-queue limit. A valid code creates only the sealed
+five-minute replacement-passkey continuation; the normal session is returned only after exact
+WebAuthn verification and atomic database completion. The local `/connect` flow now reviews one
+pending device, explicitly selects a new or active owned opaque source without exposing its raw ID,
+and fresh-passkey approves that exact choice under a database-backed session attempt window; the
+local start/poll routes and native-store Rust client complete that synthetic connection path only
+when all four pairing modules were explicitly enabled before load. New-source review and completion
+additionally require the separate exact default-off source-creation decision; disabled UI retains
+active existing-source choices and the server rejects an in-flight new-source challenge before
+passkey or database completion. These local controls are not dynamic/deployed switches. The separate
+candidate-only Windows sync command now joins the reviewed local collector, signer, and one bounded
+upload. A separate credential-free `check-codex` command verifies only point-in-time exact candidate
+admission and never launches it, reads an account, or uses the network. Its explicit redacted
+preview gives a user one complete stdout result to inspect before sharing and still declares that no
+Codex version is supported. A separate Windows release-profile smoke copies the `0.0.0` connector to
+an isolated temporary directory, checks the exact command surface and generic missing-candidate
+failure, then proves removal; secretless CI declares the same bounded job without uploading its
+binary. No repository test runs a real Codex account or deployed service, and no hosted Windows
+result is claimed from the local workflow definition. There is still no deployed
+Ingest/score/pairing API, supported sync connector, trusted edge limit or direct-origin policy,
+anonymous recovery edge policy, recovery notification, cleanup/scoring/deletion scheduler, audited
+correction flow, cache/backup/tombstone purge, restore replay, live OAuth/authenticator/Web/Jobs
+database integration, deployment Ingest credential/TLS integration, cross-platform connector
+evidence, installer, upgrade/revoke composition, credential rotation, released binary, or deployed
+database.
 
 ## Run and verify the synthetic prototype
 

@@ -26,12 +26,19 @@ material availability cost.
   capacity.
 - **Impact:** Reputation noise, invite depletion, moderation load, and infrastructure cost; no
   direct privilege if the Community boundary holds.
-- **Controls:** Invite-only rollout, upstream immutable GitHub ID binding, one profile per ID,
-  server-side Turnstile checks, private fair-use controls, and no score-backed benefit.
+- **Controls:** Default-off enrollment, invite-only rollout, upstream immutable GitHub ID binding,
+  one profile per ID, server-side Turnstile checks, private fair-use controls, and no score-backed
+  benefit.
 - **Detection:** Bounded enrollment telemetry, invite redemption anomalies, correlated source
   growth, and capacity alerts without publishing evasion thresholds.
 - **Recovery:** Pause enrollment, revoke affected invites, hide abusive profiles, and preserve a
   minimal audited reason.
+- **Current evidence:** ADR 0060 requires exact `VIBERACING_ENROLLMENT_ENABLED=true` independently
+  in both enrollment pages, all four GitHub/initial-passkey route modules, and all four service
+  methods. Disabled EN/RU pages omit both forms, and HTTP/service checks stop before private work.
+  Returning login and restricted recovery stay available. This is a local module-load control, not
+  distributed attempt policy, deployed worker coordination, invite revocation, abandoned-profile
+  cleanup, or proof that already-running enabled requests were terminated.
 - **Residual risk:** Vibe Racing cannot prove one human per GitHub account.
 
 ### VR-ABUSE-SOURCE-DUPLICATION — Duplicate declared Codex sources
@@ -301,10 +308,10 @@ material availability cost.
 - **Abuse:** Bind the wrong GitHub identity, fix a session, replay a challenge, or skip user
   verification for a critical action.
 - **Impact:** Profile takeover, device binding, source unlink, privacy change, or deletion.
-- **Controls:** State, PKCE, exact redirect, one-time code handling, secure session rotation, exact
-  RP ID/origin, transaction-bound challenges, user verification, exact session/passkey provenance,
-  fresh step-up, last-passkey protection, restricted recovery authority, and terminal credential
-  revoke that closes stale browser and pending device authority.
+- **Controls:** Default-off enrollment, state, PKCE, exact redirect, one-time code handling, secure
+  session rotation, exact RP ID/origin, transaction-bound challenges, user verification, exact
+  session/passkey provenance, fresh step-up, last-passkey protection, restricted recovery authority,
+  and terminal credential revoke that closes stale browser and pending device authority.
 - **Current evidence:** The local identity slice accepts only one exact same-origin bounded form,
   immediately reduces the 256-bit invite secret to its digest, seals state and S256 PKCE in a
   ten-minute callback-path cookie, requests no extra OAuth scope, follows no upstream redirect, and
@@ -313,34 +320,40 @@ material availability cost.
   a discoverable credential, user presence and verification, exact `webauthn.create`, RP ID, origin,
   challenge, and ES256/RS256 verification before atomic activation. Success rotates the 15-minute
   pending session to a fresh passkey-bound session and revokes the old verifier in the same query.
-  Returning-login options create no database state and seal only a profile-free five-minute
-  challenge under a separate purpose key. Verification looks up only minimal active credential
-  material, requires exact `webauthn.get`, RP ID, origin, challenge, UV, signature, counter, and
-  backup semantics, then atomically creates and consumes the database challenge, advances credential
-  state, and mints a fresh passkey-bound session. A post-commit cookie-sealing failure compensates
-  by revoking that session. Route bodies are stream-bounded under admission held through settlement;
-  overload cancels the body without a queue. Responses are generic/no-store/no-referrer, and the CSP
-  permits only self plus GitHub for OAuth form navigation. Injected tests cover wrong state, origin,
-  RP, type, UV, replay-shaped failures, cookie ambiguity, overload, continuation-before-write
-  ordering, database-free login options, atomic completion, and compensation. The account revoke
-  path accepts only an owned non-current active target from the session-derived inventory, binds a
-  five-minute challenge and sealed continuation to that session/target/RP/origin context, requires a
-  fresh exact user-verified assertion, and atomically consumes the challenge with terminal revoke.
-  Tests cover current/foreign targets, closed body shapes, target binding, and replay-shaped
-  database failure. The add path validates and seals the label before prompts, uses distinct
-  five-minute existing-key assertion and registration challenges, verifies both exact ceremonies,
-  and atomically consumes the session/profile/label/RP/origin-bound step-up while inserting the new
-  credential. Closed shapes, mixed challenge-cookie types, replay-shaped failure, retained-record
-  cap, and duplicate credentials fail closed. Recovery-code rotation binds a separate five-minute
-  challenge to the exact active session/profile/RP/origin, requires a fresh exact assertion, derives
-  ten independent Argon2id PHCs sequentially under a recovery-only protected pepper, and atomically
-  consumes the challenge while replacing every previous code and active authority. Only commit
-  returns the plaintext batch in a no-store response; the page holds it only in memory for one
-  display. Cross-session, malformed, replay-shaped, and invalid-generator outcomes fail generically.
-  The deletion path accepts only the session's exact typed handle before prompting, binds a
-  five-minute fresh assertion to session/profile/handle/RP/origin, and uses one statement to consume
-  the challenge with the existing atomic hide/revoke/unlink/enqueue call. Source pause accepts only
-  the encrypted session-bound control token through a same-origin form. Reactivation binds a fresh
+  Both enrollment pages and all four GitHub/initial-passkey route modules require exact
+  `VIBERACING_ENROLLMENT_ENABLED=true`; disabled pages omit their forms, HTTP stops before
+  request/runtime/admission/private work, and all four service methods repeat the decision before
+  input/cookie/OAuth/WebAuthn/database work. Active-session redirects, returning login, restricted
+  recovery, logout, and account security actions are intentionally independent. This does not clear
+  existing continuations or prove deployed/dynamic operation. Returning-login options create no
+  database state and seal only a profile-free five-minute challenge under a separate purpose key.
+  Verification looks up only minimal active credential material, requires exact `webauthn.get`, RP
+  ID, origin, challenge, UV, signature, counter, and backup semantics, then atomically creates and
+  consumes the database challenge, advances credential state, and mints a fresh passkey-bound
+  session. A post-commit cookie-sealing failure compensates by revoking that session. Route bodies
+  are stream-bounded under admission held through settlement; overload cancels the body without a
+  queue. Responses are generic/no-store/no-referrer, and the CSP permits only self plus GitHub for
+  OAuth form navigation. Injected tests cover wrong state, origin, RP, type, UV, replay-shaped
+  failures, cookie ambiguity, overload, continuation-before-write ordering, database-free login
+  options, atomic completion, and compensation. The account revoke path accepts only an owned
+  non-current active target from the session-derived inventory, binds a five-minute challenge and
+  sealed continuation to that session/target/RP/origin context, requires a fresh exact user-verified
+  assertion, and atomically consumes the challenge with terminal revoke. Tests cover current/foreign
+  targets, closed body shapes, target binding, and replay-shaped database failure. The add path
+  validates and seals the label before prompts, uses distinct five-minute existing-key assertion and
+  registration challenges, verifies both exact ceremonies, and atomically consumes the
+  session/profile/label/RP/origin-bound step-up while inserting the new credential. Closed shapes,
+  mixed challenge-cookie types, replay-shaped failure, retained-record cap, and duplicate
+  credentials fail closed. Recovery-code rotation binds a separate five-minute challenge to the
+  exact active session/profile/RP/origin, requires a fresh exact assertion, derives ten independent
+  Argon2id PHCs sequentially under a recovery-only protected pepper, and atomically consumes the
+  challenge while replacing every previous code and active authority. Only commit returns the
+  plaintext batch in a no-store response; the page holds it only in memory for one display.
+  Cross-session, malformed, replay-shaped, and invalid-generator outcomes fail generically. The
+  deletion path accepts only the session's exact typed handle before prompting, binds a five-minute
+  fresh assertion to session/profile/handle/RP/origin, and uses one statement to consume the
+  challenge with the existing atomic hide/revoke/unlink/enqueue call. Source pause accepts only the
+  encrypted session-bound control token through a same-origin form. Reactivation binds a fresh
   required-UV assertion to the session, source, RP ID, and origin, then atomically consumes the
   challenge and reactivates only `paused`; tests reject token tampering, cross-session use,
   replay-shaped failure, quarantine, and malformed request shapes. A distinct fresh context
@@ -757,7 +770,11 @@ material availability cost.
   gate, not a distributed creation rate limit. CarRecipe proposal creation and approval separately
   require exact `VIBERACING_CAR_PROPOSALS_ENABLED=true`; disabled browser/device mutation stops
   before parsing, admission, proof, or database work while private read/reject remains. This is also
-  a local gate, not a distributed proposal rate limit. Once pairing is enabled, the transport-free
+  a local gate, not a distributed proposal rate limit. Enrollment separately requires exact
+  `VIBERACING_ENROLLMENT_ENABLED=true` in both pages, all four route modules, and all four service
+  methods; disabled UI omits its forms and disabled HTTP/service paths stop before private work.
+  Returning login/recovery remain available. This is a local gate, not a distributed enrollment rate
+  limit, cleanup mechanism, or deployed worker control. Once pairing is enabled, the transport-free
   pairing-start application bounds labels, metadata, keys, entropy, and HMAC work, admits four
   unsettled attempts without a queue, holds each lease through a 250-millisecond floor, and makes no
   database call for malformed input. Revision 0022 now adds one Web-only fixed-storage admission

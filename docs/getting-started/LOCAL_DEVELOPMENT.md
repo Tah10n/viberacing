@@ -392,6 +392,17 @@ before parsing, runtime/service construction, admission, proof, or database work
 service repeats the decision before recipe/control/session work. Changing the value does not reload
 an existing worker, stop an old enabled instance, or prove deployed route denial.
 
+Invite/OAuth/initial-passkey enrollment separately remains unavailable unless the ignored local
+environment sets exact `VIBERACING_ENROLLMENT_ENABLED=true` before `/join`, `/join/passkey`, GitHub
+start/callback, and initial-passkey options/verification modules load. The tracked example stays
+false. Disabled EN/RU pages omit both forms, and disabled HTTP returns generic no-store 503 before
+request parsing, runtime/service construction, admission, protected configuration, OAuth/WebAuthn,
+or database work. All four service methods repeat the literal decision before input, cookie, time,
+entropy, or private dependency work. Active-session redirects, returning login, restricted recovery,
+logout, and account security actions remain available. Changing the value does not clear an existing
+continuation or pending session, clean an abandoned enrolling profile, repair an invite, reload an
+existing worker, stop an enabled in-flight request, or prove deployed route denial.
+
 The server-only score, enrollment, and local pairing adapters use only `VIBERACING_WEB_DATABASE_*`.
 Their tracked user/password are deliberately non-working placeholders and are checked against
 accidental reuse of the `DATABASE_*` compose owner. Local integration requires a separately
@@ -399,11 +410,11 @@ provisioned login whose only membership is `viberacing_web`; login creation rema
 environment-owned and is not automated here. `disable` requires explicit `NODE_ENV=development` or
 `test` plus loopback. Every other environment requires `verify-full`, a certificate-valid
 multi-label DNS hostname, and TLS 1.2 or later. The synthetic page and build never construct either
-adapter, so they need none of these settings. The join form also renders without configuration; its
-server actions fail closed until the complete enrollment environment exists.
+adapter, so they need none of these settings. The disabled join shell also renders without protected
+configuration; enabled server actions fail closed until the complete enrollment environment exists.
 
-Local enrollment additionally requires a dedicated GitHub OAuth app whose callback is exactly
-`/auth/github/callback` on the configured `localhost` origin, valid `GITHUB_CLIENT_ID` and
+Enabled local enrollment additionally requires a dedicated GitHub OAuth app whose callback is
+exactly `/auth/github/callback` on the configured `localhost` origin, valid `GITHUB_CLIENT_ID` and
 `GITHUB_CLIENT_SECRET`, and a fresh canonical 32-byte base64url `SESSION_SECRET`. Set
 `WEBAUTHN_ORIGIN` exactly equal to `VIBERACING_PUBLIC_ORIGIN` and set `WEBAUTHN_RP_ID` to that
 origin's lowercase hostname (`localhost` for the documented loopback setup). WebAuthn RP IDs cannot

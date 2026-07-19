@@ -537,7 +537,7 @@ describe("enrollment service", () => {
       service,
       verifyPasskey,
     } = createFixture();
-    const start = service.beginGithub(join);
+    const start = service.beginGithub(join, true);
     expect(start).toBeDefined();
     const authorization = new URL(start?.redirectUrl ?? "invalid:");
     const state = authorization.searchParams.get("state");
@@ -548,6 +548,7 @@ describe("enrollment service", () => {
       state ?? "",
       start?.oauthCookie ?? "",
       new AbortController().signal,
+      true,
     );
     expect(callback).toBeDefined();
     expect(exchangeGithub).toHaveBeenCalledOnce();
@@ -573,7 +574,7 @@ describe("enrollment service", () => {
         .digest(),
     );
 
-    const passkeyStart = await service.beginPasskey(callback?.sessionCookie ?? "");
+    const passkeyStart = await service.beginPasskey(callback?.sessionCookie ?? "", true);
     expect(passkeyStart?.options.challenge).toHaveLength(43);
     expect(database.createPasskeyChallenge).toHaveBeenCalledOnce();
     expect(challengeSessionDigest()).toEqual(
@@ -586,6 +587,7 @@ describe("enrollment service", () => {
       callback?.sessionCookie ?? "",
       passkeyStart?.passkeyCookie ?? "",
       { label: "Primary passkey", response: { id: "synthetic" } },
+      true,
     );
     expect(completion).toBeDefined();
     expect(verifyPasskey).toHaveBeenCalledOnce();
@@ -612,6 +614,55 @@ describe("enrollment service", () => {
       expect.objectContaining({ sessionId: "00000000-0000-4000-8000-000000000508" }),
     );
   });
+
+  it.each([false, undefined, "true", 1])(
+    "requires literal enrollment enablement before all enrollment work for value %#",
+    async (enrollmentEnabled) => {
+      const { database, exchangeGithub, service, verifyPasskey } = createFixture();
+      const hostileJoin = new Proxy(join, {
+        get() {
+          throw new Error("join-must-not-be-read");
+        },
+      });
+      const inaccessible = new Proxy(
+        {},
+        {
+          get() {
+            throw new Error("enrollment-input-must-not-be-read");
+          },
+        },
+      ) as unknown as string;
+      const hostileBody = new Proxy(
+        {},
+        {
+          ownKeys() {
+            throw new Error("passkey-body-must-not-be-read");
+          },
+        },
+      );
+
+      expect(service.beginGithub(hostileJoin, enrollmentEnabled)).toBeUndefined();
+      await expect(
+        service.completeGithub(
+          inaccessible,
+          inaccessible,
+          inaccessible,
+          inaccessible as unknown as AbortSignal,
+          enrollmentEnabled,
+        ),
+      ).resolves.toBeUndefined();
+      await expect(service.beginPasskey(inaccessible, enrollmentEnabled)).resolves.toBeUndefined();
+      await expect(
+        service.completePasskey(inaccessible, inaccessible, hostileBody, enrollmentEnabled),
+      ).resolves.toBeUndefined();
+
+      expect(exchangeGithub).not.toHaveBeenCalled();
+      expect(verifyPasskey).not.toHaveBeenCalled();
+      expect(database.enrollProfile).not.toHaveBeenCalled();
+      expect(database.createPasskeyChallenge).not.toHaveBeenCalled();
+      expect(database.completeInitialPasskey).not.toHaveBeenCalled();
+    },
+  );
 
   it("creates a profile-free challenge and mints a credential-derived passkey session", async () => {
     const {
@@ -1805,7 +1856,7 @@ describe("enrollment service", () => {
 
   it("fails closed for mismatched state, invalid cookies, repeated registration, and unsafe labels", async () => {
     const { database, exchangeGithub, service, verifyPasskey } = createFixture();
-    const start = service.beginGithub(join);
+    const start = service.beginGithub(join, true);
     const state = new URL(start?.redirectUrl ?? "invalid:").searchParams.get("state") ?? "";
     expect(service.cancelGithub(state, start?.oauthCookie ?? "")).toBe(true);
     expect(
@@ -1817,11 +1868,12 @@ describe("enrollment service", () => {
         Buffer.alloc(32, 9).toString("base64url"),
         start?.oauthCookie ?? "",
         new AbortController().signal,
+        true,
       ),
     ).resolves.toBeUndefined();
     expect(exchangeGithub).not.toHaveBeenCalled();
-    await expect(service.beginPasskey("invalid")).resolves.toBeUndefined();
-    await expect(service.completePasskey("invalid", "invalid", {})).resolves.toBeUndefined();
+    await expect(service.beginPasskey("invalid", true)).resolves.toBeUndefined();
+    await expect(service.completePasskey("invalid", "invalid", {}, true)).resolves.toBeUndefined();
     await expect(service.logout("invalid")).resolves.toBe(true);
     expect(database.enrollProfile).not.toHaveBeenCalled();
 
@@ -1830,13 +1882,19 @@ describe("enrollment service", () => {
       state,
       start?.oauthCookie ?? "",
       new AbortController().signal,
+      true,
     );
-    const passkey = await service.beginPasskey(callback?.sessionCookie ?? "");
+    const passkey = await service.beginPasskey(callback?.sessionCookie ?? "", true);
     await expect(
-      service.completePasskey(callback?.sessionCookie ?? "", passkey?.passkeyCookie ?? "", {
-        label: "unsafe\nlabel",
-        response: {},
-      }),
+      service.completePasskey(
+        callback?.sessionCookie ?? "",
+        passkey?.passkeyCookie ?? "",
+        {
+          label: "unsafe\nlabel",
+          response: {},
+        },
+        true,
+      ),
     ).resolves.toBeUndefined();
     expect(verifyPasskey).not.toHaveBeenCalled();
 
@@ -1844,12 +1902,18 @@ describe("enrollment service", () => {
       callback?.sessionCookie ?? "",
       passkey?.passkeyCookie ?? "",
       { label: "Primary passkey", response: {} },
+      true,
     );
     await expect(
-      service.completePasskey(completed?.sessionCookie ?? "", passkey?.passkeyCookie ?? "", {
-        label: "Primary passkey",
-        response: {},
-      }),
+      service.completePasskey(
+        completed?.sessionCookie ?? "",
+        passkey?.passkeyCookie ?? "",
+        {
+          label: "Primary passkey",
+          response: {},
+        },
+        true,
+      ),
     ).resolves.toBeUndefined();
     expect(database.completeInitialPasskey).toHaveBeenCalledOnce();
   });
@@ -1857,7 +1921,7 @@ describe("enrollment service", () => {
   it("contains unavailable dependencies and invalid clocks", async () => {
     const fixture = createFixture();
     vi.mocked(fixture.database.enrollProfile).mockResolvedValue(false);
-    const start = fixture.service.beginGithub(join);
+    const start = fixture.service.beginGithub(join, true);
     const state = new URL(start?.redirectUrl ?? "invalid:").searchParams.get("state") ?? "";
     await expect(
       fixture.service.completeGithub(
@@ -1865,6 +1929,7 @@ describe("enrollment service", () => {
         state,
         start?.oauthCookie ?? "",
         new AbortController().signal,
+        true,
       ),
     ).resolves.toBeUndefined();
 
@@ -1875,7 +1940,7 @@ describe("enrollment service", () => {
       derivePairingCode,
       now: () => new Date(Number.NaN),
     });
-    expect(invalidClockService.beginGithub(join)).toBeUndefined();
+    expect(invalidClockService.beginGithub(join, true)).toBeUndefined();
     expect(invalidClockService.readSession(undefined)).toBeUndefined();
   });
 
@@ -1955,7 +2020,13 @@ describe("enrollment service", () => {
       randomUuid: () => "00000000-0000-4000-8000-000000000509",
     });
     await expect(
-      oauthService.completeGithub("valid_code_123", state, "opaque", new AbortController().signal),
+      oauthService.completeGithub(
+        "valid_code_123",
+        state,
+        "opaque",
+        new AbortController().signal,
+        true,
+      ),
     ).resolves.toBeUndefined();
     expect(database.enrollProfile).not.toHaveBeenCalled();
 
@@ -2005,13 +2076,18 @@ describe("enrollment service", () => {
           signCount: 0,
         }),
     });
-    await expect(passkeyService.beginPasskey("session")).resolves.toBeUndefined();
+    await expect(passkeyService.beginPasskey("session", true)).resolves.toBeUndefined();
     expect(database.createPasskeyChallenge).not.toHaveBeenCalled();
     await expect(
-      passkeyService.completePasskey("session", "passkey", {
-        label: "Primary passkey",
-        response: {},
-      }),
+      passkeyService.completePasskey(
+        "session",
+        "passkey",
+        {
+          label: "Primary passkey",
+          response: {},
+        },
+        true,
+      ),
     ).resolves.toBeUndefined();
     expect(database.completeInitialPasskey).not.toHaveBeenCalled();
   });

@@ -35,6 +35,14 @@ apply.
   pending reads plus exact session-bound rejection while disabled; do not conflate this control with
   public ranking, cleanup, pairing, source creation, or Ingest, and do not claim dynamic/deployed
   disablement.
+- Keep invite/OAuth/initial-passkey enrollment behind exact `VIBERACING_ENROLLMENT_ENABLED=true`,
+  independently resolved by `/join`, `/join/passkey`, and the four GitHub start/callback plus
+  initial-passkey options/verification modules. Every alternate or unreadable value must omit both
+  EN/RU forms and fail before request parsing, runtime/admission, OAuth/WebAuthn, or database work.
+  All four enrollment service methods must repeat literal-true enforcement before reading their
+  inputs. Preserve active-session redirects, returning login, restricted recovery, logout, and
+  account security actions; do not conflate the enable resolver with protected enrollment runtime
+  configuration or claim dynamic/deployed disablement or cleanup.
 - Browser persistence is limited to locale, theme, and motion. Do not add trackers, analytics,
   fingerprinting, or account state to local storage.
 - Preserve per-navigation nonce CSP and repository-root build isolation. Do not add a CSP origin,

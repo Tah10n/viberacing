@@ -48,7 +48,7 @@ describe("enrollment experience", () => {
     localStorage.setItem("viberacing.locale", "ru");
     localStorage.setItem("viberacing.theme", "cyber-rally");
     localStorage.setItem("viberacing.motion", "off");
-    const mounted = mount(<JoinExperience error="invalid" />);
+    const mounted = mount(<JoinExperience enrollmentEnabled error="invalid" />);
     await act(async () => {
       await Promise.resolve();
     });
@@ -75,11 +75,39 @@ describe("enrollment experience", () => {
     });
   });
 
+  it("keeps EN/RU login and recovery guidance visible while enrollment controls are disabled", async () => {
+    localStorage.setItem("viberacing.locale", "ru");
+    const mounted = mount(<JoinExperience enrollmentEnabled={false} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain(
+      "Регистрация новых участников временно недоступна",
+    );
+    expect(mounted.container.querySelector('form[action="/auth/github/start"]')).toBeNull();
+    expect(mounted.container.querySelector('a[href="/login"]')).not.toBeNull();
+
+    for (const [locale, unavailable] of [
+      ["en", "Enrollment is temporarily unavailable"],
+      ["ru", "Регистрация временно недоступна"],
+    ] as const) {
+      const markup = renderToStaticMarkup(
+        <PasskeySetup enrollmentEnabled={false} handle="pixel_driver" locale={locale} />,
+      );
+      expect(markup).toContain(unavailable);
+      expect(markup).not.toContain("<form");
+    }
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
   it("reports unsupported passkeys without making a request", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     webauthn.browserSupportsWebAuthn.mockReturnValue(false);
-    const mounted = mount(<PasskeySetup handle="pixel_driver" locale="en" />);
+    const mounted = mount(<PasskeySetup enrollmentEnabled handle="pixel_driver" locale="en" />);
     expect(mounted.container.querySelector("main")?.getAttribute("lang")).toBe("en");
     const form = mounted.container.querySelector("form");
     await act(async () => {
@@ -104,7 +132,7 @@ describe("enrollment experience", () => {
       )
       .mockResolvedValueOnce(new Response(null, { status: 401 }));
     vi.stubGlobal("fetch", fetchMock);
-    const mounted = mount(<PasskeySetup handle="pixel_driver" locale="en" />);
+    const mounted = mount(<PasskeySetup enrollmentEnabled handle="pixel_driver" locale="en" />);
     await act(async () => {
       mounted.container
         .querySelector("form")
@@ -890,7 +918,7 @@ describe("enrollment experience", () => {
     document.documentElement.lang = "en";
     document.title = "Vibe Racing enrollment test";
     for (const markup of [
-      renderToStaticMarkup(<JoinExperience />),
+      renderToStaticMarkup(<JoinExperience enrollmentEnabled />),
       renderToStaticMarkup(
         <AccountExperience
           activeDeviceInventory={[]}
@@ -910,7 +938,7 @@ describe("enrollment experience", () => {
       ),
       renderToStaticMarkup(<PasskeyLogin />),
       renderToStaticMarkup(<RecoveryExperience />),
-      renderToStaticMarkup(<PasskeySetup handle="pixel_driver" locale="en" />),
+      renderToStaticMarkup(<PasskeySetup enrollmentEnabled handle="pixel_driver" locale="en" />),
       renderToStaticMarkup(
         <ConnectExperience
           existingSources={[

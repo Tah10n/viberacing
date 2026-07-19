@@ -74,6 +74,7 @@ export interface EnrollmentHttp {
 interface EnrollmentHttpDependencies {
   readonly admission: EnrollmentAdmission;
   readonly carProposalsEnabled?: unknown;
+  readonly enrollmentEnabled?: unknown;
   readonly getRuntime: () => EnrollmentRuntime;
   readonly pairingEnabled?: unknown;
   readonly sourceCreationEnabled?: unknown;
@@ -369,6 +370,10 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
 
   return Object.freeze({
     async callback(request: Request): Promise<Response> {
+      if (dependencies.enrollmentEnabled !== true) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
         return problem("temporarily_unavailable");
@@ -406,6 +411,7 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           query.state,
           oauthCookie,
           AbortSignal.timeout(10_000),
+          dependencies.enrollmentEnabled,
         );
         if (decision === undefined) {
           return redirect(currentRuntime.config.publicOrigin, "/join?error=unavailable", [
@@ -1771,6 +1777,10 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
       }
     },
     async passkeyOptions(request: Request): Promise<Response> {
+      if (dependencies.enrollmentEnabled !== true) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
         discardBody(request);
@@ -1799,7 +1809,10 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         if (sessionCookie === undefined) {
           return problem("temporarily_unavailable");
         }
-        const decision = await currentRuntime.service.beginPasskey(sessionCookie);
+        const decision = await currentRuntime.service.beginPasskey(
+          sessionCookie,
+          dependencies.enrollmentEnabled,
+        );
         if (decision === undefined) {
           return problem("unauthorized");
         }
@@ -1821,6 +1834,10 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
       }
     },
     async passkeyVerify(request: Request): Promise<Response> {
+      if (dependencies.enrollmentEnabled !== true) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
         discardBody(request);
@@ -1864,6 +1881,7 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           sessionCookie,
           passkeyCookie,
           parsed,
+          dependencies.enrollmentEnabled,
         );
         if (decision === undefined) {
           return problem("unauthorized");
@@ -1939,6 +1957,10 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
       }
     },
     async start(request: Request): Promise<Response> {
+      if (dependencies.enrollmentEnabled !== true) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
         discardBody(request);
@@ -1962,7 +1984,7 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         if (join === undefined) {
           return redirect(currentRuntime.config.publicOrigin, "/join?error=invalid");
         }
-        const decision = currentRuntime.service.beginGithub(join);
+        const decision = currentRuntime.service.beginGithub(join, dependencies.enrollmentEnabled);
         if (decision === undefined) {
           return redirect(currentRuntime.config.publicOrigin, "/join?error=unavailable");
         }

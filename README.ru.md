@@ -221,13 +221,17 @@ passkey-проверкой замена recovery-кодов и отдельно�
 passkey: обычная сессия создаётся лишь после успешной замены, а использованный PHC сразу удаляется.
 Локальный identity flow теперь проверяет initial WebAuthn registration, returning
 discoverable-credential login, fresh step-up для отзыва owned non-current passkey и fresh passkey
-для reactivation paused-источника. Source ID не попадает в HTML: страница получает только
-зашифрованный привязанный к сессии control token на 15 минут. Pause выполняется сразу, reactivation
-доступна только для `paused` и не меняет public/hidden visibility. Необратимый unlink использует
-отдельный fresh-passkey context, атомарно отзывает устройства источника и также не публикует hidden
-профиль. Database-only scoring refresh уже суммирует distinct eligible sources одного профиля перед
-единым дневным лимитом, закрепляет immutable версию формулы за ISO-week season и сохраняет только
-derived score/rank/active-days/source-count без raw tokens и source IDs. Database-only finalization
+для reactivation paused-источника. Invite/OAuth/initial-passkey enrollment независимо недоступен,
+пока две страницы и четыре route module не получат точное `VIBERACING_ENROLLMENT_ENABLED=true`;
+tracked default равен `false`. В выключенном EN/RU UI нет обеих enrollment form, четыре service
+method повторяют literal-true проверку до private/persistent work, а returning login/recovery
+остаются доступны. Source ID не попадает в HTML: страница получает только зашифрованный привязанный
+к сессии control token на 15 минут. Pause выполняется сразу, reactivation доступна только для
+`paused` и не меняет public/hidden visibility. Необратимый unlink использует отдельный fresh-passkey
+context, атомарно отзывает устройства источника и также не публикует hidden профиль. Database-only
+scoring refresh уже суммирует distinct eligible sources одного профиля перед единым дневным лимитом,
+закрепляет immutable версию формулы за ISO-week season и сохраняет только derived
+score/rank/active-days/source-count без raw tokens и source IDs. Database-only finalization
 закрывает grace window через 48 часов после ISO-week по server time, сохраняет late snapshot только
 как quarantined evidence и делает terminal season неизменяемым, сохраняя profile-purge. Отдельная
 Web-only database projection возвращает только bounded active-profile score rows без raw values,

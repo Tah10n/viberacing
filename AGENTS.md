@@ -62,36 +62,38 @@ new-source approval initiation and completion unless the `/connect` page and bot
 modules resolved exact enablement; active existing-source pairing remains available, and the source
 choice is sealed and digest-bound to the passkey challenge. A fifth exact default-off decision now
 closes browser proposal creation, browser approval, and device proposal ingress before request or
-state work; account UI preserves active/private previews and exact rejection. None of these local
-gates is a deployed dynamic kill switch. The public home also has a local-only EN/RU score simulator
-that persists or transmits no hypothetical input; the stable score and legacy race response
-contracts remain unchanged. These local boundaries still have no deployment proof key or
-secret-manager binding, externally verified TLS/edge route, deployment database credential, capacity
-evidence, deployment, or real-data result. A separate local enrollment slice now implements exact
-invite parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted
-cookies, atomic profile enrollment, required initial WebAuthn registration plus pending-session
-rotation, returning discoverable-credential passkey login, a session-scoped minimal passkey
-inventory, an account page, same-origin public-profile hide/show, a session-derived active-device
-inventory, immediate source pause, passkey-protected paused-source reactivation, immediate
-owned-device revoke, passkey-protected terminal source unlink, backup-passkey addition, revocation
-of an owned non-current passkey, fresh-passkey recovery-code rotation with one-time plaintext
-display, an exact-handle fresh-passkey profile-deletion request, one-time recovery-code
-replacement-passkey sign-in, and logout through the same probed read-write Web/Auth pool. Login
-options retain their profile-free challenge only in a purpose-separated cookie; valid proof
-atomically creates and consumes its database challenge while minting the session. Recovery performs
-bounded Argon2id verification under a protected pepper, creates only a five-minute restricted
-authority, verifies the replacement WebAuthn ceremony, and returns a normal session only after
-atomic completion. It has an exact-session CarRecipe editor that validates one closed version 1
-object, stores at most one 24-hour private proposal, previews active/pending recipes in all three
-themes, and activates or rejects only through an encrypted session-bound control. A separate bounded
-device-authenticated route and fixed connector command can only create or replace that pending exact
-recipe for an active source-bound device; they cannot read, approve, reject, or activate it. A
-separate compatible race projection exposes only an active profile's current approved recipe;
-proposal state stays private. A separate bounded Jobs-only capability physically removes expired
-proposals locally, but has no schedule, live login, monitoring, or deployment. The enrollment slice
-has only injected/synthetic evidence and no invite issuer UI, working OAuth or database credential,
-distributed recovery attempt controls, cleanup/deletion scheduling or notification,
-cache/backup/tombstone purge, restore replay, edge abuse controls, or deployment. Bounded expired
+state work; account UI preserves active/private previews and exact rejection. A sixth exact
+default-off decision now closes the invite/OAuth/initial-passkey enrollment pages, HTTP routes, and
+service methods while returning login and recovery remain available. None of these local gates is a
+deployed dynamic kill switch. The public home also has a local-only EN/RU score simulator that
+persists or transmits no hypothetical input; the stable score and legacy race response contracts
+remain unchanged. These local boundaries still have no deployment proof key or secret-manager
+binding, externally verified TLS/edge route, deployment database credential, capacity evidence,
+deployment, or real-data result. A separate local enrollment slice now implements exact invite
+parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted cookies,
+atomic profile enrollment, required initial WebAuthn registration plus pending-session rotation,
+returning discoverable-credential passkey login, a session-scoped minimal passkey inventory, an
+account page, same-origin public-profile hide/show, a session-derived active-device inventory,
+immediate source pause, passkey-protected paused-source reactivation, immediate owned-device revoke,
+passkey-protected terminal source unlink, backup-passkey addition, revocation of an owned
+non-current passkey, fresh-passkey recovery-code rotation with one-time plaintext display, an
+exact-handle fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey
+sign-in, and logout through the same probed read-write Web/Auth pool. Login options retain their
+profile-free challenge only in a purpose-separated cookie; valid proof atomically creates and
+consumes its database challenge while minting the session. Recovery performs bounded Argon2id
+verification under a protected pepper, creates only a five-minute restricted authority, verifies the
+replacement WebAuthn ceremony, and returns a normal session only after atomic completion. It has an
+exact-session CarRecipe editor that validates one closed version 1 object, stores at most one
+24-hour private proposal, previews active/pending recipes in all three themes, and activates or
+rejects only through an encrypted session-bound control. A separate bounded device-authenticated
+route and fixed connector command can only create or replace that pending exact recipe for an active
+source-bound device; they cannot read, approve, reject, or activate it. A separate compatible race
+projection exposes only an active profile's current approved recipe; proposal state stays private. A
+separate bounded Jobs-only capability physically removes expired proposals locally, but has no
+schedule, live login, monitoring, or deployment. The enrollment slice has only injected/synthetic
+evidence and no invite issuer UI, working OAuth or database credential, distributed recovery attempt
+controls, cleanup/deletion scheduling or notification, cache/backup/tombstone purge, restore replay,
+edge abuse controls, or deployment. Bounded expired
 authentication/invite/CarRecipe-proposal/session, aged revoked-passkey cleanup, and aged minimized
 revoked-device/pairing cleanup plus primary profile deletion exist locally. Activated pairing
 approval references can be redacted locally after 180 days, and an unreferenced revoked-device
@@ -166,12 +168,12 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
 - `config/` contains reviewed external-host and dependency-license policy; do not widen either
   allowlist as a workaround for a failing check.
 - `apps/web/` contains the synthetic Next.js frontend, default-off local public score/race/status
-  routes and adapters, bounded invite/OAuth/initial-passkey enrollment, returning-passkey login,
-  private account controls, and passkey-protected recovery-code rotation and replacement-passkey
-  sign-in, plus the pure pairing-possession verifier, default-off local pairing start/poll and
-  approval routes, the independent default-off new-source approval control, their applications, and
-  the independent default-off CarRecipe proposal mutation control plus nested agent guidance. Read
-  `apps/web/AGENTS.md` before editing it.
+  routes and adapters, default-off bounded invite/OAuth/initial-passkey enrollment,
+  returning-passkey login, private account controls, and passkey-protected recovery-code rotation
+  and replacement-passkey sign-in, plus the pure pairing-possession verifier, default-off local
+  pairing start/poll and approval routes, the independent default-off new-source approval control,
+  their applications, and the independent default-off CarRecipe proposal mutation control plus
+  nested agent guidance. Read `apps/web/AGENTS.md` before editing it.
 - `apps/jobs/` contains the bounded local one-shot maintenance runner and nested least-privilege
   guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL

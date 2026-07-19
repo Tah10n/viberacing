@@ -130,18 +130,19 @@ function readPairingReview(value: unknown): PairingReview | undefined {
 }
 
 interface PasskeySetupProps {
+  readonly enrollmentEnabled?: boolean;
   readonly handle: string;
   readonly locale: Locale;
 }
 
-export function PasskeySetup({ handle, locale }: PasskeySetupProps) {
+export function PasskeySetup({ enrollmentEnabled = false, handle, locale }: PasskeySetupProps) {
   const copy = joinTranslations[locale];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
   async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (busy) {
+    if (!enrollmentEnabled || busy) {
       return;
     }
     if (!browserSupportsWebAuthn()) {
@@ -196,21 +197,27 @@ export function PasskeySetup({ handle, locale }: PasskeySetupProps) {
         <p className="eyebrow">@{handle}</p>
         <h1 id="passkey-title">{copy.passkeyTitle}</h1>
         <p>{copy.passkeyCopy}</p>
-        <form className="auth-form" onSubmit={(event) => void submit(event)}>
-          <label>
-            <span>{copy.passkeyLabel}</span>
-            <input
-              defaultValue={copy.primaryPasskey}
-              maxLength={64}
-              minLength={1}
-              name="label"
-              required
-            />
-          </label>
-          <button className="primary-action" disabled={busy} type="submit">
-            {busy ? copy.creatingPasskey : copy.createPasskey}
-          </button>
-        </form>
+        {enrollmentEnabled ? (
+          <form className="auth-form" onSubmit={(event) => void submit(event)}>
+            <label>
+              <span>{copy.passkeyLabel}</span>
+              <input
+                defaultValue={copy.primaryPasskey}
+                maxLength={64}
+                minLength={1}
+                name="label"
+                required
+              />
+            </label>
+            <button className="primary-action" disabled={busy} type="submit">
+              {busy ? copy.creatingPasskey : copy.createPasskey}
+            </button>
+          </form>
+        ) : (
+          <p className="auth-status" role="status">
+            {copy.enrollmentCompletionUnavailable}
+          </p>
+        )}
         <p aria-live="polite" className={error === undefined ? "auth-status" : "auth-error"}>
           {error ?? ""}
         </p>

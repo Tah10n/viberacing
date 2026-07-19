@@ -44,8 +44,8 @@ content, or raw account identifiers leaving the machine.
   backpressure, alerts, audit events, and kill switches. Default-off local gates now cover Ingest
   startup, all three public-ranking routes, all four pairing routes, new-source creation while
   preserving active existing-source pairing, and CarRecipe proposal creation/approval while
-  preserving private read/reject; deployed operation and the independent enrollment switch remain
-  open.
+  preserving private read/reject, plus invite/OAuth/initial-passkey enrollment while preserving
+  returning login/recovery. Deployed operation for every local gate remains open.
 - Keep the profile cap and source count visible so adding devices cannot multiply one source.
 
 Exit criterion: source multiplication cannot exceed the profile score cap or gain privilege, and

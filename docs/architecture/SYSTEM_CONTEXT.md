@@ -6,23 +6,23 @@ This is the planned runtime architecture. The current repository contains a test
 foundation, default-off local public score/race/status routes with a visible validated status
 consumer and synthetic fallback, four default-off local pairing routes plus an independent
 default-off new-source control and an independent default-off CarRecipe proposal mutation control,
-local invite/OAuth/initial-passkey enrollment, returning-passkey login, exact-session public-profile
-visibility, and private passkey-inventory/add/revocation slices with encrypted cookies, local
-recovery-code replacement-passkey sign-in, and logout, one local one-shot Jobs runner including
-bounded primary profile deletion, and local Ingest request-verification, PostgreSQL-adapter,
-application-composition, and bounded HTTP-server boundaries, plus library-only connector
-initialization and candidate `0.144.5` account/usage parser boundaries, a synthetic one-shot
-supervisor, an exact-body sync composer, isolated pairing/sync/proposal signers, pure Web pairing
-and proposal verifiers, one local connector command with native OS key custody and exact start/poll
-routes, one credential-free Windows candidate diagnostic that performs only exact artifact
-admission, one Windows sync command with bounded fixed-name discovery plus an explicit path fallback
-that admits, collects, signs, and uploads once, and one fixed proposal-only command that starts no
-Codex process. It also has one opt-in synthetic loopback integration through the emitted Ingest host
-and a disposable least-privileged PostgreSQL login, plus a separate synthetic integration through
-all fifteen emitted Jobs commands and a disposable narrow login with a widened-login negative
-control. It still has no deployed application service, operational sync connector, supported Codex
-version, distributed recovery perimeter, Cloudflare/Railway deployment, live OAuth or production
-database login, or production database. Component status is tracked in
+default-off local invite/OAuth/initial-passkey enrollment, returning-passkey login, exact-session
+public-profile visibility, and private passkey-inventory/add/revocation slices with encrypted
+cookies, local recovery-code replacement-passkey sign-in, and logout, one local one-shot Jobs runner
+including bounded primary profile deletion, and local Ingest request-verification,
+PostgreSQL-adapter, application-composition, and bounded HTTP-server boundaries, plus library-only
+connector initialization and candidate `0.144.5` account/usage parser boundaries, a synthetic
+one-shot supervisor, an exact-body sync composer, isolated pairing/sync/proposal signers, pure Web
+pairing and proposal verifiers, one local connector command with native OS key custody and exact
+start/poll routes, one credential-free Windows candidate diagnostic that performs only exact
+artifact admission, one Windows sync command with bounded fixed-name discovery plus an explicit path
+fallback that admits, collects, signs, and uploads once, and one fixed proposal-only command that
+starts no Codex process. It also has one opt-in synthetic loopback integration through the emitted
+Ingest host and a disposable least-privileged PostgreSQL login, plus a separate synthetic
+integration through all fifteen emitted Jobs commands and a disposable narrow login with a
+widened-login negative control. It still has no deployed application service, operational sync
+connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway deployment,
+live OAuth or production database login, or production database. Component status is tracked in
 [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
 not deployed evidence.
 
@@ -170,41 +170,44 @@ page and both approval modules while preserving active existing-source pairing. 
 repeat the decision, and exact source choice enters the sealed challenge plus v2 context digest so
 an in-flight new-source approval closes after a restarted verification module resolves disabled. ADR
 0059 separately closes browser proposal creation/approval and device proposal ingress while
-preserving private read and exact session-bound rejection. ADR 0041 separately adds exact,
-idempotent deletion of one local origin/label record with no credential read or server call; the
-registered device remains until authenticated revoke. App Server launch and sync capabilities still
-have no public constructor, so ADR 0031 lets only the private Windows x86_64 command construct them
-after exact artifact admission and active-record review. ADR 0051 permits selection only through a
-resource-bounded fixed-name `PATH` policy or the original explicit path; both retain the same exact
-size/SHA-256 and no-write-sharing handle. ADR 0052 separately permits an explicitly invoked
-`check-codex` to reuse only that selector without a credential, process, account read, persistence,
-or network; its result is not reusable authority. ADR 0053 adds only a secretless no-upload Windows
-release-profile copy/removal smoke for the repository-built connector and creates no runtime
-authority, package, or release path. ADR 0054 permits only one opt-in redacted stdout preview of
-fixed version/admission/support state and adds no stored or network data flow. The sync command
-still creates fresh context only after active-record validation and repeated admission, then
-performs one fixed signed upload. A hosted Windows result, macOS/Linux admission, real package
-lifecycle, scheduling, and release remain absent. Trusted external TLS/edge routing, live
-secret-manager/edge key injection, working deployment login/certificate, composed live end-to-end
-flow, edge/capacity evidence, a verified Cloudflare/Railway path, released sync connector, Jobs
-scheduler/monitoring, public cache, backup/tombstone/restore replay, and audited correction
-authority shown in the design remain planned.
+preserving private read and exact session-bound rejection. ADR 0060 separately closes both
+enrollment pages, all four enrollment route modules, and all four service methods before private
+work while preserving active-session redirects, returning login, restricted recovery, logout, and
+account security actions. ADR 0041 separately adds exact, idempotent deletion of one local
+origin/label record with no credential read or server call; the registered device remains until
+authenticated revoke. App Server launch and sync capabilities still have no public constructor, so
+ADR 0031 lets only the private Windows x86_64 command construct them after exact artifact admission
+and active-record review. ADR 0051 permits selection only through a resource-bounded fixed-name
+`PATH` policy or the original explicit path; both retain the same exact size/SHA-256 and
+no-write-sharing handle. ADR 0052 separately permits an explicitly invoked `check-codex` to reuse
+only that selector without a credential, process, account read, persistence, or network; its result
+is not reusable authority. ADR 0053 adds only a secretless no-upload Windows release-profile
+copy/removal smoke for the repository-built connector and creates no runtime authority, package, or
+release path. ADR 0054 permits only one opt-in redacted stdout preview of fixed
+version/admission/support state and adds no stored or network data flow. The sync command still
+creates fresh context only after active-record validation and repeated admission, then performs one
+fixed signed upload. A hosted Windows result, macOS/Linux admission, real package lifecycle,
+scheduling, and release remain absent. Trusted external TLS/edge routing, live secret-manager/edge
+key injection, working deployment login/certificate, composed live end-to-end flow, edge/capacity
+evidence, a verified Cloudflare/Railway path, released sync connector, Jobs scheduler/monitoring,
+public cache, backup/tombstone/restore replay, and audited correction authority shown in the design
+remain planned.
 
 ## Component responsibilities
 
-| Component        | Owns                                                                                                                                                   | Must not own                                                                                                     | Primary trust boundary |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                                                                    | Raw device key, connector execution, admin authority, private cache mixing                                       | TB-01 and TB-02        |
-| Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                                                | Profile authorization, score derivation, database credentials                                                    | TB-01 and TB-06        |
-| Web/Auth         | Default-off public ranking, pairing, new-source, and CarRecipe proposal mutations; OAuth, sessions, passkeys, profile/preferences, lifecycle, deletion | Device private key, direct usage submission, schema ownership                                                    | TB-02, TB-07, TB-08    |
-| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision                                    | OAuth, admin, invites, passkey/recovery, migrations, final score authority                                       | TB-05, TB-06, TB-07    |
-| Ingest host      | Default-off enable admission, closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                           | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials                    | TB-06 and TB-07        |
-| Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                                           | Interactive auth, public request handling, schema ownership                                                      | TB-07 and TB-11        |
-| PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                                               | Public routing, connector trust, release credentials                                                             | TB-07                  |
-| Rust connector   | Local App Server lifecycle, compatibility adapter, local key custody/removal, canonical signing, safe scheduling                                       | Website commands, server revoke, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
-| Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                                               | Normal user session reuse, shared identities, routine exact-usage access                                         | TB-08                  |
-| CI               | Evaluate untrusted source without secrets; produce read-only and ephemeral no-upload Windows smoke evidence                                            | Deployment, signing, package publication from pull requests                                                      | TB-09                  |
-| Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                                                 | Unreviewed pull-request execution, long-lived broad credentials                                                  | TB-10                  |
+| Component        | Owns                                                                                                                                                               | Must not own                                                                                                     | Primary trust boundary |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| Browser UI       | Race rendering, authenticated profile controls, passkey ceremony UI                                                                                                | Raw device key, connector execution, admin authority, private cache mixing                                       | TB-01 and TB-02        |
+| Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                                                            | Profile authorization, score derivation, database credentials                                                    | TB-01 and TB-06        |
+| Web/Auth         | Default-off public ranking, enrollment, pairing, new-source, and CarRecipe proposal mutations; OAuth, sessions, passkeys, profile/preferences, lifecycle, deletion | Device private key, direct usage submission, schema ownership                                                    | TB-02, TB-07, TB-08    |
+| Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision                                                | OAuth, admin, invites, passkey/recovery, migrations, final score authority                                       | TB-05, TB-06, TB-07    |
+| Ingest host      | Default-off enable admission, closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                                       | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials                    | TB-06 and TB-07        |
+| Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                                                       | Interactive auth, public request handling, schema ownership                                                      | TB-07 and TB-11        |
+| PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                                                           | Public routing, connector trust, release credentials                                                             | TB-07                  |
+| Rust connector   | Local App Server lifecycle, compatibility adapter, local key custody/removal, canonical signing, safe scheduling                                                   | Website commands, server revoke, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
+| Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                                                           | Normal user session reuse, shared identities, routine exact-usage access                                         | TB-08                  |
+| CI               | Evaluate untrusted source without secrets; produce read-only and ephemeral no-upload Windows smoke evidence                                                        | Deployment, signing, package publication from pull requests                                                      | TB-09                  |
+| Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                                                             | Unreviewed pull-request execution, long-lived broad credentials                                                  | TB-10                  |
 
 The repository-verification Agent Skill is a local read-only TB-09 control. It may select checked-in
 gates for the real Git scope and report exact evidence, but it cannot edit, stage, commit, install,
@@ -256,8 +259,9 @@ when a diagram and prose appear to conflict.
 - Each public capability has a separate kill switch: enrollment, pairing, source creation, ingest,
   car proposals, and public ranking. Local default-off gates now cover Ingest startup, all three
   public-ranking route modules, all four pairing route modules, and new-source creation in the page
-  and both approval service steps, plus CarRecipe proposal creation/approval across browser and
-  device ingress; deployed operation and the enrollment switch remain planned.
+  and both approval service steps, CarRecipe proposal creation/approval across browser and device
+  ingress, and both enrollment pages plus all four route/service steps; deployed operation remains
+  planned for every local control.
 - Load shedding disables expensive or write paths without weakening auth, signature, or origin
   verification.
 - An Ingest compromise is contained by procedure-only database rights and no profile or admin

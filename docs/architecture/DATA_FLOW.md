@@ -50,30 +50,32 @@ configuration, or database work. ADR 0058 separately keeps new-source selection 
 service steps default-off while active existing-source pairing remains available. Exact source
 choice is sealed and v2-digest-bound so a restarted disabled verifier also rejects in-flight
 new-source completion. ADR 0059 separately keeps browser proposal create/approve and device proposal
-ingress default-off while private reads and exact session-bound rejection remain available. ADR 0031
-adds a separate Windows candidate command that can construct the otherwise inaccessible
-launch/context/key capabilities only after exact artifact and active-record review, then performs
-one fixed signed upload. ADR 0038 adds a third fixed command that starts no Codex process and signs
-one exact enum-only CarRecipe for the dedicated Web/Auth proposal route. ADR 0041 adds a fourth
-command that deletes only the exact native origin/label record without loading it or crossing the
-connector-to-edge boundary. ADR 0052 adds a fifth explicit `check-codex` command that performs only
-the same exact candidate admission without credential-store, process, account, persistence, or
-network access; later sync repeats admission. ADR 0053 adds a secretless no-upload Windows
-release-profile copy/removal smoke for only the repository-built connector; it adds no connector
-data flow or runtime authority. ADR 0054 adds an opt-in stdout preview to the same candidate check
-containing only fixed versions/support state and one coarse Operational admission class. It adds no
-filesystem sink, support transport, reusable authority, or connector-to-edge flow. There is still no
-hosted Windows result, supported version, cross-platform sync result, real package lifecycle,
-scheduling, packaging, or released connector. A local Ingest kernel now verifies the bounded
-exact-body origin/device request, while the separate adapter maps origin replay, device lookup, and
-submission through fixed calls. PostgreSQL now proves atomic origin replay consumption and bounded
-cleanup. A transport-free application now composes those exact local capabilities and validates only
-closed acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
-evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. A
-separate local host now binds that exact composition under closed loopback or declared Railway-edge
-configuration and bounded process shutdown. There is no edge/live-database/deployment integration.
-No trusted external TLS route, deployment login/certificate, edge signer/direct-origin policy, or
-live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+ingress default-off while private reads and exact session-bound rejection remain available. ADR 0060
+separately keeps invite/OAuth/initial-passkey enrollment default-off across both pages, all four
+route modules, and all four service methods while returning login and restricted recovery remain
+available. ADR 0031 adds a separate Windows candidate command that can construct the otherwise
+inaccessible launch/context/key capabilities only after exact artifact and active-record review,
+then performs one fixed signed upload. ADR 0038 adds a third fixed command that starts no Codex
+process and signs one exact enum-only CarRecipe for the dedicated Web/Auth proposal route. ADR 0041
+adds a fourth command that deletes only the exact native origin/label record without loading it or
+crossing the connector-to-edge boundary. ADR 0052 adds a fifth explicit `check-codex` command that
+performs only the same exact candidate admission without credential-store, process, account,
+persistence, or network access; later sync repeats admission. ADR 0053 adds a secretless no-upload
+Windows release-profile copy/removal smoke for only the repository-built connector; it adds no
+connector data flow or runtime authority. ADR 0054 adds an opt-in stdout preview to the same
+candidate check containing only fixed versions/support state and one coarse Operational admission
+class. It adds no filesystem sink, support transport, reusable authority, or connector-to-edge flow.
+There is still no hosted Windows result, supported version, cross-platform sync result, real package
+lifecycle, scheduling, packaging, or released connector. A local Ingest kernel now verifies the
+bounded exact-body origin/device request, while the separate adapter maps origin replay, device
+lookup, and submission through fixed calls. PostgreSQL now proves atomic origin replay consumption
+and bounded cleanup. A transport-free application now composes those exact local capabilities and
+validates only closed acknowledgement/problem decisions. A bounded local Fastify factory preserves
+exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes only revalidated
+contracts. A separate local host now binds that exact composition under closed loopback or declared
+Railway-edge configuration and bounded process shutdown. There is no edge/live-database/deployment
+integration. No trusted external TLS route, deployment login/certificate, edge signer/direct-origin
+policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -88,6 +90,7 @@ sequenceDiagram
   participant Authenticator as Passkey authenticator
   participant DB as Profile/Auth database role
 
+  Note over Browser,Web: Two pages and four routes require exact VIBERACING_ENROLLMENT_ENABLED=true
   User->>Browser: Enter invite, public handle, and preferences
   Browser->>Web: Exact same-origin bounded form
   Web->>Web: Digest invite secret; seal state and PKCE continuation
@@ -124,6 +127,17 @@ rotates it to a fresh 30-day passkey-bound session. The suite uses injected GitH
 authenticator-verifier, and database capabilities; there is no live OAuth app, invite issuer UI,
 real key/login, edge proof, aggregate/distributed attempt limit, expired-state cleanup scheduling,
 recovery sign-in, or deployment evidence.
+
+ADR 0060 makes `/join`, `/join/passkey`, GitHub start/callback, and initial-passkey
+options/verification resolve exact `VIBERACING_ENROLLMENT_ENABLED=true` at module evaluation.
+Disabled EN/RU pages omit both forms, and disabled HTTP returns the existing generic no-store 503
+before request parsing, runtime/admission, protected configuration, OAuth/WebAuthn, or database
+work. All four service methods repeat the literal decision before input, cookie, time, entropy, or
+private dependency work. Active-session redirects, returning login, restricted recovery, logout, and
+account security actions stay outside this gate. The local decision does not dynamically clear the
+ten-minute OAuth continuation, five-minute passkey continuation, or pending session; terminate
+in-flight requests; repair an invite; clean an abandoned enrolling profile; coordinate workers; or
+prove deployed route denial.
 
 ## Passkey login and credential management
 

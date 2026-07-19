@@ -185,9 +185,66 @@ describe("enrollment HTTP boundary", () => {
     };
   });
 
+  it.each([false, undefined, "true", 1])(
+    "fails closed before enrollment request, runtime, or admission work for enable value %#",
+    async (enrollmentEnabled) => {
+      const getRuntime = vi.fn(() => {
+        throw new Error("runtime-must-not-run");
+      });
+      const tryAcquire = vi.fn(() => {
+        throw new Error("admission-must-not-run");
+      });
+      const http = createEnrollmentHttp({
+        admission: Object.freeze({ tryAcquire }),
+        enrollmentEnabled,
+        getRuntime,
+      });
+      const makeHostileRequest = () => {
+        const cancelBody = vi.fn();
+        const body = new ReadableStream<Uint8Array>({ cancel: cancelBody });
+        const target = new Request(`${origin}/auth/github/start`, {
+          body,
+          duplex: "half",
+          method: "POST",
+        } as RequestInit & { duplex: "half" });
+        const request = new Proxy(target, {
+          get(_target, key) {
+            if (key === "body") {
+              return target.body;
+            }
+            throw new Error(`request-field-must-not-run:${String(key)}`);
+          },
+        });
+        return { cancelBody, request };
+      };
+
+      for (const invoke of [
+        (request: Request) => http.start(request),
+        (request: Request) => http.callback(request),
+        (request: Request) => http.passkeyOptions(request),
+        (request: Request) => http.passkeyVerify(request),
+      ]) {
+        const { cancelBody, request } = makeHostileRequest();
+        const response = await invoke(request);
+        expect(response.status).toBe(503);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+        expect(response.headers.has("access-control-allow-origin")).toBe(false);
+        await expect(response.json()).resolves.toMatchObject({
+          errorCode: "temporarily_unavailable",
+          status: 503,
+        });
+        expect(cancelBody).toHaveBeenCalledOnce();
+      }
+      expect(getRuntime).not.toHaveBeenCalled();
+      expect(tryAcquire).not.toHaveBeenCalled();
+    },
+  );
+
   it("starts OAuth only from a bounded same-origin form", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
+      enrollmentEnabled: true,
       getRuntime: () => runtime,
     });
     const response = await http.start(
@@ -198,7 +255,7 @@ describe("enrollment HTTP boundary", () => {
     expect(response.headers.get("set-cookie")).toContain("viberacing_oauth=opaque-oauth");
     expect(response.headers.get("set-cookie")).toContain("Path=/auth/github/callback");
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(service.beginGithub).toHaveBeenCalledOnce();
+    expect(service.beginGithub).toHaveBeenCalledWith(expect.any(Object), true);
 
     const crossOrigin = post("/auth/github/start", joinBody, "application/x-www-form-urlencoded");
     crossOrigin.headers.set("origin", "https://attacker.example");
@@ -222,6 +279,7 @@ describe("enrollment HTTP boundary", () => {
   it("consumes an exact callback cookie and rotates it into an enrollment session", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
+      enrollmentEnabled: true,
       getRuntime: () => runtime,
     });
     const response = await http.callback(
@@ -238,6 +296,7 @@ describe("enrollment HTTP boundary", () => {
       "valid_state",
       "opaque-oauth",
       expect.any(AbortSignal),
+      true,
     );
 
     const cancelled = await http.callback(
@@ -273,6 +332,7 @@ describe("enrollment HTTP boundary", () => {
   it("creates an anonymous login challenge and returns only a passkey-bound session", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
+      enrollmentEnabled: false,
       getRuntime: () => runtime,
     });
     const options = await http.loginOptions(post("/auth/login/options", "{}", "application/json"));
@@ -304,6 +364,7 @@ describe("enrollment HTTP boundary", () => {
   it("admits a bounded recovery code and creates a session only after replacement registration", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
+      enrollmentEnabled: false,
       getRuntime: () => runtime,
     });
     const code =
@@ -357,6 +418,7 @@ describe("enrollment HTTP boundary", () => {
   it("serves options, verifies one bounded response, and replaces the session cookie", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
+      enrollmentEnabled: true,
       getRuntime: () => runtime,
     });
     const options = await http.passkeyOptions(
@@ -368,6 +430,7 @@ describe("enrollment HTTP boundary", () => {
     const optionsBody = JSON.parse(await options.text()) as unknown;
     expect(optionsBody).toBeTypeOf("object");
     expect(typeof (optionsBody as Record<string, unknown>).challenge).toBe("string");
+    expect(service.beginPasskey).toHaveBeenCalledWith("opaque-session", true);
 
     const verification = await http.passkeyVerify(
       post(
@@ -380,7 +443,12 @@ describe("enrollment HTTP boundary", () => {
     expect(verification.status).toBe(204);
     expect(verification.headers.get("set-cookie")).toContain("viberacing_session=active-session");
     expect(verification.headers.get("set-cookie")).toContain("Max-Age=2592000");
-    expect(service.completePasskey).toHaveBeenCalledOnce();
+    expect(service.completePasskey).toHaveBeenCalledWith(
+      "opaque-session",
+      "opaque-passkey",
+      { label: "Primary passkey", response: { id: "synthetic" } },
+      true,
+    );
 
     await expect(
       http.passkeyOptions(
@@ -1226,7 +1294,11 @@ describe("enrollment HTTP boundary", () => {
   it("clears every browser credential on same-origin logout even when admission is busy", async () => {
     const admission = createEnrollmentAdmission(1);
     const held = admission.tryAcquire();
-    const http = createEnrollmentHttp({ admission, getRuntime: () => runtime });
+    const http = createEnrollmentHttp({
+      admission,
+      enrollmentEnabled: true,
+      getRuntime: () => runtime,
+    });
     const response = await http.logout(
       post("/auth/logout", "", "application/x-www-form-urlencoded", "viberacing_session=s"),
     );
@@ -1260,7 +1332,11 @@ describe("enrollment HTTP boundary", () => {
   it("fails closed on overload, malformed bodies, unavailable runtime, and missing cookies", async () => {
     const admission = createEnrollmentAdmission(1);
     const held = admission.tryAcquire();
-    const http = createEnrollmentHttp({ admission, getRuntime: () => runtime });
+    const http = createEnrollmentHttp({
+      admission,
+      enrollmentEnabled: true,
+      getRuntime: () => runtime,
+    });
     const cancelBody = vi.fn();
     const overloadBody = new ReadableStream<Uint8Array>({ cancel: cancelBody });
     const overload = await http.start(
@@ -1292,6 +1368,7 @@ describe("enrollment HTTP boundary", () => {
     ).resolves.toMatchObject({ status: 503 });
     const unavailable = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
+      enrollmentEnabled: true,
       getRuntime: () => {
         throw new Error("private config");
       },

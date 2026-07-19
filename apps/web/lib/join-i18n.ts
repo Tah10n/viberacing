@@ -43,6 +43,10 @@ const english = {
   currentScoreUnavailable: "Current score is temporarily unavailable.",
   createPasskey: "Create passkey",
   creatingPasskey: "Waiting for your passkey…",
+  enrollmentCompletionUnavailable:
+    "Enrollment is temporarily unavailable. Passkey setup cannot continue until enrollment resumes.",
+  enrollmentUnavailable:
+    "New enrollment is temporarily unavailable. Existing racers can still sign in or recover their account.",
   genericError: "The request could not be completed. Check the fields or try again later.",
   handleHint: "3–24 lowercase letters, numbers, hyphens, or underscores.",
   handleLabel: "Public racing handle",
@@ -189,6 +193,10 @@ const russian: Record<JoinTranslationKey, string> = {
   currentScoreUnavailable: "Текущий результат временно недоступен.",
   createPasskey: "Создать ключ доступа",
   creatingPasskey: "Ожидаем ключ доступа…",
+  enrollmentCompletionUnavailable:
+    "Регистрация временно недоступна. Создание ключа доступа нельзя продолжить до возобновления регистрации.",
+  enrollmentUnavailable:
+    "Регистрация новых участников временно недоступна. Действующие участники по-прежнему могут войти или восстановить аккаунт.",
   genericError: "Не удалось завершить запрос. Проверьте поля или попробуйте позже.",
   handleHint: "От 3 до 24 строчных букв, цифр, дефисов или подчёркиваний.",
   handleLabel: "Публичное имя пилота",

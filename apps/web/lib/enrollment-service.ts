@@ -212,9 +212,12 @@ export interface AccountSourceDeviceInventoryItem {
 }
 
 export interface EnrollmentService {
-  beginGithub(join: JoinRequest): EnrollmentStartDecision | undefined;
+  beginGithub(join: JoinRequest, enrollmentEnabled: unknown): EnrollmentStartDecision | undefined;
   beginLogin(): Promise<PasskeyLoginOptionsDecision | undefined>;
-  beginPasskey(sessionCookie: string): Promise<PasskeyOptionsDecision | undefined>;
+  beginPasskey(
+    sessionCookie: string,
+    enrollmentEnabled: unknown,
+  ): Promise<PasskeyOptionsDecision | undefined>;
   beginPasskeyAdd(
     sessionCookie: string,
     body: unknown,
@@ -250,6 +253,7 @@ export interface EnrollmentService {
     state: string,
     oauthCookie: string,
     signal: AbortSignal,
+    enrollmentEnabled: unknown,
   ): Promise<EnrollmentCallbackDecision | undefined>;
   completeLogin(
     loginCookie: string,
@@ -259,6 +263,7 @@ export interface EnrollmentService {
     sessionCookie: string,
     passkeyCookie: string,
     body: unknown,
+    enrollmentEnabled: unknown,
   ): Promise<PasskeyCompletionDecision | undefined>;
   completePasskeyAdd(
     sessionCookie: string,
@@ -1235,7 +1240,13 @@ export function createEnrollmentService(
 
   return Object.freeze({
     beginPairingApproval,
-    beginGithub(join: JoinRequest): EnrollmentStartDecision | undefined {
+    beginGithub(
+      join: JoinRequest,
+      enrollmentEnabled: unknown,
+    ): EnrollmentStartDecision | undefined {
+      if (enrollmentEnabled !== true) {
+        return undefined;
+      }
       const seconds = currentSeconds();
       if (seconds === undefined) {
         return undefined;
@@ -1362,7 +1373,13 @@ export function createEnrollmentService(
         contextDigest?.fill(0);
       }
     },
-    async beginPasskey(sessionCookie: string): Promise<PasskeyOptionsDecision | undefined> {
+    async beginPasskey(
+      sessionCookie: string,
+      enrollmentEnabled: unknown,
+    ): Promise<PasskeyOptionsDecision | undefined> {
+      if (enrollmentEnabled !== true) {
+        return undefined;
+      }
       const session = readSession(sessionCookie);
       const seconds = currentSeconds();
       if (session === undefined || session.passkeyRegistered || seconds === undefined) {
@@ -1736,7 +1753,11 @@ export function createEnrollmentService(
       state: string,
       oauthCookie: string,
       signal: AbortSignal,
+      enrollmentEnabled: unknown,
     ): Promise<EnrollmentCallbackDecision | undefined> {
+      if (enrollmentEnabled !== true) {
+        return undefined;
+      }
       const seconds = currentSeconds();
       if (seconds === undefined) {
         return undefined;
@@ -2030,7 +2051,11 @@ export function createEnrollmentService(
       sessionCookie: string,
       passkeyCookie: string,
       body: unknown,
+      enrollmentEnabled: unknown,
     ): Promise<PasskeyCompletionDecision | undefined> {
+      if (enrollmentEnabled !== true) {
+        return undefined;
+      }
       const session = readSession(sessionCookie);
       const seconds = currentSeconds();
       const registration = readRegistrationBody(body);

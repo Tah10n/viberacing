@@ -42,6 +42,7 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID", "edge_local"],
   ["VIBERACING_INGEST_TLS_TERMINATION", "loopback-cleartext"],
   ["VIBERACING_CAR_PROPOSALS_ENABLED", "false"],
+  ["VIBERACING_ENROLLMENT_ENABLED", "false"],
   ["VIBERACING_PAIRING_ENABLED", "false"],
   ["VIBERACING_PUBLIC_RANKING_ENABLED", "false"],
   ["VIBERACING_SOURCE_CREATION_ENABLED", "false"],

@@ -92,32 +92,36 @@ browser proposal create/approve modules, and source-bound device proposal module
 `VIBERACING_CAR_PROPOSALS_ENABLED=true`; the tracked default is false. Disabled mutation stops
 before request/runtime/admission/proof/database work, the browser service repeats literal-true
 checks, and EN/RU UI preserves active/private previews plus exact rejection while omitting
-editor/approve. A bounded Rust `connect` command generates a key and client rate ID with the OS
-CSPRNG, persists resumable state only in a native credential store, and performs the exact
-start/proof/poll sequence. A separate Windows x86_64 `sync` command now checks an active record
-before either bounded fixed-name `PATH` discovery or explicit-path admission of the exact `0.144.5`
-artifact, holds its file against write substitution through launch, uses a fresh empty working
-directory and the existing bounded supervisor, creates fresh context from the active native record,
-and sends one exact signed body to the fixed endpoint without retry or edge-origin headers. Its
-loopback HTTP evidence validates only the five device headers and closed acknowledgement. A separate
-explicit `check-codex` command performs only the identical bounded exact candidate admission without
-an origin, credential-store access, Codex process, account read, persistence, or network; its fixed
-point-in-time result explicitly preserves the empty support matrix, and `sync` does not reuse it.
-Its opt-in diagnostic preview emits only compile-time connector/candidate versions, the fixed
-platform contract, a closed admission class, and that empty support state. It retains a failed exit,
-omits local/account data, and gives the connector no file or sharing capability. A separate exact
-`forget-local` command derives the same native-store account from a canonical origin and bounded
-label, invokes only idempotent credential deletion, and emits one fixed warning that server device
-authority was not revoked. It does not load the record, construct a signer, start Codex, or make a
-network call. No live database connection, real-account end-to-end result, released artifact, or
-deployment is claimed. Candidate release, schema, fixture, synthetic-process, admission, composer,
-pairing, signer, and loopback-upload evidence does not populate the support matrix. Phase 0
-hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
-No production-ready anonymous edge perimeter, distributed recovery perimeter or cleanup, production
-secret-manager/edge key injection, trusted external Ingest TLS/edge route, production deployment,
-production Web/Jobs/Ingest database login/TLS integration, released or operational connector,
-supported Codex version, real-user ingestion, end-to-end public ranking, or finalization scheduler
-exists.
+editor/approve. The two enrollment pages and four GitHub/initial-passkey route modules now
+independently require exact `VIBERACING_ENROLLMENT_ENABLED=true`; the tracked default is false.
+Disabled EN/RU pages omit both forms, HTTP stops before request/runtime/admission/private work, and
+all four service methods repeat literal-true enforcement before OAuth/WebAuthn/database work while
+returning login/recovery remain available. A bounded Rust `connect` command generates a key and
+client rate ID with the OS CSPRNG, persists resumable state only in a native credential store, and
+performs the exact start/proof/poll sequence. A separate Windows x86_64 `sync` command now checks an
+active record before either bounded fixed-name `PATH` discovery or explicit-path admission of the
+exact `0.144.5` artifact, holds its file against write substitution through launch, uses a fresh
+empty working directory and the existing bounded supervisor, creates fresh context from the active
+native record, and sends one exact signed body to the fixed endpoint without retry or edge-origin
+headers. Its loopback HTTP evidence validates only the five device headers and closed
+acknowledgement. A separate explicit `check-codex` command performs only the identical bounded exact
+candidate admission without an origin, credential-store access, Codex process, account read,
+persistence, or network; its fixed point-in-time result explicitly preserves the empty support
+matrix, and `sync` does not reuse it. Its opt-in diagnostic preview emits only compile-time
+connector/candidate versions, the fixed platform contract, a closed admission class, and that empty
+support state. It retains a failed exit, omits local/account data, and gives the connector no file
+or sharing capability. A separate exact `forget-local` command derives the same native-store account
+from a canonical origin and bounded label, invokes only idempotent credential deletion, and emits
+one fixed warning that server device authority was not revoked. It does not load the record,
+construct a signer, start Codex, or make a network call. No live database connection, real-account
+end-to-end result, released artifact, or deployment is claimed. Candidate release, schema, fixture,
+synthetic-process, admission, composer, pairing, signer, and loopback-upload evidence does not
+populate the support matrix. Phase 0 hosted-publication controls remain blocked on real maintainer
+identities and GitHub configuration. No production-ready anonymous edge perimeter, distributed
+recovery perimeter or cleanup, production secret-manager/edge key injection, trusted external Ingest
+TLS/edge route, production deployment, production Web/Jobs/Ingest database login/TLS integration,
+released or operational connector, supported Codex version, real-user ingestion, end-to-end public
+ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -267,7 +271,7 @@ exists.
   prove enum, shell, invocation-allowlist, retry, authority, output, front matter, UI metadata,
   command, Git-scope, runtime, public-output, and evidence-claim drift fail closed. No released
   connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and fifty-nine accepted design decisions covering Community trust,
+- An ADR lifecycle/template and sixty accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -288,7 +292,7 @@ exists.
   revoked-device retention cleanup, bounded pairing-rate-window reset, bounded candidate executable
   discovery, the bounded candidate artifact diagnostic, the Windows portable connector lifecycle
   smoke, the redacted Codex diagnostic preview, the local Ingest startup latch, and the local
-  public-ranking, pairing-route, new-source-creation, and CarRecipe-proposal gates.
+  public-ranking, pairing-route, new-source-creation, CarRecipe-proposal, and enrollment gates.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -748,26 +752,34 @@ exists.
   database challenge; the verifier requires a discoverable credential, user presence and
   verification, attestation `none`, ES256 or RS256, and exact challenge/origin/RP/type before one
   atomic consume-register-and-session-rotate query. Success creates a fresh 30-day passkey-bound
-  session and revokes the pending session. Returning login generates a profile-free discoverable
-  challenge with no credential allowlist and keeps it only in a separate encrypted cookie. After
-  canonical credential lookup, exact `webauthn.get` challenge/origin/RP/type/signature/UV and backup
-  verification, one fixed call creates and consumes the challenge while minting a 30-day
-  passkey-provenance session. Failed cookie sealing compensates by revoking that new session. Every
-  account render can use the exact possessed session for fixed `read_passkey_inventory`,
-  `read_profile_visibility`, and `read_source_inventory` calls. The source mapper accepts at most 95
-  projection rows representing at most 32 opaque sources and 64 active devices, preserves a source
-  with no active device, rounds activation to a UTC date, and renders only source ordinal/state plus
-  device label/platform/version. Source IDs, internal key/profile IDs, public keys, and exact
-  lifecycle times stay out of HTML; only the exact opaque device ID enters its hidden revoke form.
-  Revision 0016 preserves both private inventory and immediate owned-device revoke while public
-  visibility is hidden. Revision 0017 preserves immediate source pause and fresh-passkey
-  reactivation under the same hidden profile state; revision 0018 does the same for terminal source
-  unlink. Source actions expose only a 15-minute encrypted control token bound to the active
-  session. Pause uses one same-origin form. Reactivation accepts only `paused`, binds a required-UV
-  assertion to the session/source/RP/origin context, and reaches one atomic consume-and-reactivate
-  statement; it cannot lift quarantine or change visibility. A distinct fresh context reaches one
-  atomic consume-and-unlink statement for an active, paused, or quarantined source. Unlink revokes
-  all active source devices and never publishes a hidden profile. One fixed materialized statement
+  session and revokes the pending session. The `/join` and `/join/passkey` pages plus GitHub
+  start/callback and initial-passkey options/verification now require exact
+  `VIBERACING_ENROLLMENT_ENABLED=true` at module evaluation. Disabled state omits both EN/RU forms
+  and returns generic 503 before request/runtime/admission/private work; all four service methods
+  repeat the literal check before input/cookie/OAuth/WebAuthn/database work. Existing active-session
+  redirects, returning login, restricted recovery, logout, and account security actions remain
+  available. This local control does not dynamically clear continuations, terminate in-flight
+  requests, clean abandoned profiles, repair invites, coordinate workers, or prove deployment.
+  Returning login generates a profile-free discoverable challenge with no credential allowlist and
+  keeps it only in a separate encrypted cookie. After canonical credential lookup, exact
+  `webauthn.get` challenge/origin/RP/type/signature/UV and backup verification, one fixed call
+  creates and consumes the challenge while minting a 30-day passkey-provenance session. Failed
+  cookie sealing compensates by revoking that new session. Every account render can use the exact
+  possessed session for fixed `read_passkey_inventory`, `read_profile_visibility`, and
+  `read_source_inventory` calls. The source mapper accepts at most 95 projection rows representing
+  at most 32 opaque sources and 64 active devices, preserves a source with no active device, rounds
+  activation to a UTC date, and renders only source ordinal/state plus device
+  label/platform/version. Source IDs, internal key/profile IDs, public keys, and exact lifecycle
+  times stay out of HTML; only the exact opaque device ID enters its hidden revoke form. Revision
+  0016 preserves both private inventory and immediate owned-device revoke while public visibility is
+  hidden. Revision 0017 preserves immediate source pause and fresh-passkey reactivation under the
+  same hidden profile state; revision 0018 does the same for terminal source unlink. Source actions
+  expose only a 15-minute encrypted control token bound to the active session. Pause uses one
+  same-origin form. Reactivation accepts only `paused`, binds a required-UV assertion to the
+  session/source/RP/origin context, and reaches one atomic consume-and-reactivate statement; it
+  cannot lift quarantine or change visibility. A distinct fresh context reaches one atomic
+  consume-and-unlink statement for an active, paused, or quarantined source. Unlink revokes all
+  active source devices and never publishes a hidden profile. One fixed materialized statement
   invokes `revoke_device`, returns only a boolean, and appends a bounded audit reference. The
   passkey mapper accepts 1-to-32 ordered closed rows, requires one current active authenticator,
   rounds creation to a UTC date, and keeps credential IDs, keys, sign counters, exact activity
@@ -1134,35 +1146,35 @@ Invite issuance UI, trusted anonymous login/pairing/recovery edge limits, recove
 trusted Ingest edge routing/external TLS and direct-origin denial, live secret-manager/edge key
 injection, the Ingest deployment PostgreSQL credential/TLS connection, distributed rate/backpressure
 controls and load evidence, deployed operation of the local Ingest startup latch and public-ranking
-and pairing module gates plus the new-source and CarRecipe-proposal module/service gates, the
-independent enrollment switch, scheduled execution and monitoring of retention cleanup for
-authentication, audit-event, invitation, CarRecipe-proposal, ingest, pairing, session,
-terminal-deletion-job, aged revoked-passkey state, and aged minimized revoked-device state plus
-pairing approval-provenance redaction, pairing-rate-window reset, and primary deletion, cleanup for
-remaining expiring state, the Jobs scheduler and production login/TLS path, audited corrections,
-deployed public-score delivery, cache/backup/tombstone purge and restore replay, connector
-macOS/Linux executable admission, clean-machine live Codex/privacy evidence, supported operational
-account/usage integration, deployed signed-upload egress, credential rotation and automated
-server-revoke composition, hosted Windows portable-smoke evidence, installer and real
-install/upgrade/uninstall lifecycle, automated diagnostic export/support transport, packaging,
-release signing, deployment, and public beta operations remain proposed. The local Ingest key
-reader, kernel, adapter, application composer, Fastify server, and separate host now prove bounded
-protected configuration, raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519
-device, least-privileged pool, fixed-query, orchestration, no-queue/deadline policy, exact listener
-modes, bounded startup/shutdown, result/problem serialization, and one full synthetic loopback
-persistence path, but not those deployed edge, secret, TLS, capacity, or operational boundaries.
-Bounded database score and compatible active-recipe race projections, versioned response-only
-schemas, fail-closed server mappers, bounded PostgreSQL adapters, and local HTTP routes now exist,
-including URL/media parsing, admission/deadline policy, store translation, and final serialization.
-A third compatible local status projection/contract/route now supplies complete-UTC-day freshness
-and preference-gated streak without changing either older response. Cache/invalidation, deployed
-device-proposal ingress, authenticated profile detail, client-rate and production-capacity controls,
-query-plan evidence, monitoring backend, deployment login, certificate, edge policy, and live
-adapter integration do not. The visible web scoring and ranking experience now consumes a validated
-current-week status response from the local route when its separately provisioned database login
-works, but local defaults and every unavailable/error path remain clearly synthetic. Its separate
-score simulator is explicitly hypothetical and never consumes that response or any account value. No
-working database/OAuth login, deployed data, cache, or end-to-end real-user ranking evidence exists.
+and pairing module gates plus the new-source, CarRecipe-proposal, and enrollment module/service
+gates, scheduled execution and monitoring of retention cleanup for authentication, audit-event,
+invitation, CarRecipe-proposal, ingest, pairing, session, terminal-deletion-job, aged
+revoked-passkey state, and aged minimized revoked-device state plus pairing approval-provenance
+redaction, pairing-rate-window reset, and primary deletion, cleanup for remaining expiring state,
+the Jobs scheduler and production login/TLS path, audited corrections, deployed public-score
+delivery, cache/backup/tombstone purge and restore replay, connector macOS/Linux executable
+admission, clean-machine live Codex/privacy evidence, supported operational account/usage
+integration, deployed signed-upload egress, credential rotation and automated server-revoke
+composition, hosted Windows portable-smoke evidence, installer and real install/upgrade/uninstall
+lifecycle, automated diagnostic export/support transport, packaging, release signing, deployment,
+and public beta operations remain proposed. The local Ingest key reader, kernel, adapter,
+application composer, Fastify server, and separate host now prove bounded protected configuration,
+raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
+pool, fixed-query, orchestration, no-queue/deadline policy, exact listener modes, bounded
+startup/shutdown, result/problem serialization, and one full synthetic loopback persistence path,
+but not those deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database
+score and compatible active-recipe race projections, versioned response-only schemas, fail-closed
+server mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media
+parsing, admission/deadline policy, store translation, and final serialization. A third compatible
+local status projection/contract/route now supplies complete-UTC-day freshness and preference-gated
+streak without changing either older response. Cache/invalidation, deployed device-proposal ingress,
+authenticated profile detail, client-rate and production-capacity controls, query-plan evidence,
+monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
+The visible web scoring and ranking experience now consumes a validated current-week status response
+from the local route when its separately provisioned database login works, but local defaults and
+every unavailable/error path remain clearly synthetic. Its separate score simulator is explicitly
+hypothetical and never consumes that response or any account value. No working database/OAuth login,
+deployed data, cache, or end-to-end real-user ranking evidence exists.
 
 ## Evidence commands
 

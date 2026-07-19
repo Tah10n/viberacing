@@ -189,6 +189,14 @@ flowchart LR
   selection through an encrypted session-bound control, and fresh-passkey atomic approval.
   Distributed recovery/anonymous edge attempt policy, expired-state cleanup scheduling and
   notification, live provider/database credentials, and deployment remain separate gates.
+- Enrollment enable gate: `/join`, `/join/passkey`, GitHub start/callback, and initial-passkey
+  options/verification each resolve exact `VIBERACING_ENROLLMENT_ENABLED=true` once at module
+  evaluation. Every alternate or unreadable value omits both EN/RU forms and stops before request
+  parsing, runtime/admission, OAuth/WebAuthn, or database work. All four service methods repeat the
+  literal check before input/cookie/private state. Active-session redirects, returning login,
+  restricted recovery, logout, and account security actions remain available. The tracked example is
+  false. This proves no deployed route denial, worker reload/drain, dynamic switch, operator policy,
+  distributed rate limit, abandoned-profile cleanup, or invite repair.
 - Pairing enable gate: connector start/poll and browser approval options/verification each resolve
   exact `VIBERACING_PAIRING_ENABLED=true` once at route-module evaluation. Every alternate or
   unreadable value cancels an available request body and returns the existing generic 503 before
@@ -812,9 +820,9 @@ cleanup, redaction, or reset has a scheduler or deployed cadence.
 - Kill switches independently disable enrollment, pairing, source creation, ingestion, proposals,
   and public ranking. Local default-off gates now cover Ingest startup, the three public-ranking
   route modules, the four pairing route modules, new-source creation at the page plus both approval
-  service steps, and CarRecipe proposal creation/approval across browser and device ingress;
-  deployed restart/route/cache-denial/runbook behavior and the independent enrollment switch remain
-  separate gates.
+  service steps, CarRecipe proposal creation/approval across browser and device ingress, and the two
+  enrollment pages plus all four HTTP/service steps; deployed restart/route/cache-denial/runbook
+  behavior remains a separate gate for every control.
 - Operational logs are structured, redacted, retention-bounded, and avoid raw token values.
 - Alerts cover auth anomalies, pairing storms, source growth, signature and replay failures, ingest
   rejection, season jobs, deletion failures, database saturation, release events, and origin-proof
@@ -1119,8 +1127,9 @@ measurements exist.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
   new-source creation while preserving active existing-source pairing, plus CarRecipe proposal
-  creation/approval while preserving private read/reject; deployed operation and the independent
-  enrollment switch remain open.
+  creation/approval while preserving private read/reject, plus invite/OAuth/initial-passkey
+  enrollment while preserving returning login/recovery. Deployed operation remains open for every
+  local gate.
 - Gate: source multiplication cannot exceed the profile score cap or gain privilege, and
   infrastructure limits survive load tests.
 
