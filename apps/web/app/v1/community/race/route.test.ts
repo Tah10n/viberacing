@@ -1,20 +1,43 @@
-import { describe, expect, it } from "vitest";
-
-import { DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, dynamic, runtime } from "./route";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const invalidRequest = new Request(
   "https://viberacing.invalid/v1/community/race?seasonStart=2026-07-14",
 );
 
 describe("public Community race Next.js entrypoint", () => {
-  it("stays lazy for a rejected request and pins the Node dynamic runtime", async () => {
-    expect(dynamic).toBe("force-dynamic");
-    expect(runtime).toBe("nodejs");
-    await expect(GET(invalidRequest)).resolves.toMatchObject({ status: 400 });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("stays disabled under a non-enabling deployment value", async () => {
+    vi.stubEnv("VIBERACING_PUBLIC_RANKING_ENABLED", "false");
+    const route = await import("./route");
+
+    expect(route.dynamic).toBe("force-dynamic");
+    expect(route.runtime).toBe("nodejs");
+    await expect(route.GET(invalidRequest)).resolves.toMatchObject({ status: 503 });
+  });
+
+  it("evaluates the existing request boundary only after exact enablement", async () => {
+    vi.stubEnv("VIBERACING_PUBLIC_RANKING_ENABLED", "true");
+    const route = await import("./route");
+
+    await expect(route.GET(invalidRequest)).resolves.toMatchObject({ status: 400 });
   });
 
   it("dispatches every non-GET Next.js method through the closed 405 response", async () => {
-    for (const handler of [DELETE, HEAD, OPTIONS, PATCH, POST, PUT]) {
+    vi.stubEnv("VIBERACING_PUBLIC_RANKING_ENABLED", "false");
+    const route = await import("./route");
+
+    for (const handler of [
+      route.DELETE,
+      route.HEAD,
+      route.OPTIONS,
+      route.PATCH,
+      route.POST,
+      route.PUT,
+    ]) {
       const response = handler();
       expect(response.status).toBe(405);
       expect(response.headers.get("allow")).toBe("GET");

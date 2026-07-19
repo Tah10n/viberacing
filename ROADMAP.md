@@ -41,9 +41,9 @@ content, or raw account identifiers leaving the machine.
 - Add explicit new-source versus existing-source pairing, opaque multi-account aggregation, and
   same-source device deduplication.
 - Add source pause/unlink, quarantine, retention, finalized-season immutability, abuse controls,
-  backpressure, alerts, audit events, and kill switches. A first default-off Ingest startup latch is
-  implemented locally; deployed operation and the independent switches for other capabilities remain
-  open.
+  backpressure, alerts, audit events, and kill switches. Default-off local gates now cover Ingest
+  startup and all three public-ranking routes; deployed operation and the independent switches for
+  other capabilities remain open.
 - Keep the profile cap and source count visible so adding devices cannot multiply one source.
 
 Exit criterion: source multiplication cannot exceed the profile score cap or gain privilege, and

@@ -189,6 +189,12 @@ flowchart LR
   selection through an encrypted session-bound control, and fresh-passkey atomic approval.
   Distributed recovery/anonymous edge attempt policy, expired-state cleanup scheduling and
   notification, live provider/database credentials, and deployment remain separate gates.
+- Public ranking reads: all three local score/race/status GET modules resolve exact
+  `VIBERACING_PUBLIC_RANKING_ENABLED=true` once at module evaluation. Every other or unreadable
+  value returns the existing generic 503 before query/header parsing, admission acquisition, or
+  store/database configuration. The tracked example is false and the browser retains its synthetic
+  fallback. This proves no deployed route/cache denial, worker reload, old-instance drain, or
+  dynamic switch.
 - Authenticated score view: the account server render reuses the exact possessed session and one
   combined Web/Auth pool checkout to read visibility plus the current Monday's existing seven
   derived daily scores and bounded summary. Hidden profiles return no score; raw usage, private
@@ -556,6 +562,12 @@ value plus an optional preference-gated consecutive positive-score streak to the
 timestamps, daily history, private identifiers, and the preference itself remain absent; status
 never changes score, rank, authority, or finalized state.
 
+ADR 0056 places all three read operations behind exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` at
+route-module evaluation. Disabled GET uses their already documented generic no-store 503 before
+query, `Accept`, admission, or storage work; non-GET methods retain 405. The tracked configuration
+remains false. This does not change a component or operation schema and is not deployed, dynamic, or
+cache-denial evidence.
+
 The visible home race now uses that separate same-origin status operation for its current
 server-selected Monday. It accepts only the bounded Public response, loads its compact independent
 validator after hydration, uses no credentials or browser persistence, and keeps a clearly labeled
@@ -756,8 +768,9 @@ cleanup, redaction, or reset has a scheduler or deployed cadence.
 - Sensitive actions require a reason and produce an external, append-only audit event.
 - Operators cannot retrieve Codex prompts or account email because those values are never collected.
 - Kill switches independently disable enrollment, pairing, source creation, ingestion, proposals,
-  and public ranking. The local Ingest host has only the first default-off startup latch; a deployed
-  restart/route-denial/runbook path and every other capability switch remain separate gates.
+  and public ranking. Local default-off gates now cover Ingest startup and the three public-ranking
+  route modules; deployed restart/route/cache-denial/runbook behavior and every other capability
+  switch remain separate gates.
 - Operational logs are structured, redacted, retention-bounded, and avoid raw token values.
 - Alerts cover auth anomalies, pairing storms, source growth, signature and replay failures, ingest
   rejection, season jobs, deletion failures, database saturation, release events, and origin-proof
@@ -1059,9 +1072,9 @@ measurements exist.
   gates.
 - Complete aggregation, same-source device dedup, source count, quarantine, retention, and
   finalized-season immutability.
-- Add abuse controls, backpressure, alerts, audit logs, and kill switches. One exact default-off
-  Ingest startup latch is implemented locally; deployed operation and the independent switches for
-  every other capability remain open.
+- Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
+  gates now cover Ingest startup and all three public-ranking routes; deployed operation and the
+  independent switches for every other capability remain open.
 - Gate: source multiplication cannot exceed the profile score cap or gain privilege, and
   infrastructure limits survive load tests.
 

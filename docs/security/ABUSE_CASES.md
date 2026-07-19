@@ -413,12 +413,15 @@ material availability cost.
   timestamps, daily score rows, the preference, and private IDs remain absent. The visible browser
   consumer lazily validates that complete status response, uses fixed project-owned presentation
   cars for recipe absence, sends no credentials, and falls back to explicitly synthetic rows after
-  any invalid or unavailable response. Revision 0015 lets only the exact possessed session read and
-  set the closed `public`/`hidden` state; the same-origin form carries no profile ID and repeated
-  state is a no-op. Because the public read already filters current state, a committed hide removes
-  the profile from the next no-store response while source sync may continue. Deployment,
-  enumeration controls, cache purge, edge rate policy, query-plan/load evidence, and monitoring are
-  still unimplemented.
+  any invalid or unavailable response. ADR 0056 keeps all three GET compositions unavailable unless
+  exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` was resolved at module load; every alternate state
+  returns generic 503 before query/header parsing, admission acquisition, or store work. It does not
+  prove deployed route/cache denial, worker reload, or scraping protection after enablement.
+  Revision 0015 lets only the exact possessed session read and set the closed `public`/`hidden`
+  state; the same-origin form carries no profile ID and repeated state is a no-op. Because the
+  public read already filters current state, a committed hide removes the profile from the next
+  no-store response while source sync may continue. Deployment, enumeration controls, cache purge,
+  edge rate policy, query-plan/load evidence, and monitoring are still unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 
@@ -720,53 +723,55 @@ material availability cost.
   four-connection ceiling, two-second checkout/connect wait, one/five/six-second lock/server/
   client-query deadlines, idle/lifetime recycling, and a fixed limit 32. Ranking still evaluates all
   currently visible season entries. The generated query validator now rejects malformed,
-  out-of-range, and non-Monday seasons before the route may call the store. The local route rejects
-  bodies and oversized/malformed URL or `Accept` work, admits at most four active reads with no
-  queue, holds each lease through adapter settlement, and returns 503 on exhaustion. The visible
-  home page makes one current-week request per navigation with no client retry loop and retains its
-  synthetic fallback after failure. The operation reserves a 429 response without claiming a
-  client-rate limiter exists. The local identity routes separately admit at most four unsettled
-  calls without a queue, reject malformed or over-limit bodies before database work, and create no
-  database state for login options. A valid login proof performs one bounded atomic completion,
-  while failure to seal the resulting browser cookie revokes the new session. These are local
-  process ceilings, not distributed or client-identity rate limits. The transport-free pairing-start
-  application bounds labels, metadata, keys, entropy, and HMAC work, admits four unsettled attempts
-  without a queue, holds each lease through a 250-millisecond floor, and makes no database call for
-  malformed input. Revision 0022 now adds one Web-only fixed-storage admission before start/poll
-  database work: every request locks/increments one operation-global row and one of 64
-  digest-selected buckets under a five-second deadline. Counts saturate, windows reset in place, and
-  neither raw client ID nor digest is retained. Revision 0037 adds a zero-argument Jobs-only reset
-  after the maximum one-hour window, preserves the 130 fixed rows, and proves worker/worker plus
-  reset/admission serialization. The shared service retains the four-call no-queue ceiling across
-  both operations. This is distributed across Web instances using one database, but the
-  self-asserted ID is not a trusted edge/IP identity and still needs capacity evidence. Physical
-  pairing cleanup exists as a separate local capability, but scheduling and edge controls are still
-  pending. The local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client
-  deadlines, ten fixed 1000-row cleanup commands, one zero-argument maximum-130 rate-window reset,
-  one fixed 1000-row approval-provenance redaction, one fixed maximum-10 primary-purge command,
-  canonical season validation, closed one-row results, and destructive release on failure. Its
-  synthetic integration executes those commands sequentially against one disposable database and
-  therefore proves no parallel scheduler or production-load capacity. The kernel itself has no
-  socket/stream authority. The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
-  checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row origin consume,
-  zero-or-one device lookup, and one-row submission results, with destructive release on failure.
-  The transport-free application generates request correlation before verification, submits only
-  after verification, waits for settlement, and contains dependency failures without a retry loop.
-  The local Fastify boundary caps the raw body at 8192 bytes, parsed headers at 16384 bytes, raw
-  header pairs at 64, connections at 32, and requests per socket at 16; it sets 5/33/34-second
-  request/handler/connection deadlines and a five-second keep-alive, admits four unsettled
-  application calls without a queue, holds each lease through settlement, and returns generic 503 on
-  exhaustion. Real loopback tests close malformed and partial requests; injection tests cover
-  overload and response policy. The separate host closes that composition under a 36-second
-  first-signal deadline, forces failure on a second signal/deadline/close error, and requires the
-  Railway drain declaration to leave at least four seconds beyond its local close bound. It also
-  stays default-off unless exact `VIBERACING_INGEST_ENABLED=true` is read before every other
-  host/protected-application field or resource; the tracked example remains false. This is no
-  deployed/dynamic kill-switch result. There is no live identity or deployment database integration,
-  distributed rate/backpressure policy, monitoring, or combined capacity evidence. The full
-  synthetic Ingest gate proves correctness under four sequential signed requests, not load capacity.
-  Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and production load
-  evidence remain unimplemented.
+  out-of-range, and non-Monday seasons before the route may call the store. All three local ranking
+  GETs first require the exact default-off module-load decision; disabled state returns generic 503
+  before query/header parsing, admission acquisition, or store/database work. Once enabled, the
+  route rejects bodies and oversized/malformed URL or `Accept` work, admits at most four active
+  reads with no queue, holds each lease through adapter settlement, and returns 503 on exhaustion.
+  The visible home page makes one current-week request per navigation with no client retry loop and
+  retains its synthetic fallback after failure. The operation reserves a 429 response without
+  claiming a client-rate limiter exists. The local identity routes separately admit at most four
+  unsettled calls without a queue, reject malformed or over-limit bodies before database work, and
+  create no database state for login options. A valid login proof performs one bounded atomic
+  completion, while failure to seal the resulting browser cookie revokes the new session. These are
+  local process ceilings, not distributed or client-identity rate limits. The transport-free
+  pairing-start application bounds labels, metadata, keys, entropy, and HMAC work, admits four
+  unsettled attempts without a queue, holds each lease through a 250-millisecond floor, and makes no
+  database call for malformed input. Revision 0022 now adds one Web-only fixed-storage admission
+  before start/poll database work: every request locks/increments one operation-global row and one
+  of 64 digest-selected buckets under a five-second deadline. Counts saturate, windows reset in
+  place, and neither raw client ID nor digest is retained. Revision 0037 adds a zero-argument
+  Jobs-only reset after the maximum one-hour window, preserves the 130 fixed rows, and proves
+  worker/worker plus reset/admission serialization. The shared service retains the four-call
+  no-queue ceiling across both operations. This is distributed across Web instances using one
+  database, but the self-asserted ID is not a trusted edge/IP identity and still needs capacity
+  evidence. Physical pairing cleanup exists as a separate local capability, but scheduling and edge
+  controls are still pending. The local Jobs runner adds a one-client ceiling, 2/31/32-second
+  connect/server/client deadlines, ten fixed 1000-row cleanup commands, one zero-argument
+  maximum-130 rate-window reset, one fixed 1000-row approval-provenance redaction, one fixed
+  maximum-10 primary-purge command, canonical season validation, closed one-row results, and
+  destructive release on failure. Its synthetic integration executes those commands sequentially
+  against one disposable database and therefore proves no parallel scheduler or production-load
+  capacity. The kernel itself has no socket/stream authority. The separate Ingest adapter adds a
+  four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime
+  recycling, exact one-row origin consume, zero-or-one device lookup, and one-row submission
+  results, with destructive release on failure. The transport-free application generates request
+  correlation before verification, submits only after verification, waits for settlement, and
+  contains dependency failures without a retry loop. The local Fastify boundary caps the raw body at
+  8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests
+  per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
+  keep-alive, admits four unsettled application calls without a queue, holds each lease through
+  settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and partial
+  requests; injection tests cover overload and response policy. The separate host closes that
+  composition under a 36-second first-signal deadline, forces failure on a second
+  signal/deadline/close error, and requires the Railway drain declaration to leave at least four
+  seconds beyond its local close bound. It also stays default-off unless exact
+  `VIBERACING_INGEST_ENABLED=true` is read before every other host/protected-application field or
+  resource; the tracked example remains false. This is no deployed/dynamic kill-switch result. There
+  is no live identity or deployment database integration, distributed rate/backpressure policy,
+  monitoring, or combined capacity evidence. The full synthetic Ingest gate proves correctness under
+  four sequential signed requests, not load capacity. Scheduling, cache, scoring/read capacity
+  evidence, quotas, edge shaping, and production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

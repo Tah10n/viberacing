@@ -358,6 +358,11 @@ metadata. Without it, development uses loopback and production builds use a rese
 origin that is not suitable for deployment. A real hosted build must receive its public HTTPS DNS
 origin through the deployment environment.
 
+The three public score/race/status routes remain generically unavailable unless an ignored local
+environment sets exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` before their modules load. The
+tracked example stays false, so the visible page keeps its synthetic fallback. This local gate does
+not prove deployed route/cache denial or reload already-running instances.
+
 The server-only score, enrollment, and local pairing adapters use only `VIBERACING_WEB_DATABASE_*`.
 Their tracked user/password are deliberately non-working placeholders and are checked against
 accidental reuse of the `DATABASE_*` compose owner. Local integration requires a separately

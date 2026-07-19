@@ -64,6 +64,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0053](0053-windows-portable-smoke.md)                          | Bounded Windows portable connector lifecycle smoke                  | Accepted; local/CI declaration; hosted/release pending |
 | [0054](0054-redacted-codex-diagnostic-preview.md)               | Redacted Codex diagnostic preview                                   | Accepted; local preview; support/export pending        |
 | [0055](0055-fail-closed-ingest-startup-enable-latch.md)         | Fail-closed Ingest startup enable latch                             | Accepted; local latch; deployed operation pending      |
+| [0056](0056-fail-closed-public-ranking-route-enable-gate.md)    | Fail-closed public-ranking route enable gate                        | Accepted; local gate; deployed operation pending       |
 
 ## Lifecycle
 

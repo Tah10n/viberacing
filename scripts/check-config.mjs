@@ -41,6 +41,7 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL", "replace-with-random-32-byte-base64url-key"],
   ["VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID", "edge_local"],
   ["VIBERACING_INGEST_TLS_TERMINATION", "loopback-cleartext"],
+  ["VIBERACING_PUBLIC_RANKING_ENABLED", "false"],
   ["VIBERACING_WEB_DATABASE_HOST", "127.0.0.1"],
   ["VIBERACING_WEB_DATABASE_NAME", "viberacing_local"],
   ["VIBERACING_WEB_DATABASE_PASSWORD", "replace-with-local-web-password"],

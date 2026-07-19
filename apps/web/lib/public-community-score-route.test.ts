@@ -52,6 +52,7 @@ function createRoute(readScores: (seasonStart: string) => Promise<unknown>, admi
   return createPublicCommunityScoreRoute({
     admission: createPublicScoreAdmission(admissionLimit),
     createRequestId: createPublicRequestId,
+    enabled: true,
     readScores,
   });
 }
@@ -60,6 +61,7 @@ function createRaceRoute(readRace: (seasonStart: string) => Promise<unknown>, ad
   return createPublicCommunityRaceRoute({
     admission: createPublicScoreAdmission(admissionLimit),
     createRequestId: createPublicRequestId,
+    enabled: true,
     readRace,
   });
 }
@@ -71,6 +73,7 @@ function createRaceStatusRoute(
   return createPublicCommunityRaceStatusRoute({
     admission: createPublicScoreAdmission(admissionLimit),
     createRequestId: createPublicRequestId,
+    enabled: true,
     readRaceStatus,
   });
 }
@@ -238,6 +241,72 @@ describe("public Community score Accept negotiation", () => {
 });
 
 describe("public Community score route", () => {
+  it.each([false, undefined, "true", 1])(
+    "fails closed before request parsing, admission, or storage for enable value %#",
+    async (enabled) => {
+      const tryAcquire = vi.fn(() => {
+        throw new Error("admission-must-not-run");
+      });
+      const readScores = vi.fn(() => Promise.reject(new Error("store-must-not-run")));
+      const route = createPublicCommunityScoreRoute({
+        admission: Object.freeze({ tryAcquire }),
+        createRequestId: createPublicRequestId,
+        enabled,
+        readScores,
+      });
+      const hostileRequest = new Proxy(request(), {
+        get(_target, key) {
+          if (key === "method") {
+            return "GET";
+          }
+          throw new Error(`request-field-must-not-run:${String(key)}`);
+        },
+      });
+
+      await expectProblem(await route.get(hostileRequest), {
+        code: "temporarily_unavailable",
+        retryable: true,
+        status: 503,
+        title: "Temporarily unavailable",
+      });
+      expect(tryAcquire).not.toHaveBeenCalled();
+      expect(readScores).not.toHaveBeenCalled();
+    },
+  );
+
+  it("applies the same disabled decision to race and race-status factories", async () => {
+    const readRace = vi.fn(() => Promise.resolve(emptyPage));
+    const readRaceStatus = vi.fn(() => Promise.resolve(emptyPage));
+    const admission = createPublicScoreAdmission(4);
+    const raceRoute = createPublicCommunityRaceRoute({
+      admission,
+      createRequestId: createPublicRequestId,
+      enabled: false,
+      readRace,
+    });
+    const raceStatusRoute = createPublicCommunityRaceStatusRoute({
+      admission,
+      createRequestId: createPublicRequestId,
+      enabled: false,
+      readRaceStatus,
+    });
+
+    await expectProblem(await raceRoute.get(raceRequest()), {
+      code: "temporarily_unavailable",
+      retryable: true,
+      status: 503,
+      title: "Temporarily unavailable",
+    });
+    await expectProblem(await raceStatusRoute.get(raceStatusRequest()), {
+      code: "temporarily_unavailable",
+      retryable: true,
+      status: 503,
+      title: "Temporarily unavailable",
+    });
+    expect(readRace).not.toHaveBeenCalled();
+    expect(readRaceStatus).not.toHaveBeenCalled();
+  });
+
   it("returns one validated no-store page without CORS or private response fields", async () => {
     const readScores = vi.fn(() => Promise.resolve(emptyPage));
     const inboundRequestId = "inbound-request-id-must-be-ignored";

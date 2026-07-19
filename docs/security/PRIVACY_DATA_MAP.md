@@ -239,6 +239,15 @@ adds no access log, metric, trace, analytics event, cache, request header, datab
 network destination. Any future dynamic control, diagnostic, or monitoring sink still requires a
 separate purpose, access, and retention decision.
 
+ADR 0056 adds the non-personal `VIBERACING_PUBLIC_RANKING_ENABLED` Operational module-load value.
+The server-only resolver inspects only that own string field and retains one frozen boolean
+decision. It does not serialize, log, export, persist, transmit, or attach the input to a request,
+metric, trace, audit event, cache key, database row, or browser payload. Disabled GET uses the
+existing public request-ID and generic no-store 503 fields already mapped for the score/race/status
+HTTP boundary; it adds no new response or retained field. Any dynamic control, operator event,
+monitoring sink, or deployment audit still needs a separate mapped purpose, access policy, and
+retention decision.
+
 ADR 0021 adds no collected or retained field. The connector library transiently validates the stable
 initialization response's Codex home, platform family, operating-system name, and user agent under
 fixed string/frame bounds, then discards all four values before returning. ADR 0022 then validates

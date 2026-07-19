@@ -36,6 +36,11 @@ apply.
   Web-role/login-capability probe before every query. Do not bypass the store with generic SQL or
   wire it outside the three exact `/v1/community/scores`, `/v1/community/race`, and
   `/v1/community/race/status` boundaries.
+- Keep all three public ranking GETs behind exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` resolved
+  once per route-module evaluation. Every alternate or unreadable state must return the existing
+  generic 503 before URL/query/header parsing, admission acquisition, or store construction; keep
+  the tracked example false. Do not add a truthy/default-on parser, per-request environment read,
+  alternate enable source, or claim dynamic/deployed route and cache denial.
 - Pairing reuses that environment-owned Web/Auth login only through its separate read-write pool.
   Preserve the exact role/login/search-path/read-write probe, two fixed verifier candidates,
   protected primary/secondary HMAC capability, strict proof-before-activation sequence, server-owned

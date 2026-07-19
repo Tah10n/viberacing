@@ -12,27 +12,28 @@ racing cars on a public track.
 
 The current runnable site starts with a clearly labeled synthetic preview so contributors can use it
 without an account, connector, or database. It now also requests the current Community week from the
-same-origin public race-status route and replaces the visible race and leaderboard only after a
-bounded response passes browser-side validation. The response includes complete-UTC-day freshness
-and may include the current approved enum-only car plus a preference-gated streak; exact receipt
-time and underlying daily scores remain private. When no active recipe exists, the browser keeps a
-repository-owned presentation fallback. A Community handle selects a same-page public summary from
-that same validated field set; daily detail, device counts, exact usage, and identifiers remain
-absent. Each selection has a canonical public-handle URL, and a signed-in public profile links to
-its current summary without adding browser storage. An unavailable route leaves the synthetic
-fallback visible; the demo garage remains synthetic. The same public page now includes an EN/RU
-score simulator that applies the production Community formula to one hypothetical daily token total
-and one to seven active days entirely in component memory. Its value is never sent, stored,
-prefilled from an account, or used to change a standing. A separate invite-only join flow now
-composes GitHub OAuth with state and PKCE, one encrypted short-lived continuation, atomic profile
-enrollment, required WebAuthn registration, returning discoverable-credential login, a
-session-scoped passkey inventory, an active account page, immediate public-profile hide/show, source
-and active-device inventory, immediate source pause, fresh-passkey paused-source reactivation,
-device revoke, backup-passkey addition and fresh-passkey terminal source unlink, non-current-passkey
-revocation, fresh-passkey recovery-code rotation with one-time display, an exact-handle
-fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey sign-in, and
-logout. It is locally tested only: the repository supplies no invite issuer UI, OAuth registration,
-real secret, live OAuth/authenticator/database credentials, scheduled deletion purge,
+same-origin public race-status route, which remains unavailable unless its module resolves exact
+`VIBERACING_PUBLIC_RANKING_ENABLED=true` when loaded, and replaces the visible race and leaderboard
+only after a bounded response passes browser-side validation. The tracked default is false. The
+response includes complete-UTC-day freshness and may include the current approved enum-only car plus
+a preference-gated streak; exact receipt time and underlying daily scores remain private. When no
+active recipe exists, the browser keeps a repository-owned presentation fallback. A Community handle
+selects a same-page public summary from that same validated field set; daily detail, device counts,
+exact usage, and identifiers remain absent. Each selection has a canonical public-handle URL, and a
+signed-in public profile links to its current summary without adding browser storage. An unavailable
+route leaves the synthetic fallback visible; the demo garage remains synthetic. The same public page
+now includes an EN/RU score simulator that applies the production Community formula to one
+hypothetical daily token total and one to seven active days entirely in component memory. Its value
+is never sent, stored, prefilled from an account, or used to change a standing. A separate
+invite-only join flow now composes GitHub OAuth with state and PKCE, one encrypted short-lived
+continuation, atomic profile enrollment, required WebAuthn registration, returning
+discoverable-credential login, a session-scoped passkey inventory, an active account page, immediate
+public-profile hide/show, source and active-device inventory, immediate source pause, fresh-passkey
+paused-source reactivation, device revoke, backup-passkey addition and fresh-passkey terminal source
+unlink, non-current-passkey revocation, fresh-passkey recovery-code rotation with one-time display,
+an exact-handle fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey
+sign-in, and logout. It is locally tested only: the repository supplies no invite issuer UI, OAuth
+registration, real secret, live OAuth/authenticator/database credentials, scheduled deletion purge,
 cache/backup/tombstone handling, restore replay, distributed edge abuse controls, recovery cleanup
 or notifications, or live-user evidence.
 
@@ -313,10 +314,12 @@ audit sink, scheduler, production login/certificate, monitoring backend, retry l
 result, or deployment. Revision 0011 gives only the Web database role a bounded active-profile score
 projection containing no raw values, private identifiers, or exact timestamps. The score response
 component and Web PostgreSQL adapter preserve only that public allowlist through the local score
-route. The visible race, leaderboard, and selectable participant summary now consume its validated
-current-week response with a credential-free same-origin request and an explicit synthetic fallback.
-Canonical `/?profile=handle#profile` links select only an exact public handle in that page, and a
-missing current top-32 row is not replaced with another participant. There is now a local
+route. All three public score/race/status routes require one exact default-off module-load gate
+before query/header parsing, admission acquisition, or storage work. The visible race, leaderboard,
+and selectable participant summary consume the validated current-week response only when enabled,
+using a credential-free same-origin request and an explicit synthetic fallback on disabled or failed
+state. Canonical `/?profile=handle#profile` links select only an exact public handle in that page,
+and a missing current top-32 row is not replaced with another participant. There is now a local
 invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
 rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey profile-deletion
 request flow. Recovery lookup returns only the selected unused PHC; admitted attempts use bounded

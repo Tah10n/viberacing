@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fifty-five accepted ADRs.
+  fail-closed compatibility policy and matrix, and fifty-six accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -111,6 +111,12 @@ Versioning where its guarantees are applicable.
   eleven-column mapper/store, shared no-queue route policy, independent browser validation, lazy
   client loading, and repository-owned absence fallback are tested without exposing proposal state
   or claiming a live credential, cache, edge policy, capacity result, monitoring, or deployment.
+- A shared exact default-off module-load gate for `GET /v1/community/scores`,
+  `GET /v1/community/race`, and `GET /v1/community/race/status`. Only
+  `VIBERACING_PUBLIC_RANKING_ENABLED=true` permits query/header parsing, admission acquisition, or
+  storage work; disabled GET returns the existing generic no-store 503 and the tracked example
+  remains false. This is local fail-closed evidence, not deployed route/cache denial, old-instance
+  drain, or a dynamic switch.
 - Dependency-free, traversal-budgeted runtime contract validation plus manifest/schema/generated
   drift gates and black-box regression coverage.
 - A private pure Ingest workspace plus canonical language-neutral authentication policy for one

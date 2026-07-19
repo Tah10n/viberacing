@@ -16,32 +16,33 @@ projection, and a separate compatible active-CarRecipe race projection plus a th
 rounded-freshness/optional-streak status projection and their server-only projection-to-contract
 mappers; Phase 3 database-only source/device lifecycle, same-source deduplication, and bounded
 pairing-retention cleanup have also started. A server-only public problem-response factory, closed
-query/OpenAPI operations, and locally implemented public score/race/status GETs now exist. The
-visible home race requests the current server-selected Community week from the separate same-origin
-status route, replaces only its race/leaderboard after closed browser-side validation, uses an exact
-current approved recipe or repository-owned absence fallback, shows only complete-UTC-day freshness
-and an optional preference-gated streak, lets a handle select a same-page summary from those public
-fields, exposes that selection through a canonical public-handle URL and public-account link, and
-retains a labeled synthetic fallback on failure. The same public page now exposes a local-only EN/RU
-score simulator that validates one hypothetical daily token total, applies the production daily and
-weekly scoring functions for one to seven active days, and never requests, logs, stores, preloads,
-or submits that value or changes a standing. Local identity slices now implement exact same-origin
-bounded forms, GitHub OAuth state and S256 PKCE with no extra scope, purpose-separated encrypted
-HttpOnly continuations, atomic profile/session creation, required initial WebAuthn registration,
-returning discoverable-credential login, a session-scoped minimal passkey inventory, an active
-account page, immediate public-profile hide/show, source inventory and pause, fresh-passkey
-paused-source reactivation and terminal unlink, fresh backup-passkey addition, revocation of an
-owned non-current passkey, a bounded active-device inventory with immediate owned-device revoke,
-fresh-passkey recovery-code rotation with one-time display, an exact-handle fresh-passkey
-profile-deletion request, one-time recovery-code replacement-passkey sign-in, and database-backed
-logout. Login options retain the profile-free challenge only in a separate encrypted cookie; valid
-proof alone reaches one atomic create-consume-session call. Its GitHub, passkey-verifier, database,
-and browser evidence is injected or synthetic; no working invite issuer, OAuth registration, secret,
-live authenticator/database login, distributed edge abuse control, scheduled recovery/deletion
-cleanup, cache/backup/tombstone purge, restore replay, notification, or deployment is supplied. A
-local one-shot Jobs runner invokes only the fifteen existing maintenance procedures through a
-bounded least-privileged adapter. One opt-in synthetic integration applies the reviewed migrations
-to disposable PostgreSQL, runs every emitted Jobs command through a narrow login, rejects an
+query/OpenAPI operations, and locally implemented public score/race/status GETs now exist behind one
+exact default-off module-load gate. The visible home race requests the current server-selected
+Community week from the separate same-origin status route, replaces only its race/leaderboard after
+closed browser-side validation, uses an exact current approved recipe or repository-owned absence
+fallback, shows only complete-UTC-day freshness and an optional preference-gated streak, lets a
+handle select a same-page summary from those public fields, exposes that selection through a
+canonical public-handle URL and public-account link, and retains a labeled synthetic fallback on
+failure. The same public page now exposes a local-only EN/RU score simulator that validates one
+hypothetical daily token total, applies the production daily and weekly scoring functions for one to
+seven active days, and never requests, logs, stores, preloads, or submits that value or changes a
+standing. Local identity slices now implement exact same-origin bounded forms, GitHub OAuth state
+and S256 PKCE with no extra scope, purpose-separated encrypted HttpOnly continuations, atomic
+profile/session creation, required initial WebAuthn registration, returning discoverable-credential
+login, a session-scoped minimal passkey inventory, an active account page, immediate public-profile
+hide/show, source inventory and pause, fresh-passkey paused-source reactivation and terminal unlink,
+fresh backup-passkey addition, revocation of an owned non-current passkey, a bounded active-device
+inventory with immediate owned-device revoke, fresh-passkey recovery-code rotation with one-time
+display, an exact-handle fresh-passkey profile-deletion request, one-time recovery-code
+replacement-passkey sign-in, and database-backed logout. Login options retain the profile-free
+challenge only in a separate encrypted cookie; valid proof alone reaches one atomic
+create-consume-session call. Its GitHub, passkey-verifier, database, and browser evidence is
+injected or synthetic; no working invite issuer, OAuth registration, secret, live
+authenticator/database login, distributed edge abuse control, scheduled recovery/deletion cleanup,
+cache/backup/tombstone purge, restore replay, notification, or deployment is supplied. A local
+one-shot Jobs runner invokes only the fifteen existing maintenance procedures through a bounded
+least-privileged adapter. One opt-in synthetic integration applies the reviewed migrations to
+disposable PostgreSQL, runs every emitted Jobs command through a narrow login, rejects an
 extra-membership login before mutation, and verifies exact stored state. A local Ingest kernel now
 bounds and authenticates the exact Community sync envelope, consumes an injected origin nonce,
 parses bounded JSON, validates the generated contract, and strictly verifies the source-bound device
@@ -252,7 +253,7 @@ ranking, or finalization scheduler exists.
   prove enum, shell, invocation-allowlist, retry, authority, output, front matter, UI metadata,
   command, Git-scope, runtime, public-output, and evidence-claim drift fail closed. No released
   connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and fifty-five accepted design decisions covering Community trust,
+- An ADR lifecycle/template and fifty-six accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -272,7 +273,8 @@ ranking, or finalization scheduler exists.
   retention, pairing approval-provenance retention, revoked-passkey retention cleanup, plus
   revoked-device retention cleanup, bounded pairing-rate-window reset, bounded candidate executable
   discovery, the bounded candidate artifact diagnostic, the Windows portable connector lifecycle
-  smoke, and the redacted Codex diagnostic preview.
+  smoke, the redacted Codex diagnostic preview, the local Ingest startup latch, and the local
+  public-ranking route gate.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -528,16 +530,22 @@ ranking, or finalization scheduler exists.
   token.
 - Dynamic Node.js `GET /v1/community/scores`, `GET /v1/community/race`, and
   `GET /v1/community/race/status` routes share one boundary with independent fixed response
-  validators and database calls. Each creates one request token at entry, rejects bodies and every
-  wrong path or missing/duplicate/unknown/non-canonical query, validates the one-field contract,
-  performs bounded JSON `Accept` negotiation, and dispatches every other supported method through a
-  closed 405 plus `Allow: GET`. Each acquires one of four no-queue leases before lazily constructing
-  its store, holds the lease until adapter work and serialization settle, revalidates the final
-  page, and emits only `no-store`, `Vary: Accept`, request-ID, and content-type headers without
-  CORS. Adapter/configuration availability and admission exhaustion map to 503; projection/invariant
-  or unknown failures map to a non-reflective 500. The deadline policy uses the existing two-second
+  validators and database calls. Each resolves only exact `VIBERACING_PUBLIC_RANKING_ENABLED=true`
+  once at route-module evaluation. Every alternate or unreadable state returns the closed generic
+  no-store 503 after request-ID/method handling but before URL/query/`Accept`, admission
+  acquisition, configured-store construction, or database configuration. The tracked example is
+  false. Once enabled, each creates one request token at entry, rejects bodies and every wrong path
+  or missing/duplicate/unknown/non-canonical query, validates the one-field contract, performs
+  bounded JSON `Accept` negotiation, and dispatches every other supported method through a closed
+  405 plus `Allow: GET`. Each acquires one of four no-queue leases before lazily constructing its
+  store, holds the lease until adapter work and serialization settle, revalidates the final page,
+  and emits only `no-store`, `Vary: Accept`, request-ID, and content-type headers without CORS.
+  Adapter/configuration availability and admission exhaustion map to 503; projection/invariant or
+  unknown failures map to a non-reflective 500. The deadline policy uses the existing two-second
   connect, six-second client-query, and five-second PostgreSQL statement ceilings rather than
   returning early from an outer promise race. The reserved 429 does not claim a client-rate limiter.
+  The module-load gate proves no deployed route/cache denial, simultaneous worker reload,
+  old-instance drain, operator audit, monitoring, or dynamic switch.
 - A visible public-race consumer. The dynamic server page derives the current ISO Monday and passes
   only that public label to the client. After hydration, the browser lazily loads its compact
   independent validator and issues one credential-free, `no-store`, same-origin request to the exact
@@ -1090,16 +1098,16 @@ limitations.
 Invite issuance UI, trusted anonymous login/pairing/recovery edge limits, recovery notification,
 trusted Ingest edge routing/external TLS and direct-origin denial, live secret-manager/edge key
 injection, the Ingest deployment PostgreSQL credential/TLS connection, distributed rate/backpressure
-controls and load evidence, deployed operation of the local Ingest startup latch, independent kill
-switches for the remaining capabilities, scheduled execution and monitoring of retention cleanup for
-authentication, audit-event, invitation, CarRecipe-proposal, ingest, pairing, session,
-terminal-deletion-job, aged revoked-passkey state, and aged minimized revoked-device state plus
-pairing approval-provenance redaction, pairing-rate-window reset, and primary deletion, cleanup for
-remaining expiring state, the Jobs scheduler and production login/TLS path, audited corrections,
-deployed public-score delivery, cache/backup/tombstone purge and restore replay, connector
-macOS/Linux executable admission, clean-machine live Codex/privacy evidence, supported operational
-account/usage integration, deployed signed-upload egress, credential rotation and automated
-server-revoke composition, hosted Windows portable-smoke evidence, installer and real
+controls and load evidence, deployed operation of the local Ingest startup latch and public-ranking
+module gate, independent kill switches for the remaining capabilities, scheduled execution and
+monitoring of retention cleanup for authentication, audit-event, invitation, CarRecipe-proposal,
+ingest, pairing, session, terminal-deletion-job, aged revoked-passkey state, and aged minimized
+revoked-device state plus pairing approval-provenance redaction, pairing-rate-window reset, and
+primary deletion, cleanup for remaining expiring state, the Jobs scheduler and production login/TLS
+path, audited corrections, deployed public-score delivery, cache/backup/tombstone purge and restore
+replay, connector macOS/Linux executable admission, clean-machine live Codex/privacy evidence,
+supported operational account/usage integration, deployed signed-upload egress, credential rotation
+and automated server-revoke composition, hosted Windows portable-smoke evidence, installer and real
 install/upgrade/uninstall lifecycle, automated diagnostic export/support transport, packaging,
 release signing, deployment, and public beta operations remain proposed. The local Ingest key
 reader, kernel, adapter, application composer, Fastify server, and separate host now prove bounded

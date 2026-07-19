@@ -45,11 +45,14 @@ pnpm run dev:web
 
 The development command binds Next.js to the `localhost` loopback hostname so local WebAuthn uses
 its standards-defined development origin without exposing the server to the LAN. No `.env` file is
-needed for the synthetic race. The optional server-only `VIBERACING_PUBLIC_ORIGIN` setting controls
-absolute social metadata and is mandatory for a hosted deployment; it is public configuration, not a
-secret. Focused checks are available as `pnpm run lint:web`, `pnpm run typecheck:web`,
-`pnpm run test:web:coverage`, and `pnpm run build:web`; `pnpm run check:web-build` validates the
-built artifact, and the root `pnpm run verify` runs all of them.
+needed for the synthetic race. Live local score/race/status reads additionally require exact
+`VIBERACING_PUBLIC_RANKING_ENABLED=true` before their route modules load; the tracked example stays
+false and the browser keeps the labeled synthetic fallback. The optional server-only
+`VIBERACING_PUBLIC_ORIGIN` setting controls absolute social metadata and is mandatory for a hosted
+deployment; it is public configuration, not a secret. Focused checks are available as
+`pnpm run lint:web`, `pnpm run typecheck:web`, `pnpm run test:web:coverage`, and
+`pnpm run build:web`; `pnpm run check:web-build` validates the built artifact, and the root
+`pnpm run verify` runs all of them.
 
 The separate stored viewport evidence covers every combination of three reviewed breakpoints, both
 locales, and all three themes with motion disabled. `pnpm run check:phase1-visual-baselines`
@@ -87,6 +90,7 @@ deliberately non-working placeholders. See `.env.example` and the local-developm
 | `lib/public-community-score-mapper.ts`                                           | Validates the exact SQL score, race, and status projections              | Server-only, exact ten/eleven/thirteen columns, top-32, and fail-closed             |
 | `lib/public-community-score-store.ts`                                            | Executes the three fixed public score/race/status procedures             | Canonical Monday only; verifies every checkout; routes construct lazily             |
 | `lib/public-community-score-route.ts`                                            | Parses and serializes all three public GET boundaries                    | Exact paths/query/Accept, generic errors, admission, deadlines, and no CORS         |
+| `lib/public-ranking-config.ts`                                                   | Resolves one shared default-off public-ranking decision                  | Exact own string value; no database/request field or reflection                     |
 | `lib/public-score-admission.ts`                                                  | Enforces the no-queue public-read concurrency ceiling                    | Four active reads; lease held until adapter settlement                              |
 | `lib/public-http-problem.ts`                                                     | Generates opaque request IDs and closed public error responses           | Server-only; validates the contract; no inbound ID, CORS, detail, or cause          |
 | `app/join`, `app/login`, `app/recover`, `app/account`, `app/connect`, `app/auth` | Routes enrollment, recovery, account, pairing approval, deletion, logout | Thin session/browser entrypoints; no admin                                          |
@@ -140,13 +144,15 @@ emits no CORS header, cookie, detail, exception cause, hostname, SQL, or submitt
 
 The local `GET /v1/community/scores`, `GET /v1/community/race`, and `GET /v1/community/race/status`
 routes share one closed boundary but hardwire independent response validators and fixed database
-calls. Each generates one token at entry, rejects a body and every wrong path or
-missing/duplicate/unknown/non-canonical query, validates `CommunityScoreQueryV1`, performs bounded
-`Accept` negotiation, and acquires one of four no-queue admission leases before constructing its
-store. The lease remains held until the adapter promise settles. The route validates the final page
-again before JSON serialization and adds `Vary: Accept` without CORS. Every other Next.js route
-method receives the closed 405 response and `Allow: GET`; the stable score and legacy race responses
-reject the separate status fields.
+calls. Each resolves exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` once at module load. A disabled
+GET returns the existing generic 503 before URL/query/`Accept`, admission acquisition, or store
+construction; non-GET methods retain 405. Once enabled, each generates one token at entry, rejects a
+body and every wrong path or missing/duplicate/unknown/non-canonical query, validates
+`CommunityScoreQueryV1`, performs bounded `Accept` negotiation, and acquires one of four no-queue
+admission leases before constructing its store. The lease remains held until the adapter promise
+settles. The route validates the final page again before JSON serialization and adds `Vary: Accept`
+without CORS. Every other Next.js route method receives the closed 405 response and `Allow: GET`;
+the stable score and legacy race responses reject the separate status fields.
 
 The route has no outer `Promise.race` that could return while database work continued. Its deadline
 policy is the adapter's enforced two-second connection timeout, six-second query timeout, and
@@ -167,9 +173,11 @@ after hydration and keeps its synthetic fallback on every failure.
 
 ## Score database adapter configuration
 
-The adapter is constructed lazily only when a client reaches an exact score, race, or status route;
-an invalid or absent configuration returns the generic unavailable response and the page keeps its
-synthetic fallback. Importing or building the page does not connect. The adapter uses only the
+Only an exactly enabled route can reach the adapter. It is then constructed lazily when a client
+reaches an exact score, race, or status request; an invalid or absent database configuration returns
+the generic unavailable response and the page keeps its synthetic fallback. Importing or building
+the page does not connect. The module-load gate is not a deployed or dynamic switch and proves no
+old-instance drain, route/cache denial, or operator audit. The adapter uses only the
 `VIBERACING_WEB_DATABASE_*` settings documented in `.env.example`. The separate `DATABASE_*` values
 belong to the disposable compose bootstrap owner and are forbidden for Web reads. The repository
 intentionally creates no working login.

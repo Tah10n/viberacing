@@ -7,12 +7,14 @@ import {
   publicCommunityRaceRoutePolicy,
 } from "@/lib/public-community-score-route";
 import { createPublicRequestId } from "@/lib/public-http-problem";
+import { resolvePublicRankingConfig } from "@/lib/public-ranking-config";
 import { createPublicScoreAdmission } from "@/lib/public-score-admission";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 let configuredStore: ConfiguredPublicCommunityRaceStore | undefined;
+const publicRankingConfig = resolvePublicRankingConfig();
 
 function readRace(seasonStart: string): Promise<unknown> {
   configuredStore ??= createConfiguredPublicCommunityRaceStore();
@@ -22,6 +24,7 @@ function readRace(seasonStart: string): Promise<unknown> {
 const route = createPublicCommunityRaceRoute({
   admission: createPublicScoreAdmission(publicCommunityRaceRoutePolicy.admissionLimit),
   createRequestId: createPublicRequestId,
+  enabled: publicRankingConfig.enabled,
   readRace,
 });
 

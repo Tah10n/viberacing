@@ -56,18 +56,21 @@ export const publicCommunityRaceStatusRoutePolicy = publicCommunityScoreRoutePol
 export interface PublicCommunityScoreRouteDependencies {
   readonly admission: PublicScoreAdmission;
   readonly createRequestId: () => PublicRequestId;
+  readonly enabled: unknown;
   readonly readScores: (seasonStart: string) => Promise<unknown>;
 }
 
 export interface PublicCommunityRaceRouteDependencies {
   readonly admission: PublicScoreAdmission;
   readonly createRequestId: () => PublicRequestId;
+  readonly enabled: unknown;
   readonly readRace: (seasonStart: string) => Promise<unknown>;
 }
 
 export interface PublicCommunityRaceStatusRouteDependencies {
   readonly admission: PublicScoreAdmission;
   readonly createRequestId: () => PublicRequestId;
+  readonly enabled: unknown;
   readonly readRaceStatus: (seasonStart: string) => Promise<unknown>;
 }
 
@@ -310,6 +313,7 @@ function dependencyProblem(error: unknown): PublicProblemKind {
 interface PublicCommunityRouteComposition {
   readonly admission: PublicScoreAdmission;
   readonly createRequestId: () => PublicRequestId;
+  readonly enabled: unknown;
   readonly parseQuery: (request: Request) => CommunityScoreQueryV1 | undefined;
   readonly readPage: (seasonStart: string) => Promise<unknown>;
   readonly validatePage: (
@@ -325,6 +329,9 @@ function createPublicCommunityRoute(
       const requestId = dependencies.createRequestId();
       if (request.method !== "GET") {
         return problemResponse("method_not_allowed", requestId, true);
+      }
+      if (dependencies.enabled !== true) {
+        return problemResponse("temporarily_unavailable", requestId);
       }
       const query = dependencies.parseQuery(request);
       if (query === undefined) {
@@ -376,6 +383,7 @@ export function createPublicCommunityScoreRoute(
   return createPublicCommunityRoute({
     admission: dependencies.admission,
     createRequestId: dependencies.createRequestId,
+    enabled: dependencies.enabled,
     parseQuery: parsePublicCommunityScoreQuery,
     readPage: dependencies.readScores,
     validatePage: validateCommunityScorePageV1,
@@ -388,6 +396,7 @@ export function createPublicCommunityRaceRoute(
   return createPublicCommunityRoute({
     admission: dependencies.admission,
     createRequestId: dependencies.createRequestId,
+    enabled: dependencies.enabled,
     parseQuery: parsePublicCommunityRaceQuery,
     readPage: dependencies.readRace,
     validatePage: validateCommunityRacePageV1,
@@ -400,6 +409,7 @@ export function createPublicCommunityRaceStatusRoute(
   return createPublicCommunityRoute({
     admission: dependencies.admission,
     createRequestId: dependencies.createRequestId,
+    enabled: dependencies.enabled,
     parseQuery: parsePublicCommunityRaceStatusQuery,
     readPage: dependencies.readRaceStatus,
     validatePage: validateCommunityRaceStatusPageV1,
