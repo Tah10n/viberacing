@@ -42,9 +42,10 @@ content, or raw account identifiers leaving the machine.
   same-source device deduplication.
 - Add source pause/unlink, quarantine, retention, finalized-season immutability, abuse controls,
   backpressure, alerts, audit events, and kill switches. Default-off local gates now cover Ingest
-  startup, all three public-ranking routes, all four pairing routes, and new-source creation while
-  preserving active existing-source pairing; deployed operation and the independent switches for
-  other capabilities remain open.
+  startup, all three public-ranking routes, all four pairing routes, new-source creation while
+  preserving active existing-source pairing, and CarRecipe proposal creation/approval while
+  preserving private read/reject; deployed operation and the independent enrollment switch remain
+  open.
 - Keep the profile cap and source count visible so adding devices cannot multiply one source.
 
 Exit criterion: source multiplication cannot exceed the profile score cap or gain privilege, and

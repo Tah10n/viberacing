@@ -37,14 +37,16 @@ default-off enable decision before parsing, runtime/service construction, admiss
 protected configuration, or database work. A second exact default-off decision independently blocks
 new-source UI, approval initiation, and approval completion while active existing-source pairing
 remains available; sealed source choice and its v2 context digest close an in-flight new-source
-challenge after a disabled verification-module restart. The bounded Rust client generates and stores
-a pairing key through the native OS credential store, signs the exact proof, persists activation
-before success output, and can delete only the exact local origin/label record with an explicit
-warning that server authority was not revoked. No Codex launch or sync-context capability has a
-public constructor. A separate private Windows x86_64 development command can construct them only
-after active-record review and exact artifact admission selected through bounded fixed-name `PATH`
-discovery or an explicit path, then sends one fixed signed sync without retry or edge credentials.
-It cannot admit another platform/version or create a support claim. A separate explicit
+challenge after a disabled verification-module restart. A third exact default-off decision closes
+browser proposal create/approve and device proposal ingress before request or state work while
+private review and exact session-bound rejection remain available. The bounded Rust client generates
+and stores a pairing key through the native OS credential store, signs the exact proof, persists
+activation before success output, and can delete only the exact local origin/label record with an
+explicit warning that server authority was not revoked. No Codex launch or sync-context capability
+has a public constructor. A separate private Windows x86_64 development command can construct them
+only after active-record review and exact artifact admission selected through bounded fixed-name
+`PATH` discovery or an explicit path, then sends one fixed signed sync without retry or edge
+credentials. It cannot admit another platform/version or create a support claim. A separate explicit
 `check-codex` command performs only that admission without credential-store, process, account,
 persistence, or network access; its result grants no later sync authority. Its opt-in preview
 exposes only fixed version/platform-contract, one closed Operational admission class, and the empty
@@ -202,8 +204,8 @@ and migration or rollback where applicable.
 | Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                                          | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                                                        | Local verifier/config/replay/server/host tested; edge injection, trusted route, direct-origin planned                                         |
 | Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections                                  | Default-off startup, strict schema, bounded bodies, fixed adapter/procedure, non-owner role, constraints, deadlines, backpressure                                      | Startup latch, full synthetic loopback HTTP-to-PostgreSQL, and isolated SQL tested; deployed operation planned                                |
 | Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work                      | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons                                              | SQL plus synthetic CLI-to-PostgreSQL cleanup/reset/purge/scoring tested; production login, scheduler, correction planned                      |
-| CarRecipe and assets                | A proposal, agent shell, or public row smuggles a URL, command, markup, executable value, copyrighted binary, or nondeterminism | Enum-only schema, checked one-command agent reducer, signed proposal-only device authority, browser-only decision, exact public projection, provenance, snapshots      | Local agent/browser/device/DB/public race and Jobs cleanup tested; schedule, release, edge, deployment pending                                |
-| Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                     | Invite role/reason/reference plus local Ingest, public-ranking, pairing, and new-source gates implemented; hosted controls planned            |
+| CarRecipe and assets                | A proposal, agent shell, or public row smuggles a URL, command, markup, executable value, copyrighted binary, or nondeterminism | Default-off mutation, enum-only schema, checked reducer, proposal-only device authority, browser-only decision, projection, provenance, snapshots                      | Local gate/agent/browser/device/DB/public race and Jobs cleanup tested; schedule, release, edge, deployment pending                           |
+| Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                     | Invite role/reason/reference plus local Ingest, public-ranking, pairing, new-source, and proposal gates implemented; hosted controls planned  |
 | Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                                          | Immediate hide/revoke, idempotent purge, bounded tombstone, backup expiry, deletion replay after restore                                                               | Request, immediate lock-down, and bounded primary purge tested; cache/tombstone/backup/restore planned                                        |
 | Pull-request CI                     | A fork changes a workflow or package to steal a token or publish an artifact                                                    | Read-only secretless CI, no privileged environment, pinned inputs, no persisted checkout credentials, fixed no-upload Windows smoke, protected review                  | Workflow and policy implemented locally; hosted controls and Windows result pending                                                           |
 | Release and dependencies            | A compromised dependency or runner produces an official malicious connector                                                     | Exact locks, quarantine, review, isolated trusted build, signatures, SBOM, provenance, clean-machine verification                                                      | Dependency baseline and untrusted portable smoke implemented; trusted release path planned                                                    |
@@ -239,7 +241,9 @@ and migration or rollback where applicable.
    exists. The separate CarRecipe proposal message contains no source/profile identifier; its Web
    lookup and revision 0028 derive the profile only from the exact active device, recheck active
    source binding under lock, and can change only the pending enum recipe. Isolated tests cover
-   key/device mismatch, inactive source, nonce replay, and no active-recipe mutation.
+   key/device mismatch, inactive source, nonce replay, and no active-recipe mutation. ADR 0059 now
+   keeps device/browser creation and browser approval default-off before parser/runtime/proof/state
+   work while retaining private review and exact rejection.
 4. **Local data overcollection.** A connector update starts reading prompts, account email,
    repositories, credentials, or broad App Server events. The candidate `0.144.5` adapter has only
    two fixed requests, closes every response object, validates then discards email/plan/summary,

@@ -27,6 +27,14 @@ apply.
   Skill is only a local reducer into the same fixed device command and creates no Web route or
   authority. Do not claim a cleanup schedule, additional agent service ingress, live login, or
   deployment until separate evidence exists.
+- Keep browser proposal create/approve and device proposal POST behind exact
+  `VIBERACING_CAR_PROPOSALS_ENABLED=true`, independently resolved at the account page and three
+  mutation modules. Every alternate or unreadable value must fail before request parsing,
+  runtime/service construction, admission, proof, or database work. The shared browser service must
+  repeat literal-true enforcement before recipe/control/session work. Preserve active and private
+  pending reads plus exact session-bound rejection while disabled; do not conflate this control with
+  public ranking, cleanup, pairing, source creation, or Ingest, and do not claim dynamic/deployed
+  disablement.
 - Browser persistence is limited to locale, theme, and motion. Do not add trackers, analytics,
   fingerprinting, or account state to local storage.
 - Preserve per-navigation nonce CSP and repository-root build isolation. Do not add a CSP origin,

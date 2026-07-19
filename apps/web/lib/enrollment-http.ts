@@ -73,6 +73,7 @@ export interface EnrollmentHttp {
 
 interface EnrollmentHttpDependencies {
   readonly admission: EnrollmentAdmission;
+  readonly carProposalsEnabled?: unknown;
   readonly getRuntime: () => EnrollmentRuntime;
   readonly pairingEnabled?: unknown;
   readonly sourceCreationEnabled?: unknown;
@@ -309,6 +310,10 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
     request: Request,
     action: "approve" | "reject",
   ): Promise<Response> {
+    if (action === "approve" && dependencies.carProposalsEnabled !== true) {
+      discardBody(request);
+      return problem("temporarily_unavailable");
+    }
     const currentRuntime = runtime();
     if (currentRuntime === undefined) {
       discardBody(request);
@@ -344,7 +349,11 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
       try {
         completed =
           action === "approve"
-            ? await currentRuntime.carProposalService.approve(sessionCookie, proposalControl)
+            ? await currentRuntime.carProposalService.approve(
+                sessionCookie,
+                proposalControl,
+                dependencies.carProposalsEnabled,
+              )
             : await currentRuntime.carProposalService.reject(sessionCookie, proposalControl);
       } catch {
         completed = false;
@@ -421,6 +430,10 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
       return carRecipeDecision(request, "approve");
     },
     async carRecipePropose(request: Request): Promise<Response> {
+      if (dependencies.carProposalsEnabled !== true) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
         discardBody(request);
@@ -453,7 +466,11 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         }
         let proposed = false;
         try {
-          proposed = await currentRuntime.carProposalService.propose(sessionCookie, recipe);
+          proposed = await currentRuntime.carProposalService.propose(
+            sessionCookie,
+            recipe,
+            dependencies.carProposalsEnabled,
+          );
         } catch {
           proposed = false;
         }

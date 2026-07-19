@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { AccountExperience } from "@/components/account-experience";
+import { resolveCarProposalsConfig } from "@/lib/car-proposals-config";
 import { readEnrollmentPageAccount } from "@/lib/enrollment-page-session";
 
 export const metadata: Metadata = {
   description: "Manage a protected Vibe Racing Community profile.",
   title: "Account | Vibe Racing",
 };
+
+const carProposalsConfig = resolveCarProposalsConfig();
 
 interface AccountPageProps {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -24,6 +27,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
     <AccountExperience
       actionUnavailable={parameters.error === "unavailable"}
       activeDeviceInventory={activeDeviceInventory}
+      carProposalsEnabled={carProposalsConfig.enabled}
       carRecipeState={carRecipeState}
       handle={session.handle}
       locale={session.locale}

@@ -258,8 +258,12 @@ CarRecipe slice принимает только точный versioned enum-only
 active recipe. Отдельный device-authenticated Web route и фиксированная команда `propose-car` могут
 только создать или заменить тот же pending exact recipe для активного source-bound device; читать,
 approve, reject или activate его они не могут. Cross-profile и non-Web database capabilities
-запрещены. Проверяемый локальный Agent Skill сводит style request к точным recipe flags, требует
-явно переданные shell-safe origin/label, один раз вызывает только эту команду и не получает read или
+запрещены. Browser create/approve и device ingress теперь остаются выключенными, пока их точные
+module не получат `VIBERACING_CAR_PROPOSALS_ENABLED=true`; tracked default равен `false`. В
+выключенном состоянии EN/RU account UI сохраняет active/private preview и точный session-bound
+reject, но не показывает editor/approve, а обе browser service mutation повторяют literal-true
+проверку. Проверяемый локальный Agent Skill сводит style request к точным recipe flags, требует явно
+переданные shell-safe origin/label, один раз вызывает только эту команду и не получает read или
 decision authority. Отдельная Jobs-only capability теперь bounded oldest-first batches физически
 удаляет expired proposal, сохраняя live proposals и active recipes. Отдельный совместимый public
 race contract показывает только текущий approved recipe активного профиля. Третий совместимый public

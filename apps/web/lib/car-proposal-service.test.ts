@@ -85,7 +85,7 @@ describe("car proposal service", () => {
     });
     const { service } = serviceFixture(database);
 
-    await expect(service.propose("opaque-session", recipe)).resolves.toBe(true);
+    await expect(service.propose("opaque-session", recipe, true)).resolves.toBe(true);
     expect(database.proposeCarRecipe).toHaveBeenCalledOnce();
     const proposedInput = vi.mocked(database.proposeCarRecipe).mock.calls[0]?.[0];
     expect(proposedInput).toMatchObject({
@@ -105,7 +105,7 @@ describe("car proposal service", () => {
       { ...recipe, markup: "<svg onload=alert(1)>" },
       { ...recipe, conversation: "make this car faster" },
     ]) {
-      await expect(service.propose("opaque-session", invalid)).resolves.toBe(false);
+      await expect(service.propose("opaque-session", invalid, true)).resolves.toBe(false);
     }
     expect(database.proposeCarRecipe).toHaveBeenCalledOnce();
   });
@@ -153,7 +153,7 @@ describe("car proposal service", () => {
     const control = (await service.read("opaque-session"))?.proposal?.control;
     expect(control).toBeTypeOf("string");
 
-    await expect(service.approve("opaque-session", control ?? "")).resolves.toBe(true);
+    await expect(service.approve("opaque-session", control ?? "", true)).resolves.toBe(true);
     await expect(service.reject("opaque-session", control ?? "")).resolves.toBe(true);
     const approveInput = vi.mocked(database.approveCarRecipe).mock.calls[0]?.[0];
     const rejectInput = vi.mocked(database.rejectCarRecipe).mock.calls[0]?.[0];
@@ -169,12 +169,47 @@ describe("car proposal service", () => {
       sessionId: "00000000-0000-4000-8000-000000000202",
     });
     const other = serviceFixture(database, { readSession: () => otherSession }).service;
-    await expect(other.approve("opaque-session", control ?? "")).resolves.toBe(false);
-    await expect(service.approve("opaque-session", `${control ?? ""}A`)).resolves.toBe(false);
+    await expect(other.approve("opaque-session", control ?? "", true)).resolves.toBe(false);
+    await expect(service.approve("opaque-session", `${control ?? ""}A`, true)).resolves.toBe(false);
     await expect(service.reject("opaque-session", "x".repeat(1025))).resolves.toBe(false);
     expect(database.approveCarRecipe).toHaveBeenCalledOnce();
     expect(database.rejectCarRecipe).toHaveBeenCalledOnce();
   });
+
+  it.each([false, undefined, "true", 1])(
+    "requires literal proposal enablement before creation or approval work for value %#",
+    async (carProposalsEnabled) => {
+      const database = databaseFixture();
+      const readSession = vi.fn(() => session);
+      const { service } = serviceFixture(database, { readSession });
+      const hostileRecipe = new Proxy(
+        {},
+        {
+          ownKeys() {
+            throw new Error("recipe-parser-must-not-run");
+          },
+        },
+      );
+      const hostileControl = new Proxy(
+        {},
+        {
+          get() {
+            throw new Error("proposal-control-must-not-run");
+          },
+        },
+      ) as unknown as string;
+
+      await expect(
+        service.propose("opaque-session", hostileRecipe, carProposalsEnabled),
+      ).resolves.toBe(false);
+      await expect(
+        service.approve("opaque-session", hostileControl, carProposalsEnabled),
+      ).resolves.toBe(false);
+      expect(readSession).not.toHaveBeenCalled();
+      expect(database.proposeCarRecipe).not.toHaveBeenCalled();
+      expect(database.approveCarRecipe).not.toHaveBeenCalled();
+    },
+  );
 
   it("fails closed for expired state, invalid authority, bad identifiers, and dependency failures", async () => {
     const expiredDatabase = databaseFixture({
@@ -202,6 +237,7 @@ describe("car proposal service", () => {
       serviceFixture(database, { readSession: () => undefined }).service.propose(
         "opaque-session",
         recipe,
+        true,
       ),
     ).resolves.toBe(false);
     await expect(
@@ -212,7 +248,7 @@ describe("car proposal service", () => {
     await expect(
       serviceFixture(database, {
         readSession: () => ({ ...session, sessionVerifier: "bad" }),
-      }).service.propose("opaque-session", recipe),
+      }).service.propose("opaque-session", recipe, true),
     ).resolves.toBe(false);
     await expect(
       serviceFixture(database, { now: () => new Date(Number.NaN) }).service.read("opaque-session"),
@@ -221,14 +257,15 @@ describe("car proposal service", () => {
       serviceFixture(database, { randomUuid: () => "not-a-uuid" }).service.propose(
         "opaque-session",
         recipe,
+        true,
       ),
     ).resolves.toBe(false);
 
     vi.mocked(database.proposeCarRecipe).mockRejectedValueOnce(
       new Error("private database detail"),
     );
-    await expect(serviceFixture(database).service.propose("opaque-session", recipe)).resolves.toBe(
-      false,
-    );
+    await expect(
+      serviceFixture(database).service.propose("opaque-session", recipe, true),
+    ).resolves.toBe(false);
   });
 });

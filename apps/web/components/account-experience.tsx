@@ -36,6 +36,7 @@ import { CarRecipePreview } from "./car-recipe-preview";
 interface AccountExperienceProps {
   readonly actionUnavailable?: boolean;
   readonly activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
+  readonly carProposalsEnabled?: boolean;
   readonly carRecipeState?: AccountCarRecipeState | undefined;
   readonly handle: string;
   readonly locale: Locale;
@@ -47,6 +48,7 @@ interface AccountExperienceProps {
 export function AccountExperience({
   actionUnavailable = false,
   activeDeviceInventory,
+  carProposalsEnabled = false,
   carRecipeState,
   handle,
   locale,
@@ -180,6 +182,9 @@ export function AccountExperience({
                   recipe={carRecipeState.active}
                 />
               )}
+              {!carProposalsEnabled ? (
+                <p className="auth-status">{copy.carProposalsUnavailable}</p>
+              ) : null}
               {carRecipeState.proposal === null ? (
                 <p className="auth-status">{copy.carProposalEmpty}</p>
               ) : (
@@ -190,16 +195,18 @@ export function AccountExperience({
                     recipe={carRecipeState.proposal.recipe}
                   />
                   <div className="form-actions">
-                    <form action="/auth/cars/proposals/approve" method="post">
-                      <input
-                        name="proposalControl"
-                        type="hidden"
-                        value={carRecipeState.proposal.control}
-                      />
-                      <button className="primary-action" type="submit">
-                        {copy.carApprove}
-                      </button>
-                    </form>
+                    {carProposalsEnabled ? (
+                      <form action="/auth/cars/proposals/approve" method="post">
+                        <input
+                          name="proposalControl"
+                          type="hidden"
+                          value={carRecipeState.proposal.control}
+                        />
+                        <button className="primary-action" type="submit">
+                          {copy.carApprove}
+                        </button>
+                      </form>
+                    ) : null}
                     <form action="/auth/cars/proposals/reject" method="post">
                       <input
                         name="proposalControl"
@@ -213,103 +220,111 @@ export function AccountExperience({
                   </div>
                 </div>
               )}
-              <form
-                action="/auth/cars/proposals"
-                className="auth-form car-recipe-form"
-                method="post"
-              >
-                <p>{copy.carFormCopy}</p>
-                <input name="schemaVersion" type="hidden" value="1" />
-                <label>
-                  {carCopy.chassis}
-                  <select
-                    defaultValue={carRecipeState.active?.chassis ?? "roadster"}
-                    name="chassis"
-                  >
-                    {carChassis.map((value) => (
-                      <option key={value} value={value}>
-                        {formatCarPart(value, locale)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {carCopy.nose}
-                  <select defaultValue={carRecipeState.active?.nose ?? "classic"} name="nose">
-                    {carNoses.map((value) => (
-                      <option key={value} value={value}>
-                        {formatCarPart(value, locale)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {carCopy.cockpit}
-                  <select defaultValue={carRecipeState.active?.cockpit ?? "canopy"} name="cockpit">
-                    {carCockpits.map((value) => (
-                      <option key={value} value={value}>
-                        {formatCarPart(value, locale)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {carCopy.wing}
-                  <select defaultValue={carRecipeState.active?.wing ?? "none"} name="wing">
-                    {carWings.map((value) => (
-                      <option key={value} value={value}>
-                        {formatCarPart(value, locale)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {carCopy.wheels}
-                  <select defaultValue={carRecipeState.active?.wheels ?? "street"} name="wheels">
-                    {carWheels.map((value) => (
-                      <option key={value} value={value}>
-                        {formatCarPart(value, locale)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {carCopy.palette}
-                  <select defaultValue={carRecipeState.active?.palette ?? "magenta"} name="palette">
-                    {carPalettes.map((value) => (
-                      <option key={value} value={value}>
-                        {formatCarPart(value, locale)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {carCopy.trail}
-                  <select defaultValue={carRecipeState.active?.trail ?? "none"} name="trail">
-                    {carTrails.map((value) => (
-                      <option key={value} value={value}>
-                        {formatCarPart(value, locale)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {carCopy.seed}
-                  <input
-                    defaultValue={carRecipeState.active?.seed ?? 0}
-                    inputMode="numeric"
-                    max={65535}
-                    min={0}
-                    name="seed"
-                    required
-                    step={1}
-                    type="number"
-                  />
-                </label>
-                <button className="secondary-action" type="submit">
-                  {copy.carProposalSubmit}
-                </button>
-              </form>
+              {carProposalsEnabled ? (
+                <form
+                  action="/auth/cars/proposals"
+                  className="auth-form car-recipe-form"
+                  method="post"
+                >
+                  <p>{copy.carFormCopy}</p>
+                  <input name="schemaVersion" type="hidden" value="1" />
+                  <label>
+                    {carCopy.chassis}
+                    <select
+                      defaultValue={carRecipeState.active?.chassis ?? "roadster"}
+                      name="chassis"
+                    >
+                      {carChassis.map((value) => (
+                        <option key={value} value={value}>
+                          {formatCarPart(value, locale)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {carCopy.nose}
+                    <select defaultValue={carRecipeState.active?.nose ?? "classic"} name="nose">
+                      {carNoses.map((value) => (
+                        <option key={value} value={value}>
+                          {formatCarPart(value, locale)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {carCopy.cockpit}
+                    <select
+                      defaultValue={carRecipeState.active?.cockpit ?? "canopy"}
+                      name="cockpit"
+                    >
+                      {carCockpits.map((value) => (
+                        <option key={value} value={value}>
+                          {formatCarPart(value, locale)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {carCopy.wing}
+                    <select defaultValue={carRecipeState.active?.wing ?? "none"} name="wing">
+                      {carWings.map((value) => (
+                        <option key={value} value={value}>
+                          {formatCarPart(value, locale)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {carCopy.wheels}
+                    <select defaultValue={carRecipeState.active?.wheels ?? "street"} name="wheels">
+                      {carWheels.map((value) => (
+                        <option key={value} value={value}>
+                          {formatCarPart(value, locale)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {carCopy.palette}
+                    <select
+                      defaultValue={carRecipeState.active?.palette ?? "magenta"}
+                      name="palette"
+                    >
+                      {carPalettes.map((value) => (
+                        <option key={value} value={value}>
+                          {formatCarPart(value, locale)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {carCopy.trail}
+                    <select defaultValue={carRecipeState.active?.trail ?? "none"} name="trail">
+                      {carTrails.map((value) => (
+                        <option key={value} value={value}>
+                          {formatCarPart(value, locale)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {carCopy.seed}
+                    <input
+                      defaultValue={carRecipeState.active?.seed ?? 0}
+                      inputMode="numeric"
+                      max={65535}
+                      min={0}
+                      name="seed"
+                      required
+                      step={1}
+                      type="number"
+                    />
+                  </label>
+                  <button className="secondary-action" type="submit">
+                    {copy.carProposalSubmit}
+                  </button>
+                </form>
+              ) : null}
             </>
           )}
         </section>

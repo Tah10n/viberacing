@@ -49,29 +49,31 @@ decisions before parsing, runtime/service construction, admission acquisition, p
 configuration, or database work. ADR 0058 separately keeps new-source selection and both approval
 service steps default-off while active existing-source pairing remains available. Exact source
 choice is sealed and v2-digest-bound so a restarted disabled verifier also rejects in-flight
-new-source completion. ADR 0031 adds a separate Windows candidate command that can construct the
-otherwise inaccessible launch/context/key capabilities only after exact artifact and active-record
-review, then performs one fixed signed upload. ADR 0038 adds a third fixed command that starts no
-Codex process and signs one exact enum-only CarRecipe for the dedicated Web/Auth proposal route. ADR
-0041 adds a fourth command that deletes only the exact native origin/label record without loading it
-or crossing the connector-to-edge boundary. ADR 0052 adds a fifth explicit `check-codex` command
-that performs only the same exact candidate admission without credential-store, process, account,
-persistence, or network access; later sync repeats admission. ADR 0053 adds a secretless no-upload
-Windows release-profile copy/removal smoke for only the repository-built connector; it adds no
-connector data flow or runtime authority. ADR 0054 adds an opt-in stdout preview to the same
-candidate check containing only fixed versions/support state and one coarse Operational admission
-class. It adds no filesystem sink, support transport, reusable authority, or connector-to-edge flow.
-There is still no hosted Windows result, supported version, cross-platform sync result, real package
-lifecycle, scheduling, packaging, or released connector. A local Ingest kernel now verifies the
-bounded exact-body origin/device request, while the separate adapter maps origin replay, device
-lookup, and submission through fixed calls. PostgreSQL now proves atomic origin replay consumption
-and bounded cleanup. A transport-free application now composes those exact local capabilities and
-validates only closed acknowledgement/problem decisions. A bounded local Fastify factory preserves
-exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes only revalidated
-contracts. A separate local host now binds that exact composition under closed loopback or declared
-Railway-edge configuration and bounded process shutdown. There is no edge/live-database/deployment
-integration. No trusted external TLS route, deployment login/certificate, edge signer/direct-origin
-policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+new-source completion. ADR 0059 separately keeps browser proposal create/approve and device proposal
+ingress default-off while private reads and exact session-bound rejection remain available. ADR 0031
+adds a separate Windows candidate command that can construct the otherwise inaccessible
+launch/context/key capabilities only after exact artifact and active-record review, then performs
+one fixed signed upload. ADR 0038 adds a third fixed command that starts no Codex process and signs
+one exact enum-only CarRecipe for the dedicated Web/Auth proposal route. ADR 0041 adds a fourth
+command that deletes only the exact native origin/label record without loading it or crossing the
+connector-to-edge boundary. ADR 0052 adds a fifth explicit `check-codex` command that performs only
+the same exact candidate admission without credential-store, process, account, persistence, or
+network access; later sync repeats admission. ADR 0053 adds a secretless no-upload Windows
+release-profile copy/removal smoke for only the repository-built connector; it adds no connector
+data flow or runtime authority. ADR 0054 adds an opt-in stdout preview to the same candidate check
+containing only fixed versions/support state and one coarse Operational admission class. It adds no
+filesystem sink, support transport, reusable authority, or connector-to-edge flow. There is still no
+hosted Windows result, supported version, cross-platform sync result, real package lifecycle,
+scheduling, packaging, or released connector. A local Ingest kernel now verifies the bounded
+exact-body origin/device request, while the separate adapter maps origin replay, device lookup, and
+submission through fixed calls. PostgreSQL now proves atomic origin replay consumption and bounded
+cleanup. A transport-free application now composes those exact local capabilities and validates only
+closed acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. A
+separate local host now binds that exact composition under closed loopback or declared Railway-edge
+configuration and bounded process shutdown. There is no edge/live-database/deployment integration.
+No trusted external TLS route, deployment login/certificate, edge signer/direct-origin policy, or
+live route/Jobs evidence is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -625,6 +627,7 @@ sequenceDiagram
   participant Validator as CarRecipeV1 validator
   participant DB as PostgreSQL API
 
+  Note over Browser,Web: Create and approve require exact VIBERACING_CAR_PROPOSALS_ENABLED=true
   Browser->>Web: POST exact same-origin recipe form
   Web->>Validator: Validate closed version 1 object
   Validator-->>Web: Frozen allowlisted recipe
@@ -632,6 +635,7 @@ sequenceDiagram
   DB-->>Web: Proposed or generic failure
   Agent->>Agent: Reduce intent to exact enums and seed
   Agent->>Connector: One fixed propose-car argument vector
+  Note over Connector,Web: Device proposal POST requires the same exact enable decision
   Connector->>Web: POST exact recipe plus device signature
   Web->>Validator: Validate exact body and signature
   Web->>DB: propose(active device proof, nonce digest, server proposal ID, recipe)
@@ -652,6 +656,13 @@ do not enter HTML. Approval atomically inserts or replaces the active recipe and
 row; rejection deletes only the matching pending row. A device cannot read that state or invoke
 either decision. Ingest, Jobs, Admin, direct-table, cross-profile, wrong-proof, stale, inactive, and
 replay paths are denied. Profile deletion cascades both recipe rows.
+
+ADR 0059 makes the account page, browser create, browser approve, and device proposal POST resolve
+exact `VIBERACING_CAR_PROPOSALS_ENABLED=true` at module evaluation. Disabled mutation cancels an
+available body and returns generic no-store 503 before parsing, runtime/service construction,
+admission, proof, or database work; browser service create/approve repeats the literal decision
+before recipe/control/session work. The account still renders active/private state and the exact
+encrypted reject action. This local gate is neither dynamic nor deployed.
 
 The local Agent Skill now provides bounded conversational orchestration without forwarding or
 retaining the request in Vibe Racing. It requires explicit shell-safe origin/label values, never

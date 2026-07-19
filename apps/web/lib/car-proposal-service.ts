@@ -30,8 +30,12 @@ export interface AccountCarRecipeState {
 }
 
 export interface CarProposalService {
-  approve(sessionCookie: string, proposalControl: string): Promise<boolean>;
-  propose(sessionCookie: string, value: unknown): Promise<boolean>;
+  approve(
+    sessionCookie: string,
+    proposalControl: string,
+    carProposalsEnabled: unknown,
+  ): Promise<boolean>;
+  propose(sessionCookie: string, value: unknown, carProposalsEnabled: unknown): Promise<boolean>;
   read(sessionCookie: string): Promise<AccountCarRecipeState | undefined>;
   reject(sessionCookie: string, proposalControl: string): Promise<boolean>;
 }
@@ -206,10 +210,23 @@ export function createCarProposalService(
   }
 
   return Object.freeze({
-    approve(sessionCookie: string, encodedControl: string): Promise<boolean> {
-      return decide(sessionCookie, encodedControl, "approve");
+    approve(
+      sessionCookie: string,
+      encodedControl: string,
+      carProposalsEnabled: unknown,
+    ): Promise<boolean> {
+      return carProposalsEnabled === true
+        ? decide(sessionCookie, encodedControl, "approve")
+        : Promise.resolve(false);
     },
-    async propose(sessionCookie: string, value: unknown): Promise<boolean> {
+    async propose(
+      sessionCookie: string,
+      value: unknown,
+      carProposalsEnabled: unknown,
+    ): Promise<boolean> {
+      if (carProposalsEnabled !== true) {
+        return false;
+      }
       const validated = validateCarRecipeV1(value);
       if (!validated.ok) {
         return false;

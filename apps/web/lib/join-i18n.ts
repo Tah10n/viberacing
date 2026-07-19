@@ -29,6 +29,8 @@ const english = {
   carProposalReject: "Reject proposal",
   carProposalSubmit: "Create proposal",
   carProposalTitle: "Car proposal",
+  carProposalsUnavailable:
+    "Creating or approving car proposals is temporarily unavailable. Any pending proposal remains private and can still be rejected.",
   carRecipeUnavailable: "Car recipe details are temporarily unavailable.",
   continueGithub: "Continue with GitHub",
   currentPasskey: "Current session",
@@ -173,6 +175,8 @@ const russian: Record<JoinTranslationKey, string> = {
   carProposalReject: "Отклонить предложение",
   carProposalSubmit: "Создать предложение",
   carProposalTitle: "Предложение машины",
+  carProposalsUnavailable:
+    "Создание и одобрение предложений машины временно недоступны. Ожидающее предложение остаётся приватным, и его по-прежнему можно отклонить.",
   carRecipeUnavailable: "Сведения о рецепте машины временно недоступны.",
   continueGithub: "Продолжить через GitHub",
   currentPasskey: "Текущая сессия",

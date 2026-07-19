@@ -205,6 +205,14 @@ flowchart LR
   verification module also rejects an in-flight new-source challenge. The tracked example is false.
   This proves no deployed route denial, worker reload/drain, dynamic switch, operator policy, or
   source-creation rate limit.
+- CarRecipe proposal gate: the account page, browser proposal creation, browser approval, and device
+  proposal POST each resolve exact `VIBERACING_CAR_PROPOSALS_ENABLED=true` once at module
+  evaluation. Every alternate or unreadable value omits editor/approve UI and stops mutation before
+  request parsing, runtime/service construction, admission, proof, or database work. Browser service
+  create/approve repeats literal-true enforcement before recipe/control/session work. Active and
+  private pending previews plus exact session-bound rejection remain available. The tracked example
+  is false. This proves no deployed route denial, worker reload/drain, dynamic switch, operator
+  policy, distributed rate limit, or cleanup schedule.
 - Public ranking reads: all three local score/race/status GET modules resolve exact
   `VIBERACING_PUBLIC_RANKING_ENABLED=true` once at module evaluation. Every other or unreadable
   value returns the existing generic 503 before query/header parsing, admission acquisition, or
@@ -803,9 +811,10 @@ cleanup, redaction, or reset has a scheduler or deployed cadence.
 - Operators cannot retrieve Codex prompts or account email because those values are never collected.
 - Kill switches independently disable enrollment, pairing, source creation, ingestion, proposals,
   and public ranking. Local default-off gates now cover Ingest startup, the three public-ranking
-  route modules, the four pairing route modules, and new-source creation at the page plus both
-  approval service steps; deployed restart/route/cache-denial/runbook behavior and every other
-  capability switch remain separate gates.
+  route modules, the four pairing route modules, new-source creation at the page plus both approval
+  service steps, and CarRecipe proposal creation/approval across browser and device ingress;
+  deployed restart/route/cache-denial/runbook behavior and the independent enrollment switch remain
+  separate gates.
 - Operational logs are structured, redacted, retention-bounded, and avoid raw token values.
 - Alerts cover auth anomalies, pairing storms, source growth, signature and replay failures, ingest
   rejection, season jobs, deletion failures, database saturation, release events, and origin-proof
@@ -1109,8 +1118,9 @@ measurements exist.
   finalized-season immutability.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
-  new-source creation while preserving active existing-source pairing; deployed operation and the
-  independent switches for every other capability remain open.
+  new-source creation while preserving active existing-source pairing, plus CarRecipe proposal
+  creation/approval while preserving private read/reject; deployed operation and the independent
+  enrollment switch remain open.
 - Gate: source multiplication cannot exceed the profile score cap or gain privilege, and
   infrastructure limits survive load tests.
 
@@ -1122,16 +1132,17 @@ measurements exist.
   Web/PostgreSQL ingress and fixed native-store `propose-car` command now submit only that exact
   private recipe without activation authority. A checked local Agent Skill now reduces existing
   style intent to the canonical fields, validates explicit shell-safe origin/label values, invokes
-  that command once, and never forwards conversation text or gains decision authority. Cleanup
-  scheduling and deployed retention evidence, distributed edge policy, live database result,
-  monitoring, capacity evidence, packaging, release, and deployment remain gates. A separate
-  explicit `check-codex` command now performs only point-in-time exact Windows candidate admission
-  without credential-store, process, account, persistence, or network access. Its explicit
-  diagnostic preview now adds one closed local failure-preserving and support-denying summary with
-  no output file or transport; automated support export and broader release diagnostics remain open.
-  A separate locked Windows release-profile portable copy/removal smoke is implemented locally and
-  declared in secretless no-upload CI, but its hosted result and actual package
-  install/upgrade/revoke/uninstall evidence remain open.
+  that command once, and never forwards conversation text or gains decision authority. Exact
+  default-off module decisions now independently close browser creation/approval and device ingress
+  while preserving private read/reject. Cleanup scheduling and deployed retention evidence,
+  distributed edge policy, live database result, monitoring, capacity evidence, packaging, release,
+  and deployment remain gates. A separate explicit `check-codex` command now performs only
+  point-in-time exact Windows candidate admission without credential-store, process, account,
+  persistence, or network access. Its explicit diagnostic preview now adds one closed local
+  failure-preserving and support-denying summary with no output file or transport; automated support
+  export and broader release diagnostics remain open. A separate locked Windows release-profile
+  portable copy/removal smoke is implemented locally and declared in secretless no-upload CI, but
+  its hosted result and actual package install/upgrade/revoke/uninstall evidence remain open.
 - Add versioned CarRecipe, bounded proposal API, browser preview and approval, theme rendering,
   asset provenance, and snapshot tests.
 - Package the fixed-command end-user connector workflow only after the CLI is stable.

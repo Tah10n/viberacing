@@ -67,6 +67,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0056](0056-fail-closed-public-ranking-route-enable-gate.md)    | Fail-closed public-ranking route enable gate                        | Accepted; local gate; deployed operation pending       |
 | [0057](0057-fail-closed-pairing-route-enable-gate.md)           | Fail-closed pairing route enable gate                               | Accepted; local gate; deployed operation pending       |
 | [0058](0058-fail-closed-source-creation-enable-gate.md)         | Fail-closed source-creation enable gate                             | Accepted; local gate; deployed operation pending       |
+| [0059](0059-fail-closed-car-proposal-enable-gate.md)            | Fail-closed CarRecipe proposal enable gate                          | Accepted; local gate; deployed operation pending       |
 
 ## Lifecycle
 

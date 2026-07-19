@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fifty-eight accepted ADRs.
+  fail-closed compatibility policy and matrix, and fifty-nine accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -293,6 +293,14 @@ Versioning where its guarantees are applicable.
   new-source approval also fails closed after a restarted module resolves disabled. The tracked
   example remains false; no dynamic/deployed switch, rate limit, cleanup, or worker-drain result is
   claimed.
+- An exact default-off CarRecipe proposal gate across the account page, browser create and approve,
+  and source-bound device proposal ingress. Only `VIBERACING_CAR_PROPOSALS_ENABLED=true` permits
+  creation, replacement, or activation. Disabled browser/device POST stops before request parsing,
+  runtime/service construction, admission, proof, or database work; the browser proposal service
+  repeats literal-true enforcement before recipe/control/session work. EN/RU account UI preserves
+  active and private pending previews plus exact session-bound rejection while omitting editor and
+  approval controls. The tracked example remains false; no dynamic/deployed switch, worker drain,
+  monitoring, distributed rate limit, or cleanup schedule is claimed.
 - An exact local-only `forget-local` connector command that derives one canonical origin/label
   native-store account and invokes deletion without loading the credential, constructing a signer,
   starting Codex, or contacting Vibe Racing. Deleted and absent entries share one identifier-free

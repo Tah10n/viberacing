@@ -1,10 +1,15 @@
+import { resolveCarProposalsConfig } from "@/lib/car-proposals-config";
 import { createConnectorCarProposalHttp } from "@/lib/connector-car-proposal-http";
 import { getConnectorCarProposalService } from "@/lib/connector-car-proposal-service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const http = createConnectorCarProposalHttp({ getService: getConnectorCarProposalService });
+const carProposalsConfig = resolveCarProposalsConfig();
+const http = createConnectorCarProposalHttp({
+  carProposalsEnabled: carProposalsConfig.enabled,
+  getService: getConnectorCarProposalService,
+});
 
 export function DELETE(request: Request): Response {
   return http.methodNotAllowed(request);

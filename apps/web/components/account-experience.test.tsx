@@ -9,6 +9,7 @@ describe("AccountExperience CarRecipe controls", () => {
     document.body.innerHTML = renderToStaticMarkup(
       createElement(AccountExperience, {
         activeDeviceInventory: [],
+        carProposalsEnabled: true,
         carRecipeState: {
           active: null,
           proposal: {
@@ -55,6 +56,50 @@ describe("AccountExperience CarRecipe controls", () => {
     expect(form?.querySelector('input[name="seed"]')?.getAttribute("max")).toBe("65535");
     expect(form?.querySelector('input[name="schemaVersion"]')?.getAttribute("value")).toBe("1");
     expect(document.body.textContent).not.toContain("00000000-0000-4000-8000-000000000701");
+  });
+
+  it("keeps private review and rejection available while creation and approval are disabled", () => {
+    const carRecipeState = {
+      active: null,
+      proposal: {
+        control: "opaque-session-bound-proposal-control",
+        recipe: {
+          schemaVersion: 1 as const,
+          chassis: "rally" as const,
+          nose: "scoop" as const,
+          cockpit: "rally" as const,
+          wing: "low" as const,
+          wheels: "all-terrain" as const,
+          palette: "sunburst" as const,
+          trail: "spark" as const,
+          seed: 42,
+        },
+      },
+    };
+    for (const [locale, unavailable] of [
+      ["en", "Creating or approving car proposals is temporarily unavailable"],
+      ["ru", "Создание и одобрение предложений машины временно недоступны"],
+    ] as const) {
+      const markup = renderToStaticMarkup(
+        createElement(AccountExperience, {
+          activeDeviceInventory: [],
+          carProposalsEnabled: false,
+          carRecipeState,
+          handle: "pixel_driver",
+          locale,
+          passkeys: [],
+          score: null,
+          visibility: "public",
+        }),
+      );
+
+      expect(markup).toContain(unavailable);
+      expect(markup).not.toContain('action="/auth/cars/proposals"');
+      expect(markup).not.toContain('action="/auth/cars/proposals/approve"');
+      expect(markup).toContain('action="/auth/cars/proposals/reject"');
+      expect(markup).toContain("opaque-session-bound-proposal-control");
+      expect(markup.match(/car-preview-canvas/g)).toHaveLength(3);
+    }
   });
 
   it("keeps the editor unavailable when the protected state is missing", () => {

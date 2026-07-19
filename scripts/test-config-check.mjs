@@ -32,6 +32,7 @@ VIBERACING_INGEST_DATABASE_PASSWORD=replace-with-local-ingest-password
 VIBERACING_INGEST_DATABASE_TLS_MODE=disable
 VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID=edge_local
 VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL=replace-with-random-32-byte-base64url-key
+VIBERACING_CAR_PROPOSALS_ENABLED=false
 VIBERACING_PAIRING_ENABLED=false
 VIBERACING_PUBLIC_RANKING_ENABLED=false
 VIBERACING_SOURCE_CREATION_ENABLED=false
@@ -49,6 +50,15 @@ VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL=replace-with-random-32-byte-ba
 VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL=replace-with-distinct-random-32-byte-base64url-key`;
 
 assert.deepEqual(validateEnvExampleText(goodEnvExample), []);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_CAR_PROPOSALS_ENABLED=false",
+      "VIBERACING_CAR_PROPOSALS_ENABLED=true",
+    ),
+  ).join("\n"),
+  /must retain the reviewed public-safe example value/,
+);
 assert.match(
   validateEnvExampleText(
     goodEnvExample.replace("VIBERACING_INGEST_ENABLED=false", "VIBERACING_INGEST_ENABLED=true"),
@@ -683,4 +693,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (45 cases).");
+console.log("Configuration checker tests passed (46 cases).");

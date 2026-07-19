@@ -204,7 +204,9 @@ material availability cost.
   operation remain unimplemented. ADR 0038 separately binds an exact enum recipe body, fresh
   nonce/time, and device ID under another signature domain. Web performs dummy-key work for unknown
   devices, and revision 0028 rechecks active profile/source/device state before replacing only the
-  pending recipe; browser approval remains mandatory.
+  pending recipe; browser approval remains mandatory. ADR 0059 keeps that device POST and browser
+  creation/approval default-off; disabled device requests stop before signature/service/database
+  work, while private browser review and exact rejection remain available.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
   using the same unlocked local identity. Local deletion cannot erase copied key material and does
   not stop it until the registered server device is separately revoked.
@@ -467,7 +469,9 @@ material availability cost.
   connector command share one exact body/signature vector, reject prompt/free-text/unknown fields,
   stale or replayed proof, inactive authority, and can replace only pending state. The local Agent
   Skill reduces styling intent to the canonical enums, rejects unsafe shell input, calls only that
-  command once, and has eleven fail-closed checker mutations. It never approves or activates.
+  command once, and has eleven fail-closed checker mutations. It never approves or activates. ADR
+  0059 additionally requires exact enablement for both proposal origins and browser approval before
+  request or state work; disabled EN/RU UI preserves private review/reject and omits editor/approve.
 - **Detection:** Schema rejection metrics, generated-asset drift, provenance and license review;
   operational metrics and alerting are still pending.
 - **Recovery:** Reject or disable the recipe/version, restore a safe default, and remove invalid
@@ -750,7 +754,10 @@ material availability cost.
   acquisition, protected configuration, or database work. New-source growth separately requires
   exact `VIBERACING_SOURCE_CREATION_ENABLED=true`; false UI and repeated service checks preserve
   existing-source pairing while preventing new-source challenge and completion work. This is a local
-  gate, not a distributed creation rate limit. Once pairing is enabled, the transport-free
+  gate, not a distributed creation rate limit. CarRecipe proposal creation and approval separately
+  require exact `VIBERACING_CAR_PROPOSALS_ENABLED=true`; disabled browser/device mutation stops
+  before parsing, admission, proof, or database work while private read/reject remains. This is also
+  a local gate, not a distributed proposal rate limit. Once pairing is enabled, the transport-free
   pairing-start application bounds labels, metadata, keys, entropy, and HMAC work, admits four
   unsettled attempts without a queue, holds each lease through a 250-millisecond floor, and makes no
   database call for malformed input. Revision 0022 now adds one Web-only fixed-storage admission

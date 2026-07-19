@@ -270,6 +270,17 @@ export, cache key, or network destination is added. A future dynamic control, op
 monitoring sink, or deployment audit still needs a separate purpose, access policy, and retention
 decision.
 
+ADR 0059 adds the non-personal `VIBERACING_CAR_PROPOSALS_ENABLED` Operational module-load value. The
+server-only resolver inspects only that own string field and retains one frozen boolean in the
+account page, browser create/approve modules, and device proposal module. The account page
+serializes only the boolean to its same-origin server-rendered tree so EN/RU controls can omit
+mutation while preserving active/private state and exact rejection; it is not stored in browser
+persistence or sent to another origin. The browser/device HTTP boundaries use the boolean only for
+an in-process admission decision. No recipe, proposal, account, session, source, device, cookie,
+database row, metric, trace, audit event, export, cache key, or network destination is added or
+extended. A future dynamic control, operator event, monitoring sink, or deployment audit still needs
+a separate purpose, access policy, and retention decision.
+
 ADR 0021 adds no collected or retained field. The connector library transiently validates the stable
 initialization response's Codex home, platform family, operating-system name, and user agent under
 fixed string/frame bounds, then discards all four values before returning. ADR 0022 then validates

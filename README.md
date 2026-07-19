@@ -253,17 +253,21 @@ atomically replaces the active recipe. A separate device-authenticated Web route
 source-bound device; they cannot read, approve, reject, or activate it. A checked local Agent Skill
 reduces a styling request to the exact recipe flags, requires explicit shell-safe origin/label
 values, invokes only that command once, and receives no read or decision authority. Cross-profile
-and non-Web database capabilities remain denied. A separate Jobs-only command now deletes bounded
-oldest-first batches of expired private proposals while preserving live and active recipes. A
-separate compatible public race contract now projects only the current approved recipe for an active
-profile; proposal identity, state, and timestamps stay private and the stable score response remains
-unchanged. Cleanup scheduling, live credentials, released connector packaging, edge controls, and
-deployment remain pending. A database-only Community ingest capability now exposes minimal
-active-device verification material and accepts bounded source-bound snapshots with exact retry,
-nonce replay, monotonic source/date, quarantine, and lifecycle-race enforcement. A Jobs-only
-procedure deletes independently bounded batches of expired origin nonces, device nonces, and raw
-snapshots while preserving current source/day values. A separate Jobs-only procedure deletes bounded
-expired non-activated pairing transactions plus their still-pending keys, while preserving live and
+and non-Web database capabilities remain denied. Browser creation/approval and device ingress now
+remain unavailable unless their exact modules resolve `VIBERACING_CAR_PROPOSALS_ENABLED=true`; the
+tracked default is false. Disabled EN/RU account UI keeps active/private previews and exact
+session-bound rejection while omitting editor/approve, and both browser service mutations repeat
+literal-true enforcement. A separate Jobs-only command now deletes bounded oldest-first batches of
+expired private proposals while preserving live and active recipes. A separate compatible public
+race contract now projects only the current approved recipe for an active profile; proposal
+identity, state, and timestamps stay private and the stable score response remains unchanged.
+Cleanup scheduling, live credentials, released connector packaging, edge controls, and deployment
+remain pending. A database-only Community ingest capability now exposes minimal active-device
+verification material and accepts bounded source-bound snapshots with exact retry, nonce replay,
+monotonic source/date, quarantine, and lifecycle-race enforcement. A Jobs-only procedure deletes
+independently bounded batches of expired origin nonces, device nonces, and raw snapshots while
+preserving current source/day values. A separate Jobs-only procedure deletes bounded expired
+non-activated pairing transactions plus their still-pending keys, while preserving live and
 activated bindings. A third cleanup procedure independently deletes expired authentication
 challenges and restricted recovery authorities plus an exact still-present used code whose verifier
 was already scrubbed. It preserves live ceremonies, unused recovery codes, passkeys, and audit

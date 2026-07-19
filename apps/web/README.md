@@ -115,6 +115,7 @@ reload an existing worker.
 | `lib/pairing-possession-verifier.ts`                                             | Strictly verifies one approved pending-device proof                      | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence     |
 | `lib/pairing-config.ts`                                                          | Resolves one module-local default-off pairing decision                   | Exact own string value; no request/runtime/key/database field or reflection         |
 | `lib/source-creation-config.ts`                                                  | Resolves one module-local default-off new-source decision                | Exact own string value; no request/session/source/database field or reflection      |
+| `lib/car-proposals-config.ts`                                                    | Resolves one module-local default-off proposal mutation decision         | Exact own string value; no session/recipe/device/database field or reflection       |
 | `lib/pairing-poll-verifier.ts`                                                   | Derives fixed poll-verifier candidates under protected keys              | Primary plus optional secondary; no raw key container; close clears key copies      |
 | `lib/pairing-user-code-verifier.ts`                                              | Derives fixed human-code verifier candidates under separate keys         | Primary plus optional secondary; cross-purpose key reuse is rejected                |
 | `lib/pairing-start-material.ts`                                                  | Generates bounded pending-transaction material                           | Server IDs, 32-byte token/challenge, 60-bit code, and nine-minute expiry            |
@@ -330,6 +331,15 @@ recipe and at most one pending recipe; it seals the pending ID, current session 
 expiry in a purpose-separated encrypted control rather than putting the raw proposal ID in HTML.
 Explicit approve/reject forms consume that control. PostgreSQL atomically activates and removes the
 exact proposal or removes only the rejected proposal.
+
+The account page, browser create route, browser approve route, and device proposal route each
+resolve exact `VIBERACING_CAR_PROPOSALS_ENABLED=true` once at module evaluation. Every alternate or
+unreadable value cancels mutation before request parsing, runtime/service construction, admission,
+proof, or database work; browser service creation and approval repeat literal-true enforcement
+before recipe/control/session work. The tracked example is false. Disabled EN/RU account UI still
+shows active and private pending recipes, omits the editor and approval form, and preserves only the
+exact encrypted session-bound reject action. This is a local module-load control, not a dynamic or
+deployed worker/route switch.
 
 Both active and pending recipes are server-rendered as semantic code-native indexed pixels in Neon
 Night, Classic Grand Prix, and Cyber Rally. The public animated race uses the same deterministic

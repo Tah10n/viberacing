@@ -383,6 +383,15 @@ exactly bound. Existing-source pairing still requires the pairing flag but not t
 Changing either environment value does not reload an existing worker, stop an old enabled instance,
 or prove deployed route denial.
 
+CarRecipe proposal creation and approval separately remain unavailable unless the ignored local
+environment sets exact `VIBERACING_CAR_PROPOSALS_ENABLED=true` before the account page, browser
+create/approve modules, and device proposal module load. The tracked example stays false. Disabled
+EN/RU account UI keeps active and private pending previews plus the exact encrypted session-bound
+reject form, but omits editor and approve. Browser/device mutation returns generic no-store 503
+before parsing, runtime/service construction, admission, proof, or database work; the browser
+service repeats the decision before recipe/control/session work. Changing the value does not reload
+an existing worker, stop an old enabled instance, or prove deployed route denial.
+
 The server-only score, enrollment, and local pairing adapters use only `VIBERACING_WEB_DATABASE_*`.
 Their tracked user/password are deliberately non-working placeholders and are checked against
 accidental reuse of the `DATABASE_*` compose owner. Local integration requires a separately

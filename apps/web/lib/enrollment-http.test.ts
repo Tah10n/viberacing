@@ -978,9 +978,53 @@ describe("enrollment HTTP boundary", () => {
     expect(service.completePairingApproval).toHaveBeenCalledOnce();
   });
 
+  it.each([false, undefined, "true", 1])(
+    "fails closed before CarRecipe proposal runtime, parsing, or admission for enable value %#",
+    async (carProposalsEnabled) => {
+      const getRuntime = vi.fn(() => {
+        throw new Error("runtime-must-not-run");
+      });
+      const tryAcquire = vi.fn(() => {
+        throw new Error("admission-must-not-run");
+      });
+      const http = createEnrollmentHttp({
+        admission: Object.freeze({ tryAcquire }),
+        carProposalsEnabled,
+        getRuntime,
+      });
+      const makeHostileRequest = () =>
+        new Proxy(new Request(`${origin}/auth/cars/proposals`, { method: "POST" }), {
+          get(_target, key) {
+            if (key === "body") {
+              return null;
+            }
+            throw new Error(`request-field-must-not-run:${String(key)}`);
+          },
+        });
+
+      for (const invoke of [
+        (request: Request) => http.carRecipePropose(request),
+        (request: Request) => http.carRecipeApprove(request),
+      ]) {
+        const response = await invoke(makeHostileRequest());
+        expect(response.status).toBe(503);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+        expect(response.headers.has("access-control-allow-origin")).toBe(false);
+        await expect(response.json()).resolves.toMatchObject({
+          errorCode: "temporarily_unavailable",
+          status: 503,
+        });
+      }
+      expect(getRuntime).not.toHaveBeenCalled();
+      expect(tryAcquire).not.toHaveBeenCalled();
+    },
+  );
+
   it("accepts only one exact bounded CarRecipe proposal form under the session cookie", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
+      carProposalsEnabled: true,
       getRuntime: () => runtime,
     });
     const values = {
@@ -1005,17 +1049,21 @@ describe("enrollment HTTP boundary", () => {
     expect(proposed.status).toBe(303);
     expect(proposed.headers.get("location")).toBe(`${origin}/account#car-proposal`);
     expect(proposed.headers.get("cache-control")).toBe("no-store");
-    expect(runtime.carProposalService.propose).toHaveBeenCalledWith("opaque-session", {
-      schemaVersion: 1,
-      chassis: "rally",
-      nose: "scoop",
-      cockpit: "rally",
-      wing: "low",
-      wheels: "all-terrain",
-      palette: "sunburst",
-      trail: "spark",
-      seed: 42,
-    });
+    expect(runtime.carProposalService.propose).toHaveBeenCalledWith(
+      "opaque-session",
+      {
+        schemaVersion: 1,
+        chassis: "rally",
+        nose: "scoop",
+        cockpit: "rally",
+        wing: "low",
+        wheels: "all-terrain",
+        palette: "sunburst",
+        trail: "spark",
+        seed: 42,
+      },
+      true,
+    );
 
     for (const body of [
       `${new URLSearchParams(values).toString()}&seed=7`,
@@ -1092,6 +1140,7 @@ describe("enrollment HTTP boundary", () => {
   it("approves or rejects only one bounded opaque CarRecipe control", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
+      carProposalsEnabled: true,
       getRuntime: () => runtime,
     });
     const body = new URLSearchParams({ proposalControl: "opaque-proposal-control" }).toString();
@@ -1103,13 +1152,29 @@ describe("enrollment HTTP boundary", () => {
     const rejected = await http.carRecipeReject(
       post("/auth/cars/proposals/reject", body, "application/x-www-form-urlencoded", cookie),
     );
+    const disabledMutations = createEnrollmentHttp({
+      admission: createEnrollmentAdmission(),
+      carProposalsEnabled: false,
+      getRuntime: () => runtime,
+    });
+    const rejectedWhileDisabled = await disabledMutations.carRecipeReject(
+      post("/auth/cars/proposals/reject", body, "application/x-www-form-urlencoded", cookie),
+    );
     expect(approved.headers.get("location")).toBe(`${origin}/account`);
     expect(rejected.headers.get("location")).toBe(`${origin}/account`);
+    expect(rejectedWhileDisabled.headers.get("location")).toBe(`${origin}/account`);
     expect(runtime.carProposalService.approve).toHaveBeenCalledWith(
       "opaque-session",
       "opaque-proposal-control",
+      true,
     );
-    expect(runtime.carProposalService.reject).toHaveBeenCalledWith(
+    expect(runtime.carProposalService.reject).toHaveBeenNthCalledWith(
+      1,
+      "opaque-session",
+      "opaque-proposal-control",
+    );
+    expect(runtime.carProposalService.reject).toHaveBeenNthCalledWith(
+      2,
       "opaque-session",
       "opaque-proposal-control",
     );
@@ -1155,7 +1220,7 @@ describe("enrollment HTTP boundary", () => {
     );
     held?.release();
     expect(busy.headers.get("location")).toBe(`${origin}/account?error=unavailable`);
-    expect(runtime.carProposalService.reject).toHaveBeenCalledOnce();
+    expect(runtime.carProposalService.reject).toHaveBeenCalledTimes(2);
   });
 
   it("clears every browser credential on same-origin logout even when admission is busy", async () => {

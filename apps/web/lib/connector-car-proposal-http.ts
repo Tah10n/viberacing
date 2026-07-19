@@ -39,6 +39,7 @@ const allowedViberacingHeaders = new Set<string>(Object.values(deviceHeaders));
 
 export interface ConnectorCarProposalHttpDependencies {
   readonly admission?: ConnectorCarProposalAdmission;
+  readonly carProposalsEnabled?: unknown;
   readonly getService: () => Promise<Pick<ConnectorCarProposalService, "execute">>;
 }
 
@@ -252,6 +253,10 @@ export function createConnectorCarProposalHttp(
     },
     async post(request: Request): Promise<Response> {
       const requestId = createPublicRequestId();
+      if (dependencies.carProposalsEnabled !== true) {
+        discardBody(request);
+        return problem("temporarily_unavailable", requestId);
+      }
       if (!acceptsJson(request.headers.get("accept"))) {
         discardBody(request);
         return problem("not_acceptable", requestId);
