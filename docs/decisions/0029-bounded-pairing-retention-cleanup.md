@@ -146,3 +146,4 @@ deployment.
 - [Bounded Community maintenance runner](0014-bounded-community-maintenance-job-runner.md)
 - [Bounded pairing start composition](0028-bounded-pairing-start-composition.md)
 - [Bounded authentication retention cleanup](0032-bounded-auth-retention-cleanup.md)
+- [Bounded revoked-device retention cleanup](0049-bounded-revoked-device-retention-cleanup.md)

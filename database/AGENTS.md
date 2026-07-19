@@ -18,6 +18,9 @@ cases, and privacy data map before changing this subtree.
 - Keep schema ownership and deployment migration authority out of runtime services.
 - Pending device keys have no authority. Activation must bind the exact immutable key record to one
   source and one public device ID in the same transaction.
+- Revoked-device retention cleanup must delete only an aged, minimized activated pairing and its
+  exact aged revoked key together. Preserve approval, challenge, nonce, or raw-snapshot references
+  explicitly; never rely on configured cascades to widen retention cleanup.
 - Hiding a profile changes public visibility only. Its possessed session must retain private active
   device inventory and immediate owned-device revoke; do not reactivate public visibility as a
   workaround for a lifecycle action.

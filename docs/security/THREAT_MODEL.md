@@ -13,9 +13,9 @@ public score/race/status routes, one local invite/OAuth/initial-passkey enrollme
 returning-passkey login plus private passkey/source/device inventory, source
 pause/reactivation/unlink, device/passkey revocation, fresh-passkey recovery-code rotation, and
 fresh-passkey profile-deletion-request slice plus one-time recovery-code replacement-passkey sign-in
-with encrypted cookies and logout, one local one-shot Jobs runner with nine bounded cleanup
+with encrypted cookies and logout, one local one-shot Jobs runner with ten bounded cleanup
 capabilities, one bounded pairing approval-provenance redaction, and primary profile purge, plus a
-synthetic disposable PostgreSQL integration for all thirteen Jobs commands, plus local Community
+synthetic disposable PostgreSQL integration for all fourteen Jobs commands, plus local Community
 sync verification, PostgreSQL-adapter, transport-free composition, and bounded Fastify HTTP
 boundaries; it does not yet contain an external audit sink, Jobs scheduler, cache/backup/tombstone
 purge, restore replay, deployed Ingest service, operational connector, deployment, or production
@@ -265,22 +265,24 @@ and migration or rollback where applicable.
    no-store/same-origin posture, four-request no-queue admission, adapter deadline policy, generic
    error translation, and bounded response matrix. The visible home race requests the
    server-selected current week without credentials, accepts only closed public fields, and keeps a
-   labeled synthetic fallback on error. A local one-shot Jobs runner now validates one of thirteen
+   labeled synthetic fallback on error. A local one-shot Jobs runner now validates one of fourteen
    fixed authentication/audit-event/invite/CarRecipe-proposal/ingest/pairing/session/
-   terminal-deletion-job/aged-revoked-passkey cleanup, pairing approval-provenance redaction,
-   primary-profile purge, or canonical-season refresh/finalization commands, probes its exact
-   least-privileged login/session before one prepared function call, holds one client through
-   settlement, and emits no input or database detail. A synthetic integration runs every emitted
-   command against disposable PostgreSQL, rejects an extra-membership login before mutation, and
-   checks exact stored state. Eligible expired invites are removed without deleting redeemed
-   provenance; eligible expired sessions are removed only when no retained predecessor or pairing
-   provenance requires the row; exact activated-pairing approval references are redacted only after
-   180 days while the device binding remains; revoked passkeys are removed only after 180 days and
-   after every exact session/challenge/pairing reference is absent; terminal deletion jobs are
-   removed only after 30 days; database audit references are removed only after 180 days. An
-   external append-only audit sink, production login/TLS and edge evidence, a Jobs scheduler,
-   audited correction authority, client-rate policy, and capacity evidence are still required before
-   publishing durable results.
+   terminal-deletion-job/aged-revoked-passkey/aged-revoked-device cleanup, pairing
+   approval-provenance redaction, primary-profile purge, or canonical-season refresh/finalization
+   commands, probes its exact least-privileged login/session before one prepared function call,
+   holds one client through settlement, and emits no input or database detail. A synthetic
+   integration runs every emitted command against disposable PostgreSQL, rejects an extra-membership
+   login before mutation, and checks exact stored state. Eligible expired invites are removed
+   without deleting redeemed provenance; eligible expired sessions are removed only when no retained
+   predecessor or pairing provenance requires the row; exact activated-pairing approval references
+   are redacted only after 180 days while the device binding remains; revoked passkeys are removed
+   only after 180 days and after every exact session/challenge/pairing reference is absent;
+   minimized activated pairings and their exact revoked device keys are removed only after both are
+   180 days old and every approval, authorization-challenge, nonce, and raw-snapshot reference is
+   absent; terminal deletion jobs are removed only after 30 days; database audit references are
+   removed only after 180 days. An external append-only audit sink, production login/TLS and edge
+   evidence, a Jobs scheduler, audited correction authority, client-rate policy, and capacity
+   evidence are still required before publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes.

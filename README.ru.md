@@ -280,23 +280,27 @@ device и passkey; следующий session-cleanup может удалить 
 Revision 0035 отдельно удаляет не более 1000 passkey rows только после 180 дней в revoked state и
 только при отсутствии session, verifying/authorized challenge и pairing references. Active и
 referenced credentials сохраняются, а безопасная очистка освобождает неизменный лимит 32 retained
-rows для последующего recovery. Локальный one-shot Jobs runner вызывает только одну из тринадцати
-fixed capabilities: auth/audit/invite/CarRecipe-proposal/ingest/pairing/session cleanup, aged
-revoked-passkey cleanup, pairing approval-provenance redaction, terminal deletion-job cleanup,
-primary profile purge, scoring refresh или finalization через отдельный least-privileged config,
-single-client pool, проверку role/login/search path, fixed deadlines, prepared parameters, closed
-result validation и стабильный non-reflective CLI output. Отдельный opt-in Jobs scenario применяет
-reviewed migrations к одноразовой PostgreSQL, запускает все тринадцать emitted commands через узкий
-synthetic login, отклоняет login с лишней role membership до мутации и проверяет точное состояние
-перед очисткой. Сама база не проверяет wire signature; локальные kernel, adapter и application
-объединены на synthetic/mock-pool evidence. Отдельный opt-in loopback Ingest scenario теперь
-проводит независимо подписанный HTTP request через emitted host и одноразовый least-privileged
-PostgreSQL login, включая duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed
-HTTP ingest route, operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs
-login/TLS integration, monitoring backend, deployed public score read, audited correction flow,
-cache/backup/tombstone purge, restore replay и scheduled deletion execution ещё не реализованы,
-поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
-данных пока нет.
+rows для последующего recovery. Revision 0036 отдельно удаляет не более 1000 минимизированных
+activated pairing rows и связанных revoked device-key rows только после 180 дней от activation и
+revocation, redaction approval provenance и удаления всех authorization challenge, nonce и raw
+snapshot references. Active, recent и referenced device history сохраняется без каскадного удаления
+raw evidence. Локальный one-shot Jobs runner вызывает только одну из четырнадцати fixed
+capabilities: auth/audit/invite/CarRecipe-proposal/ingest/pairing/session cleanup, aged
+revoked-passkey и revoked-device cleanup, pairing approval-provenance redaction, terminal
+deletion-job cleanup, primary profile purge, scoring refresh или finalization через отдельный
+least-privileged config, single-client pool, проверку role/login/search path, fixed deadlines,
+prepared parameters, closed result validation и стабильный non-reflective CLI output. Отдельный
+opt-in Jobs scenario применяет reviewed migrations к одноразовой PostgreSQL, запускает все
+четырнадцать emitted commands через узкий synthetic login, отклоняет login с лишней role membership
+до мутации и проверяет точное состояние перед очисткой. Сама база не проверяет wire signature;
+локальные kernel, adapter и application объединены на synthetic/mock-pool evidence. Отдельный opt-in
+loopback Ingest scenario теперь проводит независимо подписанный HTTP request через emitted host и
+одноразовый least-privileged PostgreSQL login, включая duplicate/replay/revoke и точную проверку
+сохранённого состояния. Deployed HTTP ingest route, operational sync connector, cleanup/scoring
+scheduler, deployment Ingest/Jobs login/TLS integration, monitoring backend, deployed public score
+read, audited correction flow, cache/backup/tombstone purge, restore replay и scheduled deletion
+execution ещё не реализованы, поэтому локальный enrollment ещё не является готовой
+production-авторизацией, а приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

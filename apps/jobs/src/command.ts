@@ -137,6 +137,12 @@ export function parseJobsCommand(value: unknown): CommunityMaintenanceJob {
       kind: "cleanup_aged_revoked_passkeys",
     });
   }
+  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-aged-revoked-devices") {
+    return Object.freeze({
+      batchSize: maximumCleanupBatchSize,
+      kind: "cleanup_aged_revoked_devices",
+    });
+  }
   if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-pairing-state") {
     return Object.freeze({
       batchSize: maximumCleanupBatchSize,

@@ -519,27 +519,27 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 58 cross-capability denials.
-  Ingest has exactly three reviewed functions; Jobs has exactly thirteen reviewed functions: bounded
+  and usage/scoring-table reads or API-schema mutation, and proves 61 cross-capability denials.
+  Ingest has exactly three reviewed functions; Jobs has exactly fourteen reviewed functions: bounded
   authentication-, audit-event-, invite-, CarRecipe-proposal-, ingest-, pairing-, and
-  session-retention cleanup, terminal deletion-job cleanup, aged revoked-passkey cleanup, pairing
-  approval-provenance redaction, primary profile deletion, open-season scoring refresh, and terminal
-  season finalization. Web alone receives the bounded public score and separate race functions;
-  Ingest, Jobs, and Admin are explicitly denied. The Web adapter uses one dedicated pool, fixed
-  parameterized function calls, and checks effective role, distinct non-privileged login, exact
-  Web-only membership, database capability, search path, and read-only state before every pooled
-  read. Failed sessions are destroyed and raw driver errors are not forwarded. The local Jobs
-  adapter independently checks an exact Jobs-only login/membership, CONNECT without
-  CREATE/TEMPORARY, and safe search path before exactly one of the thirteen prepared function calls.
-  Its pool maximum is one, input/result shapes are closed, failed clients are destroyed, and CLI
-  output reflects no configuration, command, SQL, count, or error detail. The local Ingest adapter
-  independently caps its pool at four, probes the exact Ingest login/role and safe search path
-  before each capability, exposes only fixed parameterized origin replay, device lookup, and
-  submission calls, reconstructs and revalidates inputs, copies mutable values, accepts only closed
-  rows, and destroys failed clients without forwarding driver/configuration details.
+  session-retention cleanup, terminal deletion-job cleanup, aged revoked-passkey cleanup, aged
+  minimized revoked-device cleanup, pairing approval-provenance redaction, primary profile deletion,
+  open-season scoring refresh, and terminal season finalization. Web alone receives the bounded
+  public score and separate race functions; Ingest, Jobs, and Admin are explicitly denied. The Web
+  adapter uses one dedicated pool, fixed parameterized function calls, and checks effective role,
+  distinct non-privileged login, exact Web-only membership, database capability, search path, and
+  read-only state before every pooled read. Failed sessions are destroyed and raw driver errors are
+  not forwarded. The local Jobs adapter independently checks an exact Jobs-only login/membership,
+  CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the fourteen prepared
+  function calls. Its pool maximum is one, input/result shapes are closed, failed clients are
+  destroyed, and CLI output reflects no configuration, command, SQL, count, or error detail. The
+  local Ingest adapter independently caps its pool at four, probes the exact Ingest login/role and
+  safe search path before each capability, exposes only fixed parameterized origin replay, device
+  lookup, and submission calls, reconstructs and revalidates inputs, copies mutable values, accepts
+  only closed rows, and destroys failed clients without forwarding driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Web deployment login/TLS integration has not been exercised. Jobs now has a
-  disposable synthetic least-privileged login, all thirteen emitted commands, a widened-login
+  disposable synthetic least-privileged login, all fourteen emitted commands, a widened-login
   denial, and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged
   loopback login and full HTTP integration result. Neither proves a deployment
   credential/certificate, external TLS/edge route, external audit sink, capacity, scheduler,
@@ -677,43 +677,48 @@ material availability cost.
   only after all four session/challenge/pairing reference paths are absent. It shares the existing
   authentication and pairing mutex order, repeats eligibility at deletion, and has an observed
   two-worker race proving serialized progress while active, recent, and referenced rows remain.
-  Revision 0031 adds a shared-mutex oldest-first 1-to-1000 cleanup for expired active or revoked
-  invite verifier rows. Its observed worker race proves exact progress while live invites and
-  redeemed enrollment provenance remain. Revision 0032 adds oldest-first 1-to-1000 cleanup for
-  profile-free terminal deletion jobs only after 30 days, and revision 0033 adds the same bound for
-  database audit events only after 180 days under a separate mutex. Their worker races preserve
-  recent rows; the audit slice does not imply an external append-only sink. Scoring
-  refresh/finalization use one private mutex, per-season locks, a five-second database lock bound,
-  numeric overflow protection, a 30-second statement deadline, bounded no-data terminal state, and
-  one atomic global-rank rebuild. The public score projection returns at most 100 rows and has a
-  five-second statement deadline; the response-only contract narrows one future page to 32 rows, and
-  the mapper rejects row 33 before traversing projected rows. The Web adapter adds a four-connection
-  ceiling, two-second checkout/connect wait, one/five/six-second lock/server/ client-query
-  deadlines, idle/lifetime recycling, and a fixed limit 32. Ranking still evaluates all currently
-  visible season entries. The generated query validator now rejects malformed, out-of-range, and
-  non-Monday seasons before the route may call the store. The local route rejects bodies and
-  oversized/malformed URL or `Accept` work, admits at most four active reads with no queue, holds
-  each lease through adapter settlement, and returns 503 on exhaustion. The visible home page makes
-  one current-week request per navigation with no client retry loop and retains its synthetic
-  fallback after failure. The operation reserves a 429 response without claiming a client-rate
-  limiter exists. The local identity routes separately admit at most four unsettled calls without a
-  queue, reject malformed or over-limit bodies before database work, and create no database state
-  for login options. A valid login proof performs one bounded atomic completion, while failure to
-  seal the resulting browser cookie revokes the new session. These are local process ceilings, not
-  distributed or client-identity rate limits. The transport-free pairing-start application bounds
-  labels, metadata, keys, entropy, and HMAC work, admits four unsettled attempts without a queue,
-  holds each lease through a 250-millisecond floor, and makes no database call for malformed input.
-  Revision 0022 now adds one Web-only fixed-storage admission before start/poll database work: every
-  request locks/increments one operation-global row and one of 64 digest-selected buckets under a
-  five-second deadline. Counts saturate, windows reset in place, and neither raw client ID nor
-  digest is retained. The shared service retains the four-call no-queue ceiling across both
-  operations. This is distributed across Web instances using one database, but the self-asserted ID
-  is not a trusted edge/IP identity and still needs capacity evidence. Physical pairing cleanup
-  exists as a separate local capability, but scheduling and edge controls are still pending. The
-  local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client deadlines, nine
-  fixed 1000-row cleanup commands, one fixed 1000-row approval-provenance redaction, one fixed
-  maximum-10 primary-purge command, canonical season validation, closed one-row results, and
-  destructive release on failure. Its synthetic integration executes those commands sequentially
+  Revision 0036 adds oldest-first 1-to-1000 paired deletion for activated pairings and their exact
+  device keys only after both activation and revocation are at least 180 days old, approval
+  provenance is minimized, and no authorization challenge, nonce, or raw snapshot remains. It uses
+  the existing Ingest and pairing mutex order, repeats every predicate, avoids configured cascades,
+  and has an observed two-worker race proving serialized progress while active, recent, and
+  referenced rows remain. Revision 0031 adds a shared-mutex oldest-first 1-to-1000 cleanup for
+  expired active or revoked invite verifier rows. Its observed worker race proves exact progress
+  while live invites and redeemed enrollment provenance remain. Revision 0032 adds oldest-first
+  1-to-1000 cleanup for profile-free terminal deletion jobs only after 30 days, and revision 0033
+  adds the same bound for database audit events only after 180 days under a separate mutex. Their
+  worker races preserve recent rows; the audit slice does not imply an external append-only sink.
+  Scoring refresh/finalization use one private mutex, per-season locks, a five-second database lock
+  bound, numeric overflow protection, a 30-second statement deadline, bounded no-data terminal
+  state, and one atomic global-rank rebuild. The public score projection returns at most 100 rows
+  and has a five-second statement deadline; the response-only contract narrows one future page to 32
+  rows, and the mapper rejects row 33 before traversing projected rows. The Web adapter adds a
+  four-connection ceiling, two-second checkout/connect wait, one/five/six-second lock/server/
+  client-query deadlines, idle/lifetime recycling, and a fixed limit 32. Ranking still evaluates all
+  currently visible season entries. The generated query validator now rejects malformed,
+  out-of-range, and non-Monday seasons before the route may call the store. The local route rejects
+  bodies and oversized/malformed URL or `Accept` work, admits at most four active reads with no
+  queue, holds each lease through adapter settlement, and returns 503 on exhaustion. The visible
+  home page makes one current-week request per navigation with no client retry loop and retains its
+  synthetic fallback after failure. The operation reserves a 429 response without claiming a
+  client-rate limiter exists. The local identity routes separately admit at most four unsettled
+  calls without a queue, reject malformed or over-limit bodies before database work, and create no
+  database state for login options. A valid login proof performs one bounded atomic completion,
+  while failure to seal the resulting browser cookie revokes the new session. These are local
+  process ceilings, not distributed or client-identity rate limits. The transport-free pairing-start
+  application bounds labels, metadata, keys, entropy, and HMAC work, admits four unsettled attempts
+  without a queue, holds each lease through a 250-millisecond floor, and makes no database call for
+  malformed input. Revision 0022 now adds one Web-only fixed-storage admission before start/poll
+  database work: every request locks/increments one operation-global row and one of 64
+  digest-selected buckets under a five-second deadline. Counts saturate, windows reset in place, and
+  neither raw client ID nor digest is retained. The shared service retains the four-call no-queue
+  ceiling across both operations. This is distributed across Web instances using one database, but
+  the self-asserted ID is not a trusted edge/IP identity and still needs capacity evidence. Physical
+  pairing cleanup exists as a separate local capability, but scheduling and edge controls are still
+  pending. The local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client
+  deadlines, nine fixed 1000-row cleanup commands, one fixed 1000-row approval-provenance redaction,
+  one fixed maximum-10 primary-purge command, canonical season validation, closed one-row results,
+  and destructive release on failure. Its synthetic integration executes those commands sequentially
   against one disposable database and therefore proves no parallel scheduler or production-load
   capacity. The kernel itself has no socket/stream authority. The separate Ingest adapter adds a
   four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime

@@ -156,3 +156,4 @@ monitoring, cache or backup purge, restore replay, capacity, real-user retention
 - [Bounded authentication retention cleanup](0032-bounded-auth-retention-cleanup.md)
 - [Bounded expired-session retention cleanup](0042-bounded-expired-session-retention-cleanup.md)
 - [Bounded pairing approval-provenance retention](0047-bounded-pairing-approval-provenance-retention.md)
+- [Bounded revoked-device retention cleanup](0049-bounded-revoked-device-retention-cleanup.md)

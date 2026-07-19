@@ -44,6 +44,8 @@ const fixture = Object.freeze({
   provenanceSessionId: "00000000-0000-4000-8000-000000031912",
   purgeJobId: "00000000-0000-4000-8000-000000031401",
   purgeProfileId: "00000000-0000-4000-8000-000000031402",
+  revokedDeviceKeyId: "00000000-0000-4000-8000-000000031916",
+  revokedDevicePairingId: "00000000-0000-4000-8000-000000031917",
   revokedPasskeyId: "00000000-0000-4000-8000-000000031915",
   scoringProfileId: "00000000-0000-4000-8000-000000031501",
   sessionId: "00000000-0000-4000-8000-000000031601",
@@ -465,15 +467,25 @@ INSERT INTO viberacing_private.device_keys (
   architecture,
   created_at
 )
-VALUES (
-  '${fixture.provenanceDeviceKeyId}',
-  pg_catalog.decode(pg_catalog.repeat('A4', 32), 'hex'),
-  'Synthetic provenance device',
-  '9.0.0',
-  'linux',
-  'x86_64',
-  pg_catalog.statement_timestamp() - INTERVAL '202 days'
-);
+VALUES
+  (
+    '${fixture.provenanceDeviceKeyId}',
+    pg_catalog.decode(pg_catalog.repeat('A4', 32), 'hex'),
+    'Synthetic provenance device',
+    '9.0.0',
+    'linux',
+    'x86_64',
+    pg_catalog.statement_timestamp() - INTERVAL '202 days'
+  ),
+  (
+    '${fixture.revokedDeviceKeyId}',
+    pg_catalog.decode(pg_catalog.repeat('C1', 32), 'hex'),
+    'Synthetic old revoked device',
+    '9.0.1',
+    'linux',
+    'x86_64',
+    pg_catalog.statement_timestamp() - INTERVAL '202 days'
+  );
 
 INSERT INTO viberacing_private.pairing_transactions (
   pairing_id,
@@ -488,19 +500,33 @@ INSERT INTO viberacing_private.pairing_transactions (
   created_at,
   expires_at
 )
-VALUES (
-  '${fixture.provenancePairingId}',
-  pg_catalog.decode(pg_catalog.repeat('A5', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('A6', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('A7', 32), 'hex'),
-  '${fixture.provenanceDeviceKeyId}',
-  'Synthetic provenance device',
-  '9.0.0',
-  'linux',
-  'x86_64',
-  pg_catalog.statement_timestamp() - INTERVAL '202 days',
-  pg_catalog.statement_timestamp() - INTERVAL '199 days'
-);
+VALUES
+  (
+    '${fixture.provenancePairingId}',
+    pg_catalog.decode(pg_catalog.repeat('A5', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('A6', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('A7', 32), 'hex'),
+    '${fixture.provenanceDeviceKeyId}',
+    'Synthetic provenance device',
+    '9.0.0',
+    'linux',
+    'x86_64',
+    pg_catalog.statement_timestamp() - INTERVAL '202 days',
+    pg_catalog.statement_timestamp() - INTERVAL '199 days'
+  ),
+  (
+    '${fixture.revokedDevicePairingId}',
+    pg_catalog.decode(pg_catalog.repeat('C2', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('C3', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('C4', 32), 'hex'),
+    '${fixture.revokedDeviceKeyId}',
+    'Synthetic old revoked device',
+    '9.0.1',
+    'linux',
+    'x86_64',
+    pg_catalog.statement_timestamp() - INTERVAL '202 days',
+    pg_catalog.statement_timestamp() - INTERVAL '199 days'
+  );
 
 UPDATE viberacing_private.pairing_transactions
 SET
@@ -513,6 +539,17 @@ SET
   approved_at = pg_catalog.statement_timestamp() - INTERVAL '201 days'
 WHERE pairing_id = '${fixture.provenancePairingId}';
 
+UPDATE viberacing_private.pairing_transactions
+SET
+  state = 'approved',
+  approved_profile_id = '${fixture.sessionProfileId}',
+  source_choice = 'existing',
+  approved_source_id = 'src_' || pg_catalog.repeat('V', 22),
+  approved_by_session_id = '${fixture.provenanceSessionId}',
+  approved_by_passkey_id = '${fixture.provenancePasskeyId}',
+  approved_at = pg_catalog.statement_timestamp() - INTERVAL '201 days'
+WHERE pairing_id = '${fixture.revokedDevicePairingId}';
+
 UPDATE viberacing_private.device_keys
 SET
   state = 'active',
@@ -521,12 +558,33 @@ SET
   activated_at = pg_catalog.statement_timestamp() - INTERVAL '200 days'
 WHERE device_key_id = '${fixture.provenanceDeviceKeyId}';
 
+UPDATE viberacing_private.device_keys
+SET
+  state = 'active',
+  source_id = 'src_' || pg_catalog.repeat('V', 22),
+  device_id = 'dev_' || pg_catalog.repeat('W', 22),
+  activated_at = pg_catalog.statement_timestamp() - INTERVAL '200 days'
+WHERE device_key_id = '${fixture.revokedDeviceKeyId}';
+
 UPDATE viberacing_private.pairing_transactions
 SET
   state = 'activated',
   activated_device_id = 'dev_' || pg_catalog.repeat('V', 22),
   activated_at = pg_catalog.statement_timestamp() - INTERVAL '200 days'
 WHERE pairing_id = '${fixture.provenancePairingId}';
+
+UPDATE viberacing_private.pairing_transactions
+SET
+  state = 'activated',
+  activated_device_id = 'dev_' || pg_catalog.repeat('W', 22),
+  activated_at = pg_catalog.statement_timestamp() - INTERVAL '200 days'
+WHERE pairing_id = '${fixture.revokedDevicePairingId}';
+
+UPDATE viberacing_private.device_keys
+SET
+  state = 'revoked',
+  revoked_at = pg_catalog.statement_timestamp() - INTERVAL '190 days'
+WHERE device_key_id = '${fixture.revokedDeviceKeyId}';
 
 INSERT INTO viberacing_private.deletion_jobs (
   deletion_job_id,
@@ -654,20 +712,29 @@ COMMIT;`,
     seedSyntheticState(currentSeasonStart);
 
     const rejected = runJobsCommand(databasePort, wideJobsLogin, wideJobsPassword, [
-      "cleanup-aged-revoked-passkeys",
+      "cleanup-aged-revoked-devices",
     ]);
     assertRejectedCommand(rejected, "widened Jobs login");
     assert.equal(
       psqlScalar(
         `SET ROLE viberacing_owner;
-SELECT pg_catalog.count(*)::integer
-FROM viberacing_private.passkeys
-WHERE passkey_id = '${fixture.revokedPasskeyId}'
-  AND state = 'revoked';`,
+SELECT (
+  (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.device_keys
+    WHERE device_key_id = '${fixture.revokedDeviceKeyId}'
+      AND state = 'revoked'
+  ) + (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.pairing_transactions
+    WHERE pairing_id = '${fixture.revokedDevicePairingId}'
+      AND state = 'activated'
+  )
+)::integer;`,
         "rejected-login stored-state verification",
       ),
-      "1",
-      "the runtime probe must fail before the requested cleanup mutates state",
+      "2",
+      "the runtime probe must fail before the requested cleanup mutates either retained row",
     );
 
     const commands = [
@@ -680,6 +747,7 @@ WHERE passkey_id = '${fixture.revokedPasskeyId}'
       ["redact-aged-pairing-approval-provenance"],
       ["cleanup-expired-sessions"],
       ["cleanup-aged-revoked-passkeys"],
+      ["cleanup-aged-revoked-devices"],
       ["purge-profile-deletions"],
       ["cleanup-terminal-deletion-jobs"],
       ["refresh-community-season", currentSeasonStart],
@@ -765,6 +833,16 @@ SELECT pg_catalog.jsonb_build_object(
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.passkeys
     WHERE passkey_id = '${fixture.revokedPasskeyId}'
+  ),
+  'revokedDeviceCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.device_keys
+    WHERE device_key_id = '${fixture.revokedDeviceKeyId}'
+  ),
+  'revokedDevicePairingCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.pairing_transactions
+    WHERE pairing_id = '${fixture.revokedDevicePairingId}'
   ),
   'sessionCount', (
     SELECT pg_catalog.count(*)::integer
@@ -852,6 +930,8 @@ SELECT pg_catalog.jsonb_build_object(
       provenancePairingRedacted: true,
       provenancePasskeyCount: 1,
       provenanceSessionCount: 0,
+      revokedDeviceCount: 0,
+      revokedDevicePairingCount: 0,
       revokedPasskeyCount: 0,
       purgeJobCompleted: true,
       purgeJobProfileCleared: true,
@@ -866,7 +946,7 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Jobs PostgreSQL integration passed (thirteen commands, least-privilege denial, generic output, and exact stored state).",
+      "Jobs PostgreSQL integration passed (fourteen commands, least-privilege denial, generic output, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

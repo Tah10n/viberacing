@@ -43,6 +43,11 @@ const agedRevokedPasskeyCleanupQuery = `SELECT
   cleanup.deleted_passkeys AS deleted_passkeys
 FROM viberacing_api.cleanup_aged_revoked_passkeys($1::integer) AS cleanup`;
 
+const agedRevokedDeviceCleanupQuery = `SELECT
+  cleanup.deleted_pairings AS deleted_pairings,
+  cleanup.deleted_device_keys AS deleted_device_keys
+FROM viberacing_api.cleanup_aged_revoked_devices($1::integer) AS cleanup`;
+
 const cleanupQuery = `SELECT
   cleanup.deleted_origin_nonces AS deleted_origin_nonces,
   cleanup.deleted_nonces AS deleted_nonces,
@@ -100,6 +105,7 @@ export type JobsDatabasePoolSignal = "idle_client_error";
 export type JobsDatabasePoolSignalSink = (signal: JobsDatabasePoolSignal) => Promise<void> | void;
 
 export interface JobsDatabaseClient {
+  cleanupAgedRevokedDevices(batchSize: number): Promise<unknown>;
   cleanupAgedRevokedPasskeys(batchSize: number): Promise<unknown>;
   cleanupExpiredAuthState(batchSize: number): Promise<unknown>;
   cleanupExpiredAuditEvents(batchSize: number): Promise<unknown>;
@@ -160,6 +166,9 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
   }
 
   return Object.freeze({
+    cleanupAgedRevokedDevices(batchSize: number): Promise<unknown> {
+      return fixedQuery(agedRevokedDeviceCleanupQuery, [batchSize]);
+    },
     cleanupAgedRevokedPasskeys(batchSize: number): Promise<unknown> {
       return fixedQuery(agedRevokedPasskeyCleanupQuery, [batchSize]);
     },

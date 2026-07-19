@@ -18,6 +18,10 @@ export const maximumProfileDeletionPurgeBatchSize = 10;
 export type CommunityMaintenanceJob =
   | Readonly<{
       batchSize: number;
+      kind: "cleanup_aged_revoked_devices";
+    }>
+  | Readonly<{
+      batchSize: number;
       kind: "cleanup_aged_revoked_passkeys";
     }>
   | Readonly<{
@@ -70,6 +74,11 @@ export type CommunityMaintenanceJob =
     }>;
 
 export type CommunityMaintenanceResult =
+  | Readonly<{
+      deletedDeviceKeys: number;
+      deletedPairings: number;
+      kind: "cleanup_aged_revoked_devices";
+    }>
   | Readonly<{
       deletedPasskeys: number;
       kind: "cleanup_aged_revoked_passkeys";
@@ -222,6 +231,7 @@ function readJob(value: unknown): CommunityMaintenanceJob {
       return Object.freeze({ batchSize, kind });
     }
     if (
+      kind === "cleanup_aged_revoked_devices" ||
       kind === "cleanup_aged_revoked_passkeys" ||
       kind === "cleanup_expired_auth_state" ||
       kind === "cleanup_expired_audit_events" ||
@@ -308,6 +318,20 @@ function readCount(row: object, key: string, maximum: number): number {
 }
 
 function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaintenanceResult {
+  if (job.kind === "cleanup_aged_revoked_devices") {
+    const row = readSingleRow(value, new Set(["deleted_device_keys", "deleted_pairings"]));
+    const deletedDeviceKeys = readCount(row, "deleted_device_keys", job.batchSize);
+    const deletedPairings = readCount(row, "deleted_pairings", job.batchSize);
+    if (deletedDeviceKeys !== deletedPairings) {
+      fail("result_invalid");
+    }
+    return Object.freeze({
+      deletedDeviceKeys,
+      deletedPairings,
+      kind: job.kind,
+    });
+  }
+
   if (job.kind === "cleanup_aged_revoked_passkeys") {
     const row = readSingleRow(value, new Set(["deleted_passkeys"]));
     return Object.freeze({
@@ -454,6 +478,9 @@ function executeCapability(
   client: JobsDatabaseClient,
   job: CommunityMaintenanceJob,
 ): Promise<unknown> {
+  if (job.kind === "cleanup_aged_revoked_devices") {
+    return client.cleanupAgedRevokedDevices(job.batchSize);
+  }
   if (job.kind === "cleanup_aged_revoked_passkeys") {
     return client.cleanupAgedRevokedPasskeys(job.batchSize);
   }

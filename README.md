@@ -197,7 +197,7 @@ accepts only a closed acknowledgement. It does not discover binaries, retry an a
 send edge origin proof. There is still no macOS/Linux admission or result, live protected key
 injection, edge signer/direct-origin denial, deployed host/TLS/database login, capacity evidence,
 credential rotation, automatic server-revoke composition, packaging, release, monitoring, supported
-connector, or deployment. Thirty-five SQL migrations now add 27 private identity, passkey,
+connector, or deployment. Thirty-six SQL migrations now add 27 private identity, passkey,
 restricted-recovery, source, device, pairing, audit, deletion, replay, usage, Community scoring, and
 CarRecipe tables with deny-by-default runtime roles, forced RLS, state-machine constraints, checksum
 drift detection, and an isolated PostgreSQL capability test. A narrow procedure boundary implements
@@ -283,25 +283,29 @@ and passkey. A later session-cleanup call can remove the now-unreferenced expire
 Revision 0035 separately removes at most 1000 passkey rows only after they have been revoked for 180
 days and have no retained session, verifying/authorized challenge, or pairing reference. Active and
 referenced credentials remain, while eligible deletion can free the unchanged 32-row recovery
-ceiling. One local one-shot Jobs runner now wraps exactly one of thirteen fixed functions:
-authentication cleanup, audit-event cleanup, invite cleanup, CarRecipe-proposal cleanup, ingest
-cleanup, pairing cleanup, aged revoked-passkey cleanup, pairing approval-provenance redaction,
-session cleanup, terminal deletion-job cleanup, primary profile purge, refresh, or finalization. It
-uses a distinct least-privileged configuration namespace, one-client pool, per-checkout
-role/login/search-path probe, fixed deadlines and prepared parameters, closed result validation,
-destructive release after failure, and stable non-reflective CLI output. An opt-in synthetic
-integration now builds that runner, applies the reviewed migration manifest to one disposable
-PostgreSQL container, proves all thirteen commands through a narrow login, rejects a deliberately
-widened login before mutation, and verifies exact stored state before cleanup. It has no external
-audit sink, scheduler, production login/certificate, monitoring backend, retry loop, capacity
-result, or deployment. Revision 0011 gives only the Web database role a bounded active-profile score
-projection containing no raw values, private identifiers, or exact timestamps. The score response
-component and Web PostgreSQL adapter preserve only that public allowlist through the local score
-route. The visible race, leaderboard, and selectable participant summary now consume its validated
-current-week response with a credential-free same-origin request and an explicit synthetic fallback.
-Canonical `/?profile=handle#profile` links select only an exact public handle in that page, and a
-missing current top-32 row is not replaced with another participant. There is now a local
-invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
+ceiling. Revision 0036 separately removes at most 1000 minimized activated pairings and their exact
+revoked device-key rows only after both activation and revocation are at least 180 days old,
+approval provenance has been redacted, and no authorization challenge, nonce, or raw snapshot
+remains. It preserves active, recent, and referenced device history and never cascades raw evidence.
+One local one-shot Jobs runner now wraps exactly one of fourteen fixed functions: authentication
+cleanup, audit-event cleanup, invite cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing
+cleanup, aged revoked-passkey cleanup, aged revoked-device cleanup, pairing approval-provenance
+redaction, session cleanup, terminal deletion-job cleanup, primary profile purge, refresh, or
+finalization. It uses a distinct least-privileged configuration namespace, one-client pool,
+per-checkout role/login/search-path probe, fixed deadlines and prepared parameters, closed result
+validation, destructive release after failure, and stable non-reflective CLI output. An opt-in
+synthetic integration now builds that runner, applies the reviewed migration manifest to one
+disposable PostgreSQL container, proves all fourteen commands through a narrow login, rejects a
+deliberately widened login before mutation, and verifies exact stored state before cleanup. It has
+no external audit sink, scheduler, production login/certificate, monitoring backend, retry loop,
+capacity result, or deployment. Revision 0011 gives only the Web database role a bounded
+active-profile score projection containing no raw values, private identifiers, or exact timestamps.
+The score response component and Web PostgreSQL adapter preserve only that public allowlist through
+the local score route. The visible race, leaderboard, and selectable participant summary now consume
+its validated current-week response with a credential-free same-origin request and an explicit
+synthetic fallback. Canonical `/?profile=handle#profile` links select only an exact public handle in
+that page, and a missing current top-32 row is not replaced with another participant. There is now a
+local invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
 rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey profile-deletion
 request flow. Recovery lookup returns only the selected unused PHC; admitted attempts use bounded
 Argon2id work, a protected pepper, generic responses, a configured minimum response floor, and a
