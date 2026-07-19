@@ -6,11 +6,12 @@ Compatibility status: no supported versions.
 
 No Codex version and no Vibe Racing connector version is supported. A library-only connector now
 implements the bounded initialization exchange and a candidate parser for exact version `0.144.5`,
-plus a bounded one-shot supervisor. A Windows x86_64 development command can construct its private
-launch capability only for the exact artifact size and SHA-256, then use an active native credential
-for one signed upload. Automatic discovery, macOS/Linux admission, clean-machine real-account
-results, packaging, provenance, and a released connector do not exist. This empty matrix is
-fail-closed evidence, not an invitation to run an arbitrary local version.
+plus a bounded one-shot supervisor. After active-record validation, a Windows x86_64 development
+command can select the candidate through bounded fixed-name `PATH` discovery or an explicit path,
+construct its private launch capability only for the exact artifact size and SHA-256, and perform
+one signed upload. macOS/Linux admission, clean-machine real-account results, packaging, provenance,
+and a released connector do not exist. This empty matrix is fail-closed evidence, not an invitation
+to run an arbitrary local version.
 
 | Codex version | Stable schema digest | Compatible connector | Platforms tested | Status and evidence                                 |
 | ------------- | -------------------- | -------------------- | ---------------- | --------------------------------------------------- |
@@ -22,9 +23,10 @@ fail-closed evidence, not an invitation to run an arbitrary local version.
 official `rust-v0.144.5` tag, immutable release commit and artifact metadata, full stable-bundle and
 client request digests, three minimal account schema extracts, and nine synthetic JSONL fixtures.
 The bundle was generated from a local CLI reporting `0.144.5` with experimental API omitted. The
-Windows admission policy matches the recorded official release asset size/digest, but repository
-verification does not execute that artifact and this is not protected clean-machine release
-evidence.
+Windows admission policy matches the recorded official release asset filename/size/digest. Its
+candidate-only discovery tests use synthetic files and fixed resource bounds; repository
+verification does not discover or execute an installed artifact, and this is not protected
+clean-machine release evidence.
 
 The candidate Rust adapter is reachable only after the handshake. It emits the fixed IDs `1` and `2`
 for `account/read` and `account/usage/read`, accepts only ChatGPT mode, discards email, plan, and
@@ -77,12 +79,12 @@ terminal for that state-machine instance and errors do not reflect server conten
 The candidate adapter adds exact-version parsing evidence described above. The one-shot supervisor
 accepts only the inaccessible `ReviewedCodexLaunch` capability. A composer and one-use signer keep
 the exact sync bytes and device key behind two further inaccessible capabilities. `connect`
-generates and activates the native-store credential. The explicit Windows x86_64 `sync` command now
-canonicalizes and hash-admits one exact path, keeps a no-write-sharing handle through launch,
-creates fresh request context from that active record, and sends one closed signed request without
-proxy, redirect, retry, or edge-origin credentials. It does not search for binaries, admit another
-version or platform, create a release, or make the candidate supported. Every matrix row still
-requires the complete admission evidence above.
+generates and activates the native-store credential. The Windows x86_64 `sync` command validates
+that active record before bounded fixed-name discovery or an explicit path, canonicalizes and
+hash-admits only the exact candidate, keeps a no-write-sharing handle through launch, creates fresh
+request context, and sends one closed signed request without proxy, redirect, retry, or edge-origin
+credentials. It cannot admit another version or platform, create a release, or make the candidate
+supported. Every matrix row still requires the complete admission evidence above.
 
 ## Planned stable surface
 

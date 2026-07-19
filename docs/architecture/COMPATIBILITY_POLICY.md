@@ -83,11 +83,13 @@ one-use signer consumes that otherwise inaccessible material only with a third i
 device-bound key capability and returns the same body plus five signed header values. The `connect`
 command can generate a real device key in a native OS credential store and complete the local
 start/approve/poll journey. A separate Windows x86_64 development `sync` command can construct the
-three private capabilities only after an explicit canonical path matches the exact `0.144.5`
-artifact size and SHA-256. It creates fresh context from the active record and submits one closed
-signed request without automatic retry. It cannot discover a binary, admit another version or
-platform, produce clean-machine privacy evidence, negotiate support, or alter the empty matrix. ADRs
-0021 through 0026, 0030, and 0031 record those distinctions.
+three private capabilities only after validating an active record and admitting the exact `0.144.5`
+artifact size and SHA-256. Selection is either an explicit canonical path or bounded fixed-name
+discovery through at most 64 absolute `PATH` directories and four distinct exact-size hashes; both
+retain the same no-write-sharing handle. It creates fresh context and submits one closed signed
+request without automatic retry. It cannot admit another version or platform, produce clean-machine
+privacy evidence, negotiate support, or alter the empty matrix. ADRs 0021 through 0026, 0030, 0031,
+and 0051 record those distinctions.
 
 Generated schema output is exact to the Codex version that produced it. The repository commits only
 reviewed relevant schema extracts and synthetic fixtures, not account data or a developer's local

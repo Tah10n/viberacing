@@ -271,9 +271,10 @@ library parser for the two planned reads. It confirms ChatGPT mode while discard
 email/plan/summary values and returns only bounded sorted daily date/token entries. ADR 0023 adds a
 one-shot supervisor with a fixed `app-server` argument, local pipes, no ambient environment, bounded
 stdout/stderr/time, and reap-before-success composition. Its launch capability has no public
-constructor. ADR 0031 now lets only one private Windows x86_64 development command construct it
-after an explicit canonical path matches the exact `0.144.5` artifact size and SHA-256 while a
-no-write-sharing handle remains open. The candidate still does not run on all platforms, create a
+constructor. ADR 0031 lets only one private Windows x86_64 development command construct it after
+exact `0.144.5` size/SHA-256 admission while a no-write-sharing handle remains open. ADR 0051 adds
+only a bounded fixed-name `PATH` selection path after active-record review and retains the explicit
+path fallback under identical admission. The candidate still does not run on all platforms, create a
 supported release, or create a matrix row. ADR 0024 adds an inaccessible reviewed
 source/device/time/nonce context whose minimized daily usage produces one exact bounded
 `ConnectorSyncV1` body, SHA-256 digest, and LF-separated device message. ADR 0025 removes public
@@ -304,11 +305,12 @@ synthetic: there is no live Web login/database result, edge capacity policy, cro
 execution matrix, released binary, Codex support, scheduler, or deployed result. ADR 0031 adds the
 next one-shot Windows development command: exact artifact admission, fresh context from the active
 record, the existing composer/signer, and one fixed no-proxy/no-redirect upload with a closed
-acknowledgement. It adds no automatic discovery, retry, edge proof, cross-platform evidence,
-package, release, or support claim. ADR 0041 adds a separate exact `forget-local` command that
-deletes only the native origin/label record without reading it or contacting the service. It is
-idempotent and explicitly does not claim server revoke; rotation and revoke composition remain
-separate gates.
+acknowledgement. ADR 0051 adds resource-bounded discovery through two fixed filenames and at most
+four exact-size hashes, plus the unchanged explicit path fallback. It adds no retry, edge proof,
+cross-platform evidence, package, release, or support claim. ADR 0041 adds a separate exact
+`forget-local` command that deletes only the native origin/label record without reading it or
+contacting the service. It is idempotent and explicitly does not claim server revoke; rotation and
+revoke composition remain separate gates.
 
 ### Date semantics
 

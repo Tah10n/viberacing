@@ -9,7 +9,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 
 use crate::DailyUsage;
-use crate::admission::{ADMITTED_CODEX_VERSION, AdmissionError, admit_candidate};
+use crate::admission::{
+    ADMITTED_CODEX_VERSION, AdmissionError, admit_candidate, discover_candidate,
+};
 use crate::process::{
     CandidateCodex01445Collector, ReviewedCodexLaunch, current_allowed_environment,
 };
@@ -34,7 +36,7 @@ const TEMP_DIRECTORY_ATTEMPTS: usize = 4;
 
 pub(super) fn run_sync(
     origin: &Origin,
-    codex_path: &Path,
+    codex_path: Option<&Path>,
     store: &mut dyn CredentialStore,
     output: &mut dyn Write,
 ) -> Result<(), ConnectorCliError> {
@@ -45,7 +47,11 @@ pub(super) fn run_sync(
         return Err(ConnectorCliError::NotConnected);
     }
 
-    let admitted = admit_candidate(codex_path).map_err(map_admission_error)?;
+    let admitted = match codex_path {
+        Some(path) => admit_candidate(path),
+        None => discover_candidate(),
+    }
+    .map_err(map_admission_error)?;
     writeln!(output, "Using admitted Codex {ADMITTED_CODEX_VERSION}.")
         .map_err(|_| ConnectorCliError::OutputUnavailable)?;
 
@@ -78,9 +84,9 @@ pub(super) fn run_sync(
 fn map_admission_error(error: AdmissionError) -> ConnectorCliError {
     match error {
         AdmissionError::UnsupportedPlatform => ConnectorCliError::UnsupportedPlatform,
-        AdmissionError::InvalidPath | AdmissionError::UnsupportedArtifact => {
-            ConnectorCliError::CodexNotAdmitted
-        }
+        AdmissionError::DiscoveryUnavailable
+        | AdmissionError::InvalidPath
+        | AdmissionError::UnsupportedArtifact => ConnectorCliError::CodexNotAdmitted,
     }
 }
 
@@ -546,17 +552,13 @@ mod tests {
     #[test]
     fn refuses_to_collect_or_upload_before_the_device_is_connected() {
         let origin = Origin::parse("https://race.example").unwrap();
-        let mut output = Vec::new();
-        assert_eq!(
-            run_sync(
-                &origin,
-                Path::new("not-an-admitted-path"),
-                &mut EmptyStore,
-                &mut output
-            )
-            .err(),
-            Some(ConnectorCliError::NotConnected)
-        );
-        assert!(output.is_empty());
+        for codex_path in [None, Some(Path::new("not-an-admitted-path"))] {
+            let mut output = Vec::new();
+            assert_eq!(
+                run_sync(&origin, codex_path, &mut EmptyStore, &mut output).err(),
+                Some(ConnectorCliError::NotConnected)
+            );
+            assert!(output.is_empty());
+        }
     }
 }

@@ -246,15 +246,16 @@ material availability cost.
   and fixes the exact JSON/digest/device-message bytes shared with Ingest. An isolated one-use
   signer removes public unsigned access, rejects a key capability bound to another device, signs
   only the fixed message, and returns the same body plus five header values. The Windows x86_64
-  development sync command accepts only an explicit canonical path matching one exact artifact
-  size/digest, holds the file against write substitution, creates fresh context from an active
-  native record, and sends one no-proxy/no-redirect/no-retry request to the fixed endpoint. The
-  pairing command supplies OS key generation/native custody and only the two exact bounded
-  start/poll paths. The separate `forget-local` command can only delete one derived native-store
-  account, uses identical output for present and absent entries, and explicitly distinguishes that
-  action from server revoke. The operational connector still requires automatic discovery policy,
-  other-platform evidence, safe diagnostics, packaging, provenance, release, and clean-machine
-  privacy evidence.
+  development sync command validates an active native record before selecting only two fixed
+  executable names through at most 64 absolute `PATH` directories and four exact-size hashes, or
+  accepting the explicit path fallback. Both require the same canonical exact artifact size/digest,
+  retain the file against write substitution, create fresh context, and send one
+  no-proxy/no-redirect/no-retry request to the fixed endpoint. The pairing command supplies OS key
+  generation/native custody and only the two exact bounded start/poll paths. The separate
+  `forget-local` command can only delete one derived native-store account, uses identical output for
+  present and absent entries, and explicitly distinguishes that action from server revoke. The
+  operational connector still requires other-platform evidence, safe release diagnostics, packaging,
+  provenance, release, and clean-machine privacy evidence.
 - **Detection:** Local safe diagnostics for selected binary/version, bounded failure reason, and
   child cleanup verification without uploading content.
 - **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified

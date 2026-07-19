@@ -109,21 +109,21 @@ persists the activated binding without printing bearer or key material. A separa
 `forget-local` command deletes only the canonical origin/label native entry without loading it or
 contacting the service, and states that it did not revoke server device authority. A separate
 Windows x86_64 development `sync` command can construct the private launch/context/key capabilities
-only after explicit exact `0.144.5` artifact and active-record admission, then sends one fixed
-signed request and validates one closed acknowledgement without retry or edge-origin headers. A
-separate fixed `propose-car` command starts no Codex process, accepts only exact enum flags and a
-bounded seed, signs one fresh proposal-domain request with the same active native key, sends once
-without retry, and validates only a generic acknowledgement. A checked local Agent Skill now reduces
-a styling request to those exact fields, requires explicit shell-safe origin/label values, invokes
-only that command once, and receives no read, approval, or activation authority. There is still no
-automatic executable discovery, supported version, macOS/Linux admission, clean-machine real-account
-result, credential rotation or automatic server-revoke composition, packaging, release, live pairing
-result, deployment Ingest credential/TLS result, edge deployment, or capacity evidence. Do not claim
-that deployed browser/session HTTP authentication, production-ready recovery or remaining
-unimplemented critical-action verification, real-user ingestion, an operational connector, a Jobs
-scheduler or deployed public-race read, season correction, scheduled or broader cleanup, deployment,
-or a hosted security control exists until its implementation and verification are present in the
-working tree.
+only after active-record review and either bounded fixed-name `PATH` discovery or explicit-path
+admission of the exact `0.144.5` artifact. It then sends one fixed signed request and validates one
+closed acknowledgement without retry or edge-origin headers. A separate fixed `propose-car` command
+starts no Codex process, accepts only exact enum flags and a bounded seed, signs one fresh
+proposal-domain request with the same active native key, sends once without retry, and validates
+only a generic acknowledgement. A checked local Agent Skill now reduces a styling request to those
+exact fields, requires explicit shell-safe origin/label values, invokes only that command once, and
+receives no read, approval, or activation authority. There is still no supported version,
+macOS/Linux admission, clean-machine real-account result, credential rotation or automatic
+server-revoke composition, packaging, release, live pairing result, deployment Ingest credential/TLS
+result, edge deployment, or capacity evidence. Do not claim that deployed browser/session HTTP
+authentication, production-ready recovery or remaining unimplemented critical-action verification,
+real-user ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
+correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
+implementation and verification are present in the working tree.
 
 A second checked local Agent Skill now selects only repository-owned read-only verification from the
 real Git scope, distinguishes focused, root, staged, history, synthetic, and live evidence, and has

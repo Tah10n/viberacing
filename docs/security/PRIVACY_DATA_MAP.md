@@ -288,6 +288,15 @@ exact usage, body, key, nonce, signature, identifiers, and acknowledgement reque
 sent as diagnostics nor printed. The synthetic HTTP test uses only reserved values; repository tests
 never open a real credential or local account.
 
+ADR 0051 adds no collected or retained field and no new sink. Only after active-record validation,
+the candidate command may transiently read a `PATH` value of at most 65,536 encoded bytes, inspect
+at most 64 absolute directory strings, join only two fixed filenames, canonicalize candidate paths
+of at most 2,048 encoded bytes, inspect exact-size regular-file metadata, and hash at most four
+distinct candidates. Those local Security/Operational values, operating-system errors, paths,
+metadata, and digests are never logged, printed, retained, exported, written to a credential, or
+sent over the network. The explicit path fallback has the same non-reflective exact admission.
+Synthetic tests do not inspect an installed Codex binary or real user path.
+
 ADR 0026 adds no data class, persistent field, or sink. The Rust kernel transiently receives the
 already mapped pending private key plus pairing ID/challenge, derives the already mapped public key,
 and returns only the existing ID/signature class. The Web kernel transiently copies the approved
@@ -634,11 +643,11 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   bounded synthetic process evidence. It can compose exact sync bytes only behind a second
   inaccessible reviewed context and sign them only behind a third inaccessible one-use device-key
   capability. `connect` owns native key persistence and fixed start/poll egress. The separate
-  private Windows sync command can construct those capabilities only after exact
-  artifact/active-record review and make one fixed signed upload. It has no automatic discovery,
-  other-platform admission, log/export capability, package, or release; the candidate remains
-  unsupported until clean-machine platform, privacy-egress, packaging, provenance, and release gates
-  pass.
+  private Windows sync command can construct those capabilities only after active-record review and
+  exact artifact admission selected through bounded fixed-name discovery or an explicit path, then
+  make one fixed signed upload. It has no other-platform admission, log/export capability, package,
+  or release; the candidate remains unsupported until clean-machine platform, privacy-egress,
+  packaging, provenance, and release gates pass.
 - Jobs currently receive only bounded cleanup of expired authentication, invitation, ingest,
   pairing, session, CarRecipe-proposal, terminal-deletion-job, database audit-event, and aged
   unreferenced revoked-passkey plus minimized revoked-device state; bounded aged pairing

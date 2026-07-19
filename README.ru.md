@@ -165,36 +165,39 @@ injection, edge signer, direct-origin denial, distributed rate policy и monitor
 после него — candidate `0.144.5` account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает
 email/plan/summary и возвращает не более 31 отсортированной строгой date/token записи. В репозитории
 есть exact release metadata, schema digests, minimal extracts, fixtures и drift/matrix checker.
-Windows x86_64 development-команда допускает только точные size и SHA-256 официального artifact;
-repository tests не запускают пользовательский Codex account, а support matrix остаётся пустой.
-One-shot supervisor проверяет точную sequence на target-built synthetic child: фиксированный
-`app-server` argument, local pipes, очищенное ambient environment, bounded stdout/stderr/time,
-отклонение late output и reap-before-success cleanup. Reviewed-launch capability остаётся приватной
-для exact admission. Второй недоступный reviewed context теперь позволяет candidate composer
-превратить минимизированные записи в точные `ConnectorSyncV1` JSON, SHA-256 digest, unpadded
-base64url nonce и LF-separated device-signature message. Изолированный one-use signer потребляет
-этот закрытый материал вместе с таким же недоступным device-bound Ed25519 key capability и
-возвращает только то же body и пять точных header values. Общий synthetic vector проверяет exact
-public key/signature между Rust и production Ingest verifier. Отдельные pairing signer и Web
-verifier согласованы по точному domain-separated possession message. Локальная signed-in страница
-`/connect` принимает короткий код, показывает ограниченные metadata и полный fingerprint публичного
-ключа, явно выбирает новый или активный существующий opaque source без раскрытия его raw ID, а перед
-атомарным одобрением точного выбора требует свежий passkey assertion. Два закрытых локальных POST
-route открывают versioned pairing start/poll contracts через общий лимит в четыре вызова,
-фиксированную глобальную и 64-bucket PostgreSQL rate policy, ограниченные body и generic `no-store`
-ответы. Локальная Rust-команда `connect` получает Ed25519 key и анонимный rate ID из OS CSPRNG,
-сохраняет prepared/pending/active record только в нативном credential store, доказывает владение
-ключом и возобновляет прерванный poll, не печатая key, token, challenge, source или device ID.
-Отдельная точная команда `forget-local` может удалить только эту нативную запись для canonical
-origin/label, не читая её и не обращаясь к Vibe Racing; фиксированный результат предупреждает, что
-команда не выполняет server device revoke: он остаётся отдельным authenticated account action.
-Отдельная Windows x86_64 команда `sync` canonicalize-ит и hash-проверяет один exact `0.144.5`
-executable, запускает его в новом пустом working directory, создаёт свежие request time/ID/nonce из
-active record, один раз отправляет точное signed body на фиксированный sync path и принимает только
-closed acknowledgement. Она не ищет binary автоматически, не повторяет ambiguous POST и не
-отправляет edge origin proof. Всё ещё нет macOS/Linux admission, live database connection, capacity
-evidence, credential rotation, automatic server-revoke composition, packaging, release,
-поддерживаемого sync connector и deployment.
+Windows x86_64 development-команда после проверки active record выбирает candidate только через
+bounded fixed-name `PATH` discovery или explicit path fallback и в обоих случаях допускает лишь
+точные size и SHA-256 официального artifact; repository tests не запускают пользовательский Codex
+account, а support matrix остаётся пустой. One-shot supervisor проверяет точную sequence на
+target-built synthetic child: фиксированный `app-server` argument, local pipes, очищенное ambient
+environment, bounded stdout/stderr/time, отклонение late output и reap-before-success cleanup.
+Reviewed-launch capability остаётся приватной для exact admission. Второй недоступный reviewed
+context теперь позволяет candidate composer превратить минимизированные записи в точные
+`ConnectorSyncV1` JSON, SHA-256 digest, unpadded base64url nonce и LF-separated device-signature
+message. Изолированный one-use signer потребляет этот закрытый материал вместе с таким же
+недоступным device-bound Ed25519 key capability и возвращает только то же body и пять точных header
+values. Общий synthetic vector проверяет exact public key/signature между Rust и production Ingest
+verifier. Отдельные pairing signer и Web verifier согласованы по точному domain-separated possession
+message. Локальная signed-in страница `/connect` принимает короткий код, показывает ограниченные
+metadata и полный fingerprint публичного ключа, явно выбирает новый или активный существующий opaque
+source без раскрытия его raw ID, а перед атомарным одобрением точного выбора требует свежий passkey
+assertion. Два закрытых локальных POST route открывают versioned pairing start/poll contracts через
+общий лимит в четыре вызова, фиксированную глобальную и 64-bucket PostgreSQL rate policy,
+ограниченные body и generic `no-store` ответы. Локальная Rust-команда `connect` получает Ed25519 key
+и анонимный rate ID из OS CSPRNG, сохраняет prepared/pending/active record только в нативном
+credential store, доказывает владение ключом и возобновляет прерванный poll, не печатая key, token,
+challenge, source или device ID. Отдельная точная команда `forget-local` может удалить только эту
+нативную запись для canonical origin/label, не читая её и не обращаясь к Vibe Racing; фиксированный
+результат предупреждает, что команда не выполняет server device revoke: он остаётся отдельным
+authenticated account action. Отдельная Windows x86_64 команда `sync` сначала проверяет active
+record, затем рассматривает не более 64 абсолютных `PATH` directories и четырёх exact-size hashes
+только для двух фиксированных имён либо использует explicit path fallback. После одинаковой
+canonical size/SHA-256 admission она удерживает и запускает exact `0.144.5` executable в новом
+пустом working directory, создаёт свежие request time/ID/nonce, один раз отправляет точное signed
+body на фиксированный sync path и принимает только closed acknowledgement. Она не повторяет
+ambiguous POST и не отправляет edge origin proof. Всё ещё нет macOS/Linux admission, live database
+connection, capacity evidence, credential rotation, automatic server-revoke composition, packaging,
+release, поддерживаемого sync connector и deployment.
 
 Также добавлена 31 SQL-миграция: 27 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring/CarRecipe

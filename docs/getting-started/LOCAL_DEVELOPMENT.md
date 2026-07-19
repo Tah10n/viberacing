@@ -23,40 +23,41 @@ library-only Rust crate implements the bounded stable App Server initialization 
 candidate `0.144.5` account/usage parser with fixed methods, discarded account/summary fields, and
 bounded normalized daily output. A one-shot supervisor now composes those states with a fixed child
 argument, local pipes, cleared ambient environment, output/deadline limits, and reap-before-success
-behavior. One explicit Windows x86_64 development command can construct that private launch only
-after the selected absolute path matches the exact `0.144.5` artifact size and SHA-256. It then uses
-the active native credential to build the previously inaccessible context/key, sign the exact
-bounded sync JSON, and make one fixed upload. It does not discover a binary, retry the POST, or
-establish support. A separate inaccessible pending-key/challenge signer and pure Web verifier agree
-on an exact synthetic pairing-possession proof. Two transport-free Web/Auth applications create
-bounded pending material and later handle protected poll-verifier derivation, a fixed approved-row
-lookup through a separately probed read-write pool, that strict proof, and exact atomic activation
-with server-owned IDs behind local admission/timing. They cannot perform pairing browser or WebAuthn
-approval themselves; the separate `/connect` flow supplies only that intervening step. Two exact
-local POST routes now compose those applications behind fixed distributed global/client-bucket
-admission, and one pairing-only Rust command generates a device key through the OS CSPRNG, stores
-resumable pairing state in the native credential store, and performs the exact start/poll proof. A
-separate exact local-only command deletes one origin/label native entry without reading it or
-revoking server authority. No supported Codex version, macOS/Linux admission, real-account/deployed
-sync result, package, release, or deployment exists. A local Ingest kernel bounds and authenticates
-a synthetic exact-body sync request, and a separate adapter constrains origin replay, database
-lookup, and submission mapping with mock-pool evidence. A transport-free application composes those
-exact boundaries, generates a server request ID, and validates the acknowledgement/problem decision;
-isolated PostgreSQL tests separately prove atomic replay and cleanup. A bounded local Fastify
-factory now preserves exact raw HTTP evidence, applies no-queue and deadline policy, and serializes
-only revalidated contracts. A separate local host now binds that exact composition only on loopback
-in development/test or under an explicit Railway-edge production declaration, with bounded
-partial-startup cleanup and process shutdown. A separate opt-in gate now proves one full synthetic
-loopback HTTP-to-PostgreSQL path through a disposable dedicated Ingest login. There is no deployment
-database credential/certificate, trusted external TLS/edge path, supported connector adapter, or
-deployment. A bounded local one-shot Jobs process now wraps only cleanup/refresh/finalization, but
-has no live login, scheduler, monitor, or deployment. A bounded server-only Web PostgreSQL adapter
-and local public-score GET are implemented and unit/build-tested, but this repository supplies no
-working deployment login or TLS certificate. A successful setup proves repository gates, synthetic
-frontend behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
-lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
-deployed API, or production flow. The Ingest server tests bind only ephemeral loopback sockets and
-use synthetic requests; no development command exposes it to the LAN or Internet.
+behavior. One Windows x86_64 development command validates the active native credential before
+bounded fixed-name `PATH` discovery or the explicit path fallback, and can construct that private
+launch only after the selected artifact matches the exact `0.144.5` size and SHA-256. It then builds
+the previously inaccessible context/key, signs the exact bounded sync JSON, and makes one fixed
+upload. It does not retry the POST or establish support. A separate inaccessible
+pending-key/challenge signer and pure Web verifier agree on an exact synthetic pairing-possession
+proof. Two transport-free Web/Auth applications create bounded pending material and later handle
+protected poll-verifier derivation, a fixed approved-row lookup through a separately probed
+read-write pool, that strict proof, and exact atomic activation with server-owned IDs behind local
+admission/timing. They cannot perform pairing browser or WebAuthn approval themselves; the separate
+`/connect` flow supplies only that intervening step. Two exact local POST routes now compose those
+applications behind fixed distributed global/client-bucket admission, and one pairing-only Rust
+command generates a device key through the OS CSPRNG, stores resumable pairing state in the native
+credential store, and performs the exact start/poll proof. A separate exact local-only command
+deletes one origin/label native entry without reading it or revoking server authority. No supported
+Codex version, macOS/Linux admission, real-account/deployed sync result, package, release, or
+deployment exists. A local Ingest kernel bounds and authenticates a synthetic exact-body sync
+request, and a separate adapter constrains origin replay, database lookup, and submission mapping
+with mock-pool evidence. A transport-free application composes those exact boundaries, generates a
+server request ID, and validates the acknowledgement/problem decision; isolated PostgreSQL tests
+separately prove atomic replay and cleanup. A bounded local Fastify factory now preserves exact raw
+HTTP evidence, applies no-queue and deadline policy, and serializes only revalidated contracts. A
+separate local host now binds that exact composition only on loopback in development/test or under
+an explicit Railway-edge production declaration, with bounded partial-startup cleanup and process
+shutdown. A separate opt-in gate now proves one full synthetic loopback HTTP-to-PostgreSQL path
+through a disposable dedicated Ingest login. There is no deployment database credential/certificate,
+trusted external TLS/edge path, supported connector adapter, or deployment. A bounded local one-shot
+Jobs process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor,
+or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
+implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
+certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
+boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
+database role isolation; it does not prove a live adapter, deployed API, or production flow. The
+Ingest server tests bind only ephemeral loopback sockets and use synthetic requests; no development
+command exposes it to the LAN or Internet.
 
 ## Prerequisites
 
@@ -181,8 +182,8 @@ no deployment exists merely because the local operations are documented.
 
 Connector-focused commands use only checked-in synthetic fixtures. Rust tests launch a target-built
 fixture executable to prove fixed arguments, environment isolation, protocol order, timeout,
-stdout/stderr overload, and cleanup. They do not discover or launch Codex, read a local account,
-open a credential store, or upload:
+stdout/stderr overload, cleanup, and bounded candidate-selection logic. They do not discover or
+launch an installed Codex binary, read a local account, open a credential store, or upload:
 
 ```text
 pnpm run check:codex-compatibility
@@ -199,13 +200,15 @@ After an explicit `connect` has activated the same origin and label, a Windows x
 manually run one candidate sync:
 
 ```text
-cargo run -p viberacing-connector -- sync --origin <https-origin> --label <device-label> --codex <absolute-codex-0.144.5-executable>
+cargo run -p viberacing-connector -- sync --origin <https-origin> --label <device-label> [--codex <absolute-codex-0.144.5-executable>]
 ```
 
 This command intentionally reads the local account's bounded daily usage and sends it once to the
-explicit origin. It fails unless the executable exactly matches the checked-in candidate artifact
-policy. It does not supply edge origin proof, so a real remote origin still needs the separately
-reviewed edge/Ingest deployment path; loopback tests use synthetic data only.
+explicit origin. Without `--codex` it considers only two fixed executable names through a bounded
+absolute-directory `PATH` search; the optional explicit path is the controlled fallback. Both forms
+fail unless the executable exactly matches the checked-in candidate size/SHA-256 policy and can be
+held against write substitution. It does not supply edge origin proof, so a real remote origin still
+needs the separately reviewed edge/Ingest deployment path; loopback tests use synthetic data only.
 
 Ingest-focused commands use only synthetic key material, injected capabilities, and mock database
 pools:

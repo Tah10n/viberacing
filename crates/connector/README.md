@@ -64,8 +64,12 @@ The implemented surface is deliberately narrow:
   account, invokes only credential deletion, and treats both deleted and absent entries as success;
 - one fixed identifier-free removal result that explicitly says server device authority was not
   revoked, with no record load, signer construction, Codex process, HTTP request, or browser access;
-- one explicit `sync --origin <origin> --label <label> --codex <absolute-path>` command that
-  requires an active record and never discovers a binary or accepts an environment path override;
+- one `sync --origin <origin> --label <label> [--codex <absolute-path>]` command that requires an
+  active record before bounded candidate discovery or identical explicit-path admission and accepts
+  no separate environment path override;
+- discovery through at most 64 absolute directories from a 65,536-byte `PATH`, only fixed names
+  `codex.exe` and `codex-x86_64-pc-windows-msvc.exe`, 2,048-byte canonical candidate paths, exact
+  regular-file size filtering, canonical deduplication, and at most four distinct hashes;
 - Windows x86_64 admission for the exact `0.144.5` official artifact byte count and SHA-256 digest,
   with exact-version-only output and a no-write-sharing handle retained through direct launch;
 - fresh OS-random sync ID and nonce, canonical millisecond UTC, active-record source/device/key
@@ -87,11 +91,11 @@ The implemented surface is deliberately narrow:
 `ReviewedCodexLaunch`, `PendingDevicePairingSigningKey`, `ReviewedPairingChallenge`,
 `ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public constructors. The
 private pairing command constructs only its two pending capabilities; the private sync command can
-construct the launch/context/key capabilities only after exact artifact and active-record review.
-There is no automatic discovery, macOS/Linux executable admission, WebSocket transport, generic
-JSON-RPC or HTTP method, scheduler, installer, credential rotation, automatic server-revoke
-composition, package, or release artifact. Browser approval and edge origin proof remain separate
-server-side boundaries. The checked-in
+construct the launch/context/key capabilities only after active-record review and exact artifact
+admission from bounded fixed-name discovery or an explicit path. There is no macOS/Linux executable
+admission, WebSocket transport, generic JSON-RPC or HTTP method, scheduler, installer, credential
+rotation, automatic server-revoke composition, package, or release artifact. Browser approval and
+edge origin proof remain separate server-side boundaries. The checked-in
 [`0.144.5` candidate evidence](../../compat/codex/0.144.5/manifest.json) is development evidence
 only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty until
 clean-machine platform, privacy, packaging, provenance, and release evidence all pass.
@@ -101,7 +105,7 @@ The local command shapes are:
 ```text
 viberacing-connector connect --origin <https-origin> --label <device-label>
 viberacing-connector forget-local --origin <https-origin> --label <device-label>
-viberacing-connector sync --origin <https-origin> --label <device-label> --codex <absolute-path>
+viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]
 viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>
 ```
 
@@ -110,12 +114,13 @@ Running `connect` creates a real local keyring entry even when the server later 
 connect process at a time. `forget-local` deletes only the exact origin/label entry and is
 idempotent; it neither revokes the registered server device nor erases copied key material, so the
 user must reconcile and revoke that device separately in the authenticated account. `sync` is
-Windows x86_64 candidate development behavior: it reads the active native record, starts only the
-exact admitted artifact, and sends private daily usage once to the explicit origin. `propose-car`
-uses the same active native record but starts no Codex process and can only create a private
-proposal for later browser review. The Agent Skill requires explicit shell-safe origin/label values,
-invokes only `propose-car` once, and is forbidden from invoking local credential removal. No
-checked-in default server, credential, code, or released binary exists.
+Windows x86_64 candidate development behavior: it reads the active native record before bounded
+fixed-name discovery or explicit-path admission, starts only the exact admitted artifact, and sends
+private daily usage once to the explicit origin. `propose-car` uses the same active native record
+but starts no Codex process and can only create a private proposal for later browser review. The
+Agent Skill requires explicit shell-safe origin/label values, invokes only `propose-car` once, and
+is forbidden from invoking local credential removal. No checked-in default server, credential, code,
+or released binary exists.
 
 Run the focused gate from the repository root:
 

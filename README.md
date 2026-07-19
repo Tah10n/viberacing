@@ -190,11 +190,12 @@ proves possession, and resumes an interrupted pending poll without printing key,
 source, or device IDs. A separate exact `forget-local` command can delete only that canonical
 origin/label native entry without reading it or contacting Vibe Racing; its fixed output warns that
 it does not revoke server device authority, which remains a separate authenticated account action. A
-separate explicit Windows x86_64 `sync` command now canonicalizes and hash-admits one exact
-`0.144.5` executable, launches it in a fresh empty working directory, creates fresh request
-time/ID/nonce from the active record, sends the exact signed body once to the fixed sync path, and
-accepts only a closed acknowledgement. It does not discover binaries, retry an ambiguous POST, or
-send edge origin proof. There is still no macOS/Linux admission or result, live protected key
+separate Windows x86_64 `sync` command now requires an active record, then either discovers the
+exact `0.144.5` executable through a fixed-name, resource-bounded `PATH` policy or accepts an
+explicit path under the same canonical size/SHA-256 admission. It launches the held file in a fresh
+empty working directory, creates fresh request time/ID/nonce, sends the exact signed body once to
+the fixed sync path, and accepts only a closed acknowledgement. It does not retry an ambiguous POST
+or send edge origin proof. There is still no macOS/Linux admission or result, live protected key
 injection, edge signer/direct-origin denial, deployed host/TLS/database login, capacity evidence,
 credential rotation, automatic server-revoke composition, packaging, release, monitoring, supported
 connector, or deployment. Thirty-seven SQL migrations now add 27 private identity, passkey,

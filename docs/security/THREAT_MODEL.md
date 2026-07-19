@@ -36,32 +36,33 @@ global/client-bucket PostgreSQL windows. The bounded Rust client generates and s
 through the native OS credential store, signs the exact proof, persists activation before success
 output, and can delete only the exact local origin/label record with an explicit warning that server
 authority was not revoked. No Codex launch or sync-context capability has a public constructor. A
-separate private Windows x86_64 development command can construct them only after exact
-explicit-path artifact admission and active-record review, then sends one fixed signed sync without
-retry or edge credentials. It cannot discover a binary, admit another platform/version, or create a
-support claim. Its database-only Community ingest plus bounded ingest- and authentication-retention
-boundaries have synthetic executable evidence. The kernel has raw-envelope, origin-proof,
-bounded-parser, contract, and strict device-signature evidence; the adapter has configuration,
-fixed-query, role-probe, mapper, and failure evidence with mock pools. A local server factory now
-has loopback framing and injection evidence. A separate local host proves exact loopback/Railway
-listener declarations, composition, bind, partial-startup cleanup, and bounded signal shutdown. One
-opt-in synthetic gate now exercises signed accepted/duplicate/replay/revoke HTTP through that
-emitted host and a disposable least-privileged PostgreSQL login with exact stored-state
-verification. It proves no live HTTP edge, trusted external TLS route, deployment credential/TLS
-connection, real-user result, or capacity. The public score/race/status routes have
-request/response, admission, production-build, and visible browser-consumer/fallback evidence, while
-the Jobs runner has strict command/config/pool/role/result evidence plus a synthetic
-CLI-to-PostgreSQL path with a widened-login denial and exact-state checks. The identity slice has
-exact-origin/body/cookie, state/PKCE, token minimization, initial-registration, returning-login,
-session-derived passkey inventory, non-current-key revocation, backup-key addition, exact-handle
-profile-deletion request, source inventory/pause/reactivation/unlink, and active-device revoke
-including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth
-`form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay server-only;
-source controls receive only a 15-minute encrypted token bound to the active session. None has a
-production database login, OAuth app, authenticator, edge, scheduler, cache/backup purge,
-tombstone/restore replay, or network deployment. Controls below are marked **implemented** only when
-executable evidence exists in [implementation status](../IMPLEMENTATION_STATUS.md). Other controls
-are release requirements, not security claims about the current tree.
+separate private Windows x86_64 development command can construct them only after active-record
+review and exact artifact admission selected through bounded fixed-name `PATH` discovery or an
+explicit path, then sends one fixed signed sync without retry or edge credentials. It cannot admit
+another platform/version or create a support claim. Its database-only Community ingest plus bounded
+ingest- and authentication-retention boundaries have synthetic executable evidence. The kernel has
+raw-envelope, origin-proof, bounded-parser, contract, and strict device-signature evidence; the
+adapter has configuration, fixed-query, role-probe, mapper, and failure evidence with mock pools. A
+local server factory now has loopback framing and injection evidence. A separate local host proves
+exact loopback/Railway listener declarations, composition, bind, partial-startup cleanup, and
+bounded signal shutdown. One opt-in synthetic gate now exercises signed
+accepted/duplicate/replay/revoke HTTP through that emitted host and a disposable least-privileged
+PostgreSQL login with exact stored-state verification. It proves no live HTTP edge, trusted external
+TLS route, deployment credential/TLS connection, real-user result, or capacity. The public
+score/race/status routes have request/response, admission, production-build, and visible
+browser-consumer/fallback evidence, while the Jobs runner has strict command/config/pool/role/result
+evidence plus a synthetic CLI-to-PostgreSQL path with a widened-login denial and exact-state checks.
+The identity slice has exact-origin/body/cookie, state/PKCE, token minimization,
+initial-registration, returning-login, session-derived passkey inventory, non-current-key
+revocation, backup-key addition, exact-handle profile-deletion request, source
+inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile PostgreSQL
+evidence, fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence
+with injected dependencies. Raw source IDs stay server-only; source controls receive only a
+15-minute encrypted token bound to the active session. None has a production database login, OAuth
+app, authenticator, edge, scheduler, cache/backup purge, tombstone/restore replay, or network
+deployment. Controls below are marked **implemented** only when executable evidence exists in
+[implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
+security claims about the current tree.
 
 ### Assets and security objectives
 
@@ -106,19 +107,19 @@ arbitrary user files are prohibited data, not assets the service may collect.
 
 ### Trust boundaries
 
-| ID    | Boundary                                                | Untrusted side                                                        | Trusted decision point                                                                     | Principal failure modes                                                                     |
-| ----- | ------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| TB-01 | Visitor browser to Cloudflare edge                      | Browser state, URL, headers, body, cookies, automation                | Edge policy and Web/Auth validation                                                        | XSS, CSRF, IDOR, cache confusion, redirects, scraping, denial of service                    |
-| TB-02 | GitHub OAuth, recovery secret, and WebAuthn to Web/Auth | Callback, recovery selector/secret, browser ceremony, upstream errors | Exact OAuth binding, bounded Argon2id verification, and RP/origin/challenge validation     | Login CSRF, account oracle, offline guessing, replay, fixation, recovery or step-up bypass  |
-| TB-03 | Local Codex App Server to connector                     | Process path, JSONL framing, JSON values, stderr, timing              | Pinned compatibility adapter and strict field allowlist                                    | Prompt or credential exfiltration, parser abuse, process escape, resource exhaustion        |
-| TB-04 | Local key store and scheduler to connector              | Host filesystem, environment, job definition, local user              | OS credential API, exact local deletion, fixed executable/arguments, path ownership checks | Key theft, shell injection, binary substitution, false revoke assumption, persistence abuse |
-| TB-05 | Connector to public edge                                | Entire payload except possession proof                                | Edge proof plus ingest signature, source, schema, nonce, and idempotency validation        | Forgery, replay, cross-source submission, oversized input, request floods                   |
-| TB-06 | Cloudflare edge to Railway origins                      | Forwarded headers and edge proof                                      | Origin verifier before application routing                                                 | Direct-origin bypass, stale proof, body substitution, spoofed client IP                     |
-| TB-07 | Web/Auth, Ingest, and Jobs to PostgreSQL                | Service queries and compromised runtime role                          | Adapter session probes plus database grants, procedures, constraints, and transactions     | SQL injection, role escalation, cross-profile writes, finalized-season mutation             |
-| TB-08 | User session to admin surface                           | Normal identity and browser claims                                    | Separate origin, Cloudflare Access, admin policy, fresh passkey, audit                     | Privilege escalation, confused deputy, shared-account actions                               |
-| TB-09 | Source and dependencies to CI                           | Pull-request tree and upstream artifacts                              | Secretless read-only CI, protected review, pinned inputs                                   | Workflow injection, credential theft, dependency substitution, artifact publication         |
-| TB-10 | Protected source to release consumers                   | Build runner, signing environment, downloadable artifact              | Protected release workflow, signatures, checksums, SBOM, provenance                        | Official malware, key compromise, unsigned substitution, rollback failure                   |
-| TB-11 | Primary data to backups, logs, support, and deletion    | Copies and derived operational records                                | Retention, access, redaction, purge, restore replay                                        | Data over-retention, resurrection, support disclosure, unaudited access                     |
+| ID    | Boundary                                                | Untrusted side                                                        | Trusted decision point                                                                        | Principal failure modes                                                                     |
+| ----- | ------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| TB-01 | Visitor browser to Cloudflare edge                      | Browser state, URL, headers, body, cookies, automation                | Edge policy and Web/Auth validation                                                           | XSS, CSRF, IDOR, cache confusion, redirects, scraping, denial of service                    |
+| TB-02 | GitHub OAuth, recovery secret, and WebAuthn to Web/Auth | Callback, recovery selector/secret, browser ceremony, upstream errors | Exact OAuth binding, bounded Argon2id verification, and RP/origin/challenge validation        | Login CSRF, account oracle, offline guessing, replay, fixation, recovery or step-up bypass  |
+| TB-03 | Local Codex App Server to connector                     | Process path, JSONL framing, JSON values, stderr, timing              | Bounded exact-artifact selection, pinned adapter, strict field allowlist                      | Prompt or credential exfiltration, parser abuse, process escape, resource exhaustion        |
+| TB-04 | Local key store and scheduler to connector              | Host filesystem, environment, job definition, local user              | OS credential API, exact local deletion, fixed executable/arguments, retained artifact handle | Key theft, shell injection, binary substitution, false revoke assumption, persistence abuse |
+| TB-05 | Connector to public edge                                | Entire payload except possession proof                                | Edge proof plus ingest signature, source, schema, nonce, and idempotency validation           | Forgery, replay, cross-source submission, oversized input, request floods                   |
+| TB-06 | Cloudflare edge to Railway origins                      | Forwarded headers and edge proof                                      | Origin verifier before application routing                                                    | Direct-origin bypass, stale proof, body substitution, spoofed client IP                     |
+| TB-07 | Web/Auth, Ingest, and Jobs to PostgreSQL                | Service queries and compromised runtime role                          | Adapter session probes plus database grants, procedures, constraints, and transactions        | SQL injection, role escalation, cross-profile writes, finalized-season mutation             |
+| TB-08 | User session to admin surface                           | Normal identity and browser claims                                    | Separate origin, Cloudflare Access, admin policy, fresh passkey, audit                        | Privilege escalation, confused deputy, shared-account actions                               |
+| TB-09 | Source and dependencies to CI                           | Pull-request tree and upstream artifacts                              | Secretless read-only CI, protected review, pinned inputs                                      | Workflow injection, credential theft, dependency substitution, artifact publication         |
+| TB-10 | Protected source to release consumers                   | Build runner, signing environment, downloadable artifact              | Protected release workflow, signatures, checksums, SBOM, provenance                           | Official malware, key compromise, unsigned substitution, rollback failure                   |
+| TB-11 | Primary data to backups, logs, support, and deletion    | Copies and derived operational records                                | Retention, access, redaction, purge, restore replay                                           | Data over-retention, resurrection, support disclosure, unaudited access                     |
 
 ### Input ownership
 
@@ -158,10 +159,10 @@ pass into trusted-source, hosted, or production evidence.
 - No Codex version is supported until version-specific generated schemas and synthetic compatibility
   fixtures pass. The connector foundation already fixes the default local stdio JSONL handshake,
   omits experimental API capability, rejects unknown fields, and proves a bounded one-shot
-  handshake/account/usage child lifecycle with a synthetic executable. Exact Windows x86_64 artifact
-  admission and one signed upload path now exist as development code; clean-machine
-  selected-artifact/account privacy evidence, other platforms, release provenance, and operational
-  account/usage remain blocked.
+  handshake/account/usage child lifecycle with a synthetic executable. Bounded fixed-name Windows
+  x86_64 candidate selection, exact artifact admission, and one signed upload path now exist as
+  development code; clean-machine selected-artifact/account privacy evidence, other platforms,
+  release provenance, and operational account/usage remain blocked.
 - Production anti-abuse thresholds and incident evidence remain private. Public code still defines
   safe maximum shapes, state machines, and tests so secrecy is never the only control.
 
@@ -178,7 +179,7 @@ and migration or rollback where applicable.
 | Public race and profiles            | A visitor injects markup through a handle/car, enumerates profiles, or infers exact work hours                                  | Plain-text bounded names, enum-only recipe, CSP, public-field allowlist, immediate hide, rounded freshness, optional streak, rate/cache policy                    | Score/race/status routes, fallback, recipe/status rejection, and hide/publish tested; cache, rate, load, live integration planned        |
 | OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up                          | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke                                  | Enrollment/login/passkey controls, recovery and bounded expired/revoked-state cleanup tested; edge, schedule, notification, live planned |
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration                                | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, pause, unlink, revoke, and rotate                                         | DB, approval, lifecycle, exact HTTP/native client, proof/activation tested; live/cross-platform/edge evidence planned                    |
-| Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command                           | Exact binary discovery, ownership and link checks, bounded child/output/time, sanitized environment, no shell, strict adapter                                     | Protocol, supervisor, exact Windows candidate admission tested; discovery, other platforms, support planned                              |
+| Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command                           | Bounded fixed-name selection, exact artifact admission, retained handle, bounded child/output/time, sanitized environment, no shell, strict adapter               | Protocol, supervisor, synthetic Windows discovery/admission tested; other platforms, support planned                                     |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                                         | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                                                         | Local signer/vector, verifier, replay stores, application, and HTTP tested; operational/live planned                                     |
 | Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                                          | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                                                   | Local verifier/config/replay/server/host tested; edge injection, trusted route, direct-origin planned                                    |
 | Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections                                  | Strict versioned schema, bounded bodies, fixed adapter, stored procedure, non-owner role, constraints, deadlines, backpressure                                    | Full synthetic loopback HTTP-to-PostgreSQL plus isolated SQL tested; deployment operations planned                                       |
@@ -222,20 +223,21 @@ and migration or rollback where applicable.
    exposes only bounded daily entries, and fails terminally on drift. The one-shot supervisor clears
    ambient environment, uses fixed local pipes/arguments, bounds output and time, discards stderr,
    checks late output, and gates success on reap. Its launch capability has no public constructor;
-   the private Windows command can construct it only after canonical-path, exact-size/digest, and
-   held-handle admission. This still cannot become a support claim. The composer separately consumes
-   only the bounded parser output plus an inaccessible reviewed context, revalidates every body and
-   unsigned device-header input it owns, and fixes exact JSON/digest/device-message bytes shared
-   with Ingest. The isolated signer removes public unsigned access, checks that its inaccessible
-   one-use key capability names the exact request device, signs only that message, and returns the
-   same body plus five header values. Drop paths zero the private byte buffers and key material,
-   while errors remain non-reflective. The pairing command owns OS entropy, native key custody,
-   exact HTTPS/loopback start/poll egress, bounded retries, and non-reflective output. The separate
-   sync command creates fresh context from only the active record and sends one fixed-path request
-   with five exact device headers, no proxy/redirect/retry, and a closed acknowledgement. The
-   separate `forget-local` command invokes only native deletion for one canonical origin/label,
-   treats absence idempotently, and explicitly says server authority was not revoked. Automatic
-   discovery, cross-platform execution, real-account privacy evidence, credential rotation,
+   the private Windows command can construct it only after active-record validation, bounded
+   fixed-name discovery or an explicit path, canonical exact-size/digest admission, and a held
+   handle. This still cannot become a support claim. The composer separately consumes only the
+   bounded parser output plus an inaccessible reviewed context, revalidates every body and unsigned
+   device-header input it owns, and fixes exact JSON/digest/device-message bytes shared with Ingest.
+   The isolated signer removes public unsigned access, checks that its inaccessible one-use key
+   capability names the exact request device, signs only that message, and returns the same body
+   plus five header values. Drop paths zero the private byte buffers and key material, while errors
+   remain non-reflective. The pairing command owns OS entropy, native key custody, exact
+   HTTPS/loopback start/poll egress, bounded retries, and non-reflective output. The separate sync
+   command creates fresh context from only the active record and sends one fixed-path request with
+   five exact device headers, no proxy/redirect/retry, and a closed acknowledgement. The separate
+   `forget-local` command invokes only native deletion for one canonical origin/label, treats
+   absence idempotently, and explicitly says server authority was not revoked. Cross-platform
+   execution, real-account privacy evidence, credential rotation, safe release diagnostics,
    packaging, and release review remain required.
 5. **Direct-origin and header spoofing.** A client avoids edge shaping or supplies a false
    forwarding address. The local kernel verifies one fresh, replay-consumed HMAC proof bound to key

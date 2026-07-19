@@ -79,23 +79,24 @@ Two closed local POST routes now compose both applications behind one shared fou
 boundary, versioned request/response validation, generic problems, and revision 0022's fixed
 global-and-64-bucket distributed rate windows. A bounded Rust `connect` command generates a key and
 client rate ID with the OS CSPRNG, persists resumable state only in a native credential store, and
-performs the exact start/proof/poll sequence. A separate Windows x86_64 `sync` command now
-canonicalizes and hash-admits one explicit exact `0.144.5` artifact, holds its file against write
-substitution through launch, uses a fresh empty working directory and the existing bounded
-supervisor, creates fresh context from the active native record, and sends one exact signed body to
-the fixed endpoint without retry or edge-origin headers. Its loopback HTTP evidence validates only
-the five device headers and closed acknowledgement. A separate exact `forget-local` command derives
-the same native-store account from a canonical origin and bounded label, invokes only idempotent
-credential deletion, and emits one fixed warning that server device authority was not revoked. It
-does not load the record, construct a signer, start Codex, or make a network call. No live database
-connection, real-account end-to-end result, released artifact, or deployment is claimed. Candidate
-release, schema, fixture, synthetic-process, admission, composer, pairing, signer, and
-loopback-upload evidence does not populate the support matrix. Phase 0 hosted-publication controls
-remain blocked on real maintainer identities and GitHub configuration. No production-ready anonymous
-edge perimeter, distributed recovery perimeter or cleanup, production secret-manager/edge key
-injection, trusted external Ingest TLS/edge route, production deployment, production Web/Jobs/Ingest
-database login/TLS integration, released or operational connector, supported Codex version,
-real-user ingestion, end-to-end public ranking, or finalization scheduler exists.
+performs the exact start/proof/poll sequence. A separate Windows x86_64 `sync` command now checks an
+active record before either bounded fixed-name `PATH` discovery or explicit-path admission of the
+exact `0.144.5` artifact, holds its file against write substitution through launch, uses a fresh
+empty working directory and the existing bounded supervisor, creates fresh context from the active
+native record, and sends one exact signed body to the fixed endpoint without retry or edge-origin
+headers. Its loopback HTTP evidence validates only the five device headers and closed
+acknowledgement. A separate exact `forget-local` command derives the same native-store account from
+a canonical origin and bounded label, invokes only idempotent credential deletion, and emits one
+fixed warning that server device authority was not revoked. It does not load the record, construct a
+signer, start Codex, or make a network call. No live database connection, real-account end-to-end
+result, released artifact, or deployment is claimed. Candidate release, schema, fixture,
+synthetic-process, admission, composer, pairing, signer, and loopback-upload evidence does not
+populate the support matrix. Phase 0 hosted-publication controls remain blocked on real maintainer
+identities and GitHub configuration. No production-ready anonymous edge perimeter, distributed
+recovery perimeter or cleanup, production secret-manager/edge key injection, trusted external Ingest
+TLS/edge route, production deployment, production Web/Jobs/Ingest database login/TLS integration,
+released or operational connector, supported Codex version, real-user ingestion, end-to-end public
+ranking, or finalization scheduler exists.
 
 ## Implemented and locally verified
 
@@ -188,36 +189,37 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   fixture and cover exact composition, environment filtering, timeout, early exit, stdout/stderr
   overload before and after the final response, non-reflection, missing executable, nonzero terminal
   status, and forced cleanup. The opaque launch capability has no public constructor. The private
-  Windows x86_64 sync command can construct it only after an explicit canonical path matches the
-  exact candidate artifact size and SHA-256 while a no-write-sharing handle remains open. There is
-  no automatic discovery, macOS/Linux admission, clean-machine real-account result, supported Codex
-  version, installer, or released binary. A candidate pairing signer now consumes inaccessible
-  pending-key/challenge capabilities and signs one exact domain-separated
-  transaction/challenge/public-key message. A server-only Web kernel independently validates exact
-  approved material and the canonical signature under strict Ed25519 semantics. Five Rust and seven
-  Web cases share the same synthetic key/vector, reject changed or malformed inputs and zero
-  material, and prove copy-before-await behavior. There is now a protected primary/secondary
-  poll-token verifier plus closed local start and activation database/application compositions. The
-  signed-in `/connect` path supplies WebAuthn approval, and the versioned HTTP routes plus
-  native-store Rust client complete a local pairing path. There is still no live database login,
-  deployed edge, cross-platform result, or released connector. A separate candidate-only composer
-  consumes the real parser output behind another capability with no public constructor. It
-  revalidates source/sync/device IDs, canonical UTC time, and daily bounds; manually emits the exact
-  seven-field body; computes the SHA-256 digest; and builds the exact unpadded base64url,
-  LF-separated device message. An isolated one-use signer consumes that otherwise inaccessible value
-  with a device-bound Ed25519 key capability, rejects an exact device mismatch, signs only the fixed
-  message, and returns the same body plus five header values. Nine Rust sync cases plus one
-  production-path Ingest case share and strictly verify an exact synthetic body, public-key, and
-  signature vector. Prepared/signed private byte buffers and the upstream key are zeroed on drop.
-  The one-shot sync command now constructs those private capabilities only from an active record,
-  fresh OS-random sync ID/nonce, and canonical `20xx` millisecond UTC. It performs one no-proxy,
-  no-redirect fixed-path POST and validates a bounded request-ID/sync-ID-matched acknowledgement;
-  five focused cases cover time, binding, exact HTTP egress, excess accepted-count rejection, and
-  refusal before connection. The pairing command supplies fresh OS entropy, a bounded local
-  clock/retry policy, native key custody, and exact pairing transport. The separate sync command
-  supplies only the local candidate context and one upload; no schedule, deployed egress, packaging,
-  release, or support claim exists, and the compatibility matrix remains empty. A third fixed
-  `propose-car` command starts no Codex process: it accepts only explicit recipe enums and a
+  Windows x86_64 sync command can construct it only after the active record is validated and either
+  bounded fixed-name `PATH` discovery or an explicit canonical path matches the exact candidate
+  artifact size and SHA-256 while a no-write-sharing handle remains open. Discovery examines at most
+  64 absolute directories and four distinct exact-size files under fixed path budgets. There is no
+  macOS/Linux admission, clean-machine real-account result, supported Codex version, installer, or
+  released binary. A candidate pairing signer now consumes inaccessible pending-key/challenge
+  capabilities and signs one exact domain-separated transaction/challenge/public-key message. A
+  server-only Web kernel independently validates exact approved material and the canonical signature
+  under strict Ed25519 semantics. Five Rust and seven Web cases share the same synthetic key/vector,
+  reject changed or malformed inputs and zero material, and prove copy-before-await behavior. There
+  is now a protected primary/secondary poll-token verifier plus closed local start and activation
+  database/application compositions. The signed-in `/connect` path supplies WebAuthn approval, and
+  the versioned HTTP routes plus native-store Rust client complete a local pairing path. There is
+  still no live database login, deployed edge, cross-platform result, or released connector. A
+  separate candidate-only composer consumes the real parser output behind another capability with no
+  public constructor. It revalidates source/sync/device IDs, canonical UTC time, and daily bounds;
+  manually emits the exact seven-field body; computes the SHA-256 digest; and builds the exact
+  unpadded base64url, LF-separated device message. An isolated one-use signer consumes that
+  otherwise inaccessible value with a device-bound Ed25519 key capability, rejects an exact device
+  mismatch, signs only the fixed message, and returns the same body plus five header values. Nine
+  Rust sync cases plus one production-path Ingest case share and strictly verify an exact synthetic
+  body, public-key, and signature vector. Prepared/signed private byte buffers and the upstream key
+  are zeroed on drop. The one-shot sync command now constructs those private capabilities only from
+  an active record, fresh OS-random sync ID/nonce, and canonical `20xx` millisecond UTC. It performs
+  one no-proxy, no-redirect fixed-path POST and validates a bounded request-ID/sync-ID-matched
+  acknowledgement; five focused cases cover time, binding, exact HTTP egress, excess accepted-count
+  rejection, and refusal before connection. The pairing command supplies fresh OS entropy, a bounded
+  local clock/retry policy, native key custody, and exact pairing transport. The separate sync
+  command supplies only the local candidate context and one upload; no schedule, deployed egress,
+  packaging, release, or support claim exists, and the compatibility matrix remains empty. A third
+  fixed `propose-car` command starts no Codex process: it accepts only explicit recipe enums and a
   canonical bounded seed, loads the active native device key, creates a fresh nonce/time, signs the
   proposal-specific exact body message, sends one no-retry fixed-path POST, and validates only a
   generic acknowledgement. Four Rust proposal cases share the exact body/message/key/signature
@@ -232,7 +234,7 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   prove enum, shell, invocation-allowlist, retry, authority, output, front matter, UI metadata,
   command, Git-scope, runtime, public-output, and evidence-claim drift fail closed. No released
   connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and forty-nine accepted design decisions covering Community trust,
+- An ADR lifecycle/template and fifty-one accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -250,7 +252,8 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   projection, bounded local credential removal, expired-session and invite retention, bounded
   repository verification orchestration, terminal deletion-job retention, and database audit-event
   retention, pairing approval-provenance retention, revoked-passkey retention cleanup, plus
-  revoked-device retention cleanup.
+  revoked-device retention cleanup, bounded pairing-rate-window reset, and bounded candidate
+  executable discovery.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -842,11 +845,13 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   separate local-only `forget-local` command deletes the exact origin/label native entry without
   loading or decoding it, treats an absent entry as the same success, and states that server revoke
   remains separate. Rust tests cover command/origin/record/response, start-to-active behavior,
-  delete-only invocation, identifier-free output, missing/extra/duplicate arguments, and native
-  result mapping under format/check/Clippy. Tests use an injected store and do not touch a real OS
-  credential entry. The separate candidate sync path is documented above; there is no cross-platform
-  runtime result, real HTTP/Web/database pairing result, key rotation, server-revoke composition,
-  package, signed release, or support claim.
+  delete-only invocation, identifier-free output, missing/extra/duplicate arguments, native result
+  mapping, default candidate discovery, explicit-path fallback, hostile filename/directory cases,
+  and every discovery resource bound under format/check/Clippy. Tests use an injected store and
+  synthetic files; they do not touch a real OS credential entry or installed Codex binary. The
+  separate candidate sync path is documented above; there is no cross-platform runtime result, real
+  HTTP/Web/database pairing result, key rotation, server-revoke composition, package, signed
+  release, or support claim.
 - A private TypeScript Jobs workspace now accepts exactly either a fixed 1000-row authentication/
   audit-event/invite/CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job/aged-
   revoked-passkey/aged-revoked-device cleanup command, a fixed 1000-row pairing approval-provenance
@@ -1059,18 +1064,18 @@ authentication, audit-event, invitation, CarRecipe-proposal, ingest, pairing, se
 terminal-deletion-job, aged revoked-passkey state, and aged minimized revoked-device state plus
 pairing approval-provenance redaction, pairing-rate-window reset, and primary deletion, cleanup for
 remaining expiring state, the Jobs scheduler and production login/TLS path, audited corrections,
-deployed public-score delivery, cache/backup/tombstone purge and restore replay, connector automatic
-discovery and macOS/Linux executable admission, clean-machine live Codex/privacy evidence, supported
-operational account/usage integration, deployed signed-upload egress, credential rotation and
-automated server-revoke composition, packaging, release signing, deployment, and public beta
-operations remain proposed. The local Ingest key reader, kernel, adapter, application composer,
-Fastify server, and separate host now prove bounded protected configuration, raw-envelope/JSON/HTTP
-framing, origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query,
-orchestration, no-queue/deadline policy, exact listener modes, bounded startup/shutdown,
-result/problem serialization, and one full synthetic loopback persistence path, but not those
-deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database score and
-compatible active-recipe race projections, versioned response-only schemas, fail-closed server
-mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media parsing,
+deployed public-score delivery, cache/backup/tombstone purge and restore replay, connector
+macOS/Linux executable admission, clean-machine live Codex/privacy evidence, supported operational
+account/usage integration, deployed signed-upload egress, credential rotation and automated
+server-revoke composition, packaging, release signing, deployment, and public beta operations remain
+proposed. The local Ingest key reader, kernel, adapter, application composer, Fastify server, and
+separate host now prove bounded protected configuration, raw-envelope/JSON/HTTP framing,
+origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query, orchestration,
+no-queue/deadline policy, exact listener modes, bounded startup/shutdown, result/problem
+serialization, and one full synthetic loopback persistence path, but not those deployed edge,
+secret, TLS, capacity, or operational boundaries. Bounded database score and compatible
+active-recipe race projections, versioned response-only schemas, fail-closed server mappers, bounded
+PostgreSQL adapters, and local HTTP routes now exist, including URL/media parsing,
 admission/deadline policy, store translation, and final serialization. A third compatible local
 status projection/contract/route now supplies complete-UTC-day freshness and preference-gated streak
 without changing either older response. Cache/invalidation, deployed device-proposal ingress,

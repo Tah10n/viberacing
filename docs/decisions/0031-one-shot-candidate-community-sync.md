@@ -61,6 +61,13 @@ This is a local development slice, not a supported or released connector. It add
 execution, automatic discovery, macOS/Linux admission, credential migration, production origin, edge
 proof, deployment entry point, live database login, package, updater, or support-matrix row.
 
+## Later decision
+
+[ADR 0051](0051-bounded-candidate-executable-discovery.md) later adds a bounded fixed-name `PATH`
+selection path while retaining this explicit `--codex` form and every exact artifact-admission
+requirement above. This ADR remains the record of the original explicit-path slice; ADR 0051 is the
+authoritative discovery policy and still creates no supported version or release claim.
+
 ## Security and privacy consequences
 
 Exact hash admission and the held Windows file handle close the substitution window between review
@@ -143,3 +150,4 @@ account, open a real user credential, call a deployed service, or establish rele
 - [ADR 0024](0024-bounded-candidate-community-sync-composer.md)
 - [ADR 0025](0025-bounded-candidate-device-signing-boundary.md)
 - [ADR 0030](0030-bounded-connector-pairing-transport.md)
+- [ADR 0051](0051-bounded-candidate-executable-discovery.md)

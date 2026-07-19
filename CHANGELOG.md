@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fifty accepted ADRs.
+  fail-closed compatibility policy and matrix, and fifty-one accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -223,6 +223,13 @@ Versioning where its guarantees are applicable.
   one no-proxy/no-redirect/no-retry request to the fixed sync path. Exact loopback tests cover only
   the five device headers and closed acknowledgement; no local Codex account, real credential,
   deployed edge/Ingest/database, supported version, package, or release is exercised.
+- Bounded Windows x86_64 discovery for that same candidate sync. After active-record validation it
+  considers at most 64 absolute `PATH` directories, only two fixed executable names, canonical paths
+  of at most 2,048 bytes, and at most four distinct exact-size hashes before requiring the existing
+  exact `0.144.5` SHA-256 and retained no-write-sharing handle. The explicit `--codex` form remains
+  available under identical admission. Relative entries, wrappers, arbitrary names, over-budget
+  searches, and all artifacts that do not match fail closed without path diagnostics; tests remain
+  synthetic and add no supported version, other platform, package, release, or clean-machine claim.
 - Bounded pairing start, possession, and dormant activation compositions. The start boundary accepts
   only closed device metadata, creates fresh server IDs, a 32-byte poll token and challenge, a
   60-bit human code, and a nine-minute expiry, then stores separate protected poll/code HMAC

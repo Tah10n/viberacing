@@ -12,14 +12,14 @@ PostgreSQL-adapter, application-composition, and bounded HTTP-server boundaries,
 connector initialization and candidate `0.144.5` account/usage parser boundaries, a synthetic
 one-shot supervisor, an exact-body sync composer, isolated pairing/sync/proposal signers, pure Web
 pairing and proposal verifiers, one local connector command with native OS key custody and exact
-start/poll routes, one explicit Windows candidate command that admits, collects, signs, and uploads
-a single sync, and one fixed proposal-only command that starts no Codex process. It also has one
-opt-in synthetic loopback integration through the emitted Ingest host and a disposable
-least-privileged PostgreSQL login, plus a separate synthetic integration through all fifteen emitted
-Jobs commands and a disposable narrow login with a widened-login negative control. It still has no
-deployed application service, operational sync connector, supported Codex version, distributed
-recovery perimeter, Cloudflare/Railway deployment, live OAuth or production database login, or
-production database. Component status is tracked in
+start/poll routes, one Windows candidate command with bounded fixed-name discovery plus an explicit
+path fallback that admits, collects, signs, and uploads a single sync, and one fixed proposal-only
+command that starts no Codex process. It also has one opt-in synthetic loopback integration through
+the emitted Ingest host and a disposable least-privileged PostgreSQL login, plus a separate
+synthetic integration through all fifteen emitted Jobs commands and a disposable narrow login with a
+widened-login negative control. It still has no deployed application service, operational sync
+connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway deployment,
+live OAuth or production database login, or production database. Component status is tracked in
 [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
 not deployed evidence.
 
@@ -159,13 +159,14 @@ fixed-storage database admission, and native OS credential custody. ADR 0041 sep
 idempotent deletion of one local origin/label record with no credential read or server call; the
 registered device remains until authenticated revoke. App Server launch and sync capabilities still
 have no public constructor, so ADR 0031 lets only the private Windows x86_64 command construct them
-after exact explicit-path artifact admission and active-record review. It creates fresh context and
-performs one fixed signed upload. Automatic discovery, macOS/Linux admission, scheduling, and
-release remain absent. Trusted external TLS/edge routing, live secret-manager/edge key injection,
-working deployment login/certificate, composed live end-to-end flow, edge/capacity evidence, a
-verified Cloudflare/Railway path, released sync connector, Jobs scheduler/monitoring, public cache,
-backup/tombstone/restore replay, and audited correction authority shown in the design remain
-planned.
+after exact artifact admission and active-record review. ADR 0051 permits selection only through a
+resource-bounded fixed-name `PATH` policy or the original explicit path; both retain the same exact
+size/SHA-256 and no-write-sharing handle. It creates fresh context and performs one fixed signed
+upload. macOS/Linux admission, scheduling, and release remain absent. Trusted external TLS/edge
+routing, live secret-manager/edge key injection, working deployment login/certificate, composed live
+end-to-end flow, edge/capacity evidence, a verified Cloudflare/Railway path, released sync
+connector, Jobs scheduler/monitoring, public cache, backup/tombstone/restore replay, and audited
+correction authority shown in the design remain planned.
 
 ## Component responsibilities
 

@@ -36,7 +36,7 @@ const KEYRING_SERVICE: &str = "viberacing.connector.pairing.v1";
 const KEYRING_ACCOUNT_PREFIX: &str = "device-";
 const ACCOUNT_DOMAIN: &[u8] = b"viberacing-connector-keyring-account-v1\0";
 const ORIGIN_DOMAIN: &[u8] = b"viberacing-connector-origin-v1\0";
-const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector forget-local --origin <https-origin> --label <device-label>\n  viberacing-connector sync --origin <https-origin> --label <device-label> --codex <absolute-path>\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
+const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector forget-local --origin <https-origin> --label <device-label>\n  viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
 const MAX_ORIGIN_BYTES: usize = 512;
 const MAX_LABEL_CHARACTERS: usize = 64;
 const MAX_REQUEST_BYTES: usize = 1024;
@@ -89,7 +89,7 @@ pub enum ConnectorCliError {
     PairingExpired,
     /// No active source-bound credential exists for the requested origin and label.
     NotConnected,
-    /// The selected Codex path or exact artifact did not pass admission.
+    /// No discovered or explicitly selected Codex artifact passed exact admission.
     CodexNotAdmitted,
     /// The reviewed Codex process did not produce bounded usable data.
     CodexUnavailable,
@@ -127,7 +127,7 @@ impl fmt::Display for ConnectorCliError {
             Self::InvalidServiceResponse => "the pairing service response is invalid",
             Self::PairingExpired => "the pairing request expired; run connect again",
             Self::NotConnected => "this device is not connected; run connect first",
-            Self::CodexNotAdmitted => "the selected Codex executable is not admitted",
+            Self::CodexNotAdmitted => "no exact Codex executable was admitted",
             Self::CodexUnavailable => "Codex usage is temporarily unavailable",
             Self::NoUsage => "Codex reported no daily usage to sync",
             Self::SyncPreparationUnavailable => "usage could not be prepared safely",
@@ -188,7 +188,12 @@ pub fn run_connector_cli() -> Result<(), ConnectorCliError> {
             let origin = Origin::parse(&origin)?;
             validate_label(&label)?;
             let mut store = OsCredentialStore::new(&origin, &label)?;
-            sync_command::run_sync(&origin, &codex_path, &mut store, &mut io::stdout().lock())
+            sync_command::run_sync(
+                &origin,
+                codex_path.as_deref(),
+                &mut store,
+                &mut io::stdout().lock(),
+            )
         }
         ParsedCommand::ProposeCar {
             label,
@@ -219,7 +224,7 @@ enum ParsedCommand {
         origin: String,
     },
     Sync {
-        codex_path: PathBuf,
+        codex_path: Option<PathBuf>,
         label: String,
         origin: String,
     },
@@ -350,7 +355,7 @@ fn parse_command(
         ("forget-local", Some(origin), Some(label), None) => {
             Ok(ParsedCommand::ForgetLocal { label, origin })
         }
-        ("sync", Some(origin), Some(label), Some(codex_path)) => Ok(ParsedCommand::Sync {
+        ("sync", Some(origin), Some(label), codex_path) => Ok(ParsedCommand::Sync {
             codex_path,
             label,
             origin,
@@ -1459,6 +1464,43 @@ mod tests {
         assert!(matches!(
             parse_command(["--help".into()]),
             Ok(ParsedCommand::Help)
+        ));
+    }
+
+    #[test]
+    fn parses_sync_with_bounded_discovery_and_explicit_fallback() {
+        let command = parse_command([
+            "sync".into(),
+            "--label".into(),
+            "Desktop".into(),
+            "--origin".into(),
+            "https://race.example".into(),
+        ])
+        .expect("exact discovery sync arguments must parse");
+        assert!(matches!(
+            command,
+            ParsedCommand::Sync {
+                codex_path: None,
+                ..
+            }
+        ));
+
+        let command = parse_command([
+            "sync".into(),
+            "--codex".into(),
+            "C:\\synthetic\\codex.exe".into(),
+            "--label".into(),
+            "Desktop".into(),
+            "--origin".into(),
+            "https://race.example".into(),
+        ])
+        .expect("exact explicit-path sync arguments must parse");
+        assert!(matches!(
+            command,
+            ParsedCommand::Sync {
+                codex_path: Some(_),
+                ..
+            }
         ));
     }
 
