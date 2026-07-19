@@ -220,11 +220,16 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   generic acknowledgement. Four Rust proposal cases share the exact body/message/key/signature
   vector with Web. A self-contained repository Agent Skill now reduces an existing styling request
   to only those exact enums and seed, requires explicit shell-safe origin/label values, invokes the
-  fixed command once, and recognizes only its exact generic success line. A dedicated checker
-  derives the schema/CLI expectations from production sources, and twelve mutation cases prove enum,
-  shell, invocation-allowlist, retry, authority, output, front matter, and UI-metadata drift fail
-  closed. No released connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and forty-three accepted design decisions covering Community trust,
+  fixed command once, and recognizes only its exact generic success line. A second self-contained
+  repository skill reads the governing instructions and real Git scope, selects only the reviewed
+  focused/root/staged/history verification gates, and separates synthetic/local evidence from live
+  or deployment claims without gaining mutation, installation, network, publication, push, or
+  deployment authority. One dedicated checker derives proposal schema/CLI expectations and the
+  verification script/runtime policy from production sources. Twenty-five combined mutation cases
+  prove enum, shell, invocation-allowlist, retry, authority, output, front matter, UI metadata,
+  command, Git-scope, runtime, public-output, and evidence-claim drift fail closed. No released
+  connector, live endpoint, edge policy, or deployment is claimed.
+- An ADR lifecycle/template and forty-four accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -238,13 +243,14 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   one-shot candidate Community sync, bounded authentication and invite cleanup, the local
   Railway-shaped Ingest host, bounded primary deletion purge, the session-owned CarRecipe proposal
   boundary, and bounded CarRecipe-proposal cleanup, public active-recipe projection, bounded device
-  proposal ingress, and bounded local agent proposal orchestration, and the bounded public
-  race-status projection.
+  proposal ingress, bounded local agent proposal orchestration, bounded public race-status
+  projection, and bounded repository verification orchestration.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
-- Agent-skill validation and eleven black-box regressions for schema/CLI drift, command widening,
-  contradictory invocation input, unsafe shell input, retry permission, stale success output,
+- Agent-skill validation and 25 black-box regressions across the proposal and verification skills
+  for schema/CLI drift, command or authority widening, contradictory invocation input, unsafe shell
+  input, retry permission, stale success output, Git-scope/runtime/public-output/evidence drift,
   front-matter widening, and UI metadata.
 - Thirteen canonical JSON Schema 2020-12 contracts for bounded Community connector sync and pairing
   start/poll requests and responses, a non-sensitive sync acknowledgement, stable problem details, a
@@ -855,8 +861,10 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   recipe of an active profile; proposal state stays private. A separate exact-body signed device
   route can create or replace only the pending recipe and cannot inspect or decide it. The local
   Agent Skill can reduce style intent to that fixed command but gains no read, decision, or
-  activation authority. No live database credential, edge policy, monitoring, capacity result,
-  released connector, or deployment is claimed.
+  activation authority. A separate read-only verification skill selects only checked-in local gates,
+  reports their exact scope, and cannot mutate the tree or claim live/deployment evidence. No live
+  database credential, edge policy, monitoring, capacity result, released connector, or deployment
+  is claimed.
 - Per-response nonce CSP, browser-isolation and capability headers, no remote image patterns,
   globally disabled Next.js image optimization, production HSTS, disabled framework branding, and an
   explicit Turbopack repository root that prevents parent-workspace inference.

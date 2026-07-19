@@ -522,6 +522,14 @@ identity or decision authority. The origin and label remain transient process ar
 user's local agent environment; the proposal service still receives neither value as stored profile
 data.
 
+ADR 0044 adds no Vibe Racing service request, retained repository field, application log, cache,
+analytics event, export, or third-party destination. The repository-verification Agent Skill runs
+inside the user's existing authorized agent environment and reads only repository state and command
+results in that scope. It reports a sanitized evidence summary in the current agent interaction,
+creates no repository persistence, does not install dependencies or access live/network services,
+and forbids copying secrets, environment values, private logs, or local absolute paths into tracked
+files or public artifacts.
+
 ADR 0037 and revision 0027 add no new retained field. `CommunityRacePageV1` repeats the ten public
 score fields and may add only the exact current approved `CarRecipeV1`; absence is explicit through
 field omission. The database resolves only the current `active` profile after score visibility

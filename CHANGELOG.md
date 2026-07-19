@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and forty-three accepted ADRs.
+  fail-closed compatibility policy and matrix, and forty-four accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -48,6 +48,11 @@ Versioning where its guarantees are applicable.
   schema/CLI drift, command widening, contradictory invocation input, unsafe shell input, retries,
   stale output, and metadata drift. This local slice still has no cleanup schedule, live credential,
   released connector, edge control, or deployment.
+- A second self-contained local Agent Skill now selects only checked-in read-only repository
+  verification from the real Git scope, preserves focused/root/staged/history evidence boundaries,
+  and has no edit, staging, commit, installation, network, live-service, publication, push, or
+  deployment authority. The shared canonical-source checker and 25 total black-box mutations reject
+  command, scope, runtime, metadata, authority, public-output, and evidence-claim drift.
 - Strict frontend lint/type/build gates plus unit, interaction, accessibility, CSP/header, scoring,
   localization, and data-boundary tests with enforced coverage thresholds.
 - Integrity-bound cross-platform npm license metadata and an expiring reviewed override for the

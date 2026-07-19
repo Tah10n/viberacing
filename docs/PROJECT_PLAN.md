@@ -716,7 +716,7 @@ The planned public tree is:
 |-- .agents/
 |   `-- skills/
 |       |-- viberacing-propose-car/
-|       `-- viberacing-verify/ (planned)
+|       `-- viberacing-verify/
 |-- .github/
 |   |-- ISSUE_TEMPLATE/
 |   |-- workflows/
@@ -841,12 +841,15 @@ Nested AGENTS.md files are introduced only for genuinely different areas:
 - crates/connector for local privacy, process, key, and compatibility rules;
 - docs when documentation tooling requires different commands.
 
-Repeatable verification becomes a repository skill under .agents/skills/viberacing-verify only after
-the real commands are stable. The local `.agents/skills/viberacing-propose-car` workflow already
-reduces style intent to exact enums and invokes only the fixed proposal command; it is checked for
-schema/CLI drift and has no connector installation or release authority. The broader end-user
-connect workflow is packaged separately as a distributable plugin or skill only after the CLI and
-release identity are stable, and it invokes fixed connector commands only.
+Repeatable verification now has a checked read-only repository skill under
+`.agents/skills/viberacing-verify` because the root, focused, staged-public-data, and history
+commands and their evidence boundaries are stable. It derives its command/runtime policy from the
+repository, includes the real Git scope, and has no edit, staging, commit, installation, network,
+live, publication, push, or deployment authority. The local `.agents/skills/viberacing-propose-car`
+workflow reduces style intent to exact enums and invokes only the fixed proposal command; it is
+checked for schema/CLI drift and has no connector installation or release authority. The broader
+end-user connect workflow is packaged separately as a distributable plugin or skill only after the
+CLI and release identity are stable, and it invokes fixed connector commands only.
 
 No duplicated agent-instruction files are maintained manually for different vendors. If adapter
 files become necessary, they are generated from the canonical guidance and checked for drift.

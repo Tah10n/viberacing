@@ -118,10 +118,16 @@ ingestion, an operational connector, a Jobs scheduler or deployed public-race re
 correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
 implementation and verification are present in the working tree.
 
+A second checked local Agent Skill now selects only repository-owned read-only verification from the
+real Git scope, distinguishes focused, root, staged, history, synthetic, and live evidence, and has
+no edit, staging, commit, installation, network, publication, push, or deployment authority.
+
 ## Repository map
 
 - `.agents/skills/viberacing-propose-car/` contains the checked local conversational reducer for the
   fixed proposal-only connector command. It is not an installer or released connector workflow.
+- `.agents/skills/viberacing-verify/` contains the checked read-only repository verification
+  workflow. It cannot edit, stage, commit, install, access live services, publish, push, or deploy.
 - `docs/` contains public canonical plans, status, threat/privacy/abuse models, architecture,
   compatibility, ADRs, and policy.
 - `.github/` contains read-only pull-request CI, dependency-update configuration, and structured
@@ -168,9 +174,10 @@ implementation and verification are present in the working tree.
   contract/Ingest/Jobs/frontend lint/type/coverage/production-build, and Rust formatting/check/test/
   Clippy gates.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
-- `pnpm run check:agent-skills` derives the local proposal skill's enum inventory, CLI flags,
-  generic output, and metadata from canonical sources. `pnpm run test:agent-skills-check` proves
-  twelve unsafe/drifted variants fail closed.
+- `pnpm run check:agent-skills` derives the proposal skill's enum inventory, CLI flags, generic
+  output, and both skills' metadata from canonical sources, then binds the verification skill to the
+  root scripts and pinned pnpm policy. `pnpm run test:agent-skills-check` proves 25 unsafe/drifted
+  variants fail closed.
 - `pnpm run check:public:staged` scans the exact staged blobs before a commit.
 - `pnpm run check:community` validates governance and community-health files and forms.
 - `pnpm run check:architecture` validates required security/architecture contracts, structured abuse

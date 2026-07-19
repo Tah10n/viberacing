@@ -178,6 +178,10 @@ planned.
 | CI               | Evaluate untrusted source without secrets; produce read-only evidence                                                           | Deployment, signing, package publication from pull requests                                                      | TB-09                  |
 | Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                          | Unreviewed pull-request execution, long-lived broad credentials                                                  | TB-10                  |
 
+The repository-verification Agent Skill is a local read-only TB-09 control. It may select checked-in
+gates for the real Git scope and report exact evidence, but it cannot edit, stage, commit, install,
+access network/live services, publish, push, deploy, or make production claims.
+
 Trust-boundary IDs are defined in the [threat model](../security/THREAT_MODEL.md).
 
 ## Deployment boundaries

@@ -39,6 +39,9 @@ remain safe to publish verbatim.
 - [Bounded local car-proposal Agent Skill](../.agents/skills/viberacing-propose-car/SKILL.md) —
   exact enum reduction, shell-safe invocation policy, browser-only decision boundary, and
   production-derived drift checks without connector installation or release authority.
+- [Bounded local repository-verification Agent Skill](../.agents/skills/viberacing-verify/SKILL.md)
+  — real-scope read-only gate selection, staged/history evidence boundaries, and fail-closed
+  authority and production-claim checks.
 - [Asset provenance](reference/ASSET_PROVENANCE.md) — generation/source records, integrity digests,
   metadata sanitation, accessibility text, and release-review status for non-code visuals.
 - [CarRecipe version 1](reference/car-recipe.md) — exact closed fields, local session-owned

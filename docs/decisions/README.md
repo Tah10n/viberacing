@@ -52,6 +52,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0041](0041-bounded-local-connector-credential-removal.md)     | Bounded local connector credential removal                          | Accepted; local command; release evidence pending      |
 | [0042](0042-bounded-expired-session-retention-cleanup.md)      | Bounded expired-session retention cleanup                           | Accepted; database and local command; schedule pending |
 | [0043](0043-bounded-invite-retention-cleanup.md)               | Bounded invite retention cleanup                                    | Accepted; database and local command; schedule pending |
+| [0044](0044-bounded-repository-verification-skill.md)          | Bounded repository verification orchestration                       | Accepted; local read-only skill implemented            |
 
 ## Lifecycle
 

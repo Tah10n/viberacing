@@ -75,6 +75,7 @@ keys, or arbitrary user-uploaded files.
 - [Ingest verification kernel](apps/ingest/README.md)
 - [Connector protocol foundation](crates/connector/README.md)
 - [Local bounded car-proposal Agent Skill](.agents/skills/viberacing-propose-car/SKILL.md)
+- [Local bounded repository-verification Agent Skill](.agents/skills/viberacing-verify/SKILL.md)
 - [Dependency policy](docs/security/DEPENDENCY_POLICY.md)
 - [Dependency inventory](docs/reference/dependency-inventory.json)
 - [Asset provenance](docs/reference/ASSET_PROVENANCE.md)
@@ -93,6 +94,9 @@ keys, or arbitrary user-uploaded files.
 - [Changelog](CHANGELOG.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [Russian overview](README.ru.md)
+
+The repository-verification Agent Skill is read-only: it inspects the real Git scope and checked-in
+gates but cannot edit, stage, commit, install, access live services, publish, push, or deploy.
 
 ## Open-source baseline
 

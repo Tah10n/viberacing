@@ -14,13 +14,21 @@ const root = args.length === 0 ? resolve(import.meta.dirname, "..") : resolve(ar
 const skillDirectory = ".agents/skills/viberacing-propose-car";
 const skillPath = `${skillDirectory}/SKILL.md`;
 const metadataPath = `${skillDirectory}/agents/openai.yaml`;
+const verifySkillDirectory = ".agents/skills/viberacing-verify";
+const verifySkillPath = `${verifySkillDirectory}/SKILL.md`;
+const verifyMetadataPath = `${verifySkillDirectory}/agents/openai.yaml`;
 const schemaPath = "contracts/v1/car-recipe.schema.json";
 const connectorPath = "crates/connector/src/connect.rs";
 const proposalCommandPath = "crates/connector/src/connect/car_proposal_command.rs";
+const packagePath = "package.json";
 const expectedDescription =
   "Turn a user's Vibe Racing pixel-car style request into one closed CarRecipeV1 and submit it through the already paired proposal-only connector command. Use when the user asks an agent to create, restyle, or propose their Vibe Racing car for later browser review; do not use it to connect, forget a local credential, sync usage, inspect private state, approve, activate, publish, or administer a profile.";
 const expectedDefaultPrompt =
   "Use $viberacing-propose-car to turn my car style idea into a private Vibe Racing proposal for browser review.";
+const expectedVerifyDescription =
+  "Verify the Vibe Racing repository or a scoped local change using the checked-in deterministic commands, staged public-data gates, and explicit evidence boundaries. Use when the user asks to verify, validate, test, audit readiness, or prepare a Vibe Racing change for review; do not use it to install dependencies, run live or network checks, stage, commit, push, publish, deploy, or claim production evidence. Those actions require a separate authorized workflow.";
+const expectedVerifyDefaultPrompt =
+  "Use $viberacing-verify to verify my current Vibe Racing repository changes and report only evidence-backed results.";
 const failures = [];
 
 function report(path, message) {
@@ -79,12 +87,17 @@ function exactDirectoryEntries(path, expected) {
 
 exactDirectoryEntries(skillDirectory, ["SKILL.md", "agents"]);
 exactDirectoryEntries(`${skillDirectory}/agents`, ["openai.yaml"]);
+exactDirectoryEntries(verifySkillDirectory, ["SKILL.md", "agents"]);
+exactDirectoryEntries(`${verifySkillDirectory}/agents`, ["openai.yaml"]);
 
 const skill = readRequired(skillPath);
 const metadataText = readRequired(metadataPath);
+const verifySkill = readRequired(verifySkillPath);
+const verifyMetadataText = readRequired(verifyMetadataPath);
 const schemaText = readRequired(schemaPath);
 const connector = readRequired(connectorPath);
 const proposalCommand = readRequired(proposalCommandPath);
+const packageText = readRequired(packagePath);
 
 if (skill !== null) {
   const normalizedSkill = skill.replace(/\s+/g, " ");
@@ -203,6 +216,85 @@ if (skill !== null) {
   }
 }
 
+let packageValue;
+if (packageText !== null) {
+  try {
+    packageValue = JSON.parse(packageText);
+  } catch {
+    report(packagePath, "package manifest is malformed JSON");
+  }
+}
+
+if (verifySkill !== null) {
+  const normalizedVerifySkill = verifySkill.replace(/\s+/g, " ");
+  if (verifySkill.split(/\r?\n/).length > 500) {
+    report(verifySkillPath, "SKILL.md exceeds the 500-line progressive-disclosure bound");
+  }
+
+  const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(verifySkill);
+  if (frontmatterMatch === null) {
+    report(verifySkillPath, "YAML frontmatter is missing");
+  } else {
+    const frontmatter = parseYaml(verifySkillPath, frontmatterMatch[1]);
+    if (exactKeys(verifySkillPath, frontmatter, ["description", "name"], "frontmatter")) {
+      if (frontmatter.name !== "viberacing-verify") {
+        report(verifySkillPath, "frontmatter name is not the canonical skill name");
+      }
+      if (frontmatter.description !== expectedVerifyDescription) {
+        report(verifySkillPath, "description does not close the verification authority scope");
+      }
+    }
+  }
+
+  for (const fragment of [
+    "Keep verification read-only.",
+    "Include untracked files when reviewing a working tree.",
+    "Inspect each untracked path directly with read-only file inspection; `git diff` does not show its content.",
+    "Use only read-only Git inspection commands",
+    "Do not stage, edit, discard, reset, commit, or install anything merely to make verification easier.",
+    "A focused gate is not a substitute for the canonical repository gate",
+    "do not upgrade or install it",
+    "Never bypass a hook or checker",
+    "Run a named opt-in gate only when the user explicitly requests it",
+    "Do not run the online external-link check",
+    "Do not stage files on the user's behalf.",
+    "It does not prove that an unstaged working copy is safe or equivalent",
+    "Do not rewrite history, amend commits, or infer an author identity.",
+    "Never copy secrets, environment values, private logs, or local absolute paths into tracked files or public artifacts.",
+    "Diagnose a failure from its exact output, but do not edit the project unless the user also asked for a fix.",
+    "Never turn a local or synthetic pass into a claim about production credentials",
+  ]) {
+    if (!normalizedVerifySkill.includes(fragment)) {
+      report(
+        verifySkillPath,
+        `required fail-closed instruction is missing: ${JSON.stringify(fragment)}`,
+      );
+    }
+  }
+
+  const expectedVerifyCommands = [
+    "git status --short\ngit diff --check",
+    "pnpm run verify",
+    "git diff --cached --check\npnpm run check:public:staged",
+    "pnpm run check:history",
+  ];
+  const verifyTextFences = [...verifySkill.matchAll(/```text\r?\n([\s\S]*?)\r?\n```/g)].map(
+    (match) => match[1].trim(),
+  );
+  if (JSON.stringify(verifyTextFences) !== JSON.stringify(expectedVerifyCommands)) {
+    report(verifySkillPath, "executable examples differ from the reviewed verification allowlist");
+  }
+
+  for (const scriptName of ["verify", "check:public:staged", "check:history"]) {
+    if (typeof packageValue?.scripts?.[scriptName] !== "string") {
+      report(packagePath, `required verification script is missing: ${scriptName}`);
+    }
+  }
+  if (packageValue?.packageManager !== "pnpm@11.7.0" || packageValue?.engines?.pnpm !== "11.7.x") {
+    report(packagePath, "verification skill runtime pin differs from the canonical pnpm policy");
+  }
+}
+
 if (metadataText !== null) {
   const metadata = parseYaml(metadataPath, metadataText);
   if (exactKeys(metadataPath, metadata, ["interface"], "metadata")) {
@@ -228,6 +320,31 @@ if (metadataText !== null) {
   }
 }
 
+if (verifyMetadataText !== null) {
+  const metadata = parseYaml(verifyMetadataPath, verifyMetadataText);
+  if (exactKeys(verifyMetadataPath, metadata, ["interface"], "metadata")) {
+    const interfaceValue = metadata.interface;
+    if (
+      exactKeys(
+        verifyMetadataPath,
+        interfaceValue,
+        ["default_prompt", "display_name", "short_description"],
+        "interface",
+      )
+    ) {
+      if (interfaceValue.display_name !== "Verify Vibe Racing") {
+        report(verifyMetadataPath, "display_name is not canonical");
+      }
+      if (interfaceValue.short_description !== "Run bounded repository verification safely") {
+        report(verifyMetadataPath, "short_description is not canonical");
+      }
+      if (interfaceValue.default_prompt !== expectedVerifyDefaultPrompt) {
+        report(verifyMetadataPath, "default_prompt is not canonical");
+      }
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error(`Agent-skill check failed with ${failures.length} finding(s):`);
   for (const failure of failures) {
@@ -236,4 +353,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log("Agent-skill check passed (1 bounded skill).");
+console.log("Agent-skill check passed (2 bounded skills).");

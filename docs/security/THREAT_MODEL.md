@@ -136,6 +136,11 @@ workflow definitions, dependencies, generated artifacts, and release metadata. I
 only after deterministic checks, review, and protected merge; repository authorship alone is not a
 security boundary.
 
+Repository-verification requests remain developer-controlled orchestration input. The checked local
+skill may select only read-only repository-owned gates for the real Git scope, cannot edit, stage,
+commit, install, access live/network services, publish, push, or deploy, and cannot turn a local
+pass into trusted-source, hosted, or production evidence.
+
 ### Assumptions and accepted limitations
 
 - A computer owner can fabricate Community usage or duplicate one real Codex account across declared

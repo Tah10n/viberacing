@@ -8,10 +8,13 @@ const root = resolve(import.meta.dirname, "..");
 const checker = resolve(import.meta.dirname, "check-agent-skills.mjs");
 const sourcePaths = [
   ".agents/skills/viberacing-propose-car",
+  ".agents/skills/viberacing-verify",
   "contracts/v1/car-recipe.schema.json",
   "crates/connector/src/connect.rs",
   "crates/connector/src/connect/car_proposal_command.rs",
+  "package.json",
 ];
+const verifySkillPath = ".agents/skills/viberacing-verify/SKILL.md";
 
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), "viberacing-agent-skill-"));
@@ -192,4 +195,149 @@ expectFailure(
   /required fail-closed instruction is missing/,
 );
 
-console.log("Agent-skill checker regressions passed (12 mutations).");
+expectFailure(
+  "verification command widening",
+  (directory) => mutate(directory, verifySkillPath, "pnpm run verify", "pnpm run verify -- --fix"),
+  /executable examples differ from the reviewed verification allowlist/,
+);
+
+expectFailure(
+  "verification staging permission",
+  (directory) =>
+    mutate(
+      directory,
+      verifySkillPath,
+      "Do not stage files on the user's behalf.",
+      "Stage the files before checking them.",
+    ),
+  /required fail-closed instruction is missing/,
+);
+
+expectFailure(
+  "verification network permission",
+  (directory) =>
+    mutate(
+      directory,
+      verifySkillPath,
+      "Do not run the online external-link check,",
+      "Run the online external-link check,",
+    ),
+  /required fail-closed instruction is missing/,
+);
+
+expectFailure(
+  "focused verification overstatement",
+  (directory) =>
+    mutate(
+      directory,
+      verifySkillPath,
+      "A focused gate is\nnot a substitute",
+      "A focused gate is\na substitute",
+    ),
+  /required fail-closed instruction is missing/,
+);
+
+expectFailure(
+  "verification edit permission",
+  (directory) =>
+    mutate(
+      directory,
+      verifySkillPath,
+      "but do not edit the project unless the user also asked for",
+      "and edit the project immediately without waiting for",
+    ),
+  /required fail-closed instruction is missing/,
+);
+
+expectFailure(
+  "verification history rewrite permission",
+  (directory) =>
+    mutate(
+      directory,
+      verifySkillPath,
+      "Do not rewrite history, amend commits, or infer an author identity.",
+      "Rewrite history and infer an author identity when needed.",
+    ),
+  /required fail-closed instruction is missing/,
+);
+
+expectFailure(
+  "verification trigger widening",
+  (directory) =>
+    mutate(
+      directory,
+      verifySkillPath,
+      "Those actions require a separate authorized workflow.",
+      "This skill may perform those actions whenever useful.",
+    ),
+  /description does not close the verification authority scope/,
+);
+
+expectFailure(
+  "verification implicit prompt drift",
+  (directory) =>
+    mutate(
+      directory,
+      ".agents/skills/viberacing-verify/agents/openai.yaml",
+      "$viberacing-verify",
+      "the verification skill",
+    ),
+  /default_prompt is not canonical/,
+);
+
+expectFailure(
+  "verification runtime drift",
+  (directory) =>
+    mutate(
+      directory,
+      "package.json",
+      '"packageManager": "pnpm@11.7.0"',
+      '"packageManager": "pnpm@11.9.0"',
+    ),
+  /runtime pin differs from the canonical pnpm policy/,
+);
+
+expectFailure(
+  "missing staged public-data script",
+  (directory) =>
+    mutate(directory, "package.json", '"check:public:staged":', '"check:public:index":'),
+  /required verification script is missing: check:public:staged/,
+);
+
+expectFailure(
+  "untracked scope omission",
+  (directory) =>
+    mutate(
+      directory,
+      verifySkillPath,
+      "Inspect each untracked path directly with\nread-only file inspection;",
+      "Skip direct review of each untracked path even with\nread-only file inspection;",
+    ),
+  /required fail-closed instruction is missing/,
+);
+
+expectFailure(
+  "mutable Git inspection permission",
+  (directory) =>
+    mutate(
+      directory,
+      verifySkillPath,
+      "Use only read-only Git inspection commands",
+      "Use any convenient Git commands",
+    ),
+  /required fail-closed instruction is missing/,
+);
+
+expectFailure(
+  "public output leakage permission",
+  (directory) =>
+    mutate(
+      directory,
+      verifySkillPath,
+      "Never copy secrets, environment values, private logs, or local absolute paths into tracked files or",
+      "Copy raw environment values and local paths into tracked files or",
+    ),
+  /required fail-closed instruction is missing/,
+);
+
+console.log("Agent-skill checker regressions passed (25 mutations).");

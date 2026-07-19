@@ -1,0 +1,6 @@
+interface:
+  display_name: "Verify Vibe Racing"
+  short_description: "Run bounded repository verification safely"
+  default_prompt:
+    "Use $viberacing-verify to verify my current Vibe Racing repository changes and report only
+    evidence-backed results."

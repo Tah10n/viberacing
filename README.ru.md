@@ -74,6 +74,7 @@ Verified-лига останется выключенной до появлен�
 - [Локальное Ingest verification kernel (EN)](apps/ingest/README.md)
 - [Connector protocol foundation (EN)](crates/connector/README.md)
 - [Локальный bounded Agent Skill для car proposal (EN)](.agents/skills/viberacing-propose-car/SKILL.md)
+- [Локальный bounded Agent Skill для проверки репозитория (EN)](.agents/skills/viberacing-verify/SKILL.md)
 - [Dependency policy (EN)](docs/security/DEPENDENCY_POLICY.md)
 - [Dependency inventory (EN)](docs/reference/dependency-inventory.json)
 - [Происхождение визуальных assets (EN)](docs/reference/ASSET_PROVENANCE.md)
@@ -88,6 +89,10 @@ Verified-лига останется выключенной до появлен�
 - [Roadmap (EN)](ROADMAP.md)
 - [Release policy (EN)](RELEASE.md)
 - [English README](README.md)
+
+Agent Skill для проверки репозитория работает только на чтение: он проверяет реальный Git scope и
+команды репозитория, но не может редактировать, добавлять в index, фиксировать коммит, устанавливать
+зависимости, обращаться к live-сервисам, публиковать, отправлять изменения или развёртывать проект.
 
 ## Важно
 
