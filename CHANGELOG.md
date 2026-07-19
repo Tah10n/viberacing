@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fifty-four accepted ADRs.
+  fail-closed compatibility policy and matrix, and fifty-five accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -158,11 +158,13 @@ Versioning where its guarantees are applicable.
   live database credential, monitoring, load evidence, connector, or deployment.
 - A separate bounded Ingest host workspace that admits only exact loopback cleartext in local/test
   mode or `0.0.0.0:$PORT` behind an explicit Railway-edge TLS contract in production. It composes
-  only the reviewed Ingest application/server factories, cleans every partial startup, closes once
-  under a 36-second SIGINT/SIGTERM deadline, and forces failure on a second signal, deadline, or
-  teardown error. Its 121 tests reach 100% coverage; a built-ESM gate proves invalid startup exits
-  silently without a module-resolution stack. No deployed TLS route, secret, live login, edge
-  policy, monitoring, capacity, or deployment is claimed.
+  only after exact `VIBERACING_INGEST_ENABLED=true`; every other value fails before inspecting
+  listener or protected application configuration, and the tracked example remains false. It then
+  uses only the reviewed Ingest application/server factories, cleans every partial startup, closes
+  once under a 36-second SIGINT/SIGTERM deadline, and forces failure on a second signal, deadline,
+  or teardown error. Its 130 tests reach 100% coverage; a built-ESM gate proves disabled startup
+  exits silently without a module-resolution stack. No deployed restart, route denial, TLS route,
+  secret, live login, edge policy, monitoring, capacity, or deployment is claimed.
 - An opt-in synthetic Ingest HTTP-to-PostgreSQL integration gate. It builds the emitted contracts,
   Ingest, and host workspaces; applies every reviewed migration to one disposable PostgreSQL
   container; creates a dedicated least-privileged login and synthetic device; sends independently

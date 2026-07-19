@@ -6,7 +6,7 @@ import {
 
 import { resolveIngestHostConfig, type IngestHostConfig } from "./listener-config.js";
 
-const configKeys = new Set(["host", "port", "tlsTermination"]);
+const configKeys = new Set(["enabled", "host", "port", "tlsTermination"]);
 const dependencyKeys = new Set(["createApplication", "createServer"]);
 const applicationKeys = new Set(["close", "execute"]);
 
@@ -89,10 +89,12 @@ function readConfig(value: unknown): IngestHostConfig {
     if (!isPlainRecord(value) || !Object.isFrozen(value) || !hasExactKeys(value, configKeys)) {
       fail("configuration_invalid");
     }
+    const enabled = ownDataValue(value, "enabled");
     const host = ownDataValue(value, "host");
     const port = ownDataValue(value, "port");
     const tlsTermination = ownDataValue(value, "tlsTermination");
     if (
+      enabled !== true ||
       (host !== "0.0.0.0" && host !== "127.0.0.1" && host !== "::1") ||
       typeof port !== "number" ||
       !Number.isSafeInteger(port) ||
@@ -104,7 +106,7 @@ function readConfig(value: unknown): IngestHostConfig {
     ) {
       fail("configuration_invalid");
     }
-    return Object.freeze({ host, port, tlsTermination });
+    return Object.freeze({ enabled, host, port, tlsTermination });
   } catch (error) {
     if (error instanceof IngestHostError) {
       throw error;

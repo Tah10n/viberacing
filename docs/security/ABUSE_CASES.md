@@ -508,11 +508,13 @@ material availability cost.
   body/header evidence, sets proxy trust to false, ignores inbound request IDs, and returns only
   generic contract-validated errors. The transport-free composer binds the same replay/device/
   submission adapter and maps origin rejection to one generic unauthorized decision. The separate
-  local host accepts production startup only for exact `0.0.0.0:$PORT` with an explicit
-  `railway-edge` declaration, but that declaration neither trusts forwarding nor proves the route;
-  the origin HMAC remains mandatory. The full synthetic loopback gate proves an HTTP replay of the
-  same origin nonce is rejected without another stored snapshot, but it does not prove an edge
-  signer or direct-origin policy.
+  host additionally requires an exact default-off enable latch before any other host/protected
+  application configuration or resource. That startup gate does not prove a deployed route denial,
+  dynamic disable, or old-instance drain. The local host accepts production startup only for exact
+  `0.0.0.0:$PORT` with an explicit `railway-edge` declaration, but that declaration neither trusts
+  forwarding nor proves the route; the origin HMAC remains mandatory. The full synthetic loopback
+  gate proves an HTTP replay of the same origin nonce is rejected without another stored snapshot,
+  but it does not prove an edge signer or direct-origin policy.
 - **Residual risk:** Infrastructure metadata exposure can increase probing but must not be the only
   protection.
 
@@ -757,11 +759,14 @@ material availability cost.
   exhaustion. Real loopback tests close malformed and partial requests; injection tests cover
   overload and response policy. The separate host closes that composition under a 36-second
   first-signal deadline, forces failure on a second signal/deadline/close error, and requires the
-  Railway drain declaration to leave at least four seconds beyond its local close bound. There is no
-  live identity or deployment database integration, distributed rate/backpressure policy,
-  monitoring, or combined capacity evidence. The full synthetic Ingest gate proves correctness under
-  four sequential signed requests, not load capacity. Scheduling, cache, scoring/read capacity
-  evidence, quotas, edge shaping, and production load evidence remain unimplemented.
+  Railway drain declaration to leave at least four seconds beyond its local close bound. It also
+  stays default-off unless exact `VIBERACING_INGEST_ENABLED=true` is read before every other
+  host/protected-application field or resource; the tracked example remains false. This is no
+  deployed/dynamic kill-switch result. There is no live identity or deployment database integration,
+  distributed rate/backpressure policy, monitoring, or combined capacity evidence. The full
+  synthetic Ingest gate proves correctness under four sequential signed requests, not load capacity.
+  Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and production load
+  evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

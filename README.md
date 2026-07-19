@@ -149,52 +149,54 @@ rejects proxy and inbound request ID trust, admits four application calls withou
 bounded parser/header/connection and 5/33/34-second request/handler/connection deadlines, and
 serializes only revalidated `no-store` success/problem contracts. A separate local host now binds
 that exact factory under loopback-only development/test or explicit Railway-edge production
-configuration, closes partial startup, and handles SIGINT/SIGTERM under a fixed deadline. Its 121
-tests and built entrypoint check are synthetic/local evidence, not proof of Railway, external TLS,
-edge routing, live credentials, or deployment. A separate opt-in integration builds the emitted
-host, creates a synthetic dedicated Ingest login in disposable PostgreSQL, sends independently
-signed loopback HTTP requests, and proves accepted, duplicate, persistent origin-replay,
-revoked-device, response-header, and exact persistence behavior before cleanup. It supplies no
-deployment credential, certificate, protected secret delivery, external edge route, real-user data,
-or capacity result. A library-only Rust foundation now emits the fixed stable App Server handshake
-and, only after it succeeds, a candidate `0.144.5` account/usage sequence. It confirms ChatGPT mode
-while discarding email/plan/summary values and returns at most 31 sorted strict date/token entries.
-Exact release metadata, schema digests, minimal extracts, fixtures, and a drift/matrix checker are
-committed. The Windows x86_64 development command admits only the exact official artifact size and
-SHA-256; repository tests still do not execute a user's Codex account and the compatibility matrix
-remains empty. A one-shot supervisor proves the exact sequence against a target-built synthetic
-child with a fixed `app-server` argument, local pipes, cleared ambient environment, bounded
-stdout/stderr/time, late-output rejection, and reap-before-success cleanup. Its reviewed-launch
-capability remains private to exact admission. A second inaccessible reviewed context now lets a
-candidate composer consume the minimized entries into the exact `ConnectorSyncV1` JSON, SHA-256
-digest, unpadded base64url nonce, and LF-separated device-signature message. An isolated one-use
-signer consumes that closed material with an equally inaccessible device-bound Ed25519 key
-capability and returns only the same body plus five exact header values. A shared synthetic vector
-proves the exact public key/signature across Rust and the production Ingest verifier. A separate
-inaccessible pending-key/challenge signer and server-only Web verifier now agree on the exact
-domain-separated pairing-possession message and a second shared vector. A transport-free Web/Auth
-start boundary generates fresh server identifiers, poll token, challenge, 60-bit human code,
-separate keyed verifiers, and a nine-minute pending transaction from closed device metadata. A
-second activation boundary uses the same separately probed read-write pool wrapper for protected
-poll lookup, verifies the exact approved proof, and alone invokes atomic activation with
-server-owned identifiers behind four-call admission and a settlement floor. A local signed-in
-`/connect` page now accepts one pending human code, shows the exact bounded device metadata and full
-public-key fingerprint, and requires a separate fresh passkey assertion before atomically approving
-a new opaque source. Its PostgreSQL lookup counts attempts on the possessed session across Web
-instances under deployment-private limits. Two closed local POST routes now expose the versioned
-pairing start/poll contracts through shared four-call admission, a fixed-storage
-global-and-64-bucket PostgreSQL rate policy, bounded bodies, generic failures, and no-store/no-CORS
-responses. A local Rust `connect` command generates an Ed25519 key and anonymous rate ID with the OS
-CSPRNG, persists a versioned prepared/pending/active record only in the native credential store,
-proves possession, and resumes an interrupted pending poll without printing key, token, challenge,
-source, or device IDs. A separate exact `forget-local` command can delete only that canonical
-origin/label native entry without reading it or contacting Vibe Racing; its fixed output warns that
-it does not revoke server device authority, which remains a separate authenticated account action. A
-separate explicit `check-codex` command performs only the same exact Windows candidate artifact
-admission without an origin, credential-store access, Codex process, account read, persistence, or
-network. Its fixed result is point-in-time candidate evidence and explicitly says no Codex version
-is supported. An optional `--diagnostic-preview` prints only a closed local v1 summary of
-allowlisted version/admission/support state, retains failed-admission status, omits
+configuration only after exact `VIBERACING_INGEST_ENABLED=true`. Missing or alternate state fails
+before any protected application configuration, pool, server, or listener; the tracked example is
+explicitly disabled. The host closes partial startup and handles SIGINT/SIGTERM under a fixed
+deadline. Its 130 tests and built entrypoint check are synthetic/local evidence, not proof of a
+deployed restart/route denial, Railway, external TLS, edge routing, live credentials, or deployment.
+A separate opt-in integration builds the emitted host, creates a synthetic dedicated Ingest login in
+disposable PostgreSQL, sends independently signed loopback HTTP requests, and proves accepted,
+duplicate, persistent origin-replay, revoked-device, response-header, and exact persistence behavior
+before cleanup. It supplies no deployment credential, certificate, protected secret delivery,
+external edge route, real-user data, or capacity result. A library-only Rust foundation now emits
+the fixed stable App Server handshake and, only after it succeeds, a candidate `0.144.5`
+account/usage sequence. It confirms ChatGPT mode while discarding email/plan/summary values and
+returns at most 31 sorted strict date/token entries. Exact release metadata, schema digests, minimal
+extracts, fixtures, and a drift/matrix checker are committed. The Windows x86_64 development command
+admits only the exact official artifact size and SHA-256; repository tests still do not execute a
+user's Codex account and the compatibility matrix remains empty. A one-shot supervisor proves the
+exact sequence against a target-built synthetic child with a fixed `app-server` argument, local
+pipes, cleared ambient environment, bounded stdout/stderr/time, late-output rejection, and
+reap-before-success cleanup. Its reviewed-launch capability remains private to exact admission. A
+second inaccessible reviewed context now lets a candidate composer consume the minimized entries
+into the exact `ConnectorSyncV1` JSON, SHA-256 digest, unpadded base64url nonce, and LF-separated
+device-signature message. An isolated one-use signer consumes that closed material with an equally
+inaccessible device-bound Ed25519 key capability and returns only the same body plus five exact
+header values. A shared synthetic vector proves the exact public key/signature across Rust and the
+production Ingest verifier. A separate inaccessible pending-key/challenge signer and server-only Web
+verifier now agree on the exact domain-separated pairing-possession message and a second shared
+vector. A transport-free Web/Auth start boundary generates fresh server identifiers, poll token,
+challenge, 60-bit human code, separate keyed verifiers, and a nine-minute pending transaction from
+closed device metadata. A second activation boundary uses the same separately probed read-write pool
+wrapper for protected poll lookup, verifies the exact approved proof, and alone invokes atomic
+activation with server-owned identifiers behind four-call admission and a settlement floor. A local
+signed-in `/connect` page now accepts one pending human code, shows the exact bounded device
+metadata and full public-key fingerprint, and requires a separate fresh passkey assertion before
+atomically approving a new opaque source. Its PostgreSQL lookup counts attempts on the possessed
+session across Web instances under deployment-private limits. Two closed local POST routes now
+expose the versioned pairing start/poll contracts through shared four-call admission, a
+fixed-storage global-and-64-bucket PostgreSQL rate policy, bounded bodies, generic failures, and
+no-store/no-CORS responses. A local Rust `connect` command generates an Ed25519 key and anonymous
+rate ID with the OS CSPRNG, persists a versioned prepared/pending/active record only in the native
+credential store, proves possession, and resumes an interrupted pending poll without printing key,
+token, challenge, source, or device IDs. A separate exact `forget-local` command can delete only
+that canonical origin/label native entry without reading it or contacting Vibe Racing; its fixed
+output warns that it does not revoke server device authority, which remains a separate authenticated
+account action. A separate explicit `check-codex` command performs only the same exact Windows
+candidate artifact admission without an origin, credential-store access, Codex process, account
+read, persistence, or network. Its fixed result is point-in-time candidate evidence and explicitly
+says no Codex version is supported. An optional `--diagnostic-preview` prints only a closed local v1
+summary of allowlisted version/admission/support state, retains failed-admission status, omits
 workstation/account data, and is neither saved nor sent by the connector. A separate Windows x86_64
 `sync` command now requires an active record, then either discovers the exact `0.144.5` executable
 through a fixed-name, resource-bounded `PATH` policy or accepts an explicit path under the same

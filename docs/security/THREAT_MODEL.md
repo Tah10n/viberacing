@@ -52,24 +52,26 @@ boundaries have synthetic executable evidence. The kernel has raw-envelope, orig
 bounded-parser, contract, and strict device-signature evidence; the adapter has configuration,
 fixed-query, role-probe, mapper, and failure evidence with mock pools. A local server factory now
 has loopback framing and injection evidence. A separate local host proves exact loopback/Railway
-listener declarations, composition, bind, partial-startup cleanup, and bounded signal shutdown. One
-opt-in synthetic gate now exercises signed accepted/duplicate/replay/revoke HTTP through that
-emitted host and a disposable least-privileged PostgreSQL login with exact stored-state
-verification. It proves no live HTTP edge, trusted external TLS route, deployment credential/TLS
-connection, real-user result, or capacity. The public score/race/status routes have
-request/response, admission, production-build, and visible browser-consumer/fallback evidence, while
-the Jobs runner has strict command/config/pool/role/result evidence plus a synthetic
-CLI-to-PostgreSQL path with a widened-login denial and exact-state checks. The identity slice has
-exact-origin/body/cookie, state/PKCE, token minimization, initial-registration, returning-login,
-session-derived passkey inventory, non-current-key revocation, backup-key addition, exact-handle
-profile-deletion request, source inventory/pause/reactivation/unlink, and active-device revoke
-including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth
-`form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay server-only;
-source controls receive only a 15-minute encrypted token bound to the active session. None has a
-production database login, OAuth app, authenticator, edge, scheduler, cache/backup purge,
-tombstone/restore replay, or network deployment. Controls below are marked **implemented** only when
-executable evidence exists in [implementation status](../IMPLEMENTATION_STATUS.md). Other controls
-are release requirements, not security claims about the current tree.
+listener declarations, composition, bind, partial-startup cleanup, and bounded signal shutdown. Its
+default-off exact enable latch fails before another host/protected-application field or resource,
+but proves no deployed restart, route denial, or dynamic kill switch. One opt-in synthetic gate now
+exercises signed accepted/duplicate/replay/revoke HTTP through that emitted host and a disposable
+least-privileged PostgreSQL login with exact stored-state verification. It proves no live HTTP edge,
+trusted external TLS route, deployment credential/TLS connection, real-user result, or capacity. The
+public score/race/status routes have request/response, admission, production-build, and visible
+browser-consumer/fallback evidence, while the Jobs runner has strict command/config/pool/role/result
+evidence plus a synthetic CLI-to-PostgreSQL path with a widened-login denial and exact-state checks.
+The identity slice has exact-origin/body/cookie, state/PKCE, token minimization,
+initial-registration, returning-login, session-derived passkey inventory, non-current-key
+revocation, backup-key addition, exact-handle profile-deletion request, source
+inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile PostgreSQL
+evidence, fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence
+with injected dependencies. Raw source IDs stay server-only; source controls receive only a
+15-minute encrypted token bound to the active session. None has a production database login, OAuth
+app, authenticator, edge, scheduler, cache/backup purge, tombstone/restore replay, or network
+deployment. Controls below are marked **implemented** only when executable evidence exists in
+[implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
+security claims about the current tree.
 
 ### Assets and security objectives
 
@@ -191,10 +193,10 @@ and migration or rollback where applicable.
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command                           | Bounded fixed-name selection, exact artifact admission, retained handle, bounded child/output/time, sanitized environment, no shell, strict adapter               | Protocol, supervisor, synthetic Windows discovery/admission and redacted process-free preview tested; other platforms, support planned   |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                                         | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                                                         | Local signer/vector, verifier, replay stores, application, and HTTP tested; operational/live planned                                     |
 | Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                                          | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                                                   | Local verifier/config/replay/server/host tested; edge injection, trusted route, direct-origin planned                                    |
-| Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections                                  | Strict versioned schema, bounded bodies, fixed adapter, stored procedure, non-owner role, constraints, deadlines, backpressure                                    | Full synthetic loopback HTTP-to-PostgreSQL plus isolated SQL tested; deployment operations planned                                       |
+| Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections                                  | Default-off startup, strict schema, bounded bodies, fixed adapter/procedure, non-owner role, constraints, deadlines, backpressure                                 | Startup latch, full synthetic loopback HTTP-to-PostgreSQL, and isolated SQL tested; deployed operation planned                           |
 | Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work                      | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons                                         | SQL plus synthetic CLI-to-PostgreSQL cleanup/reset/purge/scoring tested; production login, scheduler, correction planned                 |
 | CarRecipe and assets                | A proposal, agent shell, or public row smuggles a URL, command, markup, executable value, copyrighted binary, or nondeterminism | Enum-only schema, checked one-command agent reducer, signed proposal-only device authority, browser-only decision, exact public projection, provenance, snapshots | Local agent/browser/device/DB/public race and Jobs cleanup tested; schedule, release, edge, deployment pending                           |
-| Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                | Invite role/reason/reference implemented; hosted controls planned                                                                        |
+| Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                | Invite role/reason/reference and local Ingest startup latch implemented; hosted controls planned                                         |
 | Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                                          | Immediate hide/revoke, idempotent purge, bounded tombstone, backup expiry, deletion replay after restore                                                          | Request, immediate lock-down, and bounded primary purge tested; cache/tombstone/backup/restore planned                                   |
 | Pull-request CI                     | A fork changes a workflow or package to steal a token or publish an artifact                                                    | Read-only secretless CI, no privileged environment, pinned inputs, no persisted checkout credentials, fixed no-upload Windows smoke, protected review             | Workflow and policy implemented locally; hosted controls and Windows result pending                                                      |
 | Release and dependencies            | A compromised dependency or runner produces an official malicious connector                                                     | Exact locks, quarantine, review, isolated trusted build, signatures, SBOM, provenance, clean-machine verification                                                 | Dependency baseline and untrusted portable smoke implemented; trusted release path planned                                               |

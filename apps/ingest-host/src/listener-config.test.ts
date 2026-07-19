@@ -9,6 +9,7 @@ import {
 
 const localEnvironment = Object.freeze({
   NODE_ENV: "development",
+  VIBERACING_INGEST_ENABLED: "true",
   VIBERACING_INGEST_LISTENER_HOST: "127.0.0.1",
   VIBERACING_INGEST_LISTENER_PORT: "8788",
   VIBERACING_INGEST_TLS_TERMINATION: "loopback-cleartext",
@@ -18,6 +19,7 @@ const productionEnvironment = Object.freeze({
   NODE_ENV: "production",
   PORT: "8080",
   RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "40",
+  VIBERACING_INGEST_ENABLED: "true",
   VIBERACING_INGEST_LISTENER_HOST: "0.0.0.0",
   VIBERACING_INGEST_TLS_TERMINATION: "railway-edge",
 });
@@ -52,6 +54,7 @@ describe("resolveIngestHostConfig", () => {
     const config = resolveIngestHostConfig(localEnvironment);
 
     expect(config).toEqual({
+      enabled: true,
       host: "127.0.0.1",
       port: 8788,
       tlsTermination: "loopback-cleartext",
@@ -68,27 +71,60 @@ describe("resolveIngestHostConfig", () => {
           VIBERACING_INGEST_LISTENER_PORT: "0",
         }),
       ),
-    ).toEqual({ host: "::1", port: 0, tlsTermination: "loopback-cleartext" });
+    ).toEqual({ enabled: true, host: "::1", port: 0, tlsTermination: "loopback-cleartext" });
   });
 
   it("uses only Railway PORT and an explicit external TLS contract in production", () => {
     const config = resolveIngestHostConfig(productionEnvironment);
 
-    expect(config).toEqual({ host: "0.0.0.0", port: 8080, tlsTermination: "railway-edge" });
+    expect(config).toEqual({
+      enabled: true,
+      host: "0.0.0.0",
+      port: 8080,
+      tlsTermination: "railway-edge",
+    });
     expect(ingestHostMinimumRailwayDrainSeconds).toBe(40);
   });
 
   it("reads the real process environment only through this boundary", () => {
     vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("VIBERACING_INGEST_ENABLED", "true");
     vi.stubEnv("VIBERACING_INGEST_LISTENER_HOST", "127.0.0.1");
     vi.stubEnv("VIBERACING_INGEST_LISTENER_PORT", "0");
     vi.stubEnv("VIBERACING_INGEST_TLS_TERMINATION", "loopback-cleartext");
 
     expect(resolveIngestHostConfig()).toEqual({
+      enabled: true,
       host: "127.0.0.1",
       port: 0,
       tlsTermination: "loopback-cleartext",
     });
+  });
+
+  it.each([undefined, "", "false", "TRUE", "1", "enabled"])(
+    "rejects the Ingest enable value %s before other startup configuration",
+    (value) => {
+      expectConfigurationError(
+        replace(localEnvironment, { VIBERACING_INGEST_ENABLED: value }),
+        "ingest_disabled",
+      );
+    },
+  );
+
+  it("does not inspect another environment field while Ingest is disabled", () => {
+    const environment = new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor(_target, key) {
+          if (key === "VIBERACING_INGEST_ENABLED") {
+            return { configurable: true, enumerable: true, value: "false" };
+          }
+          throw new Error("private-environment-value");
+        },
+      },
+    );
+
+    expectConfigurationError(environment, "ingest_disabled");
   });
 
   it.each([undefined, "", "staging"])("rejects the NODE_ENV value %s", (value) => {

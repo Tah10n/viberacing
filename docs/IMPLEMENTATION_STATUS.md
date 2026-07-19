@@ -252,7 +252,7 @@ ranking, or finalization scheduler exists.
   prove enum, shell, invocation-allowlist, retry, authority, output, front matter, UI metadata,
   command, Git-scope, runtime, public-output, and evidence-claim drift fail closed. No released
   connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and fifty-four accepted design decisions covering Community trust,
+- An ADR lifecycle/template and fifty-five accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -490,21 +490,26 @@ ranking, or finalization scheduler exists.
   direct-origin denial, trusted deployment route, external TLS evidence, deployment database
   credential, monitoring, connector, load evidence, or deployment is claimed.
 - A separate local Ingest host workspace that owns only closed listener configuration, one bind,
-  startup composition, and process shutdown. Development/test admits cleartext only on exact IPv4 or
-  IPv6 loopback; production requires exact `0.0.0.0:$PORT`, the explicit `railway-edge` external-
-  TLS declaration, and a canonical 40-to-300-second Railway drain window. It composes only the
-  reviewed configured application and Fastify factories, closes every completed lower boundary on
-  startup failure, and returns one idempotent close controller. Signal handlers are installed before
-  startup; the first SIGINT/SIGTERM starts a 36-second close deadline, while a second signal,
-  deadline, or close failure forces unsuccessful exit. Runtime ESM package exports and a black-box
-  emitted-entrypoint check prevent a TypeScript-only or reflective startup failure. Its 121 tests
-  have 100% statement/branch/function/line coverage with strict lint, type checking, and production
-  builds. The `railway-edge` value is an operator assertion, not proof of Railway, external TLS,
-  Cloudflare routing, direct-origin denial, protected secrets, a deployment login, capacity, or
-  deployment.
+  startup composition, and process shutdown. Exact `VIBERACING_INGEST_ENABLED=true` is required
+  before any other host field or protected application configuration is inspected; missing or any
+  alternate value fails with the existing generic silent startup behavior. The frozen validated
+  config also carries literal `enabled: true`, while tracked `.env.example` remains false.
+  Development/test then admits cleartext only on exact IPv4 or IPv6 loopback; production requires
+  exact `0.0.0.0:$PORT`, the explicit `railway-edge` external-TLS declaration, and a canonical
+  40-to-300-second Railway drain window. It composes only the reviewed configured application and
+  Fastify factories, closes every completed lower boundary on startup failure, and returns one
+  idempotent close controller. Signal handlers are installed before startup; the first
+  SIGINT/SIGTERM starts a 36-second close deadline, while a second signal, deadline, or close
+  failure forces unsuccessful exit. Runtime ESM package exports and a black-box emitted-entrypoint
+  check prevent a TypeScript-only or reflective startup failure. Its 130 tests have 100%
+  statement/branch/function/line coverage with strict lint, type checking, and production builds.
+  The `railway-edge` value is an operator assertion, not proof of Railway, external TLS, Cloudflare
+  routing, direct-origin denial, protected secrets, a deployment login, capacity, or deployment. The
+  latch is startup-only and proves no deployed restart, route denial, old-instance drain, operator
+  audit, monitoring, or other capability switch.
 - An opt-in full local Ingest HTTP-to-PostgreSQL gate. It builds emitted contracts, Ingest, and host
   code; starts one disposable `postgres-test` container with an ephemeral loopback-only port;
-  applies all 35 reviewed migrations; creates a synthetic login with only `viberacing_ingest`; and
+  applies all 37 reviewed migrations; creates a synthetic login with only `viberacing_ingest`; and
   seeds one synthetic source-bound Ed25519 device. Independently composed signed requests prove an
   accepted write, an exact duplicate under a fresh origin nonce, persistent origin replay denial,
   revoked-device denial, the closed success/problem headers, and four unique server request IDs.
@@ -1085,7 +1090,8 @@ limitations.
 Invite issuance UI, trusted anonymous login/pairing/recovery edge limits, recovery notification,
 trusted Ingest edge routing/external TLS and direct-origin denial, live secret-manager/edge key
 injection, the Ingest deployment PostgreSQL credential/TLS connection, distributed rate/backpressure
-controls and load evidence, scheduled execution and monitoring of retention cleanup for
+controls and load evidence, deployed operation of the local Ingest startup latch, independent kill
+switches for the remaining capabilities, scheduled execution and monitoring of retention cleanup for
 authentication, audit-event, invitation, CarRecipe-proposal, ingest, pairing, session,
 terminal-deletion-job, aged revoked-passkey state, and aged minimized revoked-device state plus
 pairing approval-provenance redaction, pairing-rate-window reset, and primary deletion, cleanup for

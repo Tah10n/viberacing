@@ -44,16 +44,18 @@ composes those exact capabilities, generates one server request ID, and returns 
 sync acknowledgement or generic problem decision. A confined Fastify server factory now preserves
 raw body/header evidence, applies no-queue/deadline policy, and serializes only revalidated sync
 contracts. A separate local Ingest host now binds that exact composition under closed loopback or
-Railway-edge configuration, cleans up every partial startup, and handles SIGINT/SIGTERM under a
-fixed deadline without reflective output. An opt-in synthetic loopback integration now builds that
-host, creates a disposable least-privileged Ingest login in one ephemeral PostgreSQL container,
-sends independently signed HTTP requests, and proves accepted, duplicate, persistent origin-replay,
-revoked-device, response-contract, and exact persistence behavior before removing the container. The
-public race-status route now has a visible current-week browser consumer with rounded freshness,
-optional preference-gated streak, and an explicit validated synthetic fallback. The public home also
-has a local-only EN/RU score simulator that persists or transmits no hypothetical input; the stable
-score and legacy race routes remain unchanged. These local boundaries still have no deployment proof
-key or secret-manager binding, externally verified TLS/edge route, deployment database credential,
+Railway-edge configuration only after an exact default-off startup enable latch, cleans up every
+partial startup, and handles SIGINT/SIGTERM under a fixed deadline without reflective output. The
+latch fails before protected application configuration or resource creation but is not a deployed
+dynamic kill switch. An opt-in synthetic loopback integration now builds that host, creates a
+disposable least-privileged Ingest login in one ephemeral PostgreSQL container, sends independently
+signed HTTP requests, and proves accepted, duplicate, persistent origin-replay, revoked-device,
+response-contract, and exact persistence behavior before removing the container. The public
+race-status route now has a visible current-week browser consumer with rounded freshness, optional
+preference-gated streak, and an explicit validated synthetic fallback. The public home also has a
+local-only EN/RU score simulator that persists or transmits no hypothetical input; the stable score
+and legacy race routes remain unchanged. These local boundaries still have no deployment proof key
+or secret-manager binding, externally verified TLS/edge route, deployment database credential,
 capacity evidence, deployment, or real-data result. A separate local enrollment slice now implements
 exact invite parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted
 cookies, atomic profile enrollment, required initial WebAuthn registration plus pending-session

@@ -276,12 +276,14 @@ pnpm run check:ingest-host-entrypoint
 
 After those ordered builds, the emitted entrypoint is `node apps/ingest-host/dist/main.js`. Start it
 with Node directly so SIGTERM reaches the process. Tracked `.env.example` values are deliberately
-non-working; a local listener additionally requires exact loopback host/port and
-`loopback-cleartext`, while production requires exact `0.0.0.0`, Railway-injected `PORT`,
-`railway-edge`, and a 40-to-300-second platform drain declaration. Do not add real login/key values
-to a repository file or treat a successful local bind as external TLS/deployment evidence. See
-[`apps/ingest-host/README.md`](../../apps/ingest-host/README.md) for the complete listener and
-shutdown contract.
+non-working and keep `VIBERACING_INGEST_ENABLED=false`. An ignored local environment must first set
+that field to exact `true`; only then can exact loopback host/port and `loopback-cleartext` be
+evaluated. Production additionally requires exact `0.0.0.0`, Railway-injected `PORT`,
+`railway-edge`, and a 40-to-300-second platform drain declaration. The latch is startup-only: it
+does not prove a deployed restart, route denial, or already-running instance drain. Do not add real
+login/key values to a repository file or treat a successful local bind as external TLS/deployment
+evidence. See [`apps/ingest-host/README.md`](../../apps/ingest-host/README.md) for the complete
+listener and shutdown contract.
 
 Jobs-focused commands use injected synthetic results and never need a database credential:
 

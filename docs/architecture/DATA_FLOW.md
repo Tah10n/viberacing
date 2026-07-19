@@ -457,15 +457,17 @@ four unsettled application calls without a queue. It revalidates every applicati
 returns only generic `no-store` acknowledgement/problem contracts. Real loopback tests exercise
 malformed framing and partial sockets; injection tests exercise route, overload, and serialization.
 
-ADR 0033 adds only the local listener/process step around that reviewed composition. It accepts
-cleartext solely on exact loopback in development/test, requires exact `0.0.0.0:$PORT` plus an
-explicit external-TLS declaration in production, cleans partial startup, and bounds first-signal
-shutdown to 36 seconds. The declaration does not authenticate Railway, forwarded headers, or the
-Cloudflare route; the exact origin proof remains mandatory and live infrastructure evidence remains
-absent.
+ADR 0033 adds only the local listener/process step around that reviewed composition. ADR 0055 makes
+exact `VIBERACING_INGEST_ENABLED=true` a prerequisite before any other host field, protected
+application configuration, factory, pool, server, or socket. Only after that gate does the host
+accept cleartext solely on exact loopback in development/test, require exact `0.0.0.0:$PORT` plus an
+explicit external-TLS declaration in production, clean partial startup, and bound first-signal
+shutdown to 36 seconds. The latch is not dynamic or deployed, and the declaration does not
+authenticate Railway, forwarded headers, or the Cloudflare route; the exact origin proof remains
+mandatory and live infrastructure evidence remains absent.
 
-The opt-in `test:ingest:postgres-integration` gate composes ADRs 0015 through 0020 and 0033 as one
-synthetic loopback path. It applies the reviewed migration ledger, creates only a disposable
+The opt-in `test:ingest:postgres-integration` gate composes ADRs 0015 through 0020, 0033, and 0055
+as one synthetic loopback path. It applies the reviewed migration ledger, creates only a disposable
 least-privileged Ingest login and synthetic source/device, sends independently signed HTTP, and
 checks accepted, duplicate, persistent origin-replay, revoked-device, response-contract, and exact
 persistence results before teardown. It supplies no external TLS, protected secret delivery,

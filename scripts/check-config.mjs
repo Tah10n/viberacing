@@ -35,6 +35,7 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_INGEST_DATABASE_PORT", "54329"],
   ["VIBERACING_INGEST_DATABASE_TLS_MODE", "disable"],
   ["VIBERACING_INGEST_DATABASE_USER", "replace_with_local_ingest_login"],
+  ["VIBERACING_INGEST_ENABLED", "false"],
   ["VIBERACING_INGEST_LISTENER_HOST", "127.0.0.1"],
   ["VIBERACING_INGEST_LISTENER_PORT", "8788"],
   ["VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL", "replace-with-random-32-byte-base64url-key"],

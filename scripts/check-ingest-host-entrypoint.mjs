@@ -7,7 +7,7 @@ const entrypoint = resolve(root, "apps", "ingest-host", "dist", "main.js");
 const result = spawnSync(process.execPath, [entrypoint], {
   cwd: root,
   encoding: "utf8",
-  env: Object.freeze({ NODE_ENV: "invalid" }),
+  env: Object.freeze({ VIBERACING_INGEST_ENABLED: "false" }),
   timeout: 5_000,
   windowsHide: true,
 });

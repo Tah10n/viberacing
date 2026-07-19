@@ -134,20 +134,22 @@ transport-free validated application decision. ADR 0020 adds one confined Fastif
 with exact raw-body/header preservation, closed POST/error serialization, local connection/deadline
 bounds, four-call no-queue admission, and no proxy/request-ID trust. ADR 0033 adds a separate local
 host with exact loopback/Railway listener declarations, one bind, complete partial-startup cleanup,
-and bounded signal-driven shutdown; its external-TLS declaration is not deployment evidence. The
-opt-in full-path gate composes those Ingest boundaries with a synthetic dedicated login in
-disposable PostgreSQL and verifies signed accepted/duplicate/replay/revoke HTTP behavior plus exact
-stored state. It remains local synthetic evidence, not external TLS, edge, secret-delivery,
-production-credential, capacity, or real-user evidence. The library-only ADR 0021 Rust foundation
-adds one bounded stable App Server JSONL initialization state machine and discards all server
-values. ADR 0022 adds the exact-version candidate account/usage adapter, and ADR 0023 composes both
-through a fixed, deadline/output-bounded, reap-before-success synthetic child supervisor. ADR 0024
-adds a second inaccessible reviewed context and exact sync-body/digest/device-message composition
-shared with the Ingest verifier. ADR 0025 adds an isolated one-use signer behind a third
-inaccessible device-bound key capability and returns only the same body plus five signed header
-values. ADR 0026 adds an inaccessible pending-key/challenge signer and pure strict Web verifier for
-one exact pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed
-atomic activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
+and bounded signal-driven shutdown. ADR 0055 requires exact default-off enable admission before
+every other host/protected-application field or resource; neither that startup latch nor the
+external-TLS declaration is deployment evidence. The opt-in full-path gate composes those Ingest
+boundaries with a synthetic dedicated login in disposable PostgreSQL and verifies signed
+accepted/duplicate/replay/revoke HTTP behavior plus exact stored state. It remains local synthetic
+evidence, not external TLS, edge, secret-delivery, production-credential, capacity, or real-user
+evidence. The library-only ADR 0021 Rust foundation adds one bounded stable App Server JSONL
+initialization state machine and discards all server values. ADR 0022 adds the exact-version
+candidate account/usage adapter, and ADR 0023 composes both through a fixed,
+deadline/output-bounded, reap-before-success synthetic child supervisor. ADR 0024 adds a second
+inaccessible reviewed context and exact sync-body/digest/device-message composition shared with the
+Ingest verifier. ADR 0025 adds an isolated one-use signer behind a third inaccessible device-bound
+key capability and returns only the same body plus five signed header values. ADR 0026 adds an
+inaccessible pending-key/challenge signer and pure strict Web verifier for one exact
+pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed atomic
+activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
 material and one fixed database call; ADR 0029 supplies bounded Jobs-only physical cleanup after
 pairing expiry, while ADR 0032 separately cleans expired authentication challenges and restricted
 recovery authority under the recovery profile-lock order. ADR 0043 deletes only expired unredeemed
@@ -184,7 +186,7 @@ authority shown in the design remain planned.
 | Cloudflare edge  | Public ingress, WAF integration, request shaping, public cache, body-bound origin proof                                         | Profile authorization, score derivation, database credentials                                                    | TB-01 and TB-06        |
 | Web/Auth         | Public score/race/status reads, OAuth, sessions, passkeys, profile/preferences, user-approved device/source lifecycle, deletion | Device private key, direct usage submission, schema ownership                                                    | TB-02, TB-07, TB-08    |
 | Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision             | OAuth, admin, invites, passkey/recovery, migrations, final score authority                                       | TB-05, TB-06, TB-07    |
-| Ingest host      | Closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                                  | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials                    | TB-06 and TB-07        |
+| Ingest host      | Default-off enable admission, closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown    | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials                    | TB-06 and TB-07        |
 | Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                    | Interactive auth, public request handling, schema ownership                                                      | TB-07 and TB-11        |
 | PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                        | Public routing, connector trust, release credentials                                                             | TB-07                  |
 | Rust connector   | Local App Server lifecycle, compatibility adapter, local key custody/removal, canonical signing, safe scheduling                | Website commands, server revoke, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
@@ -240,7 +242,8 @@ when a diagram and prose appear to conflict.
 ## Failure containment
 
 - Each public capability has a separate kill switch: enrollment, pairing, source creation, ingest,
-  car proposals, and public ranking.
+  car proposals, and public ranking. Only the local default-off Ingest startup latch is currently
+  implemented; deployed operation and every other switch remain planned.
 - Load shedding disables expensive or write paths without weakening auth, signature, or origin
   verification.
 - An Ingest compromise is contained by procedure-only database rights and no profile or admin

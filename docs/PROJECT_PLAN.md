@@ -201,14 +201,16 @@ flowchart LR
   a closed acknowledgement or generic problem decision. A separate bounded Fastify factory now
   preserves exact raw HTTP evidence, enforces local parser/header/connection/deadline and four-call
   no-queue policies, rejects proxy/request-ID trust, and serializes only revalidated contracts. A
-  separate local host now admits exact loopback cleartext or explicit `0.0.0.0:$PORT` production
-  behind a declared Railway-edge TLS boundary, composes only those reviewed factories, and bounds
-  partial-startup cleanup plus SIGINT/SIGTERM shutdown. One opt-in synthetic integration now builds
-  that emitted host, provisions only a disposable least-privileged Ingest login, sends independently
-  signed loopback requests, and proves accepted/duplicate/replay/revoke plus exact PostgreSQL state.
-  Trusted external TLS and edge routing, secret-manager/edge key injection, direct-origin denial,
-  distributed rate/backpressure controls, deployment login/certificate, capacity evidence, real-user
-  end-to-end integration, and deployment remain separate gates.
+  separate local host now requires one exact default-off enable latch before inspecting other host
+  or protected application configuration, then admits exact loopback cleartext or explicit
+  `0.0.0.0:$PORT` production behind a declared Railway-edge TLS boundary, composes only those
+  reviewed factories, and bounds partial-startup cleanup plus SIGINT/SIGTERM shutdown. One opt-in
+  synthetic integration now builds that emitted host, provisions only a disposable least-privileged
+  Ingest login, sends independently signed loopback requests, and proves
+  accepted/duplicate/replay/revoke plus exact PostgreSQL state. Trusted external TLS and edge
+  routing, secret-manager/edge key injection, direct-origin denial, distributed rate/backpressure
+  controls, deployment login/certificate, capacity evidence, real-user end-to-end integration, and
+  deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
   The local runner now wraps only the ten reviewed authentication/audit-event/invite/
   CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job/aged-revoked-passkey/
@@ -596,12 +598,15 @@ contracts. ADR 0020 adds the local exact Fastify POST boundary with copied raw b
 no-queue admission, fixed connection and deadline budgets, no proxy/request-ID trust, and closed
 contract serialization. ADR 0033 adds a separate local executable host with exact loopback and
 Railway production declarations, buildable runtime package exports, one bind call, complete partial-
-startup cleanup, and a 36-second process shutdown deadline. That host is not live
-secret-manager/edge integration, a verified external TLS route, a deployment database login/TLS
-connection, direct-origin denial, a connector, capacity evidence, or deployment. A separate opt-in
-gate carries independently signed requests through the emitted loopback host and a synthetic
-dedicated login in disposable PostgreSQL, checking accepted, duplicate, replay, revoke, response,
-and exact persistence behavior. This local evidence does not satisfy any deployment gate above.
+startup cleanup, and a 36-second process shutdown deadline. ADR 0055 adds exact
+`VIBERACING_INGEST_ENABLED=true` admission before any other host field, protected application
+configuration, factory, pool, server, or listener; the tracked example remains false. That host is
+not live secret-manager/edge integration, a verified external TLS route, a deployment database
+login/TLS connection, direct-origin denial, a connector, capacity evidence, or deployment. A
+separate opt-in gate carries independently signed requests through the emitted loopback host and a
+synthetic dedicated login in disposable PostgreSQL, checking accepted, duplicate, replay, revoke,
+response, and exact persistence behavior. This local evidence does not satisfy any deployment gate
+above.
 
 ### Storage
 
@@ -751,7 +756,8 @@ cleanup, redaction, or reset has a scheduler or deployed cadence.
 - Sensitive actions require a reason and produce an external, append-only audit event.
 - Operators cannot retrieve Codex prompts or account email because those values are never collected.
 - Kill switches independently disable enrollment, pairing, source creation, ingestion, proposals,
-  and public ranking.
+  and public ranking. The local Ingest host has only the first default-off startup latch; a deployed
+  restart/route-denial/runbook path and every other capability switch remain separate gates.
 - Operational logs are structured, redacted, retention-bounded, and avoid raw token values.
 - Alerts cover auth anomalies, pairing storms, source growth, signature and replay failures, ingest
   rejection, season jobs, deletion failures, database saturation, release events, and origin-proof
@@ -1053,7 +1059,9 @@ measurements exist.
   gates.
 - Complete aggregation, same-source device dedup, source count, quarantine, retention, and
   finalized-season immutability.
-- Add abuse controls, backpressure, alerts, audit logs, and kill switches.
+- Add abuse controls, backpressure, alerts, audit logs, and kill switches. One exact default-off
+  Ingest startup latch is implemented locally; deployed operation and the independent switches for
+  every other capability remain open.
 - Gate: source multiplication cannot exceed the profile score cap or gain privilege, and
   infrastructure limits survive load tests.
 

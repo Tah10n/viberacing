@@ -383,6 +383,7 @@ async function startHost(startConfiguredIngestHost, databasePort) {
     const listenerPort = await findAvailableListenerPort();
     const environment = Object.freeze({
       NODE_ENV: "test",
+      VIBERACING_INGEST_ENABLED: "true",
       VIBERACING_INGEST_DATABASE_HOST: "127.0.0.1",
       VIBERACING_INGEST_DATABASE_NAME: databaseName,
       VIBERACING_INGEST_DATABASE_PASSWORD: ingestPassword,

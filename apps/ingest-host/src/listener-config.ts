@@ -6,6 +6,7 @@ const maximumPort = 65_535;
 const maximumRailwayDrainSeconds = 300;
 
 const names = Object.freeze({
+  enabled: "VIBERACING_INGEST_ENABLED",
   localPort: "VIBERACING_INGEST_LISTENER_PORT",
   host: "VIBERACING_INGEST_LISTENER_HOST",
   nodeEnvironment: "NODE_ENV",
@@ -21,6 +22,7 @@ export type IngestHostTlsTermination = "loopback-cleartext" | "railway-edge";
 export type IngestHostConfigurationErrorCode =
   | "environment_unreadable"
   | "host_invalid"
+  | "ingest_disabled"
   | "node_environment_invalid"
   | "port_invalid"
   | "railway_drain_invalid"
@@ -37,6 +39,7 @@ export class IngestHostConfigurationError extends Error {
 }
 
 export interface IngestHostConfig {
+  readonly enabled: true;
   readonly host: "0.0.0.0" | "127.0.0.1" | "::1";
   readonly port: number;
   readonly tlsTermination: IngestHostTlsTermination;
@@ -95,6 +98,10 @@ function validateRailwayDrainSeconds(value: string | undefined): void {
 }
 
 export function resolveIngestHostConfig(environment: unknown = process.env): IngestHostConfig {
+  if (environmentValue(environment, names.enabled) !== "true") {
+    fail("ingest_disabled");
+  }
+
   const nodeEnvironment = environmentValue(environment, names.nodeEnvironment);
   const host = environmentValue(environment, names.host);
   const tlsTermination = environmentValue(environment, names.tlsTermination);
@@ -119,7 +126,7 @@ export function resolveIngestHostConfig(environment: unknown = process.env): Ing
     }
     const port = parsePort(environmentValue(environment, names.railwayPort), false);
     validateRailwayDrainSeconds(environmentValue(environment, names.railwayDrainSeconds));
-    return Object.freeze({ host, port, tlsTermination });
+    return Object.freeze({ enabled: true, host, port, tlsTermination });
   }
 
   if (host === undefined || !localHosts.has(host)) {
@@ -133,6 +140,7 @@ export function resolveIngestHostConfig(environment: unknown = process.env): Ing
     nodeEnvironment === "test",
   );
   return Object.freeze({
+    enabled: true,
     host: host as "127.0.0.1" | "::1",
     port,
     tlsTermination,

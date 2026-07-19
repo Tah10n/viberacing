@@ -12,6 +12,7 @@ import {
 } from "./host.js";
 
 const loopbackConfig = Object.freeze({
+  enabled: true,
   host: "127.0.0.1",
   port: 0,
   tlsTermination: "loopback-cleartext",
@@ -79,10 +80,16 @@ describe("startIngestHost", () => {
   });
 
   it.each([
-    Object.freeze({ host: "::1", port: 0, tlsTermination: "loopback-cleartext" }),
-    Object.freeze({ host: "0.0.0.0", port: 8080, tlsTermination: "railway-edge" }),
+    Object.freeze({ enabled: true, host: "::1", port: 0, tlsTermination: "loopback-cleartext" }),
+    Object.freeze({
+      enabled: true,
+      host: "0.0.0.0",
+      port: 8080,
+      tlsTermination: "railway-edge",
+    }),
     Object.freeze(
       Object.assign(Object.create(null) as Record<string, unknown>, {
+        enabled: true,
         host: "127.0.0.1",
         port: 0,
         tlsTermination: "loopback-cleartext",
@@ -134,13 +141,14 @@ describe("startIngestHost", () => {
     [],
     { ...loopbackConfig },
     Object.freeze({ ...loopbackConfig, extra: true }),
+    Object.freeze({ ...loopbackConfig, enabled: false }),
     Object.freeze({ ...loopbackConfig, host: "localhost" }),
     Object.freeze({ ...loopbackConfig, port: "0" }),
     Object.freeze({ ...loopbackConfig, port: 0.5 }),
     Object.freeze({ ...loopbackConfig, port: -1 }),
     Object.freeze({ ...loopbackConfig, port: 65_536 }),
     Object.freeze({ ...loopbackConfig, tlsTermination: "disabled" }),
-    Object.freeze({ host: "127.0.0.1", port: 0, tlsTermination: "railway-edge" }),
+    Object.freeze({ host: "127.0.0.1", port: 0, tlsTermination: "loopback-cleartext" }),
     Object.freeze({ host: "127.0.0.1", port: 8080, tlsTermination: "railway-edge" }),
     Object.freeze({ host: "0.0.0.0", port: 8080, tlsTermination: "loopback-cleartext" }),
   ])("rejects the invalid configuration %#", async (configuration) => {
@@ -312,9 +320,29 @@ describe("startIngestHost", () => {
 });
 
 describe("startConfiguredIngestHost", () => {
+  it("refuses before protected application configuration while Ingest is disabled", async () => {
+    const environment = new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor(_target, key) {
+          if (key === "VIBERACING_INGEST_ENABLED") {
+            return { configurable: true, enumerable: true, value: "false" };
+          }
+          throw new Error("private-environment-value");
+        },
+      },
+    );
+
+    await expect(startConfiguredIngestHost(environment)).rejects.toMatchObject({
+      code: "ingest_disabled",
+      message: "Ingest host configuration is invalid.",
+    });
+  });
+
   it("composes the real protected configuration, database pool, HTTP factory, and listener", async () => {
     const environment = Object.freeze({
       NODE_ENV: "test",
+      VIBERACING_INGEST_ENABLED: "true",
       VIBERACING_INGEST_DATABASE_HOST: "127.0.0.1",
       VIBERACING_INGEST_DATABASE_NAME: "viberacing_local",
       VIBERACING_INGEST_DATABASE_PASSWORD: "synthetic-test-only",

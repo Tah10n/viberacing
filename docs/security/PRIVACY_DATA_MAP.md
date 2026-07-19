@@ -229,12 +229,15 @@ destination. Loopback and injection tests use synthetic values only. A future ac
 trace, proxy signal, or monitoring backend requires a separate mapped purpose, access policy, and
 retention decision before collection.
 
-ADR 0033 adds the listener/process boundary without collecting or retaining another user field. The
-listener host, port, TLS declaration, and drain window are non-personal startup configuration used
-only to validate one bind and bounded shutdown; the host does not serialize, log, export, or retain
-them. It adds no access log, metric, trace, analytics event, cache, request header, database column,
-or network destination. Any future diagnostic or monitoring sink still requires the separate
-purpose, access, and retention decision above.
+ADR 0033 adds the listener/process boundary without collecting or retaining another user field. ADR
+0055 adds the non-personal `VIBERACING_INGEST_ENABLED` Operational startup value and evaluates it
+before every other host or protected application field. Disabled input is discarded with no second
+field read; successful startup retains only literal `true` in the frozen local configuration. The
+enable value, listener host, port, TLS declaration, and drain window are used only to validate one
+startup/bind and bounded shutdown; the host does not serialize, log, export, or persist them. It
+adds no access log, metric, trace, analytics event, cache, request header, database column, or
+network destination. Any future dynamic control, diagnostic, or monitoring sink still requires a
+separate purpose, access, and retention decision.
 
 ADR 0021 adds no collected or retained field. The connector library transiently validates the stable
 initialization response's Codex home, platform family, operating-system name, and user agent under
