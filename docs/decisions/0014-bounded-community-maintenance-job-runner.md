@@ -1,10 +1,10 @@
 # ADR 0014: Bounded Community maintenance job runner
 
-- Status: Accepted (local synthetic PostgreSQL integration; scheduler pending)
+- Status: Accepted (local synthetic PostgreSQL integration; wrapped by ADR 0063)
 - Date: 2026-07-15
 - Decision owners: Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
-- Superseded by: None
+- Superseded by: ADR 0063 (scheduler-pending portion only)
 
 ## Context
 
@@ -139,11 +139,11 @@ metrics still require a privacy-map and retention review before collection.
 A local synthetic integration now proves the emitted application can use one disposable narrow login
 for all seventeen capabilities and that an extra-membership login fails the runtime probe before
 mutation. Residual risk remains: no production login/certificate path proves deployment membership;
-no external audit sink exists; no scheduler enforces cadence, backoff, overlap, or alerting; cleanup
-does not cover every expiring identity state; no correction, purge schedule, cache/backup purge, or
-restore replay exists; and no capacity test proves the selected deadlines under production load. A
-compromised Jobs login still has all seventeen database capabilities, so principal separation and
-revocation remain required.
+no external audit sink exists; ADR 0063 supplies only a default-off in-memory local scheduler, not a
+deployed cadence, durable backlog, production monitor, or alerting; cleanup does not cover every
+expiring identity state; no correction, cache/backup purge, or restore replay exists; and no
+capacity test proves the selected deadlines under production load. A compromised Jobs login still
+has all seventeen database capabilities, so principal separation and revocation remain required.
 
 Affected invariants are VR-PUBLIC-001, VR-INGEST-002, VR-ABUSE-001, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-SEASON-RACE, VR-ABUSE-DATABASE-ROLE,
@@ -207,7 +207,8 @@ Current local evidence includes:
 
 The general SQL integration suite separately proves the seventeen procedure bodies and concurrency
 behavior in portless ephemeral PostgreSQL. The Jobs integration proves one synthetic loopback
-Node-to-PostgreSQL application path only. Scheduler behavior, production TLS/login, capacity,
+Node-to-PostgreSQL application path only. ADR 0063 separately proves the local scheduler against a
+fake runner and clock. Combined scheduler/PostgreSQL behavior, production TLS/login, capacity,
 monitoring, real-user retention, and deployment evidence remain required before those behaviors may
 be claimed.
 

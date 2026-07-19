@@ -1,6 +1,6 @@
 # ADR 0047: Bounded pairing approval-provenance retention
 
-- Status: Accepted (database capability and local one-shot command implemented; scheduling pending)
+- Status: Accepted (local scheduler catalog; deployment pending)
 - Date: 2026-07-18
 - Decision owners: Web/Auth, Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
@@ -78,9 +78,10 @@ activate, revoke, or otherwise administer a pairing or device.
 Residual risk remains: activated pairing/device records and cryptographic transaction metadata,
 referenced passkeys and device keys, tombstones, caches, backups, and restore replay still need
 separate retention evidence. ADR 0048 separately deletes only aged unreferenced revoked passkeys,
-and ADR 0050 separately bounds fixed pairing-rate-window reset. There is no scheduler, cadence,
-overlap/retry policy, monitoring, capacity result, production Jobs login/TLS connection, backup
-purge, or deployed retention proof.
+and ADR 0050 separately bounds fixed pairing-rate-window reset. ADR 0063 supplies only a default-off
+in-memory local catalog, sequential execution, and no-overlap lifecycle. There is no combined
+scheduler/PostgreSQL result, deployed cadence, durable missed-slot recovery, monitoring, capacity
+result, production Jobs login/TLS connection, backup purge, or deployed retention proof.
 
 Affected invariants are VR-AUTH-001, VR-DEVICE-001, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -137,8 +138,10 @@ Acceptance evidence recorded for this decision includes:
   redacts one aged pairing, then removes its unreferenced expired session while retaining the
   pairing, active device, and passkey.
 
-All fixtures are synthetic. This evidence proves no scheduler, production cadence/login/TLS,
-monitoring, cache or backup purge, restore replay, capacity, real-user retention, or deployment.
+All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
+runner and clock. These layers do not prove combined scheduler/PostgreSQL execution, production
+cadence/login/TLS, monitoring, cache or backup purge, restore replay, capacity, real-user retention,
+or deployment.
 
 ## References
 

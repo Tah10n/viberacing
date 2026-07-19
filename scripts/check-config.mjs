@@ -29,6 +29,7 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_JOBS_DATABASE_PORT", "54329"],
   ["VIBERACING_JOBS_DATABASE_TLS_MODE", "disable"],
   ["VIBERACING_JOBS_DATABASE_USER", "replace_with_local_jobs_login"],
+  ["VIBERACING_JOBS_SCHEDULER_ENABLED", "false"],
   ["VIBERACING_INGEST_DATABASE_HOST", "127.0.0.1"],
   ["VIBERACING_INGEST_DATABASE_NAME", "viberacing_local"],
   ["VIBERACING_INGEST_DATABASE_PASSWORD", "replace-with-local-ingest-password"],

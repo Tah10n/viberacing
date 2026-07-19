@@ -27,7 +27,8 @@ abandoned-enrollment, CarRecipe-proposal, finalized-source-day, terminal-deletio
 revoked-passkey, and revoked-device retention, pairing approval-provenance redaction, primary
 profile deletion, open-season scoring, and terminal finalization procedures plus Web-only public
 score/race/status and exact-session private score projections are implemented; deployed HTTP ingest,
-scheduled execution, audited corrections, cache/backup/tombstone purge, and restore replay are not.
+combined scheduler/PostgreSQL execution, deployed cadence, audited corrections,
+cache/backup/tombstone purge, and restore replay are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -41,8 +42,9 @@ project only an active profile's current approved recipe. A third compatible sta
 those contracts while adding UTC-day-rounded freshness and an optional preference-gated streak.
 Exact receipt time and daily score history remain private. A separate Web-only device proposal
 capability now admits an exact signed recipe from an active source-bound device without granting
-read/approve/reject/activate authority. Expired-proposal cleanup is implemented only as a bounded
-local Jobs capability with no schedule, live login, monitoring, or deployment.
+read/approve/reject/activate authority. Expired-proposal cleanup is a bounded local Jobs capability
+in the default-off scheduler catalog, but no combined scheduler/PostgreSQL result, live login,
+monitoring, deployed cadence, or deployment exists.
 
 ## Layout
 
@@ -541,15 +543,16 @@ loopback gate exercises that complete path through a disposable least-privileged
 deployment TLS/credential, edge, capacity, or real-user evidence. The local returning-login options
 route keeps its challenge only in an encrypted browser continuation and creates no database state
 before valid proof, but it is not launch-ready without edge/service limits. Revision 0023 supplies
-bounded cleanup after expiry, but it still requires scheduling and deployed retention evidence.
-Procedures use one generic failure message for closed authorization and constraint failures; HTTP
-status mapping and response shaping remain application work. Recovery SQL now uses a short-lived
-restricted authority and never represents it as an ordinary session. The local application now
-performs bounded matching/dummy Argon2id work under the protected pepper, generic configured-floor
-HTTP handling, and exact replacement WebAuthn verification before these fixed calls. Distributed
-edge attempt controls, cleanup scheduling, notifications, live integration, and operational
-monitoring remain absent. The deletion procedures now implement immediate lock-down, local primary
-purge, and 30-day terminal-job retention; cache purge, tombstones, backup replay, scheduling, and
+bounded cleanup after expiry, and ADR 0063 includes the exact command in a default-off local
+catalog; combined/deployed execution and retention evidence remain required. Procedures use one
+generic failure message for closed authorization and constraint failures; HTTP status mapping and
+response shaping remain application work. Recovery SQL now uses a short-lived restricted authority
+and never represents it as an ordinary session. The local application now performs bounded
+matching/dummy Argon2id work under the protected pepper, generic configured-floor HTTP handling, and
+exact replacement WebAuthn verification before these fixed calls. Distributed edge attempt controls,
+deployed cleanup cadence, notifications, live integration, and operational monitoring remain absent.
+The deletion procedures now implement immediate lock-down, local primary purge, and 30-day
+terminal-job retention; cache purge, tombstones, backup replay, combined/deployed scheduling, and
 user-visible progress remain unimplemented.
 
 ## Data and privacy map
@@ -614,11 +617,12 @@ Revision 0008 turns those two expiry markers into one callable Jobs-only deletio
 server time, rejects null, zero, negative, or over-1000 batch sizes, serializes workers with a
 private owner-only mutex row plus a five-second lock timeout, and leaves live rows untouched. The
 procedure and observed two-worker race are deletion evidence for the isolated SQL boundary only: no
-production scheduler, monitoring, retention policy, or real-user purge evidence exists. ADR 0014's
+deployed scheduler, monitoring, retention policy, or real-user purge evidence exists. ADR 0014's
 local runner can invoke one fixed maximum-size batch only after its Jobs-role probe. The shared
 opt-in integration now proves that emitted command through one disposable narrow login and exact
-stored state, but supplies no production login/TLS, scheduler, monitoring, capacity, or real-user
-purge evidence.
+stored state. ADR 0063 separately supplies an exact-default-off in-memory UTC catalog against a fake
+runner and clock; it is not combined with this integration and supplies no production login/TLS,
+deployed cadence, monitoring, capacity, or real-user purge evidence.
 
 Revision 0009 materializes only an open Community season. It binds each ISO Monday-through-Sunday
 season to immutable `community_v1` parameters, sums current eligible source/day values with numeric
@@ -639,9 +643,9 @@ terminal transition rematerializes once, records its immutable timestamp, suppor
 idempotent retry, and rejects direct metadata or projection mutation. Profile purge can still
 cascade personal score rows without reopening the non-personal season record. A closed no-data week
 stores one terminal season, bounded to the ISO weeks reachable from the contract's `20xx` dates. No
-correction record, Jobs scheduler/monitor, production login/TLS integration, or capacity claim is
-implemented. The local one-shot runner selects only the prepared refresh/finalization call after a
-closed canonical-season command and a least-privilege session probe; the shared synthetic
+correction record, deployed Jobs scheduler/monitor, production login/TLS integration, or capacity
+claim is implemented. The local one-shot runner selects only the prepared refresh/finalization call
+after a closed canonical-season command and a least-privilege session probe; the shared synthetic
 integration now proves both emitted calls and their exact open/finalized state.
 
 Revision 0011 exposes only a bounded score projection to the Web role. It filters current profile
@@ -719,8 +723,9 @@ server time after its private Jobs mutex and locks candidate profiles in stable 
 authority/code rows, matching recovery and deletion transitions. Observed worker and recovery-start
 races prove serialization, live-authority preservation, and the profile-first lock order in isolated
 PostgreSQL. The shared synthetic integration proves the emitted command through a disposable narrow
-login. No scheduler, production Jobs login/TLS, backup purge, monitoring, public retention cadence,
-or deployment is implied.
+login. The exact object is in ADR 0063's default-off local catalog, but no combined PostgreSQL
+result, production Jobs login/TLS, backup purge, monitoring, deployed retention cadence, or
+deployment is implied.
 
 Revision 0024 physically removes at most ten due `deletion_pending` profiles per invocation. It
 locks every current maintenance mutex in stable name order before queue/profile rows, including the
@@ -728,10 +733,11 @@ six rows present after revision 0026, so cascaded auth, pairing, proposal, usage
 cannot deadlock a concurrent Jobs capability. It removes every profile-bound restrictive pairing
 first and deletes only a still-pending source-free key directly; source-bound keys leave through the
 profile cascade. The exact job becomes terminal inside the same transaction before its profile
-foreign key is nulled, while audit linkage is redacted. The opaque job remains. No keyed identity
-tombstone, cache/backup purge, restore replay, scheduler, production Jobs login/TLS, monitoring,
-capacity, or deployment is implied. The shared synthetic integration proves only one emitted local
-purge and its exact terminal job/profile state.
+foreign key is nulled, while audit linkage is redacted. The opaque job remains. The purge object is
+in the default-off local catalog, but no combined scheduler/PostgreSQL result, keyed identity
+tombstone, cache/backup purge, restore replay, production Jobs login/TLS, monitoring, capacity, or
+deployment is implied. The shared synthetic integration proves only one emitted local purge and its
+exact terminal job/profile state.
 
 Revision 0025 stores only the exact `CarRecipeV1` columns, with database checks repeating every
 version, enum, and seed bound. Both tables are forced-RLS and have no runtime table grants. Web may
@@ -741,9 +747,10 @@ IDs and expiries are server-created, one pending row replaces the previous pendi
 atomically inserts or replaces the active recipe and deletes the exact proposal, while rejection
 deletes only the exact proposal. Ingest, Jobs, Admin, `PUBLIC`, direct table reads, cross-profile
 controls, and replay are denied. Profile deletion cascades both recipe rows. Expiry prevents use
-after at most 24 hours. Revision 0026 supplies bounded physical deletion, while cleanup
-schedule/cadence, live credentials, monitoring, capacity evidence, and deployment remain open.
-Revision 0027 separately supplies only the bounded current public projection.
+after at most 24 hours. Revision 0026 supplies bounded physical deletion and the default-off local
+catalog includes that object, while combined scheduler/PostgreSQL execution, deployed cadence, live
+credentials, monitoring, capacity evidence, and deployment remain open. Revision 0027 separately
+supplies only the bounded current public projection.
 
 Revision 0028 adds no table or direct grant. Web may read only a device key ID/public key for an
 active device on an active source whose profile is active or hidden. Its proposal function locks and
@@ -759,8 +766,9 @@ captures server time only after its separate private Jobs mutex, selects oldest 
 uses `FOR UPDATE SKIP LOCKED` around concurrent Web decisions, rechecks expiry at deletion, and
 returns only one bounded count. Active recipes and live proposals are never candidates. Web, Ingest,
 Admin, `PUBLIC`, and direct table access remain denied. The observed two-worker race proves
-serialization, exact expired-row progress, and live-row preservation only in isolated PostgreSQL; no
-scheduler, cadence, production Jobs login/TLS, monitoring, backup purge, capacity, or deployment is
+serialization, exact expired-row progress, and live-row preservation only in isolated PostgreSQL.
+The object is in the default-off local catalog, but no combined scheduler/PostgreSQL result,
+deployed cadence, production Jobs login/TLS, monitoring, backup purge, capacity, or deployment is
 implied. The shared synthetic integration proves only the emitted command through a disposable
 narrow login and exact stored state.
 
@@ -792,9 +800,10 @@ pairing-reference index, oldest-first row locks with `SKIP LOCKED`, and repeated
 Deleting a session cascades only its now-unusable session-bound challenges. Activated-pairing
 provenance and live sessions remain until revision 0034 can redact the exact approval references
 after 180 days while preserving the pairing/device binding; the observed worker race proves local
-serialization, not a schedule, complete device-history policy, backup purge, or deployment. The
-shared synthetic integration additionally proves the emitted cleanup command through a disposable
-narrow login and exact stored state, not production login/TLS, monitoring, capacity, or real-user
+serialization. The object is in the default-off local catalog. The shared synthetic integration
+additionally proves the emitted cleanup command through a disposable narrow login and exact stored
+state, not combined scheduler/PostgreSQL execution, deployed cadence, complete device-history
+policy, backup purge, production login/TLS, monitoring, capacity, deployment, or real-user
 retention.
 
 Revision 0031 physically removes expired active or revoked invite rows only after the shared
@@ -802,24 +811,27 @@ authentication mutex. It uses the ordered partial expiry index, server time capt
 mutex, `FOR UPDATE SKIP LOCKED`, and repeated state/expiry predicates. Redeemed enrollment
 provenance and live invite authority are never candidates. The observed worker race proves local
 serialization and exact progress; the shared synthetic integration proves only the emitted command
-through a disposable narrow login and exact stored state. Neither proves invite issuance UI, a
-scheduler, production login/TLS, monitoring, capacity, backup purge, or deployed retention.
+through a disposable narrow login and exact stored state. The object is in the default-off local
+catalog, but neither proves invite issuance UI, combined scheduler/PostgreSQL execution, deployed
+cadence, production login/TLS, monitoring, capacity, backup purge, or deployed retention.
 
 Revision 0032 physically removes only terminal profile-deletion jobs whose profile link is null and
 whose server-recorded completion is at least 30 days old. It shares the profile-deletion mutex,
 orders the partial-index path by completion and identifier, uses `FOR UPDATE SKIP LOCKED`, and
 repeats every terminal/cutoff predicate. Recent evidence and non-terminal authority remain. The
 observed worker race and shared synthetic integration prove only local serialization,
-least-privileged execution, and exact stored state; they do not prove scheduling, cache/backup
-purge, tombstone/restore replay, monitoring, capacity, or deployment.
+least-privileged execution, and exact stored state. The object is in the default-off local catalog;
+they do not prove combined scheduler/PostgreSQL execution, deployed cadence, cache/backup purge,
+tombstone/restore replay, monitoring, capacity, or deployment.
 
 Revision 0033 physically removes both profile-linked and already-redacted database audit events only
 after 180 days from server-recorded occurrence. It uses a separate private mutex, a deterministic
 time/identifier index, `FOR UPDATE SKIP LOCKED`, and a repeated cutoff predicate. Recent evidence
 remains. The observed worker race and shared seventeen-command synthetic integration prove only
-local serialization, least-privileged execution, and exact stored state; they do not prove an
-external append-only sink, scheduling, production login/TLS, monitoring, capacity, backup purge, or
-deployed retention.
+local serialization, least-privileged execution, and exact stored state. The object is in the
+default-off local catalog; they do not prove an external append-only sink, combined
+scheduler/PostgreSQL execution, deployed cadence, production login/TLS, monitoring, capacity, backup
+purge, or deployed retention.
 
 Revision 0034 redacts only `approved_by_session_id` and `approved_by_passkey_id` from activated
 pairings at least 180 days after server-recorded activation. It locks the existing authentication
@@ -830,8 +842,10 @@ or pre-activation redaction fails closed. The pairing, source, active device, pa
 activation evidence remain; a separate session-cleanup call can then remove a newly unreferenced
 expired session. The observed worker race and shared seventeen-command synthetic integration prove
 local serialization, least-privileged execution, and exact stored state. This redaction does not
-itself delete device history; revision 0036 separately handles only an aged minimized pair. Neither
-proves scheduling, production login/TLS, monitoring, capacity, backup purge, or deployed retention.
+itself delete device history; revision 0036 separately handles only an aged minimized pair. The
+object is in the default-off local catalog, but neither test layer proves combined
+scheduler/PostgreSQL execution, deployed cadence, production login/TLS, monitoring, capacity, backup
+purge, or deployed retention.
 
 Revision 0035 physically removes a passkey row only after it has remained revoked for at least 180
 days and no retained session, verifying challenge, authorized challenge, or pairing references it.
@@ -840,8 +854,10 @@ partial index plus `FOR UPDATE SKIP LOCKED`, and repeats every state/cutoff/refe
 delete. Active, recent, and referenced credentials remain. A recovery scenario first fails
 atomically at the unchanged 32-row ceiling, deletes 31 eligible historical rows, then completes with
 the existing replacement-passkey proof. The observed worker race and shared seventeen-command
-integration prove only local serialization, least-privileged execution, and exact state, not a
-scheduler, production login/TLS, monitoring, capacity, backup purge, or deployed retention.
+integration prove only local serialization, least-privileged execution, and exact state. The object
+is in the default-off local catalog, but neither test layer proves combined scheduler/PostgreSQL
+execution, deployed cadence, production login/TLS, monitoring, capacity, backup purge, or deployed
+retention.
 
 Revision 0036 physically removes only an activated pairing and its exact revoked device-key row when
 both activation and revocation are at least 180 days old, the approving session/passkey references
@@ -851,8 +867,9 @@ locks the existing Ingest and pairing mutexes in profile-purge order, locks both
 exactly one row at each step so failure rolls back the pair. Active, recent, and referenced history
 remains, and configured challenge/raw cascades never define eligibility. The observed worker race
 and shared seventeen-command integration prove only local serialization, least-privileged execution,
-and exact state, not a scheduler, production login/TLS, monitoring, capacity, backup purge, or
-deployed retention.
+and exact state. The object is in the default-off local catalog, but neither test layer proves
+combined scheduler/PostgreSQL execution, deployed cadence, production login/TLS, monitoring,
+capacity, backup purge, or deployed retention.
 
 Revision 0037 resets only positive `pairing_request_windows` rows whose server-recorded window start
 is at least one hour old, which is the maximum duration accepted by Web admission. It first verifies
@@ -861,8 +878,9 @@ the cutoff/count predicates, and replaces only the aggregate timestamp/count wit
 epoch/zero state. The table rows, operations, buckets, Web-only admission function, saturating
 limits, and absence of client ID/digest storage remain unchanged. A failed later-row update rolls
 back the whole reset. Observed worker/worker and reset/admission races prove convergence and a fresh
-admission count surviving reset. The separate seventeen-command integration proves the no-argument
-Jobs path and exact stored state, not trusted edge identity, scheduling, monitoring, capacity,
+admission count surviving reset. The object is in the default-off local catalog. The separate
+seventeen-command integration proves the no-argument Jobs path and exact stored state, not trusted
+edge identity, combined scheduler/PostgreSQL execution, deployed cadence, monitoring, capacity,
 production login/TLS, or deployment.
 
 Revision 0038 physically removes at most 1000 canonical abandoned enrollment profiles per
@@ -875,10 +893,11 @@ or equal-boundary authority, active profiles, and every non-enrollment, recovery
 deletion, scoring, recipe, or missing-invite drift remain. Worker serialization and an in-flight
 initial-passkey activation race pass in isolated PostgreSQL. The shared seventeen-command
 integration proves only the emitted command through a disposable narrow login and exact stored
-state, not invite repair/reuse, a deletion job/tombstone, notification, scheduling, production
-login/TLS, monitoring, capacity, backup purge, restore replay, or deployed retention. Revision 0039
-repeats its eligibility boundary with a finalized-freshness exclusion so the new direct profile
-foreign key cannot widen this cascade.
+state. The object is in the default-off local catalog, but neither test layer proves invite
+repair/reuse, a deletion job/tombstone, notification, combined scheduler/PostgreSQL execution,
+deployed cadence, production login/TLS, monitoring, capacity, backup purge, restore replay, or
+deployed retention. Revision 0039 repeats its eligibility boundary with a finalized-freshness
+exclusion so the new direct profile foreign key cannot widen this cascade.
 
 Revision 0039 captures one private profile/season projection when an open season becomes finalized:
 the latest accepted receipt's UTC date, retained source count, exact source/day row count, and zero
@@ -890,7 +909,8 @@ row it proves that live rows plus progress equal the captured count, the live ma
 matches the projection, and first-row source count is exact. It locks the existing scoring, Ingest-
 retention, and profile-purge mutexes in stable order; worker, finalization, and profile-purge races
 prove local serialization. Open, recent, missing-projection, or drifted state remains untouched or
-fails closed. This is no scheduler, production login/TLS path, correction authority, backup purge,
+fails closed. The exact command is in ADR 0063's default-off local hourly catalog, but this is no
+combined scheduler/PostgreSQL result, production login/TLS path, correction authority, backup purge,
 capacity result, or deployed retention evidence.
 
 The local account application consumes those capabilities through the same probed read-write pool.
@@ -984,9 +1004,10 @@ hard failure, not something the script silently broadens or repairs.
   a deployment-provisioned least-privileged login and verified TLS, direct-origin denial,
   distributed backpressure/rate controls, monitoring, and load evidence. The synthetic loopback
   integration does not replace those gates.
-- Implement a scheduler, monitoring, retry/overlap policy, live login/TLS integration, and capacity
-  evidence around the local one-shot Jobs cleanup/refresh/finalization runner, plus audited
-  corrections.
+- Compose and deploy the default-off local scheduler with a production Jobs login/TLS path,
+  single-replica/cadence policy, monitoring, missed-backlog recovery, and capacity evidence, plus
+  audited corrections. The fake-runner scheduler tests and separate Jobs PostgreSQL integration do
+  not provide that combined evidence.
 - Integrate the bounded database adapter and local score/race/status routes with a
   deployment-provisioned Web-only login and verified TLS, then add cache/invalidation, edge request
   shaping, query-plan/load evidence, monitoring, and deployment verification.

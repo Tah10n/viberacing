@@ -1,6 +1,6 @@
 # ADR 0043: Bounded invite retention cleanup
 
-- Status: Accepted (database capability and local one-shot command implemented; scheduling pending)
+- Status: Accepted (local scheduler catalog; deployment pending)
 - Date: 2026-07-18
 - Decision owners: Web/Auth, Admin, Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
@@ -60,11 +60,12 @@ separate bounded event without the verifier digest. The row lock prevents cleanu
 invite underneath an already-running redemption, while the repeated predicates fail closed if a
 candidate changes before deletion.
 
-Residual risk remains: no invite issuance UI, scheduler, cadence, retry/overlap policy, monitoring,
-capacity result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention
-policy exists. Tombstones, pairing-referenced sessions, historical passkey/device provenance, and
-any future expiring class still require separate reviewed rules; ADR 0045 separately bounds terminal
-deletion-job retention.
+Residual risk remains: there is no invite issuance UI, combined scheduler/PostgreSQL result,
+deployed cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs
+login/TLS connection, backup-expiry proof, or deployed retention policy. ADR 0063 supplies only a
+default-off in-memory local catalog, sequential execution, and no-overlap lifecycle. Tombstones,
+pairing-referenced sessions, historical passkey/device provenance, and any future expiring class
+still require separate reviewed rules; ADR 0045 separately bounds terminal deletion-job retention.
 
 Affected invariants are VR-AUTH-001 and VR-DATA-001. Primary attacker stories are
 VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -114,8 +115,9 @@ Acceptance evidence recorded for this decision includes:
   narrow login, rejects a deliberately widened login before mutation, preserves generic output, and
   verifies exact stored state.
 
-All fixtures are synthetic. This evidence proves no scheduler, production cadence/login/TLS,
-monitoring, backup purge, capacity, invite issuance UI, or deployment.
+All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
+runner and clock. These layers do not prove combined scheduler/PostgreSQL execution, production
+cadence/login/TLS, monitoring, backup purge, capacity, invite issuance UI, or deployment.
 
 ## References
 

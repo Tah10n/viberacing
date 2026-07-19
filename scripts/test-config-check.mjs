@@ -20,6 +20,7 @@ VIBERACING_JOBS_DATABASE_NAME=viberacing_local
 VIBERACING_JOBS_DATABASE_USER=replace_with_local_jobs_login
 VIBERACING_JOBS_DATABASE_PASSWORD=replace-with-local-jobs-password
 VIBERACING_JOBS_DATABASE_TLS_MODE=disable
+VIBERACING_JOBS_SCHEDULER_ENABLED=false
 VIBERACING_INGEST_ENABLED=false
 VIBERACING_INGEST_LISTENER_HOST=127.0.0.1
 VIBERACING_INGEST_LISTENER_PORT=8788
@@ -86,6 +87,15 @@ assert.match(
     goodEnvExample.replace(
       "VIBERACING_SOURCE_CREATION_ENABLED=false",
       "VIBERACING_SOURCE_CREATION_ENABLED=true",
+    ),
+  ).join("\n"),
+  /must retain the reviewed public-safe example value/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_JOBS_SCHEDULER_ENABLED=false",
+      "VIBERACING_JOBS_SCHEDULER_ENABLED=true",
     ),
   ).join("\n"),
   /must retain the reviewed public-safe example value/,

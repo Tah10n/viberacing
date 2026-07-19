@@ -17,11 +17,11 @@ Argon2id work, creates only a five-minute restricted authority, and requires exa
 WebAuthn registration before a normal session exists. It has no working invite/OAuth/database
 credential or live-authenticator evidence. A local `/connect` page adds session-rate-limited
 pending-code review, opaque new or active existing source selection, and fresh-passkey approval with
-synthetic evidence. Distributed recovery/anonymous pairing edge controls, cleanup scheduling, a Jobs
-scheduler, real-user ingestion, audited correction, and an operational connector remain absent. A
-library-only Rust crate implements the bounded stable App Server initialization exchange and a
-candidate `0.144.5` account/usage parser with fixed methods, discarded account/summary fields, and
-bounded normalized daily output. A one-shot supervisor now composes those states with a fixed child
+synthetic evidence. Distributed recovery/anonymous pairing edge controls, deployed cleanup cadence,
+real-user ingestion, audited correction, and an operational connector remain absent. A library-only
+Rust crate implements the bounded stable App Server initialization exchange and a candidate
+`0.144.5` account/usage parser with fixed methods, discarded account/summary fields, and bounded
+normalized daily output. A one-shot supervisor now composes those states with a fixed child
 argument, local pipes, cleared ambient environment, output/deadline limits, and reap-before-success
 behavior. One Windows x86_64 development command validates the active native credential before
 bounded fixed-name `PATH` discovery or the explicit path fallback, and can construct that private
@@ -56,14 +56,15 @@ an explicit Railway-edge production declaration, with bounded partial-startup cl
 shutdown. A separate opt-in gate now proves one full synthetic loopback HTTP-to-PostgreSQL path
 through a disposable dedicated Ingest login. There is no deployment database credential/certificate,
 trusted external TLS/edge path, supported connector adapter, or deployment. A bounded local one-shot
-Jobs process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor,
-or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
-implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
-certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
-boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
-database role isolation; it does not prove a live adapter, deployed API, or production flow. The
-Ingest server tests bind only ephemeral loopback sockets and use synthetic requests; no development
-command exposes it to the LAN or Internet.
+Jobs process now wraps only cleanup/refresh/finalization. A separate default-off local scheduler
+invokes only that runner from fixed UTC process slots, but has no combined database result, live
+login, deployed cadence, monitor, or deployment. A bounded server-only Web PostgreSQL adapter and
+local public-score GET are implemented and unit/build-tested, but this repository supplies no
+working deployment login or TLS certificate. A successful setup proves repository gates, synthetic
+frontend behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
+lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
+deployed API, or production flow. The Ingest server tests bind only ephemeral loopback sockets and
+use synthetic requests; no development command exposes it to the LAN or Internet.
 
 ## Prerequisites
 
@@ -90,13 +91,14 @@ untrusted registry redirects, and exotic transitive sources.
 
 `pnpm run verify` is deterministic and offline after installation. It includes a complete reachable
 Git-history scan, external-host policy, English spelling, dependency-license inventory, contract,
-Ingest, Ingest-host, and Jobs lint/types/coverage, their required production compilation, the built
-Ingest-host entrypoint check, contract generation/drift checks and coverage, web component coverage,
-and a production web build. It also runs the offline migration manifest/capability checker plus Rust
-formatting, all-target checking, tests, and Clippy; the real PostgreSQL integration is a separate
-Docker command and a secretless CI job. The optional `pnpm run check:external-links:online` performs
-bounded network validation and may fail closed behind a private DNS/proxy; do not weaken its address
-or redirect rules to accommodate a workstation.
+Ingest, Ingest-host, Jobs, and Jobs-scheduler lint/types/coverage, their required production
+compilation, the built Ingest-host and Jobs-scheduler entrypoint checks, contract generation/drift
+checks and coverage, web component coverage, and a production web build. It also runs the offline
+migration manifest/capability checker plus Rust formatting, all-target checking, tests, and Clippy;
+the real PostgreSQL integration is a separate Docker command and a secretless CI job. The optional
+`pnpm run check:external-links:online` performs bounded network validation and may fail closed
+behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
+workstation.
 
 After an intentionally reviewed dependency change, regenerate the machine inventory with
 `node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
@@ -317,10 +319,28 @@ pnpm run test:jobs:postgres-integration
 
 It applies the reviewed migrations to one disposable PostgreSQL container, creates only synthetic
 narrow and negative-control logins, runs all seventeen built commands, verifies generic output and
-exact state, and removes the container and storage. It proves no external audit sink, scheduler,
-production login/TLS, monitoring, capacity, real-user retention, or deployment. See
-[`apps/jobs/README.md`](../../apps/jobs/README.md) for the exact boundary and remaining
-scheduler/deployment work.
+exact state, and removes the container and storage. It proves no external audit sink, combined
+scheduler execution, production login/TLS, monitoring, capacity, real-user retention, or deployment.
+See [`apps/jobs/README.md`](../../apps/jobs/README.md) for the exact boundary.
+
+The separate local scheduler uses injected time, timers, and a fake runner in its focused checks:
+
+```text
+pnpm run lint:jobs-scheduler
+pnpm run typecheck:jobs-scheduler
+pnpm run test:jobs-scheduler:coverage
+pnpm run build:jobs
+pnpm run build:jobs-scheduler
+pnpm run check:jobs-scheduler-entrypoint
+```
+
+The emitted process accepts no arguments and remains disabled unless the runtime supplies exact
+`VIBERACING_JOBS_SCHEDULER_ENABLED=true`. That latch is read before the Jobs runner or any database
+configuration. The fixed catalog derives only the current and latest grace-eligible Community
+Monday, stores slot state in memory, and invokes the existing runner sequentially. Do not enable it
+against a persistent database until the separate narrow Jobs login, single-replica deployment,
+cadence, monitoring, capacity, and missed-backlog policy have been reviewed. See
+[`apps/jobs-scheduler/README.md`](../../apps/jobs-scheduler/README.md) for the exact local boundary.
 
 The product components and libraries must meet the committed coverage thresholds. Small Next.js
 entrypoints are covered by the production build. See
@@ -404,7 +424,8 @@ logout, and account security actions remain available. Changing the value does n
 continuation or pending session, invoke the separate abandoned-enrollment cleanup, repair an invite,
 reload an existing worker, stop an enabled in-flight request, or prove deployed route denial. The
 explicit `cleanup-abandoned-enrollments` Jobs command is separately available only for canonical
-rows after every retained session/challenge expiry is past; no scheduler invokes it.
+rows after every retained session/challenge expiry is past. The default-off local scheduler includes
+that exact object in its hourly catalog, but no combined/deployed invocation is proven.
 
 The server-only score, enrollment, and local pairing adapters use only `VIBERACING_WEB_DATABASE_*`.
 Their tracked user/password are deliberately non-working placeholders and are checked against
@@ -485,6 +506,8 @@ user/password are separate non-working placeholders, and configuration checks re
 compose owner or Web login. Local integration requires another externally provisioned login whose
 only membership is `viberacing_jobs`. It follows the same loopback-only cleartext and verified-TLS
 rules as Web. Focused tests/builds do not construct a connection and need none of these settings.
+The scheduler's separate exact enable latch is not a credential and does not relax any of those
+requirements.
 
 If local work needs the public schema, copy `.env.example` to `.env`; `.env` is ignored and must
 never be committed.

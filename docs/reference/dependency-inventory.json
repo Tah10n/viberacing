@@ -5,6 +5,7 @@
     "apps/ingest/package.json",
     "apps/ingest-host/package.json",
     "apps/jobs/package.json",
+    "apps/jobs-scheduler/package.json",
     "apps/web/package.json",
     "packages/contracts/package.json",
     "pnpm-lock.yaml",
@@ -159,6 +160,7 @@
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
+        { "workspace": "apps/jobs-scheduler", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -342,6 +344,7 @@
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
+        { "workspace": "apps/jobs-scheduler", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -422,6 +425,7 @@
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
+        { "workspace": "apps/jobs-scheduler", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -527,6 +531,7 @@
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
+        { "workspace": "apps/jobs-scheduler", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -914,6 +919,7 @@
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
+        { "workspace": "apps/jobs-scheduler", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -926,6 +932,7 @@
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
+        { "workspace": "apps/jobs-scheduler", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]
@@ -944,6 +951,7 @@
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
+        { "workspace": "apps/jobs-scheduler", "scope": "development" },
         { "workspace": "apps/web", "scope": "development" },
         { "workspace": "packages/contracts", "scope": "development" }
       ]

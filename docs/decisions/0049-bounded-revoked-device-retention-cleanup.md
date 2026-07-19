@@ -1,6 +1,6 @@
 # ADR 0049: Bounded revoked-device retention cleanup
 
-- Status: Accepted (database capability and local one-shot command implemented; scheduling pending)
+- Status: Accepted (local scheduler catalog; deployment pending)
 - Date: 2026-07-18
 - Decision owners: Pairing, Ingest, Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
@@ -85,8 +85,10 @@ as verified or changing derived Community history.
 
 Residual risk remains: other retained source/profile history, tombstones, caches, backups, and
 restore replay still need separate policies and evidence. ADR 0050 now separately bounds fixed
-pairing-rate-window reset. There is no scheduler, cadence, overlap/retry policy, monitoring,
-capacity result, production Jobs login/TLS connection, backup purge, or deployed retention proof.
+pairing-rate-window reset. ADR 0063 supplies only a default-off in-memory local catalog, sequential
+execution, and no-overlap lifecycle. There is no combined scheduler/PostgreSQL result, deployed
+cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs login/TLS
+connection, backup purge, or deployed retention proof.
 
 Affected invariants are VR-DEVICE-001, VR-DATA-001, and VR-DELETE-001. Primary attacker stories are
 VR-ABUSE-DEVICE-KEY-THEFT, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -142,8 +144,10 @@ Acceptance evidence recorded for this decision includes:
   narrow login, rejects a deliberately widened login before mutation, preserves generic output,
   deletes one aged minimized revoked-device pair, and checks exact stored state.
 
-All fixtures are synthetic. This evidence proves no scheduler, production cadence/login/TLS,
-monitoring, cache or backup purge, restore replay, capacity, real-user retention, or deployment.
+All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
+runner and clock. These layers do not prove combined scheduler/PostgreSQL execution, production
+cadence/login/TLS, monitoring, cache or backup purge, restore replay, capacity, real-user retention,
+or deployment.
 
 ## References
 

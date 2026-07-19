@@ -22,7 +22,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0011](0011-bounded-web-postgresql-score-adapter.md)            | Bounded least-privileged Web PostgreSQL score adapter               | Accepted; server-only adapter implemented              |
 | [0012](0012-bounded-public-http-problem-boundary.md)            | Bounded request IDs and public HTTP problem responses               | Accepted; server-only factory implemented              |
 | [0013](0013-public-community-score-http-contract.md)            | Closed query and local Community score GET                          | Accepted; implemented locally; deployment pending      |
-| [0014](0014-bounded-community-maintenance-job-runner.md)        | Bounded one-shot Community maintenance runner                       | Accepted; local integration; scheduler pending         |
+| [0014](0014-bounded-community-maintenance-job-runner.md)        | Bounded one-shot Community maintenance runner                       | Accepted; local integration; wrapped by ADR 0063       |
 | [0015](0015-bounded-community-sync-verification-kernel.md)      | Bounded Community sync request verification kernel                  | Accepted; local kernel; integration pending            |
 | [0016](0016-bounded-ingest-postgresql-adapter.md)               | Bounded least-privileged Ingest PostgreSQL adapter                  | Accepted; local adapter; live integration pending      |
 | [0017](0017-protected-ingest-origin-key-configuration.md)       | Protected two-key Ingest origin proof configuration                 | Accepted; local reader; deployment pending             |
@@ -37,28 +37,28 @@ what it costs, how it is verified, and how it can be replaced.
 | [0026](0026-bounded-pairing-possession-proof.md)                | Bounded pairing possession proof                                    | Accepted; pure kernels; composed by ADR 0027           |
 | [0027](0027-bounded-pairing-activation-composition.md)          | Bounded pairing activation composition                              | Accepted; local application; transport pending         |
 | [0028](0028-bounded-pairing-start-composition.md)               | Bounded pairing start composition                                   | Accepted; local start; transport pending               |
-| [0029](0029-bounded-pairing-retention-cleanup.md)               | Bounded pairing retention cleanup                                   | Accepted; database and local command; schedule pending |
+| [0029](0029-bounded-pairing-retention-cleanup.md)               | Bounded pairing retention cleanup                                   | Accepted; local catalog; deployment pending            |
 | [0030](0030-bounded-connector-pairing-transport.md)             | Bounded connector pairing transport and native key custody          | Accepted; local vertical slice; deployment pending     |
 | [0031](0031-one-shot-candidate-community-sync.md)               | One-shot exact-candidate Community sync                             | Accepted; Windows development slice; release pending   |
-| [0032](0032-bounded-auth-retention-cleanup.md)                  | Bounded authentication retention cleanup                            | Accepted; database and local command; schedule pending |
+| [0032](0032-bounded-auth-retention-cleanup.md)                  | Bounded authentication retention cleanup                            | Accepted; local catalog; deployment pending            |
 | [0033](0033-bounded-railway-ingest-host.md)                     | Bounded Railway Ingest host                                         | Accepted; local entry point; deployment pending        |
-| [0034](0034-bounded-profile-deletion-purge.md)                  | Bounded primary profile deletion purge                              | Accepted; database and local command; schedule pending |
+| [0034](0034-bounded-profile-deletion-purge.md)                  | Bounded primary profile deletion purge                              | Accepted; local catalog; deployment pending            |
 | [0035](0035-bounded-session-car-recipe-proposal.md)             | Bounded session-owned CarRecipe proposal and approval               | Accepted; local Web/DB and agent path                  |
-| [0036](0036-bounded-car-recipe-proposal-cleanup.md)             | Bounded CarRecipe proposal retention cleanup                        | Accepted; database and local command; schedule pending |
+| [0036](0036-bounded-car-recipe-proposal-cleanup.md)             | Bounded CarRecipe proposal retention cleanup                        | Accepted; local catalog; deployment pending            |
 | [0037](0037-bounded-public-community-race-projection.md)        | Bounded public active-CarRecipe race projection                     | Accepted; local Web/DB slice; deployment pending       |
 | [0038](0038-bounded-device-car-recipe-proposal-ingress.md)      | Bounded device CarRecipe proposal ingress                           | Accepted; local vertical slice; deployment pending     |
 | [0039](0039-bounded-agent-car-proposal-orchestration.md)        | Bounded agent CarRecipe proposal orchestration                      | Accepted; local skill; connector release pending       |
 | [0040](0040-bounded-public-community-race-status.md)            | Bounded public Community race status projection                     | Accepted; local Web/DB slice; deployment pending       |
 | [0041](0041-bounded-local-connector-credential-removal.md)      | Bounded local connector credential removal                          | Accepted; local command; release evidence pending      |
-| [0042](0042-bounded-expired-session-retention-cleanup.md)       | Bounded expired-session retention cleanup                           | Accepted; database and local command; schedule pending |
-| [0043](0043-bounded-invite-retention-cleanup.md)                | Bounded invite retention cleanup                                    | Accepted; database and local command; schedule pending |
+| [0042](0042-bounded-expired-session-retention-cleanup.md)       | Bounded expired-session retention cleanup                           | Accepted; local catalog; deployment pending            |
+| [0043](0043-bounded-invite-retention-cleanup.md)                | Bounded invite retention cleanup                                    | Accepted; local catalog; deployment pending            |
 | [0044](0044-bounded-repository-verification-skill.md)           | Bounded repository verification orchestration                       | Accepted; local read-only skill implemented            |
-| [0045](0045-bounded-terminal-deletion-job-retention-cleanup.md) | Bounded terminal deletion-job retention cleanup                     | Accepted; database and local command; schedule pending |
-| [0046](0046-bounded-audit-event-retention-cleanup.md)           | Bounded database audit-event retention cleanup                      | Accepted; database and local command; schedule pending |
-| [0047](0047-bounded-pairing-approval-provenance-retention.md)   | Bounded pairing approval-provenance retention                       | Accepted; database and local command; schedule pending |
-| [0048](0048-bounded-revoked-passkey-retention-cleanup.md)       | Bounded revoked-passkey retention cleanup                           | Accepted; database and local command; schedule pending |
-| [0049](0049-bounded-revoked-device-retention-cleanup.md)        | Bounded revoked-device retention cleanup                            | Accepted; database and local command; schedule pending |
-| [0050](0050-bounded-pairing-rate-window-retention-reset.md)     | Bounded pairing rate-window retention reset                         | Accepted; database and local command; schedule pending |
+| [0045](0045-bounded-terminal-deletion-job-retention-cleanup.md) | Bounded terminal deletion-job retention cleanup                     | Accepted; local catalog; deployment pending            |
+| [0046](0046-bounded-audit-event-retention-cleanup.md)           | Bounded database audit-event retention cleanup                      | Accepted; local catalog; deployment pending            |
+| [0047](0047-bounded-pairing-approval-provenance-retention.md)   | Bounded pairing approval-provenance retention                       | Accepted; local catalog; deployment pending            |
+| [0048](0048-bounded-revoked-passkey-retention-cleanup.md)       | Bounded revoked-passkey retention cleanup                           | Accepted; local catalog; deployment pending            |
+| [0049](0049-bounded-revoked-device-retention-cleanup.md)        | Bounded revoked-device retention cleanup                            | Accepted; local catalog; deployment pending            |
+| [0050](0050-bounded-pairing-rate-window-retention-reset.md)     | Bounded pairing rate-window retention reset                         | Accepted; local catalog; deployment pending            |
 | [0051](0051-bounded-candidate-executable-discovery.md)          | Bounded candidate executable discovery                              | Accepted; Windows candidate; release/support pending   |
 | [0052](0052-bounded-candidate-artifact-diagnostic.md)           | Bounded candidate artifact diagnostic                               | Accepted; local diagnostic; release/support pending    |
 | [0053](0053-windows-portable-smoke.md)                          | Bounded Windows portable connector lifecycle smoke                  | Accepted; local/CI declaration; hosted/release pending |
@@ -69,8 +69,9 @@ what it costs, how it is verified, and how it can be replaced.
 | [0058](0058-fail-closed-source-creation-enable-gate.md)         | Fail-closed source-creation enable gate                             | Accepted; local gate; deployed operation pending       |
 | [0059](0059-fail-closed-car-proposal-enable-gate.md)            | Fail-closed CarRecipe proposal enable gate                          | Accepted; local gate; deployed operation pending       |
 | [0060](0060-fail-closed-enrollment-enable-gate.md)              | Fail-closed enrollment enable gate                                  | Accepted; local gate; deployed operation pending       |
-| [0061](0061-bounded-abandoned-enrollment-retention-cleanup.md)  | Bounded abandoned-enrollment retention cleanup                      | Accepted; database and local command; schedule pending |
-| [0062](0062-finalized-source-day-retention-cleanup.md)          | Finalized source-day retention cleanup                              | Accepted; database and local command; schedule pending |
+| [0061](0061-bounded-abandoned-enrollment-retention-cleanup.md)  | Bounded abandoned-enrollment retention cleanup                      | Accepted; local catalog; deployment pending            |
+| [0062](0062-finalized-source-day-retention-cleanup.md)          | Finalized source-day retention cleanup                              | Accepted; local catalog; deployment pending            |
+| [0063](0063-default-off-local-jobs-scheduler.md)                | Default-off local Jobs scheduler                                    | Accepted; local scheduler; deployment pending          |
 
 ## Lifecycle
 

@@ -38,9 +38,10 @@ material availability cost.
   methods. Disabled EN/RU pages omit both forms, and HTTP/service checks stop before private work.
   Returning login and restricted recovery stay available. This is a local module-load control, not
   distributed attempt policy, deployed worker coordination, invite revocation, or proof that
-  already-running enabled requests were terminated. ADR 0061 separately permits only explicit
-  bounded Jobs cleanup after every retained enrollment authority expires; it has no scheduler or
-  deployed cadence.
+  already-running enabled requests were terminated. ADR 0061 separately permits only bounded Jobs
+  cleanup after every retained enrollment authority expires. ADR 0063 includes that exact object in
+  a default-off local hourly catalog, but proves no combined PostgreSQL execution or deployed
+  cadence.
 - **Residual risk:** Vibe Racing cannot prove one human per GitHub account.
 
 ### VR-ABUSE-SOURCE-DUPLICATION — Duplicate declared Codex sources
@@ -121,8 +122,11 @@ material availability cost.
   exact role/login boundary, calls one prepared function, holds one client through settlement, and
   discards invalid results. The shared synthetic integration runs both emitted scoring commands
   through a disposable narrow login, rejects an extra-membership login, and checks open/finalized
-  database state. Correction authority, scheduling, production database login/TLS, and operational
-  reconciliation remain unimplemented.
+  database state. ADR 0063 separately derives only the current and latest grace-eligible Monday from
+  UTC time, marks slots before sequential invocation, prevents overlap and same-slot retry, and
+  bounds shutdown; its fake runner/clock tests are not combined with PostgreSQL. Correction
+  authority, deployed scheduling, production database login/TLS, historical backlog recovery, and
+  operational reconciliation remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -169,8 +173,8 @@ material availability cost.
   every fixed row and accepting no caller-selected scope. Revision 0013 adds a separate Jobs-only
   1-to-1000 cleanup for expired `pending`, `approved`, and `cancelled` transactions plus their exact
   still-pending keys; activated bindings and live rows are excluded. Live login/TLS integration,
-  trusted edge controls, capacity evidence, cleanup scheduling, cross-platform execution, and
-  release remain absent.
+  trusted edge controls, capacity evidence, combined/deployed cleanup cadence, cross-platform
+  execution, and release remain absent.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the
@@ -586,17 +590,20 @@ material availability cost.
   CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the seventeen
   prepared function calls. Its pool maximum is one, input/result shapes are closed, failed clients
   are destroyed, and CLI output reflects no configuration, command, SQL, count, or error detail. The
-  local Ingest adapter independently caps its pool at four, probes the exact Ingest login/role and
-  safe search path before each capability, exposes only fixed parameterized origin replay, device
-  lookup, and submission calls, reconstructs and revalidates inputs, copies mutable values, accepts
-  only closed rows, and destroys failed clients without forwarding driver/configuration details.
+  separate default-off scheduler can construct only that runner, selects only a frozen maximum-17
+  fixed UTC catalog, and validates each object again through the runner; it adds no SQL or database
+  capability. The local Ingest adapter independently caps its pool at four, probes the exact Ingest
+  login/role and safe search path before each capability, exposes only fixed parameterized origin
+  replay, device lookup, and submission calls, reconstructs and revalidates inputs, copies mutable
+  values, accepts only closed rows, and destroys failed clients without forwarding
+  driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Web deployment login/TLS integration has not been exercised. Jobs now has a
   disposable synthetic least-privileged login, all seventeen emitted commands, a widened-login
   denial, and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged
   loopback login and full HTTP integration result. Neither proves a deployment
-  credential/certificate, external TLS/edge route, external audit sink, capacity, scheduler,
-  monitoring, or real-user behavior.
+  credential/certificate, external TLS/edge route, external audit sink, capacity, combined/deployed
+  scheduler result, monitoring, or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -692,7 +699,7 @@ material availability cost.
   tombstone; observed races cover purge workers and purge versus authentication cleanup. Revision
   0032 makes the terminal job cleanup-eligible after 30 days; revision 0033 makes the redacted audit
   reference cleanup-eligible after 180 days. No external audit sink is supplied. Cache invalidation,
-  scheduler/monitoring, keyed tombstone policy, backup expiry, and restore replay remain
+  deployed scheduler/monitoring, keyed tombstone policy, backup expiry, and restore replay remain
   unimplemented.
 - **Residual risk:** Immutable backup media may retain encrypted data until documented expiry.
 
@@ -789,24 +796,27 @@ material availability cost.
   methods; disabled UI omits its forms and disabled HTTP/service paths stop before private work.
   Returning login/recovery remain available. This is a local gate, not a distributed enrollment rate
   limit, cleanup invocation, or deployed worker control. ADR 0061 separately provides an explicit
-  unscheduled Jobs cleanup after retained authority expires. Once pairing is enabled, the
-  transport-free pairing-start application bounds labels, metadata, keys, entropy, and HMAC work,
-  admits four unsettled attempts without a queue, holds each lease through a 250-millisecond floor,
-  and makes no database call for malformed input. Revision 0022 now adds one Web-only fixed-storage
-  admission before start/poll database work: every request locks/increments one operation-global row
-  and one of 64 digest-selected buckets under a five-second deadline. Counts saturate, windows reset
-  in place, and neither raw client ID nor digest is retained. Revision 0037 adds a zero-argument
-  Jobs-only reset after the maximum one-hour window, preserves the 130 fixed rows, and proves
-  worker/worker plus reset/admission serialization. The shared service retains the four-call
-  no-queue ceiling across both operations. This is distributed across Web instances using one
-  database, but the self-asserted ID is not a trusted edge/IP identity and still needs capacity
-  evidence. Physical pairing cleanup exists as a separate local capability, but scheduling and edge
-  controls are still pending. The local Jobs runner adds a one-client ceiling, 2/31/32-second
-  connect/server/client deadlines, eleven fixed 1000-row cleanup commands, one zero-argument
-  maximum-130 rate-window reset, one fixed 1000-row approval-provenance redaction, one fixed
-  maximum-10 primary-purge command, canonical season validation, closed one-row results, and
-  destructive release on failure. Its synthetic integration executes those commands sequentially
-  against one disposable database and therefore proves no parallel scheduler or production-load
+  Jobs cleanup after retained authority expires, and ADR 0063 includes only that fixed object in its
+  default-off local catalog. Once pairing is enabled, the transport-free pairing-start application
+  bounds labels, metadata, keys, entropy, and HMAC work, admits four unsettled attempts without a
+  queue, holds each lease through a 250-millisecond floor, and makes no database call for malformed
+  input. Revision 0022 now adds one Web-only fixed-storage admission before start/poll database
+  work: every request locks/increments one operation-global row and one of 64 digest-selected
+  buckets under a five-second deadline. Counts saturate, windows reset in place, and neither raw
+  client ID nor digest is retained. Revision 0037 adds a zero-argument Jobs-only reset after the
+  maximum one-hour window, preserves the 130 fixed rows, and proves worker/worker plus
+  reset/admission serialization. The shared service retains the four-call no-queue ceiling across
+  both operations. This is distributed across Web instances using one database, but the
+  self-asserted ID is not a trusted edge/IP identity and still needs capacity evidence. Physical
+  pairing cleanup exists as a separate local capability and in the default-off local hourly catalog,
+  but combined/deployed scheduling and edge controls are still pending. The local Jobs runner adds a
+  one-client ceiling, 2/31/32-second connect/server/client deadlines, twelve fixed 1000-row cleanup
+  commands, one zero-argument maximum-130 rate-window reset, one fixed 1000-row approval-provenance
+  redaction, one fixed maximum-10 primary-purge command, canonical season validation, closed one-row
+  results, and destructive release on failure. Its synthetic integration executes those commands
+  sequentially against one disposable database. The scheduler separately limits execution to one
+  non-overlapping sequential cycle, ignores timer ticks while it runs, and starts no later object
+  after shutdown; its fake runner evidence proves no combined scheduler/database or production-load
   capacity. The kernel itself has no socket/stream authority. The separate Ingest adapter adds a
   four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime
   recycling, exact one-row origin consume, zero-or-one device lookup, and one-row submission
@@ -825,8 +835,8 @@ material availability cost.
   resource; the tracked example remains false. This is no deployed/dynamic kill-switch result. There
   is no live identity or deployment database integration, distributed rate/backpressure policy,
   monitoring, or combined capacity evidence. The full synthetic Ingest gate proves correctness under
-  four sequential signed requests, not load capacity. Scheduling, cache, scoring/read capacity
-  evidence, quotas, edge shaping, and production load evidence remain unimplemented.
+  four sequential signed requests, not load capacity. Deployed scheduling, cache, scoring/read
+  capacity evidence, quotas, edge shaping, and production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

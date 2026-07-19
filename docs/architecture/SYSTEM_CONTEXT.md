@@ -9,22 +9,23 @@ default-off new-source control and an independent default-off CarRecipe proposal
 default-off local invite/OAuth/initial-passkey enrollment, returning-passkey login, exact-session
 public-profile visibility, and private passkey-inventory/add/revocation slices with encrypted
 cookies, local recovery-code replacement-passkey sign-in, and logout, one local one-shot Jobs runner
-including bounded primary profile deletion, and local Ingest request-verification,
-PostgreSQL-adapter, application-composition, and bounded HTTP-server boundaries, plus library-only
-connector initialization and candidate `0.144.5` account/usage parser boundaries, a synthetic
-one-shot supervisor, an exact-body sync composer, isolated pairing/sync/proposal signers, pure Web
-pairing and proposal verifiers, one local connector command with native OS key custody and exact
-start/poll routes, one credential-free Windows candidate diagnostic that performs only exact
-artifact admission, one Windows sync command with bounded fixed-name discovery plus an explicit path
-fallback that admits, collects, signs, and uploads once, and one fixed proposal-only command that
-starts no Codex process. It also has one opt-in synthetic loopback integration through the emitted
-Ingest host and a disposable least-privileged PostgreSQL login, plus a separate synthetic
-integration through all seventeen emitted Jobs commands and a disposable narrow login with a
-widened-login negative control. It still has no deployed application service, operational sync
-connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway deployment,
-live OAuth or production database login, or production database. Component status is tracked in
-[implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
-not deployed evidence.
+including bounded primary profile deletion, a separate default-off local UTC scheduler around only
+that runner, and local Ingest request-verification, PostgreSQL-adapter, application-composition, and
+bounded HTTP-server boundaries, plus library-only connector initialization and candidate `0.144.5`
+account/usage parser boundaries, a synthetic one-shot supervisor, an exact-body sync composer,
+isolated pairing/sync/proposal signers, pure Web pairing and proposal verifiers, one local connector
+command with native OS key custody and exact start/poll routes, one credential-free Windows
+candidate diagnostic that performs only exact artifact admission, one Windows sync command with
+bounded fixed-name discovery plus an explicit path fallback that admits, collects, signs, and
+uploads once, and one fixed proposal-only command that starts no Codex process. It also has one
+opt-in synthetic loopback integration through the emitted Ingest host and a disposable
+least-privileged PostgreSQL login, plus a separate synthetic integration through all seventeen
+emitted Jobs commands and a disposable narrow login with a widened-login negative control. Scheduler
+tests use a fake runner and clock, not that database. It still has no deployed application service,
+durable Jobs cadence, operational sync connector, supported Codex version, distributed recovery
+perimeter, Cloudflare/Railway deployment, live OAuth or production database login, or production
+database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
+diagrams describe required runtime boundaries, not deployed evidence.
 
 ## System context
 
@@ -69,10 +70,12 @@ flowchart LR
   subgraph Railway["Railway environment"]
     Web["Web/Auth\nNext.js"]
     Ingest["Ingest API\nFastify"]
+    JobsScheduler["Jobs scheduler"]
     Jobs["Idempotent jobs"]
     Origin["Origin-proof verifier"]
     Origin --> Web
     Origin --> Ingest
+    JobsScheduler --> Jobs
   end
 
   subgraph Data["PostgreSQL capability boundary"]
@@ -127,34 +130,38 @@ it to exactly twelve cleanup commands, one pairing approval-provenance redaction
 pairing-rate-window reset, one primary purge, one refresh, and one finalization command with the
 same role/login probe, one-client pool, and fixed deadlines. A separate opt-in synthetic integration
 now runs all seventeen emitted commands against disposable PostgreSQL, proves the narrow login and
-extra-membership denial, and checks exact stored state. ADR 0015 adds a pure local Ingest kernel
-that bounds the raw envelope and JSON parser, verifies a replay-consumed body-bound origin proof
-before parsing, validates the sync contract, and verifies the exact source-bound device request
-under strict Ed25519 semantics. ADR 0016 adds a fixed-query four-client PostgreSQL adapter with
-strict TLS/config, per-checkout Ingest role/login/search-path verification, closed device/submission
-mappers, copied parameters, and destructive failure release. ADR 0017 adds an exact
-primary/secondary origin-key reader and config-backed verifier factory without exposing a reusable
-key container. ADR 0018 adds persistent atomic origin replay, and ADR 0019 composes the same
-replay/device/submission adapter behind one transport-free validated application decision. ADR 0020
-adds one confined Fastify server factory with exact raw-body/header preservation, closed POST/error
-serialization, local connection/deadline bounds, four-call no-queue admission, and no
-proxy/request-ID trust. ADR 0033 adds a separate local host with exact loopback/Railway listener
-declarations, one bind, complete partial-startup cleanup, and bounded signal-driven shutdown. ADR
-0055 requires exact default-off enable admission before every other host/protected-application field
-or resource; neither that startup latch nor the external-TLS declaration is deployment evidence. The
-opt-in full-path gate composes those Ingest boundaries with a synthetic dedicated login in
-disposable PostgreSQL and verifies signed accepted/duplicate/replay/revoke HTTP behavior plus exact
-stored state. It remains local synthetic evidence, not external TLS, edge, secret-delivery,
-production-credential, capacity, or real-user evidence. The library-only ADR 0021 Rust foundation
-adds one bounded stable App Server JSONL initialization state machine and discards all server
-values. ADR 0022 adds the exact-version candidate account/usage adapter, and ADR 0023 composes both
-through a fixed, deadline/output-bounded, reap-before-success synthetic child supervisor. ADR 0024
-adds a second inaccessible reviewed context and exact sync-body/digest/device-message composition
-shared with the Ingest verifier. ADR 0025 adds an isolated one-use signer behind a third
-inaccessible device-bound key capability and returns only the same body plus five signed header
-values. ADR 0026 adds an inaccessible pending-key/challenge signer and pure strict Web verifier for
-one exact pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed
-atomic activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
+extra-membership denial, and checks exact stored state. ADR 0063 separately adds one
+exact-default-off local scheduler that derives only fixed UTC process slots, invokes the closed
+runner sequentially, keeps slot state in memory, prevents overlap and same-slot retry, and bounds
+signal shutdown. Its fake runner/clock evidence is not a combined PostgreSQL or deployed-cadence
+result. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and JSON parser,
+verifies a replay-consumed body-bound origin proof before parsing, validates the sync contract, and
+verifies the exact source-bound device request under strict Ed25519 semantics. ADR 0016 adds a
+fixed-query four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest
+role/login/search-path verification, closed device/submission mappers, copied parameters, and
+destructive failure release. ADR 0017 adds an exact primary/secondary origin-key reader and
+config-backed verifier factory without exposing a reusable key container. ADR 0018 adds persistent
+atomic origin replay, and ADR 0019 composes the same replay/device/submission adapter behind one
+transport-free validated application decision. ADR 0020 adds one confined Fastify server factory
+with exact raw-body/header preservation, closed POST/error serialization, local connection/deadline
+bounds, four-call no-queue admission, and no proxy/request-ID trust. ADR 0033 adds a separate local
+host with exact loopback/Railway listener declarations, one bind, complete partial-startup cleanup,
+and bounded signal-driven shutdown. ADR 0055 requires exact default-off enable admission before
+every other host/protected-application field or resource; neither that startup latch nor the
+external-TLS declaration is deployment evidence. The opt-in full-path gate composes those Ingest
+boundaries with a synthetic dedicated login in disposable PostgreSQL and verifies signed
+accepted/duplicate/replay/revoke HTTP behavior plus exact stored state. It remains local synthetic
+evidence, not external TLS, edge, secret-delivery, production-credential, capacity, or real-user
+evidence. The library-only ADR 0021 Rust foundation adds one bounded stable App Server JSONL
+initialization state machine and discards all server values. ADR 0022 adds the exact-version
+candidate account/usage adapter, and ADR 0023 composes both through a fixed,
+deadline/output-bounded, reap-before-success synthetic child supervisor. ADR 0024 adds a second
+inaccessible reviewed context and exact sync-body/digest/device-message composition shared with the
+Ingest verifier. ADR 0025 adds an isolated one-use signer behind a third inaccessible device-bound
+key capability and returns only the same body plus five signed header values. ADR 0026 adds an
+inaccessible pending-key/challenge signer and pure strict Web verifier for one exact
+pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed atomic
+activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
 material and one fixed database call; ADR 0029 supplies bounded Jobs-only physical cleanup after
 pairing expiry, while ADR 0032 separately cleans expired authentication challenges and restricted
 recovery authority under the recovery profile-lock order. ADR 0043 deletes only expired unredeemed
@@ -190,9 +197,9 @@ creates fresh context only after active-record validation and repeated admission
 fixed signed upload. A hosted Windows result, macOS/Linux admission, real package lifecycle,
 scheduling, and release remain absent. Trusted external TLS/edge routing, live secret-manager/edge
 key injection, working deployment login/certificate, composed live end-to-end flow, edge/capacity
-evidence, a verified Cloudflare/Railway path, released sync connector, Jobs scheduler/monitoring,
-public cache, backup/tombstone/restore replay, and audited correction authority shown in the design
-remain planned.
+evidence, a verified Cloudflare/Railway path, released sync connector, deployed Jobs
+scheduler/monitoring, public cache, backup/tombstone/restore replay, and audited correction
+authority shown in the design remain planned.
 
 ## Component responsibilities
 
@@ -204,6 +211,7 @@ remain planned.
 | Ingest           | Edge proof, device signature, replay/idempotency, strict sync contract, submission procedure, generic sync decision                                                | OAuth, admin, invites, passkey/recovery, migrations, final score authority                                       | TB-05, TB-06, TB-07    |
 | Ingest host      | Default-off enable admission, closed listener configuration, reviewed Ingest composition, one bind, bounded process shutdown                                       | Request parsing, proof/database policy, proxy trust, logs, monitoring, deployment credentials                    | TB-06 and TB-07        |
 | Jobs             | Scoring, season finalization, retention, deletion, cleanup, cache projection                                                                                       | Interactive auth, public request handling, schema ownership                                                      | TB-07 and TB-11        |
+| Jobs scheduler   | Default-off fixed UTC cadence, sequential Jobs invocation, in-memory slots, bounded process shutdown                                                               | Database queries, caller-selected work, durable queue/history, network, monitoring, deployment credentials       | TB-07 and TB-11        |
 | PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                                                           | Public routing, connector trust, release credentials                                                             | TB-07                  |
 | Rust connector   | Local App Server lifecycle, compatibility adapter, local key custody/removal, canonical signing, safe scheduling                                                   | Website commands, server revoke, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
 | Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                                                           | Normal user session reuse, shared identities, routine exact-usage access                                         | TB-08                  |
@@ -221,7 +229,8 @@ Trust-boundary IDs are defined in the [threat model](../security/THREAT_MODEL.md
 - Cloudflare is the only intended public ingress. Railway rejects traffic without a fresh proof
   bound to method, path, body hash, and time.
 - Web/Auth, Ingest, and Jobs run as separately deployable principals with different environment and
-  database capabilities. A shared monorepo is not shared runtime authority.
+  database capabilities. The scheduler can construct only the Jobs runner and adds no database
+  capability. A shared monorepo is not shared runtime authority.
 - Staging and production use different projects, databases, OAuth registrations, WebAuthn origins,
   edge keys, deployment credentials, and caches.
 - Pull-request previews contain only synthetic data and cannot reach production secrets or networks.

@@ -31,9 +31,10 @@ maintenance capabilities:
 - idempotently finalize one Community season after its server-enforced grace deadline.
 
 It is not an external audit sink, scheduler, deployment, monitoring backend, correction system,
-cache/backup/tombstone purge system, or production-capacity claim. PostgreSQL remains authoritative
-for server time, serialization, scoring, grace closure, finalization, deletion state, and row
-bounds.
+cache/backup/tombstone purge system, or production-capacity claim. The separate default-off
+`@viberacing/jobs-scheduler` workspace can invoke this same exported runner through a fixed UTC
+catalog; it adds no command or database capability. PostgreSQL remains authoritative for server
+time, serialization, scoring, grace closure, finalization, deletion state, and row bounds.
 
 ## Security boundary
 
@@ -95,8 +96,8 @@ The Docker-backed integration command applies the checksum-validated migration m
 least-privileged synthetic Jobs login plus a deliberately widened negative-control login, runs all
 seventeen built CLI commands as separate processes, verifies their generic output and exact database
 effects, and cleans up its container, network, and storage. It proves only the local
-CLI-to-PostgreSQL boundary; it does not prove an external audit sink, production TLS/credentials, a
-scheduler, monitoring, capacity, real-user retention, or deployment.
+CLI-to-PostgreSQL boundary; it does not prove an external audit sink, production TLS/credentials,
+combined scheduler execution, monitoring, capacity, real-user retention, or deployment.
 
 The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
 Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package

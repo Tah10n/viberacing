@@ -1,6 +1,6 @@
 # ADR 0032: Bounded authentication retention cleanup
 
-- Status: Accepted (database capability and local one-shot command implemented; scheduling pending)
+- Status: Accepted (local scheduler catalog; deployment pending)
 - Date: 2026-07-17
 - Decision owners: Web/Auth, Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
@@ -72,13 +72,15 @@ under a live child transition; a later invocation re-evaluates the row. The priv
 overlap between cleanup workers, while profile locks serialize cleanup with recovery and deletion
 without granting Jobs any direct table access.
 
-Residual risk remains: no scheduler, cadence, overlap/retry policy, monitoring, capacity result,
-production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy exists. ADR
-0042 now covers eligible expired sessions, ADR 0045 covers terminal deletion jobs, and ADR 0048
-covers aged unreferenced revoked passkeys; pairing-referenced session provenance, tombstones,
-referenced passkey provenance, and any future expiring class still require separate reviewed rules.
-ADR 0050 now separately covers fixed pairing-rate-window reset. Recovery also still needs
-distributed attempt controls and deployment-owned pepper/timing evidence.
+Residual risk remains: ADR 0063 supplies only a default-off in-memory local catalog, sequential
+execution, and no-overlap lifecycle. There is no combined scheduler/PostgreSQL result, deployed
+cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs login/TLS
+connection, backup-expiry proof, or deployed retention policy. ADR 0042 now covers eligible expired
+sessions, ADR 0045 covers terminal deletion jobs, and ADR 0048 covers aged unreferenced revoked
+passkeys; pairing-referenced session provenance, tombstones, referenced passkey provenance, and any
+future expiring class still require separate reviewed rules. ADR 0050 now separately covers fixed
+pairing-rate-window reset. Recovery also still needs distributed attempt controls and
+deployment-owned pepper/timing evidence.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-AUTH-003, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-RECOVERY-ORACLE,
@@ -132,8 +134,10 @@ Acceptance evidence recorded for this decision included:
 
 The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project. Focused Jobs tests
 use an injected pool; the shared opt-in Jobs integration additionally proves this emitted command
-through one disposable narrow login, generic output, and exact stored state. Neither proves a
-scheduler, production cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
+through one disposable narrow login, generic output, and exact stored state. ADR 0063 separately
+proves the default-off scheduler against a fake runner and clock. These layers do not prove combined
+scheduler/PostgreSQL execution, production cadence/login/TLS, monitoring, backup purge, capacity, or
+deployment.
 
 ## References
 

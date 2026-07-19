@@ -67,9 +67,9 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Ingest PostgreSQL deployment login and password                             | Security                               | Deployment; authorize only device lookup and sync submission                                                                                 | Ingest adapter and PostgreSQL driver process memory only                                        | Protected environment/secret manager; never tracked or logged                                                                                                                | Rotate on exposure/role change and remove when ingestion is disabled                                                                                                                                                                                                                                        |
 | WebAuthn public key, credential ID, pseudonymous user handle, and key label | Security; label is Account             | Server profile ID plus user authenticator; login and fresh step-up                                                                           | Web/Auth and the user's authenticator; user can list only bounded friendly metadata             | `passkeys`; profile UUID is the discoverable credential user ID; no attestation fingerprint store                                                                            | Active while authoritative; a revoked row is retained at least 180 days and longer while any session, challenge, or pairing reference remains, then bounded cleanup-eligible                                                                                                                                |
 | Opaque passkey ID                                                           | Security                               | Server-generated key; select one owned credential for revocation                                                                             | Authenticated account revoke control and options request only                                   | `passkeys` primary key                                                                                                                                                       | Retained and cleanup-eligible with the passkey row; never public or accepted as proof                                                                                                                                                                                                                       |
-| WebAuthn challenge, context, and verifying-passkey reference                | Security                               | Server; bind one ceremony to one action and exact credential                                                                                 | Web/Auth only; encrypted login challenge cookie contains no profile or reusable authority       | Registration uses a database challenge; login stays cookie-only before proof, then creates and consumes one database row atomically                                          | Registration and login are one-time and at most five minutes; expired-row cleanup exists but needs scheduling                                                                                                                                                                                               |
+| WebAuthn challenge, context, and verifying-passkey reference                | Security                               | Server; bind one ceremony to one action and exact credential                                                                                 | Web/Auth only; encrypted login challenge cookie contains no profile or reusable authority       | Registration uses a database challenge; login stays cookie-only before proof, then creates and consumes one database row atomically                                          | Registration and login are one-time and at most five minutes; expired-row cleanup is in the default-off local hourly catalog, but combined/deployed proof is pending                                                                                                                                        |
 | Recovery-code selector and verifier                                         | Security                               | Web/Auth-generated; recover profile access                                                                                                   | Web/Auth only; plaintext secret shown once to the user                                          | Opaque selector and Argon2id PHC; protected pepper stays outside DB                                                                                                          | PHC scrubbed on use; unused batch removed on regeneration/completion/deletion; used source row is cleanup-eligible after authority expiry                                                                                                                                                                   |
-| Restricted recovery authority and registration binding                      | Security                               | Server; permit only exact replacement-passkey registration                                                                                   | Web/Auth recovery procedure only                                                                | Keyed verifier plus challenge/context digests and terminal lifecycle                                                                                                         | One-time, at most 10 minutes; expired-row cleanup exists but needs scheduling and backup-purge evidence                                                                                                                                                                                                     |
+| Restricted recovery authority and registration binding                      | Security                               | Server; permit only exact replacement-passkey registration                                                                                   | Web/Auth recovery procedure only                                                                | Keyed verifier plus challenge/context digests and terminal lifecycle                                                                                                         | One-time, at most 10 minutes; expired-row cleanup is in the default-off local hourly catalog, but combined/deployed and backup-purge evidence is pending                                                                                                                                                    |
 | Source ID, state, and source count                                          | Account; count is Public               | User-declared opaque CodexSource; isolate and explain aggregation                                                                            | User sees sources; public sees only contributing count for a season                             | `codex_sources`, season snapshot                                                                                                                                             | Source lifecycle plus historical public count until profile deletion                                                                                                                                                                                                                                        |
 | Encrypted source-control token                                              | Security                               | Server; select one owned source without exposing its raw ID in HTML                                                                          | Authenticated account/connect pages and source-control or pairing requests                      | Transient AES-GCM ciphertext in HTML/form or JSON; no new database field                                                                                                     | Bound to the exact active session and expires within 15 minutes; never logged or accepted as proof alone                                                                                                                                                                                                    |
 | Device public key, private signing key, and public device ID                | Security                               | Connector; authenticate one source-bound device                                                                                              | Public key to pairing/Ingest/inventory; private key only to local signer                        | Public key/ID in `device_keys`; private key in one versioned native OS credential record                                                                                     | Pending server key is cleanup-eligible at expiry; active while authority exists; revoked server key/ID retained at least 180 days and until pairing/challenge/nonce/raw references are absent; `forget-local` separately removes only the exact local record                                                |
@@ -78,18 +78,18 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Connector diagnostic preview and candidate admission class                  | Operational                            | Explicit local `check-codex`; provide one user-reviewed coarse troubleshooting result                                                        | User-selected stdout only                                                                       | Not stored or transmitted by the connector                                                                                                                                   | Per invocation only; the connector retains no copy, while any shell redirect or user-shared copy remains under the user's chosen external retention                                                                                                                                                         |
 | Pairing poll token, HMAC keys/verifiers, challenge, user code, transaction  | Security                               | Server/connector; poll safely and bind browser approval to one key                                                                           | Pairing service/application, native connector record, and browser confirmation                  | Plain token/challenge/code only in pending native record; separate keyed verifiers in DB; HMAC keys in protected configuration                                               | Pending native material clears on activation/local expiry; expired non-activated rows have bounded cleanup; activated approval references redact after at least 180 days, and the minimized pairing/device pair is cleanup-eligible only after both ages and all exact challenge/nonce/raw references clear |
 | Pairing approval attempt window and count                                   | Security; Operational                  | Server; bound authenticated code guessing across Web instances                                                                               | Web/Auth and database only                                                                      | Two fields on the possessed `sessions` row; no code, digest, IP, or user-agent history                                                                                       | Window resets in place; eligible session rows are deleted once unreferenced; activated pairing references are redaction-eligible after at least 180 days                                                                                                                                                    |
-| Anonymous pairing client ID, digest, bucket, and rate window                | Security; Operational                  | Connector/Web; cheaply shape anonymous start/poll load                                                                                       | Raw 16-byte ID in native connector record and one header; digest transient in Web/PostgreSQL    | Database stores only 130 fixed operation/global/bucket rows with window start and saturated count; no ID or digest                                                           | Client ID is removed with the exact local credential; positive aggregate timestamp/count becomes reset-eligible after the maximum one-hour window through a bounded Jobs capability; fixed rows remain, and no scheduled or deployed maximum retention is evidenced                                         |
+| Anonymous pairing client ID, digest, bucket, and rate window                | Security; Operational                  | Connector/Web; cheaply shape anonymous start/poll load                                                                                       | Raw 16-byte ID in native connector record and one header; digest transient in Web/PostgreSQL    | Database stores only 130 fixed operation/global/bucket rows with window start and saturated count; no ID or digest                                                           | Client ID is removed with the exact local credential; positive aggregate timestamp/count becomes reset-eligible after the maximum one-hour window through a bounded Jobs capability in the default-off local hourly catalog; fixed rows remain, and no deployed maximum retention is evidenced              |
 | Encrypted pairing approval continuation                                     | Security                               | Server; bind reviewed pairing and exact selected source to fresh step-up                                                                     | Browser receives only an opaque HttpOnly cookie; Web/Auth decrypts it                           | AES-GCM continuation contains challenge, pairing/source IDs, exact source choice, and expiry; no raw code or public key                                                      | At most five minutes, one-time database action, cleared from the browser after success                                                                                                                                                                                                                      |
 | Pairing possession message and signature                                    | Security                               | Connector/Web verifier; prove one pending device holds its private key                                                                       | Connector signer, pure Web verifier, and closed activation application                          | Transient process memory only; never persisted                                                                                                                               | Web copies overwritten after settlement; Rust proof lives until owner drop; never logged or retained                                                                                                                                                                                                        |
 | `codexReportedDate` and exact daily token value                             | Usage                                  | Local stable App Server adapter; compute Community score                                                                                     | Isolated Ingest and Jobs scoring/cleanup procedures; never public raw                           | `usage_snapshot_entries`, `source_day_values`                                                                                                                                | Raw snapshot is Jobs-cleanup eligible after 30 days; finalized exact source/day rows become bounded-cleanup eligible 30 days after terminal projection, while open/missing-projection state remains until lifecycle or a later reviewed rule                                                                |
-| Connector `observedAt`, server `receivedAt`, device nonce, idempotency key  | Security; Usage                        | Connector/server; replay, ordering, deadline, and retry safety                                                                               | Isolated Ingest and Jobs cleanup procedures; shared finalization policy                         | `usage_snapshots`, `device_nonces`                                                                                                                                           | Nonce after 15 minutes and raw snapshot after 30 days; scheduler and production purge proof remain required                                                                                                                                                                                                 |
-| Car proposal signature envelope and nonce digest                            | Security                               | Connector/Web; authenticate one exact proposal without profile authority                                                                     | Raw body/device headers only in connector and Web verifier; digest only to Web database call    | Raw body, nonce, signature, public-key copy, and message are transient; domain-separated digest in `device_nonces`                                                           | Transient bytes overwritten after settlement; digest expires after seven minutes and uses existing bounded cleanup, whose schedule remains pending                                                                                                                                                          |
+| Connector `observedAt`, server `receivedAt`, device nonce, idempotency key  | Security; Usage                        | Connector/server; replay, ordering, deadline, and retry safety                                                                               | Isolated Ingest and Jobs cleanup procedures; shared finalization policy                         | `usage_snapshots`, `device_nonces`                                                                                                                                           | Nonce after 15 minutes and raw snapshot after 30 days; combined scheduler/PostgreSQL and deployed purge proof remain required                                                                                                                                                                               |
+| Car proposal signature envelope and nonce digest                            | Security                               | Connector/Web; authenticate one exact proposal without profile authority                                                                     | Raw body/device headers only in connector and Web verifier; digest only to Web database call    | Raw body, nonce, signature, public-key copy, and message are transient; domain-separated digest in `device_nonces`                                                           | Transient bytes overwritten after settlement; digest expires after seven minutes and uses existing bounded cleanup in the default-off local hourly catalog; combined/deployed proof remains pending                                                                                                         |
 | Edge origin HMAC key and key ID                                             | Security                               | Operator/edge/service; authenticate the only intended ingress                                                                                | Edge signer and Ingest verifier process memory only                                             | Protected environment/secret manager; local reader implemented; never tracked, logged, or stored in DB                                                                       | Rotate on exposure or policy change; remove retired key after bounded request window                                                                                                                                                                                                                        |
-| Origin proof timestamp, nonce, proof, nonce digest, and replay expiry       | Security                               | Edge/service; bind and replay-protect one exact request                                                                                      | Ingest verification and procedure-only replay capability                                        | Proof/raw nonce transient; `origin_nonces` retains key ID, domain-separated digest, and exact expiry                                                                         | Proof/raw nonce discarded per request; tuple unusable at expiry; bounded cleanup exists but needs scheduling                                                                                                                                                                                                |
+| Origin proof timestamp, nonce, proof, nonce digest, and replay expiry       | Security                               | Edge/service; bind and replay-protect one exact request                                                                                      | Ingest verification and procedure-only replay capability                                        | Proof/raw nonce transient; `origin_nonces` retains key ID, domain-separated digest, and exact expiry                                                                         | Proof/raw nonce discarded per request; tuple unusable at expiry; bounded cleanup is in the default-off local hourly catalog, but combined/deployed proof is pending                                                                                                                                         |
 | Daily and weekly score, active days, shared rank                            | Public                                 | Server-derived from accepted source/day state                                                                                                | Public Web: weekly/active/rank; private account: own daily                                      | `season_daily_scores`, `season_entries`, `seasons`, `score_versions`                                                                                                         | Final rows immutable except profile purge; public daily delivery absent                                                                                                                                                                                                                                     |
 | Rounded freshness and contributing source count                             | Public                                 | Server-derived privacy-preserving status                                                                                                     | Public projections expose source count; status route adds complete-UTC-day freshness            | `season_entries`; freshness derives from live `source_day_values.last_accepted_at` or private `finalized_season_profile_freshness.last_accepted_date` after terminal capture | Read filters current active state; finalized projection retains only UTC day, source/value counts, and cleanup progress; profile-row purge cascades; exact receipt time stays private; cache policy remains pending                                                                                         |
 | Streak                                                                      | Public when enabled                    | Server-derived informational field                                                                                                           | Status route only when the active profile's `streak_visible` preference is true                 | Derived at read time from `season_daily_scores`; preference in `profiles`                                                                                                    | Recomputed from retained score rows or deleted with profile; underlying daily rows remain private; never increases score                                                                                                                                                                                    |
-| CarRecipe and proposal state                                                | Public active recipe; Account proposal | Signed-in browser proposes enums, or a local agent reduces style intent before an active source-bound device proposes enums; browser decides | Proposal private; exact active recipe public only through the separate active-profile race read | Agent retains nothing in Vibe Racing; forced-RLS versioned recipe/proposal tables through exact session/device Web functions; bounded Web-only race projection               | Maximum 24-hour logical proposal validity; replacement/reject/approve/profile purge or bounded Jobs cleanup removes it; cleanup schedule pending; active until change/delete                                                                                                                                |
+| CarRecipe and proposal state                                                | Public active recipe; Account proposal | Signed-in browser proposes enums, or a local agent reduces style intent before an active source-bound device proposes enums; browser decides | Proposal private; exact active recipe public only through the separate active-profile race read | Agent retains nothing in Vibe Racing; forced-RLS versioned recipe/proposal tables through exact session/device Web functions; bounded Web-only race projection               | Maximum 24-hour logical proposal validity; replacement/reject/approve/profile purge or bounded Jobs cleanup removes it; command is in the default-off local hourly catalog, but deployed cadence is pending; active until change/delete                                                                     |
 | IP-derived request signal and user-agent family                             | Operational                            | Edge/service; security, rate shaping, and reliability                                                                                        | Restricted operations; never leaderboard or behavioral advertising                              | Prefer aggregate/ephemeral edge controls; minimal event when necessary                                                                                                       | Shortest operational window; exact scope and duration require launch privacy review                                                                                                                                                                                                                         |
 | Request ID, outcome, latency, and bounded error code                        | Operational                            | Server-generated correlation; debugging and SLO evidence                                                                                     | Response recipient and restricted operations; aggregate metrics                                 | Not retained today; future structured logs/metrics                                                                                                                           | Future bounded logs exclude usage, credentials, bodies, and profiles                                                                                                                                                                                                                                        |
 | Security/admin audit event and reason                                       | Security; Operational                  | Auth/admin/jobs/release; accountability                                                                                                      | Restricted responders/auditors; user-visible subset where appropriate                           | Bounded `audit_events` reference; external append-only sink planned but absent                                                                                               | Database reference retained at least 180 days then cleanup-eligible; profile link redacted on purge; external sink policy remains separate                                                                                                                                                                  |
@@ -443,7 +443,8 @@ only operation, bucket, millisecond window start, and saturated count. Window va
 so identifier rotation cannot grow storage. Revision 0037 additionally lets only Jobs scrub a
 positive aggregate timestamp/count after the maximum one-hour duration while preserving every fixed
 row. The ID is rate shaping, not authentication, account identity, device fingerprinting, or a
-substitute for a reviewed edge/IP policy. No reset schedule or deployed cadence exists.
+substitute for a reviewed edge/IP policy. The reset is in the default-off local hourly catalog, but
+no combined scheduler/PostgreSQL result or deployed cadence exists.
 
 Revision 0021 stores only a window start and bounded attempt count on the already mapped active
 session. Every admitted canonical or malformed code reaches the same primary/optional-secondary
@@ -462,10 +463,9 @@ procedure derives cutoff time on the server, deletes bounded expired batches, ca
 and preserves the current source/day value while clearing its deleted snapshot reference. A fixed
 owner-only mutex row and five-second lock timeout prevent runtime roles from seizing a public lock
 key or waiting without a database bound. The synthetic PostgreSQL suite proves idempotency, live-row
-preservation, role denial, and two-worker serialization. No scheduler, service, production retention
-monitor, backup policy, or real-user purge evidence exists, so real-user ingestion remains blocked.
-The later local one-shot runner can invoke one fixed ingest batch, but does not make cleanup
-scheduled or prove a production retention policy.
+preservation, role denial, and two-worker serialization. The default-off local catalog includes the
+fixed command, but no combined scheduler/PostgreSQL result, service, deployed retention monitor,
+backup policy, or real-user purge evidence exists, so real-user ingestion remains blocked.
 
 Revision 0012 adds one short-lived Security table with no user binding: `origin_nonces` contains
 only the closed origin key ID, a versioned domain-separated 32-byte nonce digest, and millisecond
@@ -481,16 +481,18 @@ still-pending key. It covers pending display metadata, keyed poll/code verifiers
 approval provenance, and pairing-bound approval challenges without introducing a new collected
 field. A separate owner-only mutex and oldest-first 1-to-1000 batch bound each call; activated/live
 pairings, active or revoked keys, sources, profiles, credentials, and audit events remain. The local
-Jobs runner can invoke one fixed maximum pairing batch and discards the two counts. No scheduler,
-monitor, backup policy, public retention cadence, or real-user purge evidence exists.
+Jobs runner can invoke one fixed maximum pairing batch and discards the two counts. The default-off
+local catalog includes it, but no combined PostgreSQL result, monitor, backup policy, deployed
+retention cadence, or real-user purge evidence exists.
 
 Revision 0023 adds no collected field. It deletes independently bounded expired authentication
 challenges and restricted recovery authorities, plus only an exact still-present source code in
 used/scrubbed form. Live challenges and authorities, unused recovery codes, sessions, passkeys,
 profiles, sources/devices, and audit rows remain. One fixed private mutex serializes cleanup
 workers; stable profile-first locking matches recovery/deletion transitions, and observed worker
-plus recovery-start races cover that order. The local Jobs runner discards all three counts. No
-scheduler, monitor, backup policy, public retention cadence, or real-user purge evidence exists.
+plus recovery-start races cover that order. The local Jobs runner discards all three counts. The
+default-off local catalog includes it, but no combined PostgreSQL result, monitor, backup policy,
+deployed retention cadence, or real-user purge evidence exists.
 
 Revision 0024 adds no collected field. It reads only due opaque deletion jobs already created by the
 exact-handle/fresh-passkey request and requires their linked profile to remain `deletion_pending`.
@@ -502,15 +504,17 @@ remain for at least 30 days after server-recorded completion. Revision 0032 then
 to remove maximum-1000 oldest-first terminal, profile-free jobs under the profile-deletion mutex;
 recent and non-terminal rows remain. The local Jobs mapper discards both aggregate counts. No
 identity-derived tombstone is created because no reviewed keyed digest/expiry/restore contract
-exists. Scheduling, public cache purge, backup expiry, restore replay, monitoring, capacity, live
-login, and deployed real-user evidence remain required.
+exists. The command is in the default-off local catalog; combined/deployed scheduling, public cache
+purge, backup expiry, restore replay, monitoring, capacity, live login, and real-user evidence
+remain required.
 
 Revision 0033 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of database audit
 events only after 180 days from server-recorded occurrence. Both profile-linked and already redacted
 rows are eligible; recent rows remain. One separate private mutex serializes workers, and the local
 Jobs mapper discards the count. The table's random request/event uniqueness is therefore finite
-evidence, never authority. No external append-only sink, user-visible audit subset, scheduler,
-monitor, backup purge, production login/TLS, capacity result, or deployed retention evidence exists.
+evidence, never authority. No external append-only sink, user-visible audit subset, combined
+scheduler/PostgreSQL result, monitor, backup purge, production login/TLS, capacity result, or
+deployed retention evidence exists.
 
 Revision 0034 adds no collected field. It redacts only `approved_by_session_id` and
 `approved_by_passkey_id` from an oldest-first, 1-to-1000 batch of activated pairings at least 180
@@ -521,16 +525,17 @@ transition with session cleanup, pairing cleanup, and primary profile purge; par
 pre-activation, or binding-changing redaction fails closed. A later session-cleanup invocation can
 remove an expired session once no rotation or pairing reference remains. The local Jobs mapper
 discards the count. Historical pairing/device rows and passkey lifecycle remain outside this slice;
-ADR 0050 separately bounds fixed rate-window reset. Scheduling, monitoring, backup purge, production
-login/TLS, capacity, and deployed retention evidence remain absent.
+ADR 0050 separately bounds fixed rate-window reset. Both objects are in the default-off local
+catalog; combined/deployed scheduling, monitoring, backup purge, production login/TLS, capacity, and
+retention evidence remain absent.
 
 Revision 0035 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of passkey rows
 only after server-recorded revocation is at least 180 days old and no session, verifying or
 authorized challenge, or pairing transaction retains the exact passkey ID. Candidate rows are locked
 and every eligibility predicate is repeated at deletion. Active, recent, and referenced rows remain;
 the local Jobs mapper discards the count. The operation can free the unchanged 32-row add/recovery
-ceiling, but it has no scheduler, production login/TLS, monitoring, capacity, backup purge, or
-deployed retention evidence.
+ceiling. The object is in the default-off local catalog, but has no combined PostgreSQL result,
+production login/TLS, monitoring, capacity, backup purge, or deployed retention evidence.
 
 Revision 0036 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of exact
 activated-pairing/revoked-device pairs only after both activation and revocation are at least 180
@@ -540,8 +545,9 @@ together; every predicate is repeated; and exactly one pairing plus one key must
 operation rolls back. This removes pairing verifiers/challenge/metadata/bindings and the revoked
 public key/label/version/platform/lifecycle row without cascading raw evidence or changing derived
 Community values. The local Jobs boundary validates both equal counts and the CLI then discards
-them. There is no scheduler, production login/TLS, monitoring, capacity, cache/backup purge, restore
-replay, or deployed retention evidence.
+them. The object is in the default-off local catalog, but there is no combined PostgreSQL result,
+production login/TLS, monitoring, capacity, cache/backup purge, restore replay, or deployed
+retention evidence.
 
 Revision 0030 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of already
 expired session rows only when no retained predecessor points to the row and no pairing transaction
@@ -550,14 +556,15 @@ authentication-retention mutex serializes cleanup with authentication cleanup an
 purge; an observed two-worker race proves bounded serialization and live-authority preservation. The
 local Jobs runner discards the count. Recent pairing-referenced expired sessions remain until the
 180-day approval-reference window elapses; historical pairing/device rows, passkey/device
-provenance, backup expiry, scheduling, monitoring, and deployed real-user purge evidence remain
-outside this slice.
+provenance, backup expiry, combined/deployed scheduling, monitoring, and real-user purge evidence
+remain outside this slice.
 
 Revision 0031 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of expired active
 or revoked invite rows after the shared authentication mutex. Candidate row locks and repeated
 state/expiry predicates preserve an in-flight redemption; live and redeemed rows are never eligible.
-The local Jobs mapper discards the count. Scheduling, production login/TLS, monitoring, capacity,
-backup purge, and deployed retention evidence remain outside this slice.
+The local Jobs mapper discards the count. The object is in the default-off local catalog, but
+combined/deployed scheduling, production login/TLS, monitoring, capacity, backup purge, and
+retention evidence remain outside this slice.
 
 Revision 0038 adds no collected field. It removes an oldest-first, 1-to-1000 batch of canonical
 `enrolling` profiles only when the exact redeemed invite remains, every associated session is exact
@@ -568,8 +575,9 @@ profile linkage. Authentication/profile-purge mutexes, repeated predicates, and 
 preserve live authority, every non-canonical profile-bound row, and an in-flight initial-passkey
 activation. The local Jobs mapper receives and discards only one aggregate count. The operation
 creates no replacement invite, deletion job, tombstone, notification, log, metric, cache key, or
-export. Scheduling, production login/TLS, monitoring, capacity, backup purge, restore replay, and
-deployed retention evidence remain outside this slice.
+export. The object is in the default-off local catalog, but combined/deployed scheduling, production
+login/TLS, monitoring, capacity, backup purge, restore replay, and retention evidence remain outside
+this slice.
 
 Revision 0009 reads exact current values only inside an owner-defined Jobs procedure and writes a
 strictly smaller private derived set: daily and weekly score, active days, contributing-source
@@ -590,7 +598,7 @@ client `observedAt`, closes the window. A whole late snapshot remains private 30
 with `season_closed` and creates no accepted source/day value. Finalized metadata and score rows are
 immutable except that profile purge removes the profile-linked weekly/daily rows while retaining the
 non-personal terminal season definition. A no-data closed week stores only that definition. No
-public serializer/cache, audited correction record, Jobs deployment/scheduler, or monitoring backend
+public serializer/cache, audited correction record, deployed Jobs scheduler, or monitoring backend
 exists. Revision 0039 separately defines bounded exact-source/day retention after terminal
 finalization; it does not define public score-history expiry.
 
@@ -600,24 +608,29 @@ and a terminal purge timestamp. It stores no source, device, sync, raw token, ex
 new public field. The public status function prefers this rounded date after finalization. Only Jobs
 may advance progress one exact row at a time after 30 days while repeated live/captured inventory
 checks pass; profile purge cascades the projection. Open, recent, missing-projection, and drifted
-state is preserved or fails closed. Scheduling, monitoring, production login/TLS, correction,
-cache/backup purge, restore replay, capacity, deployment, and real-user retention evidence remain
-absent.
+state is preserved or fails closed. The object is in the default-off local catalog, but
+combined/deployed scheduling, monitoring, production login/TLS, correction, cache/backup purge,
+restore replay, capacity, and real-user retention evidence remain absent.
 
-ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, and 0061 store no
-user data. ADR 0062 maps only the smaller finalized projection described above. The local Jobs
-process transiently receives only one of twelve fixed 1000-row cleanup batches, one zero-argument
-maximum-130 pairing-rate-window reset, one fixed 1000-row pairing approval-provenance redaction, one
-fixed maximum-10 profile purge, or one Public season-start label, plus the private aggregate counts
-already returned by the procedures. It validates and discards those values within one process
-invocation. The CLI emits only one constant completion/failure sentence; it does not log the
-command, date, counts, identifiers, SQL, environment, exception, or stack. The optional pool hook
-receives only the closed Operational signal `idle_client_error` and has no built-in storage or
-network sink. The opt-in integration adds no retained field: it creates obviously synthetic fixture
-IDs and passwords inside one disposable local PostgreSQL container, observes only the constant
-process sentences, asserts state in memory, and removes the container, network, and storage. A
-future scheduler, run history, metric, alert, retry record, or monitoring backend must map its exact
-fields, access, retention, and deletion behavior here before collection.
+ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, 0061, and 0063
+store no user data. ADR 0062 maps only the smaller finalized projection described above. The local
+Jobs process transiently receives only one of twelve fixed 1000-row cleanup batches, one
+zero-argument maximum-130 pairing-rate-window reset, one fixed 1000-row pairing approval-provenance
+redaction, one fixed maximum-10 profile purge, or one Public season-start label, plus the private
+aggregate counts already returned by the procedures. It validates and discards those values within
+one process invocation. The CLI emits only one constant completion/failure sentence; it does not log
+the command, date, counts, identifiers, SQL, environment, exception, or stack. The optional pool
+hook receives only the closed Operational signal `idle_client_error` and has no built-in storage or
+network sink. ADR 0063 adds only transient Operational current-clock and derived process-slot
+values, plus one fixed job object at a time. They remain in process memory, disappear at shutdown,
+and are never logged, exported, or used as database authority. Its optional signal is only
+`cycle_failed`; the entry point may emit one generic sentence without a job name, date, count,
+identifier, error, or configuration value. The opt-in integration adds no retained field: it creates
+obviously synthetic fixture IDs and passwords inside one disposable local PostgreSQL container,
+observes only the constant process sentences, asserts state in memory, and removes the container,
+network, and storage. A future durable scheduler state, run history, metric, alert, retry record, or
+monitoring backend must map its exact fields, access, retention, and deletion behavior here before
+collection.
 
 Revision 0011 stores no new data. One owner-defined function gives only the Web role a fixed
 ten-field score projection: season dates/version/finalized state, handle, weekly score, active days,
@@ -680,8 +693,9 @@ retained or logged by the application. Revision 0028 retains only a domain-separ
 digest for seven minutes in the existing replay table, plus the same private recipe and server-owned
 proposal metadata. No prompt, conversation, account email, profile/source ID, IP address, user
 agent, analytics, cache, export, or support record is added. The generic acknowledgement returns no
-proposal identity. Live credentials, cleanup scheduling, monitoring, capacity, packaging, release,
-and deployment remain unproved.
+proposal identity. The cleanup object is in the default-off local catalog; live credentials,
+combined/deployed scheduling, monitoring, capacity, packaging, release, and deployment remain
+unproved.
 
 ADR 0039 adds no service request, retained field, log, cache, analytics event, export, or
 third-party destination. The Agent Skill processes the user's existing style request only to select
@@ -772,9 +786,11 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   revoked-device state; bounded aged pairing approval-provenance redaction; fixed anonymous
   pairing-rate-window reset; maximum-10 primary profile deletion; open-season Community scoring
   refresh; and terminal finalization. The local one-shot adapter rechecks the exact Jobs-only login
-  and invokes one prepared capability without logging inputs or results. Correction, cache/backup
-  purge, tombstone/restore replay, and remaining retention capabilities require separate migrations
-  and tests; migrations use a different non-runtime owner.
+  and invokes one prepared capability without logging inputs or results. The separate default-off
+  scheduler can supply only those fixed objects from UTC in-memory slots and retains only the closed
+  Operational state described above. Correction, cache/backup purge, tombstone/restore replay, and
+  remaining retention capabilities require separate migrations and tests; migrations use a different
+  non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The

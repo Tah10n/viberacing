@@ -1,6 +1,6 @@
 # ADR 0036: Bounded CarRecipe proposal retention cleanup
 
-- Status: Accepted (database capability and local one-shot command implemented; scheduling pending)
+- Status: Accepted (local scheduler catalog; deployment pending)
 - Date: 2026-07-17
 - Decision owners: Web/Auth, Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
@@ -56,10 +56,12 @@ for safety around a concurrent propose, approve, reject, or profile purge; a lat
 re-evaluates the row. Cleanup cannot activate a recipe and does not grant Jobs a profile, browser,
 device, or direct-table capability.
 
-Residual risk remains: no scheduler, cadence, retry/overlap policy, monitoring, capacity result,
-production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy exists.
-Active recipes remain until replacement or profile deletion. The separate public active-recipe
-projection, device proposal ingress, and local agent orchestration were later accepted in
+Residual risk remains: ADR 0063 supplies only a default-off in-memory local catalog, sequential
+execution, and no-overlap lifecycle. There is no combined scheduler/PostgreSQL result, deployed
+cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs login/TLS
+connection, backup-expiry proof, or deployed retention policy. Active recipes remain until
+replacement or profile deletion. The separate public active-recipe projection, device proposal
+ingress, and local agent orchestration were later accepted in
 [ADR 0037](0037-bounded-public-community-race-projection.md),
 [ADR 0038](0038-bounded-device-car-recipe-proposal-ingress.md), and
 [ADR 0039](0039-bounded-agent-car-proposal-orchestration.md); scheduling and deployed retention
@@ -112,8 +114,10 @@ Acceptance evidence recorded for this decision included:
 
 The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project. Focused Jobs tests
 use an injected pool; the shared opt-in Jobs integration additionally proves this emitted command
-through one disposable narrow login and exact stored state. Neither proves a scheduler, production
-cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
+through one disposable narrow login and exact stored state. ADR 0063 separately proves the
+default-off scheduler against a fake runner and clock. These layers do not prove combined
+scheduler/PostgreSQL execution, production cadence/login/TLS, monitoring, backup purge, capacity, or
+deployment.
 
 ## References
 

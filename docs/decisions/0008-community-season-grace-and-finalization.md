@@ -1,6 +1,6 @@
 # ADR 0008: Community season grace and immutable finalization
 
-- Status: Accepted (database and local runner implemented; scheduler and corrections pending)
+- Status: Accepted (local scheduler; corrections/deployment pending)
 - Date: 2026-07-15
 - Decision owners: Product, Ingest, Jobs, Database, Security, and Privacy
 - Supersedes: None
@@ -71,9 +71,10 @@ order makes finalization and submission serializable at the affected season boun
 granting Ingest any scoring-table access.
 
 Retaining a late raw snapshot helps diagnose compatibility and deadline disputes, but it retains
-private usage evidence until the existing 30-day cleanup boundary runs. The repository therefore
-still requires a real cleanup scheduler, monitoring, deletion worker, backup policy, and production
-retention evidence before real-user ingestion.
+private usage evidence until the existing 30-day cleanup boundary runs. ADR 0063 supplies only a
+default-off in-memory local catalog. Combined scheduler/PostgreSQL execution, a deployed cleanup
+cadence, monitoring, deletion-worker operation, backup policy, and production retention evidence are
+still required before real-user ingestion.
 
 The 48-hour window deliberately favors ordinary delayed sync over immediate leaderboard closure. It
 does not verify Community input, make a score authoritative OpenAI data, or justify prizes, money,
@@ -143,10 +144,11 @@ Current PostgreSQL evidence covers:
 - an observed opposing-order multi-season Ingest race that proves both callers acquire ascending
   season locks rather than forming an `A → B` / `B → A` advisory-lock cycle.
 
-The repository still lacks the Ingest service, Ed25519 verification, edge/origin proof, rate limits,
-Jobs scheduler, corrections, monitoring, capacity evidence, purge, and deployment. Revision 0011
-later adds a bounded database score projection and ADR 0013 adds local HTTP delivery, but database
-finalization, projection, and a route that is not deployed are not launch evidence.
+At this decision's verification point, the repository still lacked the Ingest service, Ed25519
+verification, edge/origin proof, rate limits, Jobs scheduler, corrections, monitoring, capacity
+evidence, purge, and deployment. Later revisions add local bounded slices, including ADR 0063's
+default-off scheduler, but database finalization, projection, and local routes are not launch
+evidence.
 
 ## References
 

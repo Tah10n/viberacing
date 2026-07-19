@@ -1,6 +1,6 @@
 # ADR 0046: Bounded database audit-event retention cleanup
 
-- Status: Accepted (database capability and local one-shot command implemented; scheduling pending)
+- Status: Accepted (local scheduler catalog; deployment pending)
 - Date: 2026-07-18
 - Decision owners: Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
@@ -66,9 +66,11 @@ access, integrity, retention, and incident-response contract exists, running thi
 selected local evidence irrecoverable except for independently governed backups. There is no
 scheduler here, so no deployed deletion cadence or proof is implied.
 
-Residual risk remains: there is no external audit sink, user-visible audit subset, scheduler,
-cadence, retry/overlap policy, monitoring, capacity result, production Jobs login/TLS connection,
-cache or backup purge, tombstone policy, restore replay, or deployed retention evidence.
+Residual risk remains: there is no external audit sink or user-visible audit subset. ADR 0063
+supplies only a default-off in-memory local catalog, sequential execution, and no-overlap lifecycle;
+there is no combined scheduler/PostgreSQL result, deployed cadence, durable missed-slot recovery,
+monitoring, capacity result, production Jobs login/TLS connection, cache or backup purge, tombstone
+policy, restore replay, or deployed retention evidence.
 
 Affected invariant is VR-DATA-001. Primary attacker stories are VR-ABUSE-DATABASE-ROLE,
 VR-ABUSE-RESOURCE-EXHAUSTION, and VR-ABUSE-DELETE-RESURRECTION.
@@ -122,8 +124,10 @@ Acceptance evidence recorded for this decision includes:
   narrow login, rejects a deliberately widened login before mutation, preserves generic output,
   removes one aged audit event, and verifies exact stored state.
 
-All fixtures are synthetic. This evidence proves no external append-only sink, scheduler, production
-cadence/login/TLS, monitoring, cache or backup purge, restore replay, capacity, or deployment.
+All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
+runner and clock. These layers do not prove an external append-only sink, combined
+scheduler/PostgreSQL execution, production cadence/login/TLS, monitoring, cache or backup purge,
+restore replay, capacity, or deployment.
 
 ## References
 

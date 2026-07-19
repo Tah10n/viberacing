@@ -8,6 +8,14 @@ Versioning where its guarantees are applicable.
 
 ### Added
 
+- A separate default-off local Jobs scheduler around the existing seventeen-command runner. It
+  accepts no arguments or schedule configuration, derives the current and latest grace-eligible
+  Community Mondays in UTC, invokes a fixed five-minute/hour/day catalog sequentially through one
+  runner, prevents overlapping cycles and same-slot retries, retains slots only in memory, and
+  bounds SIGINT/SIGTERM shutdown to the current Jobs call. Ninety-three adversarial tests reach 100%
+  statement/branch/function/line coverage, and a built-entrypoint gate rejects disabled or
+  argument-bearing startup without output. No deployed replica/cadence, combined PostgreSQL run,
+  production credential/TLS, monitoring, capacity, or real-user retention is claimed.
 - Public-safe repository baseline, implementation plan, security invariants, and contribution
   guidance.
 - Pinned Node, pnpm, Rust, PostgreSQL, dependency, formatting, documentation, and CI foundations.
@@ -15,7 +23,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and sixty accepted ADRs.
+  fail-closed compatibility policy and matrix, and sixty-three accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe

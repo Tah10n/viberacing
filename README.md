@@ -33,7 +33,7 @@ paused-source reactivation, device revoke, backup-passkey addition and fresh-pas
 unlink, non-current-passkey revocation, fresh-passkey recovery-code rotation with one-time display,
 an exact-handle fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey
 sign-in, and logout. It is locally tested only: the repository supplies no invite issuer UI, OAuth
-registration, real secret, live OAuth/authenticator/database credentials, scheduled deletion purge,
+registration, real secret, live OAuth/authenticator/database credentials, deployed deletion purge,
 cache/backup/tombstone handling, restore replay, distributed edge abuse controls, recovery cleanup
 or notifications, or live-user evidence.
 
@@ -264,10 +264,11 @@ both browser service mutations repeat literal-true enforcement. A separate Jobs-
 deletes bounded oldest-first batches of expired private proposals while preserving live and active
 recipes. A separate compatible public race contract now projects only the current approved recipe
 for an active profile; proposal identity, state, and timestamps stay private and the stable score
-response remains unchanged. Cleanup scheduling, live credentials, released connector packaging, edge
-controls, and deployment remain pending. A database-only Community ingest capability now exposes
-minimal active-device verification material and accepts bounded source-bound snapshots with exact
-retry, nonce replay, monotonic source/date, quarantine, and lifecycle-race enforcement. A Jobs-only
+response remains unchanged. The cleanup object is in the default-off local scheduler catalog;
+combined/deployed cadence, live credentials, released connector packaging, edge controls, and
+deployment remain pending. A database-only Community ingest capability now exposes minimal
+active-device verification material and accepts bounded source-bound snapshots with exact retry,
+nonce replay, monotonic source/date, quarantine, and lifecycle-race enforcement. A Jobs-only
 procedure deletes independently bounded batches of expired origin nonces, device nonces, and raw
 snapshots while preserving current source/day values. A separate Jobs-only procedure deletes bounded
 expired non-activated pairing transactions plus their still-pending keys, while preserving live and
@@ -306,10 +307,11 @@ procedure whose terminal metadata and score projection reject silent rewrites wh
 can still remove personal rows. Revision 0039 separately retains one private UTC-day/count freshness
 projection at terminal finalization and, only after 30 days, permits bounded Jobs-only deletion of
 exact per-source daily values while preserving the compatible public race-status response. Open,
-recent, missing-projection, or integrity-drifted state fails closed; no scheduler, backup purge,
-correction process, or deployed retention evidence is implied. Revision 0034 separately retains the
-exact session/passkey approval references on an activated pairing for at least 180 days, then
-permits bounded oldest-first redaction of only those two references while preserving the
+recent, missing-projection, or integrity-drifted state fails closed. The command is in the
+default-off local scheduler catalog, but no combined PostgreSQL result, backup purge, correction
+process, or deployed retention evidence is implied. Revision 0034 separately retains the exact
+session/passkey approval references on an activated pairing for at least 180 days, then permits
+bounded oldest-first redaction of only those two references while preserving the
 profile/source/device binding, pairing row, active device, and passkey. A later session-cleanup call
 can remove the now-unreferenced expired session. One local Revision 0035 separately removes at most
 1000 passkey rows only after they have been revoked for 180 days and have no retained session,
@@ -332,45 +334,50 @@ result validation, destructive release after failure, and stable non-reflective 
 opt-in synthetic integration now builds that runner, applies the reviewed migration manifest to one
 disposable PostgreSQL container, proves all seventeen commands through a narrow login, rejects a
 deliberately widened login before mutation, and verifies exact stored state before cleanup. It has
-no external audit sink, scheduler, production login/certificate, monitoring backend, retry loop,
-capacity result, or deployment. Revision 0011 gives only the Web database role a bounded
-active-profile score projection containing no raw values, private identifiers, or exact timestamps.
-The score response component and Web PostgreSQL adapter preserve only that public allowlist through
-the local score route. All three public score/race/status routes require one exact default-off
-module-load gate before query/header parsing, admission acquisition, or storage work. The visible
-race, leaderboard, and selectable participant summary consume the validated current-week response
-only when enabled, using a credential-free same-origin request and an explicit synthetic fallback on
-disabled or failed state. Canonical `/?profile=handle#profile` links select only an exact public
-handle in that page, and a missing current top-32 row is not replaced with another participant.
-There is now a local invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey
-recovery-code rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey
-profile-deletion request flow. Recovery lookup returns only the selected unused PHC; admitted
-attempts use bounded Argon2id work, a protected pepper, generic responses, a configured minimum
-response floor, and a four-call local no-queue limit. A valid code creates only the sealed
-five-minute replacement-passkey continuation; the normal session is returned only after exact
-WebAuthn verification and atomic database completion. The local `/connect` flow now reviews one
-pending device, explicitly selects a new or active owned opaque source without exposing its raw ID,
-and fresh-passkey approves that exact choice under a database-backed session attempt window; the
-local start/poll routes and native-store Rust client complete that synthetic connection path only
-when all four pairing modules were explicitly enabled before load. New-source review and completion
-additionally require the separate exact default-off source-creation decision; disabled UI retains
-active existing-source choices and the server rejects an in-flight new-source challenge before
-passkey or database completion. These local controls are not dynamic/deployed switches. The separate
-candidate-only Windows sync command now joins the reviewed local collector, signer, and one bounded
-upload. A separate credential-free `check-codex` command verifies only point-in-time exact candidate
-admission and never launches it, reads an account, or uses the network. Its explicit redacted
-preview gives a user one complete stdout result to inspect before sharing and still declares that no
-Codex version is supported. A separate Windows release-profile smoke copies the `0.0.0` connector to
-an isolated temporary directory, checks the exact command surface and generic missing-candidate
-failure, then proves removal; secretless CI declares the same bounded job without uploading its
-binary. No repository test runs a real Codex account or deployed service, and no hosted Windows
-result is claimed from the local workflow definition. There is still no deployed
-Ingest/score/pairing API, supported sync connector, trusted edge limit or direct-origin policy,
-anonymous recovery edge policy, recovery notification, cleanup/scoring/deletion scheduler, audited
-correction flow, cache/backup/tombstone purge, restore replay, live OAuth/authenticator/Web/Jobs
-database integration, deployment Ingest credential/TLS integration, cross-platform connector
-evidence, installer, upgrade/revoke composition, credential rotation, released binary, or deployed
-database.
+no external audit sink, production login/certificate, monitoring backend, capacity result, or
+deployment. A separate default-off local scheduler now invokes only that closed catalog: it derives
+the current and latest grace-eligible Monday in UTC, marks fixed five-minute/hour/day slots in
+memory, runs sequentially without overlap or same-slot retry, and stops under a bounded signal
+lifecycle. Its 93 tests and built-entrypoint check use fake time and a fake runner; they do not
+prove combined PostgreSQL execution, a durable or hosted cadence, cross-replica coordination,
+production TLS/login, monitoring, capacity, or real-user retention. Revision 0011 gives only the Web
+database role a bounded active-profile score projection containing no raw values, private
+identifiers, or exact timestamps. The score response component and Web PostgreSQL adapter preserve
+only that public allowlist through the local score route. All three public score/race/status routes
+require one exact default-off module-load gate before query/header parsing, admission acquisition,
+or storage work. The visible race, leaderboard, and selectable participant summary consume the
+validated current-week response only when enabled, using a credential-free same-origin request and
+an explicit synthetic fallback on disabled or failed state. Canonical `/?profile=handle#profile`
+links select only an exact public handle in that page, and a missing current top-32 row is not
+replaced with another participant. There is now a local invite/OAuth/initial-passkey enrollment,
+returning-passkey login, fresh-passkey recovery-code rotation, one-time recovery-code
+replacement-passkey sign-in, and a fresh-passkey profile-deletion request flow. Recovery lookup
+returns only the selected unused PHC; admitted attempts use bounded Argon2id work, a protected
+pepper, generic responses, a configured minimum response floor, and a four-call local no-queue
+limit. A valid code creates only the sealed five-minute replacement-passkey continuation; the normal
+session is returned only after exact WebAuthn verification and atomic database completion. The local
+`/connect` flow now reviews one pending device, explicitly selects a new or active owned opaque
+source without exposing its raw ID, and fresh-passkey approves that exact choice under a
+database-backed session attempt window; the local start/poll routes and native-store Rust client
+complete that synthetic connection path only when all four pairing modules were explicitly enabled
+before load. New-source review and completion additionally require the separate exact default-off
+source-creation decision; disabled UI retains active existing-source choices and the server rejects
+an in-flight new-source challenge before passkey or database completion. These local controls are
+not dynamic/deployed switches. The separate candidate-only Windows sync command now joins the
+reviewed local collector, signer, and one bounded upload. A separate credential-free `check-codex`
+command verifies only point-in-time exact candidate admission and never launches it, reads an
+account, or uses the network. Its explicit redacted preview gives a user one complete stdout result
+to inspect before sharing and still declares that no Codex version is supported. A separate Windows
+release-profile smoke copies the `0.0.0` connector to an isolated temporary directory, checks the
+exact command surface and generic missing-candidate failure, then proves removal; secretless CI
+declares the same bounded job without uploading its binary. No repository test runs a real Codex
+account or deployed service, and no hosted Windows result is claimed from the local workflow
+definition. There is still no deployed Ingest/score/pairing API, supported sync connector, trusted
+edge limit or direct-origin policy, anonymous recovery edge policy, recovery notification, deployed
+cleanup/scoring/deletion cadence, audited correction flow, cache/backup/tombstone purge, restore
+replay, live OAuth/authenticator/Web/Jobs database integration, deployment Ingest credential/TLS
+integration, cross-platform connector evidence, installer, upgrade/revoke composition, credential
+rotation, released binary, or deployed database.
 
 ## Run and verify the synthetic prototype
 

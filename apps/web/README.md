@@ -358,19 +358,21 @@ recipe rules. Its separate status response may include only the current approved
 profile; the browser loads a compact independent exact-shape validator after hydration, and the
 generic contract runtime stays outside the initial bundle. Proposal identity, state, and timestamps
 remain private, while absence uses the existing repository-owned car. A separate bounded Jobs-only
-capability can physically remove expired proposals locally. There is no cleanup schedule or deployed
-cadence. A separate `POST /v1/connector/cars/proposals` boundary verifies a proposal-specific exact
-raw-body signature from an active source-bound device and can only replace the same pending recipe;
-it exposes no proposal state or approve/reject/activate capability. Conversational-agent
-orchestration now exists only as a checked local Agent Skill that reduces style intent into the
-fixed connector command; it creates no additional Web origin or authority. Distributed edge policy,
-live credential, monitoring, capacity result, released connector, and deployment remain absent.
+capability can physically remove expired proposals locally and is included in the separate
+default-off local hourly scheduler catalog. No combined scheduler/PostgreSQL execution or deployed
+cleanup cadence is proven. A separate `POST /v1/connector/cars/proposals` boundary verifies a
+proposal-specific exact raw-body signature from an active source-bound device and can only replace
+the same pending recipe; it exposes no proposal state or approve/reject/activate capability.
+Conversational-agent orchestration now exists only as a checked local Agent Skill that reduces style
+intent into the fixed connector command; it creates no additional Web origin or authority.
+Distributed edge policy, live credential, monitoring, capacity result, released connector, and
+deployment remain absent.
 
 This is not a launch-ready authentication system. There is no invite-issuance UI, passkey profile
 mutation beyond the listed controls, aggregate/distributed edge rate policy, cleanup or notification
-for abandoned recovery/enrollment state, scheduled deletion execution, cache/backup/tombstone purge,
-restore replay, live OAuth, authenticator, or database-login evidence, monitoring, or deployment.
-The tracked environment values are non-working placeholders.
+for abandoned recovery/enrollment state, combined scheduler/PostgreSQL deletion execution, deployed
+cadence, cache/backup/tombstone purge, restore replay, live OAuth, authenticator, or database-login
+evidence, monitoring, or deployment. The tracked environment values are non-working placeholders.
 
 ## Pairing browser approval
 
@@ -459,8 +461,9 @@ fixed revision 0022 PostgreSQL function before start/activation work. The raw 16
 its SHA-256 digest are never stored; only 130 preallocated operation/bucket windows exist. Mandatory
 deployment-private limits cover start/poll global, bucket, and window values. This is a distributed
 service-instance control, not strong client identity or a trusted edge/IP capacity perimeter. There
-is still no live login/TLS connection, capacity evidence, monitoring, cleanup schedule, or
-deployment. The synthetic home page and build do not construct the service.
+is still no live login/TLS connection, combined scheduler/PostgreSQL retention execution, capacity
+evidence, monitoring, deployed cadence, or deployment. The synthetic home page and build do not
+construct the service.
 
 ## Public client data contract
 

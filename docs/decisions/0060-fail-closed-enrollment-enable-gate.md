@@ -21,9 +21,10 @@ already-created enrolling profile able to activate through initial passkey optio
 A narrow control must cover the complete invite/OAuth/initial-passkey state machine without
 disabling returning passkey login, restricted recovery, logout, or authenticated account controls.
 
-The database currently has bounded retention for expired authentication challenges and sessions, but
-no scheduled abandoned-enrollment cleanup or deployed cadence. A disabled switch therefore must not
-claim to delete a pending OAuth continuation, passkey challenge, redeemed invite, or `enrolling`
+The database currently has bounded retention for expired authentication challenges and sessions, and
+the exact abandoned-enrollment command is in a separate default-off local scheduler catalog. There
+is no combined scheduler/PostgreSQL execution or deployed cadence. A disabled switch therefore must
+not claim to delete a pending OAuth continuation, passkey challenge, redeemed invite, or `enrolling`
 profile.
 
 A complete operational switch still needs protected deployment configuration, coordinated instance

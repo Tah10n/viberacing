@@ -13,6 +13,8 @@ const ingestHostRoot = resolve(root, "apps", "ingest-host");
 const ingestHostRequire = createRequire(resolve(ingestHostRoot, "package.json"));
 const jobsRoot = resolve(root, "apps", "jobs");
 const jobsRequire = createRequire(resolve(jobsRoot, "package.json"));
+const jobsSchedulerRoot = resolve(root, "apps", "jobs-scheduler");
+const jobsSchedulerRequire = createRequire(resolve(jobsSchedulerRoot, "package.json"));
 const webRoot = resolve(root, "apps", "web");
 const webRequire = createRequire(resolve(webRoot, "package.json"));
 const contractsEslintBin = resolve(
@@ -37,6 +39,17 @@ const ingestHostVitestBin = resolve(dirname(ingestHostRequire.resolve("vitest"))
 const jobsEslintBin = resolve(dirname(jobsRequire.resolve("eslint")), "..", "bin", "eslint.js");
 const jobsTscBin = jobsRequire.resolve("typescript/bin/tsc");
 const jobsVitestBin = resolve(dirname(jobsRequire.resolve("vitest")), "vitest.mjs");
+const jobsSchedulerEslintBin = resolve(
+  dirname(jobsSchedulerRequire.resolve("eslint")),
+  "..",
+  "bin",
+  "eslint.js",
+);
+const jobsSchedulerTscBin = jobsSchedulerRequire.resolve("typescript/bin/tsc");
+const jobsSchedulerVitestBin = resolve(
+  dirname(jobsSchedulerRequire.resolve("vitest")),
+  "vitest.mjs",
+);
 const eslintBin = resolve(dirname(webRequire.resolve("eslint")), "..", "bin", "eslint.js");
 const nextBin = webRequire.resolve("next/dist/bin/next");
 const tscBin = webRequire.resolve("typescript/bin/tsc");
@@ -221,6 +234,25 @@ const checks = [
     process.execPath,
     [jobsTscBin, "--project", "tsconfig.build.json"],
     jobsRoot,
+  ],
+  ["Jobs scheduler lint", process.execPath, [jobsSchedulerEslintBin, "."], jobsSchedulerRoot],
+  ["Jobs scheduler types", process.execPath, [jobsSchedulerTscBin, "--noEmit"], jobsSchedulerRoot],
+  [
+    "Jobs scheduler tests and coverage",
+    process.execPath,
+    [jobsSchedulerVitestBin, "run", "--coverage"],
+    jobsSchedulerRoot,
+  ],
+  [
+    "Jobs scheduler production build",
+    process.execPath,
+    [jobsSchedulerTscBin, "--project", "tsconfig.build.json"],
+    jobsSchedulerRoot,
+  ],
+  [
+    "Jobs scheduler built entry point",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-jobs-scheduler-entrypoint.mjs")],
   ],
   ["web lint", process.execPath, [eslintBin, "."], webRoot],
   ["web types", process.execPath, [tscBin, "--noEmit"], webRoot],

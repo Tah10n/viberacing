@@ -6,8 +6,8 @@ Most sequences remain planned application contracts. The enrollment, returning-l
 addition, non-current-passkey revocation, recovery-code rotation/replacement-passkey sign-in,
 immediate profile-deletion-request, source inventory/pause/reactivation/unlink, active-device
 revoke, and pairing-approval sequences below plus the public race-status consumer are now locally
-implemented boundaries; none has live credentials, distributed edge policy, scheduled purge, or
-deployment evidence. Revisions 0001 through 0038 provide private
+implemented boundaries; none has live credentials, distributed edge policy, deployed purge cadence,
+or deployment evidence. Revisions 0001 through 0038 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
@@ -29,54 +29,53 @@ score query field or browser persistence. One local one-shot Jobs runner can inv
 seventeen fixed functions: any of the twelve cleanup functions, pairing approval-provenance
 redaction, fixed pairing-rate-window reset, primary profile purge, refresh, or finalization, but no
 broader recovery/step-up, deployed ingest endpoint, operational connector, purge
-schedule/cache/backup/tombstone handling, Jobs monitor, audited correction, or deployed service
-executes the complete sequences. A library-only Rust connector foundation validates the bounded
-stable App Server initialization exchange and candidate `0.144.5` account/usage responses. A
-synthetic one-shot supervisor composes those states with fixed local process mechanics, while an
-exact-body composer and isolated one-use signer produce a synthetic signed envelope. A separate
-pending-key and challenge signer plus a pure server-only Web verifier agree on one exact
-pairing-possession message. The Web/Auth start application generates fresh IDs, token, challenge,
-60-bit code, separate protected poll/code verifiers, and a nine-minute pending transaction from
-closed device metadata. A second application performs protected keyed poll lookup, mandates that
-proof, and invokes only exact atomic activation behind local admission/timing. The local signed-in
-`/connect` flow counts pending-code attempts on the exact session, renders bounded device evidence
-plus the full public-key fingerprint, and consumes a fresh WebAuthn assertion into atomic approval
-for an explicitly selected new or active existing opaque source. Existing choices use only encrypted
-session-bound controls; raw source IDs stay server-only. ADR 0030 adds exact start/poll HTTP routes,
-fixed-storage aggregate admission, and one pairing-only Rust command that creates and retains its
-device key only in a native OS credential store. ADR 0057 places those routes and both browser
-approval operations behind exact default-off module-load decisions before parsing, runtime/service
-construction, admission acquisition, protected configuration, or database work. ADR 0058 separately
-keeps new-source selection and both approval service steps default-off while active existing-source
-pairing remains available. Exact source choice is sealed and v2-digest-bound so a restarted disabled
-verifier also rejects in-flight new-source completion. ADR 0059 separately keeps browser proposal
-create/approve and device proposal ingress default-off while private reads and exact session-bound
-rejection remain available. ADR 0060 separately keeps invite/OAuth/initial-passkey enrollment
-default-off across both pages, all four route modules, and all four service methods while returning
-login and restricted recovery remain available. ADR 0031 adds a separate Windows candidate command
-that can construct the otherwise inaccessible launch/context/key capabilities only after exact
-artifact and active-record review, then performs one fixed signed upload. ADR 0038 adds a third
-fixed command that starts no Codex process and signs one exact enum-only CarRecipe for the dedicated
-Web/Auth proposal route. ADR 0041 adds a fourth command that deletes only the exact native
-origin/label record without loading it or crossing the connector-to-edge boundary. ADR 0052 adds a
-fifth explicit `check-codex` command that performs only the same exact candidate admission without
-credential-store, process, account, persistence, or network access; later sync repeats admission.
-ADR 0053 adds a secretless no-upload Windows release-profile copy/removal smoke for only the
-repository-built connector; it adds no connector data flow or runtime authority. ADR 0054 adds an
-opt-in stdout preview to the same candidate check containing only fixed versions/support state and
-one coarse Operational admission class. It adds no filesystem sink, support transport, reusable
-authority, or connector-to-edge flow. There is still no hosted Windows result, supported version,
-cross-platform sync result, real package lifecycle, scheduling, packaging, or released connector. A
-local Ingest kernel now verifies the bounded exact-body origin/device request, while the separate
-adapter maps origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves
-atomic origin replay consumption and bounded cleanup. A transport-free application now composes
-those exact local capabilities and validates only closed acknowledgement/problem decisions. A
-bounded local Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline
-policy, and serializes only revalidated contracts. A separate local host now binds that exact
-composition under closed loopback or declared Railway-edge configuration and bounded process
-shutdown. There is no edge/live-database/deployment integration. No trusted external TLS route,
-deployment login/certificate, edge signer/direct-origin policy, or live route/Jobs evidence is
-supplied. Data labels refer to the classifications in the
+cache/backup/tombstone handling, Jobs monitor, audited correction, or deployed service executes the
+complete sequences. A library-only Rust connector foundation validates the bounded stable App Server
+initialization exchange and candidate `0.144.5` account/usage responses. A synthetic one-shot
+supervisor composes those states with fixed local process mechanics, while an exact-body composer
+and isolated one-use signer produce a synthetic signed envelope. A separate pending-key and
+challenge signer plus a pure server-only Web verifier agree on one exact pairing-possession message.
+The Web/Auth start application generates fresh IDs, token, challenge, 60-bit code, separate
+protected poll/code verifiers, and a nine-minute pending transaction from closed device metadata. A
+second application performs protected keyed poll lookup, mandates that proof, and invokes only exact
+atomic activation behind local admission/timing. The local signed-in `/connect` flow counts
+pending-code attempts on the exact session, renders bounded device evidence plus the full public-key
+fingerprint, and consumes a fresh WebAuthn assertion into atomic approval for an explicitly selected
+new or active existing opaque source. Existing choices use only encrypted session-bound controls;
+raw source IDs stay server-only. ADR 0030 adds exact start/poll HTTP routes, fixed-storage aggregate
+admission, and one pairing-only Rust command that creates and retains its device key only in a
+native OS credential store. ADR 0057 places those routes and both browser approval operations behind
+exact default-off module-load decisions before parsing, runtime/service construction, admission
+acquisition, protected configuration, or database work. ADR 0058 separately keeps new-source
+selection and both approval service steps default-off while active existing-source pairing remains
+available. Exact source choice is sealed and v2-digest-bound so a restarted disabled verifier also
+rejects in-flight new-source completion. ADR 0059 separately keeps browser proposal create/approve
+and device proposal ingress default-off while private reads and exact session-bound rejection remain
+available. ADR 0060 separately keeps invite/OAuth/initial-passkey enrollment default-off across both
+pages, all four route modules, and all four service methods while returning login and restricted
+recovery remain available. ADR 0031 adds a separate Windows candidate command that can construct the
+otherwise inaccessible launch/context/key capabilities only after exact artifact and active-record
+review, then performs one fixed signed upload. ADR 0038 adds a third fixed command that starts no
+Codex process and signs one exact enum-only CarRecipe for the dedicated Web/Auth proposal route. ADR
+0041 adds a fourth command that deletes only the exact native origin/label record without loading it
+or crossing the connector-to-edge boundary. ADR 0052 adds a fifth explicit `check-codex` command
+that performs only the same exact candidate admission without credential-store, process, account,
+persistence, or network access; later sync repeats admission. ADR 0053 adds a secretless no-upload
+Windows release-profile copy/removal smoke for only the repository-built connector; it adds no
+connector data flow or runtime authority. ADR 0054 adds an opt-in stdout preview to the same
+candidate check containing only fixed versions/support state and one coarse Operational admission
+class. It adds no filesystem sink, support transport, reusable authority, or connector-to-edge flow.
+There is still no hosted Windows result, supported version, cross-platform sync result, real package
+lifecycle, scheduling, packaging, or released connector. A local Ingest kernel now verifies the
+bounded exact-body origin/device request, while the separate adapter maps origin replay, device
+lookup, and submission through fixed calls. PostgreSQL now proves atomic origin replay consumption
+and bounded cleanup. A transport-free application now composes those exact local capabilities and
+validates only closed acknowledgement/problem decisions. A bounded local Fastify factory preserves
+exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes only revalidated
+contracts. A separate local host now binds that exact composition under closed loopback or declared
+Railway-edge configuration and bounded process shutdown. There is no edge/live-database/deployment
+integration. No trusted external TLS route, deployment login/certificate, edge signer/direct-origin
+policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -126,8 +125,8 @@ endpoints, streaming body limits, exact RP/origin/type/user-verification checks,
 calls. The pending session lasts at most 15 minutes; successful passkey registration atomically
 rotates it to a fresh 30-day passkey-bound session. The suite uses injected GitHub,
 authenticator-verifier, and database capabilities; there is no live OAuth app, invite issuer UI,
-real key/login, edge proof, aggregate/distributed attempt limit, expired-state cleanup scheduling,
-recovery sign-in, or deployment evidence.
+real key/login, edge proof, aggregate/distributed attempt limit, combined/deployed expired-state
+cleanup cadence, recovery sign-in, or deployment evidence.
 
 ADR 0060 makes `/join`, `/join/passkey`, GitHub start/callback, and initial-passkey
 options/verification resolve exact `VIBERACING_ENROLLMENT_ENABLED=true` at module evaluation.
@@ -275,9 +274,9 @@ acquisition. Observed cross-connection tests prove rotation dominates a concurre
 code and completion dominates a concurrent login with an old passkey. Completion fails closed at the
 32-retained-passkey provenance ceiling until revision 0035 has removed an eligible aged unreferenced
 revoked row; the ceiling itself remains unchanged. The repository still lacks a distributed/edge
-anonymous attempt policy, cleanup scheduling for expired authentication state, notifications,
-production secrets and timing values, live authenticator/database integration, monitoring, and
-deployment evidence; therefore the local recovery sign-in is not launch-ready.
+anonymous attempt policy, combined/deployed cleanup cadence for expired authentication state,
+notifications, production secrets and timing values, live authenticator/database integration,
+monitoring, and deployment evidence; therefore the local recovery sign-in is not launch-ready.
 
 ## Device pairing and source choice
 
@@ -340,10 +339,10 @@ in-flight completion; the encrypted choice is included in the v2 context digest.
 also local and not dynamic/deployed. ADR 0041 adds only local idempotent deletion for the canonical
 origin/label account. It prints that the action did not revoke server device authority, so device
 revoke still follows the authenticated browser lifecycle below. Live Web/database credentials, edge
-enforcement and capacity evidence, cleanup scheduling, cross-platform runtime evidence, packaging,
-and deployment remain planned. ADR 0015's later device-request verifier does not consume or activate
-this pairing transaction. The ceiling and first-winner assertions use separate PostgreSQL
-connections held behind a real row lock before simultaneous release.
+enforcement and capacity evidence, combined/deployed cleanup cadence, cross-platform runtime
+evidence, packaging, and deployment remain planned. ADR 0015's later device-request verifier does
+not consume or activate this pairing transaction. The ceiling and first-winner assertions use
+separate PostgreSQL connections held behind a real row lock before simultaneous release.
 
 ## Source and device lifecycle
 
@@ -535,36 +534,40 @@ Revisions 0008 and 0012 give Jobs a server-time, 1-to-1000 batch procedure for e
 nonces, device nonces, and raw snapshots. It serializes callers, caps each class independently,
 cascades raw entries, preserves current source/day values, and clears only their deleted raw
 reference. The expiry columns still do not delete rows by themselves. The local one-shot Jobs
-command can invoke one fixed 1000-row batch, but no scheduler, monitor, production login/TLS path,
-or deployment invokes it automatically.
+command can invoke one fixed 1000-row batch. The default-off local scheduler includes it in the
+hourly catalog, but no combined PostgreSQL result, monitor, production login/TLS path, or deployed
+cadence invokes it operationally.
 
 Revision 0013 adds a separate private mutex and oldest-first 1-to-1000 batch for expired `pending`,
 `approved`, or `cancelled` pairing transactions whose exact key is still pending and unbound. It
 deletes transaction-bound approval challenges by cascade, then the key, while contended rows wait
 for a later invocation and activated/live state remains. The local Jobs runner exposes a second
-fixed 1000-row cleanup command; no scheduler, production login/TLS path, monitoring, or retention
-cadence invokes it automatically.
+fixed 1000-row cleanup command. The local catalog includes it, but no combined PostgreSQL result,
+production login/TLS path, monitoring, or deployed retention cadence invokes it operationally.
 
 Revision 0023 adds a third fixed 1000-row cleanup command for expired authentication challenges and
 an independently bounded set of expired restricted recovery authorities. It deletes only an exact
 still-present source code in used/scrubbed form, preserves live ceremonies and unused codes, and
 locks candidate profiles before authorities/codes to match recovery transitions. Worker and
-recovery-start races are observed locally; no scheduler, production login/TLS path, monitor, backup
-purge, or retention cadence invokes it automatically.
+recovery-start races are observed locally. The local catalog includes it, but no combined PostgreSQL
+result, production login/TLS path, monitor, backup purge, or deployed retention cadence invokes it
+operationally.
 
 Revision 0024 adds a separate fixed maximum-10 primary-profile purge command. The database locks its
 fixed five maintenance mutexes in stable order, selects only due queued/retry work, requires
 committed `deletion_pending` state, removes restrictive pairing references and authority-free
 pending keys, terminally settles the opaque job, then cascades the exact profile in one transaction.
 Two purge workers and purge versus authentication cleanup are observed serializing locally. No
-scheduler, production login/TLS path, cache/backup purge, keyed tombstone, restore replay, monitor,
-capacity result, or retention cadence invokes or completes the broader deletion sequence.
+combined scheduler/PostgreSQL result, production login/TLS path, cache/backup purge, keyed
+tombstone, restore replay, monitor, capacity result, or deployed retention cadence invokes or
+completes the broader deletion sequence.
 
 Revision 0026 adds a fourth fixed 1000-row cleanup command for expired CarRecipe proposals. It
 serializes workers through a separate private mutex, captures the cutoff after that lock, deletes
 oldest-first with `SKIP LOCKED`, and preserves every live proposal and active recipe. One observed
-two-worker race proves exact deletion and live-state preservation; no scheduler, production
-login/TLS path, monitoring, backup-purge proof, or deployed cadence invokes it automatically.
+two-worker race proves exact deletion and live-state preservation. The local catalog includes it,
+but no combined PostgreSQL result, production login/TLS path, monitoring, backup-purge proof, or
+deployed cadence invokes it operationally.
 
 Revision 0030 adds a fifth fixed 1000-row cleanup command for expired browser sessions that have no
 retained rotation predecessor or pairing approval reference. It shares the authentication mutex,
@@ -587,8 +590,8 @@ activation and revocation are at least 180 days old and no approval, authorizati
 or raw-snapshot reference remains. It deletes no raw evidence by cascade. Revision 0037 adds one
 zero-argument reset for only positive fixed pairing request windows older than the maximum one-hour
 duration. It preserves the 130-row matrix. Observed worker races prove local serialization only. No
-scheduler, production login/TLS path, monitoring, backup-purge proof, or deployed cadence invokes
-these commands automatically.
+combined scheduler/PostgreSQL result, production login/TLS path, monitoring, backup-purge proof, or
+deployed cadence invokes these commands operationally.
 
 Revision 0038 adds an eleventh fixed cleanup command for canonical abandoned enrollment profiles. It
 locks the authentication and profile-purge mutexes in their existing order, captures one server
@@ -597,9 +600,9 @@ invite, has only expired exact enrollment sessions and registration challenges, 
 recovery, passkey, source, deletion, scoring, or recipe state. Repeated predicates and `SKIP LOCKED`
 preserve state drift and an in-flight initial-passkey activation. Existing cascades remove the
 redeemed invite and expired enrollment authority while audit rows retain a null profile link. Worker
-and activation-overlap races are observed locally; no scheduler, production login/TLS path,
-notification, monitoring, backup purge, restore replay, or deployed cadence invokes it
-automatically.
+and activation-overlap races are observed locally. The local catalog includes it, but no combined
+PostgreSQL result, production login/TLS path, notification, monitoring, backup purge, restore
+replay, or deployed cadence invokes it operationally.
 
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct
@@ -631,9 +634,12 @@ pairing approval-provenance redaction, pairing-rate-window reset, primary profil
 finalization—after a per-checkout least-privilege probe. One opt-in synthetic integration applies
 all reviewed migrations to a disposable loopback PostgreSQL container, runs each emitted command
 through a narrow login, rejects an extra-membership login before mutation, observes only generic
-process output, verifies exact stored state, and removes the container, network, and storage. No
-scheduler, external audit sink, production login/certificate, audited correction, tombstone/restore
-replay, deployed route, or public cache exists.
+process output, verifies exact stored state, and removes the container, network, and storage. ADR
+0063 separately wraps the runner with one exact-default-off UTC catalog, in-memory slot state,
+sequential no-overlap invocation, and bounded signal shutdown. Ninety-three tests use a fake clock,
+timer, and runner; they are not combined with the PostgreSQL integration. No deployed scheduler,
+external audit sink, production login/certificate, audited correction, tombstone/restore replay,
+deployed route, or public cache exists.
 
 ## CarRecipe proposal origins and browser approval
 
@@ -697,8 +703,8 @@ The local Agent Skill now provides bounded conversational orchestration without 
 retaining the request in Vibe Racing. It requires explicit shell-safe origin/label values, never
 discovers or installs a connector, invokes only `propose-car` once, accepts only its exact generic
 success line, and has no decision authority. The active recipe is projected separately and locally;
-physical cleanup scheduling, live database login, distributed edge control, monitoring, capacity,
-released connector packaging, and deployment remain unproved.
+combined/deployed physical cleanup cadence, live database login, distributed edge control,
+monitoring, capacity, released connector packaging, and deployment remain unproved.
 
 ## Public race read
 
@@ -799,8 +805,9 @@ active session and typed handle, binds a fresh required-UV assertion to the
 session/profile/handle/RP/origin context, atomically consumes the challenge with that existing
 transaction, and clears every browser auth cookie only after success. Revision 0024 plus the local
 Jobs command now execute bounded primary purge and preserve only the opaque terminal job plus
-redacted audit linkage. Scheduling, public cache purge, keyed tombstone policy, backup expiry, and
-restore replay are still planned.
+redacted audit linkage. The default-off local scheduler includes that exact command, while deployed
+cadence, public cache purge, keyed tombstone policy, backup expiry, and restore replay are still
+planned.
 
 ## Trusted release
 

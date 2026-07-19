@@ -27,10 +27,11 @@ staged-review rules all apply.
 - Do not log dates, counts, identifiers, SQL, environment values, database errors, stack traces, or
   retained data. CLI output is one stable success/failure sentence; monitoring hooks receive only a
   closed signal enum.
-- This workspace is a local one-shot runner. Do not claim that an external audit sink, scheduler,
-  production login/TLS path, monitoring backend, deployment, correction flow, cache/backup/tombstone
-  purge, restore replay, or live retention policy exists without separate implementation and
-  evidence.
+- This workspace remains a local one-shot runner. The separate `apps/jobs-scheduler/` workspace may
+  invoke only this exported boundary and does not change its command or database authority. Do not
+  claim that an external audit sink, deployed scheduler/cadence, production login/TLS path,
+  monitoring backend, deployment, correction flow, cache/backup/tombstone purge, restore replay, or
+  live retention policy exists without separate implementation and evidence.
 
 ## Commands
 

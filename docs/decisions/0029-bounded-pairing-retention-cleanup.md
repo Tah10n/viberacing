@@ -1,6 +1,6 @@
 # ADR 0029: Bounded pairing retention cleanup
 
-- Status: Accepted (database capability and local one-shot command implemented; scheduling pending)
+- Status: Accepted (local scheduler catalog; deployment pending)
 - Date: 2026-07-16
 - Decision owners: Web/Auth, Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
@@ -70,13 +70,15 @@ rollback. `SKIP LOCKED` means cleanup can make less than batch-size progress und
 is preferable to racing a live security transition. The separate private mutex prevents two Jobs
 workers from selecting overlapping batches.
 
-Residual risk remains: there is no scheduler, cadence, retry/overlap policy, alert, capacity result,
-production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. ADR 0032
-now covers expired authentication challenges and restricted recovery authorities, while ADR 0042 now
-covers eligible expired sessions, while ADR 0045 covers terminal deletion jobs. Pairing-referenced
-session provenance, passkey provenance, and tombstones still need separate bounded cleanup or
-retention policy. Anonymous pairing start also still needs an HTTP contract, browser approval,
-connector client, distributed edge/service limits, monitoring, and real-key custody.
+Residual risk remains: ADR 0063 supplies only a default-off in-memory local catalog, sequential
+execution, and no-overlap lifecycle. There is no combined scheduler/PostgreSQL result, deployed
+cadence, durable missed-slot recovery, alert, capacity result, production Jobs login/TLS connection,
+backup-expiry proof, or deployed retention policy. ADR 0032 now covers expired authentication
+challenges and restricted recovery authorities, while ADR 0042 now covers eligible expired sessions,
+while ADR 0045 covers terminal deletion jobs. Pairing-referenced session provenance, passkey
+provenance, and tombstones still need separate bounded cleanup or retention policy. Anonymous
+pairing start also still needs an HTTP contract, browser approval, connector client, distributed
+edge/service limits, monitoring, and real-key custody.
 
 Affected invariants are VR-DEVICE-001, VR-DATA-001, and VR-ABUSE-001. Primary attacker stories are
 VR-ABUSE-PAIRING-GUESS, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -128,9 +130,10 @@ Acceptance evidence recorded for this decision included:
 
 The SQL evidence uses only synthetic rows in a portless ephemeral PostgreSQL project. Focused Jobs
 tests use an injected pool; the shared opt-in Jobs integration additionally proves this emitted
-command through one disposable narrow login and exact stored state. Neither proves a scheduler,
-production retention cadence/login/TLS, capacity, monitoring, backup purge, anonymous route, or
-deployment.
+command through one disposable narrow login and exact stored state. ADR 0063 separately proves the
+default-off scheduler against a fake runner and clock. These layers do not prove combined
+scheduler/PostgreSQL execution, production retention cadence/login/TLS, capacity, monitoring, backup
+purge, anonymous route, or deployment.
 
 ## References
 

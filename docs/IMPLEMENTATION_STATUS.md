@@ -38,13 +38,17 @@ profile-deletion request, one-time recovery-code replacement-passkey sign-in, an
 logout. Login options retain the profile-free challenge only in a separate encrypted cookie; valid
 proof alone reaches one atomic create-consume-session call. Its GitHub, passkey-verifier, database,
 and browser evidence is injected or synthetic; no working invite issuer, OAuth registration, secret,
-live authenticator/database login, distributed edge abuse control, scheduled recovery/deletion
-cleanup, cache/backup/tombstone purge, restore replay, notification, or deployment is supplied. A
-local one-shot Jobs runner invokes only the seventeen existing maintenance procedures through a
-bounded least-privileged adapter. One opt-in synthetic integration applies the reviewed migrations
-to disposable PostgreSQL, runs every emitted Jobs command through a narrow login, rejects an
-extra-membership login before mutation, and verifies exact stored state. A local Ingest kernel now
-bounds and authenticates the exact Community sync envelope, consumes an injected origin nonce,
+live authenticator/database login, distributed edge abuse control, deployed recovery/deletion
+cleanup cadence, cache/backup/tombstone purge, restore replay, notification, or deployment is
+supplied. A local one-shot Jobs runner invokes only the seventeen existing maintenance procedures
+through a bounded least-privileged adapter. One opt-in synthetic integration applies the reviewed
+migrations to disposable PostgreSQL, runs every emitted Jobs command through a narrow login, rejects
+an extra-membership login before mutation, and verifies exact stored state. A separate
+exact-default-off local Jobs scheduler derives only fixed UTC five-minute/hour/day slots, invokes
+that closed runner sequentially without overlap or same-slot retry, retains slot state only in
+memory, and bounds first-signal shutdown. Its fake clock/runner evidence is separate from the
+PostgreSQL integration and proves no combined execution or deployed cadence. A local Ingest kernel
+now bounds and authenticates the exact Community sync envelope, consumes an injected origin nonce,
 parses bounded JSON, validates the generated contract, and strictly verifies the source-bound device
 request. A separate bounded Ingest PostgreSQL adapter revalidates that output and exposes only
 atomic origin-nonce consumption, device lookup, and submission through a probed least-privileged
@@ -122,7 +126,7 @@ identities and GitHub configuration. No production-ready anonymous edge perimete
 recovery perimeter or cleanup, production secret-manager/edge key injection, trusted external Ingest
 TLS/edge route, production deployment, production Web/Jobs/Ingest database login/TLS integration,
 released or operational connector, supported Codex version, real-user ingestion, end-to-end public
-ranking, or finalization scheduler exists.
+ranking, or deployed Jobs scheduler/cadence exists.
 
 ## Implemented and locally verified
 
@@ -373,7 +377,7 @@ ranking, or finalization scheduler exists.
   nonces, device nonces, and snapshots at the requested 1-to-1000 batch. Static scenarios and three
   observed PostgreSQL races prove exact one-time consumption, live-row preservation, cleanup
   serialization, role isolation, and database deadlines. Expiry does not schedule physical purge;
-  production scheduling, monitoring, backup handling, and capacity remain open.
+  deployed scheduling, monitoring, backup handling, and capacity remain open.
 - A bounded pairing-retention database boundary. Revision 0013 extends the partial expiry index to
   cancelled state and gives only Jobs a separate 1-to-1000 oldest-first deletion under a private
   mutex, five-second lock wait, and 30-second statement deadline. It selects only expired pending,
@@ -381,9 +385,9 @@ ranking, or finalization scheduler exists.
   pairing-bound approval challenges, deletes the transaction before its key, and rolls back on any
   changed-row mismatch. Live pending and activated rows, bound devices, sources, profiles,
   credentials, and audit events remain. Static scenarios and an observed two-worker race prove
-  bounds, idempotency, role isolation, serialization, and live/activated preservation. No scheduler,
-  production Jobs login/TLS path, production cadence, backup proof, capacity result, or broader
-  ceremony cleanup is claimed.
+  bounds, idempotency, role isolation, serialization, and live/activated preservation. No combined
+  scheduler/PostgreSQL result, production Jobs login/TLS path, deployed cadence, backup proof,
+  capacity result, or broader ceremony cleanup is claimed.
 - A bounded authentication-retention database boundary. Revision 0023 gives only Jobs one 1-to-1000
   cleanup under a separate private mutex and independently caps expired challenge and
   restricted-recovery-authority deletion. It removes an authority's source recovery code only when
@@ -392,15 +396,16 @@ ranking, or finalization scheduler exists.
   locked in stable order before authority/code rows, matching recovery and deletion transitions.
   Static scenarios, an observed two-worker race, and an observed cleanup-versus-recovery-start race
   prove bounds, role isolation, live-state preservation, worker serialization, and the
-  cross-capability lock order. No scheduler, production Jobs login/TLS path, production cadence,
-  backup proof, capacity result, or deployed retention policy is claimed.
+  cross-capability lock order. No combined scheduler/PostgreSQL result, production Jobs login/TLS
+  path, deployed cadence, backup proof, capacity result, or deployed retention policy is claimed.
 - A bounded invite-retention database boundary. Revision 0031 gives only Jobs one 1-to-1000
   oldest-first cleanup under the shared authentication mutex. It selects only expired active or
   revoked invites, locks candidates with `SKIP LOCKED`, repeats state and expiry at deletion, and
   never selects live authority or redeemed enrollment provenance. Static scenarios and an observed
   two-worker race prove bounds, deterministic progress, role isolation, idempotency, shared-mutex
-  serialization, and live/redeemed preservation. No invite issuer UI, scheduler, production Jobs
-  login/TLS path, backup purge, capacity, or deployed retention policy is claimed.
+  serialization, and live/redeemed preservation. No invite issuer UI, combined scheduler/PostgreSQL
+  result, production Jobs login/TLS path, backup purge, capacity, or deployed retention policy is
+  claimed.
 - A bounded expired-session retention database boundary. Revision 0030 gives only Jobs one 1-to-1000
   oldest-first cleanup under the existing private authentication mutex. It selects only expired
   sessions with no retained rotation predecessor and no pairing approval reference, locks one
@@ -409,8 +414,8 @@ ranking, or finalization scheduler exists.
   sessions and pairing-referenced sessions remain until a separate aged-provenance redaction. Static
   scenarios and an observed two-worker race prove active/revoked/rotated deletion, bounds, role
   isolation, idempotency, rotation-chain progress, shared-mutex serialization, and live/provenance
-  preservation. No scheduler, production Jobs login/TLS path, complete device-history policy, backup
-  purge, capacity, or deployment is claimed.
+  preservation. No combined scheduler/PostgreSQL result, production Jobs login/TLS path, complete
+  device-history policy, backup purge, capacity, or deployment is claimed.
 - A bounded pairing approval-provenance retention boundary. Revision 0034 gives only Jobs one
   1-to-1000 oldest-first redaction under the existing authentication and pairing mutexes in their
   profile-purge order. PostgreSQL derives a fixed 180-day cutoff after both locks; only activated
@@ -421,8 +426,8 @@ ranking, or finalization scheduler exists.
   pre-activation rejection, role isolation, invalid bounds, both missing-mutex failures, preserved
   pairing/device/passkey rows, and subsequent expired-session cleanup progress. This redaction does
   not itself delete device history; revision 0036 separately handles only an aged minimized pair. No
-  scheduler, production Jobs login/TLS path, backup purge, monitoring, capacity, or deployed
-  retention evidence is claimed.
+  combined scheduler/PostgreSQL result, production Jobs login/TLS path, backup purge, monitoring,
+  capacity, or deployed retention evidence is claimed.
 - A bounded revoked-passkey retention boundary. Revision 0035 gives only Jobs one 1-to-1000
   oldest-first deletion under the same authentication and pairing mutex order. PostgreSQL derives a
   fixed 180-day cutoff after both locks and selects only revoked rows with no
@@ -432,8 +437,8 @@ ranking, or finalization scheduler exists.
   preservation, deterministic progress, role isolation, invalid bounds, both missing-mutex failures,
   and idempotency. Recovery evidence first fails atomically at the unchanged 32-row ceiling, deletes
   31 eligible old rows, then completes through the unchanged replacement-passkey contract. No
-  scheduler, production Jobs login/TLS path, backup purge, monitoring, capacity, or deployed
-  retention evidence is claimed.
+  combined scheduler/PostgreSQL result, production Jobs login/TLS path, backup purge, monitoring,
+  capacity, or deployed retention evidence is claimed.
 - A bounded revoked-device retention boundary. Revision 0036 gives only Jobs one 1-to-1000
   oldest-first paired deletion under the existing Ingest and pairing mutex order. PostgreSQL derives
   one fixed 180-day cutoff after both locks and selects only an activated pairing plus its exact
@@ -443,8 +448,8 @@ ranking, or finalization scheduler exists.
   row at both steps so any drift rolls back the pair. Static scenarios and an observed two-worker
   race prove exact-boundary/recent/active/reference preservation, deterministic progress, role
   isolation, invalid bounds, both missing-mutex failures, idempotency, and atomic rollback. No
-  scheduler, production Jobs login/TLS path, backup purge, monitoring, capacity, or deployed
-  retention evidence is claimed.
+  combined scheduler/PostgreSQL result, production Jobs login/TLS path, backup purge, monitoring,
+  capacity, or deployed retention evidence is claimed.
 - A bounded anonymous pairing rate-window retention boundary. Revision 0037 gives only Jobs one
   zero-argument reset over the existing fixed 130-row operation/global/bucket matrix. PostgreSQL
   verifies the complete inventory, derives a fixed one-hour cutoff from server time, and locks only
@@ -454,8 +459,9 @@ ranking, or finalization scheduler exists.
   recent preservation, idempotency, missing-inventory failure, role isolation, continued admission,
   and rollback after later-row failure. Observed worker/worker and reset/admission races prove
   convergence and that a newly admitted count survives reset. This is aggregate shaping for a
-  self-asserted ID, not trusted edge identity. No scheduler, production Jobs login/TLS path,
-  monitoring, capacity, edge control, or deployed retention evidence is claimed.
+  self-asserted ID, not trusted edge identity. No combined scheduler/PostgreSQL result, production
+  Jobs login/TLS path, monitoring, capacity, edge control, or deployed retention evidence is
+  claimed.
 - A bounded abandoned-enrollment retention boundary. Revision 0038 gives only Jobs one 1-to-1000
   oldest-first deletion after the existing authentication and profile-purge mutexes. A candidate
   must remain `enrolling`, retain its exact redeemed invite, have only expired exact enrollment
@@ -466,8 +472,8 @@ ranking, or finalization scheduler exists.
   remain with null profile linkage. Static scenarios, an observed two-worker race, and an
   activation-overlap race prove bounds, role isolation, deterministic progress, comprehensive
   fail-closed drift preservation, and live authority safety. No invite repair/reuse, deletion job,
-  tombstone, notification, scheduler, production Jobs login/TLS path, monitoring, capacity, backup
-  purge, restore replay, or deployed retention evidence is claimed.
+  tombstone, notification, combined scheduler/PostgreSQL result, production Jobs login/TLS path,
+  monitoring, capacity, backup purge, restore replay, or deployed retention evidence is claimed.
 - A bounded primary profile deletion database boundary. Revision 0024 gives only Jobs one maximum-10
   due queue/retry purge under stable acquisition of its five fixed maintenance mutexes. It requires
   committed `deletion_pending` state, removes every restrictive profile-bound pairing and only its
@@ -476,24 +482,24 @@ ranking, or finalization scheduler exists.
   rows in the same transaction. Audit and job profile links are nulled; the opaque terminal job
   remains and no unkeyed tombstone is invented. End-to-end request/purge, batch, retry/future,
   state-drift rollback, role-denial, idempotency, two-worker, and purge-versus-auth-cleanup
-  scenarios pass in real isolated PostgreSQL. No scheduler, production Jobs login/TLS path,
-  published deletion window, cache/backup purge, keyed tombstone, restore replay, monitoring,
-  capacity result, or deployment is claimed.
+  scenarios pass in real isolated PostgreSQL. No combined scheduler/PostgreSQL result, production
+  Jobs login/TLS path, published deletion window, cache/backup purge, keyed tombstone, restore
+  replay, monitoring, capacity result, or deployment is claimed.
 - A bounded terminal deletion-job retention boundary. Revision 0032 gives only Jobs one 1-to-1000
   oldest-first cleanup under the profile-deletion mutex. PostgreSQL derives a fixed 30-day cutoff
   after locking; only `purged`, profile-free jobs with non-null completion at or before that cutoff
   are candidates, and every predicate is repeated at delete. Static scenarios and an observed
-  two-worker race prove recent/non-terminal preservation and exact progress. No scheduler,
-  production Jobs login/TLS path, cache/backup purge, tombstone/restore replay, monitoring, capacity
-  result, or deployed retention evidence is claimed.
+  two-worker race prove recent/non-terminal preservation and exact progress. No combined
+  scheduler/PostgreSQL result, production Jobs login/TLS path, cache/backup purge, tombstone/restore
+  replay, monitoring, capacity result, or deployed retention evidence is claimed.
 - A bounded database audit-event retention boundary. Revision 0033 gives only Jobs one 1-to-1000
   oldest-first cleanup under a separate private mutex. PostgreSQL derives a fixed 180-day cutoff
   after locking; profile-linked and already-redacted rows at or before that cutoff are candidates,
   and the predicate is repeated at delete. Static scenarios and an observed two-worker race prove
   linked/redacted eligibility, recent-event preservation, exact progress, role isolation, invalid
   bounds, missing-mutex failure, and idempotency. No external append-only audit sink, user-visible
-  audit subset, scheduler, production Jobs login/TLS path, backup purge, monitoring, capacity
-  result, or deployed retention evidence is claimed.
+  audit subset, combined scheduler/PostgreSQL result, production Jobs login/TLS path, backup purge,
+  monitoring, capacity result, or deployed retention evidence is claimed.
 - A transport-free Community sync application boundary. Its configured factory creates one bounded
   Ingest database object, injects that same object's atomic origin consume and minimal device lookup
   into the protected-key verifier, binds its submission capability, closes the pool after startup
@@ -622,7 +628,8 @@ ranking, or finalization scheduler exists.
   color/URL/markup/conversation, and seed/version drift are rejected. Profile purge cascades both
   rows. Expiry is logically enforced for at most 24 hours. Revision 0026 gives only Jobs a separate
   oldest-first, 1-to-1000 physical cleanup serialized by the sixth fixed mutex; it preserves live
-  proposals and active recipes. No cleanup schedule or deployed retention evidence exists.
+  proposals and active recipes. The command is in the default-off local catalog, but no combined
+  scheduler/PostgreSQL result or deployed retention evidence exists.
 - A separate Web-only device CarRecipe proposal database boundary. Revision 0028 exposes only
   minimal active-device key material and one fixed proposal call to the probed Web role. It locks
   and rechecks active/hidden profile, active source, and active device, consumes a seven-minute
@@ -650,8 +657,8 @@ ranking, or finalization scheduler exists.
   days without changing public output. Every row deletion rechecks live plus deleted inventory and
   the saved maximum date under the existing scoring, Ingest-retention, and profile-purge mutexes.
   Open, recent, missing-projection, or drifted state is preserved or fails closed. There is no
-  scheduler, correction authority, production login/TLS path, monitoring, capacity, backup purge,
-  restore replay, deployment, or real-user retention evidence.
+  combined scheduler/PostgreSQL result, correction authority, production login/TLS path, monitoring,
+  capacity, backup purge, restore replay, deployment, or real-user retention evidence.
 - A database policy checker with 23 black-box cases for migration drift/path/revision, transaction
   and timeout omissions, unsafe SQL features, `PUBLIC`/direct runtime grants, unsafe
   `SECURITY DEFINER`, role options, passwords, and owner membership. The real PostgreSQL gate runs
@@ -726,9 +733,10 @@ ranking, or finalization scheduler exists.
   private-mutex failure. Ingest also applies the server grace deadline before its
   profile/source/device locks: a late whole snapshot is retained as `season_closed` but updates no
   accepted source/day state. No deployed HTTP Ingest API, deployment Ingest/Jobs credential/TLS
-  integration, or scheduler exists. The local Ingest composition now has synthetic mock-pool,
-  injection, loopback framing, and full disposable HTTP-to-PostgreSQL evidence; the local runner
-  described below is the only Jobs application boundary.
+  integration, or deployed scheduler/cadence exists. The local Ingest composition now has synthetic
+  mock-pool, injection, loopback framing, and full disposable HTTP-to-PostgreSQL evidence; the local
+  one-shot runner described below remains the only Jobs database boundary, and the separate
+  scheduler can invoke only that runner.
 - Community scoring PostgreSQL scenarios prove immutable `community_v1` formula parameters and
   season binding, ISO Monday-to-Sunday grouping, exact logarithmic rounding, numeric overflow
   protection, one profile cap after distinct-source aggregation, weekly caps, active-day and
@@ -762,8 +770,8 @@ ranking, or finalization scheduler exists.
   read-only state before every query; destroys a failed client; releases a healthy client before
   mapping; and returns only stable non-reflective error/signal codes. Config, pool, and store tests
   cover positive and negative boundaries without a live deployment credential. The local routes are
-  wired to this adapter, but no cache, live login/certificate, audited correction flow, or scheduler
-  exists.
+  wired to this adapter, but no cache, live login/certificate, audited correction flow, or deployed
+  scheduler/cadence exists.
 - A local server-only enrollment application now parses one exact 1 KiB invite form, immediately
   reduces the canonical 256-bit secret to SHA-256, and seals the digest/preferences with independent
   32-byte OAuth state and S256 PKCE material in a ten-minute callback-path AES-256-GCM cookie.
@@ -843,14 +851,15 @@ ranking, or finalization scheduler exists.
   invokes the existing atomic hide/revoke/unlink/enqueue procedure with server-generated job/audit
   IDs and a fresh opaque 32-byte purge reference. Success clears all browser auth cookies; failure
   remains generic and retains them. The Web boundary itself runs no background work; revision 0024
-  plus the separate local Jobs command now provide bounded primary purge. Scheduling, cache/backup
-  purge, keyed tombstone policy, and restore replay remain unimplemented. Inventory dependency
-  failure renders a generic unavailable state without removing logout. Every POST body is
-  stream-bounded, compressed bodies and duplicate cookies fail closed, and admission is held from
-  the first body read through dependency settlement; overload cancels the body without a queue.
-  Cookies are HttpOnly/SameSite=Lax/secure-on-HTTPS with narrow paths, callback URLs are excluded
-  from Next development request logs, and responses are generic, `no-store`, and `no-referrer`.
-  EN/RU home-session navigation, join, passkey, returning-login, passkey-inventory, active-account,
+  plus the separate local Jobs command now provide bounded primary purge, and the default-off local
+  scheduler catalog includes it. Combined/deployed scheduling, cache/backup purge, keyed tombstone
+  policy, and restore replay remain unimplemented. Inventory dependency failure renders a generic
+  unavailable state without removing logout. Every POST body is stream-bounded, compressed bodies
+  and duplicate cookies fail closed, and admission is held from the first body read through
+  dependency settlement; overload cancels the body without a queue. Cookies are
+  HttpOnly/SameSite=Lax/secure-on-HTTPS with narrow paths, callback URLs are excluded from Next
+  development request logs, and responses are generic, `no-store`, and `no-referrer`. EN/RU
+  home-session navigation, join, passkey, returning-login, passkey-inventory, active-account,
   profile-visibility, source inventory/pause/reactivation/unlink, active-device revoke, passkey
   add/revoke, recovery-code rotation, recovery sign-in, deletion, and logout UI is present. Each
   route has four-call local admission. The CSP permits GitHub only as the exact OAuth `form-action`;
@@ -889,7 +898,7 @@ ranking, or finalization scheduler exists.
   reading origin/body/cookies, acquiring admission, starting WebAuthn, or accessing pairing state.
   The `/connect` shell and its separate session inventory may remain visible while actions fail
   generically. There is no invite issuer UI, anonymous pairing-start or recovery edge attempt
-  policy, expired-state cleanup scheduling or notification, live OAuth/authenticator/database
+  policy, deployed expired-state cleanup cadence or notification, live OAuth/authenticator/database
   integration, monitoring, or deployment evidence.
 - A private current-week account score slice now reuses the exact possessed session and one combined
   Web/Auth pool checkout for visibility plus revision 0019's derived-score read. The server-only
@@ -931,7 +940,7 @@ ranking, or finalization scheduler exists.
   five-minute approval cookie and bound by the v2 context digest, so a restarted disabled
   verification module rejects an in-flight new-source challenge. This local gate is also not dynamic
   or deployed. These boundaries still do not prove a live login/TLS connection, edge capacity,
-  cleanup schedule, monitoring, or deployment.
+  deployed cleanup cadence, monitoring, or deployment.
 - A Rust connector binary exposes a bounded `connect` command that accepts only a canonical HTTPS
   origin or explicit loopback HTTP development origin and a bounded label. It disables proxies and
   redirects, uses platform TLS verification, bounds request/response/time, generates an Ed25519 key
@@ -980,9 +989,25 @@ ranking, or finalization scheduler exists.
   login with one extra group membership, runs all seventeen emitted CLI commands as separate
   processes, proves the widened login returns only the generic failure before mutation, and verifies
   generic success plus exact cleanup, purge, refresh, and finalization state before removing the
-  container, network, and storage. No external audit sink, production Jobs login/TLS path,
-  scheduler, monitoring backend, automatic retry policy, capacity result, correction,
+  container, network, and storage. No external audit sink, production Jobs login/TLS path, deployed
+  scheduler/cadence, monitoring backend, automatic retry policy, capacity result, correction,
   cache/backup/tombstone purge, restore replay, or deployment is claimed.
+- A separate private Jobs-scheduler workspace accepts no arguments or schedule configuration and
+  starts only after exact `VIBERACING_JOBS_SCHEDULER_ENABLED=true`. It resolves that latch before
+  constructing the Jobs runner or reading database configuration. One closed UTC catalog refreshes
+  the current Monday season at most once per uninterrupted five-minute slot, submits finalization
+  only for the latest grace-eligible season at most once per UTC day, and invokes all fifteen
+  cleanup, redaction, reset, and purge objects at most once per UTC-hour slot. It marks slots in
+  memory before invocation, validates a frozen dense maximum-17 collection, runs through one runner
+  sequentially, ignores overlapping ticks, continues later fixed objects after a failure, and emits
+  only `cycle_failed` once for that cycle. SIGINT/SIGTERM prevents a later object, waits for the
+  current bounded Jobs call and runner close under 35 seconds, and fails on a second signal,
+  deadline, or cleanup error. Ninety-three tests cover the UTC bounds, default-off ordering, hostile
+  shapes/dependencies, runtime-import policy, non-overlap, failure containment, and process
+  lifecycle at 100% statement/branch/function/line coverage. Strict lint, TypeScript, build, and
+  built-entrypoint gates pass locally. This proves no combined scheduler/PostgreSQL execution,
+  historical backlog, stable production clock, replica lease, durable/deployed cadence, production
+  login/TLS, monitoring, capacity, or real-user retention.
 - Forty-four deterministic lock-wait races hold a relevant invite, challenge, session, source,
   device, pairing, or profile row, or a season advisory lock; tag every session; and observe every
   contender in the holder's transitive PostgreSQL blocker chain before releasing it. Protective
@@ -1137,8 +1162,8 @@ terminal-deletion-job/finalized-source-day/aged-revoked-passkey/aged-revoked-dev
 approval-provenance redaction and subsequent session deletion, pairing-rate-window reset,
 profile-purge, current-season refresh, and closed-season finalization state before removing the
 loopback-published container, network, and storage. This is local synthetic application evidence,
-not a scheduler, production credential/TLS result, capacity result, real-user purge, monitoring
-backend, or deployment.
+not combined scheduler execution, a production credential/TLS result, capacity result, real-user
+purge, monitoring backend, or deployment.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -1180,34 +1205,35 @@ trusted Ingest edge routing/external TLS and direct-origin denial, live secret-m
 injection, the Ingest deployment PostgreSQL credential/TLS connection, distributed rate/backpressure
 controls and load evidence, deployed operation of the local Ingest startup latch and public-ranking
 and pairing module gates plus the new-source, CarRecipe-proposal, and enrollment module/service
-gates, scheduled execution and monitoring of retention cleanup for authentication,
+gates, deployed execution and monitoring of retention cleanup for authentication,
 abandoned-enrollment, audit-event, invitation, CarRecipe-proposal, ingest, finalized-source-day,
 pairing, session, terminal-deletion-job, aged revoked-passkey state, and aged minimized
 revoked-device state plus pairing approval-provenance redaction, pairing-rate-window reset, and
-primary deletion, cleanup for remaining expiring state, the Jobs scheduler and production login/TLS
-path, audited corrections, deployed public-score delivery, cache/backup/tombstone purge and restore
-replay, connector macOS/Linux executable admission, clean-machine live Codex/privacy evidence,
-supported operational account/usage integration, deployed signed-upload egress, credential rotation
-and automated server-revoke composition, hosted Windows portable-smoke evidence, installer and real
-install/upgrade/uninstall lifecycle, automated diagnostic export/support transport, packaging,
-release signing, deployment, and public beta operations remain proposed. The local Ingest key
-reader, kernel, adapter, application composer, Fastify server, and separate host now prove bounded
-protected configuration, raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519
-device, least-privileged pool, fixed-query, orchestration, no-queue/deadline policy, exact listener
-modes, bounded startup/shutdown, result/problem serialization, and one full synthetic loopback
-persistence path, but not those deployed edge, secret, TLS, capacity, or operational boundaries.
-Bounded database score and compatible active-recipe race projections, versioned response-only
-schemas, fail-closed server mappers, bounded PostgreSQL adapters, and local HTTP routes now exist,
-including URL/media parsing, admission/deadline policy, store translation, and final serialization.
-A third compatible local status projection/contract/route now supplies complete-UTC-day freshness
-and preference-gated streak without changing either older response. Cache/invalidation, deployed
-device-proposal ingress, authenticated profile detail, client-rate and production-capacity controls,
-query-plan evidence, monitoring backend, deployment login, certificate, edge policy, and live
-adapter integration do not. The visible web scoring and ranking experience now consumes a validated
-current-week status response from the local route when its separately provisioned database login
-works, but local defaults and every unavailable/error path remain clearly synthetic. Its separate
-score simulator is explicitly hypothetical and never consumes that response or any account value. No
-working database/OAuth login, deployed data, cache, or end-to-end real-user ranking evidence exists.
+primary deletion, cleanup for remaining expiring state, deployed operation and combined PostgreSQL
+evidence for the local Jobs scheduler, a production login/TLS path, audited corrections, deployed
+public-score delivery, cache/backup/tombstone purge and restore replay, connector macOS/Linux
+executable admission, clean-machine live Codex/privacy evidence, supported operational account/usage
+integration, deployed signed-upload egress, credential rotation and automated server-revoke
+composition, hosted Windows portable-smoke evidence, installer and real install/upgrade/uninstall
+lifecycle, automated diagnostic export/support transport, packaging, release signing, deployment,
+and public beta operations remain proposed. The local Ingest key reader, kernel, adapter,
+application composer, Fastify server, and separate host now prove bounded protected configuration,
+raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
+pool, fixed-query, orchestration, no-queue/deadline policy, exact listener modes, bounded
+startup/shutdown, result/problem serialization, and one full synthetic loopback persistence path,
+but not those deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database
+score and compatible active-recipe race projections, versioned response-only schemas, fail-closed
+server mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media
+parsing, admission/deadline policy, store translation, and final serialization. A third compatible
+local status projection/contract/route now supplies complete-UTC-day freshness and preference-gated
+streak without changing either older response. Cache/invalidation, deployed device-proposal ingress,
+authenticated profile detail, client-rate and production-capacity controls, query-plan evidence,
+monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
+The visible web scoring and ranking experience now consumes a validated current-week status response
+from the local route when its separately provisioned database login works, but local defaults and
+every unavailable/error path remain clearly synthetic. Its separate score simulator is explicitly
+hypothetical and never consumes that response or any account value. No working database/OAuth login,
+deployed data, cache, or end-to-end real-user ranking evidence exists.
 
 ## Evidence commands
 
@@ -1225,6 +1251,9 @@ pnpm run build:ingest
 pnpm run test:ingest:postgres-integration
 pnpm run test:jobs:coverage
 pnpm run build:jobs
+pnpm run test:jobs-scheduler:coverage
+pnpm run build:jobs-scheduler
+pnpm run check:jobs-scheduler-entrypoint
 pnpm run test:jobs:postgres-integration
 cargo test --workspace --all-targets --all-features --locked
 pnpm run check:web-build

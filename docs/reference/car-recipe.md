@@ -7,9 +7,10 @@ and validator, deterministic three-theme renderer, exact-session PostgreSQL prop
 boundary, signed-in account editor, bounded device-authenticated proposal ingress, a fixed
 native-store connector command, a checked local Agent Skill, Jobs-only expired-proposal cleanup, and
 separate compatible public race projection. Proposal creation and approval are independently
-default-off behind one exact local module decision while private read/reject remains available. This
-is synthetic/local evidence; no cleanup schedule, released connector, live credential, edge control,
-or deployment is claimed.
+default-off behind one exact local module decision while private read/reject remains available. The
+cleanup command is in the separate default-off local hourly scheduler catalog. This is
+synthetic/local evidence; no combined scheduler/PostgreSQL execution, deployed cadence, released
+connector, live credential, edge control, or deployment is claimed.
 
 ## Closed shape
 
@@ -70,7 +71,9 @@ The raw proposal ID and profile ID never enter HTML. A separate `CommunityRacePa
 only the current approved exact recipe for an `active` profile. It contains no proposal identity,
 state, timestamp, private ID, or account authority, and the stable score response remains unchanged.
 An absent recipe uses a repository-owned presentation fallback. Expired proposal rows are unusable
-immediately and eligible for bounded physical cleanup, but no scheduler invokes it.
+immediately and eligible for bounded physical cleanup. The default-off local scheduler can invoke
+that exact command through the closed Jobs runner, but no combined PostgreSQL result or deployed
+cadence is proven.
 
 ## Rendering and assets
 
