@@ -78,32 +78,36 @@ and alone invokes exact atomic activation with server-owned identifiers behind f
 and a 250-millisecond settlement floor. The authenticated `/connect` flow supplies browser approval.
 Two closed local POST routes now compose both applications behind one shared four-call admission
 boundary, versioned request/response validation, generic problems, and revision 0022's fixed
-global-and-64-bucket distributed rate windows. A bounded Rust `connect` command generates a key and
-client rate ID with the OS CSPRNG, persists resumable state only in a native credential store, and
-performs the exact start/proof/poll sequence. A separate Windows x86_64 `sync` command now checks an
-active record before either bounded fixed-name `PATH` discovery or explicit-path admission of the
-exact `0.144.5` artifact, holds its file against write substitution through launch, uses a fresh
-empty working directory and the existing bounded supervisor, creates fresh context from the active
-native record, and sends one exact signed body to the fixed endpoint without retry or edge-origin
-headers. Its loopback HTTP evidence validates only the five device headers and closed
-acknowledgement. A separate explicit `check-codex` command performs only the identical bounded exact
-candidate admission without an origin, credential-store access, Codex process, account read,
-persistence, or network; its fixed point-in-time result explicitly preserves the empty support
-matrix, and `sync` does not reuse it. Its opt-in diagnostic preview emits only compile-time
-connector/candidate versions, the fixed platform contract, a closed admission class, and that empty
-support state. It retains a failed exit, omits local/account data, and gives the connector no file
-or sharing capability. A separate exact `forget-local` command derives the same native-store account
-from a canonical origin and bounded label, invokes only idempotent credential deletion, and emits
-one fixed warning that server device authority was not revoked. It does not load the record,
-construct a signer, start Codex, or make a network call. No live database connection, real-account
-end-to-end result, released artifact, or deployment is claimed. Candidate release, schema, fixture,
-synthetic-process, admission, composer, pairing, signer, and loopback-upload evidence does not
-populate the support matrix. Phase 0 hosted-publication controls remain blocked on real maintainer
-identities and GitHub configuration. No production-ready anonymous edge perimeter, distributed
-recovery perimeter or cleanup, production secret-manager/edge key injection, trusted external Ingest
-TLS/edge route, production deployment, production Web/Jobs/Ingest database login/TLS integration,
-released or operational connector, supported Codex version, real-user ingestion, end-to-end public
-ranking, or finalization scheduler exists.
+global-and-64-bucket distributed rate windows. Those two connector routes and the two signed-in
+approval routes now each require exact `VIBERACING_PAIRING_ENABLED=true` at module evaluation; the
+tracked default is false and disabled POST reaches no parser, runtime/service, admission
+acquisition, protected configuration, or database work after body cancellation. A bounded Rust
+`connect` command generates a key and client rate ID with the OS CSPRNG, persists resumable state
+only in a native credential store, and performs the exact start/proof/poll sequence. A separate
+Windows x86_64 `sync` command now checks an active record before either bounded fixed-name `PATH`
+discovery or explicit-path admission of the exact `0.144.5` artifact, holds its file against write
+substitution through launch, uses a fresh empty working directory and the existing bounded
+supervisor, creates fresh context from the active native record, and sends one exact signed body to
+the fixed endpoint without retry or edge-origin headers. Its loopback HTTP evidence validates only
+the five device headers and closed acknowledgement. A separate explicit `check-codex` command
+performs only the identical bounded exact candidate admission without an origin, credential-store
+access, Codex process, account read, persistence, or network; its fixed point-in-time result
+explicitly preserves the empty support matrix, and `sync` does not reuse it. Its opt-in diagnostic
+preview emits only compile-time connector/candidate versions, the fixed platform contract, a closed
+admission class, and that empty support state. It retains a failed exit, omits local/account data,
+and gives the connector no file or sharing capability. A separate exact `forget-local` command
+derives the same native-store account from a canonical origin and bounded label, invokes only
+idempotent credential deletion, and emits one fixed warning that server device authority was not
+revoked. It does not load the record, construct a signer, start Codex, or make a network call. No
+live database connection, real-account end-to-end result, released artifact, or deployment is
+claimed. Candidate release, schema, fixture, synthetic-process, admission, composer, pairing,
+signer, and loopback-upload evidence does not populate the support matrix. Phase 0
+hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
+No production-ready anonymous edge perimeter, distributed recovery perimeter or cleanup, production
+secret-manager/edge key injection, trusted external Ingest TLS/edge route, production deployment,
+production Web/Jobs/Ingest database login/TLS integration, released or operational connector,
+supported Codex version, real-user ingestion, end-to-end public ranking, or finalization scheduler
+exists.
 
 ## Implemented and locally verified
 
@@ -253,7 +257,7 @@ ranking, or finalization scheduler exists.
   prove enum, shell, invocation-allowlist, retry, authority, output, front matter, UI metadata,
   command, Git-scope, runtime, public-output, and evidence-claim drift fail closed. No released
   connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and fifty-six accepted design decisions covering Community trust,
+- An ADR lifecycle/template and fifty-seven accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -274,7 +278,7 @@ ranking, or finalization scheduler exists.
   revoked-device retention cleanup, bounded pairing-rate-window reset, bounded candidate executable
   discovery, the bounded candidate artifact diagnostic, the Windows portable connector lifecycle
   smoke, the redacted Codex diagnostic preview, the local Ingest startup latch, and the local
-  public-ranking route gate.
+  public-ranking and pairing route gates.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -835,9 +839,12 @@ ranking, or finalization scheduler exists.
   never reaches the client, and raw pairing/source IDs exist only inside encrypted source-control or
   HttpOnly approval continuations rather than client-readable plaintext or logs. This is
   HTTP/runtime evidence only, not visual browser, OAuth-provider, authenticator, or database E2E.
-  There is no invite issuer UI, anonymous pairing-start or recovery edge attempt policy,
-  expired-state cleanup scheduling or notification, live OAuth/authenticator/database integration,
-  monitoring, or deployment evidence.
+  Both approval routes now enforce literal-true pairing enablement before constructing that runtime,
+  reading origin/body/cookies, acquiring admission, starting WebAuthn, or accessing pairing state.
+  The `/connect` shell and its separate session inventory may remain visible while actions fail
+  generically. There is no invite issuer UI, anonymous pairing-start or recovery edge attempt
+  policy, expired-state cleanup scheduling or notification, live OAuth/authenticator/database
+  integration, monitoring, or deployment evidence.
 - A private current-week account score slice now reuses the exact possessed session and one combined
   Web/Auth pool checkout for visibility plus revision 0019's derived-score read. The server-only
   mapper accepts one empty sentinel or exactly seven consecutive 0–1000 daily scores with coherent
@@ -864,9 +871,14 @@ ranking, or finalization scheduler exists.
   close. The same Web workspace now adds exact start/poll body/header routes, one aggregate service,
   domain-separated anonymous client digests, mandatory deployment-private global/bucket/window
   limits, and retry-safe activation result reads that require a fresh valid possession proof before
-  returning the existing binding. Revision 0022 retains only 130 fixed aggregate counter rows and
-  never the client ID or digest. These local boundaries still do not prove a live login/TLS
-  connection, edge capacity, cleanup schedule, monitoring, or deployment.
+  returning the existing binding. All four pairing route modules resolve exact
+  `VIBERACING_PAIRING_ENABLED=true` once at load; every alternate or unreadable state returns the
+  existing generic no-store 503 after body cancellation but before request parsing, runtime/service
+  construction, admission acquisition, protected configuration, or database work. Connector non-POST
+  methods retain 405 and the tracked example remains false. Revision 0022 retains only 130 fixed
+  aggregate counter rows and never the client ID or digest. This module gate is not dynamic,
+  deployed, or the independent source-creation control. These local boundaries still do not prove a
+  live login/TLS connection, edge capacity, cleanup schedule, monitoring, or deployment.
 - A Rust connector binary exposes a bounded `connect` command that accepts only a canonical HTTPS
   origin or explicit loopback HTTP development origin and a bounded label. It disables proxies and
   redirects, uses platform TLS verification, bounds request/response/time, generates an Ed25519 key
@@ -1099,34 +1111,35 @@ Invite issuance UI, trusted anonymous login/pairing/recovery edge limits, recove
 trusted Ingest edge routing/external TLS and direct-origin denial, live secret-manager/edge key
 injection, the Ingest deployment PostgreSQL credential/TLS connection, distributed rate/backpressure
 controls and load evidence, deployed operation of the local Ingest startup latch and public-ranking
-module gate, independent kill switches for the remaining capabilities, scheduled execution and
-monitoring of retention cleanup for authentication, audit-event, invitation, CarRecipe-proposal,
-ingest, pairing, session, terminal-deletion-job, aged revoked-passkey state, and aged minimized
-revoked-device state plus pairing approval-provenance redaction, pairing-rate-window reset, and
-primary deletion, cleanup for remaining expiring state, the Jobs scheduler and production login/TLS
-path, audited corrections, deployed public-score delivery, cache/backup/tombstone purge and restore
-replay, connector macOS/Linux executable admission, clean-machine live Codex/privacy evidence,
-supported operational account/usage integration, deployed signed-upload egress, credential rotation
-and automated server-revoke composition, hosted Windows portable-smoke evidence, installer and real
-install/upgrade/uninstall lifecycle, automated diagnostic export/support transport, packaging,
-release signing, deployment, and public beta operations remain proposed. The local Ingest key
-reader, kernel, adapter, application composer, Fastify server, and separate host now prove bounded
-protected configuration, raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519
-device, least-privileged pool, fixed-query, orchestration, no-queue/deadline policy, exact listener
-modes, bounded startup/shutdown, result/problem serialization, and one full synthetic loopback
-persistence path, but not those deployed edge, secret, TLS, capacity, or operational boundaries.
-Bounded database score and compatible active-recipe race projections, versioned response-only
-schemas, fail-closed server mappers, bounded PostgreSQL adapters, and local HTTP routes now exist,
-including URL/media parsing, admission/deadline policy, store translation, and final serialization.
-A third compatible local status projection/contract/route now supplies complete-UTC-day freshness
-and preference-gated streak without changing either older response. Cache/invalidation, deployed
-device-proposal ingress, authenticated profile detail, client-rate and production-capacity controls,
-query-plan evidence, monitoring backend, deployment login, certificate, edge policy, and live
-adapter integration do not. The visible web scoring and ranking experience now consumes a validated
-current-week status response from the local route when its separately provisioned database login
-works, but local defaults and every unavailable/error path remain clearly synthetic. Its separate
-score simulator is explicitly hypothetical and never consumes that response or any account value. No
-working database/OAuth login, deployed data, cache, or end-to-end real-user ranking evidence exists.
+and pairing module gates, independent kill switches for the remaining capabilities including source
+creation, scheduled execution and monitoring of retention cleanup for authentication, audit-event,
+invitation, CarRecipe-proposal, ingest, pairing, session, terminal-deletion-job, aged
+revoked-passkey state, and aged minimized revoked-device state plus pairing approval-provenance
+redaction, pairing-rate-window reset, and primary deletion, cleanup for remaining expiring state,
+the Jobs scheduler and production login/TLS path, audited corrections, deployed public-score
+delivery, cache/backup/tombstone purge and restore replay, connector macOS/Linux executable
+admission, clean-machine live Codex/privacy evidence, supported operational account/usage
+integration, deployed signed-upload egress, credential rotation and automated server-revoke
+composition, hosted Windows portable-smoke evidence, installer and real install/upgrade/uninstall
+lifecycle, automated diagnostic export/support transport, packaging, release signing, deployment,
+and public beta operations remain proposed. The local Ingest key reader, kernel, adapter,
+application composer, Fastify server, and separate host now prove bounded protected configuration,
+raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
+pool, fixed-query, orchestration, no-queue/deadline policy, exact listener modes, bounded
+startup/shutdown, result/problem serialization, and one full synthetic loopback persistence path,
+but not those deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database
+score and compatible active-recipe race projections, versioned response-only schemas, fail-closed
+server mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media
+parsing, admission/deadline policy, store translation, and final serialization. A third compatible
+local status projection/contract/route now supplies complete-UTC-day freshness and preference-gated
+streak without changing either older response. Cache/invalidation, deployed device-proposal ingress,
+authenticated profile detail, client-rate and production-capacity controls, query-plan evidence,
+monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
+The visible web scoring and ranking experience now consumes a validated current-week status response
+from the local route when its separately provisioned database login works, but local defaults and
+every unavailable/error path remain clearly synthetic. Its separate score simulator is explicitly
+hypothetical and never consumes that response or any account value. No working database/OAuth login,
+deployed data, cache, or end-to-end real-user ranking evidence exists.
 
 ## Evidence commands
 

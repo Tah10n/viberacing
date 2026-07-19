@@ -183,24 +183,27 @@ metadata и полный fingerprint публичного ключа, явно �
 source без раскрытия его raw ID, а перед атомарным одобрением точного выбора требует свежий passkey
 assertion. Два закрытых локальных POST route открывают versioned pairing start/poll contracts через
 общий лимит в четыре вызова, фиксированную глобальную и 64-bucket PostgreSQL rate policy,
-ограниченные body и generic `no-store` ответы. Локальная Rust-команда `connect` получает Ed25519 key
-и анонимный rate ID из OS CSPRNG, сохраняет prepared/pending/active record только в нативном
-credential store, доказывает владение ключом и возобновляет прерванный poll, не печатая key, token,
-challenge, source или device ID. Отдельная точная команда `forget-local` может удалить только эту
-нативную запись для canonical origin/label, не читая её и не обращаясь к Vibe Racing; фиксированный
-результат предупреждает, что команда не выполняет server device revoke: он остаётся отдельным
-authenticated account action. Отдельная явно вызываемая команда `check-codex` выполняет только ту же
-exact Windows candidate artifact admission без origin, доступа к credential store, запуска Codex,
-чтения account, сохранения результата или сети. Её фиксированный point-in-time результат прямо
-сообщает, что ни одна версия Codex не поддерживается. Отдельная Windows x86_64 команда `sync`
-сначала проверяет active record, затем рассматривает не более 64 абсолютных `PATH` directories и
-четырёх exact-size hashes только для двух фиксированных имён либо использует explicit path fallback.
-После одинаковой canonical size/SHA-256 admission она удерживает и запускает exact `0.144.5`
-executable в новом пустом working directory, создаёт свежие request time/ID/nonce, один раз
-отправляет точное signed body на фиксированный sync path и принимает только closed acknowledgement.
-Она не повторяет ambiguous POST и не отправляет edge origin proof. Всё ещё нет macOS/Linux
-admission, live database connection, capacity evidence, credential rotation, automatic server-revoke
-composition, packaging, release, поддерживаемого sync connector и deployment.
+ограниченные body и generic `no-store` ответы. Start, poll и два browser approval route остаются
+выключенными, пока каждый module при загрузке не получит точное `VIBERACING_PAIRING_ENABLED=true`;
+tracked default равен `false`, а этот локальный gate не является динамическим/deployed switch или
+отдельным source-creation control. Локальная Rust-команда `connect` получает Ed25519 key и анонимный
+rate ID из OS CSPRNG, сохраняет prepared/pending/active record только в нативном credential store,
+доказывает владение ключом и возобновляет прерванный poll, не печатая key, token, challenge, source
+или device ID. Отдельная точная команда `forget-local` может удалить только эту нативную запись для
+canonical origin/label, не читая её и не обращаясь к Vibe Racing; фиксированный результат
+предупреждает, что команда не выполняет server device revoke: он остаётся отдельным authenticated
+account action. Отдельная явно вызываемая команда `check-codex` выполняет только ту же exact Windows
+candidate artifact admission без origin, доступа к credential store, запуска Codex, чтения account,
+сохранения результата или сети. Её фиксированный point-in-time результат прямо сообщает, что ни одна
+версия Codex не поддерживается. Отдельная Windows x86_64 команда `sync` сначала проверяет active
+record, затем рассматривает не более 64 абсолютных `PATH` directories и четырёх exact-size hashes
+только для двух фиксированных имён либо использует explicit path fallback. После одинаковой
+canonical size/SHA-256 admission она удерживает и запускает exact `0.144.5` executable в новом
+пустом working directory, создаёт свежие request time/ID/nonce, один раз отправляет точное signed
+body на фиксированный sync path и принимает только closed acknowledgement. Она не повторяет
+ambiguous POST и не отправляет edge origin proof. Всё ещё нет macOS/Linux admission, live database
+connection, capacity evidence, credential rotation, automatic server-revoke composition, packaging,
+release, поддерживаемого sync connector и deployment.
 
 Также добавлена 31 SQL-миграция: 27 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring/CarRecipe

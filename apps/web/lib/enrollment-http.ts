@@ -74,6 +74,7 @@ export interface EnrollmentHttp {
 interface EnrollmentHttpDependencies {
   readonly admission: EnrollmentAdmission;
   readonly getRuntime: () => EnrollmentRuntime;
+  readonly pairingEnabled?: unknown;
 }
 
 function problem(kind: "invalid_request" | "temporarily_unavailable" | "unauthorized"): Response {
@@ -611,6 +612,10 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
       }
     },
     async pairingApprovalOptions(request: Request): Promise<Response> {
+      if (dependencies.pairingEnabled !== true) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
         discardBody(request);
@@ -671,6 +676,10 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
       }
     },
     async pairingApprovalVerify(request: Request): Promise<Response> {
+      if (dependencies.pairingEnabled !== true) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
         discardBody(request);

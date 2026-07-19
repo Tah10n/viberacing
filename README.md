@@ -187,8 +187,10 @@ atomically approving a new opaque source. Its PostgreSQL lookup counts attempts 
 session across Web instances under deployment-private limits. Two closed local POST routes now
 expose the versioned pairing start/poll contracts through shared four-call admission, a
 fixed-storage global-and-64-bucket PostgreSQL rate policy, bounded bodies, generic failures, and
-no-store/no-CORS responses. A local Rust `connect` command generates an Ed25519 key and anonymous
-rate ID with the OS CSPRNG, persists a versioned prepared/pending/active record only in the native
+no-store/no-CORS responses. Connector start/poll and signed-in approval options/verification each
+remain unavailable unless their route module resolves exact `VIBERACING_PAIRING_ENABLED=true`; the
+tracked default is false. A local Rust `connect` command generates an Ed25519 key and anonymous rate
+ID with the OS CSPRNG, persists a versioned prepared/pending/active record only in the native
 credential store, proves possession, and resumes an interrupted pending poll without printing key,
 token, challenge, source, or device IDs. A separate exact `forget-local` command can delete only
 that canonical origin/label native entry without reading it or contacting Vibe Racing; its fixed
@@ -329,21 +331,23 @@ continuation; the normal session is returned only after exact WebAuthn verificat
 database completion. The local `/connect` flow now reviews one pending device, explicitly selects a
 new or active owned opaque source without exposing its raw ID, and fresh-passkey approves that exact
 choice under a database-backed session attempt window; the local start/poll routes and native-store
-Rust client complete that synthetic connection path. The separate candidate-only Windows sync
-command now joins the reviewed local collector, signer, and one bounded upload. A separate
-credential-free `check-codex` command verifies only point-in-time exact candidate admission and
-never launches it, reads an account, or uses the network. Its explicit redacted preview gives a user
-one complete stdout result to inspect before sharing and still declares that no Codex version is
-supported. A separate Windows release-profile smoke copies the `0.0.0` connector to an isolated
-temporary directory, checks the exact command surface and generic missing-candidate failure, then
-proves removal; secretless CI declares the same bounded job without uploading its binary. No
-repository test runs a real Codex account or deployed service, and no hosted Windows result is
-claimed from the local workflow definition. There is still no deployed Ingest/score/pairing API,
-supported sync connector, trusted edge limit or direct-origin policy, anonymous recovery edge
-policy, recovery notification, cleanup/scoring/deletion scheduler, audited correction flow,
-cache/backup/tombstone purge, restore replay, live OAuth/authenticator/Web/Jobs database
-integration, deployment Ingest credential/TLS integration, cross-platform connector evidence,
-installer, upgrade/revoke composition, credential rotation, released binary, or deployed database.
+Rust client complete that synthetic connection path only when all four pairing modules were
+explicitly enabled before load. This local control is not a dynamic/deployed switch and does not
+implement the independent source-creation gate. The separate candidate-only Windows sync command now
+joins the reviewed local collector, signer, and one bounded upload. A separate credential-free
+`check-codex` command verifies only point-in-time exact candidate admission and never launches it,
+reads an account, or uses the network. Its explicit redacted preview gives a user one complete
+stdout result to inspect before sharing and still declares that no Codex version is supported. A
+separate Windows release-profile smoke copies the `0.0.0` connector to an isolated temporary
+directory, checks the exact command surface and generic missing-candidate failure, then proves
+removal; secretless CI declares the same bounded job without uploading its binary. No repository
+test runs a real Codex account or deployed service, and no hosted Windows result is claimed from the
+local workflow definition. There is still no deployed Ingest/score/pairing API, supported sync
+connector, trusted edge limit or direct-origin policy, anonymous recovery edge policy, recovery
+notification, cleanup/scoring/deletion scheduler, audited correction flow, cache/backup/tombstone
+purge, restore replay, live OAuth/authenticator/Web/Jobs database integration, deployment Ingest
+credential/TLS integration, cross-platform connector evidence, installer, upgrade/revoke
+composition, credential rotation, released binary, or deployed database.
 
 ## Run and verify the synthetic prototype
 

@@ -248,6 +248,16 @@ HTTP boundary; it adds no new response or retained field. Any dynamic control, o
 monitoring sink, or deployment audit still needs a separate mapped purpose, access policy, and
 retention decision.
 
+ADR 0057 adds the non-personal `VIBERACING_PAIRING_ENABLED` Operational module-load value. The
+server-only resolver inspects only that own string field and retains one frozen boolean decision in
+each pairing route module. It does not serialize, log, export, persist, transmit, or attach the
+input to a request, metric, trace, audit event, cache key, database row, cookie, native credential,
+browser payload, or error. Disabled POST may cancel its existing request body and uses the already
+mapped opaque request ID plus generic no-store 503; it adds no response or retained field. The
+`/connect` shell adds no flag exposure or browser persistence. Any dynamic control, operator event,
+monitoring sink, or deployment audit still needs a separate mapped purpose, access policy, and
+retention decision.
+
 ADR 0021 adds no collected or retained field. The connector library transiently validates the stable
 initialization response's Codex home, platform family, operating-system name, and user agent under
 fixed string/frame bounds, then discards all four values before returning. ADR 0022 then validates

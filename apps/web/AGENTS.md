@@ -41,6 +41,12 @@ apply.
   generic 503 before URL/query/header parsing, admission acquisition, or store construction; keep
   the tracked example false. Do not add a truthy/default-on parser, per-request environment read,
   alternate enable source, or claim dynamic/deployed route and cache denial.
+- Keep connector pairing start/poll and signed-in approval options/verification behind exact
+  `VIBERACING_PAIRING_ENABLED=true` resolved once per route-module evaluation. Disabled POST may
+  cancel its body but must return the existing generic 503 before request parsing, runtime/service
+  construction, admission acquisition, protected configuration, or database work; connector non-POST
+  methods remain 405 and the tracked example remains false. Do not treat this as a dynamic/deployed
+  switch or as the still-separate source-creation control.
 - Pairing reuses that environment-owned Web/Auth login only through its separate read-write pool.
   Preserve the exact role/login/search-path/read-write probe, two fixed verifier candidates,
   protected primary/secondary HMAC capability, strict proof-before-activation sequence, server-owned

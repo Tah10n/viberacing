@@ -77,9 +77,46 @@ function service(
 }
 
 describe("connector pairing HTTP boundary", () => {
+  it.each([false, undefined, "true", 1])(
+    "fails closed before request parsing or service construction for enable value %#",
+    async (enabled) => {
+      const getService = vi.fn(() => Promise.reject(new Error("service-must-not-run")));
+      const http = createPairingHttp({ enabled, getService });
+      const makeHostileRequest = () =>
+        new Proxy(new Request(startPath, { method: "POST" }), {
+          get(_target, key) {
+            if (key === "body") {
+              return null;
+            }
+            throw new Error(`request-field-must-not-run:${String(key)}`);
+          },
+        });
+
+      for (const invoke of [
+        (request: Request) => http.start(request),
+        (request: Request) => http.poll(request),
+      ]) {
+        const response = await invoke(makeHostileRequest());
+        expect(response.status).toBe(503);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+        expect(response.headers.get("vary")).toBe("Accept");
+        expect(response.headers.has("access-control-allow-origin")).toBe(false);
+        await expect(response.json()).resolves.toMatchObject({
+          errorCode: "temporarily_unavailable",
+          status: 503,
+        });
+      }
+      expect(getService).not.toHaveBeenCalled();
+    },
+  );
+
   it("validates and dispatches one bounded start request", async () => {
     const currentService = service();
-    const http = createPairingHttp({ getService: () => Promise.resolve(currentService) });
+    const http = createPairingHttp({
+      enabled: true,
+      getService: () => Promise.resolve(currentService),
+    });
 
     const response = await http.start(request(startPath, JSON.stringify(startBody)));
 
@@ -108,6 +145,7 @@ describe("connector pairing HTTP boundary", () => {
   it("returns only an empty pending page or one activated binding", async () => {
     const pendingService = service();
     const pendingHttp = createPairingHttp({
+      enabled: true,
       getService: () => Promise.resolve(pendingService),
     });
     const pending = await pendingHttp.poll(request(pollPath, JSON.stringify(pollBody)));
@@ -127,6 +165,7 @@ describe("connector pairing HTTP boundary", () => {
       },
     });
     const activatedHttp = createPairingHttp({
+      enabled: true,
       getService: () => Promise.resolve(activatedService),
     });
     const activated = await activatedHttp.poll(request(pollPath, JSON.stringify(pollBody)));
@@ -194,7 +233,7 @@ describe("connector pairing HTTP boundary", () => {
     },
   ])("rejects $label before service initialization", async ({ make }) => {
     const getService = vi.fn(() => Promise.resolve(service()));
-    const response = await createPairingHttp({ getService }).start(make());
+    const response = await createPairingHttp({ enabled: true, getService }).start(make());
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ errorCode: "invalid_request" });
@@ -203,7 +242,7 @@ describe("connector pairing HTTP boundary", () => {
 
   it("rejects unacceptable output negotiation before reading the body", async () => {
     const getService = vi.fn(() => Promise.resolve(service()));
-    const response = await createPairingHttp({ getService }).poll(
+    const response = await createPairingHttp({ enabled: true, getService }).poll(
       request(pollPath, JSON.stringify(pollBody), { accept: "text/html" }),
     );
 
@@ -223,6 +262,7 @@ describe("connector pairing HTTP boundary", () => {
     "maps start decisions to the closed problem contract",
     async ({ expected, result, status }) => {
       const response = await createPairingHttp({
+        enabled: true,
         getService: () => Promise.resolve(service({ start: result })),
       }).start(request(startPath, JSON.stringify(startBody)));
 
@@ -233,16 +273,19 @@ describe("connector pairing HTTP boundary", () => {
 
   it("contains service initialization, execution, and output-contract failures", async () => {
     const unavailable = await createPairingHttp({
+      enabled: true,
       getService: () => Promise.reject(new Error("private configuration")),
     }).start(request(startPath, JSON.stringify(startBody)));
     expect(unavailable.status).toBe(503);
 
     const execution = await createPairingHttp({
+      enabled: true,
       getService: () => Promise.resolve(service({ pollError: new Error("private query") })),
     }).poll(request(pollPath, JSON.stringify(pollBody)));
     expect(execution.status).toBe(503);
 
     const invalidOutput = await createPairingHttp({
+      enabled: true,
       getService: () =>
         Promise.resolve(
           service({
@@ -264,6 +307,7 @@ describe("connector pairing HTTP boundary", () => {
 
   it("closes every non-POST method with one Allow header", async () => {
     const response = createPairingHttp({
+      enabled: true,
       getService: () => Promise.resolve(service()),
     }).methodNotAllowed();
 

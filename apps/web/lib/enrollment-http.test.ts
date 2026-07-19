@@ -840,10 +840,54 @@ describe("enrollment HTTP boundary", () => {
     });
   });
 
+  it.each([false, undefined, "true", 1])(
+    "fails closed before pairing runtime, request parsing, or admission acquisition for enable value %#",
+    async (pairingEnabled) => {
+      const getRuntime = vi.fn(() => {
+        throw new Error("runtime-must-not-run");
+      });
+      const tryAcquire = vi.fn(() => {
+        throw new Error("admission-must-not-run");
+      });
+      const http = createEnrollmentHttp({
+        admission: Object.freeze({ tryAcquire }),
+        getRuntime,
+        pairingEnabled,
+      });
+      const makeHostileRequest = () =>
+        new Proxy(new Request(`${origin}/auth/pairing/options`, { method: "POST" }), {
+          get(_target, key) {
+            if (key === "body") {
+              return null;
+            }
+            throw new Error(`request-field-must-not-run:${String(key)}`);
+          },
+        });
+
+      for (const invoke of [
+        (request: Request) => http.pairingApprovalOptions(request),
+        (request: Request) => http.pairingApprovalVerify(request),
+      ]) {
+        const response = await invoke(makeHostileRequest());
+        expect(response.status).toBe(503);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+        expect(response.headers.has("access-control-allow-origin")).toBe(false);
+        await expect(response.json()).resolves.toMatchObject({
+          errorCode: "temporarily_unavailable",
+          status: 503,
+        });
+      }
+      expect(getRuntime).not.toHaveBeenCalled();
+      expect(tryAcquire).not.toHaveBeenCalled();
+    },
+  );
+
   it("serves pairing review and approval as two closed same-origin steps", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
       getRuntime: () => runtime,
+      pairingEnabled: true,
     });
     const options = await http.pairingApprovalOptions(
       post(

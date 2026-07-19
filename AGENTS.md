@@ -54,13 +54,17 @@ response-contract, and exact persistence behavior before removing the container.
 score/race/status routes now share a second exact default-off module-load gate before query/header
 parsing, admission acquisition, or storage work. Their visible current-week browser consumer retains
 rounded freshness, optional preference-gated streak, and an explicit validated synthetic fallback
-while the tracked gate is false. Neither local gate is a deployed dynamic kill switch. The public
-home also has a local-only EN/RU score simulator that persists or transmits no hypothetical input;
-the stable score and legacy race response contracts remain unchanged. These local boundaries still
-have no deployment proof key or secret-manager binding, externally verified TLS/edge route,
-deployment database credential, capacity evidence, deployment, or real-data result. A separate local
-enrollment slice now implements exact invite parsing, GitHub OAuth state plus PKCE with no extra
-scope, purpose-separated encrypted cookies, atomic profile enrollment, required initial WebAuthn
+while the tracked gate is false. Connector pairing start/poll and signed-in approval
+options/verification now use a third exact default-off capability gate, independently resolved at
+module load before request parsing, runtime/service construction, admission acquisition, protected
+configuration, or database work. None of these local gates is a deployed dynamic kill switch, and
+the pairing gate is not the independent source-creation control. The public home also has a
+local-only EN/RU score simulator that persists or transmits no hypothetical input; the stable score
+and legacy race response contracts remain unchanged. These local boundaries still have no deployment
+proof key or secret-manager binding, externally verified TLS/edge route, deployment database
+credential, capacity evidence, deployment, or real-data result. A separate local enrollment slice
+now implements exact invite parsing, GitHub OAuth state plus PKCE with no extra scope,
+purpose-separated encrypted cookies, atomic profile enrollment, required initial WebAuthn
 registration plus pending-session rotation, returning discoverable-credential passkey login, a
 session-scoped minimal passkey inventory, an account page, same-origin public-profile hide/show, a
 session-derived active-device inventory, immediate source pause, passkey-protected paused-source
@@ -107,27 +111,28 @@ metadata plus a full public-key fingerprint, offers a new source or an active ow
 an encrypted session-bound control, and requires a separate fresh passkey assertion before atomic
 new/existing-source approval. A closed local start/poll HTTP boundary now shares four-call
 admission, applies a fixed-storage global-and-64-bucket PostgreSQL rate policy, and serializes only
-the versioned contracts. A bounded Rust `connect` command generates one Ed25519 key through the OS
-CSPRNG, stores its versioned state only in the native credential store, resumes polling, and
-persists the activated binding without printing bearer or key material. A separate exact
-`forget-local` command deletes only the canonical origin/label native entry without loading it or
-contacting the service, and states that it did not revoke server device authority. A separate
-explicit `check-codex` command reuses only the bounded exact Windows candidate admission without an
-origin, credential-store access, Codex process, account read, persistence, or network, and reports
-that no version is supported. Its opt-in diagnostic preview emits only a closed local v1 summary of
-compile-time version, fixed platform contract, admission class, and empty support state; it retains
-failure status, omits local values, and neither saves nor sends output. A separate Windows x86_64
-development `sync` command can construct the private launch/context/key capabilities only after
-active-record review and either bounded fixed-name `PATH` discovery or explicit-path admission of
-the exact `0.144.5` artifact. It then sends one fixed signed request and validates one closed
-acknowledgement without retry or edge-origin headers. A separate fixed `propose-car` command starts
-no Codex process, accepts only exact enum flags and a bounded seed, signs one fresh proposal-domain
-request with the same active native key, sends once without retry, and validates only a generic
-acknowledgement. A checked local Agent Skill now reduces a styling request to those exact fields,
-requires explicit shell-safe origin/label values, invokes only that command once, and receives no
-read, approval, or activation authority. A separate Windows release-profile smoke copies the
-repository-built `0.0.0` connector into a bounded temporary directory, checks only exact help and
-missing-candidate behavior with a cleared environment, verifies digest/inventory stability, and
+the versioned contracts; it and both signed-in approval routes remain unavailable unless their
+modules resolve exact `VIBERACING_PAIRING_ENABLED=true`. A bounded Rust `connect` command generates
+one Ed25519 key through the OS CSPRNG, stores its versioned state only in the native credential
+store, resumes polling, and persists the activated binding without printing bearer or key material.
+A separate exact `forget-local` command deletes only the canonical origin/label native entry without
+loading it or contacting the service, and states that it did not revoke server device authority. A
+separate explicit `check-codex` command reuses only the bounded exact Windows candidate admission
+without an origin, credential-store access, Codex process, account read, persistence, or network,
+and reports that no version is supported. Its opt-in diagnostic preview emits only a closed local v1
+summary of compile-time version, fixed platform contract, admission class, and empty support state;
+it retains failure status, omits local values, and neither saves nor sends output. A separate
+Windows x86_64 development `sync` command can construct the private launch/context/key capabilities
+only after active-record review and either bounded fixed-name `PATH` discovery or explicit-path
+admission of the exact `0.144.5` artifact. It then sends one fixed signed request and validates one
+closed acknowledgement without retry or edge-origin headers. A separate fixed `propose-car` command
+starts no Codex process, accepts only exact enum flags and a bounded seed, signs one fresh
+proposal-domain request with the same active native key, sends once without retry, and validates
+only a generic acknowledgement. A checked local Agent Skill now reduces a styling request to those
+exact fields, requires explicit shell-safe origin/label values, invokes only that command once, and
+receives no read, approval, or activation authority. A separate Windows release-profile smoke copies
+the repository-built `0.0.0` connector into a bounded temporary directory, checks only exact help
+and missing-candidate behavior with a cleared environment, verifies digest/inventory stability, and
 removes the copy. Secretless no-upload CI declares the same `windows-2025` job, but no hosted pass
 is claimed from the local tree. There is still no supported version, macOS/Linux admission,
 clean-machine real-account result, real package install/upgrade/uninstall lifecycle, credential
@@ -158,8 +163,9 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
 - `apps/web/` contains the synthetic Next.js frontend, default-off local public score/race/status
   routes and adapters, bounded invite/OAuth/initial-passkey enrollment, returning-passkey login,
   private account controls, and passkey-protected recovery-code rotation and replacement-passkey
-  sign-in, plus the pure pairing- possession verifier, local pairing start/poll routes and
-  applications, and nested agent guidance. Read `apps/web/AGENTS.md` before editing it.
+  sign-in, plus the pure pairing-possession verifier, default-off local pairing start/poll and
+  approval routes, their applications, and nested agent guidance. Read `apps/web/AGENTS.md` before
+  editing it.
 - `apps/jobs/` contains the bounded local one-shot maintenance runner and nested least-privilege
   guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL

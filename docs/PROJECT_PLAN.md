@@ -189,6 +189,12 @@ flowchart LR
   selection through an encrypted session-bound control, and fresh-passkey atomic approval.
   Distributed recovery/anonymous edge attempt policy, expired-state cleanup scheduling and
   notification, live provider/database credentials, and deployment remain separate gates.
+- Pairing enable gate: connector start/poll and browser approval options/verification each resolve
+  exact `VIBERACING_PAIRING_ENABLED=true` once at route-module evaluation. Every alternate or
+  unreadable value cancels an available request body and returns the existing generic 503 before
+  request parsing, runtime/service construction, admission acquisition, protected configuration, or
+  database work. The tracked example is false. This proves no deployed route denial, worker reload,
+  old-instance drain, dynamic switch, or independent source-creation control.
 - Public ranking reads: all three local score/race/status GET modules resolve exact
   `VIBERACING_PUBLIC_RANKING_ENABLED=true` once at module evaluation. Every other or unreadable
   value returns the existing generic 503 before query/header parsing, admission acquisition, or
@@ -316,22 +322,26 @@ application boundary, revision 0022's fixed global-and-64-bucket distributed rat
 pairing-only Rust command. The client uses OS randomness, native credential storage without a
 plaintext fallback, HTTPS with platform trust (or loopback HTTP for development), bounded
 bodies/time/retries, exact possession proof, resumable prepared/pending/active state, and
-non-reflective output. This evidence is still local and synthetic: there is no live Web
-login/database result, edge capacity policy, cross-platform execution matrix, released binary, Codex
-support, scheduler, or deployed result. ADR 0031 adds the next one-shot Windows development command:
-exact artifact admission, fresh context from the active record, the existing composer/signer, and
-one fixed no-proxy/no-redirect upload with a closed acknowledgement. ADR 0051 adds resource-bounded
-discovery through two fixed filenames and at most four exact-size hashes, plus the unchanged
-explicit path fallback. ADR 0052 adds a credential-free candidate artifact check that performs only
-that admission and emits an explicit unsupported result; the sync command still re-admits only after
-active-record validation. ADR 0053 then builds the locked Windows release profile, copies it under a
-bounded temporary root, checks only help and missing-candidate behavior with no ambient
-credential/network environment, and removes it. ADR 0054 adds the closed redacted stdout preview to
-the same candidate check without changing admission or support. These decisions add no retry, edge
-proof, cross-platform evidence, package, installer, release, or support claim. ADR 0041 adds a
-separate exact `forget-local` command that deletes only the native origin/label record without
-reading it or contacting the service. It is idempotent and explicitly does not claim server revoke;
-rotation and revoke composition remain separate gates.
+non-reflective output. ADR 0057 places connector start/poll and both signed-in approval operations
+behind exact `VIBERACING_PAIRING_ENABLED=true` at route-module evaluation. Disabled POST cancels an
+available body and returns generic no-store 503 before parsing, runtime/service construction,
+admission acquisition, protected configuration, or database work; explicit connector non-POST
+methods retain 405. The tracked example remains false. This evidence is still local and synthetic:
+there is no live Web login/database result, edge capacity policy, cross-platform execution matrix,
+released binary, Codex support, scheduler, or deployed result. ADR 0031 adds the next one-shot
+Windows development command: exact artifact admission, fresh context from the active record, the
+existing composer/signer, and one fixed no-proxy/no-redirect upload with a closed acknowledgement.
+ADR 0051 adds resource-bounded discovery through two fixed filenames and at most four exact-size
+hashes, plus the unchanged explicit path fallback. ADR 0052 adds a credential-free candidate
+artifact check that performs only that admission and emits an explicit unsupported result; the sync
+command still re-admits only after active-record validation. ADR 0053 then builds the locked Windows
+release profile, copies it under a bounded temporary root, checks only help and missing-candidate
+behavior with no ambient credential/network environment, and removes it. ADR 0054 adds the closed
+redacted stdout preview to the same candidate check without changing admission or support. These
+decisions add no retry, edge proof, cross-platform evidence, package, installer, release, or support
+claim. ADR 0041 adds a separate exact `forget-local` command that deletes only the native
+origin/label record without reading it or contacting the service. It is idempotent and explicitly
+does not claim server revoke; rotation and revoke composition remain separate gates.
 
 ### Date semantics
 
@@ -466,6 +476,11 @@ event.
 8. The server atomically activates the binding and issues a public device ID tied to that public key
    and exactly one source.
 
+Steps 4 through 8 are unavailable at their four HTTP entry modules unless each resolved exact
+`VIBERACING_PAIRING_ENABLED=true` when loaded. Disabled POST reaches no pairing runtime, service,
+admission acquisition, protected key, WebAuthn ceremony, or database capability. This local decision
+is not a dynamic/deployed switch and does not implement the independent source-creation gate.
+
 The poll token is short-lived, one-time, and insufficient to approve or activate a device without
 the browser step-up and key-possession proof. The server stores only its keyed verifier; the
 connector persists the plaintext only inside its native OS credential record while the transaction
@@ -564,9 +579,9 @@ never changes score, rank, authority, or finalized state.
 
 ADR 0056 places all three read operations behind exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` at
 route-module evaluation. Disabled GET uses their already documented generic no-store 503 before
-query, `Accept`, admission, or storage work; non-GET methods retain 405. The tracked configuration
-remains false. This does not change a component or operation schema and is not deployed, dynamic, or
-cache-denial evidence.
+query, `Accept`, admission acquisition, or storage work; non-GET methods retain 405. The tracked
+configuration remains false. This does not change a component or operation schema and is not
+deployed, dynamic, or cache-denial evidence.
 
 The visible home race now uses that separate same-origin status operation for its current
 server-selected Monday. It accepts only the bounded Public response, loads its compact independent
@@ -768,9 +783,10 @@ cleanup, redaction, or reset has a scheduler or deployed cadence.
 - Sensitive actions require a reason and produce an external, append-only audit event.
 - Operators cannot retrieve Codex prompts or account email because those values are never collected.
 - Kill switches independently disable enrollment, pairing, source creation, ingestion, proposals,
-  and public ranking. Local default-off gates now cover Ingest startup and the three public-ranking
-  route modules; deployed restart/route/cache-denial/runbook behavior and every other capability
-  switch remain separate gates.
+  and public ranking. Local default-off gates now cover Ingest startup, the three public-ranking
+  route modules, and the four pairing route modules; deployed restart/route/cache-denial/runbook
+  behavior and every other capability switch remain separate gates. The pairing decision is not the
+  independent source-creation switch.
 - Operational logs are structured, redacted, retention-bounded, and avoid raw token values.
 - Alerts cover auth anomalies, pairing storms, source growth, signature and replay failures, ingest
   rejection, season jobs, deletion failures, database saturation, release events, and origin-proof
@@ -1073,8 +1089,8 @@ measurements exist.
 - Complete aggregation, same-source device dedup, source count, quarantine, retention, and
   finalized-season immutability.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
-  gates now cover Ingest startup and all three public-ranking routes; deployed operation and the
-  independent switches for every other capability remain open.
+  gates now cover Ingest startup, all three public-ranking routes, and all four pairing routes;
+  deployed operation and the independent switches for every other capability remain open.
 - Gate: source multiplication cannot exceed the profile score cap or gain privilege, and
   infrastructure limits survive load tests.
 

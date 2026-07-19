@@ -27,7 +27,9 @@ configuration. A signed-in `/connect` page also performs one session-rate-limite
 lookup, displays only bounded device evidence and a full public-key fingerprint, then requires a
 separate fresh passkey assertion before atomic approval for an explicitly selected new or active
 existing source. Existing-source controls are encrypted and session-bound; raw source IDs do not
-enter HTML. These flows have no live-user or deployment evidence.
+enter HTML. Connector start/poll and both signed-in approval routes remain unavailable unless each
+route module resolves exact `VIBERACING_PAIRING_ENABLED=true`; the tracked example stays false.
+These flows have no live-user or deployment evidence.
 
 The private account render now combines visibility with the exact session's current Community week
 in one existing Web/Auth pool checkout. Its closed mapper accepts one empty sentinel or exactly
@@ -78,7 +80,9 @@ canonical 32-byte `SESSION_SECRET`, matching `VIBERACING_PUBLIC_ORIGIN`/`WEBAUTH
 hostname `WEBAUTHN_RP_ID`, a distinct protected 32-byte recovery pepper plus deployment-reviewed
 Argon2id settings and response floor, and a separately provisioned `viberacing_web` login. The
 repository provides no valid invite or working credential; the tracked recovery settings are
-deliberately non-working placeholders. See `.env.example` and the local-development guide.
+deliberately non-working placeholders. See `.env.example` and the local-development guide. Manual
+pairing additionally requires exact `VIBERACING_PAIRING_ENABLED=true` before all four pairing route
+modules load. Changing it afterward does not reload an existing worker.
 
 ## Module map
 
@@ -94,7 +98,7 @@ deliberately non-working placeholders. See `.env.example` and the local-developm
 | `lib/public-score-admission.ts`                                                  | Enforces the no-queue public-read concurrency ceiling                    | Four active reads; lease held until adapter settlement                              |
 | `lib/public-http-problem.ts`                                                     | Generates opaque request IDs and closed public error responses           | Server-only; validates the contract; no inbound ID, CORS, detail, or cause          |
 | `app/join`, `app/login`, `app/recover`, `app/account`, `app/connect`, `app/auth` | Routes enrollment, recovery, account, pairing approval, deletion, logout | Thin session/browser entrypoints; no admin                                          |
-| `app/v1/connector/pairing`                                                       | Routes anonymous connector pairing start/poll                            | Exact POST only; delegates to the closed shared HTTP boundary                       |
+| `app/v1/connector/pairing`                                                       | Routes anonymous connector pairing start/poll                            | Exact POST and default-off pairing decision; delegates to the closed HTTP boundary  |
 | `components/account-experience.tsx`                                              | Renders visibility, devices, passkeys, recovery codes, deletion          | Closed state and opaque targets; plaintext codes exist only after explicit action   |
 | `lib/enrollment-http.ts`                                                         | Owns the local identity and pairing-approval HTTP decisions              | Exact origin/content/body/cookie policy, no-store, no-referrer, and no queue        |
 | `lib/enrollment-service.ts`                                                      | Composes OAuth, login, account security, pairing, and deletion           | Server IDs/secrets only; fixed database capabilities; generic failure               |
@@ -104,6 +108,7 @@ deliberately non-working placeholders. See `.env.example` and the local-developm
 | `lib/recovery-code.ts`                                                           | Generates and verifies exact recovery codes and Argon2id PHCs            | Server-only; protected pepper, bounded matching/dummy work, transient plaintext     |
 | `lib/enrollment-database.ts`                                                     | Owns fixed identity database operations                                  | Reuses the probed Web/Auth pool; no general query or reflected database detail      |
 | `lib/pairing-possession-verifier.ts`                                             | Strictly verifies one approved pending-device proof                      | Server-only pure kernel; no poll lookup, activation, HTTP, rate, or persistence     |
+| `lib/pairing-config.ts`                                                          | Resolves one module-local default-off pairing decision                   | Exact own string value; no request/runtime/key/database field or reflection         |
 | `lib/pairing-poll-verifier.ts`                                                   | Derives fixed poll-verifier candidates under protected keys              | Primary plus optional secondary; no raw key container; close clears key copies      |
 | `lib/pairing-user-code-verifier.ts`                                              | Derives fixed human-code verifier candidates under separate keys         | Primary plus optional secondary; cross-purpose key reuse is rejected                |
 | `lib/pairing-start-material.ts`                                                  | Generates bounded pending-transaction material                           | Server IDs, 32-byte token/challenge, 60-bit code, and nine-minute expiry            |
@@ -343,11 +348,13 @@ The tracked environment values are non-working placeholders.
 ## Pairing browser approval
 
 The public `/connect` page contains static EN/RU instructions and an honest warning that no public
-connector release exists. A signed-in, passkey-registered session may submit exactly one canonical
-human code to the same-origin options route. The server derives both bounded key-rotation
-candidates, and revision 0021 atomically records the attempt on that session before returning at
-most one unexpired pending transaction. The deployment supplies the attempt count and window; the
-repository publishes no production values.
+connector release exists. The page shell and its separate session-derived inventory may render while
+pairing is disabled, but its options and verification routes return generic 503 unless exact
+`VIBERACING_PAIRING_ENABLED=true` was resolved when each module loaded. Once enabled, a signed-in,
+passkey-registered session may submit exactly one canonical human code to the same-origin options
+route. The server derives both bounded key-rotation candidates, and revision 0021 atomically records
+the attempt on that session before returning at most one unexpired pending transaction. The
+deployment supplies the attempt count and window; the repository publishes no production values.
 
 Only the bounded NFC device label, syntactic connector version, OS, architecture, expiry, and full
 SHA-256 public-key fingerprint reach the review screen. Looking up a code does not invoke WebAuthn.
@@ -396,12 +403,17 @@ pending-key, profile, and source binding. Four in-flight leases held through a 2
 bound steady-state local work to at most 16 minimum-path completions per second; short windows may
 still be bursty, and every non-success returns only `not_activated` plus the request ID.
 
-The two exact POST routes validate the generated start/poll request contracts before lazily
+The two exact POST routes and the two browser approval routes each resolve exact
+`VIBERACING_PAIRING_ENABLED=true` once at module load. Every alternate or unreadable state cancels
+an available request body and returns the existing generic 503 before parsing, runtime/service
+construction, admission acquisition, protected configuration, or database work. Connector non-POST
+methods retain 405. Once enabled, start/poll validate the generated request contracts before lazily
 constructing one shared service. That service owns one pool, poll/code verifier set, rate policy,
 and aggregate four-call admission boundary. The HTTP layer caps requests at 1024 bytes and responses
 at 2048 bytes, rejects queries, duplicate decoded keys, unknown/nested fields, content encoding,
 unsupported media/Accept values, and noncanonical client IDs, and emits only revalidated success or
-generic problem bodies with `no-store`, no referrer, and no CORS headers.
+generic problem bodies with `no-store`, no referrer, and no CORS headers. The module gate is neither
+a dynamic/deployed switch nor the still-separate source-creation control.
 
 Every accepted request increments one operation-global and one of 64 client buckets through the
 fixed revision 0022 PostgreSQL function before start/activation work. The raw 16-byte client ID and

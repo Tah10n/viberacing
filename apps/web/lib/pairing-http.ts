@@ -31,6 +31,7 @@ const jsonContentTypePattern = /^application\/json(?:;[\t ]*charset=[\t ]*utf-8)
 const qualityPattern = /^(?:0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)$/;
 
 export interface PairingHttpDependencies {
+  readonly enabled: unknown;
   readonly getService: () => Promise<Pick<PairingTransportService, "poll" | "start">>;
 }
 
@@ -362,6 +363,10 @@ export function createPairingHttp(dependencies: PairingHttpDependencies): Pairin
       return problem("method_not_allowed", true);
     },
     async poll(request: Request): Promise<Response> {
+      if (dependencies.enabled !== true) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
       if (!acceptsJson(request.headers.get("accept"))) {
         discardBody(request);
         return problem("not_acceptable");
@@ -410,6 +415,10 @@ export function createPairingHttp(dependencies: PairingHttpDependencies): Pairin
         : problem("internal_error");
     },
     async start(request: Request): Promise<Response> {
+      if (dependencies.enabled !== true) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
       if (!acceptsJson(request.headers.get("accept"))) {
         discardBody(request);
         return problem("not_acceptable");

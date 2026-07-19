@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fifty-six accepted ADRs.
+  fail-closed compatibility policy and matrix, and fifty-seven accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -278,6 +278,12 @@ Versioning where its guarantees are applicable.
   first-winner settlement. Exact local start/poll routes and the native-store Rust client complete
   only a synthetic journey; there is no live authenticator/database result, trusted edge, release,
   or deployment evidence.
+- A shared exact default-off module-load gate for connector pairing start/poll and signed-in pairing
+  approval options/verification. Only `VIBERACING_PAIRING_ENABLED=true` permits request parsing,
+  runtime/service construction, admission acquisition, or pairing storage work; disabled POST
+  cancels any available body, returns the existing generic no-store 503, and leaves connector
+  non-POST handling at 405. The tracked example remains false, and no dynamic/deployed switch or
+  independent source-creation control is claimed.
 - An exact local-only `forget-local` connector command that derives one canonical origin/label
   native-store account and invokes deletion without loading the credential, constructing a signer,
   starting Codex, or contacting Vibe Racing. Deleted and absent entries share one identifier-free

@@ -1,10 +1,15 @@
 import { createPairingHttp } from "@/lib/pairing-http";
+import { resolvePairingConfig } from "@/lib/pairing-config";
 import { getPairingTransportService } from "@/lib/pairing-transport-service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const http = createPairingHttp({ getService: getPairingTransportService });
+const pairingConfig = resolvePairingConfig();
+const http = createPairingHttp({
+  enabled: pairingConfig.enabled,
+  getService: getPairingTransportService,
+});
 
 export function DELETE(request: Request): Response {
   return http.methodNotAllowed(request);

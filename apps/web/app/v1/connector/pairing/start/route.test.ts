@@ -1,26 +1,44 @@
-import { describe, expect, it } from "vitest";
-
-import { DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, dynamic, runtime } from "./route";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const path = "https://viberacing.invalid/v1/connector/pairing/start";
 
 describe("connector pairing start Next.js entrypoint", () => {
-  it("stays lazy for a rejected request and pins the Node dynamic runtime", async () => {
-    expect(dynamic).toBe("force-dynamic");
-    expect(runtime).toBe("nodejs");
-    await expect(POST(new Request(path, { method: "POST" }))).resolves.toMatchObject({
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("stays disabled under a non-enabling deployment value", async () => {
+    vi.stubEnv("VIBERACING_PAIRING_ENABLED", "false");
+    const route = await import("./route");
+
+    expect(route.dynamic).toBe("force-dynamic");
+    expect(route.runtime).toBe("nodejs");
+    await expect(route.POST(new Request(path, { method: "POST" }))).resolves.toMatchObject({
+      status: 503,
+    });
+  });
+
+  it("evaluates the existing request boundary only after exact enablement", async () => {
+    vi.stubEnv("VIBERACING_PAIRING_ENABLED", "true");
+    const route = await import("./route");
+
+    await expect(route.POST(new Request(path, { method: "POST" }))).resolves.toMatchObject({
       status: 400,
     });
   });
 
   it("dispatches every non-POST method through the closed response", async () => {
+    vi.stubEnv("VIBERACING_PAIRING_ENABLED", "false");
+    const route = await import("./route");
+
     for (const [method, handler] of [
-      ["DELETE", DELETE],
-      ["GET", GET],
-      ["HEAD", HEAD],
-      ["OPTIONS", OPTIONS],
-      ["PATCH", PATCH],
-      ["PUT", PUT],
+      ["DELETE", route.DELETE],
+      ["GET", route.GET],
+      ["HEAD", route.HEAD],
+      ["OPTIONS", route.OPTIONS],
+      ["PATCH", route.PATCH],
+      ["PUT", route.PUT],
     ] as const) {
       const response = handler(new Request(path, { method }));
       expect(response.status).toBe(405);

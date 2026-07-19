@@ -37,29 +37,31 @@ lookup through a separately probed read-write pool, that strict proof, and exact
 with server-owned IDs behind local admission/timing. They cannot perform pairing browser or WebAuthn
 approval themselves; the separate `/connect` flow supplies only that intervening step. Two exact
 local POST routes now compose those applications behind fixed distributed global/client-bucket
-admission, and one pairing-only Rust command generates a device key through the OS CSPRNG, stores
-resumable pairing state in the native credential store, and performs the exact start/poll proof. A
-separate exact local-only command deletes one origin/label native entry without reading it or
-revoking server authority. No supported Codex version, macOS/Linux admission, real-account/deployed
-sync result, package, release, or deployment exists. A local Ingest kernel bounds and authenticates
-a synthetic exact-body sync request, and a separate adapter constrains origin replay, database
-lookup, and submission mapping with mock-pool evidence. A transport-free application composes those
-exact boundaries, generates a server request ID, and validates the acknowledgement/problem decision;
-isolated PostgreSQL tests separately prove atomic replay and cleanup. A bounded local Fastify
-factory now preserves exact raw HTTP evidence, applies no-queue and deadline policy, and serializes
-only revalidated contracts. A separate local host now binds that exact composition only on loopback
-in development/test or under an explicit Railway-edge production declaration, with bounded
-partial-startup cleanup and process shutdown. A separate opt-in gate now proves one full synthetic
-loopback HTTP-to-PostgreSQL path through a disposable dedicated Ingest login. There is no deployment
-database credential/certificate, trusted external TLS/edge path, supported connector adapter, or
-deployment. A bounded local one-shot Jobs process now wraps only cleanup/refresh/finalization, but
-has no live login, scheduler, monitor, or deployment. A bounded server-only Web PostgreSQL adapter
-and local public-score GET are implemented and unit/build-tested, but this repository supplies no
-working deployment login or TLS certificate. A successful setup proves repository gates, synthetic
-frontend behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
-lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
-deployed API, or production flow. The Ingest server tests bind only ephemeral loopback sockets and
-use synthetic requests; no development command exposes it to the LAN or Internet.
+admission. All four connector/browser pairing route modules remain default-off unless exact
+`VIBERACING_PAIRING_ENABLED=true` was resolved when each loaded. One pairing-only Rust command
+generates a device key through the OS CSPRNG, stores resumable pairing state in the native
+credential store, and performs the exact start/poll proof. A separate exact local-only command
+deletes one origin/label native entry without reading it or revoking server authority. No supported
+Codex version, macOS/Linux admission, real-account/deployed sync result, package, release, or
+deployment exists. A local Ingest kernel bounds and authenticates a synthetic exact-body sync
+request, and a separate adapter constrains origin replay, database lookup, and submission mapping
+with mock-pool evidence. A transport-free application composes those exact boundaries, generates a
+server request ID, and validates the acknowledgement/problem decision; isolated PostgreSQL tests
+separately prove atomic replay and cleanup. A bounded local Fastify factory now preserves exact raw
+HTTP evidence, applies no-queue and deadline policy, and serializes only revalidated contracts. A
+separate local host now binds that exact composition only on loopback in development/test or under
+an explicit Railway-edge production declaration, with bounded partial-startup cleanup and process
+shutdown. A separate opt-in gate now proves one full synthetic loopback HTTP-to-PostgreSQL path
+through a disposable dedicated Ingest login. There is no deployment database credential/certificate,
+trusted external TLS/edge path, supported connector adapter, or deployment. A bounded local one-shot
+Jobs process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor,
+or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
+implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
+certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
+boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
+database role isolation; it does not prove a live adapter, deployed API, or production flow. The
+Ingest server tests bind only ephemeral loopback sockets and use synthetic requests; no development
+command exposes it to the LAN or Internet.
 
 ## Prerequisites
 
@@ -362,6 +364,13 @@ The three public score/race/status routes remain generically unavailable unless 
 environment sets exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` before their modules load. The
 tracked example stays false, so the visible page keeps its synthetic fallback. This local gate does
 not prove deployed route/cache denial or reload already-running instances.
+
+Connector pairing start/poll and signed-in approval options/verification remain generically
+unavailable unless an ignored local environment sets exact `VIBERACING_PAIRING_ENABLED=true` before
+all four modules load. The tracked example stays false. Disabled POST cancels an available request
+body before request parsing, runtime/service construction, admission acquisition, protected
+configuration, or database work. This is not a dynamic/deployed switch and is separate from the
+still-unimplemented source-creation gate.
 
 The server-only score, enrollment, and local pairing adapters use only `VIBERACING_WEB_DATABASE_*`.
 Their tracked user/password are deliberately non-working placeholders and are checked against

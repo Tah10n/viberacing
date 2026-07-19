@@ -43,30 +43,33 @@ bounded device evidence plus the full public-key fingerprint, and consumes a fre
 assertion into atomic approval for an explicitly selected new or active existing opaque source.
 Existing choices use only encrypted session-bound controls; raw source IDs stay server-only. ADR
 0030 adds exact start/poll HTTP routes, fixed-storage aggregate admission, and one pairing-only Rust
-command that creates and retains its device key only in a native OS credential store. ADR 0031 adds
-a separate Windows candidate command that can construct the otherwise inaccessible
-launch/context/key capabilities only after exact artifact and active-record review, then performs
-one fixed signed upload. ADR 0038 adds a third fixed command that starts no Codex process and signs
-one exact enum-only CarRecipe for the dedicated Web/Auth proposal route. ADR 0041 adds a fourth
-command that deletes only the exact native origin/label record without loading it or crossing the
-connector-to-edge boundary. ADR 0052 adds a fifth explicit `check-codex` command that performs only
-the same exact candidate admission without credential-store, process, account, persistence, or
-network access; later sync repeats admission. ADR 0053 adds a secretless no-upload Windows
-release-profile copy/removal smoke for only the repository-built connector; it adds no connector
-data flow or runtime authority. ADR 0054 adds an opt-in stdout preview to the same candidate check
-containing only fixed versions/support state and one coarse Operational admission class. It adds no
-filesystem sink, support transport, reusable authority, or connector-to-edge flow. There is still no
-hosted Windows result, supported version, cross-platform sync result, real package lifecycle,
-scheduling, packaging, or released connector. A local Ingest kernel now verifies the bounded
-exact-body origin/device request, while the separate adapter maps origin replay, device lookup, and
-submission through fixed calls. PostgreSQL now proves atomic origin replay consumption and bounded
-cleanup. A transport-free application now composes those exact local capabilities and validates only
-closed acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
-evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. A
-separate local host now binds that exact composition under closed loopback or declared Railway-edge
-configuration and bounded process shutdown. There is no edge/live-database/deployment integration.
-No trusted external TLS route, deployment login/certificate, edge signer/direct-origin policy, or
-live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+command that creates and retains its device key only in a native OS credential store. ADR 0057
+places those routes and both browser approval operations behind exact default-off module-load
+decisions before parsing, runtime/service construction, admission acquisition, protected
+configuration, or database work. ADR 0031 adds a separate Windows candidate command that can
+construct the otherwise inaccessible launch/context/key capabilities only after exact artifact and
+active-record review, then performs one fixed signed upload. ADR 0038 adds a third fixed command
+that starts no Codex process and signs one exact enum-only CarRecipe for the dedicated Web/Auth
+proposal route. ADR 0041 adds a fourth command that deletes only the exact native origin/label
+record without loading it or crossing the connector-to-edge boundary. ADR 0052 adds a fifth explicit
+`check-codex` command that performs only the same exact candidate admission without
+credential-store, process, account, persistence, or network access; later sync repeats admission.
+ADR 0053 adds a secretless no-upload Windows release-profile copy/removal smoke for only the
+repository-built connector; it adds no connector data flow or runtime authority. ADR 0054 adds an
+opt-in stdout preview to the same candidate check containing only fixed versions/support state and
+one coarse Operational admission class. It adds no filesystem sink, support transport, reusable
+authority, or connector-to-edge flow. There is still no hosted Windows result, supported version,
+cross-platform sync result, real package lifecycle, scheduling, packaging, or released connector. A
+local Ingest kernel now verifies the bounded exact-body origin/device request, while the separate
+adapter maps origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves
+atomic origin replay consumption and bounded cleanup. A transport-free application now composes
+those exact local capabilities and validates only closed acknowledgement/problem decisions. A
+bounded local Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline
+policy, and serializes only revalidated contracts. A separate local host now binds that exact
+composition under closed loopback or declared Railway-edge configuration and bounded process
+shutdown. There is no edge/live-database/deployment integration. No trusted external TLS route,
+deployment login/certificate, edge signer/direct-origin policy, or live route/Jobs evidence is
+supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -268,6 +271,7 @@ sequenceDiagram
   participant Authenticator as Passkey authenticator
   participant DB as Profile/Auth database role
 
+  Note over Web: Each of four route modules first requires exact VIBERACING_PAIRING_ENABLED=true
   Connector->>Connector: Generate Ed25519 key in OS credential store
   Connector->>Web: Start short-lived pairing with public key and safe metadata
   Web->>DB: Store keyed poll verifier, challenge, and immutable key fingerprint
@@ -306,13 +310,17 @@ active/unexpired-approved device authorities per profile. Revision 0013 and ADR 
 physical cleanup for expired non-activated pairings and their pending keys. ADR 0030 closes the
 local journey with generated start/poll contracts, exact no-store HTTP framing, one shared four-call
 service, revision 0022's fixed global-and-bucket database admission, and a pairing-only Rust client
-with native OS key custody. ADR 0041 adds only local idempotent deletion for the canonical
-origin/label account. It prints that the action did not revoke server device authority, so device
-revoke still follows the authenticated browser lifecycle below. Live Web/database credentials, edge
-enforcement and capacity evidence, cleanup scheduling, cross-platform runtime evidence, packaging,
-and deployment remain planned. ADR 0015's later device-request verifier does not consume or activate
-this pairing transaction. The ceiling and first-winner assertions use separate PostgreSQL
-connections held behind a real row lock before simultaneous release.
+with native OS key custody. ADR 0057 keeps start, poll, approval options, and approval verification
+unavailable unless their modules resolved exact `VIBERACING_PAIRING_ENABLED=true`; disabled POST
+cancels an available body and returns generic 503 before pairing runtime or state work. This is not
+a dynamic/deployed switch or the independent source-creation control. ADR 0041 adds only local
+idempotent deletion for the canonical origin/label account. It prints that the action did not revoke
+server device authority, so device revoke still follows the authenticated browser lifecycle below.
+Live Web/database credentials, edge enforcement and capacity evidence, cleanup scheduling,
+cross-platform runtime evidence, packaging, and deployment remain planned. ADR 0015's later
+device-request verifier does not consume or activate this pairing transaction. The ceiling and
+first-winner assertions use separate PostgreSQL connections held behind a real row lock before
+simultaneous release.
 
 ## Source and device lifecycle
 

@@ -119,8 +119,8 @@ material availability cost.
 - **Impact:** Durable unauthorized submission authority for the selected source.
 - **Controls:** One-time high-entropy poll token with a server-side keyed verifier, immutable
   pending public key, short-lived user code and challenge, bounded attempts, exact key/transaction
-  display, authenticated GitHub session, fresh passkey approval, and Ed25519 possession proof. The
-  poll token alone cannot approve or activate a device.
+  display, authenticated GitHub session, fresh passkey approval, Ed25519 possession proof, and one
+  independent default-off route gate. The poll token alone cannot approve or activate a device.
 - **Current evidence:** Revision 0003 proves immutable key/challenge/poll-verifier binding, exact
   browser-approved state, wrong-poll denial, one-time activation, and lifecycle races at the SQL
   boundary. ADR 0026 adds one exact domain-separated transaction/challenge/public-key message, an
@@ -141,12 +141,16 @@ material availability cost.
   same generic decision. ADR 0030 adds exact bounded start/poll routes, one shared four-call
   service, a native-store Rust client, and revision 0022's fixed operation-global plus 64-bucket
   rate windows. The client ID is self-asserted rate shaping only; rotating it still consumes the
-  global row and creates no database row. Revision 0037 separately lets only Jobs reset a positive
-  aggregate timestamp/count after the maximum one-hour window while preserving every fixed row and
-  accepting no caller-selected scope. Revision 0013 adds a separate Jobs-only 1-to-1000 cleanup for
-  expired `pending`, `approved`, and `cancelled` transactions plus their exact still-pending keys;
-  activated bindings and live rows are excluded. Live login/TLS integration, trusted edge controls,
-  capacity evidence, cleanup scheduling, cross-platform execution, and release remain absent.
+  global row and creates no database row. ADR 0057 requires exact `VIBERACING_PAIRING_ENABLED=true`
+  at each connector/browser pairing route module; disabled POST cancels an available body and
+  reaches no parser, runtime/service, admission acquisition, protected key, WebAuthn, or database
+  work. It proves no deployed/dynamic route denial and is not the independent source-creation
+  control. Revision 0037 separately lets only Jobs reset a positive aggregate timestamp/count after
+  the maximum one-hour window while preserving every fixed row and accepting no caller-selected
+  scope. Revision 0013 adds a separate Jobs-only 1-to-1000 cleanup for expired `pending`,
+  `approved`, and `cancelled` transactions plus their exact still-pending keys; activated bindings
+  and live rows are excluded. Live login/TLS integration, trusted edge controls, capacity evidence,
+  cleanup scheduling, cross-platform execution, and release remain absent.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the
@@ -734,7 +738,10 @@ material availability cost.
   unsettled calls without a queue, reject malformed or over-limit bodies before database work, and
   create no database state for login options. A valid login proof performs one bounded atomic
   completion, while failure to seal the resulting browser cookie revokes the new session. These are
-  local process ceilings, not distributed or client-identity rate limits. The transport-free
+  local process ceilings, not distributed or client-identity rate limits. The four pairing routes
+  first require exact `VIBERACING_PAIRING_ENABLED=true` at module load; disabled POST cancels an
+  available body and returns generic 503 before parsing, runtime/service construction, admission
+  acquisition, protected configuration, or database work. Once enabled, the transport-free
   pairing-start application bounds labels, metadata, keys, entropy, and HMAC work, admits four
   unsettled attempts without a queue, holds each lease through a 250-millisecond floor, and makes no
   database call for malformed input. Revision 0022 now adds one Web-only fixed-storage admission
