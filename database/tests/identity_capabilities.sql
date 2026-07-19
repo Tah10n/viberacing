@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 68
+    SELECT pg_catalog.count(*) = 69
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 25
+    SELECT pg_catalog.count(*) = 26
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -69,6 +69,7 @@ SELECT pg_temp.assert_true(
       AND procedure.proname IN (
         'consume_origin_nonce',
         'admit_pairing_transport_request',
+        'cleanup_abandoned_enrollments',
         'cleanup_expired_auth_state',
         'cleanup_expired_audit_events',
         'cleanup_expired_car_recipe_proposals',
@@ -113,7 +114,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 16
+    SELECT pg_catalog.count(*) = 17
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -121,6 +122,7 @@ SELECT pg_temp.assert_true(
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.proname IN (
+        'cleanup_abandoned_enrollments',
         'cleanup_aged_revoked_devices',
         'cleanup_aged_revoked_passkeys',
         'cleanup_expired_auth_state',
@@ -221,6 +223,7 @@ SELECT pg_temp.assert_true(
           'consume_origin_nonce',
           'read_device_verification_material',
           'submit_community_sync',
+          'cleanup_abandoned_enrollments',
           'cleanup_expired_auth_state',
           'cleanup_expired_audit_events',
           'cleanup_expired_car_recipe_proposals',
@@ -268,6 +271,7 @@ SELECT pg_temp.assert_true(
       pg_catalog.has_function_privilege('viberacing_jobs', procedure.oid, 'EXECUTE')
       = (
         procedure.proname IN (
+          'cleanup_abandoned_enrollments',
           'cleanup_expired_auth_state',
           'cleanup_expired_audit_events',
           'cleanup_expired_car_recipe_proposals',

@@ -195,8 +195,10 @@ flowchart LR
   parsing, runtime/admission, OAuth/WebAuthn, or database work. All four service methods repeat the
   literal check before input/cookie/private state. Active-session redirects, returning login,
   restricted recovery, logout, and account security actions remain available. The tracked example is
-  false. This proves no deployed route denial, worker reload/drain, dynamic switch, operator policy,
-  distributed rate limit, abandoned-profile cleanup, or invite repair.
+  false. This gate itself proves no deployed route denial, worker reload/drain, dynamic switch,
+  operator policy, distributed rate limit, cleanup execution, or invite repair. Revision 0038 and
+  ADR 0061 separately add unscheduled bounded cleanup for an abandoned `enrolling` profile after all
+  associated session/challenge authority expires; they do not make its redeemed invite reusable.
 - Pairing enable gate: connector start/poll and browser approval options/verification each resolve
   exact `VIBERACING_PAIRING_ENABLED=true` once at route-module evaluation. Every alternate or
   unreadable value cancels an available request body and returns the existing generic 503 before
@@ -806,9 +808,15 @@ remains. It deletes no raw evidence by cascade and preserves active, recent, or 
 Revision 0037 separately resets only positive fixed anonymous pairing transport windows after the
 maximum permitted one-hour duration: it preserves all 130 preallocated rows, accepts no caller
 parameter, locks rows in admission order, and scrubs the aggregate timestamp/count to the closed
-epoch/zero state. Other remaining expiry classes, keyed tombstone policy, cache/backup purge, and
-restore replay still require their own reviewed implementation and public policy, and no implemented
-cleanup, redaction, or reset has a scheduler or deployed cadence.
+epoch/zero state. Revision 0038 separately removes maximum-1000 oldest-first canonical `enrolling`
+profiles only after all exact enrollment-session/registration-challenge expiries are strictly past,
+one redeemed invite remains, and no other profile-bound recovery, authority, source, deletion,
+scoring, or recipe state exists. The profile cascade permanently removes the redeemed invite and
+expired enrollment authority while audit evidence remains with null profile linkage; it creates no
+deletion job, tombstone, restored invite, or notification. Other remaining expiry classes, keyed
+tombstone policy, cache/backup purge, and restore replay still require their own reviewed
+implementation and public policy, and no implemented cleanup, redaction, or reset has a scheduler or
+deployed cadence.
 
 ## Administration and operations
 
@@ -1123,7 +1131,9 @@ measurements exist.
   Web/Auth boundary; live authenticator/database/connector evidence and deployment controls remain
   gates.
 - Complete aggregation, same-source device dedup, source count, quarantine, retention, and
-  finalized-season immutability.
+  finalized-season immutability. A bounded local abandoned-enrollment retention command now removes
+  only pre-activation profiles after all session/challenge authority expires; scheduling, capacity,
+  notification, backup purge, and deployed retention evidence remain open.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
   new-source creation while preserving active existing-source pairing, plus CarRecipe proposal

@@ -22,6 +22,7 @@ const runtimeBoundary = [
 interface PoolFixture {
   readonly client: JobsDatabaseClient;
   readonly close: ReturnType<typeof vi.fn>;
+  readonly cleanupAbandonedEnrollments: ReturnType<typeof vi.fn>;
   readonly cleanupAgedRevokedDevices: ReturnType<typeof vi.fn>;
   readonly cleanupAgedRevokedPasskeys: ReturnType<typeof vi.fn>;
   readonly cleanupExpiredAuthState: ReturnType<typeof vi.fn>;
@@ -44,6 +45,7 @@ interface PoolFixture {
 }
 
 function createPoolFixture(jobResult: unknown): PoolFixture {
+  const cleanupAbandonedEnrollments = vi.fn(() => Promise.resolve(jobResult));
   const cleanupAgedRevokedDevices = vi.fn(() => Promise.resolve(jobResult));
   const cleanupAgedRevokedPasskeys = vi.fn(() => Promise.resolve(jobResult));
   const cleanupExpiredAuthState = vi.fn(() => Promise.resolve(jobResult));
@@ -62,6 +64,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
   const refreshCommunitySeason = vi.fn(() => Promise.resolve(jobResult));
   const verifyRuntimeBoundary = vi.fn(() => Promise.resolve(runtimeBoundary));
   const client: JobsDatabaseClient = {
+    cleanupAbandonedEnrollments,
     cleanupAgedRevokedDevices,
     cleanupAgedRevokedPasskeys,
     cleanupExpiredAuthState,
@@ -85,6 +88,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
   return {
     client,
     close,
+    cleanupAbandonedEnrollments,
     cleanupAgedRevokedDevices,
     cleanupAgedRevokedPasskeys,
     cleanupExpiredAuthState,
@@ -128,6 +132,16 @@ async function expectMaintenanceError(
 
 describe("Community maintenance runner", () => {
   it.each([
+    {
+      expected: {
+        deletedEnrollments: 4,
+        kind: "cleanup_abandoned_enrollments",
+      },
+      functionName: "cleanup_abandoned_enrollments",
+      input: { batchSize: 6, kind: "cleanup_abandoned_enrollments" },
+      rows: [{ deleted_enrollments: 4 }],
+      values: [6],
+    },
     {
       expected: {
         deletedDeviceKeys: 4,
@@ -293,6 +307,8 @@ describe("Community maintenance runner", () => {
     expect(fixture.verifyRuntimeBoundary).toHaveBeenCalledOnce();
     if (testCase.input.kind === "reset_expired_pairing_request_windows") {
       expect(fixture.resetExpiredPairingRequestWindows).toHaveBeenCalledWith();
+    } else if (testCase.input.kind === "cleanup_abandoned_enrollments") {
+      expect(fixture.cleanupAbandonedEnrollments).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "cleanup_aged_revoked_devices") {
       expect(fixture.cleanupAgedRevokedDevices).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "cleanup_aged_revoked_passkeys") {
@@ -323,7 +339,8 @@ describe("Community maintenance runner", () => {
       expect(fixture.finalizeCommunitySeason).toHaveBeenCalledWith(testCase.values[0]);
     }
     expect(
-      fixture.cleanupAgedRevokedDevices.mock.calls.length +
+      fixture.cleanupAbandonedEnrollments.mock.calls.length +
+        fixture.cleanupAgedRevokedDevices.mock.calls.length +
         fixture.cleanupAgedRevokedPasskeys.mock.calls.length +
         fixture.cleanupExpiredAuthState.mock.calls.length +
         fixture.cleanupExpiredAuditEvents.mock.calls.length +
@@ -347,6 +364,11 @@ describe("Community maintenance runner", () => {
     [],
     { extra: true, kind: "reset_expired_pairing_request_windows" },
     { batchSize: 1, kind: "reset_expired_pairing_request_windows" },
+    { batchSize: 0, kind: "cleanup_abandoned_enrollments" },
+    { batchSize: 1_001, kind: "cleanup_abandoned_enrollments" },
+    { batchSize: 1.5, kind: "cleanup_abandoned_enrollments" },
+    { batchSize: "1", kind: "cleanup_abandoned_enrollments" },
+    { batchSize: 1, extra: true, kind: "cleanup_abandoned_enrollments" },
     { batchSize: 0, kind: "cleanup_aged_revoked_devices" },
     { batchSize: 1_001, kind: "cleanup_aged_revoked_devices" },
     { batchSize: 1.5, kind: "cleanup_aged_revoked_devices" },
@@ -510,6 +532,7 @@ describe("Community maintenance runner", () => {
     { cleanup: "rate-window", rows: [{ reset_window_count: 1 }] },
     { cleanup: "device", rows: [{ deleted_pairings: 1 }] },
     { cleanup: "passkey", rows: [{ deleted_passkey_count: 1 }] },
+    { cleanup: "enrollment", rows: [{ deleted_enrollment_count: 1 }] },
     {
       cleanup: "auth",
       rows: [{ deleted_challenges: 1, deleted_recovery_authorities: 1 }],
@@ -521,31 +544,33 @@ describe("Community maintenance runner", () => {
     const job: CommunityMaintenanceJob =
       cleanup === "rate-window"
         ? { kind: "reset_expired_pairing_request_windows" }
-        : cleanup === "device"
-          ? { batchSize: 1, kind: "cleanup_aged_revoked_devices" }
-          : cleanup === "passkey"
-            ? { batchSize: 1, kind: "cleanup_aged_revoked_passkeys" }
-            : cleanup === "auth"
-              ? { batchSize: 1, kind: "cleanup_expired_auth_state" }
-              : cleanup === "audit"
-                ? { batchSize: 1, kind: "cleanup_expired_audit_events" }
-                : cleanup === "deletion-job"
-                  ? { batchSize: 1, kind: "cleanup_terminal_deletion_jobs" }
-                  : cleanup === "invite"
-                    ? { batchSize: 1, kind: "cleanup_expired_invites" }
-                    : cleanup === "session"
-                      ? { batchSize: 1, kind: "cleanup_expired_sessions" }
-                      : cleanup === "car"
-                        ? { batchSize: 1, kind: "cleanup_expired_car_recipe_proposals" }
-                        : cleanup === "purge"
-                          ? { batchSize: 1, kind: "purge_profile_deletions" }
-                          : cleanup === "pairing"
-                            ? { batchSize: 1, kind: "cleanup_expired_pairing_state" }
-                            : cleanup === "provenance"
-                              ? { batchSize: 1, kind: "redact_aged_pairing_approval_provenance" }
-                              : cleanup
-                                ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
-                                : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
+        : cleanup === "enrollment"
+          ? { batchSize: 1, kind: "cleanup_abandoned_enrollments" }
+          : cleanup === "device"
+            ? { batchSize: 1, kind: "cleanup_aged_revoked_devices" }
+            : cleanup === "passkey"
+              ? { batchSize: 1, kind: "cleanup_aged_revoked_passkeys" }
+              : cleanup === "auth"
+                ? { batchSize: 1, kind: "cleanup_expired_auth_state" }
+                : cleanup === "audit"
+                  ? { batchSize: 1, kind: "cleanup_expired_audit_events" }
+                  : cleanup === "deletion-job"
+                    ? { batchSize: 1, kind: "cleanup_terminal_deletion_jobs" }
+                    : cleanup === "invite"
+                      ? { batchSize: 1, kind: "cleanup_expired_invites" }
+                      : cleanup === "session"
+                        ? { batchSize: 1, kind: "cleanup_expired_sessions" }
+                        : cleanup === "car"
+                          ? { batchSize: 1, kind: "cleanup_expired_car_recipe_proposals" }
+                          : cleanup === "purge"
+                            ? { batchSize: 1, kind: "purge_profile_deletions" }
+                            : cleanup === "pairing"
+                              ? { batchSize: 1, kind: "cleanup_expired_pairing_state" }
+                              : cleanup === "provenance"
+                                ? { batchSize: 1, kind: "redact_aged_pairing_approval_provenance" }
+                                : cleanup
+                                  ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
+                                  : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
 
     await expectMaintenanceError(
       createCommunityMaintenanceRunner(fixture.pool).execute(job),
@@ -609,6 +634,21 @@ describe("Community maintenance runner", () => {
       createCommunityMaintenanceRunner(fixture.pool).execute({
         batchSize: 1,
         kind: "cleanup_expired_ingest_state",
+      }),
+      "result_invalid",
+    );
+  });
+
+  it.each([
+    { batchSize: 1, row: { deleted_enrollments: 2 } },
+    { batchSize: 10, row: { deleted_enrollments: -1 } },
+    { batchSize: 10, row: { deleted_enrollments: "1" } },
+  ])("bounds the abandoned-enrollment cleanup result", async ({ batchSize, row }) => {
+    const fixture = createPoolFixture([row]);
+    await expectMaintenanceError(
+      createCommunityMaintenanceRunner(fixture.pool).execute({
+        batchSize,
+        kind: "cleanup_abandoned_enrollments",
       }),
       "result_invalid",
     );

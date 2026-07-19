@@ -222,6 +222,12 @@
       "name": "pairing_rate_window_retention_reset",
       "path": "database/migrations/0037_pairing_rate_window_retention_reset.sql",
       "sha256": "d4e4b1e496466aa9b1c00f301d92aeeb6f08f4d8ef460e74a338e56aab6ce80c"
+    },
+    {
+      "revision": 38,
+      "name": "abandoned_enrollment_retention_cleanup",
+      "path": "database/migrations/0038_abandoned_enrollment_retention_cleanup.sql",
+      "sha256": "a0e7fbef1c0d7b2b0f7fdecd035298a1c5476c42e344cf71ef5e43cd0031aa44"
     }
   ]
 }

@@ -107,6 +107,12 @@ export function parseJobsCommand(value: unknown): CommunityMaintenanceJob {
   ) {
     return Object.freeze({ kind: "reset_expired_pairing_request_windows" });
   }
+  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-abandoned-enrollments") {
+    return Object.freeze({
+      batchSize: maximumCleanupBatchSize,
+      kind: "cleanup_abandoned_enrollments",
+    });
+  }
   if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-ingest-state") {
     return Object.freeze({
       batchSize: maximumCleanupBatchSize,

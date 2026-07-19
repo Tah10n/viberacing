@@ -3,7 +3,7 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and thirty-seven checksum-ledgered database migrations. Repository verification uses synthetic data
+and thirty-eight checksum-ledgered database migrations. Repository verification uses synthetic data
 and injected capabilities only. It has procedure-only identity, passkey login/management, restricted
 recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
 retention cleanup, bounded primary profile deletion, scoring, terminal finalization, and public
@@ -298,15 +298,15 @@ pnpm run test:jobs:coverage
 pnpm run build:jobs
 ```
 
-The built one-shot CLI accepts only `cleanup-expired-auth-state`, `cleanup-expired-audit-events`,
-`cleanup-expired-car-recipe-proposals`, `cleanup-expired-invites`, `cleanup-expired-ingest-state`,
-`cleanup-expired-pairing-state`, `cleanup-expired-sessions`, `cleanup-aged-revoked-passkeys`,
-`cleanup-aged-revoked-devices`, `reset-expired-pairing-request-windows`,
-`cleanup-terminal-deletion-jobs`, `redact-aged-pairing-approval-provenance`,
-`purge-profile-deletions`, `refresh-community-season YYYY-MM-DD`, or
-`finalize-community-season YYYY-MM-DD`. Do not invoke it against a persistent database until an
-environment-owned login has been separately provisioned with only `viberacing_jobs`; the repository
-does not create a deployment login.
+The built one-shot CLI accepts only `cleanup-expired-auth-state`, `cleanup-abandoned-enrollments`,
+`cleanup-expired-audit-events`, `cleanup-expired-car-recipe-proposals`, `cleanup-expired-invites`,
+`cleanup-expired-ingest-state`, `cleanup-expired-pairing-state`, `cleanup-expired-sessions`,
+`cleanup-aged-revoked-passkeys`, `cleanup-aged-revoked-devices`,
+`reset-expired-pairing-request-windows`, `cleanup-terminal-deletion-jobs`,
+`redact-aged-pairing-approval-provenance`, `purge-profile-deletions`,
+`refresh-community-season YYYY-MM-DD`, or `finalize-community-season YYYY-MM-DD`. Do not invoke it
+against a persistent database until an environment-owned login has been separately provisioned with
+only `viberacing_jobs`; the repository does not create a deployment login.
 
 The separate synthetic Jobs application path is opt-in and requires Docker:
 
@@ -315,7 +315,7 @@ pnpm run test:jobs:postgres-integration
 ```
 
 It applies the reviewed migrations to one disposable PostgreSQL container, creates only synthetic
-narrow and negative-control logins, runs all fifteen built commands, verifies generic output and
+narrow and negative-control logins, runs all sixteen built commands, verifies generic output and
 exact state, and removes the container and storage. It proves no external audit sink, scheduler,
 production login/TLS, monitoring, capacity, real-user retention, or deployment. See
 [`apps/jobs/README.md`](../../apps/jobs/README.md) for the exact boundary and remaining
@@ -400,8 +400,10 @@ request parsing, runtime/service construction, admission, protected configuratio
 or database work. All four service methods repeat the literal decision before input, cookie, time,
 entropy, or private dependency work. Active-session redirects, returning login, restricted recovery,
 logout, and account security actions remain available. Changing the value does not clear an existing
-continuation or pending session, clean an abandoned enrolling profile, repair an invite, reload an
-existing worker, stop an enabled in-flight request, or prove deployed route denial.
+continuation or pending session, invoke the separate abandoned-enrollment cleanup, repair an invite,
+reload an existing worker, stop an enabled in-flight request, or prove deployed route denial. The
+explicit `cleanup-abandoned-enrollments` Jobs command is separately available only for canonical
+rows after every retained session/challenge expiry is past; no scheduler invokes it.
 
 The server-only score, enrollment, and local pairing adapters use only `VIBERACING_WEB_DATABASE_*`.
 Their tracked user/password are deliberately non-working placeholders and are checked against

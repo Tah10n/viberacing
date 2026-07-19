@@ -19,6 +19,10 @@ export const maximumProfileDeletionPurgeBatchSize = 10;
 export type CommunityMaintenanceJob =
   | Readonly<{
       batchSize: number;
+      kind: "cleanup_abandoned_enrollments";
+    }>
+  | Readonly<{
+      batchSize: number;
       kind: "cleanup_aged_revoked_devices";
     }>
   | Readonly<{
@@ -78,6 +82,10 @@ export type CommunityMaintenanceJob =
     }>;
 
 export type CommunityMaintenanceResult =
+  | Readonly<{
+      deletedEnrollments: number;
+      kind: "cleanup_abandoned_enrollments";
+    }>
   | Readonly<{
       deletedDeviceKeys: number;
       deletedPairings: number;
@@ -245,6 +253,7 @@ function readJob(value: unknown): CommunityMaintenanceJob {
       return Object.freeze({ batchSize, kind });
     }
     if (
+      kind === "cleanup_abandoned_enrollments" ||
       kind === "cleanup_aged_revoked_devices" ||
       kind === "cleanup_aged_revoked_passkeys" ||
       kind === "cleanup_expired_auth_state" ||
@@ -337,6 +346,14 @@ function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaint
     return Object.freeze({
       kind: job.kind,
       resetWindows: readCount(row, "reset_windows", pairingRequestWindowCount),
+    });
+  }
+
+  if (job.kind === "cleanup_abandoned_enrollments") {
+    const row = readSingleRow(value, new Set(["deleted_enrollments"]));
+    return Object.freeze({
+      deletedEnrollments: readCount(row, "deleted_enrollments", job.batchSize),
+      kind: job.kind,
     });
   }
 
@@ -502,6 +519,9 @@ function executeCapability(
 ): Promise<unknown> {
   if (job.kind === "reset_expired_pairing_request_windows") {
     return client.resetExpiredPairingRequestWindows();
+  }
+  if (job.kind === "cleanup_abandoned_enrollments") {
+    return client.cleanupAbandonedEnrollments(job.batchSize);
   }
   if (job.kind === "cleanup_aged_revoked_devices") {
     return client.cleanupAgedRevokedDevices(job.batchSize);

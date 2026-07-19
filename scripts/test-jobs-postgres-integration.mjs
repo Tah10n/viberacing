@@ -31,6 +31,9 @@ const failedMessage = "Vibe Racing Jobs command failed.\n";
 const finalizedSeasonStart = "2000-01-03";
 
 const fixture = Object.freeze({
+  abandonedInviteId: "00000000-0000-4000-8000-000000031951",
+  abandonedProfileId: "00000000-0000-4000-8000-000000031952",
+  abandonedSessionId: "00000000-0000-4000-8000-000000031953",
   authChallengeId: "00000000-0000-4000-8000-000000031101",
   auditEventId: "00000000-0000-4000-8000-000000031901",
   carProfileId: "00000000-0000-4000-8000-000000031201",
@@ -282,9 +285,29 @@ VALUES (
 
 INSERT INTO viberacing_private.profiles (profile_id, github_user_id, handle, state)
 VALUES
+  ('${fixture.abandonedProfileId}', 900000000000031952, 'jobs-it-abandoned', 'enrolling'),
   ('${fixture.carProfileId}', 900000000000031201, 'jobs-it-car', 'active'),
   ('${fixture.sessionProfileId}', 900000000000031602, 'jobs-it-session', 'active'),
   ('${fixture.scoringProfileId}', 900000000000031501, 'jobs-it-score', 'active');
+
+INSERT INTO viberacing_private.invites (
+  invite_id,
+  verifier_digest,
+  state,
+  created_at,
+  expires_at,
+  redeemed_at,
+  redeemed_profile_id
+)
+VALUES (
+  '${fixture.abandonedInviteId}',
+  pg_catalog.decode(pg_catalog.repeat('95', 32), 'hex'),
+  'redeemed',
+  pg_catalog.statement_timestamp() - INTERVAL '3 hours',
+  pg_catalog.statement_timestamp() - INTERVAL '2 hours',
+  pg_catalog.statement_timestamp() - INTERVAL '2 hours',
+  '${fixture.abandonedProfileId}'
+);
 
 INSERT INTO viberacing_private.passkeys (
   passkey_id,
@@ -440,6 +463,15 @@ INSERT INTO viberacing_private.sessions (
   expires_at
 )
 VALUES
+  (
+    '${fixture.abandonedSessionId}',
+    '${fixture.abandonedProfileId}',
+    pg_catalog.decode(pg_catalog.repeat('94', 32), 'hex'),
+    'enrollment',
+    NULL,
+    pg_catalog.statement_timestamp() - INTERVAL '2 hours',
+    pg_catalog.statement_timestamp() - INTERVAL '1 hour'
+  ),
   (
     '${fixture.sessionId}',
     '${fixture.sessionProfileId}',
@@ -756,6 +788,7 @@ SELECT (
       ["cleanup-expired-audit-events"],
       ["cleanup-expired-car-recipe-proposals"],
       ["cleanup-expired-invites"],
+      ["cleanup-abandoned-enrollments"],
       ["cleanup-expired-ingest-state"],
       ["cleanup-expired-pairing-state"],
       ["redact-aged-pairing-approval-provenance"],
@@ -777,6 +810,21 @@ SELECT (
       psqlScalar(
         `SET ROLE viberacing_owner;
 SELECT pg_catalog.jsonb_build_object(
+  'abandonedInviteCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.invites
+    WHERE invite_id = '${fixture.abandonedInviteId}'
+  ),
+  'abandonedProfileCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.profiles
+    WHERE profile_id = '${fixture.abandonedProfileId}'
+  ),
+  'abandonedSessionCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.sessions
+    WHERE session_id = '${fixture.abandonedSessionId}'
+  ),
   'authChallengeCount', (
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.auth_challenges
@@ -938,6 +986,9 @@ SELECT pg_catalog.jsonb_build_object(
       ),
     );
     assert.deepEqual(storedState, {
+      abandonedInviteCount: 0,
+      abandonedProfileCount: 0,
+      abandonedSessionCount: 0,
       authChallengeCount: 0,
       auditEventCount: 0,
       carProposalCount: 0,
@@ -970,7 +1021,7 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Jobs PostgreSQL integration passed (fifteen commands, least-privilege denial, generic output, and exact stored state).",
+      "Jobs PostgreSQL integration passed (sixteen commands, least-privilege denial, generic output, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

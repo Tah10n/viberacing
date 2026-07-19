@@ -307,8 +307,9 @@ Versioning where its guarantees are applicable.
   request/runtime/admission/private work, and four production service methods repeat literal-true
   enforcement before OAuth/WebAuthn/database work. EN/RU pages omit enrollment forms while active
   session redirects, returning login, and restricted recovery remain available. The tracked example
-  remains false; no dynamic/deployed switch, in-flight termination, abandoned-profile cleanup,
-  invite repair, worker drain, monitoring, or distributed rate limit is claimed.
+  remains false; the switch itself provides no dynamic/deployed behavior, in-flight termination,
+  abandoned-profile cleanup, invite repair, worker drain, monitoring, or distributed rate limit. A
+  separate Jobs-only bounded abandoned-enrollment cleanup now exists without a scheduler.
 - An exact local-only `forget-local` connector command that derives one canonical origin/label
   native-store account and invokes deletion without loading the credential, constructing a signer,
   starting Codex, or contacting Vibe Racing. Deleted and absent entries share one identifier-free
@@ -418,6 +419,12 @@ Versioning where its guarantees are applicable.
   maximum one-hour duration, with a closed epoch/zero state, complete fixed 130-row inventory,
   operation/global/bucket lock order, worker/admission race evidence, and no implied trusted edge
   identity, scheduler, capacity result, or deployment.
+- Jobs-only maximum-1000 cleanup for canonical abandoned `enrolling` profiles only after all exact
+  enrollment-session/registration-challenge authority is expired, one redeemed invite remains, and
+  no other profile-bound recovery, authority, source, deletion, scoring, or recipe state exists,
+  with authentication/profile-purge mutex ordering, repeated eligibility predicates, worker and
+  initial-passkey activation race evidence, retained redacted audit evidence, and no implied invite
+  reuse, deletion job, tombstone, notification, scheduler, backup purge, or deployment.
 - Jobs-only atomic open-season Community scoring refresh with immutable formula/season binding,
   distinct-source aggregation under one profile cap, shared-rank semantics, private derived score
   tables, bounded lock/statement waits, no empty-season growth, and observed concurrent idempotent
@@ -425,18 +432,19 @@ Versioning where its guarantees are applicable.
 - Jobs-only immutable Community season finalization after an exact 48-hour server-time grace period,
   with whole-payload late quarantine, terminal no-data seasons, idempotent retry, bounded calendar
   support, and no implied scheduler, correction capability, or public read surface.
-- A private local one-shot Jobs workspace for exactly fifteen fixed capabilities: authentication,
-  audit-event, invite, CarRecipe-proposal, ingest, pairing, session, aged revoked-passkey, or aged
-  minimized revoked-device cleanup; pairing approval-provenance redaction; primary profile purge;
-  fixed pairing-rate-window reset; terminal deletion-job cleanup; open-season refresh; or terminal
-  finalization. It has strict command/object/result parsing, a distinct redacted database namespace,
-  one-client pool, fixed deadlines, an exact role/login/capability/search-path probe, prepared
-  procedure calls, destructive failure release, stable non-reflective CLI output, production build,
-  and 242 tests at 100% coverage. A separate opt-in Docker gate now applies every reviewed
-  migration, runs all fifteen emitted commands through one synthetic least-privileged login, rejects
-  a deliberately widened login before mutation, verifies generic output and exact stored state, and
-  cleans up its container, network, and storage. It adds no scheduler, production credential/TLS
-  path, monitoring, retry loop, capacity result, or deployment claim.
+- A private local one-shot Jobs workspace for exactly sixteen fixed capabilities: authentication,
+  abandoned-enrollment, audit-event, invite, CarRecipe-proposal, ingest, pairing, session, aged
+  revoked-passkey, or aged minimized revoked-device cleanup; pairing approval-provenance redaction;
+  primary profile purge; fixed pairing-rate-window reset; terminal deletion-job cleanup; open-season
+  refresh; or terminal finalization. It has strict command/object/result parsing, a distinct
+  redacted database namespace, one-client pool, fixed deadlines, an exact
+  role/login/capability/search-path probe, prepared procedure calls, destructive failure release,
+  stable non-reflective CLI output, production build, and 254 tests at 100% coverage. A separate
+  opt-in Docker gate now applies every reviewed migration, runs all sixteen emitted commands through
+  one synthetic least-privileged login, rejects a deliberately widened login before mutation,
+  verifies generic output and exact stored state, and cleans up its container, network, and storage.
+  It adds no scheduler, production credential/TLS path, monitoring, retry loop, capacity result, or
+  deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.

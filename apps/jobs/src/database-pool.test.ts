@@ -52,8 +52,9 @@ describe("Jobs database pool", () => {
     await expect(client.cleanupAgedRevokedPasskeys(15)).resolves.toEqual([{ value: 1 }]);
     await expect(client.cleanupAgedRevokedDevices(16)).resolves.toEqual([{ value: 1 }]);
     await expect(client.resetExpiredPairingRequestWindows()).resolves.toEqual([{ value: 1 }]);
+    await expect(client.cleanupAbandonedEnrollments(17)).resolves.toEqual([{ value: 1 }]);
     expect(client).not.toHaveProperty("query");
-    expect(query).toHaveBeenCalledTimes(16);
+    expect(query).toHaveBeenCalledTimes(17);
     expect(query.mock.calls[0]![0]).toMatchObject({ values: [] });
     expect(query.mock.calls[0]![0].text).toContain("CURRENT_USER = 'viberacing_jobs'");
     expect(query.mock.calls[1]![0]).toMatchObject({ values: [6] });
@@ -146,6 +147,13 @@ describe("Jobs database pool", () => {
       "viberacing_api.reset_expired_pairing_request_windows()",
     );
     expect(query.mock.calls[15]![0].text).toContain("reset.reset_windows AS reset_windows");
+    expect(query.mock.calls[16]![0]).toMatchObject({ values: [17] });
+    expect(query.mock.calls[16]![0].text).toContain(
+      "viberacing_api.cleanup_abandoned_enrollments($1::integer)",
+    );
+    expect(query.mock.calls[16]![0].text).toContain(
+      "cleanup.deleted_enrollments AS deleted_enrollments",
+    );
     client.release(true);
     expect(release).toHaveBeenCalledWith(true);
 

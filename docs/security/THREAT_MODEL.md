@@ -13,9 +13,9 @@ public score/race/status routes, one local invite/OAuth/initial-passkey enrollme
 returning-passkey login plus private passkey/source/device inventory, source
 pause/reactivation/unlink, device/passkey revocation, fresh-passkey recovery-code rotation, and
 fresh-passkey profile-deletion-request slice plus one-time recovery-code replacement-passkey sign-in
-with encrypted cookies and logout, one local one-shot Jobs runner with ten bounded cleanup
+with encrypted cookies and logout, one local one-shot Jobs runner with eleven bounded cleanup
 capabilities, one bounded pairing approval-provenance redaction, one fixed pairing-rate-window
-reset, and primary profile purge, plus a synthetic disposable PostgreSQL integration for all fifteen
+reset, and primary profile purge, plus a synthetic disposable PostgreSQL integration for all sixteen
 Jobs commands, plus local Community sync verification, PostgreSQL-adapter, transport-free
 composition, and bounded Fastify HTTP boundaries; it does not yet contain an external audit sink,
 Jobs scheduler, cache/backup/tombstone purge, restore replay, deployed Ingest service, operational
@@ -209,7 +209,7 @@ and migration or rollback where applicable.
 | Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work                      | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons                                              | SQL plus synthetic CLI-to-PostgreSQL cleanup/reset/purge/scoring tested; production login, scheduler, correction planned                          |
 | CarRecipe and assets                | A proposal, agent shell, or public row smuggles a URL, command, markup, executable value, copyrighted binary, or nondeterminism | Default-off mutation, enum-only schema, checked reducer, proposal-only device authority, browser-only decision, projection, provenance, snapshots                      | Local gate/agent/browser/device/DB/public race and Jobs cleanup tested; schedule, release, edge, deployment pending                               |
 | Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                     | Invite role/reason/reference plus local Ingest, ranking, enrollment, pairing, new-source, and proposal gates implemented; hosted controls planned |
-| Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                                          | Immediate hide/revoke, idempotent purge, bounded tombstone, backup expiry, deletion replay after restore                                                               | Request, immediate lock-down, and bounded primary purge tested; cache/tombstone/backup/restore planned                                            |
+| Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                                          | Immediate hide/revoke, idempotent purge, bounded abandonment cleanup, bounded tombstone, backup expiry, deletion replay after restore                                  | Request, immediate lock-down, bounded primary purge, and abandoned enrollment cleanup tested; schedule/cache/tombstone/backup/restore planned     |
 | Pull-request CI                     | A fork changes a workflow or package to steal a token or publish an artifact                                                    | Read-only secretless CI, no privileged environment, pinned inputs, no persisted checkout credentials, fixed no-upload Windows smoke, protected review                  | Workflow and policy implemented locally; hosted controls and Windows result pending                                                               |
 | Release and dependencies            | A compromised dependency or runner produces an official malicious connector                                                     | Exact locks, quarantine, review, isolated trusted build, signatures, SBOM, provenance, clean-machine verification                                                      | Dependency baseline and untrusted portable smoke implemented; trusted release path planned                                                        |
 | Public repository                   | A maintainer accidentally commits a credential, personal record, local path, or private incident detail                         | Public-file scan, exact staged-blob scan, synthetic-only policy, manual diff and history review                                                                        | Tree, staged-blob, and reachable-history scans implemented locally; hosted scans pending                                                          |
@@ -305,8 +305,8 @@ and migration or rollback where applicable.
    labeled synthetic fallback on error. ADR 0056 now keeps all three public GET compositions
    default-off before query/header parsing, admission acquisition, or storage work unless their
    module-load value is exact true; it proves no deployed or dynamic route/cache denial. A local
-   one-shot Jobs runner now validates one of fifteen fixed
-   authentication/audit-event/invite/CarRecipe-proposal/ingest/pairing/session/
+   one-shot Jobs runner now validates one of sixteen fixed
+   authentication/abandoned-enrollment/audit-event/invite/CarRecipe-proposal/ingest/pairing/session/
    terminal-deletion-job/aged-revoked-passkey/aged-revoked-device cleanup, pairing
    approval-provenance redaction, fixed pairing-rate-window reset, primary-profile purge, or
    canonical-season refresh/finalization commands, probes its exact least-privileged login/session
@@ -320,10 +320,13 @@ and migration or rollback where applicable.
    session/challenge/pairing reference is absent; minimized activated pairings and their exact
    revoked device keys are removed only after both are 180 days old and every approval,
    authorization-challenge, nonce, and raw-snapshot reference is absent; terminal deletion jobs are
-   removed only after 30 days; database audit references are removed only after 180 days. An
-   external append-only audit sink, production login/TLS and edge evidence, a Jobs scheduler,
-   audited correction authority, trusted-edge rate policy, and capacity evidence are still required
-   before publishing durable results.
+   removed only after 30 days; database audit references are removed only after 180 days. A
+   canonical abandoned `enrolling` profile and its redeemed invite are removed only after every
+   exact enrollment-session/registration-challenge expiry is past and no other recovery, passkey,
+   source, deletion, scoring, or recipe state exists; a locked in-flight initial-passkey activation
+   is skipped. An external append-only audit sink, production login/TLS and edge evidence, a Jobs
+   scheduler, audited correction authority, trusted-edge rate policy, and capacity evidence are
+   still required before publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes.

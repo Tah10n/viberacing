@@ -27,7 +27,11 @@ testWeekStartDate.setUTCDate(
   testWeekStartDate.getUTCDate() - ((testWeekStartDate.getUTCDay() + 6) % 7),
 );
 const testWeekStart = testWeekStartDate.toISOString().slice(0, 10);
+const expectedObservedLockWaitRaceCount = 41;
+const expectedObservedEarlyCompletionOverlapCount = 1;
 let raceSequence = 0;
+let observedLockWaitRaceCount = 0;
+let observedEarlyCompletionOverlapCount = 0;
 
 function docker(args, options = {}) {
   const result = spawnSync("docker", args, {
@@ -232,6 +236,7 @@ async function runObservedRace(
   { orderedContenders = false, releaseDelayMilliseconds = 0, releaseSql = "\nCOMMIT;\n" } = {},
 ) {
   raceSequence += 1;
+  observedLockWaitRaceCount += 1;
   const racePrefix = `vr-race-${process.pid}-${raceSequence}`;
   const holderName = `${racePrefix}-holder`;
   const contenderNames = contenderSql.map((_, index) => `${racePrefix}-contender-${index + 1}`);
@@ -295,6 +300,49 @@ async function runObservedRace(
         (contenderEvidence ? `\n${contenderEvidence}` : ""),
       { cause: error },
     );
+  }
+}
+
+async function expectSuccessBeforeHolderRelease(label, lockSql, readyMarker, contenderSql) {
+  raceSequence += 1;
+  observedEarlyCompletionOverlapCount += 1;
+  const racePrefix = `vr-race-${process.pid}-${raceSequence}`;
+  const holder = startPsql(withApplicationName(`${racePrefix}-holder`, lockSql), readyMarker, {
+    diagnosticName: `${label} lock holder`,
+    keepStdinOpen: true,
+  });
+  let holderReleased = false;
+  let contender;
+
+  try {
+    await holder.ready;
+    contender = startPsql(withApplicationName(`${racePrefix}-contender`, contenderSql), undefined, {
+      diagnosticName: `${label} contender`,
+    });
+    let timeout;
+    const contenderResult = await Promise.race([
+      contender.completion,
+      new Promise((_, rejectPromise) => {
+        timeout = setTimeout(
+          () => rejectPromise(new Error(`${label} contender blocked behind the held transition`)),
+          5_000,
+        );
+      }),
+    ]).finally(() => clearTimeout(timeout));
+    requireSuccess(contenderResult, `${label} contender`);
+
+    holderReleased = true;
+    holder.closeInput("\nCOMMIT;\n");
+    requireSuccess(await holder.completion, `${label} lock holder`);
+  } catch (error) {
+    if (!holderReleased) {
+      holder.closeInput("\nROLLBACK;\n");
+    }
+    await Promise.allSettled([
+      holder.completion,
+      ...(contender === undefined ? [] : [contender.completion]),
+    ]);
+    throw error;
   }
 }
 
@@ -511,6 +559,10 @@ try {
     {
       label: "session retention cleanup scenarios",
       sql: readFileSync(resolve(root, "database/tests/session_cleanup.sql"), "utf8"),
+    },
+    {
+      label: "abandoned enrollment retention cleanup scenarios",
+      sql: readFileSync(resolve(root, "database/tests/abandoned_enrollment_cleanup.sql"), "utf8"),
     },
     {
       label: "pairing approval-provenance retention scenarios",
@@ -759,6 +811,63 @@ SELECT * FROM viberacing_api.cleanup_expired_sessions(1);`,
       ),
     ),
     "session cleanup concurrency assertions",
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/abandoned_enrollment_cleanup_concurrency_setup.sql"),
+        "utf8",
+      ),
+    ),
+    "abandoned enrollment cleanup concurrency setup",
+  );
+
+  await expectConcurrentSuccesses(
+    "bounded abandoned enrollment cleanup worker race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_abandoned_enrollments(1);
+\\echo abandoned-enrollment-worker-lock-ready`,
+    "abandoned-enrollment-worker-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_abandoned_enrollments(1);`,
+    ],
+  );
+
+  await expectSuccessBeforeHolderRelease(
+    "initial passkey activation versus abandoned enrollment cleanup race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_web;
+SELECT viberacing_api.register_initial_passkey(
+  '00000000-0000-4000-8000-000000038903',
+  pg_catalog.decode(pg_catalog.lpad('38903', 64, '0'), 'hex'),
+  '00000000-0000-4000-8000-000000039003',
+  '00000000-0000-4000-8000-000000039103',
+  pg_catalog.decode(pg_catalog.repeat('a3', 16), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('b3', 32), 'hex'),
+  'Activation race key',
+  0,
+  false,
+  false,
+  '00000000-0000-4000-8000-000000039203',
+  'req_' || pg_catalog.repeat('R', 22)
+);
+\\echo enrollment-activation-lock-ready`,
+    "enrollment-activation-lock-ready",
+    `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_abandoned_enrollments(1);`,
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/abandoned_enrollment_cleanup_concurrency_assertions.sql"),
+        "utf8",
+      ),
+    ),
+    "abandoned enrollment cleanup concurrency assertions",
   );
 
   await expectConcurrentSuccesses(
@@ -2397,8 +2506,17 @@ SELECT viberacing_api.complete_passkey_login(
     );
   }
 
+  if (
+    observedLockWaitRaceCount !== expectedObservedLockWaitRaceCount ||
+    observedEarlyCompletionOverlapCount !== expectedObservedEarlyCompletionOverlapCount
+  ) {
+    throw new Error(
+      `Database race inventory drifted: observed ${observedLockWaitRaceCount} lock-wait and ${observedEarlyCompletionOverlapCount} early-completion overlap scenarios.`,
+    );
+  }
+
   console.log(
-    "Database integration passed (27 schema tables, 38 observed lock-wait races, 12 relation-denial and 64 cross-capability checks).",
+    `Database integration passed (27 schema tables, ${observedLockWaitRaceCount} observed lock-wait races, ${observedEarlyCompletionOverlapCount} observed early-completion overlap, 12 relation-denial and 64 cross-capability checks).`,
   );
 } finally {
   if (started) {

@@ -10,15 +10,15 @@ an exact-body composer, isolated pairing/request signers, a pure Web pairing ver
 applications/routes and bounded native-store connect/local-removal commands, a visible public-race
 consumer with a synthetic fallback, a browser-memory-only hypothetical score simulator, and bounded
 database/local Jobs ingest, pairing, authentication, CarRecipe-proposal, eligible
-expired-invite/session, aged unreferenced revoked-passkey, and aged minimized revoked-device cleanup
-plus primary profile purge. A local invite/OAuth/initial-passkey enrollment, returning-passkey
-login, private passkey inventory, and private active-device inventory and revoke slice now add
-encrypted short-lived cookies, fixed Web/Auth database calls, an account page, and logout with
-injected/synthetic evidence, but there is no live OAuth app, authenticator-backed result, deployed
-application database, production service, operational connector, or real user data. This document
-remains the required inventory for implementation. A field may not be collected merely because it
-appears here: its schema, purpose, visibility, retention, deletion, and access tests must exist
-first. The implemented column-level mapping is documented in
+expired-invite/session, abandoned-enrollment, aged unreferenced revoked-passkey, and aged minimized
+revoked-device cleanup plus primary profile purge. A local invite/OAuth/initial-passkey enrollment,
+returning-passkey login, private passkey inventory, and private active-device inventory and revoke
+slice now add encrypted short-lived cookies, fixed Web/Auth database calls, an account page, and
+logout with injected/synthetic evidence, but there is no live OAuth app, authenticator-backed
+result, deployed application database, production service, operational connector, or real user data.
+This document remains the required inventory for implementation. A field may not be collected merely
+because it appears here: its schema, purpose, visibility, retention, deletion, and access tests must
+exist first. The implemented column-level mapping is documented in
 [`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
@@ -50,7 +50,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 
 | Data                                                                        | Class                                  | Source and purpose                                                                                                                           | Visibility and access                                                                           | Planned store                                                                                                                                                  | Retention and deletion                                                                                                                                                                                                                                                                                      |
 | --------------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resolved GitHub numeric user ID                                             | Account                                | GitHub OAuth; enforce one Vibe Racing profile per upstream ID                                                                                | Web/Auth and uniqueness procedure only                                                          | `profiles` identity binding                                                                                                                                    | Until profile deletion; short security tombstone only if justified and disclosed                                                                                                                                                                                                                            |
+| Resolved GitHub numeric user ID                                             | Account                                | GitHub OAuth; enforce one Vibe Racing profile per upstream ID                                                                                | Web/Auth and uniqueness procedure only                                                          | `profiles` identity binding                                                                                                                                    | Until profile deletion; a canonical abandoned `enrolling` profile is bounded cleanup-eligible only after all retained authority expires; short security tombstone only if justified and disclosed                                                                                                           |
 | GitHub access token and non-ID profile response fields                      | Prohibited after callback              | GitHub OAuth; resolve the numeric ID once with no extra scope                                                                                | Callback memory only                                                                            | Never persisted                                                                                                                                                | Discard immediately after identity resolution                                                                                                                                                                                                                                                               |
 | OAuth state, PKCE verifier, callback code, and invite continuation          | Security                               | Web/Auth; bind one authorization response to one enrollment                                                                                  | Verifier/continuation in HttpOnly cookie; state crosses browser/GitHub; code returns to Web     | State, verifier, preferences, invite ID/digest, and ten-minute expiry in a purpose-keyed AES-GCM cookie                                                        | Cookie expires or is cleared at callback; code is exchanged once; app/dev logs suppress it; hosted access logs must redact query                                                                                                                                                                            |
 | GitHub OAuth client ID and client secret                                    | Security                               | Deployment; identify the dedicated enrollment OAuth app                                                                                      | Web/Auth callback only; client ID appears in the GitHub redirect                                | Protected environment/secret manager; tracked values are non-working placeholders                                                                              | Rotate secret on exposure/ownership change; remove both when GitHub enrollment is disabled                                                                                                                                                                                                                  |
@@ -60,8 +60,8 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Hypothetical simulator token/day and active-day input                       | Usage                                  | Visitor; explain the public Community formula without account data                                                                           | Current browser component only; never Web, API, server, or log                                  | React component state only; no form name/action, request, cache, or persistence                                                                                | Discarded on reload/navigation; never transmitted, logged, cached, persisted, or prefilled                                                                                                                                                                                                                  |
 | Optional GitHub profile link                                                | Public                                 | User opt-in; distinguish an upstream public identity                                                                                         | Public only after explicit opt-in                                                               | `profiles` preference                                                                                                                                          | Until opt-out or deletion; purge public cache                                                                                                                                                                                                                                                               |
 | Profile visibility, locale, theme, motion, privacy preferences              | Account                                | User; product experience and visibility controls                                                                                             | User profile; only public effects are visible                                                   | `profiles`; Web maps lifecycle state only to closed `public`/`hidden`                                                                                          | Until reset or deletion                                                                                                                                                                                                                                                                                     |
-| Invite secret, verifier digest, and state                                   | Security                               | Operator-issued 256-bit secret; gate beta enrollment                                                                                         | Plaintext only in the initial bounded form; digest to Web/Auth and limited admin procedure      | SHA-256 verifier digest, status, expiry, and non-sensitive audit                                                                                               | Plaintext discarded during parsing; expired active/revoked rows are cleanup-eligible; redeemed provenance remains until profile purge                                                                                                                                                                       |
-| Session verifier, encrypted cookie, and metadata                            | Security                               | Web/Auth; maintain one browser session                                                                                                       | HttpOnly same-site browser cookie and Web/Auth only                                             | Purpose-keyed AES-GCM cookie; database stores SHA-256 verifier digest, expiry, state, and passkey provenance                                                   | At most 15 minutes pending or 30 days normal; bounded cleanup once unreferenced; activated pairing approval reference is retained at least 180 days before redaction eligibility                                                                                                                            |
+| Invite secret, verifier digest, and state                                   | Security                               | Operator-issued 256-bit secret; gate beta enrollment                                                                                         | Plaintext only in the initial bounded form; digest to Web/Auth and limited admin procedure      | SHA-256 verifier digest, status, expiry, and non-sensitive audit                                                                                               | Plaintext discarded during parsing; expired active/revoked rows are cleanup-eligible; redeemed provenance remains until profile purge or exact abandoned-enrollment cleanup                                                                                                                                 |
+| Session verifier, encrypted cookie, and metadata                            | Security                               | Web/Auth; maintain one browser session                                                                                                       | HttpOnly same-site browser cookie and Web/Auth only                                             | Purpose-keyed AES-GCM cookie; database stores SHA-256 verifier digest, expiry, state, and passkey provenance                                                   | At most 15 minutes pending or 30 days normal; bounded cleanup once unreferenced; expired abandoned-enrollment sessions may cascade with their exact profile; activated pairing approval reference is retained at least 180 days before redaction eligibility                                                |
 | Enrollment cookie master key                                                | Security                               | Deployment; seal login, OAuth, passkey, and session continuations                                                                            | Web/Auth process memory only; four purpose keys are derived with HKDF                           | Protected environment/secret manager; exactly 32 canonical base64url bytes; never tracked or logged                                                            | Rotate on exposure; rotation invalidates outstanding continuations and sessions                                                                                                                                                                                                                             |
 | Web PostgreSQL deployment login and password                                | Security                               | Deployment; authorize only the Web score, identity, and pairing adapters                                                                     | Adapters and PostgreSQL driver process memory only                                              | Protected environment/secret manager; never tracked or logged                                                                                                  | Rotate on exposure/role change and remove when the adapters are disabled                                                                                                                                                                                                                                    |
 | Ingest PostgreSQL deployment login and password                             | Security                               | Deployment; authorize only device lookup and sync submission                                                                                 | Ingest adapter and PostgreSQL driver process memory only                                        | Protected environment/secret manager; never tracked or logged                                                                                                  | Rotate on exposure/role change and remove when ingestion is disabled                                                                                                                                                                                                                                        |
@@ -290,6 +290,10 @@ service boundaries use the boolean only for in-process fail-closed decisions. No
 passkey, session, account, cookie, database row, metric, trace, audit event, export, cache key, or
 network destination is added or extended. A future dynamic control, operator event, monitoring sink,
 or deployment audit still needs a separate purpose, access policy, and retention decision.
+
+ADR 0061 is a separate Jobs-only retention capability, not behavior of that module-load value. It
+adds no cookie, field, identifier, metric, log, or network destination and is described with
+revision 0038 below.
 
 ADR 0021 adds no collected or retained field. The connector library transiently validates the stable
 initialization response's Codex home, platform family, operating-system name, and user agent under
@@ -555,6 +559,18 @@ state/expiry predicates preserve an in-flight redemption; live and redeemed rows
 The local Jobs mapper discards the count. Scheduling, production login/TLS, monitoring, capacity,
 backup purge, and deployed retention evidence remain outside this slice.
 
+Revision 0038 adds no collected field. It removes an oldest-first, 1-to-1000 batch of canonical
+`enrolling` profiles only when the exact redeemed invite remains, every associated session is exact
+expired enrollment authority, every challenge is exact expired registration authority, and no other
+recovery, passkey, source, deletion, scoring, or recipe state exists. The existing cascade removes
+that redeemed verifier plus expired session/challenge state; database audit rows remain with null
+profile linkage. Authentication/profile-purge mutexes, repeated predicates, and `SKIP LOCKED`
+preserve live authority, every non-canonical profile-bound row, and an in-flight initial-passkey
+activation. The local Jobs mapper receives and discards only one aggregate count. The operation
+creates no replacement invite, deletion job, tombstone, notification, log, metric, cache key, or
+export. Scheduling, production login/TLS, monitoring, capacity, backup purge, restore replay, and
+deployed retention evidence remain outside this slice.
+
 Revision 0009 reads exact current values only inside an owner-defined Jobs procedure and writes a
 strictly smaller private derived set: daily and weekly score, active days, contributing-source
 count, shared rank, deterministic display order, ISO-week dates, and immutable Community formula
@@ -577,9 +593,9 @@ non-personal terminal season definition. A no-data closed week stores only that 
 public serializer/cache, audited correction record, finalized public-history retention rule, Jobs
 deployment/scheduler, or monitoring backend exists.
 
-ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, 0048, 0049, and 0050 store no user
-data. The local Jobs process transiently receives only one of ten fixed 1000-row cleanup batches,
-one zero-argument maximum-130 pairing-rate-window reset, one fixed 1000-row pairing
+ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, and 0061 store no
+user data. The local Jobs process transiently receives only one of eleven fixed 1000-row cleanup
+batches, one zero-argument maximum-130 pairing-rate-window reset, one fixed 1000-row pairing
 approval-provenance redaction, one fixed maximum-10 profile purge, or one Public season-start label,
 plus the private aggregate counts already returned by the procedures. It validates and discards
 those values within one process invocation. The CLI emits only one constant completion/failure
@@ -738,14 +754,14 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   the later sync. It has no other-platform admission, log/export capability, package, or release;
   the candidate remains unsupported until clean-machine platform, privacy-egress, packaging,
   provenance, and release gates pass.
-- Jobs currently receive only bounded cleanup of expired authentication, invitation, ingest,
-  pairing, session, CarRecipe-proposal, terminal-deletion-job, database audit-event, and aged
-  unreferenced revoked-passkey plus minimized revoked-device state; bounded aged pairing
-  approval-provenance redaction; fixed anonymous pairing-rate-window reset; maximum-10 primary
-  profile deletion; open-season Community scoring refresh; and terminal finalization. The local
-  one-shot adapter rechecks the exact Jobs-only login and invokes one prepared capability without
-  logging inputs or results. Correction, cache/backup purge, tombstone/restore replay, and remaining
-  retention capabilities require separate migrations and tests; migrations use a different
+- Jobs currently receive only bounded cleanup of expired authentication, abandoned-enrollment,
+  invitation, ingest, pairing, session, CarRecipe-proposal, terminal-deletion-job, database
+  audit-event, and aged unreferenced revoked-passkey plus minimized revoked-device state; bounded
+  aged pairing approval-provenance redaction; fixed anonymous pairing-rate-window reset; maximum-10
+  primary profile deletion; open-season Community scoring refresh; and terminal finalization. The
+  local one-shot adapter rechecks the exact Jobs-only login and invokes one prepared capability
+  without logging inputs or results. Correction, cache/backup purge, tombstone/restore replay, and
+  remaining retention capabilities require separate migrations and tests; migrations use a different
   non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
