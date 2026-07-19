@@ -60,6 +60,10 @@ describe("Jobs command", () => {
     ],
     [["purge-profile-deletions"], { batchSize: 10, kind: "purge_profile_deletions" }],
     [
+      ["redact-aged-pairing-approval-provenance"],
+      { batchSize: 1_000, kind: "redact_aged_pairing_approval_provenance" },
+    ],
+    [
       ["refresh-community-season", "2026-07-13"],
       { kind: "refresh_community_season", seasonStart: "2026-07-13" },
     ],
@@ -86,6 +90,7 @@ describe("Jobs command", () => {
     ["cleanup-expired-sessions", "unexpected"],
     ["cleanup-terminal-deletion-jobs", "unexpected"],
     ["purge-profile-deletions", "unexpected"],
+    ["redact-aged-pairing-approval-provenance", "unexpected"],
     ["refresh-community-season", "2026-07-13", "unexpected"],
     ["refresh-community-season"],
     ["refresh-community-season", "2026-07-14"],

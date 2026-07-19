@@ -14,10 +14,11 @@ staged-review rules all apply.
   function with positional parameters; do not add a generic query, migration, table, owner, Web,
   Ingest, Admin, or interactive-auth capability.
 - Authentication, audit-event, invite, CarRecipe-proposal, ingest, pairing, session, and terminal
-  deletion-job cleanup each accept only the fixed 1000-row CLI batch. Scoring commands accept one
-  canonical Monday season inside the database contract. Primary profile purge accepts only the
-  separate fixed 10-profile CLI batch. Unknown commands, fields, arguments, result columns, rows,
-  accessors, and prototypes fail before they can widen work.
+  deletion-job cleanup plus pairing approval-provenance redaction each accept only the fixed
+  1000-row CLI batch. Scoring commands accept one canonical Monday season inside the database
+  contract. Primary profile purge accepts only the separate fixed 10-profile CLI batch. Unknown
+  commands, fields, arguments, result columns, rows, accessors, and prototypes fail before they can
+  widen work.
 - Hold the client until the PostgreSQL call settles. Destroy failed clients, close the pool on every
   CLI path, and keep the client deadline outside the database function's 30-second deadline.
 - Do not log dates, counts, identifiers, SQL, environment values, database errors, stack traces, or

@@ -53,6 +53,10 @@ export type CommunityMaintenanceJob =
       kind: "purge_profile_deletions";
     }>
   | Readonly<{
+      batchSize: number;
+      kind: "redact_aged_pairing_approval_provenance";
+    }>
+  | Readonly<{
       kind: "finalize_community_season";
       seasonStart: string;
     }>
@@ -102,6 +106,10 @@ export type CommunityMaintenanceResult =
   | Readonly<{
       kind: "purge_profile_deletions";
       purgedProfiles: number;
+    }>
+  | Readonly<{
+      kind: "redact_aged_pairing_approval_provenance";
+      redactedPairings: number;
     }>
   | Readonly<{
       kind: "finalize_community_season";
@@ -213,7 +221,8 @@ function readJob(value: unknown): CommunityMaintenanceJob {
       kind === "cleanup_expired_ingest_state" ||
       kind === "cleanup_expired_pairing_state" ||
       kind === "cleanup_expired_sessions" ||
-      kind === "cleanup_terminal_deletion_jobs"
+      kind === "cleanup_terminal_deletion_jobs" ||
+      kind === "redact_aged_pairing_approval_provenance"
     ) {
       if (!hasExactKeys(value, new Set(["batchSize", "kind"]))) {
         fail("job_invalid");
@@ -392,6 +401,14 @@ function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaint
     });
   }
 
+  if (job.kind === "redact_aged_pairing_approval_provenance") {
+    const row = readSingleRow(value, new Set(["redacted_pairings"]));
+    return Object.freeze({
+      kind: job.kind,
+      redactedPairings: readCount(row, "redacted_pairings", job.batchSize),
+    });
+  }
+
   const row = readSingleRow(value, new Set(["profile_count"]));
   return Object.freeze({
     kind: job.kind,
@@ -446,6 +463,9 @@ function executeCapability(
   }
   if (job.kind === "purge_profile_deletions") {
     return client.purgeProfileDeletions(job.batchSize);
+  }
+  if (job.kind === "redact_aged_pairing_approval_provenance") {
+    return client.redactAgedPairingApprovalProvenance(job.batchSize);
   }
   if (job.kind === "refresh_community_season") {
     return client.refreshCommunitySeason(job.seasonStart);

@@ -55,6 +55,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0044](0044-bounded-repository-verification-skill.md)           | Bounded repository verification orchestration                       | Accepted; local read-only skill implemented            |
 | [0045](0045-bounded-terminal-deletion-job-retention-cleanup.md) | Bounded terminal deletion-job retention cleanup                     | Accepted; database and local command; schedule pending |
 | [0046](0046-bounded-audit-event-retention-cleanup.md)           | Bounded database audit-event retention cleanup                      | Accepted; database and local command; schedule pending |
+| [0047](0047-bounded-pairing-approval-provenance-retention.md)   | Bounded pairing approval-provenance retention                       | Accepted; database and local command; schedule pending |
 
 ## Lifecycle
 

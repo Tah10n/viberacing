@@ -198,6 +198,12 @@
       "name": "audit_event_retention_cleanup",
       "path": "database/migrations/0033_audit_event_retention_cleanup.sql",
       "sha256": "922974450c51d5414be3a1f223abccb3bf5217f4008d4d35bb934e369ef4ba86"
+    },
+    {
+      "revision": 34,
+      "name": "pairing_approval_provenance_retention",
+      "path": "database/migrations/0034_pairing_approval_provenance_retention.sql",
+      "sha256": "afd0b68d93d7c72a03cd55321da14db2fc3f90f4ff3ac8a3bbdd0021c33f0f53"
     }
   ]
 }

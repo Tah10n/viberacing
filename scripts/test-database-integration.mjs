@@ -506,6 +506,13 @@ try {
       sql: readFileSync(resolve(root, "database/tests/session_cleanup.sql"), "utf8"),
     },
     {
+      label: "pairing approval-provenance retention scenarios",
+      sql: readFileSync(
+        resolve(root, "database/tests/pairing_approval_provenance_retention.sql"),
+        "utf8",
+      ),
+    },
+    {
       label: "primary profile deletion purge scenarios",
       sql: readFileSync(resolve(root, "database/tests/profile_deletion_purge.sql"), "utf8"),
     },
@@ -613,6 +620,13 @@ try {
       label: "audit-event cleanup concurrency setup",
       sql: readFileSync(
         resolve(root, "database/tests/audit_event_cleanup_concurrency_setup.sql"),
+        "utf8",
+      ),
+    },
+    {
+      label: "pairing approval-provenance concurrency setup",
+      sql: readFileSync(
+        resolve(root, "database/tests/pairing_approval_provenance_concurrency_setup.sql"),
         "utf8",
       ),
     },
@@ -950,6 +964,29 @@ SELECT * FROM viberacing_api.cleanup_expired_audit_events(1);`,
       ),
     ),
     "audit-event cleanup concurrency assertions",
+  );
+
+  await expectConcurrentSuccesses(
+    "bounded pairing approval-provenance worker race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.redact_aged_pairing_approval_provenance(1);
+\\echo pairing-provenance-worker-lock-ready`,
+    "pairing-provenance-worker-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.redact_aged_pairing_approval_provenance(1);`,
+    ],
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/pairing_approval_provenance_concurrency_assertions.sql"),
+        "utf8",
+      ),
+    ),
+    "pairing approval-provenance concurrency assertions",
   );
 
   await expectOneConcurrentWinner(
@@ -2158,6 +2195,11 @@ SELECT viberacing_api.complete_passkey_login(
     );
     expectDenied(
       role,
+      "SELECT * FROM viberacing_api.redact_aged_pairing_approval_provenance(1);",
+      `${role} pairing approval-provenance redaction`,
+    );
+    expectDenied(
+      role,
       "SELECT * FROM viberacing_api.cleanup_expired_car_recipe_proposals(1);",
       `${role} CarRecipe proposal cleanup`,
     );
@@ -2207,7 +2249,7 @@ SELECT viberacing_api.complete_passkey_login(
   }
 
   console.log(
-    "Database integration passed (27 schema tables, 33 observed lock-wait races, 12 relation-denial and 52 cross-capability checks).",
+    "Database integration passed (27 schema tables, 34 observed lock-wait races, 12 relation-denial and 55 cross-capability checks).",
   );
 } finally {
   if (started) {

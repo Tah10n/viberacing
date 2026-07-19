@@ -515,26 +515,27 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 52 cross-capability denials.
-  Ingest has exactly three reviewed functions; Jobs has exactly eleven reviewed functions: bounded
+  and usage/scoring-table reads or API-schema mutation, and proves 55 cross-capability denials.
+  Ingest has exactly three reviewed functions; Jobs has exactly twelve reviewed functions: bounded
   authentication-, audit-event-, invite-, CarRecipe-proposal-, ingest-, pairing-, and
-  session-retention cleanup, terminal deletion-job cleanup, primary profile deletion, open-season
-  scoring refresh, and terminal season finalization. Web alone receives the bounded public score and
-  separate race functions; Ingest, Jobs, and Admin are explicitly denied. The Web adapter uses one
-  dedicated pool, fixed parameterized function calls, and checks effective role, distinct
-  non-privileged login, exact Web-only membership, database capability, search path, and read-only
-  state before every pooled read. Failed sessions are destroyed and raw driver errors are not
-  forwarded. The local Jobs adapter independently checks an exact Jobs-only login/membership,
-  CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the eleven prepared
-  function calls. Its pool maximum is one, input/result shapes are closed, failed clients are
-  destroyed, and CLI output reflects no configuration, command, SQL, count, or error detail. The
-  local Ingest adapter independently caps its pool at four, probes the exact Ingest login/role and
-  safe search path before each capability, exposes only fixed parameterized origin replay, device
-  lookup, and submission calls, reconstructs and revalidates inputs, copies mutable values, accepts
-  only closed rows, and destroys failed clients without forwarding driver/configuration details.
+  session-retention cleanup, terminal deletion-job cleanup, pairing approval-provenance redaction,
+  primary profile deletion, open-season scoring refresh, and terminal season finalization. Web alone
+  receives the bounded public score and separate race functions; Ingest, Jobs, and Admin are
+  explicitly denied. The Web adapter uses one dedicated pool, fixed parameterized function calls,
+  and checks effective role, distinct non-privileged login, exact Web-only membership, database
+  capability, search path, and read-only state before every pooled read. Failed sessions are
+  destroyed and raw driver errors are not forwarded. The local Jobs adapter independently checks an
+  exact Jobs-only login/membership, CONNECT without CREATE/TEMPORARY, and safe search path before
+  exactly one of the twelve prepared function calls. Its pool maximum is one, input/result shapes
+  are closed, failed clients are destroyed, and CLI output reflects no configuration, command, SQL,
+  count, or error detail. The local Ingest adapter independently caps its pool at four, probes the
+  exact Ingest login/role and safe search path before each capability, exposes only fixed
+  parameterized origin replay, device lookup, and submission calls, reconstructs and revalidates
+  inputs, copies mutable values, accepts only closed rows, and destroys failed clients without
+  forwarding driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Web deployment login/TLS integration has not been exercised. Jobs now has a
-  disposable synthetic least-privileged login, all eleven emitted commands, a widened-login denial,
+  disposable synthetic least-privileged login, all twelve emitted commands, a widened-login denial,
   and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged loopback
   login and full HTTP integration result. Neither proves a deployment credential/certificate,
   external TLS/edge route, external audit sink, capacity, scheduler, monitoring, or real-user
@@ -664,7 +665,10 @@ material availability cost.
   Revision 0030 adds an oldest-first 1-to-1000 cleanup for expired session rows with no retained
   predecessor and no pairing approval reference. It reuses the authentication-retention mutex,
   cascades only the selected row's challenges, and has an observed two-worker race proving
-  serialization and live-session preservation. Activated-pairing provenance remains retained.
+  serialization and live-session preservation. Revision 0034 permits only Jobs to redact both exact
+  approval references together from activated pairings after 180 days under the authentication and
+  pairing mutexes. Partial or pre-activation redaction fails; the pairing, profile/source/device
+  binding, active device, and passkey remain, and a separate session cleanup can then progress.
   Revision 0031 adds a shared-mutex oldest-first 1-to-1000 cleanup for expired active or revoked
   invite verifier rows. Its observed worker race proves exact progress while live invites and
   redeemed enrollment provenance remain. Revision 0032 adds oldest-first 1-to-1000 cleanup for
@@ -699,27 +703,28 @@ material availability cost.
   is not a trusted edge/IP identity and still needs capacity evidence. Physical pairing cleanup
   exists as a separate local capability, but scheduling and edge controls are still pending. The
   local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client deadlines, eight
-  fixed 1000-row cleanup commands, one fixed maximum-10 primary-purge command, canonical season
-  validation, closed one-row results, and destructive release on failure. Its synthetic integration
-  executes those commands sequentially against one disposable database and therefore proves no
-  parallel scheduler or production-load capacity. The kernel itself has no socket/stream authority.
-  The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
-  checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row origin consume,
-  zero-or-one device lookup, and one-row submission results, with destructive release on failure.
-  The transport-free application generates request correlation before verification, submits only
-  after verification, waits for settlement, and contains dependency failures without a retry loop.
-  The local Fastify boundary caps the raw body at 8192 bytes, parsed headers at 16384 bytes, raw
-  header pairs at 64, connections at 32, and requests per socket at 16; it sets 5/33/34-second
-  request/handler/connection deadlines and a five-second keep-alive, admits four unsettled
-  application calls without a queue, holds each lease through settlement, and returns generic 503 on
-  exhaustion. Real loopback tests close malformed and partial requests; injection tests cover
-  overload and response policy. The separate host closes that composition under a 36-second
-  first-signal deadline, forces failure on a second signal/deadline/close error, and requires the
-  Railway drain declaration to leave at least four seconds beyond its local close bound. There is no
-  live identity or deployment database integration, distributed rate/backpressure policy,
-  monitoring, or combined capacity evidence. The full synthetic Ingest gate proves correctness under
-  four sequential signed requests, not load capacity. Scheduling, cache, scoring/read capacity
-  evidence, quotas, edge shaping, and production load evidence remain unimplemented.
+  fixed 1000-row cleanup commands, one fixed 1000-row approval-provenance redaction, one fixed
+  maximum-10 primary-purge command, canonical season validation, closed one-row results, and
+  destructive release on failure. Its synthetic integration executes those commands sequentially
+  against one disposable database and therefore proves no parallel scheduler or production-load
+  capacity. The kernel itself has no socket/stream authority. The separate Ingest adapter adds a
+  four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime
+  recycling, exact one-row origin consume, zero-or-one device lookup, and one-row submission
+  results, with destructive release on failure. The transport-free application generates request
+  correlation before verification, submits only after verification, waits for settlement, and
+  contains dependency failures without a retry loop. The local Fastify boundary caps the raw body at
+  8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests
+  per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
+  keep-alive, admits four unsettled application calls without a queue, holds each lease through
+  settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and partial
+  requests; injection tests cover overload and response policy. The separate host closes that
+  composition under a 36-second first-signal deadline, forces failure on a second
+  signal/deadline/close error, and requires the Railway drain declaration to leave at least four
+  seconds beyond its local close bound. There is no live identity or deployment database
+  integration, distributed rate/backpressure policy, monitoring, or combined capacity evidence. The
+  full synthetic Ingest gate proves correctness under four sequential signed requests, not load
+  capacity. Scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and production
+  load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

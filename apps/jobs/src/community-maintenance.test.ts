@@ -34,6 +34,7 @@ interface PoolFixture {
   readonly finalizeCommunitySeason: ReturnType<typeof vi.fn>;
   readonly pool: JobsDatabasePool;
   readonly purgeProfileDeletions: ReturnType<typeof vi.fn>;
+  readonly redactAgedPairingApprovalProvenance: ReturnType<typeof vi.fn>;
   readonly release: ReturnType<typeof vi.fn>;
   readonly refreshCommunitySeason: ReturnType<typeof vi.fn>;
   readonly verifyRuntimeBoundary: ReturnType<typeof vi.fn>;
@@ -50,6 +51,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
   const cleanupTerminalDeletionJobs = vi.fn(() => Promise.resolve(jobResult));
   const finalizeCommunitySeason = vi.fn(() => Promise.resolve(jobResult));
   const purgeProfileDeletions = vi.fn(() => Promise.resolve(jobResult));
+  const redactAgedPairingApprovalProvenance = vi.fn(() => Promise.resolve(jobResult));
   const release = vi.fn();
   const refreshCommunitySeason = vi.fn(() => Promise.resolve(jobResult));
   const verifyRuntimeBoundary = vi.fn(() => Promise.resolve(runtimeBoundary));
@@ -64,6 +66,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
     cleanupTerminalDeletionJobs,
     finalizeCommunitySeason,
     purgeProfileDeletions,
+    redactAgedPairingApprovalProvenance,
     release,
     refreshCommunitySeason,
     verifyRuntimeBoundary,
@@ -85,6 +88,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
     finalizeCommunitySeason,
     pool: { close, connect },
     purgeProfileDeletions,
+    redactAgedPairingApprovalProvenance,
     release,
     refreshCommunitySeason,
     verifyRuntimeBoundary,
@@ -211,6 +215,16 @@ describe("Community maintenance runner", () => {
       values: [5],
     },
     {
+      expected: {
+        kind: "redact_aged_pairing_approval_provenance",
+        redactedPairings: 4,
+      },
+      functionName: "redact_aged_pairing_approval_provenance",
+      input: { batchSize: 6, kind: "redact_aged_pairing_approval_provenance" },
+      rows: [{ redacted_pairings: 4 }],
+      values: [6],
+    },
+    {
       expected: { kind: "refresh_community_season", profileCount: 12 },
       functionName: "refresh_community_season",
       input: { kind: "refresh_community_season", seasonStart: "2026-07-13" },
@@ -252,6 +266,8 @@ describe("Community maintenance runner", () => {
       expect(fixture.cleanupTerminalDeletionJobs).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "purge_profile_deletions") {
       expect(fixture.purgeProfileDeletions).toHaveBeenCalledWith(testCase.values[0]);
+    } else if (testCase.input.kind === "redact_aged_pairing_approval_provenance") {
+      expect(fixture.redactAgedPairingApprovalProvenance).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "refresh_community_season") {
       expect(fixture.refreshCommunitySeason).toHaveBeenCalledWith(testCase.values[0]);
     } else {
@@ -267,6 +283,7 @@ describe("Community maintenance runner", () => {
         fixture.cleanupExpiredSessions.mock.calls.length +
         fixture.cleanupTerminalDeletionJobs.mock.calls.length +
         fixture.purgeProfileDeletions.mock.calls.length +
+        fixture.redactAgedPairingApprovalProvenance.mock.calls.length +
         fixture.refreshCommunitySeason.mock.calls.length +
         fixture.finalizeCommunitySeason.mock.calls.length,
     ).toBe(1);
@@ -319,6 +336,11 @@ describe("Community maintenance runner", () => {
     { batchSize: 1.5, kind: "purge_profile_deletions" },
     { batchSize: "1", kind: "purge_profile_deletions" },
     { batchSize: 1, extra: true, kind: "purge_profile_deletions" },
+    { batchSize: 0, kind: "redact_aged_pairing_approval_provenance" },
+    { batchSize: 1_001, kind: "redact_aged_pairing_approval_provenance" },
+    { batchSize: 1.5, kind: "redact_aged_pairing_approval_provenance" },
+    { batchSize: "1", kind: "redact_aged_pairing_approval_provenance" },
+    { batchSize: 1, extra: true, kind: "redact_aged_pairing_approval_provenance" },
     { kind: "refresh_community_season", seasonStart: "2026-07-14" },
     { extra: true, kind: "refresh_community_season", seasonStart: "2026-07-13" },
     { kind: "refresh_community_season", seasonStart: "2026-02-30" },
@@ -420,6 +442,7 @@ describe("Community maintenance runner", () => {
     { cleanup: "session", rows: [{ deleted_session_count: 1 }] },
     { cleanup: "deletion-job", rows: [{ deleted_deletion_job_count: 1 }] },
     { cleanup: "purge", rows: [{ purged_profile_count: 1 }] },
+    { cleanup: "provenance", rows: [{ redacted_pairing_count: 1 }] },
     {
       cleanup: "auth",
       rows: [{ deleted_challenges: 1, deleted_recovery_authorities: 1 }],
@@ -445,9 +468,11 @@ describe("Community maintenance runner", () => {
                     ? { batchSize: 1, kind: "purge_profile_deletions" }
                     : cleanup === "pairing"
                       ? { batchSize: 1, kind: "cleanup_expired_pairing_state" }
-                      : cleanup
-                        ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
-                        : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
+                      : cleanup === "provenance"
+                        ? { batchSize: 1, kind: "redact_aged_pairing_approval_provenance" }
+                        : cleanup
+                          ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
+                          : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
 
     await expectMaintenanceError(
       createCommunityMaintenanceRunner(fixture.pool).execute(job),
@@ -526,6 +551,21 @@ describe("Community maintenance runner", () => {
       createCommunityMaintenanceRunner(fixture.pool).execute({
         batchSize,
         kind: "cleanup_expired_audit_events",
+      }),
+      "result_invalid",
+    );
+  });
+
+  it.each([
+    { batchSize: 1, row: { redacted_pairings: 2 } },
+    { batchSize: 10, row: { redacted_pairings: -1 } },
+    { batchSize: 10, row: { redacted_pairings: "1" } },
+  ])("bounds the pairing approval-provenance redaction result", async ({ batchSize, row }) => {
+    const fixture = createPoolFixture([row]);
+    await expectMaintenanceError(
+      createCommunityMaintenanceRunner(fixture.pool).execute({
+        batchSize,
+        kind: "redact_aged_pairing_approval_provenance",
       }),
       "result_invalid",
     );

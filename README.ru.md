@@ -273,14 +273,18 @@ terminal job не менее 30 дней после server-recorded completion, 
 oldest-first batches, не затрагивая recent и non-terminal deletion work. Отдельный Jobs-only cleanup
 для audit events сохраняет database audit reference не менее 180 дней после server-recorded
 occurrence, затем допускает bounded oldest-first batches и сохраняет recent evidence; external
-append-only audit sink он не создаёт. Локальный one-shot Jobs runner вызывает только одну из
-одиннадцати fixed capabilities: auth/audit/invite/CarRecipe-proposal/ingest/pairing/session cleanup,
-terminal deletion-job cleanup, primary profile purge, scoring refresh или finalization через
-отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
+append-only audit sink он не создаёт. Revision 0034 отдельно хранит точные session/passkey ссылки
+одобрения активированного pairing не менее 180 дней, а затем допускает bounded oldest-first
+redaction только этих двух ссылок, сохраняя profile/source/device binding, pairing row, active
+device и passkey; следующий session-cleanup может удалить ставшую свободной expired session.
+Локальный one-shot Jobs runner вызывает только одну из двенадцати fixed capabilities:
+auth/audit/invite/CarRecipe-proposal/ingest/pairing/session cleanup, pairing approval-provenance
+redaction, terminal deletion-job cleanup, primary profile purge, scoring refresh или finalization
+через отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
 deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI output.
 Отдельный opt-in Jobs scenario применяет reviewed migrations к одноразовой PostgreSQL, запускает все
-одиннадцать emitted commands через узкий synthetic login, отклоняет login с лишней role membership
-до мутации и проверяет точное состояние перед очисткой. Сама база не проверяет wire signature;
+двенадцать emitted commands через узкий synthetic login, отклоняет login с лишней role membership до
+мутации и проверяет точное состояние перед очисткой. Сама база не проверяет wire signature;
 локальные kernel, adapter и application объединены на synthetic/mock-pool evidence. Отдельный opt-in
 loopback Ingest scenario теперь проводит независимо подписанный HTTP request через emitted host и
 одноразовый least-privileged PostgreSQL login, включая duplicate/replay/revoke и точную проверку

@@ -276,17 +276,21 @@ after server-recorded occurrence, then permits bounded oldest-first batches whil
 evidence. It does not supply an external append-only audit sink. Revision 0010 adds a public 48-hour
 server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization procedure
 whose terminal metadata and score projection reject silent rewrites while profile purge can still
-remove personal rows. One local one-shot Jobs runner now wraps exactly one of eleven fixed
-functions: authentication cleanup, audit-event cleanup, invite cleanup, CarRecipe-proposal cleanup,
-ingest cleanup, pairing cleanup, session cleanup, terminal deletion-job cleanup, primary profile
-purge, refresh, or finalization. It uses a distinct least-privileged configuration namespace,
-one-client pool, per-checkout role/login/search-path probe, fixed deadlines and prepared parameters,
-closed result validation, destructive release after failure, and stable non-reflective CLI output.
-An opt-in synthetic integration now builds that runner, applies the reviewed migration manifest to
-one disposable PostgreSQL container, proves all eleven commands through a narrow login, rejects a
-deliberately widened login before mutation, and verifies exact stored state before cleanup. It has
-no external audit sink, scheduler, production login/certificate, monitoring backend, retry loop,
-capacity result, or deployment. Revision 0011 gives only the Web database role a bounded
+remove personal rows. Revision 0034 separately retains the exact session/passkey approval references
+on an activated pairing for at least 180 days, then permits bounded oldest-first redaction of only
+those two references while preserving the profile/source/device binding, pairing row, active device,
+and passkey. A later session-cleanup call can remove the now-unreferenced expired session. One local
+one-shot Jobs runner now wraps exactly one of twelve fixed functions: authentication cleanup,
+audit-event cleanup, invite cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup,
+pairing approval-provenance redaction, session cleanup, terminal deletion-job cleanup, primary
+profile purge, refresh, or finalization. It uses a distinct least-privileged configuration
+namespace, one-client pool, per-checkout role/login/search-path probe, fixed deadlines and prepared
+parameters, closed result validation, destructive release after failure, and stable non-reflective
+CLI output. An opt-in synthetic integration now builds that runner, applies the reviewed migration
+manifest to one disposable PostgreSQL container, proves all twelve commands through a narrow login,
+rejects a deliberately widened login before mutation, and verifies exact stored state before
+cleanup. It has no external audit sink, scheduler, production login/certificate, monitoring backend,
+retry loop, capacity result, or deployment. Revision 0011 gives only the Web database role a bounded
 active-profile score projection containing no raw values, private identifiers, or exact timestamps.
 The score response component and Web PostgreSQL adapter preserve only that public allowlist through
 the local score route. The visible race, leaderboard, and selectable participant summary now consume

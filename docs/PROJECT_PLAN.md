@@ -212,11 +212,12 @@ flowchart LR
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
   The local runner now wraps only the eight reviewed authentication/audit-event/invite/
   CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job cleanup procedures, primary
-  profile purge, Community refresh, and finalization. One opt-in synthetic integration applies the
-  reviewed migrations to disposable PostgreSQL, runs every emitted command through a narrow login,
-  rejects an extra-membership login before mutation, and verifies exact state. An external audit
-  sink, scheduling, monitoring, production credentials/TLS, capacity, cache/backup/tombstone purge,
-  restore replay, and deployment remain separate gates.
+  profile purge, one pairing approval-provenance redaction procedure, Community refresh, and
+  finalization. One opt-in synthetic integration applies the reviewed migrations to disposable
+  PostgreSQL, runs every emitted command through a narrow login, rejects an extra-membership login
+  before mutation, and verifies exact state. An external audit sink, scheduling, monitoring,
+  production credentials/TLS, capacity, cache/backup/tombstone purge, restore replay, and deployment
+  remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.
@@ -682,21 +683,26 @@ still-present used code whose verifier was already scrubbed and follows the reco
 order. Expired CarRecipe proposals have a separate maximum-1000 cleanup under their own private
 mutex. Revision 0030 adds a maximum-1000 oldest-first cleanup for expired browser sessions only when
 no retained rotation predecessor or pairing approval provenance references the row; selected session
-challenges cascade, while activated-pairing provenance remains. Revision 0031 adds a maximum-1000
-oldest-first cleanup for expired active or revoked invite verifier rows under the shared
-authentication mutex; live invites and redeemed enrollment provenance remain. Revision 0024 adds a
-maximum-10 Jobs-only primary-profile purge: it serializes against every intersecting maintenance
-capability, accepts only due queued/retry work for committed `deletion_pending` profiles, removes
-restrictive pairing references first, terminally settles the opaque job, and cascades primary
-identity/credential/source/device/usage/personal-score data in one transaction. It retains only the
-opaque terminal job and redacted audit reference. Revision 0032 retains that job for at least 30
-days after server-recorded completion, then permits maximum-1000 oldest-first batches only when
-state remains `purged` and the profile link is null. Revision 0033 adds a maximum-1000 oldest-first
-cleanup for both profile-linked and already-redacted database audit events only after 180 days from
-server-recorded occurrence under a separate private mutex. It does not provide the planned external
-append-only sink. Pairing-referenced sessions, other remaining expiry classes, keyed tombstone
-policy, cache/backup purge, and restore replay still require their own reviewed implementation and
-public policy, and no implemented cleanup has a scheduler or deployed cadence.
+challenges cascade, while pairing-referenced sessions remain until that reference is removed.
+Revision 0031 adds a maximum-1000 oldest-first cleanup for expired active or revoked invite verifier
+rows under the shared authentication mutex; live invites and redeemed enrollment provenance remain.
+Revision 0024 adds a maximum-10 Jobs-only primary-profile purge: it serializes against every
+intersecting maintenance capability, accepts only due queued/retry work for committed
+`deletion_pending` profiles, removes restrictive pairing references first, terminally settles the
+opaque job, and cascades primary identity/credential/source/device/usage/personal-score data in one
+transaction. It retains only the opaque terminal job and redacted audit reference. Revision 0032
+retains that job for at least 30 days after server-recorded completion, then permits maximum-1000
+oldest-first batches only when state remains `purged` and the profile link is null. Revision 0033
+adds a maximum-1000 oldest-first cleanup for both profile-linked and already-redacted database audit
+events only after 180 days from server-recorded occurrence under a separate private mutex. It does
+not provide the planned external append-only sink. Revision 0034 retains the exact session/passkey
+approval references on activated pairings for at least 180 days, then permits maximum-1000
+oldest-first redaction of only those two references under the existing authentication and pairing
+mutexes. The pairing, profile/source/device binding, active device, and passkey remain, while a
+later session cleanup may remove a newly unreferenced expired session. Retained pairing/device
+history, historical passkeys/devices, other remaining expiry classes, keyed tombstone policy,
+cache/backup purge, and restore replay still require their own reviewed implementation and public
+policy, and no implemented cleanup or redaction has a scheduler or deployed cadence.
 
 ## Administration and operations
 

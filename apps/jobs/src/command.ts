@@ -155,6 +155,15 @@ export function parseJobsCommand(value: unknown): CommunityMaintenanceJob {
       kind: "purge_profile_deletions",
     });
   }
+  if (
+    argumentsValue.length === 1 &&
+    argumentsValue[0] === "redact-aged-pairing-approval-provenance"
+  ) {
+    return Object.freeze({
+      batchSize: maximumCleanupBatchSize,
+      kind: "redact_aged_pairing_approval_provenance",
+    });
+  }
   if (argumentsValue.length !== 2) {
     fail();
   }

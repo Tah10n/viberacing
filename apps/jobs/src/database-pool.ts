@@ -68,6 +68,10 @@ const pairingCleanupQuery = `SELECT
   cleanup.deleted_pending_keys AS deleted_pending_keys
 FROM viberacing_api.cleanup_expired_pairing_state($1::integer) AS cleanup`;
 
+const pairingApprovalProvenanceRedactionQuery = `SELECT
+  cleanup.redacted_pairings AS redacted_pairings
+FROM viberacing_api.redact_aged_pairing_approval_provenance($1::integer) AS cleanup`;
+
 const sessionCleanupQuery = `SELECT
   cleanup.deleted_sessions AS deleted_sessions
 FROM viberacing_api.cleanup_expired_sessions($1::integer) AS cleanup`;
@@ -102,6 +106,7 @@ export interface JobsDatabaseClient {
   cleanupTerminalDeletionJobs(batchSize: number): Promise<unknown>;
   finalizeCommunitySeason(seasonStart: string): Promise<unknown>;
   purgeProfileDeletions(batchSize: number): Promise<unknown>;
+  redactAgedPairingApprovalProvenance(batchSize: number): Promise<unknown>;
   release(destroy?: boolean): void;
   refreshCommunitySeason(seasonStart: string): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
@@ -179,6 +184,9 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
     },
     purgeProfileDeletions(batchSize: number): Promise<unknown> {
       return fixedQuery(profileDeletionPurgeQuery, [batchSize]);
+    },
+    redactAgedPairingApprovalProvenance(batchSize: number): Promise<unknown> {
+      return fixedQuery(pairingApprovalProvenanceRedactionQuery, [batchSize]);
     },
     release(destroy = false): void {
       client.release(destroy);

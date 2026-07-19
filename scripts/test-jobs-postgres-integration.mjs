@@ -38,6 +38,10 @@ const fixture = Object.freeze({
   inviteId: "00000000-0000-4000-8000-000000031701",
   pairingDeviceKeyId: "00000000-0000-4000-8000-000000031301",
   pairingId: "00000000-0000-4000-8000-000000031302",
+  provenanceDeviceKeyId: "00000000-0000-4000-8000-000000031913",
+  provenancePairingId: "00000000-0000-4000-8000-000000031914",
+  provenancePasskeyId: "00000000-0000-4000-8000-000000031911",
+  provenanceSessionId: "00000000-0000-4000-8000-000000031912",
   purgeJobId: "00000000-0000-4000-8000-000000031401",
   purgeProfileId: "00000000-0000-4000-8000-000000031402",
   scoringProfileId: "00000000-0000-4000-8000-000000031501",
@@ -279,6 +283,23 @@ VALUES
   ('${fixture.sessionProfileId}', 900000000000031602, 'jobs-it-session', 'active'),
   ('${fixture.scoringProfileId}', 900000000000031501, 'jobs-it-score', 'active');
 
+INSERT INTO viberacing_private.passkeys (
+  passkey_id,
+  profile_id,
+  credential_id,
+  cose_public_key,
+  label,
+  created_at
+)
+VALUES (
+  '${fixture.provenancePasskeyId}',
+  '${fixture.sessionProfileId}',
+  pg_catalog.decode(pg_catalog.repeat('A1', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('A2', 64), 'hex'),
+  'Synthetic provenance passkey',
+  pg_catalog.statement_timestamp() - INTERVAL '210 days'
+);
+
 INSERT INTO viberacing_private.profiles (
   profile_id,
   github_user_id,
@@ -388,16 +409,108 @@ INSERT INTO viberacing_private.sessions (
   session_id,
   profile_id,
   verifier_digest,
+  authentication_kind,
+  authenticated_by_passkey_id,
+  created_at,
+  expires_at
+)
+VALUES
+  (
+    '${fixture.sessionId}',
+    '${fixture.sessionProfileId}',
+    pg_catalog.decode(pg_catalog.repeat('51', 32), 'hex'),
+    'enrollment',
+    NULL,
+    pg_catalog.statement_timestamp() - INTERVAL '2 hours',
+    pg_catalog.statement_timestamp() - INTERVAL '1 hour'
+  ),
+  (
+    '${fixture.provenanceSessionId}',
+    '${fixture.sessionProfileId}',
+    pg_catalog.decode(pg_catalog.repeat('A3', 32), 'hex'),
+    'passkey',
+    '${fixture.provenancePasskeyId}',
+    pg_catalog.statement_timestamp() - INTERVAL '210 days',
+    pg_catalog.statement_timestamp() - INTERVAL '190 days'
+  );
+
+INSERT INTO viberacing_private.codex_sources (source_id, profile_id)
+VALUES (
+  'src_' || pg_catalog.repeat('V', 22),
+  '${fixture.sessionProfileId}'
+);
+
+INSERT INTO viberacing_private.device_keys (
+  device_key_id,
+  public_key,
+  label,
+  connector_version,
+  os_family,
+  architecture,
+  created_at
+)
+VALUES (
+  '${fixture.provenanceDeviceKeyId}',
+  pg_catalog.decode(pg_catalog.repeat('A4', 32), 'hex'),
+  'Synthetic provenance device',
+  '9.0.0',
+  'linux',
+  'x86_64',
+  pg_catalog.statement_timestamp() - INTERVAL '202 days'
+);
+
+INSERT INTO viberacing_private.pairing_transactions (
+  pairing_id,
+  poll_verifier_digest,
+  user_code_digest,
+  challenge,
+  pending_device_key_id,
+  device_label,
+  connector_version,
+  os_family,
+  architecture,
   created_at,
   expires_at
 )
 VALUES (
-  '${fixture.sessionId}',
-  '${fixture.sessionProfileId}',
-  pg_catalog.decode(pg_catalog.repeat('51', 32), 'hex'),
-  pg_catalog.statement_timestamp() - INTERVAL '2 hours',
-  pg_catalog.statement_timestamp() - INTERVAL '1 hour'
+  '${fixture.provenancePairingId}',
+  pg_catalog.decode(pg_catalog.repeat('A5', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('A6', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('A7', 32), 'hex'),
+  '${fixture.provenanceDeviceKeyId}',
+  'Synthetic provenance device',
+  '9.0.0',
+  'linux',
+  'x86_64',
+  pg_catalog.statement_timestamp() - INTERVAL '202 days',
+  pg_catalog.statement_timestamp() - INTERVAL '199 days'
 );
+
+UPDATE viberacing_private.pairing_transactions
+SET
+  state = 'approved',
+  approved_profile_id = '${fixture.sessionProfileId}',
+  source_choice = 'existing',
+  approved_source_id = 'src_' || pg_catalog.repeat('V', 22),
+  approved_by_session_id = '${fixture.provenanceSessionId}',
+  approved_by_passkey_id = '${fixture.provenancePasskeyId}',
+  approved_at = pg_catalog.statement_timestamp() - INTERVAL '201 days'
+WHERE pairing_id = '${fixture.provenancePairingId}';
+
+UPDATE viberacing_private.device_keys
+SET
+  state = 'active',
+  source_id = 'src_' || pg_catalog.repeat('V', 22),
+  device_id = 'dev_' || pg_catalog.repeat('V', 22),
+  activated_at = pg_catalog.statement_timestamp() - INTERVAL '200 days'
+WHERE device_key_id = '${fixture.provenanceDeviceKeyId}';
+
+UPDATE viberacing_private.pairing_transactions
+SET
+  state = 'activated',
+  activated_device_id = 'dev_' || pg_catalog.repeat('V', 22),
+  activated_at = pg_catalog.statement_timestamp() - INTERVAL '200 days'
+WHERE pairing_id = '${fixture.provenancePairingId}';
 
 INSERT INTO viberacing_private.deletion_jobs (
   deletion_job_id,
@@ -525,15 +638,17 @@ COMMIT;`,
     seedSyntheticState(currentSeasonStart);
 
     const rejected = runJobsCommand(databasePort, wideJobsLogin, wideJobsPassword, [
-      "cleanup-expired-audit-events",
+      "redact-aged-pairing-approval-provenance",
     ]);
     assertRejectedCommand(rejected, "widened Jobs login");
     assert.equal(
       psqlScalar(
         `SET ROLE viberacing_owner;
 SELECT pg_catalog.count(*)::integer
-FROM viberacing_private.audit_events
-WHERE audit_event_id = '${fixture.auditEventId}';`,
+FROM viberacing_private.pairing_transactions
+WHERE pairing_id = '${fixture.provenancePairingId}'
+  AND approved_by_session_id = '${fixture.provenanceSessionId}'
+  AND approved_by_passkey_id = '${fixture.provenancePasskeyId}';`,
         "rejected-login stored-state verification",
       ),
       "1",
@@ -547,6 +662,7 @@ WHERE audit_event_id = '${fixture.auditEventId}';`,
       ["cleanup-expired-invites"],
       ["cleanup-expired-ingest-state"],
       ["cleanup-expired-pairing-state"],
+      ["redact-aged-pairing-approval-provenance"],
       ["cleanup-expired-sessions"],
       ["purge-profile-deletions"],
       ["cleanup-terminal-deletion-jobs"],
@@ -596,6 +712,38 @@ SELECT pg_catalog.jsonb_build_object(
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.device_keys
     WHERE device_key_id = '${fixture.pairingDeviceKeyId}'
+  ),
+  'provenanceDeviceCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.device_keys
+    WHERE device_key_id = '${fixture.provenanceDeviceKeyId}'
+      AND state = 'active'
+      AND source_id = 'src_' || pg_catalog.repeat('V', 22)
+      AND device_id = 'dev_' || pg_catalog.repeat('V', 22)
+  ),
+  'provenancePairingCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.pairing_transactions
+    WHERE pairing_id = '${fixture.provenancePairingId}'
+      AND state = 'activated'
+      AND approved_source_id = 'src_' || pg_catalog.repeat('V', 22)
+      AND activated_device_id = 'dev_' || pg_catalog.repeat('V', 22)
+  ),
+  'provenancePairingRedacted', (
+    SELECT approved_by_session_id IS NULL AND approved_by_passkey_id IS NULL
+    FROM viberacing_private.pairing_transactions
+    WHERE pairing_id = '${fixture.provenancePairingId}'
+  ),
+  'provenancePasskeyCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.passkeys
+    WHERE passkey_id = '${fixture.provenancePasskeyId}'
+      AND state = 'active'
+  ),
+  'provenanceSessionCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.sessions
+    WHERE session_id = '${fixture.provenanceSessionId}'
   ),
   'sessionCount', (
     SELECT pg_catalog.count(*)::integer
@@ -678,6 +826,11 @@ SELECT pg_catalog.jsonb_build_object(
       originNonceCount: 0,
       pairingCount: 0,
       pendingDeviceKeyCount: 0,
+      provenanceDeviceCount: 1,
+      provenancePairingCount: 1,
+      provenancePairingRedacted: true,
+      provenancePasskeyCount: 1,
+      provenanceSessionCount: 0,
       purgeJobCompleted: true,
       purgeJobProfileCleared: true,
       purgeJobState: "purged",
@@ -691,7 +844,7 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Jobs PostgreSQL integration passed (eleven commands, least-privilege denial, generic output, and exact stored state).",
+      "Jobs PostgreSQL integration passed (twelve commands, least-privilege denial, generic output, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

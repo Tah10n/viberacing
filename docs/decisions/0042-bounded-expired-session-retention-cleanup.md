@@ -49,6 +49,11 @@ which a later session-cleanup call may delete the session. Activated pairing pro
 until a separate reviewed device-history retention policy permits a narrower representation or
 deletion.
 
+ADR 0047 supplies that narrower representation for the two exact approval references only: after at
+least 180 days it may redact the session/passkey links while preserving the activated
+profile/source/device binding and the pairing, device, and passkey rows. A later invocation of this
+session cleanup can then remove an otherwise eligible expired session.
+
 ADR 0014's local runner gains the exact `cleanup-expired-sessions` command. It always supplies the
 fixed batch of 1000, probes the same least-privileged Jobs login and search path, issues one fixed
 parameterized call, validates one exact count row, holds the client through settlement, destroys it
@@ -71,9 +76,10 @@ implemented or the profile is purged.
 
 Residual risk remains: there is no scheduler, cadence, overlap/retry policy, monitoring, capacity
 result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy.
-Activated pairing-referenced sessions, tombstones, historical passkey/device provenance, and fixed
-pairing-rate windows still need separate reviewed retention or reset evidence. ADR 0045 separately
-bounds terminal deletion-job retention.
+Recent activated pairing-referenced sessions, tombstones, historical pairing/passkey/device rows,
+and fixed pairing-rate windows still need separate reviewed retention or reset evidence. ADR 0045
+separately bounds terminal deletion-job retention; ADR 0047 bounds the exact approval references
+after 180 days without deleting device history.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -145,3 +151,4 @@ production cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
 - [Bounded Community maintenance runner](0014-bounded-community-maintenance-job-runner.md)
 - [Bounded pairing retention cleanup](0029-bounded-pairing-retention-cleanup.md)
 - [Bounded authentication retention cleanup](0032-bounded-auth-retention-cleanup.md)
+- [Bounded pairing approval-provenance retention](0047-bounded-pairing-approval-provenance-retention.md)

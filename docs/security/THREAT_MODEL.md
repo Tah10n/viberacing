@@ -14,53 +14,54 @@ returning-passkey login plus private passkey/source/device inventory, source
 pause/reactivation/unlink, device/passkey revocation, fresh-passkey recovery-code rotation, and
 fresh-passkey profile-deletion-request slice plus one-time recovery-code replacement-passkey sign-in
 with encrypted cookies and logout, one local one-shot Jobs runner with eight bounded cleanup
-capabilities plus primary profile purge, and a synthetic disposable PostgreSQL integration for all
-eleven Jobs commands, plus local Community sync verification, PostgreSQL-adapter, transport-free
-composition, and bounded Fastify HTTP boundaries; it does not yet contain an external audit sink,
-Jobs scheduler, cache/backup/tombstone purge, restore replay, deployed Ingest service, operational
-connector, deployment, or production data. A library-only Rust connector foundation now bounds and
-validates the stable App Server initialization and candidate account/usage exchanges, then composes
-them through a synthetic one-shot child supervisor and produces exact sync material behind a second
-inaccessible reviewed context. An isolated one-use signer consumes that material only with a third
-inaccessible device-bound key capability and returns a closed signed envelope. A separate
-pending-key/challenge signer and pure Web verifier agree on an exact pairing-possession proof. A
-Web/Auth start application generates bounded pending-transaction material, separate protected
-poll/code verifiers, and one fixed database call. A second application composes protected keyed poll
-lookup, strict proof, and exact atomic activation through the separately probed read-write pool with
-local admission/timing. Between those boundaries, a local `/connect` flow performs
-session-rate-limited pending-code lookup, exact device/fingerprint review, opaque new or active
-existing source selection, and fresh-passkey atomic approval of that exact choice. Exact local
-start/poll routes now add closed framing/contracts, shared four-call admission, and fixed
-global/client-bucket PostgreSQL windows. The bounded Rust client generates and stores a pairing key
-through the native OS credential store, signs the exact proof, persists activation before success
-output, and can delete only the exact local origin/label record with an explicit warning that server
-authority was not revoked. No Codex launch or sync-context capability has a public constructor. A
-separate private Windows x86_64 development command can construct them only after exact
-explicit-path artifact admission and active-record review, then sends one fixed signed sync without
-retry or edge credentials. It cannot discover a binary, admit another platform/version, or create a
-support claim. Its database-only Community ingest plus bounded ingest- and authentication-retention
-boundaries have synthetic executable evidence. The kernel has raw-envelope, origin-proof,
-bounded-parser, contract, and strict device-signature evidence; the adapter has configuration,
-fixed-query, role-probe, mapper, and failure evidence with mock pools. A local server factory now
-has loopback framing and injection evidence. A separate local host proves exact loopback/Railway
-listener declarations, composition, bind, partial-startup cleanup, and bounded signal shutdown. One
-opt-in synthetic gate now exercises signed accepted/duplicate/replay/revoke HTTP through that
-emitted host and a disposable least-privileged PostgreSQL login with exact stored-state
-verification. It proves no live HTTP edge, trusted external TLS route, deployment credential/TLS
-connection, real-user result, or capacity. The public score/race/status routes have
-request/response, admission, production-build, and visible browser-consumer/fallback evidence, while
-the Jobs runner has strict command/config/pool/role/result evidence plus a synthetic
-CLI-to-PostgreSQL path with a widened-login denial and exact-state checks. The identity slice has
-exact-origin/body/cookie, state/PKCE, token minimization, initial-registration, returning-login,
-session-derived passkey inventory, non-current-key revocation, backup-key addition, exact-handle
-profile-deletion request, source inventory/pause/reactivation/unlink, and active-device revoke
-including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth
-`form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay server-only;
-source controls receive only a 15-minute encrypted token bound to the active session. None has a
-production database login, OAuth app, authenticator, edge, scheduler, cache/backup purge,
-tombstone/restore replay, or network deployment. Controls below are marked **implemented** only when
-executable evidence exists in [implementation status](../IMPLEMENTATION_STATUS.md). Other controls
-are release requirements, not security claims about the current tree.
+capabilities, one bounded pairing approval-provenance redaction, and primary profile purge, plus a
+synthetic disposable PostgreSQL integration for all twelve Jobs commands, plus local Community sync
+verification, PostgreSQL-adapter, transport-free composition, and bounded Fastify HTTP boundaries;
+it does not yet contain an external audit sink, Jobs scheduler, cache/backup/tombstone purge,
+restore replay, deployed Ingest service, operational connector, deployment, or production data. A
+library-only Rust connector foundation now bounds and validates the stable App Server initialization
+and candidate account/usage exchanges, then composes them through a synthetic one-shot child
+supervisor and produces exact sync material behind a second inaccessible reviewed context. An
+isolated one-use signer consumes that material only with a third inaccessible device-bound key
+capability and returns a closed signed envelope. A separate pending-key/challenge signer and pure
+Web verifier agree on an exact pairing-possession proof. A Web/Auth start application generates
+bounded pending-transaction material, separate protected poll/code verifiers, and one fixed database
+call. A second application composes protected keyed poll lookup, strict proof, and exact atomic
+activation through the separately probed read-write pool with local admission/timing. Between those
+boundaries, a local `/connect` flow performs session-rate-limited pending-code lookup, exact
+device/fingerprint review, opaque new or active existing source selection, and fresh-passkey atomic
+approval of that exact choice. Exact local start/poll routes now add closed framing/contracts,
+shared four-call admission, and fixed global/client-bucket PostgreSQL windows. The bounded Rust
+client generates and stores a pairing key through the native OS credential store, signs the exact
+proof, persists activation before success output, and can delete only the exact local origin/label
+record with an explicit warning that server authority was not revoked. No Codex launch or
+sync-context capability has a public constructor. A separate private Windows x86_64 development
+command can construct them only after exact explicit-path artifact admission and active-record
+review, then sends one fixed signed sync without retry or edge credentials. It cannot discover a
+binary, admit another platform/version, or create a support claim. Its database-only Community
+ingest plus bounded ingest- and authentication-retention boundaries have synthetic executable
+evidence. The kernel has raw-envelope, origin-proof, bounded-parser, contract, and strict
+device-signature evidence; the adapter has configuration, fixed-query, role-probe, mapper, and
+failure evidence with mock pools. A local server factory now has loopback framing and injection
+evidence. A separate local host proves exact loopback/Railway listener declarations, composition,
+bind, partial-startup cleanup, and bounded signal shutdown. One opt-in synthetic gate now exercises
+signed accepted/duplicate/replay/revoke HTTP through that emitted host and a disposable
+least-privileged PostgreSQL login with exact stored-state verification. It proves no live HTTP edge,
+trusted external TLS route, deployment credential/TLS connection, real-user result, or capacity. The
+public score/race/status routes have request/response, admission, production-build, and visible
+browser-consumer/fallback evidence, while the Jobs runner has strict command/config/pool/role/result
+evidence plus a synthetic CLI-to-PostgreSQL path with a widened-login denial and exact-state checks.
+The identity slice has exact-origin/body/cookie, state/PKCE, token minimization,
+initial-registration, returning-login, session-derived passkey inventory, non-current-key
+revocation, backup-key addition, exact-handle profile-deletion request, source
+inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile PostgreSQL
+evidence, fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence
+with injected dependencies. Raw source IDs stay server-only; source controls receive only a
+15-minute encrypted token bound to the active session. None has a production database login, OAuth
+app, authenticator, edge, scheduler, cache/backup purge, tombstone/restore replay, or network
+deployment. Controls below are marked **implemented** only when executable evidence exists in
+[implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
+security claims about the current tree.
 
 ### Assets and security objectives
 
@@ -264,19 +265,20 @@ and migration or rollback where applicable.
    no-store/same-origin posture, four-request no-queue admission, adapter deadline policy, generic
    error translation, and bounded response matrix. The visible home race requests the
    server-selected current week without credentials, accepts only closed public fields, and keeps a
-   labeled synthetic fallback on error. A local one-shot Jobs runner now validates one of eleven
+   labeled synthetic fallback on error. A local one-shot Jobs runner now validates one of twelve
    fixed authentication/audit-event/invite/CarRecipe-proposal/ingest/pairing/session/
-   terminal-deletion-job cleanup, primary-profile purge, or canonical-season refresh/finalization
-   commands, probes its exact least-privileged login/session before one prepared function call,
-   holds one client through settlement, and emits no input or database detail. A synthetic
-   integration runs every emitted command against disposable PostgreSQL, rejects an extra-membership
-   login before mutation, and checks exact stored state. Eligible expired invites are removed
-   without deleting redeemed provenance; eligible expired sessions are removed only when no retained
-   predecessor or activated-pairing provenance requires the row; terminal deletion jobs are removed
-   only after 30 days; database audit references are removed only after 180 days. An external
-   append-only audit sink, production login/TLS and edge evidence, a Jobs scheduler, audited
-   correction authority, client-rate policy, and capacity evidence are still required before
-   publishing durable results.
+   terminal-deletion-job cleanup, pairing approval-provenance redaction, primary-profile purge, or
+   canonical-season refresh/finalization commands, probes its exact least-privileged login/session
+   before one prepared function call, holds one client through settlement, and emits no input or
+   database detail. A synthetic integration runs every emitted command against disposable
+   PostgreSQL, rejects an extra-membership login before mutation, and checks exact stored state.
+   Eligible expired invites are removed without deleting redeemed provenance; eligible expired
+   sessions are removed only when no retained predecessor or pairing provenance requires the row;
+   exact activated-pairing approval references are redacted only after 180 days while the device
+   binding remains; terminal deletion jobs are removed only after 30 days; database audit references
+   are removed only after 180 days. An external append-only audit sink, production login/TLS and
+   edge evidence, a Jobs scheduler, audited correction authority, client-rate policy, and capacity
+   evidence are still required before publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes.

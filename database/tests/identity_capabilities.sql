@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 64
+    SELECT pg_catalog.count(*) = 65
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 21
+    SELECT pg_catalog.count(*) = 22
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -85,6 +85,7 @@ SELECT pg_temp.assert_true(
         'approve_car_recipe',
         'reject_car_recipe',
         'read_pairing_for_approval_limited',
+        'redact_aged_pairing_approval_provenance',
         'refresh_community_season',
         'finalize_community_season',
         'submit_community_sync'
@@ -109,7 +110,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 12
+    SELECT pg_catalog.count(*) = 13
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -126,6 +127,7 @@ SELECT pg_temp.assert_true(
         'cleanup_expired_sessions',
         'cleanup_terminal_deletion_jobs',
         'purge_profile_deletions',
+        'redact_aged_pairing_approval_provenance',
         'submit_community_sync',
         'refresh_community_season',
         'finalize_community_season'
@@ -223,6 +225,7 @@ SELECT pg_temp.assert_true(
           'cleanup_terminal_deletion_jobs',
           'purge_profile_deletions',
           'read_pairing_for_approval',
+          'redact_aged_pairing_approval_provenance',
           'refresh_community_season',
           'finalize_community_season'
         )
@@ -265,6 +268,7 @@ SELECT pg_temp.assert_true(
           'cleanup_expired_sessions',
           'cleanup_terminal_deletion_jobs',
           'purge_profile_deletions',
+          'redact_aged_pairing_approval_provenance',
           'refresh_community_season',
           'finalize_community_season'
         )
