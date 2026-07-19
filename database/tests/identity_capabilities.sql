@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 69
+    SELECT pg_catalog.count(*) = 70
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 26
+    SELECT pg_catalog.count(*) = 27
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -77,6 +77,7 @@ SELECT pg_temp.assert_true(
         'cleanup_expired_ingest_state',
         'cleanup_expired_pairing_state',
         'cleanup_expired_sessions',
+        'cleanup_finalized_source_day_values',
         'cleanup_terminal_deletion_jobs',
         'purge_profile_deletions',
         'propose_car_recipe',
@@ -114,7 +115,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 17
+    SELECT pg_catalog.count(*) = 18
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -132,6 +133,7 @@ SELECT pg_temp.assert_true(
         'cleanup_expired_ingest_state',
         'cleanup_expired_pairing_state',
         'cleanup_expired_sessions',
+        'cleanup_finalized_source_day_values',
         'cleanup_terminal_deletion_jobs',
         'purge_profile_deletions',
         'redact_aged_pairing_approval_provenance',
@@ -231,6 +233,7 @@ SELECT pg_temp.assert_true(
           'cleanup_expired_ingest_state',
           'cleanup_expired_pairing_state',
           'cleanup_expired_sessions',
+          'cleanup_finalized_source_day_values',
           'cleanup_aged_revoked_devices',
           'cleanup_aged_revoked_passkeys',
           'cleanup_terminal_deletion_jobs',
@@ -279,6 +282,7 @@ SELECT pg_temp.assert_true(
           'cleanup_expired_ingest_state',
           'cleanup_expired_pairing_state',
           'cleanup_expired_sessions',
+          'cleanup_finalized_source_day_values',
           'cleanup_aged_revoked_devices',
           'cleanup_aged_revoked_passkeys',
           'cleanup_terminal_deletion_jobs',

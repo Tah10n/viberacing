@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains thirty-eight SQL-first revisions for identity, passkey login and management,
+This directory contains thirty-nine SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
 finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
 PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,
@@ -23,11 +23,11 @@ Ingest login, passes independently signed loopback HTTP through the emitted host
 exact database result. Local public score/race/status routes and one local one-shot Jobs runner wrap
 narrow capabilities without a working database login. The database-only ingest and Jobs-only
 ingest-retention, pairing-retention, authentication-retention, invite-retention, session-retention,
-abandoned-enrollment, CarRecipe-proposal, terminal-deletion-job, audit-event, revoked-passkey, and
-revoked-device retention, pairing approval-provenance redaction, primary profile deletion,
-open-season scoring, and terminal finalization procedures plus Web-only public score/race/status and
-exact-session private score projections are implemented; deployed HTTP ingest, scheduled execution,
-audited corrections, cache/backup/tombstone purge, and restore replay are not.
+abandoned-enrollment, CarRecipe-proposal, finalized-source-day, terminal-deletion-job, audit-event,
+revoked-passkey, and revoked-device retention, pairing approval-provenance redaction, primary
+profile deletion, open-season scoring, and terminal finalization procedures plus Web-only public
+score/race/status and exact-session private score projections are implemented; deployed HTTP ingest,
+scheduled execution, audited corrections, cache/backup/tombstone purge, and restore replay are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -152,6 +152,10 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
   registration challenge expires, while preserving any active/non-enrollment, recovery,
   passkey/source, deletion, scoring, recipe, or malformed-invite state and retaining redacted audit
   evidence.
+- `migrations/0039_finalized_source_day_retention_cleanup.sql` captures a private UTC-day/count
+  projection at terminal finalization, keeps the compatible public race-status result stable, and
+  adds Jobs-only maximum-1000 physical deletion of exact source/day rows only after 30 days and
+  repeated live/captured integrity checks.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -189,6 +193,14 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
   expired-tuple reuse, strict digest/key/time input, and bounded proof lifetime.
 - `tests/ingest_cleanup.sql` exercises batch bounds, deterministic expiry order, idempotency,
   live-row preservation, entry cascade, retained current values, and detached raw provenance.
+- `tests/finalized_source_day_cleanup.sql` exercises finalization capture, backfill bounds,
+  unchanged public status, oldest-first row progress, exact inventory drift rollback, recent/open/
+  missing-projection preservation, profile-purge cascade, invalid bounds, missing mutexes, and
+  Jobs-only authority.
+- `tests/finalized_source_day_migration_setup.sql` and
+  `tests/finalized_source_day_migration_assertions.sql` place one synthetic terminal season after
+  revision 0038, then prove revision 0039 backfills its exact UTC-day/count projection without
+  changing source/day state.
 - `tests/pairing_cleanup.sql` exercises bounded oldest-first pending/approved/cancelled deletion,
   challenge cascade, idempotency, activated/live preservation, mutex failure, and exact role denial.
 - `tests/auth_cleanup.sql` exercises independent challenge/authority bounds, consumed and terminal
@@ -243,6 +255,10 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
   deadlock.
 - `tests/cleanup_concurrency_setup.sql` and `tests/cleanup_concurrency_assertions.sql` prove two
   Jobs cleanup calls serialize and each expired raw row is removed once without deleting live state.
+- `tests/finalized_source_day_cleanup_concurrency_setup.sql` and
+  `tests/finalized_source_day_cleanup_concurrency_assertions.sql` prove two cleanup workers
+  serialize, a concurrent finalization remains terminal without becoming prematurely eligible, and
+  primary profile purge waits for cleanup before cascading the projection.
 - `tests/pairing_cleanup_concurrency_setup.sql` and
   `tests/pairing_cleanup_concurrency_assertions.sql` prove two pairing-cleanup calls serialize,
   delete each expired transaction/key pair once, and preserve live pending state.
@@ -306,7 +322,7 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 | `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                                              |
 | `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus score/race/status reads            |
 | `viberacing_ingest` | No    | None           | Usage      | Origin replay, device verification, and Community sync only                         |
-| `viberacing_jobs`   | No    | None           | Usage      | Eleven cleanup calls, one redaction, one reset, profile purge, scoring/finalization |
+| `viberacing_jobs`   | No    | None           | Usage      | Twelve cleanup calls, one redaction, one reset, profile purge, scoring/finalization |
 | `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                                        |
 | `PUBLIC`            | N/A   | None           | None       | None                                                                                |
 
@@ -556,6 +572,7 @@ All current columns map to the canonical [privacy data map](../docs/security/PRI
 | `device_nonces`                             | Security                      | Device-bound replay digest and 15-minute expiry marker                                              |
 | `usage_snapshots`, `usage_snapshot_entries` | Usage; Security               | Bounded signed snapshot metadata, exact private daily values, 30-day expiry marker                  |
 | `source_day_values`                         | Usage                         | One monotonic current token value and accepted provenance per source/date                           |
+| `finalized_season_profile_freshness`        | Usage; Public-derived         | One UTC freshness date, source/value inventory, and bounded cleanup progress per profile/season     |
 | `score_versions`, `seasons`                 | Operational; Public           | Immutable formula, ISO-week binding, grace, and terminal state                                      |
 | `season_entries`, `season_daily_scores`     | Public                        | Private pre-projection scores, active days, source count, rank, and display order                   |
 | `schema_migrations`                         | Operational                   | Revision name and server application time only                                                      |
@@ -799,10 +816,10 @@ purge, tombstone/restore replay, monitoring, capacity, or deployment.
 Revision 0033 physically removes both profile-linked and already-redacted database audit events only
 after 180 days from server-recorded occurrence. It uses a separate private mutex, a deterministic
 time/identifier index, `FOR UPDATE SKIP LOCKED`, and a repeated cutoff predicate. Recent evidence
-remains. The observed worker race and shared sixteen-command synthetic integration prove only local
-serialization, least-privileged execution, and exact stored state; they do not prove an external
-append-only sink, scheduling, production login/TLS, monitoring, capacity, backup purge, or deployed
-retention.
+remains. The observed worker race and shared seventeen-command synthetic integration prove only
+local serialization, least-privileged execution, and exact stored state; they do not prove an
+external append-only sink, scheduling, production login/TLS, monitoring, capacity, backup purge, or
+deployed retention.
 
 Revision 0034 redacts only `approved_by_session_id` and `approved_by_passkey_id` from activated
 pairings at least 180 days after server-recorded activation. It locks the existing authentication
@@ -811,7 +828,7 @@ and pairing mutexes in profile-purge order, uses an ordered partial index and
 trigger transition only when every other approval and activation binding remains immutable. Partial
 or pre-activation redaction fails closed. The pairing, source, active device, passkey, and
 activation evidence remain; a separate session-cleanup call can then remove a newly unreferenced
-expired session. The observed worker race and shared sixteen-command synthetic integration prove
+expired session. The observed worker race and shared seventeen-command synthetic integration prove
 local serialization, least-privileged execution, and exact stored state. This redaction does not
 itself delete device history; revision 0036 separately handles only an aged minimized pair. Neither
 proves scheduling, production login/TLS, monitoring, capacity, backup purge, or deployed retention.
@@ -822,7 +839,7 @@ It locks the existing authentication and pairing mutexes in profile-purge order,
 partial index plus `FOR UPDATE SKIP LOCKED`, and repeats every state/cutoff/reference predicate at
 delete. Active, recent, and referenced credentials remain. A recovery scenario first fails
 atomically at the unchanged 32-row ceiling, deletes 31 eligible historical rows, then completes with
-the existing replacement-passkey proof. The observed worker race and shared sixteen-command
+the existing replacement-passkey proof. The observed worker race and shared seventeen-command
 integration prove only local serialization, least-privileged execution, and exact state, not a
 scheduler, production login/TLS, monitoring, capacity, backup purge, or deployed retention.
 
@@ -833,7 +850,7 @@ locks the existing Ingest and pairing mutexes in profile-purge order, locks both
 `FOR UPDATE SKIP LOCKED`, deletes the pairing before the key, repeats every predicate, and requires
 exactly one row at each step so failure rolls back the pair. Active, recent, and referenced history
 remains, and configured challenge/raw cascades never define eligibility. The observed worker race
-and shared sixteen-command integration prove only local serialization, least-privileged execution,
+and shared seventeen-command integration prove only local serialization, least-privileged execution,
 and exact state, not a scheduler, production login/TLS, monitoring, capacity, backup purge, or
 deployed retention.
 
@@ -844,7 +861,7 @@ the cutoff/count predicates, and replaces only the aggregate timestamp/count wit
 epoch/zero state. The table rows, operations, buckets, Web-only admission function, saturating
 limits, and absence of client ID/digest storage remain unchanged. A failed later-row update rolls
 back the whole reset. Observed worker/worker and reset/admission races prove convergence and a fresh
-admission count surviving reset. The separate sixteen-command integration proves the no-argument
+admission count surviving reset. The separate seventeen-command integration proves the no-argument
 Jobs path and exact stored state, not trusted edge identity, scheduling, monitoring, capacity,
 production login/TLS, or deployment.
 
@@ -856,10 +873,25 @@ no-other-profile-state predicates at deletion. The existing profile cascade remo
 redeemed invite and expired enrollment authority; audit rows remain with null profile linkage. Live
 or equal-boundary authority, active profiles, and every non-enrollment, recovery, passkey/source,
 deletion, scoring, recipe, or missing-invite drift remain. Worker serialization and an in-flight
-initial-passkey activation race pass in isolated PostgreSQL. The shared sixteen-command integration
-proves only the emitted command through a disposable narrow login and exact stored state, not invite
-repair/reuse, a deletion job/tombstone, notification, scheduling, production login/TLS, monitoring,
-capacity, backup purge, restore replay, or deployed retention.
+initial-passkey activation race pass in isolated PostgreSQL. The shared seventeen-command
+integration proves only the emitted command through a disposable narrow login and exact stored
+state, not invite repair/reuse, a deletion job/tombstone, notification, scheduling, production
+login/TLS, monitoring, capacity, backup purge, restore replay, or deployed retention. Revision 0039
+repeats its eligibility boundary with a finalized-freshness exclusion so the new direct profile
+foreign key cannot widen this cascade.
+
+Revision 0039 captures one private profile/season projection when an open season becomes finalized:
+the latest accepted receipt's UTC date, retained source count, exact source/day row count, and zero
+cleanup progress. It backfills the same bounded projection for existing finalized state. The
+compatible public status read prefers that rounded date and otherwise falls back to live rows, so
+its contract and visible freshness remain unchanged. Only Jobs may delete oldest exact source/day
+rows, at most 1000 per invocation, after finalization has remained terminal for 30 days. Before each
+row it proves that live rows plus progress equal the captured count, the live maximum UTC day still
+matches the projection, and first-row source count is exact. It locks the existing scoring, Ingest-
+retention, and profile-purge mutexes in stable order; worker, finalization, and profile-purge races
+prove local serialization. Open, recent, missing-projection, or drifted state remains untouched or
+fails closed. This is no scheduler, production login/TLS path, correction authority, backup purge,
+capacity result, or deployed retention evidence.
 
 The local account application consumes those capabilities through the same probed read-write pool.
 Its combined overview query reads visibility and the current week's derived score with one checkout,
@@ -961,12 +993,12 @@ hard failure, not something the script silently broadens or repairs.
 - Extend the separate profile surface only after authenticated profile detail has real persistence,
   privacy, compatibility, and lifecycle evidence; do not widen either closed legacy race response.
 - Schedule and monitor the implemented retention-cleanup procedures for expired authentication,
-  invitation, abandoned-enrollment, CarRecipe-proposal, ingest, pairing, session,
-  terminal-deletion-job, and database audit-event state, aged revoked passkeys and minimized revoked
-  devices, plus aged pairing approval-provenance redaction and fixed pairing-rate-window reset;
-  implement a reviewed keyed tombstone policy separately. Retention markers outside revisions 0008,
-  0012, 0013, 0023, 0026, 0030, 0031, 0032, 0033, 0034, 0035, 0036, 0037, and 0038 are not cleanup,
-  redaction, or reset evidence.
+  invitation, abandoned-enrollment, CarRecipe-proposal, finalized source/day, ingest, pairing,
+  session, terminal-deletion-job, and database audit-event state, aged revoked passkeys and
+  minimized revoked devices, plus aged pairing approval-provenance redaction and fixed
+  pairing-rate-window reset; implement a reviewed keyed tombstone policy separately. Retention
+  markers outside revisions 0008, 0012, 0013, 0023, 0026, 0030, 0031, 0032, 0033, 0034, 0035, 0036,
+  0037, 0038, and 0039 are not cleanup, redaction, or reset evidence.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
   in isolated staging before real-user ingestion.

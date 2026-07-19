@@ -13,13 +13,15 @@ staged-review rules all apply.
 - Keep the database pool at one client. A job invocation calls exactly one reviewed `viberacing_api`
   function with positional parameters; do not add a generic query, migration, table, owner, Web,
   Ingest, Admin, or interactive-auth capability.
-- Authentication, audit-event, invite, CarRecipe-proposal, ingest, pairing, session, terminal
-  deletion-job, aged revoked-passkey, and aged revoked-device cleanup plus pairing
-  approval-provenance redaction each accept only the fixed 1000-row CLI batch. Scoring commands
-  accept one canonical Monday season inside the database contract. Pairing rate-window reset accepts
-  no parameters and can touch only the fixed 130-row matrix. Primary profile purge accepts only the
-  separate fixed 10-profile CLI batch. Unknown commands, fields, arguments, result columns, rows,
-  accessors, and prototypes fail before they can widen work.
+- Authentication, audit-event, invite, CarRecipe-proposal, ingest, finalized source/day, pairing,
+  session, terminal deletion-job, aged revoked-passkey, and aged revoked-device cleanup plus pairing
+  approval-provenance redaction each accept only the fixed 1000-row CLI batch. Finalized source/day
+  cleanup must preserve its captured rounded freshness and prove the live/captured inventory before
+  every row deletion. Scoring commands accept one canonical Monday season inside the database
+  contract. Pairing rate-window reset accepts no parameters and can touch only the fixed 130-row
+  matrix. Primary profile purge accepts only the separate fixed 10-profile CLI batch. Unknown
+  commands, fields, arguments, result columns, rows, accessors, and prototypes fail before they can
+  widen work.
 - Hold the client until the PostgreSQL call settles. Destroy failed clients, close the pool on every
   CLI path, and keep the client deadline outside the database function's 30-second deadline.
 - Do not log dates, counts, identifiers, SQL, environment values, database errors, stack traces, or

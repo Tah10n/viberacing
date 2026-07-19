@@ -432,19 +432,24 @@ Versioning where its guarantees are applicable.
 - Jobs-only immutable Community season finalization after an exact 48-hour server-time grace period,
   with whole-payload late quarantine, terminal no-data seasons, idempotent retry, bounded calendar
   support, and no implied scheduler, correction capability, or public read surface.
-- A private local one-shot Jobs workspace for exactly sixteen fixed capabilities: authentication,
-  abandoned-enrollment, audit-event, invite, CarRecipe-proposal, ingest, pairing, session, aged
-  revoked-passkey, or aged minimized revoked-device cleanup; pairing approval-provenance redaction;
-  primary profile purge; fixed pairing-rate-window reset; terminal deletion-job cleanup; open-season
-  refresh; or terminal finalization. It has strict command/object/result parsing, a distinct
-  redacted database namespace, one-client pool, fixed deadlines, an exact
-  role/login/capability/search-path probe, prepared procedure calls, destructive failure release,
-  stable non-reflective CLI output, production build, and 254 tests at 100% coverage. A separate
-  opt-in Docker gate now applies every reviewed migration, runs all sixteen emitted commands through
-  one synthetic least-privileged login, rejects a deliberately widened login before mutation,
-  verifies generic output and exact stored state, and cleans up its container, network, and storage.
-  It adds no scheduler, production credential/TLS path, monitoring, retry loop, capacity result, or
-  deployment claim.
+- Jobs-only maximum-1000 cleanup of exact finalized source/day values only after a terminal season
+  has retained them for 30 days, with a private UTC-day/count freshness projection, unchanged public
+  race-status output, repeated live/captured integrity checks, shared maintenance-lock ordering,
+  worker/finalization/profile-purge race evidence, and no implied scheduler, correction process,
+  backup purge, or deployment.
+- A private local one-shot Jobs workspace for exactly seventeen fixed capabilities: authentication,
+  abandoned-enrollment, audit-event, invite, CarRecipe-proposal, ingest, finalized-source-day,
+  pairing, session, aged revoked-passkey, or aged minimized revoked-device cleanup; pairing
+  approval-provenance redaction; primary profile purge; fixed pairing-rate-window reset; terminal
+  deletion-job cleanup; open-season refresh; or terminal finalization. It has strict
+  command/object/result parsing, a distinct redacted database namespace, one-client pool, fixed
+  deadlines, an exact role/login/capability/search-path probe, prepared procedure calls, destructive
+  failure release, stable non-reflective CLI output, production build, and 266 tests at 100%
+  coverage. A separate opt-in Docker gate now applies every reviewed migration, runs all seventeen
+  emitted commands through one synthetic least-privileged login, rejects a deliberately widened
+  login before mutation, verifies generic output and exact stored state, and cleans up its
+  container, network, and storage. It adds no scheduler, production credential/TLS path, monitoring,
+  retry loop, capacity result, or deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.

@@ -252,14 +252,14 @@ flowchart LR
   controls, deployment login/certificate, capacity evidence, real-user end-to-end integration, and
   deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
-  The local runner now wraps only the ten reviewed authentication/audit-event/invite/
-  CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job/aged-revoked-passkey/
-  aged-revoked-device cleanup procedures, primary profile purge, one pairing approval-provenance
-  redaction procedure, Community refresh, and finalization. One opt-in synthetic integration applies
-  the reviewed migrations to disposable PostgreSQL, runs every emitted command through a narrow
-  login, rejects an extra-membership login before mutation, and verifies exact state. An external
-  audit sink, scheduling, monitoring, production credentials/TLS, capacity, cache/backup/tombstone
-  purge, restore replay, and deployment remain separate gates.
+  The local runner now wraps only the eleven reviewed authentication/audit-event/invite/
+  CarRecipe-proposal/ingest/finalized-source-day/pairing/session/terminal-deletion-job/
+  aged-revoked-passkey/aged-revoked-device cleanup procedures, primary profile purge, one pairing
+  approval-provenance redaction procedure, Community refresh, and finalization. One opt-in synthetic
+  integration applies the reviewed migrations to disposable PostgreSQL, runs every emitted command
+  through a narrow login, rejects an extra-membership login before mutation, and verifies exact
+  state. An external audit sink, scheduling, monitoring, production credentials/TLS, capacity,
+  cache/backup/tombstone purge, restore replay, and deployment remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.
@@ -679,7 +679,8 @@ Primary tables include:
 - profiles, sessions, passkeys, recovery codes, and invites;
 - codex sources and device keys;
 - short-lived origin and device replay digests;
-- signed usage snapshots and current source/day values;
+- signed usage snapshots, current source/day values, and terminal UTC-day/count freshness
+  projections;
 - seasons, score-version records, entries, and source-count snapshots;
 - CarRecipe and proposals;
 - audit events, deletion jobs, and short-lived security tombstones.
@@ -813,7 +814,13 @@ profiles only after all exact enrollment-session/registration-challenge expiries
 one redeemed invite remains, and no other profile-bound recovery, authority, source, deletion,
 scoring, or recipe state exists. The profile cascade permanently removes the redeemed invite and
 expired enrollment authority while audit evidence remains with null profile linkage; it creates no
-deletion job, tombstone, restored invite, or notification. Other remaining expiry classes, keyed
+deletion job, tombstone, restored invite, or notification. Revision 0039 captures one bounded
+UTC-day/source/value inventory per profile when a season becomes terminal, keeps the compatible
+public freshness result stable, and permits maximum-1000 oldest-first source/day deletions only
+after 30 days. Every deletion rechecks captured/live inventory under the existing scoring,
+Ingest-retention, and profile-purge mutex order. Open, recent, missing-projection, or drifted state
+remains ineligible. The local capability has no scheduler, deployed cadence, correction authority,
+monitoring, capacity, backup purge, or restore evidence. Other remaining expiry classes, keyed
 tombstone policy, cache/backup purge, and restore replay still require their own reviewed
 implementation and public policy, and no implemented cleanup, redaction, or reset has a scheduler or
 deployed cadence.
@@ -1131,9 +1138,10 @@ measurements exist.
   Web/Auth boundary; live authenticator/database/connector evidence and deployment controls remain
   gates.
 - Complete aggregation, same-source device dedup, source count, quarantine, retention, and
-  finalized-season immutability. A bounded local abandoned-enrollment retention command now removes
-  only pre-activation profiles after all session/challenge authority expires; scheduling, capacity,
-  notification, backup purge, and deployed retention evidence remain open.
+  finalized-season immutability. Bounded local commands now remove only canonical abandoned
+  pre-activation profiles after all session/challenge authority expires and exact source/day rows
+  only after terminal finalization plus 30 days while preserving rounded freshness. Scheduling,
+  capacity, notification, correction, backup purge, and deployed retention evidence remain open.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
   new-source creation while preserving active existing-source pairing, plus CarRecipe proposal

@@ -13,10 +13,10 @@ public score/race/status routes, one local invite/OAuth/initial-passkey enrollme
 returning-passkey login plus private passkey/source/device inventory, source
 pause/reactivation/unlink, device/passkey revocation, fresh-passkey recovery-code rotation, and
 fresh-passkey profile-deletion-request slice plus one-time recovery-code replacement-passkey sign-in
-with encrypted cookies and logout, one local one-shot Jobs runner with eleven bounded cleanup
+with encrypted cookies and logout, one local one-shot Jobs runner with twelve bounded cleanup
 capabilities, one bounded pairing approval-provenance redaction, one fixed pairing-rate-window
-reset, and primary profile purge, plus a synthetic disposable PostgreSQL integration for all sixteen
-Jobs commands, plus local Community sync verification, PostgreSQL-adapter, transport-free
+reset, and primary profile purge, plus a synthetic disposable PostgreSQL integration for all
+seventeen Jobs commands, plus local Community sync verification, PostgreSQL-adapter, transport-free
 composition, and bounded Fastify HTTP boundaries; it does not yet contain an external audit sink,
 Jobs scheduler, cache/backup/tombstone purge, restore replay, deployed Ingest service, operational
 connector, deployment, or production data. A library-only Rust connector foundation now bounds and
@@ -305,8 +305,8 @@ and migration or rollback where applicable.
    labeled synthetic fallback on error. ADR 0056 now keeps all three public GET compositions
    default-off before query/header parsing, admission acquisition, or storage work unless their
    module-load value is exact true; it proves no deployed or dynamic route/cache denial. A local
-   one-shot Jobs runner now validates one of sixteen fixed
-   authentication/abandoned-enrollment/audit-event/invite/CarRecipe-proposal/ingest/pairing/session/
+   one-shot Jobs runner now validates one of seventeen fixed
+   authentication/abandoned-enrollment/audit-event/invite/CarRecipe-proposal/ingest/finalized-source-day/pairing/session/
    terminal-deletion-job/aged-revoked-passkey/aged-revoked-device cleanup, pairing
    approval-provenance redaction, fixed pairing-rate-window reset, primary-profile purge, or
    canonical-season refresh/finalization commands, probes its exact least-privileged login/session
@@ -324,8 +324,11 @@ and migration or rollback where applicable.
    canonical abandoned `enrolling` profile and its redeemed invite are removed only after every
    exact enrollment-session/registration-challenge expiry is past and no other recovery, passkey,
    source, deletion, scoring, or recipe state exists; a locked in-flight initial-passkey activation
-   is skipped. An external append-only audit sink, production login/TLS and edge evidence, a Jobs
-   scheduler, audited correction authority, trusted-edge rate policy, and capacity evidence are
+   is skipped. Exact source/day values are removable only 30 days after terminal finalization, after
+   a smaller UTC-day/count projection exists and repeated live/captured integrity checks pass; the
+   public status result remains stable. Open, recent, missing-projection, or drifted seasons are not
+   cleanup-eligible. An external append-only audit sink, production login/TLS and edge evidence, a
+   Jobs scheduler, audited correction authority, trusted-edge rate policy, and capacity evidence are
    still required before publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore

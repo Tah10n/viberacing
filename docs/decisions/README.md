@@ -70,6 +70,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0059](0059-fail-closed-car-proposal-enable-gate.md)            | Fail-closed CarRecipe proposal enable gate                          | Accepted; local gate; deployed operation pending       |
 | [0060](0060-fail-closed-enrollment-enable-gate.md)              | Fail-closed enrollment enable gate                                  | Accepted; local gate; deployed operation pending       |
 | [0061](0061-bounded-abandoned-enrollment-retention-cleanup.md)  | Bounded abandoned-enrollment retention cleanup                      | Accepted; database and local command; schedule pending |
+| [0062](0062-finalized-source-day-retention-cleanup.md)          | Finalized source-day retention cleanup                              | Accepted; database and local command; schedule pending |
 
 ## Lifecycle
 

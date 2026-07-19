@@ -228,6 +228,12 @@
       "name": "abandoned_enrollment_retention_cleanup",
       "path": "database/migrations/0038_abandoned_enrollment_retention_cleanup.sql",
       "sha256": "a0e7fbef1c0d7b2b0f7fdecd035298a1c5476c42e344cf71ef5e43cd0031aa44"
+    },
+    {
+      "revision": 39,
+      "name": "finalized_source_day_retention_cleanup",
+      "path": "database/migrations/0039_finalized_source_day_retention_cleanup.sql",
+      "sha256": "eb0866ea6cf10e42b2f4bd424eaaba5d0a5d83ca93bd91c4c622ff3dde8e4303"
     }
   ]
 }

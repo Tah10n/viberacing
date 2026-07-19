@@ -47,7 +47,8 @@ A profile is eligible only when all of these predicates hold at the captured ser
 - every associated authentication challenge retains exact `passkey_registration` purpose and has
   `expires_at` strictly before the captured time;
 - no passkey, recovery code, recovery authority, Codex source, or deletion job points to it; and
-- no season entry, active CarRecipe, or pending CarRecipe proposal points to it.
+- no season entry, finalized freshness projection, active CarRecipe, or pending CarRecipe proposal
+  points to it.
 
 Those shape predicates fail closed on non-enrollment, post-activation, deletion, scoring, or recipe
 state even if an owner-side error left the profile state unchanged. Terminal session/challenge state
@@ -76,6 +77,11 @@ expose exactly sixteen reviewed one-shot capabilities.
 This decision changes no public JSON Schema, OpenAPI operation, cookie, OAuth scope, WebAuthn
 ceremony, browser route, source/device contract, scoring rule, connector command, public response,
 or maintenance-lock row inventory.
+
+Revision 0039 later repeats the same eligibility boundary with an additional
+`NOT EXISTS finalized_season_profile_freshness` predicate. This preserves a malformed `enrolling`
+profile that has finalization-derived state instead of broadening its cascade through the new direct
+profile foreign key. It does not change this command, grant, batch, or normal canonical result.
 
 ## Security and privacy consequences
 
@@ -148,8 +154,8 @@ Repository evidence covers:
 - atomic deletion of the exact profile, redeemed invite, expired session, and expired challenge;
 - retained audit evidence with null profile linkage;
 - preservation of a live session, live challenge, active profile, wrong-purpose challenge, recovery
-  code/authority, passkey, source, deletion-job, score-entry, active/pending recipe, and
-  missing-redeemed-invite drift;
+  code/authority, passkey, source, deletion-job, score-entry, finalized freshness projection,
+  active/pending recipe, and missing-redeemed-invite drift;
 - missing authentication/profile-purge mutex failure and exact Jobs-only role grants;
 - two cleanup workers serializing and deleting each eligible row once;
 - an in-flight initial passkey activation committing while cleanup completes without waiting or

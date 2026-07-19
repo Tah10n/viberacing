@@ -162,6 +162,13 @@ VALUES
     'enroll-proposal-drift',
     'enrolling',
     pg_catalog.statement_timestamp() - INTERVAL '23 minutes'
+  ),
+  (
+    '00000000-0000-4000-8000-000000038116',
+    900000000000038116,
+    'enroll-freshness-drift',
+    'enrolling',
+    pg_catalog.statement_timestamp() - INTERVAL '22 minutes'
   );
 
 INSERT INTO viberacing_private.invites (
@@ -199,7 +206,8 @@ FROM (
     (12, '00000000-0000-4000-8000-000000038112'::uuid),
     (13, '00000000-0000-4000-8000-000000038113'::uuid),
     (14, '00000000-0000-4000-8000-000000038114'::uuid),
-    (15, '00000000-0000-4000-8000-000000038115'::uuid)
+    (15, '00000000-0000-4000-8000-000000038115'::uuid),
+    (16, '00000000-0000-4000-8000-000000038116'::uuid)
 ) AS fixture(ordinal, profile_id);
 
 INSERT INTO viberacing_private.sessions (
@@ -237,7 +245,8 @@ FROM (
     (12, '00000000-0000-4000-8000-000000038112'::uuid),
     (13, '00000000-0000-4000-8000-000000038113'::uuid),
     (14, '00000000-0000-4000-8000-000000038114'::uuid),
-    (15, '00000000-0000-4000-8000-000000038115'::uuid)
+    (15, '00000000-0000-4000-8000-000000038115'::uuid),
+    (16, '00000000-0000-4000-8000-000000038116'::uuid)
 ) AS fixture(ordinal, profile_id);
 
 INSERT INTO viberacing_private.auth_challenges (
@@ -348,6 +357,42 @@ VALUES (
   DATE '2100-01-03',
   'community_v1',
   viberacing_private.community_season_grace_ends_at(DATE '2099-12-28')
+);
+
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  season_end,
+  score_version,
+  created_at,
+  refreshed_at,
+  state,
+  grace_ends_at,
+  finalized_at
+)
+VALUES (
+  DATE '2001-01-01',
+  DATE '2001-01-07',
+  'community_v1',
+  TIMESTAMPTZ '2001-01-01 00:00:00+00',
+  TIMESTAMPTZ '2001-01-09 00:00:00+00',
+  'finalized',
+  viberacing_private.community_season_grace_ends_at(DATE '2001-01-01'),
+  TIMESTAMPTZ '2001-01-10 00:00:00+00'
+);
+
+INSERT INTO viberacing_private.finalized_season_profile_freshness (
+  season_start,
+  profile_id,
+  last_accepted_date,
+  retained_source_count,
+  source_day_value_count
+)
+VALUES (
+  DATE '2001-01-01',
+  '00000000-0000-4000-8000-000000038116',
+  DATE '2001-01-09',
+  1,
+  1
 );
 
 INSERT INTO viberacing_private.season_entries (
@@ -481,6 +526,7 @@ SELECT pg_temp.assert_true(
       'car_recipe_proposals',
       'codex_sources',
       'deletion_jobs',
+      'finalized_season_profile_freshness',
       'invites',
       'passkeys',
       'profile_car_recipes',
@@ -575,7 +621,7 @@ SET LOCAL ROLE viberacing_owner;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 13
+    SELECT pg_catalog.count(*) = 14
     FROM viberacing_private.profiles
     WHERE profile_id IN (
       '00000000-0000-4000-8000-000000038103',
@@ -590,7 +636,8 @@ SELECT pg_temp.assert_true(
       '00000000-0000-4000-8000-000000038112',
       '00000000-0000-4000-8000-000000038113',
       '00000000-0000-4000-8000-000000038114',
-      '00000000-0000-4000-8000-000000038115'
+      '00000000-0000-4000-8000-000000038115',
+      '00000000-0000-4000-8000-000000038116'
     )
   ),
   'live, active, and every non-canonical profile-bound drift shape remain'
@@ -661,8 +708,14 @@ SELECT pg_temp.assert_true(
     FROM viberacing_private.car_recipe_proposals
     WHERE proposal_id = '00000000-0000-4000-8000-000000038515'
       AND profile_id = '00000000-0000-4000-8000-000000038115'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM viberacing_private.finalized_season_profile_freshness
+    WHERE season_start = DATE '2001-01-01'
+      AND profile_id = '00000000-0000-4000-8000-000000038116'
   ),
-  'cleanup preserves every non-enrollment challenge, recovery, deletion, score, and recipe row'
+  'cleanup preserves every non-enrollment challenge, recovery, deletion, score, recipe, and freshness row'
 );
 
 SET LOCAL ROLE viberacing_jobs;

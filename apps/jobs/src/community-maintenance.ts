@@ -23,6 +23,10 @@ export type CommunityMaintenanceJob =
     }>
   | Readonly<{
       batchSize: number;
+      kind: "cleanup_finalized_source_day_values";
+    }>
+  | Readonly<{
+      batchSize: number;
       kind: "cleanup_aged_revoked_devices";
     }>
   | Readonly<{
@@ -85,6 +89,10 @@ export type CommunityMaintenanceResult =
   | Readonly<{
       deletedEnrollments: number;
       kind: "cleanup_abandoned_enrollments";
+    }>
+  | Readonly<{
+      deletedSourceDayValues: number;
+      kind: "cleanup_finalized_source_day_values";
     }>
   | Readonly<{
       deletedDeviceKeys: number;
@@ -254,6 +262,7 @@ function readJob(value: unknown): CommunityMaintenanceJob {
     }
     if (
       kind === "cleanup_abandoned_enrollments" ||
+      kind === "cleanup_finalized_source_day_values" ||
       kind === "cleanup_aged_revoked_devices" ||
       kind === "cleanup_aged_revoked_passkeys" ||
       kind === "cleanup_expired_auth_state" ||
@@ -353,6 +362,14 @@ function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaint
     const row = readSingleRow(value, new Set(["deleted_enrollments"]));
     return Object.freeze({
       deletedEnrollments: readCount(row, "deleted_enrollments", job.batchSize),
+      kind: job.kind,
+    });
+  }
+
+  if (job.kind === "cleanup_finalized_source_day_values") {
+    const row = readSingleRow(value, new Set(["deleted_source_day_values"]));
+    return Object.freeze({
+      deletedSourceDayValues: readCount(row, "deleted_source_day_values", job.batchSize),
       kind: job.kind,
     });
   }
@@ -522,6 +539,9 @@ function executeCapability(
   }
   if (job.kind === "cleanup_abandoned_enrollments") {
     return client.cleanupAbandonedEnrollments(job.batchSize);
+  }
+  if (job.kind === "cleanup_finalized_source_day_values") {
+    return client.cleanupFinalizedSourceDayValues(job.batchSize);
   }
   if (job.kind === "cleanup_aged_revoked_devices") {
     return client.cleanupAgedRevokedDevices(job.batchSize);

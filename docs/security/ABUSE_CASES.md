@@ -94,9 +94,10 @@ material availability cost.
 ### VR-ABUSE-SEASON-RACE — Duplicate or late mutation of season state
 
 - **Attacker:** A malicious client or normal retries exploiting concurrency and timing.
-- **Preconditions:** Parallel sync, job retry, or a request near the grace/finalization boundary.
-- **Abuse:** Double-count a source/date, reopen a closed season with client time, or apply a job
-  more than once.
+- **Preconditions:** Parallel sync, job retry, retention cleanup, or a request near the
+  grace/finalization boundary.
+- **Abuse:** Double-count a source/date, reopen a closed season with client time, delete scoring
+  input before terminal projection, or apply a job more than once.
 - **Impact:** Persistent ranking corruption and loss of audit confidence.
 - **Controls:** Unique source/date state, transactions, idempotency, server receipt time, versioned
   scoring, and database-enforced finalized immutability.
@@ -112,12 +113,16 @@ material availability cost.
   refresh denial after finalization, and an observed finalization-versus-late-Ingest race. That race
   exposed and then verified the canonical deadlock-free `season → profile → source → device` lock
   order; a second observed race proves opposing multi-season payload orders both lock seasons in
-  ascending order. A local one-shot Jobs runner now admits only canonical refresh/finalization
-  commands, probes the exact role/login boundary, calls one prepared function, holds one client
-  through settlement, and discards invalid results. The shared synthetic integration runs both
-  emitted scoring commands through a disposable narrow login, rejects an extra-membership login, and
-  checks open/finalized database state. Correction authority, scheduling, production database
-  login/TLS, and operational reconciliation remain unimplemented.
+  ascending order. Revision 0039 captures a bounded UTC-day/count projection at finalization and
+  admits exact source/day deletion only after 30 days, repeated live/captured inventory checks, and
+  the existing scoring/Ingest-retention/profile-purge mutex order. Worker and finalization races
+  preserve public freshness and prevent an open or newly finalized season from becoming eligible. A
+  local one-shot Jobs runner now admits only canonical refresh/finalization commands, probes the
+  exact role/login boundary, calls one prepared function, holds one client through settlement, and
+  discards invalid results. The shared synthetic integration runs both emitted scoring commands
+  through a disposable narrow login, rejects an extra-membership login, and checks open/finalized
+  database state. Correction authority, scheduling, production database login/TLS, and operational
+  reconciliation remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -567,31 +572,31 @@ material availability cost.
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
   and usage/scoring-table reads or API-schema mutation, and proves 64 cross-capability denials.
-  Ingest has exactly three reviewed functions; Jobs has exactly sixteen reviewed functions: bounded
-  authentication-, abandoned-enrollment-, audit-event-, invite-, CarRecipe-proposal-, ingest-,
-  pairing-, and session-retention cleanup, terminal deletion-job cleanup, aged revoked-passkey
-  cleanup, aged minimized revoked-device cleanup, pairing approval-provenance redaction, fixed
-  pairing-rate-window reset, primary profile deletion, open-season scoring refresh, and terminal
-  season finalization. Web alone receives the bounded public score and separate race functions;
-  Ingest, Jobs, and Admin are explicitly denied. The Web adapter uses one dedicated pool, fixed
-  parameterized function calls, and checks effective role, distinct non-privileged login, exact
-  Web-only membership, database capability, search path, and read-only state before every pooled
-  read. Failed sessions are destroyed and raw driver errors are not forwarded. The local Jobs
-  adapter independently checks an exact Jobs-only login/membership, CONNECT without
-  CREATE/TEMPORARY, and safe search path before exactly one of the sixteen prepared function calls.
-  Its pool maximum is one, input/result shapes are closed, failed clients are destroyed, and CLI
-  output reflects no configuration, command, SQL, count, or error detail. The local Ingest adapter
-  independently caps its pool at four, probes the exact Ingest login/role and safe search path
-  before each capability, exposes only fixed parameterized origin replay, device lookup, and
-  submission calls, reconstructs and revalidates inputs, copies mutable values, accepts only closed
-  rows, and destroys failed clients without forwarding driver/configuration details.
+  Ingest has exactly three reviewed functions; Jobs has exactly seventeen reviewed functions:
+  bounded authentication-, abandoned-enrollment-, audit-event-, invite-, CarRecipe-proposal-,
+  ingest-, pairing-, session-, and finalized-source-day retention cleanup, terminal deletion-job
+  cleanup, aged revoked-passkey cleanup, aged minimized revoked-device cleanup, pairing
+  approval-provenance redaction, fixed pairing-rate-window reset, primary profile deletion,
+  open-season scoring refresh, and terminal season finalization. Web alone receives the bounded
+  public score and separate race functions; Ingest, Jobs, and Admin are explicitly denied. The Web
+  adapter uses one dedicated pool, fixed parameterized function calls, and checks effective role,
+  distinct non-privileged login, exact Web-only membership, database capability, search path, and
+  read-only state before every pooled read. Failed sessions are destroyed and raw driver errors are
+  not forwarded. The local Jobs adapter independently checks an exact Jobs-only login/membership,
+  CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the seventeen
+  prepared function calls. Its pool maximum is one, input/result shapes are closed, failed clients
+  are destroyed, and CLI output reflects no configuration, command, SQL, count, or error detail. The
+  local Ingest adapter independently caps its pool at four, probes the exact Ingest login/role and
+  safe search path before each capability, exposes only fixed parameterized origin replay, device
+  lookup, and submission calls, reconstructs and revalidates inputs, copies mutable values, accepts
+  only closed rows, and destroys failed clients without forwarding driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Web deployment login/TLS integration has not been exercised. Jobs now has a
-  disposable synthetic least-privileged login, all sixteen emitted commands, a widened-login denial,
-  and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged loopback
-  login and full HTTP integration result. Neither proves a deployment credential/certificate,
-  external TLS/edge route, external audit sink, capacity, scheduler, monitoring, or real-user
-  behavior.
+  disposable synthetic least-privileged login, all seventeen emitted commands, a widened-login
+  denial, and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged
+  loopback login and full HTTP integration result. Neither proves a deployment
+  credential/certificate, external TLS/edge route, external audit sink, capacity, scheduler,
+  monitoring, or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 

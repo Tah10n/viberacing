@@ -19,7 +19,7 @@ artifact admission, one Windows sync command with bounded fixed-name discovery p
 fallback that admits, collects, signs, and uploads once, and one fixed proposal-only command that
 starts no Codex process. It also has one opt-in synthetic loopback integration through the emitted
 Ingest host and a disposable least-privileged PostgreSQL login, plus a separate synthetic
-integration through all sixteen emitted Jobs commands and a disposable narrow login with a
+integration through all seventeen emitted Jobs commands and a disposable narrow login with a
 widened-login negative control. It still has no deployed application service, operational sync
 connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway deployment,
 live OAuth or production database login, or production database. Component status is tracked in
@@ -122,11 +122,11 @@ the current active recipe. ADR 0040 adds the separate compatible rounded status 
 places all three GET compositions behind one exact default-off module-load decision before
 query/header parsing, admission acquisition, or store work. These capabilities have role, contract,
 route, adapter, mapping, and concurrency evidence. ADR 0014 adds a local one-shot Jobs adapter/CLI;
-ADRs 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, and 0061 extend it to
-exactly eleven cleanup commands, one pairing approval-provenance redaction, one fixed
+ADRs 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, 0061, and 0062 extend
+it to exactly twelve cleanup commands, one pairing approval-provenance redaction, one fixed
 pairing-rate-window reset, one primary purge, one refresh, and one finalization command with the
 same role/login probe, one-client pool, and fixed deadlines. A separate opt-in synthetic integration
-now runs all sixteen emitted commands against disposable PostgreSQL, proves the narrow login and
+now runs all seventeen emitted commands against disposable PostgreSQL, proves the narrow login and
 extra-membership denial, and checks exact stored state. ADR 0015 adds a pure local Ingest kernel
 that bounds the raw envelope and JSON parser, verifies a replay-consumed body-bound origin proof
 before parsing, validates the sync contract, and verifies the exact source-bound device request

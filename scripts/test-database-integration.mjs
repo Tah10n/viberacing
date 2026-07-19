@@ -27,7 +27,7 @@ testWeekStartDate.setUTCDate(
   testWeekStartDate.getUTCDate() - ((testWeekStartDate.getUTCDay() + 6) % 7),
 );
 const testWeekStart = testWeekStartDate.toISOString().slice(0, 10);
-const expectedObservedLockWaitRaceCount = 41;
+const expectedObservedLockWaitRaceCount = 44;
 const expectedObservedEarlyCompletionOverlapCount = 1;
 let raceSequence = 0;
 let observedLockWaitRaceCount = 0;
@@ -477,10 +477,33 @@ function loadReviewedMigrations() {
     throw new Error(`migration manifest validation failed:\n- ${findings.join("\n- ")}`);
   }
 
-  return manifest.migrations.map((migration) => ({
-    label: `migration ${migration.revision}: ${migration.name}`,
-    sql: filesByPath.get(migration.path),
-  }));
+  return manifest.migrations.flatMap((migration) => {
+    const migrationInput = {
+      label: `migration ${migration.revision}: ${migration.name}`,
+      sql: filesByPath.get(migration.path),
+    };
+    if (migration.revision !== 39) {
+      return [migrationInput];
+    }
+
+    return [
+      {
+        label: "revision 0039 finalized source-day backfill setup",
+        sql: readFileSync(
+          resolve(root, "database/tests/finalized_source_day_migration_setup.sql"),
+          "utf8",
+        ),
+      },
+      migrationInput,
+      {
+        label: "revision 0039 finalized source-day backfill assertions",
+        sql: readFileSync(
+          resolve(root, "database/tests/finalized_source_day_migration_assertions.sql"),
+          "utf8",
+        ),
+      },
+    ];
+  });
 }
 
 let started = false;
@@ -563,6 +586,10 @@ try {
     {
       label: "abandoned enrollment retention cleanup scenarios",
       sql: readFileSync(resolve(root, "database/tests/abandoned_enrollment_cleanup.sql"), "utf8"),
+    },
+    {
+      label: "finalized source-day retention cleanup scenarios",
+      sql: readFileSync(resolve(root, "database/tests/finalized_source_day_cleanup.sql"), "utf8"),
     },
     {
       label: "pairing approval-provenance retention scenarios",
@@ -868,6 +895,65 @@ SELECT * FROM viberacing_api.cleanup_abandoned_enrollments(1);`,
       ),
     ),
     "abandoned enrollment cleanup concurrency assertions",
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/finalized_source_day_cleanup_concurrency_setup.sql"),
+        "utf8",
+      ),
+    ),
+    "finalized source-day cleanup concurrency setup",
+  );
+
+  await expectConcurrentSuccesses(
+    "bounded finalized source-day cleanup worker race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_finalized_source_day_values(1);
+\\echo finalized-source-day-worker-lock-ready`,
+    "finalized-source-day-worker-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_finalized_source_day_values(1);`,
+    ],
+  );
+
+  await expectConcurrentSuccesses(
+    "finalized source-day cleanup versus primary profile purge race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_finalized_source_day_values(1);
+\\echo finalized-source-day-purge-lock-ready`,
+    "finalized-source-day-purge-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.purge_profile_deletions(1);`,
+    ],
+  );
+
+  await expectConcurrentSuccesses(
+    "Community finalization versus finalized source-day cleanup race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.finalize_community_season(DATE '2009-01-05');
+\\echo finalized-source-day-finalization-lock-ready`,
+    "finalized-source-day-finalization-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_finalized_source_day_values(1);`,
+    ],
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/finalized_source_day_cleanup_concurrency_assertions.sql"),
+        "utf8",
+      ),
+    ),
+    "finalized source-day cleanup concurrency assertions",
   );
 
   await expectConcurrentSuccesses(
@@ -2516,7 +2602,7 @@ SELECT viberacing_api.complete_passkey_login(
   }
 
   console.log(
-    `Database integration passed (27 schema tables, ${observedLockWaitRaceCount} observed lock-wait races, ${observedEarlyCompletionOverlapCount} observed early-completion overlap, 12 relation-denial and 64 cross-capability checks).`,
+    `Database integration passed (28 schema tables, ${observedLockWaitRaceCount} observed lock-wait races, ${observedEarlyCompletionOverlapCount} observed early-completion overlap, 12 relation-denial and 64 cross-capability checks).`,
   );
 } finally {
   if (started) {

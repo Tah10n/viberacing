@@ -46,6 +46,10 @@ describe("Jobs command", () => {
       ["cleanup-abandoned-enrollments"],
       { batchSize: 1_000, kind: "cleanup_abandoned_enrollments" },
     ],
+    [
+      ["cleanup-finalized-source-day-values"],
+      { batchSize: 1_000, kind: "cleanup_finalized_source_day_values" },
+    ],
     [["cleanup-aged-revoked-devices"], { batchSize: 1_000, kind: "cleanup_aged_revoked_devices" }],
     [
       ["cleanup-aged-revoked-passkeys"],
@@ -93,6 +97,7 @@ describe("Jobs command", () => {
     [],
     ["reset-expired-pairing-request-windows", "unexpected"],
     ["cleanup-abandoned-enrollments", "unexpected"],
+    ["cleanup-finalized-source-day-values", "unexpected"],
     ["cleanup-aged-revoked-devices", "unexpected"],
     ["cleanup-aged-revoked-passkeys", "unexpected"],
     ["cleanup-expired-auth-state", "unexpected"],

@@ -38,6 +38,7 @@ const fixture = Object.freeze({
   auditEventId: "00000000-0000-4000-8000-000000031901",
   carProfileId: "00000000-0000-4000-8000-000000031201",
   carProposalId: "00000000-0000-4000-8000-000000031202",
+  finalizedSourceProfileId: "00000000-0000-4000-8000-000000031954",
   inviteId: "00000000-0000-4000-8000-000000031701",
   pairingDeviceKeyId: "00000000-0000-4000-8000-000000031301",
   pairingId: "00000000-0000-4000-8000-000000031302",
@@ -287,6 +288,7 @@ INSERT INTO viberacing_private.profiles (profile_id, github_user_id, handle, sta
 VALUES
   ('${fixture.abandonedProfileId}', 900000000000031952, 'jobs-it-abandoned', 'enrolling'),
   ('${fixture.carProfileId}', 900000000000031201, 'jobs-it-car', 'active'),
+  ('${fixture.finalizedSourceProfileId}', 900000000000031954, 'jobs-it-source-ret', 'active'),
   ('${fixture.sessionProfileId}', 900000000000031602, 'jobs-it-session', 'active'),
   ('${fixture.scoringProfileId}', 900000000000031501, 'jobs-it-score', 'active');
 
@@ -658,7 +660,12 @@ VALUES (
 );
 
 INSERT INTO viberacing_private.codex_sources (source_id, profile_id)
-VALUES ('src_' || pg_catalog.repeat('J', 22), '${fixture.scoringProfileId}');
+VALUES
+  ('src_' || pg_catalog.repeat('J', 22), '${fixture.scoringProfileId}'),
+  (
+    'src_' || pg_catalog.lpad('31954', 22, 'R'),
+    '${fixture.finalizedSourceProfileId}'
+  );
 
 INSERT INTO viberacing_private.source_day_values (
   source_id,
@@ -669,15 +676,47 @@ INSERT INTO viberacing_private.source_day_values (
   first_accepted_at,
   last_accepted_at
 )
+VALUES
+  (
+    'src_' || pg_catalog.repeat('J', 22),
+    DATE '${currentSeasonStart}',
+    12345,
+    'syn_' || pg_catalog.repeat('J', 22),
+    'dev_' || pg_catalog.repeat('J', 22),
+    pg_catalog.statement_timestamp(),
+    pg_catalog.statement_timestamp()
+  ),
+  (
+    'src_' || pg_catalog.lpad('31954', 22, 'R'),
+    DATE '2001-01-08',
+    67890,
+    'syn_' || pg_catalog.lpad('31954', 22, 'R'),
+    'dev_' || pg_catalog.lpad('31954', 22, 'R'),
+    TIMESTAMPTZ '2001-01-10 08:00:00+00',
+    TIMESTAMPTZ '2001-01-10 09:00:00+00'
+  );
+
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  season_end,
+  score_version,
+  created_at,
+  refreshed_at,
+  grace_ends_at
+)
 VALUES (
-  'src_' || pg_catalog.repeat('J', 22),
-  DATE '${currentSeasonStart}',
-  12345,
-  'syn_' || pg_catalog.repeat('J', 22),
-  'dev_' || pg_catalog.repeat('J', 22),
-  pg_catalog.statement_timestamp(),
-  pg_catalog.statement_timestamp()
+  DATE '2001-01-08',
+  DATE '2001-01-14',
+  'community_v1',
+  TIMESTAMPTZ '2001-01-08 00:00:00+00',
+  TIMESTAMPTZ '2001-01-17 00:30:00+00',
+  viberacing_private.community_season_grace_ends_at(DATE '2001-01-08')
 );
+
+UPDATE viberacing_private.seasons
+SET state = 'finalized',
+  finalized_at = TIMESTAMPTZ '2001-01-17 01:00:00+00'
+WHERE season_start = DATE '2001-01-08';
 COMMIT;`,
     "synthetic Jobs integration fixture",
   );
@@ -789,6 +828,7 @@ SELECT (
       ["cleanup-expired-car-recipe-proposals"],
       ["cleanup-expired-invites"],
       ["cleanup-abandoned-enrollments"],
+      ["cleanup-finalized-source-day-values"],
       ["cleanup-expired-ingest-state"],
       ["cleanup-expired-pairing-state"],
       ["redact-aged-pairing-approval-provenance"],
@@ -839,6 +879,23 @@ SELECT pg_catalog.jsonb_build_object(
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.car_recipe_proposals
     WHERE proposal_id = '${fixture.carProposalId}'
+  ),
+  'finalizedSourceDayCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.source_day_values
+    WHERE source_id = 'src_' || pg_catalog.lpad('31954', 22, 'R')
+      AND codex_reported_date = DATE '2001-01-08'
+  ),
+  'finalizedSourceProjectionPurgedCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.finalized_season_profile_freshness
+    WHERE season_start = DATE '2001-01-08'
+      AND profile_id = '${fixture.finalizedSourceProfileId}'
+      AND last_accepted_date = DATE '2001-01-10'
+      AND retained_source_count = 1
+      AND source_day_value_count = 1
+      AND deleted_source_day_value_count = 1
+      AND source_values_purged_at IS NOT NULL
   ),
   'inviteCount', (
     SELECT pg_catalog.count(*)::integer
@@ -995,6 +1052,8 @@ SELECT pg_catalog.jsonb_build_object(
       finalizedAtSet: true,
       finalizedEntryCount: 0,
       finalizedSeasonState: "finalized",
+      finalizedSourceDayCount: 0,
+      finalizedSourceProjectionPurgedCount: 1,
       inviteCount: 0,
       originNonceCount: 0,
       pairingCount: 0,
@@ -1021,7 +1080,7 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Jobs PostgreSQL integration passed (sixteen commands, least-privilege denial, generic output, and exact stored state).",
+      "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

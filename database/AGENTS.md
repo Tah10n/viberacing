@@ -42,6 +42,10 @@ cases, and privacy data map before changing this subtree.
 - Pairing rate-window retention reset must preserve all 130 rows, accept no caller-selected scope,
   wait the maximum one-hour admission duration, use the same operation/global/bucket lock order, and
   remain Jobs-only. It may scrub only aggregate timestamps/counts to the exact epoch/zero state.
+- Finalized source/day cleanup must remain Jobs-only, wait at least 30 days after terminal
+  finalization, preserve the UTC-day public freshness projection, verify live plus deleted inventory
+  before every row, and lock scoring, Ingest retention, then profile purge in stable name order.
+  Never make open, missing-projection, recent, or integrity-drifted state eligible.
 - Do not weaken forced RLS, state constraints, digest/length checks, or role denials to simplify
   application code.
 
