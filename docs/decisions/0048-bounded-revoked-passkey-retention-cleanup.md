@@ -76,10 +76,11 @@ Recovery still requires one-time Argon2id verification, exact restricted authori
 WebAuthn proof, and atomic session creation. Jobs receives no table access and cannot read
 credential material or select the affected profile.
 
-Residual risk remains: retained pairing/device transaction history, revoked device keys, fixed
-pairing-rate windows, tombstones, caches, backups, and restore replay still need separate policies
-and evidence. There is no scheduler, cadence, overlap/retry policy, monitoring, capacity result,
-production Jobs login/TLS connection, backup purge, or deployed retention proof.
+Residual risk remains: retained pairing/device transaction history, revoked device keys, tombstones,
+caches, backups, and restore replay still need separate policies and evidence. ADR 0050 separately
+bounds fixed pairing-rate-window reset. There is no scheduler, cadence, overlap/retry policy,
+monitoring, capacity result, production Jobs login/TLS connection, backup purge, or deployed
+retention proof.
 
 Affected invariants are VR-AUTH-002, VR-AUTH-003, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and

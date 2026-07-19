@@ -77,7 +77,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Connector, Codex, and OS-family versions                                    | Security; Operational                  | Connector; compatibility and incident diagnosis                                                                                              | Pairing service while pending; user inventory after activation                                  | Device/sync metadata                                                                                                                                           | Pending metadata is cleanup-eligible at pairing expiry; activated metadata remains through authority and at least 180 days after revocation, longer while exact references remain                                                                                                                           |
 | Pairing poll token, HMAC keys/verifiers, challenge, user code, transaction  | Security                               | Server/connector; poll safely and bind browser approval to one key                                                                           | Pairing service/application, native connector record, and browser confirmation                  | Plain token/challenge/code only in pending native record; separate keyed verifiers in DB; HMAC keys in protected configuration                                 | Pending native material clears on activation/local expiry; expired non-activated rows have bounded cleanup; activated approval references redact after at least 180 days, and the minimized pairing/device pair is cleanup-eligible only after both ages and all exact challenge/nonce/raw references clear |
 | Pairing approval attempt window and count                                   | Security; Operational                  | Server; bound authenticated code guessing across Web instances                                                                               | Web/Auth and database only                                                                      | Two fields on the possessed `sessions` row; no code, digest, IP, or user-agent history                                                                         | Window resets in place; eligible session rows are deleted once unreferenced; activated pairing references are redaction-eligible after at least 180 days                                                                                                                                                    |
-| Anonymous pairing client ID, digest, bucket, and rate window                | Security; Operational                  | Connector/Web; cheaply shape anonymous start/poll load                                                                                       | Raw 16-byte ID in native connector record and one header; digest transient in Web/PostgreSQL    | Database stores only 130 fixed operation/global/bucket rows with window start and saturated count; no ID or digest                                             | Client ID is removed with the exact local credential; aggregate rows reset in place and do not grow                                                                                                                                                                                                         |
+| Anonymous pairing client ID, digest, bucket, and rate window                | Security; Operational                  | Connector/Web; cheaply shape anonymous start/poll load                                                                                       | Raw 16-byte ID in native connector record and one header; digest transient in Web/PostgreSQL    | Database stores only 130 fixed operation/global/bucket rows with window start and saturated count; no ID or digest                                             | Client ID is removed with the exact local credential; positive aggregate timestamp/count becomes reset-eligible after the maximum one-hour window through a bounded Jobs capability; fixed rows remain, and no scheduled or deployed maximum retention is evidenced                                         |
 | Encrypted pairing approval continuation                                     | Security                               | Server; bind reviewed pairing and exact selected source to fresh step-up                                                                     | Browser receives only an opaque HttpOnly cookie; Web/Auth decrypts it                           | AES-GCM continuation contains challenge, pairing/source IDs, and expiry; no raw code or public key                                                             | At most five minutes, one-time database action, cleared from the browser after success                                                                                                                                                                                                                      |
 | Pairing possession message and signature                                    | Security                               | Connector/Web verifier; prove one pending device holds its private key                                                                       | Connector signer, pure Web verifier, and closed activation application                          | Transient process memory only; never persisted                                                                                                                 | Web copies overwritten after settlement; Rust proof lives until owner drop; never logged or retained                                                                                                                                                                                                        |
 | `codexReportedDate` and exact daily token value                             | Usage                                  | Local stable App Server adapter; compute Community score                                                                                     | Isolated Ingest and Jobs scoring/cleanup procedures; never public raw                           | `usage_snapshot_entries`, `source_day_values`                                                                                                                  | Raw snapshot is Jobs-cleanup eligible after 30 days; current/history policy remains a launch decision                                                                                                                                                                                                       |
@@ -339,8 +339,10 @@ The raw anonymous client ID crosses only the exact start/poll header. Web derive
 32-byte SHA-256 digest and clears the decoded copy. PostgreSQL uses only the first digest byte
 modulo 64 to select a fixed bucket and retains no ID or digest. Revision 0022's 130 rows contain
 only operation, bucket, millisecond window start, and saturated count. Window values reset in place,
-so identifier rotation cannot grow storage. The ID is rate shaping, not authentication, account
-identity, device fingerprinting, or a substitute for a reviewed edge/IP policy.
+so identifier rotation cannot grow storage. Revision 0037 additionally lets only Jobs scrub a
+positive aggregate timestamp/count after the maximum one-hour duration while preserving every fixed
+row. The ID is rate shaping, not authentication, account identity, device fingerprinting, or a
+substitute for a reviewed edge/IP policy. No reset schedule or deployed cadence exists.
 
 Revision 0021 stores only a window start and bounded attempt count on the already mapped active
 session. Every admitted canonical or malformed code reaches the same primary/optional-secondary
@@ -417,9 +419,9 @@ transaction material remain. The existing authentication and pairing mutexes ser
 transition with session cleanup, pairing cleanup, and primary profile purge; partial,
 pre-activation, or binding-changing redaction fails closed. A later session-cleanup invocation can
 remove an expired session once no rotation or pairing reference remains. The local Jobs mapper
-discards the count. Historical pairing/device rows, passkey lifecycle, rate windows, scheduling,
-monitoring, backup purge, production login/TLS, capacity, and deployed retention evidence remain
-outside this slice.
+discards the count. Historical pairing/device rows and passkey lifecycle remain outside this slice;
+ADR 0050 separately bounds fixed rate-window reset. Scheduling, monitoring, backup purge, production
+login/TLS, capacity, and deployed retention evidence remain absent.
 
 Revision 0035 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of passkey rows
 only after server-recorded revocation is at least 180 days old and no session, verifying or
@@ -478,19 +480,19 @@ non-personal terminal season definition. A no-data closed week stores only that 
 public serializer/cache, audited correction record, finalized public-history retention rule, Jobs
 deployment/scheduler, or monitoring backend exists.
 
-ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, and 0048 store no user data. The
-local Jobs process transiently receives only one of nine fixed 1000-row cleanup batches, one fixed
-1000-row pairing approval-provenance redaction, one fixed maximum-10 profile purge, or one Public
-season-start label, plus the private aggregate counts already returned by the procedures. It
-validates and discards those values within one process invocation. The CLI emits only one constant
-completion/failure sentence; it does not log the command, date, counts, identifiers, SQL,
-environment, exception, or stack. The optional pool hook receives only the closed Operational signal
-`idle_client_error` and has no built-in storage or network sink. The opt-in integration adds no
-retained field: it creates obviously synthetic fixture IDs and passwords inside one disposable local
-PostgreSQL container, observes only the constant process sentences, asserts state in memory, and
-removes the container, network, and storage. A future scheduler, run history, metric, alert, retry
-record, or monitoring backend must map its exact fields, access, retention, and deletion behavior
-here before collection.
+ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, 0048, 0049, and 0050 store no user
+data. The local Jobs process transiently receives only one of ten fixed 1000-row cleanup batches,
+one zero-argument maximum-130 pairing-rate-window reset, one fixed 1000-row pairing
+approval-provenance redaction, one fixed maximum-10 profile purge, or one Public season-start label,
+plus the private aggregate counts already returned by the procedures. It validates and discards
+those values within one process invocation. The CLI emits only one constant completion/failure
+sentence; it does not log the command, date, counts, identifiers, SQL, environment, exception, or
+stack. The optional pool hook receives only the closed Operational signal `idle_client_error` and
+has no built-in storage or network sink. The opt-in integration adds no retained field: it creates
+obviously synthetic fixture IDs and passwords inside one disposable local PostgreSQL container,
+observes only the constant process sentences, asserts state in memory, and removes the container,
+network, and storage. A future scheduler, run history, metric, alert, retry record, or monitoring
+backend must map its exact fields, access, retention, and deletion behavior here before collection.
 
 Revision 0011 stores no new data. One owner-defined function gives only the Web role a fixed
 ten-field score projection: season dates/version/finalized state, handle, weekly score, active days,
@@ -640,11 +642,12 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
 - Jobs currently receive only bounded cleanup of expired authentication, invitation, ingest,
   pairing, session, CarRecipe-proposal, terminal-deletion-job, database audit-event, and aged
   unreferenced revoked-passkey plus minimized revoked-device state; bounded aged pairing
-  approval-provenance redaction; maximum-10 primary profile deletion; open-season Community scoring
-  refresh; and terminal finalization. The local one-shot adapter rechecks the exact Jobs-only login
-  and invokes one prepared capability without logging inputs or results. Correction, cache/backup
-  purge, tombstone/restore replay, and remaining retention capabilities require separate migrations
-  and tests; migrations use a different non-runtime owner.
+  approval-provenance redaction; fixed anonymous pairing-rate-window reset; maximum-10 primary
+  profile deletion; open-season Community scoring refresh; and terminal finalization. The local
+  one-shot adapter rechecks the exact Jobs-only login and invokes one prepared capability without
+  logging inputs or results. Correction, cache/backup purge, tombstone/restore replay, and remaining
+  retention capabilities require separate migrations and tests; migrations use a different
+  non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The

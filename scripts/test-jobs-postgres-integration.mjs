@@ -377,6 +377,13 @@ VALUES (
   pg_catalog.statement_timestamp() - INTERVAL '5 minutes'
 );
 
+UPDATE viberacing_private.pairing_request_windows
+SET
+  window_started_at = pg_catalog.statement_timestamp() - INTERVAL '2 hours',
+  attempt_count = CASE bucket WHEN -1 THEN 21 ELSE 6 END
+WHERE operation = 'poll'
+  AND bucket IN (-1, 5);
+
 INSERT INTO viberacing_private.device_keys (
   device_key_id,
   public_key,
@@ -712,7 +719,7 @@ COMMIT;`,
     seedSyntheticState(currentSeasonStart);
 
     const rejected = runJobsCommand(databasePort, wideJobsLogin, wideJobsPassword, [
-      "cleanup-aged-revoked-devices",
+      "reset-expired-pairing-request-windows",
     ]);
     assertRejectedCommand(rejected, "widened Jobs login");
     assert.equal(
@@ -729,12 +736,19 @@ SELECT (
     FROM viberacing_private.pairing_transactions
     WHERE pairing_id = '${fixture.revokedDevicePairingId}'
       AND state = 'activated'
+  ) + (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.pairing_request_windows
+    WHERE operation = 'poll'
+      AND bucket IN (-1, 5)
+      AND attempt_count > 0
+      AND window_started_at < pg_catalog.statement_timestamp() - INTERVAL '1 hour'
   )
 )::integer;`,
         "rejected-login stored-state verification",
       ),
-      "2",
-      "the runtime probe must fail before the requested cleanup mutates either retained row",
+      "4",
+      "the runtime probe must fail before the requested reset or retained-row cleanup mutates state",
     );
 
     const commands = [
@@ -748,6 +762,7 @@ SELECT (
       ["cleanup-expired-sessions"],
       ["cleanup-aged-revoked-passkeys"],
       ["cleanup-aged-revoked-devices"],
+      ["reset-expired-pairing-request-windows"],
       ["purge-profile-deletions"],
       ["cleanup-terminal-deletion-jobs"],
       ["refresh-community-season", currentSeasonStart],
@@ -796,6 +811,14 @@ SELECT pg_catalog.jsonb_build_object(
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.device_keys
     WHERE device_key_id = '${fixture.pairingDeviceKeyId}'
+  ),
+  'pairingRateWindowResetCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.pairing_request_windows
+    WHERE operation = 'poll'
+      AND bucket IN (-1, 5)
+      AND attempt_count = 0
+      AND window_started_at = TIMESTAMPTZ '1970-01-01 00:00:00+00'
   ),
   'provenanceDeviceCount', (
     SELECT pg_catalog.count(*)::integer
@@ -924,6 +947,7 @@ SELECT pg_catalog.jsonb_build_object(
       inviteCount: 0,
       originNonceCount: 0,
       pairingCount: 0,
+      pairingRateWindowResetCount: 2,
       pendingDeviceKeyCount: 0,
       provenanceDeviceCount: 1,
       provenancePairingCount: 1,
@@ -946,7 +970,7 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Jobs PostgreSQL integration passed (fourteen commands, least-privilege denial, generic output, and exact stored state).",
+      "Jobs PostgreSQL integration passed (fifteen commands, least-privilege denial, generic output, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

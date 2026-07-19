@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 67
+    SELECT pg_catalog.count(*) = 68
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 24
+    SELECT pg_catalog.count(*) = 25
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -88,6 +88,7 @@ SELECT pg_temp.assert_true(
         'reject_car_recipe',
         'read_pairing_for_approval_limited',
         'redact_aged_pairing_approval_provenance',
+        'reset_expired_pairing_request_windows',
         'refresh_community_season',
         'finalize_community_season',
         'submit_community_sync'
@@ -112,7 +113,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 15
+    SELECT pg_catalog.count(*) = 16
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -132,6 +133,7 @@ SELECT pg_temp.assert_true(
         'cleanup_terminal_deletion_jobs',
         'purge_profile_deletions',
         'redact_aged_pairing_approval_provenance',
+        'reset_expired_pairing_request_windows',
         'submit_community_sync',
         'refresh_community_season',
         'finalize_community_season'
@@ -232,6 +234,7 @@ SELECT pg_temp.assert_true(
           'purge_profile_deletions',
           'read_pairing_for_approval',
           'redact_aged_pairing_approval_provenance',
+          'reset_expired_pairing_request_windows',
           'refresh_community_season',
           'finalize_community_season'
         )
@@ -277,6 +280,7 @@ SELECT pg_temp.assert_true(
           'cleanup_terminal_deletion_jobs',
           'purge_profile_deletions',
           'redact_aged_pairing_approval_provenance',
+          'reset_expired_pairing_request_windows',
           'refresh_community_season',
           'finalize_community_season'
         )

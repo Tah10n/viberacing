@@ -48,6 +48,10 @@ const agedRevokedDeviceCleanupQuery = `SELECT
   cleanup.deleted_device_keys AS deleted_device_keys
 FROM viberacing_api.cleanup_aged_revoked_devices($1::integer) AS cleanup`;
 
+const pairingRequestWindowResetQuery = `SELECT
+  reset.reset_windows AS reset_windows
+FROM viberacing_api.reset_expired_pairing_request_windows() AS reset`;
+
 const cleanupQuery = `SELECT
   cleanup.deleted_origin_nonces AS deleted_origin_nonces,
   cleanup.deleted_nonces AS deleted_nonces,
@@ -119,6 +123,7 @@ export interface JobsDatabaseClient {
   purgeProfileDeletions(batchSize: number): Promise<unknown>;
   redactAgedPairingApprovalProvenance(batchSize: number): Promise<unknown>;
   release(destroy?: boolean): void;
+  resetExpiredPairingRequestWindows(): Promise<unknown>;
   refreshCommunitySeason(seasonStart: string): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
 }
@@ -207,6 +212,9 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
     },
     release(destroy = false): void {
       client.release(destroy);
+    },
+    resetExpiredPairingRequestWindows(): Promise<unknown> {
+      return fixedQuery(pairingRequestWindowResetQuery);
     },
     refreshCommunitySeason(seasonStart: string): Promise<unknown> {
       return fixedQuery(refreshQuery, [seasonStart]);

@@ -67,6 +67,10 @@ boundary.
 [ADR 0049](0049-bounded-revoked-device-retention-cleanup.md) adds a fourteenth fixed command,
 `cleanup-aged-revoked-devices`, with the fixed maximum batch of 1000 and the same one-shot boundary.
 
+[ADR 0050](0050-bounded-pairing-rate-window-retention-reset.md) adds a fifteenth fixed command,
+`reset-expired-pairing-request-windows`. It accepts no parameter and can reset at most the existing
+130 fixed operation/global/bucket rows.
+
 Season input must be one canonical Monday from `1999-12-27` through `2099-12-28`. Unknown commands,
 arguments, fields, sparse or exotic arrays, accessors, prototypes, and values fail before database
 configuration or connection. Programmatic job objects are separately revalidated as closed plain
@@ -88,18 +92,19 @@ Every checkout first verifies all of the following in one fixed query:
 - it has no other group membership; and
 - the search path is exactly `pg_catalog,pg_temp`.
 
-The second and only capability query is selected in code from a closed set of fourteen fixed
+The second and only capability query is selected in code from a closed set of fifteen fixed
 parameterized SQL strings: the original three plus ADR 0029's pairing-retention cleanup, ADR 0032's
 authentication cleanup, ADR 0034's primary profile deletion purge, ADR 0036's CarRecipe-proposal
 cleanup, ADR 0042's session-retention cleanup, ADR 0043's invite-retention cleanup, ADR 0045's
 terminal deletion-job cleanup, ADR 0046's audit-event cleanup, ADR 0047's pairing
-approval-provenance redaction, ADR 0048's aged revoked-passkey cleanup, and ADR 0049's aged
-revoked-device cleanup. There is no generic query, table access, migration, owner, Web, Ingest,
-Admin, interactive auth, or correction capability. The returned array and row must contain exactly
-one plain dense row and the allowlisted integer columns. Cleanup counts cannot exceed the requested
-batch; paired deletion counts must agree; scoring counts must fit PostgreSQL `integer`. Accessors,
-extra columns, missing rows, invalid counts, and driver/runtime exceptions produce one stable error
-type without reflecting values.
+approval-provenance redaction, ADR 0048's aged revoked-passkey cleanup, ADR 0049's aged
+revoked-device cleanup, and ADR 0050's fixed pairing-rate-window reset. There is no generic query,
+table access, migration, owner, Web, Ingest, Admin, interactive auth, or correction capability. The
+returned array and row must contain exactly one plain dense row and the allowlisted integer columns.
+Cleanup counts cannot exceed the requested batch; paired deletion counts must agree; rate-window
+reset cannot exceed 130; scoring counts must fit PostgreSQL `integer`. Accessors, extra columns,
+missing rows, invalid counts, and driver/runtime exceptions produce one stable error type without
+reflecting values.
 
 The CLI prints only one stable success or failure sentence. It does not print the command, season,
 counts, configuration, SQL, exception, or stack. The pool monitoring seam accepts only the closed
@@ -123,12 +128,12 @@ analytics or retention sink. Production scheduler metadata, run history, alerts,
 metrics still require a privacy-map and retention review before collection.
 
 A local synthetic integration now proves the emitted application can use one disposable narrow login
-for all fourteen capabilities and that an extra-membership login fails the runtime probe before
+for all fifteen capabilities and that an extra-membership login fails the runtime probe before
 mutation. Residual risk remains: no production login/certificate path proves deployment membership;
 no external audit sink exists; no scheduler enforces cadence, backoff, overlap, or alerting; cleanup
 does not cover every expiring identity state; no correction, purge schedule, cache/backup purge, or
 restore replay exists; and no capacity test proves the selected deadlines under production load. A
-compromised Jobs login still has all fourteen database capabilities, so principal separation and
+compromised Jobs login still has all fifteen database capabilities, so principal separation and
 revocation remain required.
 
 Affected invariants are VR-PUBLIC-001, VR-INGEST-002, VR-ABUSE-001, VR-DATA-001, and VR-DELETE-001.
@@ -177,21 +182,21 @@ Current local evidence includes:
 - canonical season and batch bounds, closed object/array/result allowlists, sparse/exotic/accessor/
   proxy rejection, aggregate count bounds, and non-reflective failures;
 - effective-role/login/capability/search-path rejection before every procedure call;
-- exact prepared parameters for all fourteen functions, healthy versus destructive release,
+- exact prepared parameters for all fifteen functions, healthy versus destructive release,
   connection and query translation, and a deferred query proving release occurs only after
   settlement;
 - CLI rejection before configuration, pool close after success or failure, stable output, writer
   failure containment, and no reflected command/error detail;
-- 232 unit tests with 100% statement, branch, function, and line coverage, including a lint-policy
+- 242 unit tests with 100% statement, branch, function, and line coverage, including a lint-policy
   regression that keeps direct `pg` imports inside the fixed pool adapter;
 - one opt-in Docker integration that revalidates and applies the migration manifest, runs all
-  fourteen built commands through a synthetic narrow login, rejects a deliberately widened login
+  fifteen built commands through a synthetic narrow login, rejects a deliberately widened login
   before mutation, validates constant process output and exact stored state, and removes its
   container, network, and storage; and
 - strict lint, type checking, production TypeScript build, dependency/license inventory, root
   deterministic verification, and staged public-data review.
 
-The general SQL integration suite separately proves the fourteen procedure bodies and concurrency
+The general SQL integration suite separately proves the fifteen procedure bodies and concurrency
 behavior in portless ephemeral PostgreSQL. The Jobs integration proves one synthetic loopback
 Node-to-PostgreSQL application path only. Scheduler behavior, production TLS/login, capacity,
 monitoring, real-user retention, and deployment evidence remain required before those behaviors may
@@ -221,3 +226,4 @@ be claimed.
 - [Bounded pairing approval-provenance retention](0047-bounded-pairing-approval-provenance-retention.md)
 - [Bounded revoked-passkey retention cleanup](0048-bounded-revoked-passkey-retention-cleanup.md)
 - [Bounded revoked-device retention cleanup](0049-bounded-revoked-device-retention-cleanup.md)
+- [Bounded pairing rate-window retention reset](0050-bounded-pairing-rate-window-retention-reset.md)

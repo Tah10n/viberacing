@@ -1,6 +1,6 @@
 # Vibe Racing Jobs
 
-This private workspace is the local one-shot application boundary for fourteen existing PostgreSQL
+This private workspace is the local one-shot application boundary for fifteen existing PostgreSQL
 maintenance capabilities:
 
 - delete one bounded batch of expired authentication challenges and restricted recovery state;
@@ -14,6 +14,8 @@ maintenance capabilities:
 - delete one bounded batch of minimized activated pairings and their exact revoked device-key rows
   only after 180 days and only when no approval, challenge, nonce, or raw-snapshot reference
   remains;
+- reset positive anonymous pairing request windows only after the maximum one-hour duration while
+  preserving the fixed 130-row matrix;
 - redact the exact approving session/passkey references from one bounded batch of activated pairings
   only after 180 days while preserving their profile/source/device bindings;
 - delete one bounded batch of expired sessions that are no longer retained by rotation or pairing
@@ -69,6 +71,7 @@ pnpm --filter @viberacing/jobs start -- cleanup-expired-ingest-state
 pnpm --filter @viberacing/jobs start -- cleanup-expired-pairing-state
 pnpm --filter @viberacing/jobs start -- cleanup-aged-revoked-passkeys
 pnpm --filter @viberacing/jobs start -- cleanup-aged-revoked-devices
+pnpm --filter @viberacing/jobs start -- reset-expired-pairing-request-windows
 pnpm --filter @viberacing/jobs start -- redact-aged-pairing-approval-provenance
 pnpm --filter @viberacing/jobs start -- cleanup-expired-sessions
 pnpm --filter @viberacing/jobs start -- purge-profile-deletions
@@ -83,7 +86,7 @@ prints the command input, affected counts, configuration, SQL, or exception deta
 
 The Docker-backed integration command applies the checksum-validated migration manifest, creates a
 least-privileged synthetic Jobs login plus a deliberately widened negative-control login, runs all
-fourteen built CLI commands as separate processes, verifies their generic output and exact database
+fifteen built CLI commands as separate processes, verifies their generic output and exact database
 effects, and cleans up its container, network, and storage. It proves only the local
 CLI-to-PostgreSQL boundary; it does not prove an external audit sink, production TLS/credentials, a
 scheduler, monitoring, capacity, real-user retention, or deployment.

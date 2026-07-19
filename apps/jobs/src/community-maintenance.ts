@@ -9,6 +9,7 @@ import {
 const minimumSeasonStart = "1999-12-27";
 const maximumSeasonStart = "2099-12-28";
 const maximumPostgresInteger = 2_147_483_647;
+const pairingRequestWindowCount = 130;
 const runtimeBoundaryColumns = ["role_ok", "login_scope_ok", "search_path_ok"] as const;
 const runtimeBoundaryColumnSet = new Set<string>(runtimeBoundaryColumns);
 
@@ -63,6 +64,9 @@ export type CommunityMaintenanceJob =
   | Readonly<{
       batchSize: number;
       kind: "redact_aged_pairing_approval_provenance";
+    }>
+  | Readonly<{
+      kind: "reset_expired_pairing_request_windows";
     }>
   | Readonly<{
       kind: "finalize_community_season";
@@ -127,6 +131,10 @@ export type CommunityMaintenanceResult =
   | Readonly<{
       kind: "redact_aged_pairing_approval_provenance";
       redactedPairings: number;
+    }>
+  | Readonly<{
+      kind: "reset_expired_pairing_request_windows";
+      resetWindows: number;
     }>
   | Readonly<{
       kind: "finalize_community_season";
@@ -215,6 +223,12 @@ function readJob(value: unknown): CommunityMaintenanceJob {
       fail("job_invalid");
     }
     const kind = ownDataValue(value, "kind");
+    if (kind === "reset_expired_pairing_request_windows") {
+      if (!hasExactKeys(value, new Set(["kind"]))) {
+        fail("job_invalid");
+      }
+      return Object.freeze({ kind });
+    }
     if (kind === "purge_profile_deletions") {
       if (!hasExactKeys(value, new Set(["batchSize", "kind"]))) {
         fail("job_invalid");
@@ -318,6 +332,14 @@ function readCount(row: object, key: string, maximum: number): number {
 }
 
 function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaintenanceResult {
+  if (job.kind === "reset_expired_pairing_request_windows") {
+    const row = readSingleRow(value, new Set(["reset_windows"]));
+    return Object.freeze({
+      kind: job.kind,
+      resetWindows: readCount(row, "reset_windows", pairingRequestWindowCount),
+    });
+  }
+
   if (job.kind === "cleanup_aged_revoked_devices") {
     const row = readSingleRow(value, new Set(["deleted_device_keys", "deleted_pairings"]));
     const deletedDeviceKeys = readCount(row, "deleted_device_keys", job.batchSize);
@@ -478,6 +500,9 @@ function executeCapability(
   client: JobsDatabaseClient,
   job: CommunityMaintenanceJob,
 ): Promise<unknown> {
+  if (job.kind === "reset_expired_pairing_request_windows") {
+    return client.resetExpiredPairingRequestWindows();
+  }
   if (job.kind === "cleanup_aged_revoked_devices") {
     return client.cleanupAgedRevokedDevices(job.batchSize);
   }

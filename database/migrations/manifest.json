@@ -216,6 +216,12 @@
       "name": "revoked_device_retention_cleanup",
       "path": "database/migrations/0036_revoked_device_retention_cleanup.sql",
       "sha256": "7dc175aea39ede33b82aad2ec608148cd94b50ec04ba9f23eabaa839b04f5216"
+    },
+    {
+      "revision": 37,
+      "name": "pairing_rate_window_retention_reset",
+      "path": "database/migrations/0037_pairing_rate_window_retention_reset.sql",
+      "sha256": "d4e4b1e496466aa9b1c00f301d92aeeb6f08f4d8ef460e74a338e56aab6ce80c"
     }
   ]
 }

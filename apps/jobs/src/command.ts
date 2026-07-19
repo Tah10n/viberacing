@@ -101,6 +101,12 @@ function validSeasonStart(value: unknown): value is string {
 
 export function parseJobsCommand(value: unknown): CommunityMaintenanceJob {
   const argumentsValue = readArgumentArray(value);
+  if (
+    argumentsValue.length === 1 &&
+    argumentsValue[0] === "reset-expired-pairing-request-windows"
+  ) {
+    return Object.freeze({ kind: "reset_expired_pairing_request_windows" });
+  }
   if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-ingest-state") {
     return Object.freeze({
       batchSize: maximumCleanupBatchSize,

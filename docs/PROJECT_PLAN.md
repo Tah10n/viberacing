@@ -707,9 +707,12 @@ session, verifying/authorized challenge, or pairing reference remains; this can 
 pairing/revoked-device pairs only after both activation and revocation are at least 180 days old,
 approval provenance has been redacted, and no authorization challenge, nonce, or raw snapshot
 remains. It deletes no raw evidence by cascade and preserves active, recent, or referenced history.
-Other remaining expiry classes, pairing rate windows, keyed tombstone policy, cache/backup purge,
-and restore replay still require their own reviewed implementation and public policy, and no
-implemented cleanup or redaction has a scheduler or deployed cadence.
+Revision 0037 separately resets only positive fixed anonymous pairing transport windows after the
+maximum permitted one-hour duration: it preserves all 130 preallocated rows, accepts no caller
+parameter, locks rows in admission order, and scrubs the aggregate timestamp/count to the closed
+epoch/zero state. Other remaining expiry classes, keyed tombstone policy, cache/backup purge, and
+restore replay still require their own reviewed implementation and public policy, and no implemented
+cleanup, redaction, or reset has a scheduler or deployed cadence.
 
 ## Administration and operations
 

@@ -39,6 +39,9 @@ cases, and privacy data map before changing this subtree.
 - Anonymous pairing transport admission must keep its fixed 130-row global/bucket matrix, global-
   then-bucket lock order, saturating counts, and Web-only function. Never persist a client ID or
   digest or replace fixed buckets with attacker-created rows.
+- Pairing rate-window retention reset must preserve all 130 rows, accept no caller-selected scope,
+  wait the maximum one-hour admission duration, use the same operation/global/bucket lock order, and
+  remain Jobs-only. It may scrub only aggregate timestamps/counts to the exact epoch/zero state.
 - Do not weaken forced RLS, state constraints, digest/length checks, or role denials to simplify
   application code.
 

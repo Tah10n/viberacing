@@ -474,6 +474,13 @@ try {
       sql: readFileSync(resolve(root, "database/tests/pairing_transport_rate.sql"), "utf8"),
     },
     {
+      label: "pairing transport rate-window retention reset scenarios",
+      sql: readFileSync(
+        resolve(root, "database/tests/pairing_rate_window_retention_reset.sql"),
+        "utf8",
+      ),
+    },
+    {
       label: "source and device lifecycle scenarios",
       sql: readFileSync(resolve(root, "database/tests/source_device_lifecycle.sql"), "utf8"),
     },
@@ -649,6 +656,13 @@ try {
       label: "revoked-device concurrency setup",
       sql: readFileSync(
         resolve(root, "database/tests/revoked_device_concurrency_setup.sql"),
+        "utf8",
+      ),
+    },
+    {
+      label: "pairing rate-window reset concurrency setup",
+      sql: readFileSync(
+        resolve(root, "database/tests/pairing_rate_window_reset_concurrency_setup.sql"),
         "utf8",
       ),
     },
@@ -1055,6 +1069,58 @@ SELECT * FROM viberacing_api.cleanup_aged_revoked_devices(1);`,
       ),
     ),
     "revoked-device concurrency assertions",
+  );
+
+  await expectConcurrentSuccesses(
+    "bounded pairing rate-window reset worker race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.reset_expired_pairing_request_windows();
+\\echo rate-window-worker-lock-ready`,
+    "rate-window-worker-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.reset_expired_pairing_request_windows();`,
+    ],
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/pairing_rate_window_admission_concurrency_setup.sql"),
+        "utf8",
+      ),
+    ),
+    "pairing rate-window admission concurrency setup",
+  );
+
+  await expectConcurrentSuccesses(
+    "pairing rate-window reset versus live admission race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.reset_expired_pairing_request_windows();
+\\echo rate-window-admission-lock-ready`,
+    "rate-window-admission-lock-ready",
+    [
+      `SET ROLE viberacing_web;
+SELECT viberacing_api.admit_pairing_transport_request(
+  'start',
+  pg_catalog.decode('01' || pg_catalog.repeat('00', 31), 'hex'),
+  3,
+  1,
+  60
+);`,
+    ],
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/pairing_rate_window_reset_concurrency_assertions.sql"),
+        "utf8",
+      ),
+    ),
+    "pairing rate-window reset concurrency assertions",
   );
 
   await expectOneConcurrentWinner(
@@ -2278,6 +2344,11 @@ SELECT viberacing_api.complete_passkey_login(
     );
     expectDenied(
       role,
+      "SELECT * FROM viberacing_api.reset_expired_pairing_request_windows();",
+      `${role} pairing rate-window reset`,
+    );
+    expectDenied(
+      role,
       "SELECT * FROM viberacing_api.cleanup_expired_car_recipe_proposals(1);",
       `${role} CarRecipe proposal cleanup`,
     );
@@ -2327,7 +2398,7 @@ SELECT viberacing_api.complete_passkey_login(
   }
 
   console.log(
-    "Database integration passed (27 schema tables, 36 observed lock-wait races, 12 relation-denial and 61 cross-capability checks).",
+    "Database integration passed (27 schema tables, 38 observed lock-wait races, 12 relation-denial and 64 cross-capability checks).",
   );
 } finally {
   if (started) {

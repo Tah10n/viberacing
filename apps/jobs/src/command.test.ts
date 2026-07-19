@@ -41,6 +41,7 @@ function outputDependencies(
 
 describe("Jobs command", () => {
   it.each([
+    [["reset-expired-pairing-request-windows"], { kind: "reset_expired_pairing_request_windows" }],
     [["cleanup-aged-revoked-devices"], { batchSize: 1_000, kind: "cleanup_aged_revoked_devices" }],
     [
       ["cleanup-aged-revoked-passkeys"],
@@ -86,6 +87,7 @@ describe("Jobs command", () => {
     null,
     {},
     [],
+    ["reset-expired-pairing-request-windows", "unexpected"],
     ["cleanup-aged-revoked-devices", "unexpected"],
     ["cleanup-aged-revoked-passkeys", "unexpected"],
     ["cleanup-expired-auth-state", "unexpected"],

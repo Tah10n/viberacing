@@ -76,9 +76,9 @@ Residual risk remains: no scheduler, cadence, overlap/retry policy, monitoring, 
 production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy exists. ADR
 0042 now covers eligible expired sessions, ADR 0045 covers terminal deletion jobs, and ADR 0048
 covers aged unreferenced revoked passkeys; pairing-referenced session provenance, tombstones,
-referenced passkey provenance, pairing rate windows, and any future expiring class still require
-separate reviewed rules. Recovery also still needs distributed attempt controls and deployment-owned
-pepper/timing evidence.
+referenced passkey provenance, and any future expiring class still require separate reviewed rules.
+ADR 0050 now separately covers fixed pairing-rate-window reset. Recovery also still needs
+distributed attempt controls and deployment-owned pepper/timing evidence.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-AUTH-003, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-RECOVERY-ORACLE,

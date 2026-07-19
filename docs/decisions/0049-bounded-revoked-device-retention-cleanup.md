@@ -83,10 +83,10 @@ usage. Its result exposes only two aggregate counts that must be equal and no af
 The cleanup reduces retained Security and Account metadata without treating client-submitted usage
 as verified or changing derived Community history.
 
-Residual risk remains: fixed pairing-rate windows, other retained source/profile history,
-tombstones, caches, backups, and restore replay still need separate policies and evidence. There is
-no scheduler, cadence, overlap/retry policy, monitoring, capacity result, production Jobs login/TLS
-connection, backup purge, or deployed retention proof.
+Residual risk remains: other retained source/profile history, tombstones, caches, backups, and
+restore replay still need separate policies and evidence. ADR 0050 now separately bounds fixed
+pairing-rate-window reset. There is no scheduler, cadence, overlap/retry policy, monitoring,
+capacity result, production Jobs login/TLS connection, backup purge, or deployed retention proof.
 
 Affected invariants are VR-DEVICE-001, VR-DATA-001, and VR-DELETE-001. Primary attacker stories are
 VR-ABUSE-DEVICE-KEY-THEFT, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -128,17 +128,17 @@ rollback must not widen Jobs table access or introduce cascading cleanup.
 
 Acceptance evidence recorded for this decision includes:
 
-- static validation of 36 contiguous immutable migration revisions and the exact checksum ledger;
+- static validation of 37 contiguous immutable migration revisions and the exact checksum ledger;
 - real PostgreSQL scenarios for oldest-first and exact-cutoff batches, recent and active
   preservation, approval-provenance/challenge/nonce/snapshot blockers, idempotency, invalid batches,
   both missing-mutex cases, supporting index, atomic rollback, and exact role grants;
 - an observed two-worker race in which separate one-row batches serialize, both aged minimized pairs
   and devices are deleted once, and recent plus active controls remain;
-- the complete isolated PostgreSQL suite with 27 tables, 36 observed lock-wait races, 12 direct
-  relation denials, and 61 cross-capability denials;
-- 232 focused Jobs tests with 100% statement, branch, function, and line coverage plus strict lint,
+- the complete isolated PostgreSQL suite with 27 tables, 38 observed lock-wait races, 12 direct
+  relation denials, and 64 cross-capability denials;
+- 242 focused Jobs tests with 100% statement, branch, function, and line coverage plus strict lint,
   type checking, and build; and
-- a separate disposable PostgreSQL integration that runs all fourteen built Jobs commands through a
+- a separate disposable PostgreSQL integration that runs all fifteen built Jobs commands through a
   narrow login, rejects a deliberately widened login before mutation, preserves generic output,
   deletes one aged minimized revoked-device pair, and checks exact stored state.
 
@@ -162,3 +162,4 @@ monitoring, cache or backup purge, restore replay, capacity, real-user retention
 - [Bounded expired-session retention cleanup](0042-bounded-expired-session-retention-cleanup.md)
 - [Bounded pairing approval-provenance retention](0047-bounded-pairing-approval-provenance-retention.md)
 - [Bounded revoked-passkey retention cleanup](0048-bounded-revoked-passkey-retention-cleanup.md)
+- [Bounded pairing rate-window retention reset](0050-bounded-pairing-rate-window-retention-reset.md)

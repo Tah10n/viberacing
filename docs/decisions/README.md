@@ -58,6 +58,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0047](0047-bounded-pairing-approval-provenance-retention.md)   | Bounded pairing approval-provenance retention                       | Accepted; database and local command; schedule pending |
 | [0048](0048-bounded-revoked-passkey-retention-cleanup.md)       | Bounded revoked-passkey retention cleanup                           | Accepted; database and local command; schedule pending |
 | [0049](0049-bounded-revoked-device-retention-cleanup.md)        | Bounded revoked-device retention cleanup                            | Accepted; database and local command; schedule pending |
+| [0050](0050-bounded-pairing-rate-window-retention-reset.md)     | Bounded pairing rate-window retention reset                         | Accepted; database and local command; schedule pending |
 
 ## Lifecycle
 
