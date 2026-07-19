@@ -52,5 +52,11 @@ integration separately proves all seventeen emitted CLI commands. The opt-in
 scheduler core with a fixed injected UTC clock/timer, the real Jobs runner, and one disposable
 PostgreSQL database. It proves the exact ordered catalog, full private-table non-mutation for a
 deliberately widened login, and exact stored state for the narrow login. It does not execute the
-emitted scheduler process with a real clock or prove production TLS/login, durable cadence,
-monitoring, capacity, deployment, or real-user retention.
+emitted scheduler process. The separate opt-in
+`pnpm run test:jobs-scheduler:process-postgres-integration` gate starts the built entry point with
+the real host clock, requires host/database UTC-date agreement, waits for the terminal catalog
+marker without process output, forcibly ends only its otherwise persistent test child, and then
+verifies the same exact stored state. It does not prove controller settlement before that forced
+termination. It proves no recurring timer callback, graceful process-signal settlement against
+PostgreSQL, production TLS/login, durable cadence, monitoring, capacity, deployment, or real-user
+retention.

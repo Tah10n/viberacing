@@ -100,8 +100,12 @@ effects, and cleans up its container, network, and storage. The separate opt-in
 under a fixed injected UTC clock/timer directly with this real runner and the same disposable
 PostgreSQL boundary. It verifies the exact ordered catalog, a full private-table non-mutation
 fingerprint for the widened login, and exact narrow-login effects. Together they still do not prove
-an external audit sink, emitted scheduler process with a real clock, production TLS/credentials,
-durable cadence, monitoring, capacity, real-user retention, or deployment.
+an external audit sink, production TLS/credentials, durable cadence, monitoring, capacity, real-user
+retention, or deployment. The separate emitted-process mode starts the built scheduler entry point
+with the real host clock, reaches the terminal startup-catalog marker without process output,
+forcibly ends only its persistent test child, and then verifies exact state. It does not prove
+controller settlement before that forced termination, a recurring timer callback, or graceful
+process-signal settlement against PostgreSQL.
 
 The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
 Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package

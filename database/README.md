@@ -27,9 +27,9 @@ abandoned-enrollment, CarRecipe-proposal, finalized-source-day, terminal-deletio
 revoked-passkey, and revoked-device retention, pairing approval-provenance redaction, primary
 profile deletion, open-season scoring, and terminal finalization procedures plus Web-only public
 score/race/status and exact-session private score projections are implemented; deployed HTTP ingest,
-emitted-process scheduler timing, deployed cadence, audited corrections, cache/backup/tombstone
-purge, and restore replay are not. A fixed-clock production scheduler-core/Jobs/PostgreSQL
-composition is proven synthetically.
+recurring scheduler timer-callback and graceful process-signal/PostgreSQL behavior, deployed
+cadence, audited corrections, cache/backup/tombstone purge, and restore replay are not. Fixed-clock
+core composition and real-clock emitted-process terminal-marker evidence are proven synthetically.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -624,8 +624,11 @@ local runner can invoke one fixed maximum-size batch only after its Jobs-role pr
 opt-in integration now proves that emitted command through one disposable narrow login and exact
 stored state. ADR 0063 separately supplies an exact-default-off in-memory UTC catalog against a fake
 runner and clock, plus a second fixed-clock synthetic composition with the real runner and
-disposable PostgreSQL. It supplies no emitted-process timing, production login/TLS, deployed
-cadence, monitoring, capacity, or real-user purge evidence.
+disposable PostgreSQL. A third starts the built entry point under real host time, reaches the
+terminal startup-catalog marker without process output, then forcibly ends only its persistent test
+child. These supply no controller settlement before that forced termination, recurring
+timer-callback or graceful process-signal/PostgreSQL result, production login/TLS, deployed cadence,
+monitoring, capacity, or real-user purge evidence.
 
 Revision 0009 materializes only an open Community season. It binds each ISO Monday-through-Sunday
 season to immutable `community_v1` parameters, sums current eligible source/day values with numeric
@@ -1013,8 +1016,9 @@ hard failure, not something the script silently broadens or repairs.
   integration does not replace those gates.
 - Deploy the default-off local scheduler with a production Jobs login/TLS path,
   single-replica/cadence policy, monitoring, missed-backlog recovery, and capacity evidence, plus
-  audited corrections. The fixed-clock combined synthetic integration does not provide emitted
-  process timing, production configuration, or deployed evidence.
+  audited corrections. The fixed-clock integration and emitted-process terminal-marker evidence do
+  not provide controller settlement before forced termination, a recurring timer callback, graceful
+  process-signal settlement against PostgreSQL, production configuration, or deployed evidence.
 - Integrate the bounded database adapter and local score/race/status routes with a
   deployment-provisioned Web-only login and verified TLS, then add cache/invalidation, edge request
   shaping, query-plan/load evidence, monitoring, and deployment verification.

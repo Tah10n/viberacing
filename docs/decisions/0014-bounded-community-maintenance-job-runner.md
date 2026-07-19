@@ -208,10 +208,12 @@ Current local evidence includes:
 The general SQL integration suite separately proves the seventeen procedure bodies and concurrency
 behavior in portless ephemeral PostgreSQL. The Jobs integration proves one synthetic loopback
 Node-to-PostgreSQL application path. ADR 0063 proves the local scheduler against a fake runner and
-clock, then separately composes its production core under fixed injected UTC time with this real
-runner and disposable PostgreSQL. Emitted-process timing, production TLS/login, capacity,
-monitoring, real-user retention, and deployment evidence remain required before those behaviors may
-be claimed.
+clock, separately composes its production core under fixed injected UTC time with this real runner
+and disposable PostgreSQL, and starts the built entry point under the real host clock through its
+terminal startup-catalog marker without process output. Controller settlement before forced
+termination, recurring timer-callback and graceful process-signal/PostgreSQL behavior, production
+TLS/login, capacity, monitoring, real-user retention, and deployment evidence remain required before
+those behaviors may be claimed.
 
 ## References
 

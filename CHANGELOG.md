@@ -17,9 +17,12 @@ Versioning where its guarantees are applicable.
   and a built-entrypoint gate rejects disabled or argument-bearing startup without output. A second
   opt-in integration composes the production scheduler core under a fixed injected UTC clock/timer
   with the real Jobs runner and disposable PostgreSQL, proving the exact ordered catalog, full-state
-  widened-login denial, and exact narrow-login effects. No emitted-process clock result, deployed
-  replica/cadence, production credential/TLS, monitoring, capacity, or real-user retention is
-  claimed.
+  widened-login denial, and exact narrow-login effects. A third opt-in integration starts the built
+  scheduler entry point with the real host clock, reaches the terminal startup-catalog marker
+  without process output, forcibly ends only its persistent test child, and then verifies exact
+  stored state. No controller settlement before that forced termination, recurring timer callback,
+  graceful process-signal/PostgreSQL result, deployed replica/cadence, production credential/TLS,
+  monitoring, capacity, or real-user retention is claimed.
 - Public-safe repository baseline, implementation plan, security invariants, and contribution
   guidance.
 - Pinned Node, pnpm, Rust, PostgreSQL, dependency, formatting, documentation, and CI foundations.

@@ -341,46 +341,49 @@ memory, runs sequentially without overlap or same-slot retry, and stops under a 
 lifecycle. Its 94 tests and built-entrypoint check use fake time and a fake runner. A second opt-in
 integration composes the production scheduler core under a fixed injected UTC clock/timer with the
 real Jobs runner and disposable PostgreSQL, proving exact catalog order, full-state widened-login
-denial, and exact narrow-login state. It does not prove the emitted process with a real clock, a
-durable or hosted cadence, cross-replica coordination, production TLS/login, monitoring, capacity,
-or real-user retention. Revision 0011 gives only the Web database role a bounded active-profile
-score projection containing no raw values, private identifiers, or exact timestamps. The score
-response component and Web PostgreSQL adapter preserve only that public allowlist through the local
-score route. All three public score/race/status routes require one exact default-off module-load
-gate before query/header parsing, admission acquisition, or storage work. The visible race,
-leaderboard, and selectable participant summary consume the validated current-week response only
-when enabled, using a credential-free same-origin request and an explicit synthetic fallback on
-disabled or failed state. Canonical `/?profile=handle#profile` links select only an exact public
-handle in that page, and a missing current top-32 row is not replaced with another participant.
-There is now a local invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey
-recovery-code rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey
-profile-deletion request flow. Recovery lookup returns only the selected unused PHC; admitted
-attempts use bounded Argon2id work, a protected pepper, generic responses, a configured minimum
-response floor, and a four-call local no-queue limit. A valid code creates only the sealed
-five-minute replacement-passkey continuation; the normal session is returned only after exact
-WebAuthn verification and atomic database completion. The local `/connect` flow now reviews one
-pending device, explicitly selects a new or active owned opaque source without exposing its raw ID,
-and fresh-passkey approves that exact choice under a database-backed session attempt window; the
-local start/poll routes and native-store Rust client complete that synthetic connection path only
-when all four pairing modules were explicitly enabled before load. New-source review and completion
-additionally require the separate exact default-off source-creation decision; disabled UI retains
-active existing-source choices and the server rejects an in-flight new-source challenge before
-passkey or database completion. These local controls are not dynamic/deployed switches. The separate
-candidate-only Windows sync command now joins the reviewed local collector, signer, and one bounded
-upload. A separate credential-free `check-codex` command verifies only point-in-time exact candidate
-admission and never launches it, reads an account, or uses the network. Its explicit redacted
-preview gives a user one complete stdout result to inspect before sharing and still declares that no
-Codex version is supported. A separate Windows release-profile smoke copies the `0.0.0` connector to
-an isolated temporary directory, checks the exact command surface and generic missing-candidate
-failure, then proves removal; secretless CI declares the same bounded job without uploading its
-binary. No repository test runs a real Codex account or deployed service, and no hosted Windows
-result is claimed from the local workflow definition. There is still no deployed
-Ingest/score/pairing API, supported sync connector, trusted edge limit or direct-origin policy,
-anonymous recovery edge policy, recovery notification, deployed cleanup/scoring/deletion cadence,
-audited correction flow, cache/backup/tombstone purge, restore replay, live
-OAuth/authenticator/Web/Jobs database integration, deployment Ingest credential/TLS integration,
-cross-platform connector evidence, installer, upgrade/revoke composition, credential rotation,
-released binary, or deployed database.
+denial, and exact narrow-login state. A third opt-in integration starts the built scheduler entry
+point with the real host clock, reaches the terminal startup-catalog marker without process output,
+forcibly ends only its persistent test child, and then verifies exact stored state. It does not
+prove controller settlement before that forced termination. Neither scheduler integration proves a
+recurring timer callback, graceful process-signal settlement against PostgreSQL, a durable or hosted
+cadence, cross-replica coordination, production TLS/login, monitoring, capacity, or real-user
+retention. Revision 0011 gives only the Web database role a bounded active-profile score projection
+containing no raw values, private identifiers, or exact timestamps. The score response component and
+Web PostgreSQL adapter preserve only that public allowlist through the local score route. All three
+public score/race/status routes require one exact default-off module-load gate before query/header
+parsing, admission acquisition, or storage work. The visible race, leaderboard, and selectable
+participant summary consume the validated current-week response only when enabled, using a
+credential-free same-origin request and an explicit synthetic fallback on disabled or failed state.
+Canonical `/?profile=handle#profile` links select only an exact public handle in that page, and a
+missing current top-32 row is not replaced with another participant. There is now a local
+invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
+rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey profile-deletion
+request flow. Recovery lookup returns only the selected unused PHC; admitted attempts use bounded
+Argon2id work, a protected pepper, generic responses, a configured minimum response floor, and a
+four-call local no-queue limit. A valid code creates only the sealed five-minute replacement-passkey
+continuation; the normal session is returned only after exact WebAuthn verification and atomic
+database completion. The local `/connect` flow now reviews one pending device, explicitly selects a
+new or active owned opaque source without exposing its raw ID, and fresh-passkey approves that exact
+choice under a database-backed session attempt window; the local start/poll routes and native-store
+Rust client complete that synthetic connection path only when all four pairing modules were
+explicitly enabled before load. New-source review and completion additionally require the separate
+exact default-off source-creation decision; disabled UI retains active existing-source choices and
+the server rejects an in-flight new-source challenge before passkey or database completion. These
+local controls are not dynamic/deployed switches. The separate candidate-only Windows sync command
+now joins the reviewed local collector, signer, and one bounded upload. A separate credential-free
+`check-codex` command verifies only point-in-time exact candidate admission and never launches it,
+reads an account, or uses the network. Its explicit redacted preview gives a user one complete
+stdout result to inspect before sharing and still declares that no Codex version is supported. A
+separate Windows release-profile smoke copies the `0.0.0` connector to an isolated temporary
+directory, checks the exact command surface and generic missing-candidate failure, then proves
+removal; secretless CI declares the same bounded job without uploading its binary. No repository
+test runs a real Codex account or deployed service, and no hosted Windows result is claimed from the
+local workflow definition. There is still no deployed Ingest/score/pairing API, supported sync
+connector, trusted edge limit or direct-origin policy, anonymous recovery edge policy, recovery
+notification, deployed cleanup/scoring/deletion cadence, audited correction flow,
+cache/backup/tombstone purge, restore replay, live OAuth/authenticator/Web/Jobs database
+integration, deployment Ingest credential/TLS integration, cross-platform connector evidence,
+installer, upgrade/revoke composition, credential rotation, released binary, or deployed database.
 
 ## Run and verify the synthetic prototype
 
@@ -392,14 +395,15 @@ pnpm run test:connector:windows-portable
 pnpm run test:ingest:postgres-integration
 pnpm run test:jobs:postgres-integration
 pnpm run test:jobs-scheduler:postgres-integration
+pnpm run test:jobs-scheduler:process-postgres-integration
 ```
 
 The connector lifecycle command is Windows x86_64-only. It builds from the locked Cargo graph and
 tests only a temporary portable copy; it does not install, package, sign, publish, run a connector
-network command, or contact a Vibe Racing/Codex service. The final three commands are opt-in
-Docker-backed synthetic integrations; secretless CI declares all three, and they are intentionally
+network command, or contact a Vibe Racing/Codex service. The final four commands are opt-in
+Docker-backed synthetic integrations; secretless CI declares all four, and they are intentionally
 outside the deterministic offline `verify` command. The current tree has local results only; no
-hosted pass is claimed for the newly added fixed-clock Jobs-scheduler composition.
+hosted pass is claimed for either Jobs-scheduler composition.
 
 `pnpm run check:publication` is a separate fail-closed gate. It is expected to fail in the current
 pre-public state and must pass only after real hosted identities and controls are configured.

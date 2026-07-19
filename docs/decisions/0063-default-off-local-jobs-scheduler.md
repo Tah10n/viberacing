@@ -175,14 +175,21 @@ Local evidence includes:
 - an opt-in combined integration that builds the production scheduler core and Jobs runner, injects
   one fixed UTC clock/timer, executes the exact ordered seventeen-job catalog against one disposable
   PostgreSQL database, fingerprints every private table before and after a widened-login denial, and
-  verifies exact stored state through the narrow login; secretless CI declares the same command, but
-  this tree claims only the observed local pass.
+  verifies exact stored state through the narrow login;
+- a separate opt-in emitted-process integration that starts the built entry point with exact enable
+  and narrow-login configuration, requires real host/disposable-database UTC-date agreement, waits
+  for the terminal reset marker, requires no process output, forcibly ends only its otherwise
+  persistent test child, and then verifies the same exact stored state. Secretless CI declares both
+  scheduler commands, but this tree claims only the observed local passes.
 
-The combined integration invokes the production scheduler core in-process; it does not execute the
-emitted process entry point or timer callback against PostgreSQL. None of these layers proves that a
-production clock remains stable, a deployment has one replica, durable cadence is maintained, missed
-historical seasons are recovered, production TLS/credentials work, or a real-user retention/deletion
-deadline is met.
+The fixed-clock integration invokes the production scheduler core in-process. The emitted-process
+integration observes only the immediate startup catalog through its terminal database marker and
+deliberately uses `SIGKILL` because Windows cannot deliver this child a catchable POSIX shutdown
+signal. It does not prove controller settlement before forced termination. Neither integration
+exercises a recurring timer callback or graceful process-signal settlement against PostgreSQL. None
+proves that a production clock remains stable, a deployment has one replica, durable cadence is
+maintained, missed historical seasons are recovered, production TLS/credentials work, or a real-user
+retention/deletion deadline is met.
 
 ## References
 

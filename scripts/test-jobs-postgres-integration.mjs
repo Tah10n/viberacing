@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -32,7 +32,10 @@ const completedMessage = "Vibe Racing Jobs command completed.\n";
 const failedMessage = "Vibe Racing Jobs command failed.\n";
 const defaultFinalizedSeasonStart = "2000-01-03";
 const schedulerArgument = "--scheduler";
+const schedulerProcessArgument = "--scheduler-process";
 const schedulerCycleTimeoutMs = 120_000;
+const schedulerProcessCloseTimeoutMs = 10_000;
+const schedulerProcessPollIntervalMs = 250;
 const oneDayMs = 24 * 60 * 60 * 1_000;
 
 function readIntegrationMode() {
@@ -41,6 +44,9 @@ function readIntegrationMode() {
   }
   if (process.argv.length === 3 && process.argv[2] === schedulerArgument) {
     return "scheduler";
+  }
+  if (process.argv.length === 3 && process.argv[2] === schedulerProcessArgument) {
+    return "scheduler_process";
   }
   throw new Error("Jobs PostgreSQL integration arguments failed closed.");
 }
@@ -431,6 +437,151 @@ function expectedSchedulerCatalog(currentSeasonStart, finalizedSeasonStart) {
       { batchSize: 1_000, kind: "cleanup_aged_revoked_devices" },
       { kind: "reset_expired_pairing_request_windows" },
     ].map((job) => Object.freeze(job)),
+  );
+}
+
+function assertSchedulerSeasonStarts(expectedSeasonStarts, label) {
+  assert.deepEqual(expectedSchedulerSeasonStarts(Date.now()), expectedSeasonStarts, label);
+}
+
+function startEmittedSchedulerProcess(databasePort) {
+  let exitObserved = false;
+  let stdoutObserved = false;
+  let stderrObserved = false;
+  const child = spawn(
+    process.execPath,
+    [resolve(root, "apps", "jobs-scheduler", "dist", "main.js")],
+    {
+      cwd: root,
+      env: Object.freeze({
+        ...jobsEnvironment(databasePort, jobsLogin, jobsPassword),
+        VIBERACING_JOBS_SCHEDULER_ENABLED: "true",
+      }),
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  );
+  const terminateOnOutput = (stream) => {
+    if (stream === "stdout") {
+      stdoutObserved = true;
+    } else {
+      stderrObserved = true;
+    }
+    child.kill("SIGKILL");
+  };
+  child.stdout.on("data", () => {
+    terminateOnOutput("stdout");
+  });
+  child.stderr.on("data", () => {
+    terminateOnOutput("stderr");
+  });
+  child.once("exit", () => {
+    exitObserved = true;
+  });
+  const closed = new Promise((resolveClose, rejectClose) => {
+    child.once("error", () => {
+      exitObserved = true;
+      rejectClose(new Error("Emitted Jobs scheduler process could not start."));
+    });
+    child.once("close", (code, signal) => {
+      exitObserved = true;
+      resolveClose(Object.freeze({ code, signal }));
+    });
+  });
+  void closed.catch(() => undefined);
+  return Object.freeze({
+    child,
+    closed,
+    hasExited: () => exitObserved,
+    outputObserved: () => stdoutObserved || stderrObserved,
+  });
+}
+
+async function waitWithDeadline(promise, milliseconds, message) {
+  let timeoutToken;
+  const timeout = new Promise((_, reject) => {
+    timeoutToken = setTimeout(() => {
+      reject(new Error(message));
+    }, milliseconds);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timeoutToken);
+  }
+}
+
+async function waitForEmittedSchedulerTerminalMarker(processState) {
+  const deadline = Date.now() + schedulerCycleTimeoutMs;
+  while (Date.now() < deadline) {
+    if (processState.outputObserved()) {
+      throw new Error("Emitted Jobs scheduler process produced unexpected output.");
+    }
+    if (processState.hasExited()) {
+      throw new Error("Emitted Jobs scheduler process exited before its terminal startup marker.");
+    }
+    const resetCount = psqlScalar(
+      `SET ROLE viberacing_owner;
+SELECT pg_catalog.count(*)::integer
+FROM viberacing_private.pairing_request_windows
+WHERE operation = 'poll'
+  AND bucket IN (-1, 5)
+  AND attempt_count = 0
+  AND window_started_at = TIMESTAMPTZ '1970-01-01 00:00:00+00';`,
+      "emitted scheduler terminal-job marker",
+    );
+    if (resetCount === "2") {
+      return;
+    }
+    assert.match(resetCount, /^(?:0|1)$/);
+    await sleep(schedulerProcessPollIntervalMs);
+  }
+  throw new Error(
+    "Emitted Jobs scheduler process did not reach its terminal startup marker in time.",
+  );
+}
+
+async function runEmittedSchedulerProcess({ databasePort, expectedSeasonStarts }) {
+  assertSchedulerSeasonStarts(
+    expectedSeasonStarts,
+    "the host clock must retain the reviewed scheduler season targets before process startup",
+  );
+  const processState = startEmittedSchedulerProcess(databasePort);
+  let terminalMarkerObserved = false;
+  let closeResult;
+  let terminationRequested = false;
+  try {
+    await waitForEmittedSchedulerTerminalMarker(processState);
+    assertSchedulerSeasonStarts(
+      expectedSeasonStarts,
+      "the host clock must retain the reviewed scheduler season targets through process execution",
+    );
+    terminalMarkerObserved = true;
+  } finally {
+    if (!processState.hasExited()) {
+      terminationRequested = processState.child.kill("SIGKILL");
+    }
+    closeResult = await waitWithDeadline(
+      processState.closed,
+      schedulerProcessCloseTimeoutMs,
+      "Emitted Jobs scheduler process did not terminate and close stdio within its fixed test deadline.",
+    );
+  }
+  assert.equal(terminalMarkerObserved, true);
+  assert.equal(
+    terminationRequested,
+    true,
+    "the synthetic harness must terminate only its emitted scheduler child",
+  );
+  assert.equal(
+    processState.outputObserved(),
+    false,
+    "the scheduler process must remain silent through its terminal marker and stdio close",
+  );
+  assert.deepEqual(
+    closeResult,
+    { code: null, signal: "SIGKILL" },
+    "the synthetic harness must end the otherwise persistent scheduler only after its terminal marker",
   );
 }
 
@@ -924,7 +1075,7 @@ COMMIT;`,
 
 async function main() {
   buildWorkspace("apps/jobs", "Jobs production build");
-  if (integrationMode === "scheduler") {
+  if (integrationMode !== "commands") {
     buildWorkspace("apps/jobs-scheduler", "Jobs scheduler production build");
   }
 
@@ -988,6 +1139,7 @@ COMMIT;`,
     let schedulerExpectedJobs;
     let schedulerModules;
     let schedulerNowEpochMs;
+    let schedulerSeasonStarts;
     if (integrationMode === "scheduler") {
       const databaseDate = psqlScalar(
         "SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text;",
@@ -1000,15 +1152,29 @@ COMMIT;`,
       const scheduledJobs = schedulerModules.scheduler
         .createMaintenanceSchedule()
         .due(schedulerNowEpochMs);
-      const seasonStarts = expectedSchedulerSeasonStarts(schedulerNowEpochMs);
-      currentSeasonStart = seasonStarts.current;
-      finalizedSeasonStart = seasonStarts.finalization;
+      schedulerSeasonStarts = expectedSchedulerSeasonStarts(schedulerNowEpochMs);
+      currentSeasonStart = schedulerSeasonStarts.current;
+      finalizedSeasonStart = schedulerSeasonStarts.finalization;
       schedulerExpectedJobs = expectedSchedulerCatalog(currentSeasonStart, finalizedSeasonStart);
       assert.deepEqual(
         scheduledJobs,
         schedulerExpectedJobs,
         "the combined catalog must match all 17 independently reviewed jobs in order",
       );
+    } else if (integrationMode === "scheduler_process") {
+      const databaseDate = psqlScalar(
+        "SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text;",
+        "emitted scheduler database-date discovery",
+      );
+      const hostNowEpochMs = Date.now();
+      assert.equal(
+        new Date(hostNowEpochMs).toISOString().slice(0, 10),
+        databaseDate,
+        "the host and disposable database clocks must agree on the UTC date",
+      );
+      schedulerSeasonStarts = expectedSchedulerSeasonStarts(hostNowEpochMs);
+      currentSeasonStart = schedulerSeasonStarts.current;
+      finalizedSeasonStart = schedulerSeasonStarts.finalization;
     } else {
       currentSeasonStart = psqlScalar(
         `SELECT (
@@ -1083,6 +1249,11 @@ SELECT (
         modules: schedulerModules,
         nowEpochMs: schedulerNowEpochMs,
         password: jobsPassword,
+      });
+    } else if (integrationMode === "scheduler_process") {
+      await runEmittedSchedulerProcess({
+        databasePort,
+        expectedSeasonStarts: schedulerSeasonStarts,
       });
     } else {
       const commands = [
@@ -1343,11 +1514,13 @@ SELECT pg_catalog.jsonb_build_object(
       terminalDeletionJobCount: 0,
     });
 
-    console.log(
+    const successMessage =
       integrationMode === "scheduler"
         ? "Jobs scheduler PostgreSQL integration passed (exact catalog, full-state least-privilege denial, and exact stored state)."
-        : "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).",
-    );
+        : integrationMode === "scheduler_process"
+          ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, forced test-child termination, and exact stored state)."
+          : "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).";
+    console.log(successMessage);
   } catch (error) {
     primaryFailure = error;
   } finally {

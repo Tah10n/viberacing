@@ -267,9 +267,13 @@ flowchart LR
   retry, and bounds signal shutdown. An opt-in synthetic integration now composes that production
   scheduler core under a fixed injected UTC clock/timer with the real Jobs runner and disposable
   PostgreSQL, proving exact catalog order, full-state widened-login denial, and exact narrow-login
-  effects. An external audit sink, emitted-process clock result, durable or deployed cadence,
-  historical backlog, monitoring, production credentials/TLS, capacity, cache/backup/tombstone
-  purge, restore replay, and deployment remain separate gates.
+  effects. A separate opt-in integration starts the built entry point under the real host clock,
+  reaches the terminal startup-catalog marker without process output, forcibly ends only its
+  persistent test child, and then verifies exact stored state. Controller settlement before that
+  forced termination, an external audit sink, recurring timer-callback and graceful
+  process-signal/PostgreSQL results, durable or deployed cadence, historical backlog, monitoring,
+  production credentials/TLS, capacity, cache/backup/tombstone purge, restore replay, and deployment
+  remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.
@@ -1155,9 +1159,12 @@ measurements exist.
   only after terminal finalization plus 30 days while preserving rounded freshness. A separate
   default-off local scheduler now invokes the fixed maintenance catalog sequentially from UTC
   process slots, and one opt-in synthetic integration composes its production core with the real
-  Jobs runner and disposable PostgreSQL under fixed injected time. Emitted-process clock behavior,
-  durable/deployed cadence, historical backlog, capacity, notification, correction, backup purge,
-  and deployed retention evidence remain open.
+  Jobs runner and disposable PostgreSQL under fixed injected time. A second starts the built entry
+  point under real host time, reaches the terminal startup-catalog marker without process output,
+  and then forcibly ends only the test child. Controller settlement before that forced termination,
+  recurring timer-callback and graceful process-signal/PostgreSQL behavior, durable/deployed
+  cadence, historical backlog, capacity, notification, correction, backup purge, and deployed
+  retention evidence remain open.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
   new-source creation while preserving active existing-source pairing, plus CarRecipe proposal

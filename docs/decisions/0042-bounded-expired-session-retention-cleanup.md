@@ -75,14 +75,15 @@ claim, but those verifier digests and identifiers remain stored until the relate
 implemented or the profile is purged.
 
 Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
-execution, no-overlap lifecycle, and fixed-clock synthetic scheduler/PostgreSQL composition. There
-is no emitted-process timing, deployed cadence, durable missed-slot recovery, monitoring, capacity
-result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy.
-Recent activated pairing-referenced sessions, tombstones, and historical pairing/device rows still
-need separate reviewed retention evidence. ADR 0045 separately bounds terminal deletion-job
-retention; ADR 0047 bounds the exact approval references after 180 days without deleting device
-history; ADR 0048 deletes only aged unreferenced revoked passkeys; ADR 0050 bounds fixed
-pairing-rate-window reset.
+execution, no-overlap lifecycle, fixed-clock core composition, and real-clock emitted-process
+terminal-marker evidence. There is no controller settlement before forced termination, recurring
+timer-callback or graceful process-signal/PostgreSQL result, deployed cadence, durable missed-slot
+recovery, monitoring, capacity result, production Jobs login/TLS connection, backup-expiry proof, or
+deployed retention policy. Recent activated pairing-referenced sessions, tombstones, and historical
+pairing/device rows still need separate reviewed retention evidence. ADR 0045 separately bounds
+terminal deletion-job retention; ADR 0047 bounds the exact approval references after 180 days
+without deleting device history; ADR 0048 deletes only aged unreferenced revoked passkeys; ADR 0050
+bounds fixed pairing-rate-window reset.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -139,8 +140,9 @@ The SQL evidence uses only synthetic rows in a portless ephemeral PostgreSQL pro
 tests use an injected pool; the shared opt-in Jobs integration additionally proves this emitted
 command through one disposable narrow login and exact stored state. ADR 0063 separately proves the
 default-off scheduler against a fake runner and clock and proves provenance redaction precedes this
-cleanup in a fixed-clock production-core/PostgreSQL cycle. These layers do not prove emitted-process
-timing, production cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
+cleanup in a fixed-clock production-core/PostgreSQL cycle. These layers do not prove recurring
+timer-callback or graceful process-signal/PostgreSQL behavior, production cadence/login/TLS,
+monitoring, backup purge, capacity, or deployment.
 
 ## References
 

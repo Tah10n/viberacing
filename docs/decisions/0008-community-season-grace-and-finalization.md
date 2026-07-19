@@ -72,10 +72,11 @@ granting Ingest any scoring-table access.
 
 Retaining a late raw snapshot helps diagnose compatibility and deadline disputes, but it retains
 private usage evidence until the existing 30-day cleanup boundary runs. ADR 0063 supplies only a
-default-off in-memory local catalog plus a fixed-clock synthetic scheduler-core/PostgreSQL
-integration. Emitted-process timing, a deployed cleanup cadence, monitoring, deletion-worker
-operation, backup policy, and production retention evidence are still required before real-user
-ingestion.
+default-off in-memory local catalog plus fixed-clock core composition and real-clock emitted-process
+terminal-marker evidence. Controller settlement before forced termination, recurring timer-callback
+and graceful process-signal/PostgreSQL behavior, a deployed cleanup cadence, monitoring,
+deletion-worker operation, backup policy, and production retention evidence are still required
+before real-user ingestion.
 
 The 48-hour window deliberately favors ordinary delayed sync over immediate leaderboard closure. It
 does not verify Community input, make a score authoritative OpenAI data, or justify prizes, money,

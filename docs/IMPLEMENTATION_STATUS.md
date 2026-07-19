@@ -49,22 +49,26 @@ that closed runner sequentially without overlap or same-slot retry, retains slot
 memory, and bounds first-signal shutdown. An opt-in synthetic integration composes the production
 scheduler core under a fixed injected UTC clock/timer with the real Jobs runner and disposable
 PostgreSQL, proving exact catalog order, full private-table non-mutation for a widened login, and
-exact narrow-login stored state. It proves no emitted-process clock behavior or deployed cadence. A
-local Ingest kernel now bounds and authenticates the exact Community sync envelope, consumes an
-injected origin nonce, parses bounded JSON, validates the generated contract, and strictly verifies
-the source-bound device request. A separate bounded Ingest PostgreSQL adapter revalidates that
-output and exposes only atomic origin-nonce consumption, device lookup, and submission through a
-probed least-privileged pool. A protected local reader supplies one mandatory and one optional
-rotation origin key directly to the verifier without returning raw configuration. A forced-RLS
-replay tuple, Ingest-only atomic consume, separate Jobs cleanup paths for ingest, pairing,
-authentication, invites, sessions, abandoned enrollments, CarRecipe proposals, finalized source/day
-values, terminal deletion jobs, audit events, aged revoked passkeys, and aged minimized revoked
-devices plus pairing approval-provenance redaction and primary profile deletion now have real
-isolated PostgreSQL evidence. A transport-free Ingest application now composes those exact verifier
-and database capabilities, generates a server-owned request ID, waits for submission, and returns
-only a validated acknowledgement or generic problem decision. A bounded local Fastify server factory
-now preserves exact raw HTTP evidence, admits four application calls without a queue, applies fixed
-parser/header/connection/deadline policies, and serializes only revalidated sync
+exact narrow-login stored state. A separate opt-in integration starts the built scheduler entry
+point under the real host clock, requires host/database UTC-date agreement, reaches the terminal
+startup-catalog marker without process output, forcibly ends only its persistent test child, and
+then verifies the same exact state. It proves no controller settlement before that forced
+termination, recurring timer callback, graceful process-signal settlement against PostgreSQL, or
+deployed cadence. A local Ingest kernel now bounds and authenticates the exact Community sync
+envelope, consumes an injected origin nonce, parses bounded JSON, validates the generated contract,
+and strictly verifies the source-bound device request. A separate bounded Ingest PostgreSQL adapter
+revalidates that output and exposes only atomic origin-nonce consumption, device lookup, and
+submission through a probed least-privileged pool. A protected local reader supplies one mandatory
+and one optional rotation origin key directly to the verifier without returning raw configuration. A
+forced-RLS replay tuple, Ingest-only atomic consume, separate Jobs cleanup paths for ingest,
+pairing, authentication, invites, sessions, abandoned enrollments, CarRecipe proposals, finalized
+source/day values, terminal deletion jobs, audit events, aged revoked passkeys, and aged minimized
+revoked devices plus pairing approval-provenance redaction and primary profile deletion now have
+real isolated PostgreSQL evidence. A transport-free Ingest application now composes those exact
+verifier and database capabilities, generates a server-owned request ID, waits for submission, and
+returns only a validated acknowledgement or generic problem decision. A bounded local Fastify server
+factory now preserves exact raw HTTP evidence, admits four application calls without a queue,
+applies fixed parser/header/connection/deadline policies, and serializes only revalidated sync
 acknowledgement/problem contracts. A library-only Rust connector foundation now bounds the stable
 App Server handshake and a candidate `0.144.5` account/usage parser, discarding account/summary
 fields and returning only bounded normalized daily usage in caller memory. An inaccessible one-shot
@@ -1020,10 +1024,15 @@ ranking, or deployed Jobs scheduler/cadence exists.
   TypeScript, build, and built-entrypoint gates pass locally. An opt-in synthetic integration builds
   the production scheduler core and Jobs runner, injects one fixed UTC clock/timer, executes the
   exact ordered seventeen-job catalog against disposable PostgreSQL, fingerprints every private
-  table around a widened-login denial, and verifies exact narrow-login stored state. This proves no
-  emitted-process clock behavior, historical backlog, stable production clock, replica lease,
-  durable/deployed cadence, production login/TLS, monitoring, capacity, or real-user retention.
-  Secretless CI declares the combined command, but no hosted pass is claimed from this local tree.
+  table around a widened-login denial, and verifies exact narrow-login stored state. A separate
+  opt-in integration starts the built entry point with exact configuration and the real host clock,
+  requires host/database UTC-date agreement, waits for the terminal reset marker, requires no
+  process output, forcibly ends only its persistent test child, and then verifies the same exact
+  state. These checks prove no controller settlement before forced process termination, recurring
+  timer callback, graceful process-signal settlement against PostgreSQL, historical backlog, stable
+  production clock, replica lease, durable/deployed cadence, production login/TLS, monitoring,
+  capacity, or real-user retention. Secretless CI declares both scheduler commands, but no hosted
+  pass is claimed from this local tree.
 - Forty-four deterministic lock-wait races hold a relevant invite, challenge, session, source,
   device, pairing, or profile row, or a season advisory lock; tag every session; and observe every
   contender in the holder's transitive PostgreSQL blocker chain before releasing it. Protective
@@ -1181,9 +1190,13 @@ loopback-published container, network, and storage. A second run built the produ
 and Jobs runner, injected one fixed UTC clock/timer, attempted the exact ordered seventeen-job
 catalog through a deliberately widened login, proved every private-table fingerprint stayed
 unchanged, then ran the catalog through the narrow login and verified the same exact stored-state
-oracle. This is local synthetic application evidence, not emitted scheduler-process clock behavior,
-a production credential/TLS result, capacity result, real-user purge, monitoring backend, durable
-cadence, or deployment.
+oracle. A third run started the built scheduler entry point under the real host clock, required
+host/database UTC-date agreement, observed no process output, waited for the terminal catalog
+marker, forcibly ended only its otherwise persistent test child, and then verified the same exact
+state. This is local synthetic application evidence, not controller settlement before forced
+termination, a recurring timer-callback, or graceful process-signal/PostgreSQL result, production
+credential/TLS result, capacity result, real-user purge, monitoring backend, durable cadence, or
+deployment.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -1229,24 +1242,25 @@ gates, deployed execution and monitoring of retention cleanup for authentication
 abandoned-enrollment, audit-event, invitation, CarRecipe-proposal, ingest, finalized-source-day,
 pairing, session, terminal-deletion-job, aged revoked-passkey state, and aged minimized
 revoked-device state plus pairing approval-provenance redaction, pairing-rate-window reset, and
-primary deletion, cleanup for remaining expiring state, emitted-process clock execution and deployed
-operation of the local Jobs scheduler, a production login/TLS path, audited corrections, deployed
-public-score delivery, cache/backup/tombstone purge and restore replay, connector macOS/Linux
-executable admission, clean-machine live Codex/privacy evidence, supported operational account/usage
-integration, deployed signed-upload egress, credential rotation and automated server-revoke
-composition, hosted Windows portable-smoke evidence, installer and real install/upgrade/uninstall
-lifecycle, automated diagnostic export/support transport, packaging, release signing, deployment,
-and public beta operations remain proposed. The local Ingest key reader, kernel, adapter,
-application composer, Fastify server, and separate host now prove bounded protected configuration,
-raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
-pool, fixed-query, orchestration, no-queue/deadline policy, exact listener modes, bounded
-startup/shutdown, result/problem serialization, and one full synthetic loopback persistence path,
-but not those deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database
-score and compatible active-recipe race projections, versioned response-only schemas, fail-closed
-server mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media
-parsing, admission/deadline policy, store translation, and final serialization. A third compatible
-local status projection/contract/route now supplies complete-UTC-day freshness and preference-gated
-streak without changing either older response. Cache/invalidation, deployed device-proposal ingress,
+primary deletion, cleanup for remaining expiring state, recurring timer-callback execution and
+graceful process-signal settlement against PostgreSQL, deployed operation of the local Jobs
+scheduler, a production login/TLS path, audited corrections, deployed public-score delivery,
+cache/backup/tombstone purge and restore replay, connector macOS/Linux executable admission,
+clean-machine live Codex/privacy evidence, supported operational account/usage integration, deployed
+signed-upload egress, credential rotation and automated server-revoke composition, hosted Windows
+portable-smoke evidence, installer and real install/upgrade/uninstall lifecycle, automated
+diagnostic export/support transport, packaging, release signing, deployment, and public beta
+operations remain proposed. The local Ingest key reader, kernel, adapter, application composer,
+Fastify server, and separate host now prove bounded protected configuration, raw-envelope/JSON/HTTP
+framing, origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query,
+orchestration, no-queue/deadline policy, exact listener modes, bounded startup/shutdown,
+result/problem serialization, and one full synthetic loopback persistence path, but not those
+deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database score and
+compatible active-recipe race projections, versioned response-only schemas, fail-closed server
+mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media parsing,
+admission/deadline policy, store translation, and final serialization. A third compatible local
+status projection/contract/route now supplies complete-UTC-day freshness and preference-gated streak
+without changing either older response. Cache/invalidation, deployed device-proposal ingress,
 authenticated profile detail, client-rate and production-capacity controls, query-plan evidence,
 monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
 The visible web scoring and ranking experience now consumes a validated current-week status response
@@ -1276,6 +1290,7 @@ pnpm run build:jobs-scheduler
 pnpm run check:jobs-scheduler-entrypoint
 pnpm run test:jobs:postgres-integration
 pnpm run test:jobs-scheduler:postgres-integration
+pnpm run test:jobs-scheduler:process-postgres-integration
 cargo test --workspace --all-targets --all-features --locked
 pnpm run check:web-build
 pnpm run check:public:staged
