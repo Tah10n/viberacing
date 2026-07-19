@@ -30,7 +30,7 @@ const expectedUsage =
   "Usage:\n" +
   "  viberacing-connector connect --origin <https-origin> --label <device-label>\n" +
   "  viberacing-connector forget-local --origin <https-origin> --label <device-label>\n" +
-  "  viberacing-connector check-codex [--codex <absolute-path>]\n" +
+  "  viberacing-connector check-codex [--codex <absolute-path>] [--diagnostic-preview]\n" +
   "  viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]\n" +
   "  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>\n";
 const expectedCandidateFailure = "no exact Codex executable was admitted\n";

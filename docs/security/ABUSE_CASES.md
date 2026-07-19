@@ -257,14 +257,18 @@ material availability cost.
   separate `check-codex` command reuses only exact candidate admission, releases the handle, and has
   no credential-store, child-process, account, persistence, or network capability. Its fixed success
   text explicitly preserves unsupported status, and failure reflects no path or operating-system
-  detail. A separate release-profile smoke exclusively copies the repository-built connector to a
-  random bounded temporary root, runs only exact help and missing-candidate behavior with no ambient
-  credential/network environment, rechecks source/copy digests and inventory, and removes the copy.
-  The operational connector still requires other-platform evidence, complete safe release
-  diagnostics, real packaging/lifecycle, provenance, release, and clean-machine privacy evidence.
-- **Detection:** The local candidate check now reports only exact candidate admission success or a
-  stable generic failure without uploading content. Release provenance, packaged-binary, broader
-  failure-recovery, and real child-cleanup diagnostics remain separate gates.
+  detail. Its opt-in v1 preview adds only compile-time versions, fixed platform contract, a closed
+  admission class, and empty support state. Failed admission remains nonzero; local values remain
+  absent, and the connector can neither save nor send the preview. A separate release-profile smoke
+  exclusively copies the repository-built connector to a random bounded temporary root, runs only
+  exact help and missing-candidate behavior with no ambient credential/network environment, rechecks
+  source/copy digests and inventory, and removes the copy. The operational connector still requires
+  other-platform evidence, automated support-export review, broader release diagnostics, real
+  packaging/lifecycle, provenance, release, and clean-machine privacy evidence.
+- **Detection:** The local candidate check reports exact success or a stable generic failure without
+  uploading content. Its explicit preview provides only one reviewed redacted class for user
+  inspection. Release provenance, packaged-binary, broader failure-recovery, and real child-cleanup
+  diagnostics remain separate gates.
 - **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified
   binary, revoke the registered device after suspected compromise, remove the exact local
   credential, and rotate the device key when that lifecycle exists.
@@ -612,7 +616,9 @@ material availability cost.
 - **Current evidence:** The untrusted Windows job may build only ephemeral test input, runs a
   bounded portable copy/removal smoke, and has no artifact upload or release authority. This is
   useful lifecycle regression evidence but satisfies none of the protected-build, package,
-  signature, checksum, SBOM, provenance, or hosted release requirements.
+  signature, checksum, SBOM, provenance, or hosted release requirements. The local diagnostic
+  preview likewise states no supported Codex version and is not accepted as artifact identity,
+  provenance, or release evidence.
 - **Detection:** Signature/provenance validation, reproducibility comparison, release audit, and
   reports of signer or checksum mismatch.
 - **Recovery:** Revoke the artifact/signer, publish an advisory, disable affected connector

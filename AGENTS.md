@@ -110,27 +110,29 @@ persists the activated binding without printing bearer or key material. A separa
 contacting the service, and states that it did not revoke server device authority. A separate
 explicit `check-codex` command reuses only the bounded exact Windows candidate admission without an
 origin, credential-store access, Codex process, account read, persistence, or network, and reports
-that no version is supported. A separate Windows x86_64 development `sync` command can construct the
-private launch/context/key capabilities only after active-record review and either bounded
-fixed-name `PATH` discovery or explicit-path admission of the exact `0.144.5` artifact. It then
-sends one fixed signed request and validates one closed acknowledgement without retry or edge-origin
-headers. A separate fixed `propose-car` command starts no Codex process, accepts only exact enum
-flags and a bounded seed, signs one fresh proposal-domain request with the same active native key,
-sends once without retry, and validates only a generic acknowledgement. A checked local Agent Skill
-now reduces a styling request to those exact fields, requires explicit shell-safe origin/label
-values, invokes only that command once, and receives no read, approval, or activation authority. A
-separate Windows release-profile smoke copies the repository-built `0.0.0` connector into a bounded
-temporary directory, checks only exact help and missing-candidate behavior with a cleared
-environment, verifies digest/inventory stability, and removes the copy. Secretless no-upload CI
-declares the same `windows-2025` job, but no hosted pass is claimed from the local tree. There is
-still no supported version, macOS/Linux admission, clean-machine real-account result, real package
-install/upgrade/uninstall lifecycle, credential rotation or automatic server-revoke composition,
-packaging, release, live pairing result, deployment Ingest credential/TLS result, edge deployment,
-or capacity evidence. Do not claim that deployed browser/session HTTP authentication,
-production-ready recovery or remaining unimplemented critical-action verification, real-user
-ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
-correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
-implementation and verification are present in the working tree.
+that no version is supported. Its opt-in diagnostic preview emits only a closed local v1 summary of
+compile-time version, fixed platform contract, admission class, and empty support state; it retains
+failure status, omits local values, and neither saves nor sends output. A separate Windows x86_64
+development `sync` command can construct the private launch/context/key capabilities only after
+active-record review and either bounded fixed-name `PATH` discovery or explicit-path admission of
+the exact `0.144.5` artifact. It then sends one fixed signed request and validates one closed
+acknowledgement without retry or edge-origin headers. A separate fixed `propose-car` command starts
+no Codex process, accepts only exact enum flags and a bounded seed, signs one fresh proposal-domain
+request with the same active native key, sends once without retry, and validates only a generic
+acknowledgement. A checked local Agent Skill now reduces a styling request to those exact fields,
+requires explicit shell-safe origin/label values, invokes only that command once, and receives no
+read, approval, or activation authority. A separate Windows release-profile smoke copies the
+repository-built `0.0.0` connector into a bounded temporary directory, checks only exact help and
+missing-candidate behavior with a cleared environment, verifies digest/inventory stability, and
+removes the copy. Secretless no-upload CI declares the same `windows-2025` job, but no hosted pass
+is claimed from the local tree. There is still no supported version, macOS/Linux admission,
+clean-machine real-account result, real package install/upgrade/uninstall lifecycle, credential
+rotation or automatic server-revoke composition, packaging, release, live pairing result, deployment
+Ingest credential/TLS result, edge deployment, or capacity evidence. Do not claim that deployed
+browser/session HTTP authentication, production-ready recovery or remaining unimplemented
+critical-action verification, real-user ingestion, an operational connector, a Jobs scheduler or
+deployed public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted
+security control exists until its implementation and verification are present in the working tree.
 
 A second checked local Agent Skill now selects only repository-owned read-only verification from the
 real Git scope, distinguishes focused, root, staged, history, synthetic, and live evidence, and has
@@ -172,9 +174,10 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
 - `crates/connector/` contains the bounded App Server JSONL handshake, candidate exact-version
   account/usage parser, inaccessible one-shot child supervisor, synthetic process fixture,
   exact-body sync composer, isolated pairing/sync signers, the native-store `connect` command, the
-  local-only `forget-local` command, credential-free candidate-only `check-codex` diagnostic,
-  exact-candidate one-shot `sync` command, fixed proposal-only `propose-car` command, and nested
-  connector security guidance. Read `crates/connector/AGENTS.md` before editing it.
+  local-only `forget-local` command, credential-free candidate-only `check-codex` diagnostic and
+  redacted preview, exact-candidate one-shot `sync` command, fixed proposal-only `propose-car`
+  command, and nested connector security guidance. Read `crates/connector/AGENTS.md` before editing
+  it.
 - `package.json`, `pnpm-workspace.yaml`, and `Cargo.toml` define the pinned monorepo workspaces.
 - `compose.yaml` provides disposable loopback-only PostgreSQL for local development.
 - Trusted Ingest edge routing/external TLS deployment, the distributed recovery perimeter and

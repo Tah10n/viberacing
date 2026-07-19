@@ -51,9 +51,10 @@ bounded infrastructure survives load tests.
 
 - Add the versioned bounded CarRecipe proposal/approval flow without arbitrary content.
 - Continue connector compatibility diagnostics from the locally implemented point-in-time Windows
-  candidate admission check. A secretless Windows workflow now defines a locked release-profile
-  portable copy/removal smoke without publishing its binary; obtain its hosted result, then complete
-  real package install, upgrade, revoke, and uninstall tests.
+  candidate admission check and its closed redacted local preview. A secretless Windows workflow now
+  defines a locked release-profile portable copy/removal smoke without publishing its binary; obtain
+  its hosted result, then complete real package install, upgrade, revoke, and uninstall tests plus a
+  separately reviewed support-export path if one is needed.
 - Produce signed, checksummed, SBOM- and provenance-backed connector artifacts.
 
 Exit criterion: no arbitrary content or conversation text enters the service, and supported

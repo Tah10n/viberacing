@@ -201,13 +201,21 @@ obvious fixed label. Repository tests never run a local account or open a real c
 Before pairing, a Windows x86_64 developer may explicitly check only the exact candidate artifact:
 
 ```text
-cargo run -p viberacing-connector -- check-codex [--codex <absolute-codex-0.144.5-executable>]
+cargo run -p viberacing-connector -- check-codex [--codex <absolute-codex-0.144.5-executable>] [--diagnostic-preview]
 ```
 
 Without `--codex`, this reads only the bounded fixed-name `PATH` search defined by ADR 0051. The
 explicit form uses identical canonical size/SHA-256 admission. The command starts no Codex process,
 opens no connector credential or account, persists nothing, and uses no network. Success is only a
 point-in-time candidate result, explicitly does not claim support, and is never reused by `sync`.
+
+`--diagnostic-preview` replaces the normal success line with one closed local v1 preview containing
+only the connector/candidate versions, fixed Windows x86_64 contract, a passed/not-admitted/
+unsupported-platform class, and `supported-codex-versions: none`. A failed admission remains
+nonzero. The preview excludes paths, digests, environment values, credentials, account, and usage;
+the preview itself is written only to stdout, while the unchanged generic failure can still appear
+on stderr. The connector neither saves nor sends it. Read the complete preview before deliberately
+copying it to a trusted support context.
 
 On Windows x86_64, the repository can also build and exercise only a disposable portable copy of the
 development connector:

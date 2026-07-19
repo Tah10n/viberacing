@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fifty-three accepted ADRs.
+  fail-closed compatibility policy and matrix, and fifty-four accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -245,6 +245,11 @@ Versioning where its guarantees are applicable.
   policy mutations reject another runner, missing steps, or an upload action. This creates no
   package, installer, hosted result, upgrade/revoke evidence, signature, checksum publication, SBOM,
   provenance, release, or support claim.
+- An explicit `check-codex --diagnostic-preview` mode that performs the same one-shot candidate
+  admission and writes one closed local v1 preview containing only fixed version/platform contract,
+  a three-value admission class, and the empty support state. It retains nonzero failed admission,
+  omits paths, digests, environment values, credentials, account, and usage, and gives the connector
+  no file, upload, telemetry, or sharing capability.
 - Bounded pairing start, possession, and dormant activation compositions. The start boundary accepts
   only closed device metadata, creates fresh server IDs, a 32-byte poll token and challenge, a
   60-bit human code, and a nine-minute expiry, then stores separate protected poll/code HMAC

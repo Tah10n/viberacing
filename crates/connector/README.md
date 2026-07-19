@@ -74,9 +74,11 @@ The implemented surface is deliberately narrow:
   regular-file size filtering, canonical deduplication, and at most four distinct hashes;
 - Windows x86_64 admission for the exact `0.144.5` official artifact byte count and SHA-256 digest,
   with exact-version-only output and a no-write-sharing handle retained through direct launch;
-- one exact `check-codex [--codex <absolute-path>]` command that reuses that same bounded selector,
-  releases the admitted handle, and prints only candidate admission plus the explicit unsupported
-  status, with no credential, process, account, persistence, or network access;
+- one exact `check-codex [--codex <absolute-path>] [--diagnostic-preview]` command that reuses that
+  same bounded selector, releases the admitted handle, and prints only candidate admission plus the
+  explicit unsupported status, with no credential, process, account, persistence, or network access;
+  its opt-in preview adds only fixed version/admission fields, excludes paths, digests, environment
+  values, credentials, account, and usage, and is never saved or sent by the connector;
 - fresh OS-random sync ID and nonce, canonical millisecond UTC, active-record source/device/key
   binding, and one existing exact composition/signing path;
 - one fixed `/v1/community/sync` POST with proxies and redirects disabled, platform TLS, only the
@@ -98,10 +100,11 @@ The implemented surface is deliberately narrow:
 private pairing command constructs only its two pending capabilities; the private sync command can
 construct the launch/context/key capabilities only after active-record review and exact artifact
 admission from bounded fixed-name discovery or an explicit path. `check-codex` reuses only that
-selector without constructing any of those capabilities. There is no macOS/Linux executable
-admission, WebSocket transport, generic JSON-RPC or HTTP method, scheduler, installer, credential
-rotation, automatic server-revoke composition, package, or release artifact. Browser approval and
-edge origin proof remain separate server-side boundaries. The checked-in
+selector without constructing any of those capabilities; its explicit preview remains a local
+redacted stdout result and never changes failure status or support state. There is no macOS/Linux
+executable admission, WebSocket transport, generic JSON-RPC or HTTP method, scheduler, installer,
+credential rotation, automatic server-revoke composition, package, or release artifact. Browser
+approval and edge origin proof remain separate server-side boundaries. The checked-in
 [`0.144.5` candidate evidence](../../compat/codex/0.144.5/manifest.json) is development evidence
 only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty until
 clean-machine platform, privacy, packaging, provenance, and release evidence all pass.
@@ -119,7 +122,7 @@ The local command shapes are:
 ```text
 viberacing-connector connect --origin <https-origin> --label <device-label>
 viberacing-connector forget-local --origin <https-origin> --label <device-label>
-viberacing-connector check-codex [--codex <absolute-path>]
+viberacing-connector check-codex [--codex <absolute-path>] [--diagnostic-preview]
 viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]
 viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>
 ```
@@ -130,14 +133,17 @@ connect process at a time. `forget-local` deletes only the exact origin/label en
 idempotent; it neither revokes the registered server device nor erases copied key material, so the
 user must reconcile and revoke that device separately in the authenticated account. `check-codex` is
 an explicit Windows x86_64 candidate diagnostic: it performs the same bounded default discovery or
-explicit-path admission without an origin, credential, child process, account read, or network, and
-its point-in-time result is never reused. `sync` still reads the active native record first, repeats
-admission, starts only the exact admitted artifact, and sends private daily usage once to the
-explicit origin. `propose-car` uses the same active native record but starts no Codex process and
-can only create a private proposal for later browser review. The Agent Skill requires explicit
-shell-safe origin/label values, invokes only `propose-car` once, and is forbidden from invoking
-local credential removal or the diagnostic. No checked-in default server, credential, code, or
-released binary exists.
+explicit-path admission without an origin, credential, child process, account read, persistence, or
+network, and its point-in-time result is never reused. `--diagnostic-preview` prints one closed v1
+preview with only connector/candidate versions, the fixed platform contract, a three-value admission
+class, and the empty support state. It retains a nonzero failed-admission exit, omits all local
+values, and gives the connector no file or sharing capability; inspect the complete stdout preview
+before copying it. `sync` still reads the active native record first, repeats admission, starts only
+the exact admitted artifact, and sends private daily usage once to the explicit origin.
+`propose-car` uses the same active native record but starts no Codex process and can only create a
+private proposal for later browser review. The Agent Skill requires explicit shell-safe origin/label
+values, invokes only `propose-car` once, and is forbidden from invoking local credential removal or
+the diagnostic. No checked-in default server, credential, code, or released binary exists.
 
 Run the focused gate from the repository root:
 

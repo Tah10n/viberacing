@@ -62,6 +62,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0051](0051-bounded-candidate-executable-discovery.md)          | Bounded candidate executable discovery                              | Accepted; Windows candidate; release/support pending   |
 | [0052](0052-bounded-candidate-artifact-diagnostic.md)           | Bounded candidate artifact diagnostic                               | Accepted; local diagnostic; release/support pending    |
 | [0053](0053-windows-portable-smoke.md)                          | Bounded Windows portable connector lifecycle smoke                  | Accepted; local/CI declaration; hosted/release pending |
+| [0054](0054-redacted-codex-diagnostic-preview.md)               | Redacted Codex diagnostic preview                                   | Accepted; local preview; support/export pending        |
 
 ## Lifecycle
 

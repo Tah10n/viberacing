@@ -37,7 +37,7 @@ const KEYRING_SERVICE: &str = "viberacing.connector.pairing.v1";
 const KEYRING_ACCOUNT_PREFIX: &str = "device-";
 const ACCOUNT_DOMAIN: &[u8] = b"viberacing-connector-keyring-account-v1\0";
 const ORIGIN_DOMAIN: &[u8] = b"viberacing-connector-origin-v1\0";
-const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector forget-local --origin <https-origin> --label <device-label>\n  viberacing-connector check-codex [--codex <absolute-path>]\n  viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
+const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector forget-local --origin <https-origin> --label <device-label>\n  viberacing-connector check-codex [--codex <absolute-path>] [--diagnostic-preview]\n  viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
 const MAX_ORIGIN_BYTES: usize = 512;
 const MAX_LABEL_CHARACTERS: usize = 64;
 const MAX_REQUEST_BYTES: usize = 1024;
@@ -149,7 +149,9 @@ impl std::error::Error for ConnectorCliError {}
 /// `connect` creates or resumes one device credential. `sync` admits one exact Codex candidate,
 /// collects only bounded daily usage, signs it with that active credential, and submits it once.
 /// `check-codex` performs only the same point-in-time candidate artifact admission, without opening
-/// credential storage, starting Codex, reading an account, or using the network.
+/// credential storage, starting Codex, reading an account, persisting data, or using the network.
+/// Its explicit diagnostic preview contains only fixed version/admission state and remains local
+/// standard output for review before the user chooses whether to share it.
 /// `propose-car` signs and submits one exact enum-only `CarRecipe` with the same active credential.
 /// `forget-local` removes only the exact local origin/label credential and performs no server call.
 ///
@@ -183,9 +185,14 @@ pub fn run_connector_cli() -> Result<(), ConnectorCliError> {
             let mut store = OsCredentialStore::new(&origin, &label)?;
             run_forget_local(&mut store, &mut io::stdout().lock())
         }
-        ParsedCommand::CheckCodex { codex_path } => {
-            run_codex_check(codex_path.as_deref(), &mut io::stdout().lock())
-        }
+        ParsedCommand::CheckCodex {
+            codex_path,
+            diagnostic_preview,
+        } => run_codex_check(
+            codex_path.as_deref(),
+            diagnostic_preview,
+            &mut io::stdout().lock(),
+        ),
         ParsedCommand::Sync {
             codex_path,
             label,
@@ -231,6 +238,7 @@ enum ParsedCommand {
     },
     CheckCodex {
         codex_path: Option<PathBuf>,
+        diagnostic_preview: bool,
     },
     Sync {
         codex_path: Option<PathBuf>,
@@ -289,11 +297,7 @@ impl PendingCarRecipeSelection {
 fn parse_command(
     arguments: impl IntoIterator<Item = OsString>,
 ) -> Result<ParsedCommand, ConnectorCliError> {
-    let arguments = arguments
-        .into_iter()
-        .map(OsString::into_string)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| ConnectorCliError::InvalidArguments)?;
+    let arguments = collect_cli_arguments(arguments)?;
     if arguments.as_slice() == ["--help"] || arguments.as_slice() == ["-h"] {
         return Ok(ParsedCommand::Help);
     }
@@ -301,22 +305,25 @@ fn parse_command(
         .first()
         .map(String::as_str)
         .ok_or(ConnectorCliError::InvalidArguments)?;
-    if !matches!(
-        command,
-        "connect" | "forget-local" | "check-codex" | "sync" | "propose-car"
-    ) {
+    if !is_bounded_command(command) {
         return Err(ConnectorCliError::InvalidArguments);
     }
 
     let mut origin = None;
     let mut label = None;
     let mut codex_path = None;
+    let mut diagnostic_preview = false;
     let mut pending_recipe = PendingCarRecipeSelection::default();
     let mut index = 1;
     while index < arguments.len() {
         let flag = arguments
             .get(index)
             .ok_or(ConnectorCliError::InvalidArguments)?;
+        if flag == "--diagnostic-preview" && command == "check-codex" && !diagnostic_preview {
+            diagnostic_preview = true;
+            index += 1;
+            continue;
+        }
         let value = arguments
             .get(index + 1)
             .ok_or(ConnectorCliError::InvalidArguments)?;
@@ -371,7 +378,10 @@ fn parse_command(
         ("forget-local", Some(origin), Some(label), None) => {
             Ok(ParsedCommand::ForgetLocal { label, origin })
         }
-        ("check-codex", None, None, codex_path) => Ok(ParsedCommand::CheckCodex { codex_path }),
+        ("check-codex", None, None, codex_path) => Ok(ParsedCommand::CheckCodex {
+            codex_path,
+            diagnostic_preview,
+        }),
         ("sync", Some(origin), Some(label), codex_path) => Ok(ParsedCommand::Sync {
             codex_path,
             label,
@@ -387,6 +397,23 @@ fn parse_command(
         }
         _ => Err(ConnectorCliError::InvalidArguments),
     }
+}
+
+fn collect_cli_arguments(
+    arguments: impl IntoIterator<Item = OsString>,
+) -> Result<Vec<String>, ConnectorCliError> {
+    arguments
+        .into_iter()
+        .map(OsString::into_string)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| ConnectorCliError::InvalidArguments)
+}
+
+fn is_bounded_command(command: &str) -> bool {
+    matches!(
+        command,
+        "connect" | "forget-local" | "check-codex" | "sync" | "propose-car"
+    )
 }
 
 #[derive(Clone)]
@@ -1300,25 +1327,83 @@ fn map_admission_error(error: AdmissionError) -> ConnectorCliError {
 
 fn run_codex_check(
     codex_path: Option<&Path>,
+    diagnostic_preview: bool,
     output: &mut dyn Write,
 ) -> Result<(), ConnectorCliError> {
-    run_codex_check_with(codex_path, output, |selection| {
+    run_codex_check_with(codex_path, diagnostic_preview, output, |selection| {
         admit_candidate_selection(selection).map(drop)
     })
 }
 
 fn run_codex_check_with(
     codex_path: Option<&Path>,
+    diagnostic_preview: bool,
     output: &mut dyn Write,
     admit: impl FnOnce(Option<&Path>) -> Result<(), AdmissionError>,
 ) -> Result<(), ConnectorCliError> {
-    admit(codex_path).map_err(map_admission_error)?;
-    write_line(
-        output,
-        &format!(
-            "Candidate Codex {ADMITTED_CODEX_VERSION} artifact admission passed; no Codex version is supported."
+    match admit(codex_path) {
+        Ok(()) if diagnostic_preview => {
+            write_codex_diagnostic_preview(output, CodexDiagnosticAdmission::Passed)
+        }
+        Ok(()) => write_line(
+            output,
+            &format!(
+                "Candidate Codex {ADMITTED_CODEX_VERSION} artifact admission passed; no Codex version is supported."
+            ),
         ),
+        Err(error) if diagnostic_preview => {
+            let admission = match error {
+                AdmissionError::UnsupportedPlatform => {
+                    CodexDiagnosticAdmission::UnsupportedPlatform
+                }
+                AdmissionError::DiscoveryUnavailable
+                | AdmissionError::InvalidPath
+                | AdmissionError::UnsupportedArtifact => CodexDiagnosticAdmission::NotAdmitted,
+            };
+            write_codex_diagnostic_preview(output, admission)?;
+            Err(map_admission_error(error))
+        }
+        Err(error) => Err(map_admission_error(error)),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum CodexDiagnosticAdmission {
+    Passed,
+    NotAdmitted,
+    UnsupportedPlatform,
+}
+
+impl CodexDiagnosticAdmission {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Passed => "passed",
+            Self::NotAdmitted => "not-admitted",
+            Self::UnsupportedPlatform => "unsupported-platform",
+        }
+    }
+}
+
+fn write_codex_diagnostic_preview(
+    output: &mut dyn Write,
+    candidate_admission: CodexDiagnosticAdmission,
+) -> Result<(), ConnectorCliError> {
+    let candidate_admission = candidate_admission.as_str();
+    write!(
+        output,
+        "Vibe Racing connector diagnostic preview v1\n\
+connector-version: {}\n\
+candidate-platform-contract: windows-x86_64\n\
+candidate-codex-version: {ADMITTED_CODEX_VERSION}\n\
+candidate-admission: {candidate_admission}\n\
+supported-codex-versions: none\n\
+included-data: fixed-version-and-admission-state-only\n\
+excluded-data: paths,digests,environment,credentials,account,usage\n\
+side-effects: no-codex-process,no-credential-access,no-persistence,no-network\n\
+review-before-sharing: required\n",
+        env!("CARGO_PKG_VERSION"),
     )
+    .map_err(|_| ConnectorCliError::OutputUnavailable)
 }
 
 #[cfg(test)]
@@ -1559,12 +1644,17 @@ mod tests {
             .expect("default candidate diagnostic arguments must parse");
         assert!(matches!(
             command,
-            ParsedCommand::CheckCodex { codex_path: None }
+            ParsedCommand::CheckCodex {
+                codex_path: None,
+                diagnostic_preview: false,
+            }
         ));
         assert!(
             ConnectorCliError::InvalidArguments
                 .to_string()
-                .contains("\n  viberacing-connector check-codex [--codex <absolute-path>]\n")
+                .contains(
+                    "\n  viberacing-connector check-codex [--codex <absolute-path>] [--diagnostic-preview]\n"
+                )
         );
 
         let explicit_path = "C:\\synthetic-private\\codex.exe";
@@ -1573,12 +1663,56 @@ mod tests {
         match command {
             ParsedCommand::CheckCodex {
                 codex_path: Some(path),
+                diagnostic_preview: false,
             } => assert_eq!(path, PathBuf::from(explicit_path)),
             _ => panic!("the explicit diagnostic path must remain confined to check-codex"),
         }
 
         for arguments in [
+            vec!["check-codex".into(), "--diagnostic-preview".into()],
+            vec![
+                "check-codex".into(),
+                "--diagnostic-preview".into(),
+                "--codex".into(),
+                explicit_path.into(),
+            ],
+            vec![
+                "check-codex".into(),
+                "--codex".into(),
+                explicit_path.into(),
+                "--diagnostic-preview".into(),
+            ],
+        ] {
+            assert!(matches!(
+                parse_command(arguments),
+                Ok(ParsedCommand::CheckCodex {
+                    diagnostic_preview: true,
+                    ..
+                })
+            ));
+        }
+
+        for arguments in [
             vec!["check-codex".into(), "--codex".into()],
+            vec![
+                "check-codex".into(),
+                "--diagnostic-preview".into(),
+                "true".into(),
+            ],
+            vec![
+                "check-codex".into(),
+                "--diagnostic-preview".into(),
+                "--diagnostic-preview".into(),
+            ],
+            vec![
+                "sync".into(),
+                "--origin".into(),
+                "https://race.example".into(),
+                "--label".into(),
+                "Desktop".into(),
+                "--diagnostic-preview".into(),
+                "true".into(),
+            ],
             vec![
                 "check-codex".into(),
                 "--codex".into(),
@@ -1616,7 +1750,7 @@ mod tests {
         let selected = PathBuf::from("C:\\synthetic-private\\codex.exe");
         let mut calls = 0;
         let mut output = Vec::new();
-        run_codex_check_with(Some(&selected), &mut output, |candidate| {
+        run_codex_check_with(Some(&selected), false, &mut output, |candidate| {
             calls += 1;
             assert_eq!(candidate, Some(selected.as_path()));
             Ok(())
@@ -1631,7 +1765,7 @@ mod tests {
         assert!(!rendered.contains("synthetic-private"));
 
         let mut default_output = Vec::new();
-        run_codex_check_with(None, &mut default_output, |candidate| {
+        run_codex_check_with(None, false, &mut default_output, |candidate| {
             assert_eq!(candidate, None);
             Ok(())
         })
@@ -1661,14 +1795,73 @@ mod tests {
         ] {
             let mut output = Vec::new();
             assert_eq!(
-                run_codex_check_with(None, &mut output, |_| Err(admission_error)),
+                run_codex_check_with(None, false, &mut output, |_| Err(admission_error)),
                 Err(expected)
             );
             assert!(output.is_empty());
         }
 
         assert_eq!(
-            run_codex_check_with(None, &mut UnwritableOutput, |_| Ok(())),
+            run_codex_check_with(None, false, &mut UnwritableOutput, |_| Ok(())),
+            Err(ConnectorCliError::OutputUnavailable)
+        );
+    }
+
+    #[test]
+    fn codex_diagnostic_preview_is_closed_redacted_and_keeps_failure_status() {
+        let selected = PathBuf::from("C:\\synthetic-private\\codex.exe");
+        let expected = |admission: &str| {
+            format!(
+                "Vibe Racing connector diagnostic preview v1\n\
+connector-version: 0.0.0\n\
+candidate-platform-contract: windows-x86_64\n\
+candidate-codex-version: 0.144.5\n\
+candidate-admission: {admission}\n\
+supported-codex-versions: none\n\
+included-data: fixed-version-and-admission-state-only\n\
+excluded-data: paths,digests,environment,credentials,account,usage\n\
+side-effects: no-codex-process,no-credential-access,no-persistence,no-network\n\
+review-before-sharing: required\n"
+            )
+        };
+
+        let mut passed = Vec::new();
+        run_codex_check_with(Some(&selected), true, &mut passed, |candidate| {
+            assert_eq!(candidate, Some(selected.as_path()));
+            Ok(())
+        })
+        .expect("an admitted candidate must produce a diagnostic preview");
+        assert_eq!(
+            String::from_utf8(passed).expect("preview must remain UTF-8"),
+            expected("passed")
+        );
+
+        for (error, admission, expected_error) in [
+            (
+                AdmissionError::InvalidPath,
+                "not-admitted",
+                ConnectorCliError::CodexNotAdmitted,
+            ),
+            (
+                AdmissionError::UnsupportedPlatform,
+                "unsupported-platform",
+                ConnectorCliError::UnsupportedPlatform,
+            ),
+        ] {
+            let mut failed = Vec::new();
+            assert_eq!(
+                run_codex_check_with(Some(&selected), true, &mut failed, |_| Err(error)),
+                Err(expected_error)
+            );
+            let rendered = String::from_utf8(failed).expect("preview must remain UTF-8");
+            assert_eq!(rendered, expected(admission));
+            assert!(!rendered.contains("synthetic-private"));
+        }
+
+        assert_eq!(
+            run_codex_check_with(None, true, &mut UnwritableOutput, |_| {
+                Err(AdmissionError::InvalidPath)
+            }),
             Err(ConnectorCliError::OutputUnavailable)
         );
     }

@@ -166,14 +166,15 @@ size/SHA-256 and no-write-sharing handle. ADR 0052 separately permits an explici
 `check-codex` to reuse only that selector without a credential, process, account read, persistence,
 or network; its result is not reusable authority. ADR 0053 adds only a secretless no-upload Windows
 release-profile copy/removal smoke for the repository-built connector and creates no runtime
-authority, package, or release path. The sync command still creates fresh context only after
-active-record validation and repeated admission, then performs one fixed signed upload. A hosted
-Windows result, macOS/Linux admission, real package lifecycle, scheduling, and release remain
-absent. Trusted external TLS/edge routing, live secret-manager/edge key injection, working
-deployment login/certificate, composed live end-to-end flow, edge/capacity evidence, a verified
-Cloudflare/Railway path, released sync connector, Jobs scheduler/monitoring, public cache,
-backup/tombstone/restore replay, and audited correction authority shown in the design remain
-planned.
+authority, package, or release path. ADR 0054 permits only one opt-in redacted stdout preview of
+fixed version/admission/support state and adds no stored or network data flow. The sync command
+still creates fresh context only after active-record validation and repeated admission, then
+performs one fixed signed upload. A hosted Windows result, macOS/Linux admission, real package
+lifecycle, scheduling, and release remain absent. Trusted external TLS/edge routing, live
+secret-manager/edge key injection, working deployment login/certificate, composed live end-to-end
+flow, edge/capacity evidence, a verified Cloudflare/Railway path, released sync connector, Jobs
+scheduler/monitoring, public cache, backup/tombstone/restore replay, and audited correction
+authority shown in the design remain planned.
 
 ## Component responsibilities
 

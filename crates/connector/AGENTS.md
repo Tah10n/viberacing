@@ -30,9 +30,11 @@ changing it.
   the exact active record. The sole credential-free exception is explicit `check-codex`, which may
   reuse only the same selector and must not open credential storage, start a process, read an
   account, persist a result, use a network, or become callable through the proposal-only Agent
-  Skill. Never add environment-derived executable extensions, wrappers, shell lookup, recursive or
-  registry search, version negotiation, path reflection, or a way for explicit `--codex` to bypass
-  identical admission.
+  Skill. Its optional diagnostic preview may expose only the reviewed compile-time versions, fixed
+  platform contract, closed admission class, and empty support state; it must omit local values,
+  retain failure status, and never save or send output. Never add environment-derived executable
+  extensions, wrappers, shell lookup, recursive or registry search, version negotiation, path
+  reflection, or a way for explicit `--codex` to bypass identical admission.
 - Keep `propose-car` confined to explicit version 1 enum flags and a bounded seed. It may load only
   an active native device record, sign the exact proposal-domain body message, send once without
   retry, and accept only the generic acknowledgement. Never add prompts, conversation, arbitrary

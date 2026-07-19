@@ -5,8 +5,10 @@
 //! pairing-possession signer, Community sync composer, and isolated one-use request signer. It also
 //! exposes bounded `connect`, `check-codex`, `sync`, local-credential removal, and proposal-only
 //! commands. The candidate-only Windows diagnostic performs only exact artifact admission, while
-//! the sync path separately re-admits either one explicit executable or one exact executable found
-//! through bounded discovery before uploading the closed signed usage request once. It does not
+//! its optional preview emits only fixed redacted version/admission/support state and no file or
+//! network output. The sync path separately re-admits either one explicit executable or one exact
+//! executable found through bounded discovery before uploading the closed signed usage request
+//! once. It does not
 //! expose a generic JSON-RPC or HTTP client or claim compatibility with any Codex release.
 
 #![forbid(unsafe_code)]

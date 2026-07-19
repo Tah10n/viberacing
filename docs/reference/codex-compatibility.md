@@ -11,12 +11,15 @@ command can select the candidate through bounded fixed-name `PATH` discovery or 
 construct its private launch capability only for the exact artifact size and SHA-256, and perform
 one signed upload. A separate explicit `check-codex` command can perform only that exact candidate
 admission without opening credential storage, starting Codex, reading an account, retaining a
-result, or using the network; success explicitly remains unsupported and later sync re-admits. A
-separate Windows release-profile smoke copies only the repository-built `0.0.0` connector to a
-bounded temporary directory, checks its closed help and missing-candidate behavior, and removes it;
-the secretless CI declaration uploads no binary. macOS/Linux admission, a hosted Windows result,
-clean-machine real-account results, real package lifecycle, provenance, and a released connector do
-not exist. This empty matrix is fail-closed evidence, not permission to claim support.
+result, or using the network; success explicitly remains unsupported and later sync re-admits. Its
+opt-in diagnostic preview contains only the fixed public version/platform contract, one closed
+Operational admission class, and the empty support state, retains failed admission, and creates no
+file or transport. A separate Windows release-profile smoke copies only the repository-built `0.0.0`
+connector to a bounded temporary directory, checks its closed help and missing-candidate behavior,
+and removes it; the secretless CI declaration uploads no binary. macOS/Linux admission, a hosted
+Windows result, clean-machine real-account results, real package lifecycle, provenance, and a
+released connector do not exist. This empty matrix is fail-closed evidence, not permission to claim
+support.
 
 It is not an invitation to run an arbitrary local version.
 
@@ -35,8 +38,10 @@ candidate-only discovery tests use synthetic files and fixed resource bounds; re
 verification does not discover or execute an installed artifact, and this is not protected
 clean-machine release evidence. The credential-free diagnostic has only parser, selector,
 non-reflective-output, and error-mapping evidence; no repository test invokes it against an
-installed artifact. The separate portable smoke executes the repository-built connector, not Codex;
-it verifies no official Codex artifact, account, usage response, package, signature, or support row.
+installed artifact. Its preview additionally has exact unit and target-built missing-path process
+evidence with no local values in output; that preview is not attestation or support evidence. The
+separate portable smoke executes the repository-built connector, not Codex; it verifies no official
+Codex artifact, account, usage response, package, signature, or support row.
 
 The candidate Rust adapter is reachable only after the handshake. It emits the fixed IDs `1` and `2`
 for `account/read` and `account/usage/read`, accepts only ChatGPT mode, discards email, plan, and
@@ -95,8 +100,9 @@ hash-admits only the exact candidate, keeps a no-write-sharing handle through la
 request context, and sends one closed signed request without proxy, redirect, retry, or edge-origin
 credentials. It cannot admit another version or platform, create a release, or make the candidate
 supported. `check-codex` separately reuses only the artifact selector and grants no launch, account,
-credential, network, or cached authority. Every matrix row still requires the complete admission
-evidence above.
+credential, network, or cached authority. Its preview adds only redacted fixed state and grants no
+support or report authenticity. Every matrix row still requires the complete admission evidence
+above.
 
 ## Planned stable surface
 

@@ -18,6 +18,10 @@ bounded Windows portable copy/removal smoke uploads nothing and does not establi
 installer, immutable version, signature, checksum publication, SBOM, provenance, clean-machine
 release result, or support claim.
 
+The local `check-codex --diagnostic-preview` output is user-reviewed troubleshooting context only.
+It contains no signature, checksum, artifact identity, provenance, installed-package state, or
+support grant and must never be accepted as release verification.
+
 ## Required release evidence
 
 - Clean, reviewed source and generated artifacts at an immutable commit.

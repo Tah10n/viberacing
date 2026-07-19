@@ -279,47 +279,51 @@ command that reuses only that selector without credential-store, process, accoun
 access; its point-in-time result is never reused by `sync`. ADR 0053 adds a separate Windows
 release-profile portable copy/removal smoke under a secretless no-upload CI declaration. It tests
 only the repository-built `0.0.0` connector's closed command surface and residue, not Codex
-execution, packaging, installation, release, or support. The candidate still does not run on all
-platforms, create a supported release, or create a matrix row. ADR 0024 adds an inaccessible
-reviewed source/device/time/nonce context whose minimized daily usage produces one exact bounded
-`ConnectorSyncV1` body, SHA-256 digest, and LF-separated device message. ADR 0025 removes public
-access to that unsigned material and adds an isolated one-use signer behind an equally inaccessible
-device-bound key capability. A shared Rust/Ingest vector proves exact body, public-key, and
-signature agreement. ADR 0026 adds a second domain-separated pairing-possession policy, inaccessible
-pending-key/challenge signer, and pure strict Web verifier with a shared synthetic vector. A
-separate local Web/Auth slice implements browser approval for a signed-in passkey session. ADR 0027
-adds the server-side half of the final activation step: exact 32-byte poll tokens become
-primary/secondary HMAC-SHA-256 verifier candidates, one probed read-write Web pool selects at most
-one approved transaction, the strict proof is mandatory, and only server-owned IDs reach the atomic
-procedure. Its four-call admission and 250-millisecond floor are local process safeguards, not an
-anonymous route or distributed client-rate policy. ADR 0028 adds the transport-free server-side
-start half: closed public-key/device metadata enters, fresh server IDs, a 32-byte poll token and
-challenge, separate primary poll/code HMAC verifiers, a 60-bit human code, and a nine-minute expiry
-reach only the fixed `start_pairing` procedure. Malformed admitted input performs fixed-shape local
-work but no database write. Revision 0021 separately gives the authenticated browser approval lookup
-a session-bound distributed attempt window and a closed primary/secondary code probe. Revision 0013
-and ADR 0029 add the separate Jobs-side physical cleanup: at most 1000 expired non-activated
-transactions and exact pending keys per call, with activated and live state preserved. ADR 0030 now
-closes the local connection journey with four versioned start/poll request/response contracts, exact
-no-store POST routes, one aggregate four-call application boundary, revision 0022's fixed
-global-and-64-bucket distributed rate windows, and one pairing-only Rust command. The client uses OS
-randomness, native credential storage without a plaintext fallback, HTTPS with platform trust (or
-loopback HTTP for development), bounded bodies/time/retries, exact possession proof, resumable
-prepared/pending/active state, and non-reflective output. This evidence is still local and
-synthetic: there is no live Web login/database result, edge capacity policy, cross-platform
-execution matrix, released binary, Codex support, scheduler, or deployed result. ADR 0031 adds the
-next one-shot Windows development command: exact artifact admission, fresh context from the active
-record, the existing composer/signer, and one fixed no-proxy/no-redirect upload with a closed
-acknowledgement. ADR 0051 adds resource-bounded discovery through two fixed filenames and at most
-four exact-size hashes, plus the unchanged explicit path fallback. ADR 0052 adds a credential-free
-candidate artifact check that performs only that admission and emits an explicit unsupported result;
-the sync command still re-admits only after active-record validation. ADR 0053 then builds the
-locked Windows release profile, copies it under a bounded temporary root, checks only help and
-missing-candidate behavior with no ambient credential/network environment, and removes it. These
-decisions add no retry, edge proof, cross-platform evidence, package, installer, release, or support
-claim. ADR 0041 adds a separate exact `forget-local` command that deletes only the native
-origin/label record without reading it or contacting the service. It is idempotent and explicitly
-does not claim server revoke; rotation and revoke composition remain separate gates.
+execution, packaging, installation, release, or support. ADR 0054 adds an explicit diagnostic
+preview mode to the same candidate check: it emits only a closed version/admission/support summary,
+retains failed-admission status, omits local values, and neither saves nor sends output. The
+candidate still does not run on all platforms, create a supported release, or create a matrix row.
+ADR 0024 adds an inaccessible reviewed source/device/time/nonce context whose minimized daily usage
+produces one exact bounded `ConnectorSyncV1` body, SHA-256 digest, and LF-separated device message.
+ADR 0025 removes public access to that unsigned material and adds an isolated one-use signer behind
+an equally inaccessible device-bound key capability. A shared Rust/Ingest vector proves exact body,
+public-key, and signature agreement. ADR 0026 adds a second domain-separated pairing-possession
+policy, inaccessible pending-key/challenge signer, and pure strict Web verifier with a shared
+synthetic vector. A separate local Web/Auth slice implements browser approval for a signed-in
+passkey session. ADR 0027 adds the server-side half of the final activation step: exact 32-byte poll
+tokens become primary/secondary HMAC-SHA-256 verifier candidates, one probed read-write Web pool
+selects at most one approved transaction, the strict proof is mandatory, and only server-owned IDs
+reach the atomic procedure. Its four-call admission and 250-millisecond floor are local process
+safeguards, not an anonymous route or distributed client-rate policy. ADR 0028 adds the
+transport-free server-side start half: closed public-key/device metadata enters, fresh server IDs, a
+32-byte poll token and challenge, separate primary poll/code HMAC verifiers, a 60-bit human code,
+and a nine-minute expiry reach only the fixed `start_pairing` procedure. Malformed admitted input
+performs fixed-shape local work but no database write. Revision 0021 separately gives the
+authenticated browser approval lookup a session-bound distributed attempt window and a closed
+primary/secondary code probe. Revision 0013 and ADR 0029 add the separate Jobs-side physical
+cleanup: at most 1000 expired non-activated transactions and exact pending keys per call, with
+activated and live state preserved. ADR 0030 now closes the local connection journey with four
+versioned start/poll request/response contracts, exact no-store POST routes, one aggregate four-call
+application boundary, revision 0022's fixed global-and-64-bucket distributed rate windows, and one
+pairing-only Rust command. The client uses OS randomness, native credential storage without a
+plaintext fallback, HTTPS with platform trust (or loopback HTTP for development), bounded
+bodies/time/retries, exact possession proof, resumable prepared/pending/active state, and
+non-reflective output. This evidence is still local and synthetic: there is no live Web
+login/database result, edge capacity policy, cross-platform execution matrix, released binary, Codex
+support, scheduler, or deployed result. ADR 0031 adds the next one-shot Windows development command:
+exact artifact admission, fresh context from the active record, the existing composer/signer, and
+one fixed no-proxy/no-redirect upload with a closed acknowledgement. ADR 0051 adds resource-bounded
+discovery through two fixed filenames and at most four exact-size hashes, plus the unchanged
+explicit path fallback. ADR 0052 adds a credential-free candidate artifact check that performs only
+that admission and emits an explicit unsupported result; the sync command still re-admits only after
+active-record validation. ADR 0053 then builds the locked Windows release profile, copies it under a
+bounded temporary root, checks only help and missing-candidate behavior with no ambient
+credential/network environment, and removes it. ADR 0054 adds the closed redacted stdout preview to
+the same candidate check without changing admission or support. These decisions add no retry, edge
+proof, cross-platform evidence, package, installer, release, or support claim. ADR 0041 adds a
+separate exact `forget-local` command that deletes only the native origin/label record without
+reading it or contacting the service. It is idempotent and explicitly does not claim server revoke;
+rotation and revoke composition remain separate gates.
 
 ### Date semantics
 
@@ -486,6 +490,10 @@ and real-user end-to-end sync remain separate gates.
 - One explicit point-in-time candidate check reuses the identical bounded admission without opening
   credential storage, starting Codex, reading an account, persisting a result, or using a network;
   success explicitly states that no version is supported, and later sync repeats admission.
+- One optional diagnostic-preview mode on that same check emits only the compile-time connector and
+  candidate versions, fixed platform contract, closed admission class, and empty support state. A
+  failure remains nonzero; paths, digests, environment values, credentials, account, and usage stay
+  absent, and the connector supplies no file or sharing mechanism.
 - One Windows x86_64 repository smoke copies only the locked release-profile `0.0.0` connector into
   a bounded temporary directory, checks its exact help and missing-candidate behavior under a
   cleared environment, verifies digest stability and no residue, and removes the copy. It is not a
@@ -497,8 +505,9 @@ and real-user end-to-end sync remain separate gates.
 - The connector never executes commands or scripts received from the website.
 - MVP updates are manual and verified. Auto-update is deferred until its own signed update threat
   model exists.
-- Telemetry is off by default. Local diagnostic export is explicit, redacted, and previewed before
-  sharing.
+- Telemetry is off by default. The implemented local diagnostic preview is explicit, closed,
+  redacted, stdout-only, and inspected before a user deliberately shares it; the connector neither
+  saves nor sends it. Any automated export remains a separate reviewed boundary.
 
 ## Public protocol and data
 
@@ -1060,10 +1069,12 @@ measurements exist.
   scheduling and deployed retention evidence, distributed edge policy, live database result,
   monitoring, capacity evidence, packaging, release, and deployment remain gates. A separate
   explicit `check-codex` command now performs only point-in-time exact Windows candidate admission
-  without credential-store, process, account, persistence, or network access; broader release
-  diagnostics remain open. A separate locked Windows release-profile portable copy/removal smoke is
-  implemented locally and declared in secretless no-upload CI, but its hosted result and actual
-  package install/upgrade/revoke/uninstall evidence remain open.
+  without credential-store, process, account, persistence, or network access. Its explicit
+  diagnostic preview now adds one closed local failure-preserving and support-denying summary with
+  no output file or transport; automated support export and broader release diagnostics remain open.
+  A separate locked Windows release-profile portable copy/removal smoke is implemented locally and
+  declared in secretless no-upload CI, but its hosted result and actual package
+  install/upgrade/revoke/uninstall evidence remain open.
 - Add versioned CarRecipe, bounded proposal API, browser preview and approval, theme rendering,
   asset provenance, and snapshot tests.
 - Package the fixed-command end-user connector workflow only after the CLI is stable.

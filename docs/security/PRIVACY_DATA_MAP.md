@@ -75,6 +75,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Device public key, private signing key, and public device ID                | Security                               | Connector; authenticate one source-bound device                                                                                              | Public key to pairing/Ingest/inventory; private key only to local signer                        | Public key/ID in `device_keys`; private key in one versioned native OS credential record                                                                       | Pending server key is cleanup-eligible at expiry; active while authority exists; revoked server key/ID retained at least 180 days and until pairing/challenge/nonce/raw references are absent; `forget-local` separately removes only the exact local record                                                |
 | Device label                                                                | Account                                | User or safe generated default; distinguish devices                                                                                          | User profile only after activation; pairing service while pending                               | `device_keys` metadata                                                                                                                                         | Pending label is cleanup-eligible at pairing expiry; active while the device is active; revoked label follows the same at-least-180-day referenced-device boundary                                                                                                                                          |
 | Connector, Codex, and OS-family versions                                    | Security; Operational                  | Connector; compatibility and incident diagnosis                                                                                              | Pairing service while pending; user inventory after activation                                  | Device/sync metadata                                                                                                                                           | Pending metadata is cleanup-eligible at pairing expiry; activated metadata remains through authority and at least 180 days after revocation, longer while exact references remain                                                                                                                           |
+| Connector diagnostic preview and candidate admission class                  | Operational                            | Explicit local `check-codex`; provide one user-reviewed coarse troubleshooting result                                                        | User-selected stdout only                                                                       | Not stored or transmitted by the connector                                                                                                                     | Per invocation only; the connector retains no copy, while any shell redirect or user-shared copy remains under the user's chosen external retention                                                                                                                                                         |
 | Pairing poll token, HMAC keys/verifiers, challenge, user code, transaction  | Security                               | Server/connector; poll safely and bind browser approval to one key                                                                           | Pairing service/application, native connector record, and browser confirmation                  | Plain token/challenge/code only in pending native record; separate keyed verifiers in DB; HMAC keys in protected configuration                                 | Pending native material clears on activation/local expiry; expired non-activated rows have bounded cleanup; activated approval references redact after at least 180 days, and the minimized pairing/device pair is cleanup-eligible only after both ages and all exact challenge/nonce/raw references clear |
 | Pairing approval attempt window and count                                   | Security; Operational                  | Server; bound authenticated code guessing across Web instances                                                                               | Web/Auth and database only                                                                      | Two fields on the possessed `sessions` row; no code, digest, IP, or user-agent history                                                                         | Window resets in place; eligible session rows are deleted once unreferenced; activated pairing references are redaction-eligible after at least 180 days                                                                                                                                                    |
 | Anonymous pairing client ID, digest, bucket, and rate window                | Security; Operational                  | Connector/Web; cheaply shape anonymous start/poll load                                                                                       | Raw 16-byte ID in native connector record and one header; digest transient in Web/PostgreSQL    | Database stores only 130 fixed operation/global/bucket rows with window start and saturated count; no ID or digest                                             | Client ID is removed with the exact local credential; positive aggregate timestamp/count becomes reset-eligible after the maximum one-hour window through a bounded Jobs capability; fixed rows remain, and no scheduled or deployed maximum retention is evidenced                                         |
@@ -257,8 +258,10 @@ output never enter returned errors. The only success result is the already mappe
 target-built fixture and temporary directory only. `ReviewedCodexLaunch` has no public constructor;
 ADR 0031 permits only the private exact-admission command to construct it. No path, environment
 value, or child output is retained. ADR 0052's later candidate admission diagnostic remains
-process-free and non-retained. Any future retained connector/Codex version or diagnostic export must
-use the existing mapped Security/Operational class with an explicit purpose and bounded retention.
+process-free and non-retained. ADR 0054's explicit stdout preview adds only the allowlisted
+version/support fields and coarse Operational admission class mapped below. Any future retained
+connector/Codex value or automated diagnostic export must use the existing mapped
+Security/Operational class with an explicit purpose and bounded retention.
 
 ADR 0024 adds no new data class or persistent field. It consumes the already mapped private daily
 usage plus reviewed opaque source, sync, device, millisecond UTC, and nonce values in transient
@@ -315,6 +318,17 @@ repository, Git, Cargo, or CI environment value, and runs no account, usage, pai
 proposal, credential-removal, or network operation. The copied binary and random directory are
 removed after each result. No path, digest, child output, artifact, log, metric, cache, credential,
 database field, analytics event, export, or network destination is retained or published.
+
+ADR 0054 adds one explicit stdout-only diagnostic preview but no retained field or automatic sink.
+It exposes only the compile-time connector version, fixed candidate platform/version contract, one
+closed passed/not-admitted/unsupported-platform class, the empty support state, and fixed statements
+about included/excluded data and side effects. The exact/discovered path, `PATH` entries, metadata,
+size, digest, operating-system error, hostname, username, environment values, credential state,
+source/device identity, account, usage, repository, prompt, conversation, and child output stay
+absent. A failed admission remains nonzero. The connector does not create a file, clipboard value,
+archive, log, metric, telemetry event, support ticket, upload, or network destination; the user must
+review stdout before deliberately sharing it. Shell redirection remains a user-controlled external
+sink and is not represented as connector retention.
 
 ADR 0026 adds no data class, persistent field, or sink. The Rust kernel transiently receives the
 already mapped pending private key plus pairing ID/challenge, derives the already mapped public key,
@@ -759,10 +773,11 @@ review. They omit raw URLs, request bodies, raw token values, handles when not n
 material, device public keys/signatures/nonces, origin keys/proofs/nonces, idempotency keys,
 recovery selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
 
-Connector telemetry is off by default. A future diagnostic export is local, explicit, redacted,
-previewed before sharing, and generated from an allowlist. Public issue forms do not request raw
-logs, screenshots, contact details, or account identifiers. Security and conduct reports use tested
-private channels before participation opens.
+Connector telemetry is off by default. The implemented candidate diagnostic preview is local,
+explicit, stdout-only, redacted, reviewed before sharing, and generated from a fixed allowlist; the
+connector neither retains nor transmits it. Any automated export requires a separate review. Public
+issue forms do not request raw logs, screenshots, contact details, or account identifiers. Security
+and conduct reports use tested private channels before participation opens.
 
 ## Privacy review gates
 

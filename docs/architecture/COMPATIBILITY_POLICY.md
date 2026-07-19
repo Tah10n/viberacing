@@ -92,11 +92,14 @@ privacy evidence, negotiate support, or alter the empty matrix. A separate expli
 `check-codex` command reuses only the same selector without origin, credential-store, process,
 account, persistence, or network access. It releases the handle before fixed output, explicitly says
 no version is supported, and creates no reusable result; `sync` always repeats admission after
-active-record validation. A separate Windows release-profile smoke copies the repository-built
-`0.0.0` connector to an isolated temporary directory, verifies only its closed help and generic
-candidate-missing behavior, and removes it. That portable lifecycle check neither executes Codex nor
-creates a connector package, version, clean-machine account result, provenance, release, or support
-row. ADRs 0021 through 0026, 0030, 0031, and 0051 through 0053 record those distinctions.
+active-record validation. Its optional diagnostic preview exposes only compile-time versions, the
+fixed platform contract, one closed admission class, and the empty support state; failed admission
+remains nonzero and no local value, file, or transport is added. A separate Windows release-profile
+smoke copies the repository-built `0.0.0` connector to an isolated temporary directory, verifies
+only its closed help and generic candidate-missing behavior, and removes it. That portable lifecycle
+check neither executes Codex nor creates a connector package, version, clean-machine account result,
+provenance, release, or support row. ADRs 0021 through 0026, 0030, 0031, and 0051 through 0054
+record those distinctions.
 
 Generated schema output is exact to the Codex version that produced it. The repository commits only
 reviewed relevant schema extracts and synthetic fixtures, not account data or a developer's local
