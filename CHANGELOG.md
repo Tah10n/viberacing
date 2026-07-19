@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and forty-seven accepted ADRs.
+  fail-closed compatibility policy and matrix, and forty-eight accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -282,7 +282,7 @@ Versioning where its guarantees are applicable.
 - An authenticated account can now add one backup passkey after a fresh assertion by an existing key
   and a separate registration ceremony. The validated label and two independent five-minute
   challenges are session/profile/RP/origin-bound; one fixed statement atomically consumes the
-  step-up and inserts the new credential under the existing lifetime cap.
+  step-up and inserts the new credential under the existing retained-record cap.
 - An authenticated account can now rotate exactly ten recovery codes after a fresh required-UV
   passkey assertion. Web/Auth generates independent selector/secrets, derives Argon2id PHCs
   sequentially under a separate protected pepper, and atomically consumes the five-minute challenge
@@ -339,6 +339,10 @@ Versioning where its guarantees are applicable.
   order, an exact trigger transition, preserved profile/source/device binding and
   pairing/device/passkey rows, subsequent expired-session cleanup progress, and no implied
   device-history deletion, scheduler, backup purge, or deployment.
+- Jobs-only maximum-1000 deletion of passkeys only after at least 180 days in revoked state and only
+  when no session, verifying/authorized challenge, or pairing reference remains, with two-mutex
+  ordering, repeated eligibility predicates, active/recent/referenced preservation, recovery-ceiling
+  progress, and no implied scheduler, backup purge, or deployment.
 - Jobs-only atomic open-season Community scoring refresh with immutable formula/season binding,
   distinct-source aggregation under one profile cap, shared-rank semantics, private derived score
   tables, bounded lock/statement waits, no empty-season growth, and observed concurrent idempotent
@@ -346,18 +350,18 @@ Versioning where its guarantees are applicable.
 - Jobs-only immutable Community season finalization after an exact 48-hour server-time grace period,
   with whole-payload late quarantine, terminal no-data seasons, idempotent retry, bounded calendar
   support, and no implied scheduler, correction capability, or public read surface.
-- A private local one-shot Jobs workspace for exactly twelve fixed capabilities: authentication,
-  audit-event, invite, CarRecipe-proposal, ingest, pairing, or session cleanup; pairing
-  approval-provenance redaction; primary profile purge; terminal deletion-job cleanup; open-season
-  refresh; or terminal finalization. It has strict command/object/result parsing, a distinct
-  redacted database namespace, one-client pool, fixed deadlines, an exact
+- A private local one-shot Jobs workspace for exactly thirteen fixed capabilities: authentication,
+  audit-event, invite, CarRecipe-proposal, ingest, pairing, session, or aged revoked-passkey
+  cleanup; pairing approval-provenance redaction; primary profile purge; terminal deletion-job
+  cleanup; open-season refresh; or terminal finalization. It has strict command/object/result
+  parsing, a distinct redacted database namespace, one-client pool, fixed deadlines, an exact
   role/login/capability/search-path probe, prepared procedure calls, destructive failure release,
-  stable non-reflective CLI output, production build, and 204 tests at 100% coverage. A separate
-  opt-in Docker gate now applies every reviewed migration, runs all twelve emitted commands through
-  one synthetic least-privileged login, rejects a deliberately widened login before mutation,
-  verifies generic output and exact stored state, and cleans up its container, network, and storage.
-  It adds no scheduler, production credential/TLS path, monitoring, retry loop, capacity result, or
-  deployment claim.
+  stable non-reflective CLI output, production build, and 216 tests at 100% coverage. A separate
+  opt-in Docker gate now applies every reviewed migration, runs all thirteen emitted commands
+  through one synthetic least-privileged login, rejects a deliberately widened login before
+  mutation, verifies generic output and exact stored state, and cleans up its container, network,
+  and storage. It adds no scheduler, production credential/TLS path, monitoring, retry loop,
+  capacity result, or deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.

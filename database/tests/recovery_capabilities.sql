@@ -152,6 +152,7 @@ INSERT INTO viberacing_private.passkeys (
   cose_public_key,
   label,
   state,
+  created_at,
   revoked_at
 )
 SELECT
@@ -161,7 +162,11 @@ SELECT
   pg_catalog.decode(pg_catalog.lpad(pg_catalog.to_hex(26000 + key_number), 64, '0'), 'hex'),
   'Recovery cap key ' || key_number,
   CASE WHEN key_number = 1 THEN 'active' ELSE 'revoked' END,
-  CASE WHEN key_number = 1 THEN NULL ELSE pg_catalog.statement_timestamp() END
+  pg_catalog.statement_timestamp() - INTERVAL '210 days',
+  CASE
+    WHEN key_number = 1 THEN NULL
+    ELSE pg_catalog.statement_timestamp() - INTERVAL '200 days'
+  END
 FROM pg_catalog.generate_series(1, 32) AS generated_key(key_number);
 
 INSERT INTO viberacing_private.sessions (
@@ -892,7 +897,7 @@ SELECT pg_temp.expect_operation_failure(
       'req_' || pg_catalog.repeat('M', 22)
     )
   $sql$,
-  'recovery fails closed at the lifetime passkey provenance ceiling'
+  'recovery fails closed at the retained passkey provenance ceiling'
 );
 
 RESET ROLE;
@@ -918,6 +923,88 @@ SELECT pg_temp.assert_true(
   'failed capped recovery preserves the restricted authority without partial login state'
 );
 
+SELECT pg_temp.expect_integrity_failure(
+  $sql$
+    UPDATE viberacing_private.recovery_codes
+    SET used_at = used_at
+    WHERE recovery_code_id = '00000000-0000-4000-8000-000000006703'
+  $sql$,
+  'consumed recovery code state is terminal before successful completion deletes it'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_jobs;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT deleted_passkeys = 31
+    FROM viberacing_api.cleanup_aged_revoked_passkeys(1000)
+  ),
+  'bounded cleanup removes only the old unreferenced revoked records at the recovery ceiling'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_web;
+
+SELECT pg_temp.assert_true(
+  viberacing_api.complete_recovery_registration(
+    '00000000-0000-4000-8000-000000006913',
+    pg_catalog.decode(pg_catalog.repeat('c1', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('c2', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('c3', 32), 'hex'),
+    '00000000-0000-4000-8000-000000006313',
+    pg_catalog.decode(pg_catalog.repeat('38', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('48', 64), 'hex'),
+    'Cap recovery key',
+    0,
+    false,
+    false,
+    '00000000-0000-4000-8000-000000006213',
+    pg_catalog.decode(pg_catalog.repeat('58', 32), 'hex'),
+    pg_catalog.statement_timestamp() + INTERVAL '1 hour',
+    '00000000-0000-4000-8000-000000006914',
+    'req_' || pg_catalog.repeat('M', 22)
+  ) = '00000000-0000-4000-8000-000000006103',
+  'recovery succeeds after bounded cleanup frees the retained-record ceiling'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_owner;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 2
+    FROM viberacing_private.passkeys
+    WHERE profile_id = '00000000-0000-4000-8000-000000006103'
+  )
+    AND EXISTS (
+      SELECT 1
+      FROM viberacing_private.passkeys
+      WHERE passkey_id = '00000000-0000-4000-8000-000000006313'
+        AND state = 'active'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM viberacing_private.passkeys
+      WHERE passkey_id = '00000000-0000-4000-8063-000000000001'
+        AND state = 'revoked'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM viberacing_private.recovery_authorities
+      WHERE recovery_authority_id = '00000000-0000-4000-8000-000000006913'
+        AND state = 'completed'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM viberacing_private.sessions
+      WHERE session_id = '00000000-0000-4000-8000-000000006213'
+        AND state = 'active'
+        AND authenticated_by_passkey_id = '00000000-0000-4000-8000-000000006313'
+    ),
+  'successful retry retains the newly revoked predecessor and creates exact replacement authority'
+);
+
 UPDATE viberacing_private.profiles
 SET
   state = 'deletion_pending',
@@ -934,15 +1021,6 @@ SELECT pg_temp.assert_true(
       AND revoked_at IS NOT NULL
   ),
   'profile deletion state revokes active recovery authority defensively'
-);
-
-SELECT pg_temp.expect_integrity_failure(
-  $sql$
-    UPDATE viberacing_private.recovery_codes
-    SET used_at = used_at
-    WHERE recovery_code_id = '00000000-0000-4000-8000-000000006703'
-  $sql$,
-  'consumed recovery code state is terminal'
 );
 
 SELECT pg_temp.expect_integrity_failure(
@@ -976,7 +1054,7 @@ SELECT pg_temp.assert_true(
       AND profile_id IS NULL
   )
     AND (
-      SELECT pg_catalog.count(*) = 7
+      SELECT pg_catalog.count(*) = 8
       FROM viberacing_private.audit_events
       WHERE event_type IN (
         'recovery.codes_replaced',

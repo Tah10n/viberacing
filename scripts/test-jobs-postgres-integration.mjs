@@ -44,6 +44,7 @@ const fixture = Object.freeze({
   provenanceSessionId: "00000000-0000-4000-8000-000000031912",
   purgeJobId: "00000000-0000-4000-8000-000000031401",
   purgeProfileId: "00000000-0000-4000-8000-000000031402",
+  revokedPasskeyId: "00000000-0000-4000-8000-000000031915",
   scoringProfileId: "00000000-0000-4000-8000-000000031501",
   sessionId: "00000000-0000-4000-8000-000000031601",
   sessionProfileId: "00000000-0000-4000-8000-000000031602",
@@ -289,16 +290,31 @@ INSERT INTO viberacing_private.passkeys (
   credential_id,
   cose_public_key,
   label,
-  created_at
+  created_at,
+  state,
+  revoked_at
 )
-VALUES (
-  '${fixture.provenancePasskeyId}',
-  '${fixture.sessionProfileId}',
-  pg_catalog.decode(pg_catalog.repeat('A1', 32), 'hex'),
-  pg_catalog.decode(pg_catalog.repeat('A2', 64), 'hex'),
-  'Synthetic provenance passkey',
-  pg_catalog.statement_timestamp() - INTERVAL '210 days'
-);
+VALUES
+  (
+    '${fixture.provenancePasskeyId}',
+    '${fixture.sessionProfileId}',
+    pg_catalog.decode(pg_catalog.repeat('A1', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('A2', 64), 'hex'),
+    'Synthetic provenance passkey',
+    pg_catalog.statement_timestamp() - INTERVAL '210 days',
+    'active',
+    NULL
+  ),
+  (
+    '${fixture.revokedPasskeyId}',
+    '${fixture.sessionProfileId}',
+    pg_catalog.decode(pg_catalog.repeat('B1', 32), 'hex'),
+    pg_catalog.decode(pg_catalog.repeat('B2', 64), 'hex'),
+    'Synthetic old revoked passkey',
+    pg_catalog.statement_timestamp() - INTERVAL '210 days',
+    'revoked',
+    pg_catalog.statement_timestamp() - INTERVAL '200 days'
+  );
 
 INSERT INTO viberacing_private.profiles (
   profile_id,
@@ -638,17 +654,16 @@ COMMIT;`,
     seedSyntheticState(currentSeasonStart);
 
     const rejected = runJobsCommand(databasePort, wideJobsLogin, wideJobsPassword, [
-      "redact-aged-pairing-approval-provenance",
+      "cleanup-aged-revoked-passkeys",
     ]);
     assertRejectedCommand(rejected, "widened Jobs login");
     assert.equal(
       psqlScalar(
         `SET ROLE viberacing_owner;
 SELECT pg_catalog.count(*)::integer
-FROM viberacing_private.pairing_transactions
-WHERE pairing_id = '${fixture.provenancePairingId}'
-  AND approved_by_session_id = '${fixture.provenanceSessionId}'
-  AND approved_by_passkey_id = '${fixture.provenancePasskeyId}';`,
+FROM viberacing_private.passkeys
+WHERE passkey_id = '${fixture.revokedPasskeyId}'
+  AND state = 'revoked';`,
         "rejected-login stored-state verification",
       ),
       "1",
@@ -664,6 +679,7 @@ WHERE pairing_id = '${fixture.provenancePairingId}'
       ["cleanup-expired-pairing-state"],
       ["redact-aged-pairing-approval-provenance"],
       ["cleanup-expired-sessions"],
+      ["cleanup-aged-revoked-passkeys"],
       ["purge-profile-deletions"],
       ["cleanup-terminal-deletion-jobs"],
       ["refresh-community-season", currentSeasonStart],
@@ -744,6 +760,11 @@ SELECT pg_catalog.jsonb_build_object(
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.sessions
     WHERE session_id = '${fixture.provenanceSessionId}'
+  ),
+  'revokedPasskeyCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.passkeys
+    WHERE passkey_id = '${fixture.revokedPasskeyId}'
   ),
   'sessionCount', (
     SELECT pg_catalog.count(*)::integer
@@ -831,6 +852,7 @@ SELECT pg_catalog.jsonb_build_object(
       provenancePairingRedacted: true,
       provenancePasskeyCount: 1,
       provenanceSessionCount: 0,
+      revokedPasskeyCount: 0,
       purgeJobCompleted: true,
       purgeJobProfileCleared: true,
       purgeJobState: "purged",
@@ -844,7 +866,7 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Jobs PostgreSQL integration passed (twelve commands, least-privilege denial, generic output, and exact stored state).",
+      "Jobs PostgreSQL integration passed (thirteen commands, least-privilege denial, generic output, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

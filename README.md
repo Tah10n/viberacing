@@ -197,7 +197,7 @@ accepts only a closed acknowledgement. It does not discover binaries, retry an a
 send edge origin proof. There is still no macOS/Linux admission or result, live protected key
 injection, edge signer/direct-origin denial, deployed host/TLS/database login, capacity evidence,
 credential rotation, automatic server-revoke composition, packaging, release, monitoring, supported
-connector, or deployment. Thirty-one SQL migrations now add 27 private identity, passkey,
+connector, or deployment. Thirty-five SQL migrations now add 27 private identity, passkey,
 restricted-recovery, source, device, pairing, audit, deletion, replay, usage, Community scoring, and
 CarRecipe tables with deny-by-default runtime roles, forced RLS, state-machine constraints, checksum
 drift detection, and an isolated PostgreSQL capability test. A narrow procedure boundary implements
@@ -230,7 +230,7 @@ assertion bound to that session and target, and reaches one atomic consume-and-r
 current or last active passkey cannot be removed. A separate add control validates and seals the
 label before prompting, requires an existing-key assertion plus an independent registration
 ceremony, and atomically consumes that step-up while inserting the new credential under the
-32-record lifetime cap. A local CarRecipe slice now validates one exact versioned enum-only recipe,
+32-retained-record cap. A local CarRecipe slice now validates one exact versioned enum-only recipe,
 stores at most one private 24-hour proposal per session-derived profile, previews it in all three
 themes, and requires an explicit encrypted session-bound approve or reject control. Approval
 atomically replaces the active recipe. A separate device-authenticated Web route and fixed
@@ -280,24 +280,28 @@ remove personal rows. Revision 0034 separately retains the exact session/passkey
 on an activated pairing for at least 180 days, then permits bounded oldest-first redaction of only
 those two references while preserving the profile/source/device binding, pairing row, active device,
 and passkey. A later session-cleanup call can remove the now-unreferenced expired session. One local
-one-shot Jobs runner now wraps exactly one of twelve fixed functions: authentication cleanup,
-audit-event cleanup, invite cleanup, CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup,
-pairing approval-provenance redaction, session cleanup, terminal deletion-job cleanup, primary
-profile purge, refresh, or finalization. It uses a distinct least-privileged configuration
-namespace, one-client pool, per-checkout role/login/search-path probe, fixed deadlines and prepared
-parameters, closed result validation, destructive release after failure, and stable non-reflective
-CLI output. An opt-in synthetic integration now builds that runner, applies the reviewed migration
-manifest to one disposable PostgreSQL container, proves all twelve commands through a narrow login,
-rejects a deliberately widened login before mutation, and verifies exact stored state before
-cleanup. It has no external audit sink, scheduler, production login/certificate, monitoring backend,
-retry loop, capacity result, or deployment. Revision 0011 gives only the Web database role a bounded
-active-profile score projection containing no raw values, private identifiers, or exact timestamps.
-The score response component and Web PostgreSQL adapter preserve only that public allowlist through
-the local score route. The visible race, leaderboard, and selectable participant summary now consume
-its validated current-week response with a credential-free same-origin request and an explicit
-synthetic fallback. Canonical `/?profile=handle#profile` links select only an exact public handle in
-that page, and a missing current top-32 row is not replaced with another participant. There is now a
-local invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
+Revision 0035 separately removes at most 1000 passkey rows only after they have been revoked for 180
+days and have no retained session, verifying/authorized challenge, or pairing reference. Active and
+referenced credentials remain, while eligible deletion can free the unchanged 32-row recovery
+ceiling. One local one-shot Jobs runner now wraps exactly one of thirteen fixed functions:
+authentication cleanup, audit-event cleanup, invite cleanup, CarRecipe-proposal cleanup, ingest
+cleanup, pairing cleanup, aged revoked-passkey cleanup, pairing approval-provenance redaction,
+session cleanup, terminal deletion-job cleanup, primary profile purge, refresh, or finalization. It
+uses a distinct least-privileged configuration namespace, one-client pool, per-checkout
+role/login/search-path probe, fixed deadlines and prepared parameters, closed result validation,
+destructive release after failure, and stable non-reflective CLI output. An opt-in synthetic
+integration now builds that runner, applies the reviewed migration manifest to one disposable
+PostgreSQL container, proves all thirteen commands through a narrow login, rejects a deliberately
+widened login before mutation, and verifies exact stored state before cleanup. It has no external
+audit sink, scheduler, production login/certificate, monitoring backend, retry loop, capacity
+result, or deployment. Revision 0011 gives only the Web database role a bounded active-profile score
+projection containing no raw values, private identifiers, or exact timestamps. The score response
+component and Web PostgreSQL adapter preserve only that public allowlist through the local score
+route. The visible race, leaderboard, and selectable participant summary now consume its validated
+current-week response with a credential-free same-origin request and an explicit synthetic fallback.
+Canonical `/?profile=handle#profile` links select only an exact public handle in that page, and a
+missing current top-32 row is not replaced with another participant. There is now a local
+invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
 rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey profile-deletion
 request flow. Recovery lookup returns only the selected unused PHC; admitted attempts use bounded
 Argon2id work, a protected pepper, generic responses, a configured minimum response floor, and a

@@ -81,8 +81,8 @@ apply.
   authenticated revoke control/request; never expose credential IDs or key material.
 - Passkey addition must validate and seal the label before WebAuthn, use independent required-UV
   assertion and registration challenges, bind both to the active session/profile/RP/origin, and
-  consume-plus-add atomically under the existing lifetime cap. Profile UUID may enter only the
-  authenticated registration options required by the user's authenticator.
+  consume-plus-add atomically under the existing retained-record cap. Profile UUID may enter only
+  the authenticated registration options required by the user's authenticator.
 - Recovery-code rotation must require the exact active session and one fresh required-UV assertion
   bound to that session/profile/RP/origin. Generate exactly ten independent selector/secret codes,
   derive their Argon2id PHCs sequentially under the protected recovery-only pepper, and atomically

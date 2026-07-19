@@ -58,11 +58,11 @@ All protective recovery operations serialize on the profile row. Security timest
 after that lock is acquired, so code rotation dominates a concurrent old-code recovery start and
 recovery completion dominates a concurrent old-passkey login regardless of transaction order.
 
-Historical passkey rows preserve session and pairing provenance. Until a reviewed bounded cleanup
-capability exists, recovery completion fails closed when the profile already has 32 lifetime passkey
-records. The application must explain this availability condition without weakening the credential
-boundary. Cleanup is a launch requirement, not permission to erase referenced history or raise the
-public ceiling silently.
+Historical passkey rows preserve session, challenge, and pairing provenance. Recovery completion
+fails closed when the profile already has 32 retained passkey records. ADR 0048 now permits bounded
+cleanup only after a credential has been revoked for at least 180 days and no exact provenance
+reference remains; an unchanged recovery attempt may then be retried. Cleanup does not erase
+referenced history or raise the public ceiling.
 
 ## Security and privacy consequences
 
@@ -108,8 +108,9 @@ VR-ABUSE-RECOVERY-ORACLE.
 - **Immediately revoke activated connectors during recovery:** rejected for MVP because connector
   keys already lack account authority; silent revocation harms continuity. The recovered inventory
   must instead make them visible and explicitly revocable.
-- **Delete old passkey history to bypass the 32-record ceiling:** rejected because sessions and
-  activated or historical pairing records retain credential provenance through foreign keys.
+- **Delete recent or referenced passkey history to bypass the 32-record ceiling:** rejected because
+  sessions, challenges, and pairing records retain exact credential provenance through foreign keys.
+  ADR 0048 permits only aged unreferenced revoked rows.
 
 ## Migration and rollback
 
@@ -157,11 +158,12 @@ configured response floor, purpose-separated cookies, exact replacement registra
 completion after failed WebAuthn, and minimal post-commit profile mapping. They use synthetic
 secrets, authenticator responses, and database results only.
 
-ADR 0032 now supplies bounded cleanup for expired challenges and terminal recovery authority. The
-repository still lacks distributed/edge anonymous attempt controls, cleanup scheduling,
-notifications, production secrets and timing values, live authenticator/database integration,
-monitoring, and hosted operational evidence. Recovery sign-in is locally implemented but not
-launch-ready until those controls are implemented and tested.
+ADR 0032 now supplies bounded cleanup for expired challenges and terminal recovery authority, and
+ADR 0048 supplies bounded cleanup for aged unreferenced revoked passkeys. The repository still lacks
+distributed/edge anonymous attempt controls, cleanup scheduling, notifications, production secrets
+and timing values, live authenticator/database integration, monitoring, and hosted operational
+evidence. Recovery sign-in is locally implemented but not launch-ready until those controls are
+implemented and tested.
 
 ## References
 
@@ -170,6 +172,7 @@ launch-ready until those controls are implemented and tested.
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
 - [Threat model](../security/THREAT_MODEL.md)
 - [Bounded authentication retention cleanup](0032-bounded-auth-retention-cleanup.md)
+- [Bounded revoked-passkey retention cleanup](0048-bounded-revoked-passkey-retention-cleanup.md)
 - [Authentication takeover abuse](../security/ABUSE_CASES.md#vr-abuse-auth-takeover-oauth-session-passkey-or-recovery-abuse)
 - [Recovery oracle abuse](../security/ABUSE_CASES.md#vr-abuse-recovery-oracle-recovery-enumeration-replay-or-authority-expansion)
 - [Privacy data map](../security/PRIVACY_DATA_MAP.md)

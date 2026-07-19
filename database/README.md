@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains thirty-four SQL-first revisions for identity, passkey login and management,
+This directory contains thirty-five SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
 finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
 PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,
@@ -23,11 +23,11 @@ Ingest login, passes independently signed loopback HTTP through the emitted host
 exact database result. Local public score/race/status routes and one local one-shot Jobs runner wrap
 narrow capabilities without a working database login. The database-only ingest and Jobs-only
 ingest-retention, pairing-retention, authentication-retention, invite-retention, session-retention,
-CarRecipe-proposal, terminal-deletion-job, and audit-event retention, pairing approval-provenance
-redaction, primary profile deletion, open-season scoring, and terminal finalization procedures plus
-Web-only public score/race/status and exact-session private score projections are implemented;
-deployed HTTP ingest, scheduled execution, audited corrections, cache/backup/tombstone purge, and
-restore replay are not.
+CarRecipe-proposal, terminal-deletion-job, audit-event, and revoked-passkey retention, pairing
+approval-provenance redaction, primary profile deletion, open-season scoring, and terminal
+finalization procedures plus Web-only public score/race/status and exact-session private score
+projections are implemented; deployed HTTP ingest, scheduled execution, audited corrections,
+cache/backup/tombstone purge, and restore replay are not.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -137,6 +137,9 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 - `migrations/0034_pairing_approval_provenance_retention.sql` adds Jobs-only maximum-1000 redaction
   of the exact approving session/passkey references from activated pairings only after 180 days,
   while preserving every profile/source/device binding and the pairing, device, and passkey rows.
+- `migrations/0035_revoked_passkey_retention_cleanup.sql` adds Jobs-only maximum-1000 deletion of
+  passkeys only after 180 days in revoked state and only when no session, verifying/authorized
+  challenge, or pairing reference remains.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -159,7 +162,11 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
   protection, cross-profile denial, and public safety ceilings.
 - `tests/recovery_capabilities.sql` exercises exact-passkey code rotation, bounded PHC batches,
   profile-free lookup, one-time scrub and authority, exact completion binding, deletion revoke,
-  retained activated devices, role denial, rollback, and the lifetime-passkey fail-closed edge.
+  retained activated devices, role denial, rollback, the retained-passkey fail-closed edge, and
+  successful retry after bounded revoked-passkey cleanup.
+- `tests/revoked_passkey_retention.sql` exercises oldest-first deletion, exact cutoff, every
+  restrictive provenance reference, active/recent preservation, invalid bounds, missing mutexes,
+  idempotency, and the Jobs-only grant matrix.
 - `tests/usage_ingest.sql` exercises exact device/source binding, strict bounds, canonical time,
   replay/idempotency, same-source device deduplication, monotonic state, quarantine, lifecycle
   rejection, retention markers, direct-transition constraints, and the exact role boundary.
@@ -220,6 +227,9 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 - `tests/pairing_cleanup_concurrency_setup.sql` and
   `tests/pairing_cleanup_concurrency_assertions.sql` prove two pairing-cleanup calls serialize,
   delete each expired transaction/key pair once, and preserve live pending state.
+- `tests/revoked_passkey_concurrency_setup.sql` and
+  `tests/revoked_passkey_concurrency_assertions.sql` prove two one-row cleanup calls serialize,
+  delete both aged revoked credentials once, and preserve recent plus active credentials.
 - `tests/auth_cleanup_concurrency_setup.sql`, `tests/auth_cleanup_concurrency_assertions.sql`, and
   `tests/auth_cleanup_recovery_race_assertions.sql` prove two auth-cleanup calls serialize and that
   cleanup follows profile-first recovery lock order while preserving a concurrent new authority.
@@ -333,9 +343,10 @@ Runtime access must remain procedure-only and must have positive and negative in
   passkey, revokes previous active passkeys and sessions, cancels approved pairings, removes profile
   challenges and remaining codes, completes the authority, and then creates the new passkey-bound
   session. Activated source-bound devices remain active and explicitly revocable. Completion fails
-  closed at 32 lifetime passkey records until bounded provenance-preserving cleanup exists. Revision
-  0020's `complete_recovery_registration_session` invokes that exact capability and returns only
-  profile ID, handle, and locale after success; it grants no additional authority.
+  closed at 32 retained passkey records; revision 0035 can later remove only old unreferenced
+  revoked rows before an unchanged recovery attempt is retried. Revision 0020's
+  `complete_recovery_registration_session` invokes that exact capability and returns only profile
+  ID, handle, and locale after success; it grants no additional authority.
 - `rotate_session` and `revoke_session` require the exact keyed verifier. Rotation serializes on the
   current session/profile, preserves its authentication provenance, and creates a fresh bounded
   record before ending the old one.
@@ -359,6 +370,11 @@ Runtime access must remain procedure-only and must have positive and negative in
   references at least 180 days after activation. PostgreSQL derives and repeats the cutoff; the
   exact trigger transition preserves the approved profile/source, activation device/time, pairing,
   device, and passkey rows and returns only one bounded count.
+- `cleanup_aged_revoked_passkeys` is Jobs-only, locks the same authentication- then
+  pairing-retention mutexes, and deletes at most 1000 oldest-first passkey rows only after 180 days
+  in revoked state. PostgreSQL derives and repeats the cutoff plus the absence of session,
+  verifying/authorized challenge, and pairing references; active or referenced credentials never
+  qualify.
 - `read_profile_visibility` maps only the possessed active session's current profile state to
   `public` or `hidden`. `set_profile_visibility` accepts no profile ID, moves only between active
   and hidden, preserves source sync, and treats repeated state as a no-op.
@@ -446,7 +462,7 @@ Runtime access must remain procedure-only and must have positive and negative in
   itself are not returned; both older functions remain unchanged.
 
 The public schema safety ceilings are 8 to 16 codes per replacement recovery batch, one active
-recovery authority per profile for at most ten minutes, 32 lifetime passkey records, 32 active
+recovery authority per profile for at most ten minutes, 32 retained passkey records, 32 active
 unexpired browser sessions, 32 lifetime source records, 64 active plus unexpired approved device
 authorities per profile, and 100 rows per public score, race, or status read. They bound retained
 credential growth, authority fan-out, and one response; they are not substitutes for lower
@@ -605,7 +621,7 @@ credential against the encrypted challenge continuation, one fixed function crea
 that five-minute profile-free challenge in the same transaction as the existing credential-derived
 session. It returns only profile ID, public handle, and locale so Web/Auth can seal its existing
 session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
-55 cross-capability denials. Physical challenge cleanup after expiry is supplied by revision 0023; a
+58 cross-capability denials. Physical challenge cleanup after expiry is supplied by revision 0023; a
 deployment login, edge attempt policy, monitoring, and live authenticator/database integration
 remain open.
 
@@ -744,7 +760,7 @@ purge, tombstone/restore replay, monitoring, capacity, or deployment.
 Revision 0033 physically removes both profile-linked and already-redacted database audit events only
 after 180 days from server-recorded occurrence. It uses a separate private mutex, a deterministic
 time/identifier index, `FOR UPDATE SKIP LOCKED`, and a repeated cutoff predicate. Recent evidence
-remains. The observed worker race and shared twelve-command synthetic integration prove only local
+remains. The observed worker race and shared thirteen-command synthetic integration prove only local
 serialization, least-privileged execution, and exact stored state; they do not prove an external
 append-only sink, scheduling, production login/TLS, monitoring, capacity, backup purge, or deployed
 retention.
@@ -756,10 +772,20 @@ and pairing mutexes in profile-purge order, uses an ordered partial index and
 trigger transition only when every other approval and activation binding remains immutable. Partial
 or pre-activation redaction fails closed. The pairing, source, active device, passkey, and
 activation evidence remain; a separate session-cleanup call can then remove a newly unreferenced
-expired session. The observed worker race and shared twelve-command synthetic integration prove
+expired session. The observed worker race and shared thirteen-command synthetic integration prove
 local serialization, least-privileged execution, and exact stored state, not device-history
 deletion, scheduling, production login/TLS, monitoring, capacity, backup purge, or deployed
 retention.
+
+Revision 0035 physically removes a passkey row only after it has remained revoked for at least 180
+days and no retained session, verifying challenge, authorized challenge, or pairing references it.
+It locks the existing authentication and pairing mutexes in profile-purge order, uses an ordered
+partial index plus `FOR UPDATE SKIP LOCKED`, and repeats every state/cutoff/reference predicate at
+delete. Active, recent, and referenced credentials remain. A recovery scenario first fails
+atomically at the unchanged 32-row ceiling, deletes 31 eligible historical rows, then completes with
+the existing replacement-passkey proof. The observed worker race and shared thirteen-command
+integration prove only local serialization, least-privileged execution, and exact state, not a
+scheduler, production login/TLS, monitoring, capacity, backup purge, or deployed retention.
 
 The local account application consumes those capabilities through the same probed read-write pool.
 Its combined overview query reads visibility and the current week's derived score with one checkout,
@@ -861,10 +887,10 @@ hard failure, not something the script silently broadens or repairs.
   privacy, compatibility, and lifecycle evidence; do not widen either closed legacy race response.
 - Schedule and monitor the implemented retention-cleanup procedures for expired authentication,
   invitation, CarRecipe-proposal, ingest, pairing, session, terminal-deletion-job, and database
-  audit-event state plus aged pairing approval-provenance redaction, and implement bounded cleanup
-  or reset policy for retained pairing/device history, historical passkeys/devices, pairing rate
-  windows, and tombstones. Retention markers outside revisions 0008, 0012, 0013, 0023, 0026, 0030,
-  0031, 0032, 0033, and 0034 are not cleanup or redaction evidence.
+  audit-event state, aged revoked passkeys, plus aged pairing approval-provenance redaction, and
+  implement bounded cleanup or reset policy for retained pairing/device history, historical device
+  keys, pairing rate windows, and tombstones. Retention markers outside revisions 0008, 0012, 0013,
+  0023, 0026, 0030, 0031, 0032, 0033, 0034, and 0035 are not cleanup or redaction evidence.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
   in isolated staging before real-user ingestion.

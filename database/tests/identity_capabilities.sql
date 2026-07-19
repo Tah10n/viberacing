@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 65
+    SELECT pg_catalog.count(*) = 66
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 22
+    SELECT pg_catalog.count(*) = 23
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -83,6 +83,7 @@ SELECT pg_temp.assert_true(
         'read_car_proposal_device_material',
         'read_car_recipe_state',
         'approve_car_recipe',
+        'cleanup_aged_revoked_passkeys',
         'reject_car_recipe',
         'read_pairing_for_approval_limited',
         'redact_aged_pairing_approval_provenance',
@@ -110,7 +111,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 13
+    SELECT pg_catalog.count(*) = 14
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -118,6 +119,7 @@ SELECT pg_temp.assert_true(
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
       AND procedure.proname IN (
+        'cleanup_aged_revoked_passkeys',
         'cleanup_expired_auth_state',
         'cleanup_expired_audit_events',
         'cleanup_expired_car_recipe_proposals',
@@ -222,6 +224,7 @@ SELECT pg_temp.assert_true(
           'cleanup_expired_ingest_state',
           'cleanup_expired_pairing_state',
           'cleanup_expired_sessions',
+          'cleanup_aged_revoked_passkeys',
           'cleanup_terminal_deletion_jobs',
           'purge_profile_deletions',
           'read_pairing_for_approval',
@@ -266,6 +269,7 @@ SELECT pg_temp.assert_true(
           'cleanup_expired_ingest_state',
           'cleanup_expired_pairing_state',
           'cleanup_expired_sessions',
+          'cleanup_aged_revoked_passkeys',
           'cleanup_terminal_deletion_jobs',
           'purge_profile_deletions',
           'redact_aged_pairing_approval_provenance',

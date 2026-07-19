@@ -56,6 +56,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0045](0045-bounded-terminal-deletion-job-retention-cleanup.md) | Bounded terminal deletion-job retention cleanup                     | Accepted; database and local command; schedule pending |
 | [0046](0046-bounded-audit-event-retention-cleanup.md)           | Bounded database audit-event retention cleanup                      | Accepted; database and local command; schedule pending |
 | [0047](0047-bounded-pairing-approval-provenance-retention.md)   | Bounded pairing approval-provenance retention                       | Accepted; database and local command; schedule pending |
+| [0048](0048-bounded-revoked-passkey-retention-cleanup.md)       | Bounded revoked-passkey retention cleanup                           | Accepted; database and local command; schedule pending |
 
 ## Lifecycle
 

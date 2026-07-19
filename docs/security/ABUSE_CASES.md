@@ -305,10 +305,10 @@ material availability cost.
   database failure. The add path validates and seals the label before prompts, uses distinct
   five-minute existing-key assertion and registration challenges, verifies both exact ceremonies,
   and atomically consumes the session/profile/label/RP/origin-bound step-up while inserting the new
-  credential. Closed shapes, mixed challenge-cookie types, replay-shaped failure, lifetime cap, and
-  duplicate credentials fail closed. Recovery-code rotation binds a separate five-minute challenge
-  to the exact active session/profile/RP/origin, requires a fresh exact assertion, derives ten
-  independent Argon2id PHCs sequentially under a recovery-only protected pepper, and atomically
+  credential. Closed shapes, mixed challenge-cookie types, replay-shaped failure, retained-record
+  cap, and duplicate credentials fail closed. Recovery-code rotation binds a separate five-minute
+  challenge to the exact active session/profile/RP/origin, requires a fresh exact assertion, derives
+  ten independent Argon2id PHCs sequentially under a recovery-only protected pepper, and atomically
   consumes the challenge while replacing every previous code and active authority. Only commit
   returns the plaintext batch in a no-store response; the page holds it only in memory for one
   display. Cross-session, malformed, replay-shaped, and invalid-generator outcomes fail generically.
@@ -326,13 +326,16 @@ material availability cost.
   admitted failures behind a configured floor, and grants only a five-minute replacement-passkey
   continuation. Exact WebAuthn verification and one atomic completion are required before a normal
   session exists. Revision 0023 now deletes expired challenges and restricted recovery authority in
-  bounded profile-serialized Jobs batches while preserving live/unused state. Aggregate edge rate
-  policy, cleanup scheduling, notification, live OAuth/authenticator/database integration,
-  cache/backup/tombstone purge, restore replay, and deployment remain absent. Revision 0024 locally
-  executes only bounded primary deletion. The account read additionally revalidates exact session
-  possession and accepts at most 32 closed, ordered rows with one current active authenticator; it
-  renders no credential ID, key, sign counter, exact activity timestamp, or profile ID. Only a
-  revocable target's opaque passkey ID enters the authenticated control and options request.
+  bounded profile-serialized Jobs batches while preserving live/unused state. Revision 0035 can
+  delete only revoked passkeys at least 180 days old after every exact session, challenge, and
+  pairing reference is absent; tests prove recovery first fails atomically at 32 retained rows and
+  succeeds unchanged after cleanup removes only eligible rows. Aggregate edge rate policy, cleanup
+  scheduling, notification, live OAuth/authenticator/database integration, cache/backup/tombstone
+  purge, restore replay, and deployment remain absent. Revision 0024 locally executes only bounded
+  primary deletion. The account read additionally revalidates exact session possession and accepts
+  at most 32 closed, ordered rows with one current active authenticator; it renders no credential
+  ID, key, sign counter, exact activity timestamp, or profile ID. Only a revocable target's opaque
+  passkey ID enters the authenticated control and options request.
 - **Detection:** Failed and replayed ceremony events, sign-counter risk signals, identity-binding
   changes, recovery use, and sensitive-action audit without credential material.
 - **Recovery:** Revoke exact passkeys, sessions, and devices; restore control only through a
@@ -355,7 +358,8 @@ material availability cost.
   pepper, bounded body/collection shapes, generic unknown/used responses and timing, edge/service
   attempt limits, immediate PHC scrub, one active authority per profile for at most ten minutes,
   exact challenge/context binding, no session before replacement WebAuthn, and profile-serialized
-  rotation/completion that dominates old-code start and old-passkey login.
+  rotation/completion that dominates old-code start and old-passkey login, a 32-retained-passkey
+  ceiling, and bounded cleanup only for aged unreferenced revoked rows.
 - **Detection:** Coarse lookup failure and saturation metrics, recovery start/completion audit
   without selectors or verifier material, unusual code rotation, and repeated completion failure
   signals.
@@ -515,31 +519,31 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 55 cross-capability denials.
-  Ingest has exactly three reviewed functions; Jobs has exactly twelve reviewed functions: bounded
+  and usage/scoring-table reads or API-schema mutation, and proves 58 cross-capability denials.
+  Ingest has exactly three reviewed functions; Jobs has exactly thirteen reviewed functions: bounded
   authentication-, audit-event-, invite-, CarRecipe-proposal-, ingest-, pairing-, and
-  session-retention cleanup, terminal deletion-job cleanup, pairing approval-provenance redaction,
-  primary profile deletion, open-season scoring refresh, and terminal season finalization. Web alone
-  receives the bounded public score and separate race functions; Ingest, Jobs, and Admin are
-  explicitly denied. The Web adapter uses one dedicated pool, fixed parameterized function calls,
-  and checks effective role, distinct non-privileged login, exact Web-only membership, database
-  capability, search path, and read-only state before every pooled read. Failed sessions are
-  destroyed and raw driver errors are not forwarded. The local Jobs adapter independently checks an
-  exact Jobs-only login/membership, CONNECT without CREATE/TEMPORARY, and safe search path before
-  exactly one of the twelve prepared function calls. Its pool maximum is one, input/result shapes
-  are closed, failed clients are destroyed, and CLI output reflects no configuration, command, SQL,
-  count, or error detail. The local Ingest adapter independently caps its pool at four, probes the
-  exact Ingest login/role and safe search path before each capability, exposes only fixed
-  parameterized origin replay, device lookup, and submission calls, reconstructs and revalidates
-  inputs, copies mutable values, accepts only closed rows, and destroys failed clients without
-  forwarding driver/configuration details.
+  session-retention cleanup, terminal deletion-job cleanup, aged revoked-passkey cleanup, pairing
+  approval-provenance redaction, primary profile deletion, open-season scoring refresh, and terminal
+  season finalization. Web alone receives the bounded public score and separate race functions;
+  Ingest, Jobs, and Admin are explicitly denied. The Web adapter uses one dedicated pool, fixed
+  parameterized function calls, and checks effective role, distinct non-privileged login, exact
+  Web-only membership, database capability, search path, and read-only state before every pooled
+  read. Failed sessions are destroyed and raw driver errors are not forwarded. The local Jobs
+  adapter independently checks an exact Jobs-only login/membership, CONNECT without
+  CREATE/TEMPORARY, and safe search path before exactly one of the thirteen prepared function calls.
+  Its pool maximum is one, input/result shapes are closed, failed clients are destroyed, and CLI
+  output reflects no configuration, command, SQL, count, or error detail. The local Ingest adapter
+  independently caps its pool at four, probes the exact Ingest login/role and safe search path
+  before each capability, exposes only fixed parameterized origin replay, device lookup, and
+  submission calls, reconstructs and revalidates inputs, copies mutable values, accepts only closed
+  rows, and destroys failed clients without forwarding driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Web deployment login/TLS integration has not been exercised. Jobs now has a
-  disposable synthetic least-privileged login, all twelve emitted commands, a widened-login denial,
-  and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged loopback
-  login and full HTTP integration result. Neither proves a deployment credential/certificate,
-  external TLS/edge route, external audit sink, capacity, scheduler, monitoring, or real-user
-  behavior.
+  disposable synthetic least-privileged login, all thirteen emitted commands, a widened-login
+  denial, and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged
+  loopback login and full HTTP integration result. Neither proves a deployment
+  credential/certificate, external TLS/edge route, external audit sink, capacity, scheduler,
+  monitoring, or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -669,6 +673,10 @@ material availability cost.
   approval references together from activated pairings after 180 days under the authentication and
   pairing mutexes. Partial or pre-activation redaction fails; the pairing, profile/source/device
   binding, active device, and passkey remain, and a separate session cleanup can then progress.
+  Revision 0035 adds oldest-first 1-to-1000 deletion for passkeys revoked at least 180 days earlier
+  only after all four session/challenge/pairing reference paths are absent. It shares the existing
+  authentication and pairing mutex order, repeats eligibility at deletion, and has an observed
+  two-worker race proving serialized progress while active, recent, and referenced rows remain.
   Revision 0031 adds a shared-mutex oldest-first 1-to-1000 cleanup for expired active or revoked
   invite verifier rows. Its observed worker race proves exact progress while live invites and
   redeemed enrollment provenance remain. Revision 0032 adds oldest-first 1-to-1000 cleanup for
@@ -702,7 +710,7 @@ material availability cost.
   operations. This is distributed across Web instances using one database, but the self-asserted ID
   is not a trusted edge/IP identity and still needs capacity evidence. Physical pairing cleanup
   exists as a separate local capability, but scheduling and edge controls are still pending. The
-  local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client deadlines, eight
+  local Jobs runner adds a one-client ceiling, 2/31/32-second connect/server/client deadlines, nine
   fixed 1000-row cleanup commands, one fixed 1000-row approval-provenance redaction, one fixed
   maximum-10 primary-purge command, canonical season validation, closed one-row results, and
   destructive release on failure. Its synthetic integration executes those commands sequentially

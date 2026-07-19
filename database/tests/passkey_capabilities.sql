@@ -930,7 +930,7 @@ SELECT pg_temp.expect_operation_failure(
       pg_catalog.statement_timestamp() + INTERVAL '4 minutes'
     )
   $sql$,
-  'lifetime passkey records have a public database safety ceiling'
+  'retained passkey records have a public database safety ceiling'
 );
 
 RESET ROLE;

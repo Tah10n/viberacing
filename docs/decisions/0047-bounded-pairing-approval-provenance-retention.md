@@ -76,10 +76,10 @@ reverse profile/device lock order. Jobs receives no table access and cannot sele
 activate, revoke, or otherwise administer a pairing or device.
 
 Residual risk remains: activated pairing/device records and cryptographic transaction metadata,
-historical passkeys and device keys, fixed pairing-rate windows, tombstones, caches, backups, and
-restore replay still need separate retention evidence. There is no scheduler, cadence, overlap/retry
-policy, monitoring, capacity result, production Jobs login/TLS connection, backup purge, or deployed
-retention proof.
+referenced passkeys and device keys, fixed pairing-rate windows, tombstones, caches, backups, and
+restore replay still need separate retention evidence. ADR 0048 separately deletes only aged
+unreferenced revoked passkeys. There is no scheduler, cadence, overlap/retry policy, monitoring,
+capacity result, production Jobs login/TLS connection, backup purge, or deployed retention proof.
 
 Affected invariants are VR-AUTH-001, VR-DEVICE-001, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -153,3 +153,4 @@ monitoring, cache or backup purge, restore replay, capacity, real-user retention
 - [Bounded Community maintenance runner](0014-bounded-community-maintenance-job-runner.md)
 - [Bounded pairing retention cleanup](0029-bounded-pairing-retention-cleanup.md)
 - [Bounded expired-session retention cleanup](0042-bounded-expired-session-retention-cleanup.md)
+- [Bounded revoked-passkey retention cleanup](0048-bounded-revoked-passkey-retention-cleanup.md)

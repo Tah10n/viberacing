@@ -18,6 +18,10 @@ export const maximumProfileDeletionPurgeBatchSize = 10;
 export type CommunityMaintenanceJob =
   | Readonly<{
       batchSize: number;
+      kind: "cleanup_aged_revoked_passkeys";
+    }>
+  | Readonly<{
+      batchSize: number;
       kind: "cleanup_expired_auth_state";
     }>
   | Readonly<{
@@ -66,6 +70,10 @@ export type CommunityMaintenanceJob =
     }>;
 
 export type CommunityMaintenanceResult =
+  | Readonly<{
+      deletedPasskeys: number;
+      kind: "cleanup_aged_revoked_passkeys";
+    }>
   | Readonly<{
       deletedChallenges: number;
       deletedRecoveryAuthorities: number;
@@ -214,6 +222,7 @@ function readJob(value: unknown): CommunityMaintenanceJob {
       return Object.freeze({ batchSize, kind });
     }
     if (
+      kind === "cleanup_aged_revoked_passkeys" ||
       kind === "cleanup_expired_auth_state" ||
       kind === "cleanup_expired_audit_events" ||
       kind === "cleanup_expired_car_recipe_proposals" ||
@@ -299,6 +308,14 @@ function readCount(row: object, key: string, maximum: number): number {
 }
 
 function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaintenanceResult {
+  if (job.kind === "cleanup_aged_revoked_passkeys") {
+    const row = readSingleRow(value, new Set(["deleted_passkeys"]));
+    return Object.freeze({
+      deletedPasskeys: readCount(row, "deleted_passkeys", job.batchSize),
+      kind: job.kind,
+    });
+  }
+
   if (job.kind === "cleanup_expired_auth_state") {
     const row = readSingleRow(
       value,
@@ -437,6 +454,9 @@ function executeCapability(
   client: JobsDatabaseClient,
   job: CommunityMaintenanceJob,
 ): Promise<unknown> {
+  if (job.kind === "cleanup_aged_revoked_passkeys") {
+    return client.cleanupAgedRevokedPasskeys(job.batchSize);
+  }
   if (job.kind === "cleanup_expired_auth_state") {
     return client.cleanupExpiredAuthState(job.batchSize);
   }

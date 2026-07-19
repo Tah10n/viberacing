@@ -9,16 +9,16 @@ contains library-only connector protocol/parser boundaries, a synthetic one-shot
 an exact-body composer, isolated pairing/request signers, a pure Web pairing verifier, local pairing
 applications/routes and bounded native-store connect/local-removal commands, a visible public-race
 consumer with a synthetic fallback, a browser-memory-only hypothetical score simulator, and bounded
-database/local Jobs ingest, pairing, authentication, CarRecipe-proposal, and eligible
-expired-invite/session cleanup plus primary profile purge. A local invite/OAuth/initial-passkey
-enrollment, returning-passkey login, private passkey inventory, and private active-device inventory
-and revoke slice now add encrypted short-lived cookies, fixed Web/Auth database calls, an account
-page, and logout with injected/synthetic evidence, but there is no live OAuth app,
-authenticator-backed result, deployed application database, production service, operational
-connector, or real user data. This document remains the required inventory for implementation. A
-field may not be collected merely because it appears here: its schema, purpose, visibility,
-retention, deletion, and access tests must exist first. The implemented column-level mapping is
-documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
+database/local Jobs ingest, pairing, authentication, CarRecipe-proposal, eligible
+expired-invite/session, and aged unreferenced revoked-passkey cleanup plus primary profile purge. A
+local invite/OAuth/initial-passkey enrollment, returning-passkey login, private passkey inventory,
+and private active-device inventory and revoke slice now add encrypted short-lived cookies, fixed
+Web/Auth database calls, an account page, and logout with injected/synthetic evidence, but there is
+no live OAuth app, authenticator-backed result, deployed application database, production service,
+operational connector, or real user data. This document remains the required inventory for
+implementation. A field may not be collected merely because it appears here: its schema, purpose,
+visibility, retention, deletion, and access tests must exist first. The implemented column-level
+mapping is documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
 
@@ -64,8 +64,8 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | Enrollment cookie master key                                                | Security                               | Deployment; seal login, OAuth, passkey, and session continuations                                                                            | Web/Auth process memory only; four purpose keys are derived with HKDF                           | Protected environment/secret manager; exactly 32 canonical base64url bytes; never tracked or logged                                                            | Rotate on exposure; rotation invalidates outstanding continuations and sessions                                                                                                                                                   |
 | Web PostgreSQL deployment login and password                                | Security                               | Deployment; authorize only the Web score, identity, and pairing adapters                                                                     | Adapters and PostgreSQL driver process memory only                                              | Protected environment/secret manager; never tracked or logged                                                                                                  | Rotate on exposure/role change and remove when the adapters are disabled                                                                                                                                                          |
 | Ingest PostgreSQL deployment login and password                             | Security                               | Deployment; authorize only device lookup and sync submission                                                                                 | Ingest adapter and PostgreSQL driver process memory only                                        | Protected environment/secret manager; never tracked or logged                                                                                                  | Rotate on exposure/role change and remove when ingestion is disabled                                                                                                                                                              |
-| WebAuthn public key, credential ID, pseudonymous user handle, and key label | Security; label is Account             | Server profile ID plus user authenticator; login and fresh step-up                                                                           | Web/Auth and the user's authenticator; user can list only bounded friendly metadata             | `passkeys`; profile UUID is the discoverable credential user ID; no attestation fingerprint store                                                              | Exact activated-pairing approval reference is retained at least 180 days then redaction-eligible; the passkey row follows its separately reviewed profile/credential lifecycle                                                    |
-| Opaque passkey ID                                                           | Security                               | Server-generated key; select one owned credential for revocation                                                                             | Authenticated account revoke control and options request only                                   | `passkeys` primary key                                                                                                                                         | Retained with the passkey row; never public or accepted as proof                                                                                                                                                                  |
+| WebAuthn public key, credential ID, pseudonymous user handle, and key label | Security; label is Account             | Server profile ID plus user authenticator; login and fresh step-up                                                                           | Web/Auth and the user's authenticator; user can list only bounded friendly metadata             | `passkeys`; profile UUID is the discoverable credential user ID; no attestation fingerprint store                                                              | Active while authoritative; a revoked row is retained at least 180 days and longer while any session, challenge, or pairing reference remains, then bounded cleanup-eligible                                                      |
+| Opaque passkey ID                                                           | Security                               | Server-generated key; select one owned credential for revocation                                                                             | Authenticated account revoke control and options request only                                   | `passkeys` primary key                                                                                                                                         | Retained and cleanup-eligible with the passkey row; never public or accepted as proof                                                                                                                                             |
 | WebAuthn challenge, context, and verifying-passkey reference                | Security                               | Server; bind one ceremony to one action and exact credential                                                                                 | Web/Auth only; encrypted login challenge cookie contains no profile or reusable authority       | Registration uses a database challenge; login stays cookie-only before proof, then creates and consumes one database row atomically                            | Registration and login are one-time and at most five minutes; expired-row cleanup exists but needs scheduling                                                                                                                     |
 | Recovery-code selector and verifier                                         | Security                               | Web/Auth-generated; recover profile access                                                                                                   | Web/Auth only; plaintext secret shown once to the user                                          | Opaque selector and Argon2id PHC; protected pepper stays outside DB                                                                                            | PHC scrubbed on use; unused batch removed on regeneration/completion/deletion; used source row is cleanup-eligible after authority expiry                                                                                         |
 | Restricted recovery authority and registration binding                      | Security                               | Server; permit only exact replacement-passkey registration                                                                                   | Web/Auth recovery procedure only                                                                | Keyed verifier plus challenge/context digests and terminal lifecycle                                                                                           | One-time, at most 10 minutes; expired-row cleanup exists but needs scheduling and backup-purge evidence                                                                                                                           |
@@ -420,6 +420,14 @@ discards the count. Historical pairing/device rows, passkey lifecycle, rate wind
 monitoring, backup purge, production login/TLS, capacity, and deployed retention evidence remain
 outside this slice.
 
+Revision 0035 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of passkey rows
+only after server-recorded revocation is at least 180 days old and no session, verifying or
+authorized challenge, or pairing transaction retains the exact passkey ID. Candidate rows are locked
+and every eligibility predicate is repeated at deletion. Active, recent, and referenced rows remain;
+the local Jobs mapper discards the count. The operation can free the unchanged 32-row add/recovery
+ceiling, but it has no scheduler, production login/TLS, monitoring, capacity, backup purge, or
+deployed retention evidence.
+
 Revision 0030 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of already
 expired session rows only when no retained predecessor points to the row and no pairing transaction
 uses it as approval provenance. Session-bound challenges cascade with the selected row. One shared
@@ -458,8 +466,8 @@ non-personal terminal season definition. A no-data closed week stores only that 
 public serializer/cache, audited correction record, finalized public-history retention rule, Jobs
 deployment/scheduler, or monitoring backend exists.
 
-ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, and 0047 store no user data. The local
-Jobs process transiently receives only one of eight fixed 1000-row cleanup batches, one fixed
+ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, and 0048 store no user data. The
+local Jobs process transiently receives only one of nine fixed 1000-row cleanup batches, one fixed
 1000-row pairing approval-provenance redaction, one fixed maximum-10 profile purge, or one Public
 season-start label, plus the private aggregate counts already returned by the procedures. It
 validates and discards those values within one process invocation. The CLI emits only one constant
@@ -618,12 +626,13 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   unsupported until clean-machine platform, privacy-egress, packaging, provenance, and release gates
   pass.
 - Jobs currently receive only bounded cleanup of expired authentication, invitation, ingest,
-  pairing, session, CarRecipe-proposal, terminal-deletion-job, and database audit-event state;
-  bounded aged pairing approval-provenance redaction; maximum-10 primary profile deletion;
-  open-season Community scoring refresh; and terminal finalization. The local one-shot adapter
-  rechecks the exact Jobs-only login and invokes one prepared capability without logging inputs or
-  results. Correction, cache/backup purge, tombstone/restore replay, and remaining retention
-  capabilities require separate migrations and tests; migrations use a different non-runtime owner.
+  pairing, session, CarRecipe-proposal, terminal-deletion-job, database audit-event, and aged
+  unreferenced revoked-passkey state; bounded aged pairing approval-provenance redaction; maximum-10
+  primary profile deletion; open-season Community scoring refresh; and terminal finalization. The
+  local one-shot adapter rechecks the exact Jobs-only login and invokes one prepared capability
+  without logging inputs or results. Correction, cache/backup purge, tombstone/restore replay, and
+  remaining retention capabilities require separate migrations and tests; migrations use a different
+  non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The

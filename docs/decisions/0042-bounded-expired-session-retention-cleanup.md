@@ -76,10 +76,10 @@ implemented or the profile is purged.
 
 Residual risk remains: there is no scheduler, cadence, overlap/retry policy, monitoring, capacity
 result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy.
-Recent activated pairing-referenced sessions, tombstones, historical pairing/passkey/device rows,
-and fixed pairing-rate windows still need separate reviewed retention or reset evidence. ADR 0045
-separately bounds terminal deletion-job retention; ADR 0047 bounds the exact approval references
-after 180 days without deleting device history.
+Recent activated pairing-referenced sessions, tombstones, historical pairing/device rows, and fixed
+pairing-rate windows still need separate reviewed retention or reset evidence. ADR 0045 separately
+bounds terminal deletion-job retention; ADR 0047 bounds the exact approval references after 180 days
+without deleting device history; ADR 0048 deletes only aged unreferenced revoked passkeys.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -152,3 +152,4 @@ production cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
 - [Bounded pairing retention cleanup](0029-bounded-pairing-retention-cleanup.md)
 - [Bounded authentication retention cleanup](0032-bounded-auth-retention-cleanup.md)
 - [Bounded pairing approval-provenance retention](0047-bounded-pairing-approval-provenance-retention.md)
+- [Bounded revoked-passkey retention cleanup](0048-bounded-revoked-passkey-retention-cleanup.md)

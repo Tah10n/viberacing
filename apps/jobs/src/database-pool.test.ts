@@ -49,8 +49,9 @@ describe("Jobs database pool", () => {
     await expect(client.finalizeCommunitySeason("2026-07-06")).resolves.toEqual([{ value: 1 }]);
     await expect(client.cleanupExpiredAuditEvents(13)).resolves.toEqual([{ value: 1 }]);
     await expect(client.redactAgedPairingApprovalProvenance(14)).resolves.toEqual([{ value: 1 }]);
+    await expect(client.cleanupAgedRevokedPasskeys(15)).resolves.toEqual([{ value: 1 }]);
     expect(client).not.toHaveProperty("query");
-    expect(query).toHaveBeenCalledTimes(13);
+    expect(query).toHaveBeenCalledTimes(14);
     expect(query.mock.calls[0]![0]).toMatchObject({ values: [] });
     expect(query.mock.calls[0]![0].text).toContain("CURRENT_USER = 'viberacing_jobs'");
     expect(query.mock.calls[1]![0]).toMatchObject({ values: [6] });
@@ -125,6 +126,11 @@ describe("Jobs database pool", () => {
     expect(query.mock.calls[12]![0].text).toContain(
       "cleanup.redacted_pairings AS redacted_pairings",
     );
+    expect(query.mock.calls[13]![0]).toMatchObject({ values: [15] });
+    expect(query.mock.calls[13]![0].text).toContain(
+      "viberacing_api.cleanup_aged_revoked_passkeys($1::integer)",
+    );
+    expect(query.mock.calls[13]![0].text).toContain("cleanup.deleted_passkeys AS deleted_passkeys");
     client.release(true);
     expect(release).toHaveBeenCalledWith(true);
 

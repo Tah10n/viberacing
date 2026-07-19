@@ -204,6 +204,12 @@
       "name": "pairing_approval_provenance_retention",
       "path": "database/migrations/0034_pairing_approval_provenance_retention.sql",
       "sha256": "afd0b68d93d7c72a03cd55321da14db2fc3f90f4ff3ac8a3bbdd0021c33f0f53"
+    },
+    {
+      "revision": 35,
+      "name": "revoked_passkey_retention_cleanup",
+      "path": "database/migrations/0035_revoked_passkey_retention_cleanup.sql",
+      "sha256": "004c781bbc84b5fe50ce8f21de39dc649e18d799eb7b45bb986274d7496c2101"
     }
   ]
 }

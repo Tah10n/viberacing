@@ -7,7 +7,7 @@ addition, non-current-passkey revocation, recovery-code rotation/replacement-pas
 immediate profile-deletion-request, source inventory/pause/reactivation/unlink, active-device
 revoke, and pairing-approval sequences below plus the public race-status consumer are now locally
 implemented boundaries; none has live credentials, distributed edge policy, scheduled purge, or
-deployment evidence. Revisions 0001 through 0034 provide private
+deployment evidence. Revisions 0001 through 0035 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
@@ -24,7 +24,7 @@ streak, and optional recipe, lets one canonical public-handle URL select a same-
 only those fields, and retains a clearly labeled synthetic fallback on failure. A public signed-in
 account links to that URL; invalid, duplicate, and unranked selections grant no authority and add no
 score query field or browser persistence. One local one-shot Jobs runner can invoke exactly one of
-twelve fixed functions: any of the eight cleanup functions, pairing approval-provenance redaction,
+thirteen fixed functions: any of the nine cleanup functions, pairing approval-provenance redaction,
 primary profile purge, refresh, or finalization, but no broader recovery/step-up, deployed ingest
 endpoint, operational connector, purge schedule/cache/backup/tombstone handling, Jobs monitor,
 audited correction, or deployed service executes the complete sequences. A library-only Rust
@@ -181,7 +181,7 @@ seven consecutive 0–1000 daily scores, a matching weekly sum, and coherent bou
 profiles return no score; no raw usage, private identifier, browser fetch, cache, or storage is
 added.
 
-The add control appears only below the 32-record lifetime cap. It validates and seals the label
+The add control appears only below the 32-retained-record cap. It validates and seals the label
 before either prompt, uses distinct five-minute assertion and registration challenges, and binds
 both to the active session/profile/RP/origin. The profile UUID enters only the authenticated
 registration options as the pseudonymous WebAuthn user ID required by the authenticator. One
@@ -242,10 +242,11 @@ visible and revocable because they have no profile-administration scope.
 Code rotation and completion serialize on the profile row and take terminal timestamps after lock
 acquisition. Observed cross-connection tests prove rotation dominates a concurrent start with an old
 code and completion dominates a concurrent login with an old passkey. Completion fails closed at the
-32-lifetime-passkey provenance ceiling until bounded cleanup exists. The repository still lacks a
-distributed/edge anonymous attempt policy, cleanup scheduling for expired authentication state,
-notifications, production secrets and timing values, live authenticator/database integration,
-monitoring, and deployment evidence; therefore the local recovery sign-in is not launch-ready.
+32-retained-passkey provenance ceiling until revision 0035 has removed an eligible aged unreferenced
+revoked row; the ceiling itself remains unchanged. The repository still lacks a distributed/edge
+anonymous attempt policy, cleanup scheduling for expired authentication state, notifications,
+production secrets and timing values, live authenticator/database integration, monitoring, and
+deployment evidence; therefore the local recovery sign-in is not launch-ready.
 
 ## Device pairing and source choice
 
@@ -385,6 +386,7 @@ sequenceDiagram
   Jobs->>DB: Delete bounded expired non-activated pairing and pending-key pairs
   Jobs->>DB: Delete bounded expired authentication and invite state
   Jobs->>DB: Delete bounded expired proposals and eligible sessions
+  Jobs->>DB: Delete bounded aged unreferenced revoked passkeys
   Jobs->>DB: Aggregate sources then apply one profile daily cap
 ```
 
@@ -533,9 +535,11 @@ append-only audit sink is implied. Revision 0034 adds one fixed redaction comman
 approving session/passkey references on activated pairings at least 180 days after server-recorded
 activation. It locks the authentication and pairing mutexes in their established order and preserves
 the pairing, profile/source/device binding, active device, and passkey while allowing later cleanup
-of a newly unreferenced expired session. Observed worker races prove local serialization only. No
-scheduler, production login/TLS path, monitoring, backup-purge proof, or deployed cadence invokes
-these commands automatically.
+of a newly unreferenced expired session. Revision 0035 adds a ninth fixed cleanup command for
+passkeys revoked at least 180 days earlier only when no session, verifying/authorized challenge, or
+pairing reference remains; it can free the unchanged 32-row add/recovery ceiling. Observed worker
+races prove local serialization only. No scheduler, production login/TLS path, monitoring,
+backup-purge proof, or deployed cadence invokes these commands automatically.
 
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct
@@ -556,16 +560,16 @@ Revision 0029 calls that compatible race read and derives only saturated complet
 plus a consecutive positive-score streak from retained accepted receipt times and materialized daily
 scores. The streak is omitted unless the current active profile enables it; exact timestamps, daily
 rows, the preference, and private identifiers remain private. ADRs 0014, 0029, 0032, 0034, 0036,
-0042, 0043, 0045, 0046, and 0047 make the local one-shot Jobs process invoke exactly one of twelve
-reviewed functions—authentication cleanup, audit-event cleanup, invite cleanup, CarRecipe-proposal
-cleanup, ingest cleanup, pairing cleanup, pairing approval-provenance redaction, session cleanup,
-terminal deletion-job cleanup, primary profile purge, refresh, or finalization—after a per-checkout
-least-privilege probe. One opt-in synthetic integration applies all reviewed migrations to a
-disposable loopback PostgreSQL container, runs each emitted command through a narrow login, rejects
-an extra-membership login before mutation, observes only generic process output, verifies exact
-stored state, and removes the container, network, and storage. No scheduler, external audit sink,
-production login/certificate, audited correction, tombstone/restore replay, deployed route, or
-public cache exists.
+0042, 0043, 0045, 0046, 0047, and 0048 make the local one-shot Jobs process invoke exactly one of
+thirteen reviewed functions—authentication cleanup, audit-event cleanup, invite cleanup,
+CarRecipe-proposal cleanup, ingest cleanup, pairing cleanup, session cleanup, terminal deletion-job
+cleanup, aged revoked-passkey cleanup, pairing approval-provenance redaction, primary profile purge,
+refresh, or finalization—after a per-checkout least-privilege probe. One opt-in synthetic
+integration applies all reviewed migrations to a disposable loopback PostgreSQL container, runs each
+emitted command through a narrow login, rejects an extra-membership login before mutation, observes
+only generic process output, verifies exact stored state, and removes the container, network, and
+storage. No scheduler, external audit sink, production login/certificate, audited correction,
+tombstone/restore replay, deployed route, or public cache exists.
 
 ## CarRecipe proposal origins and browser approval
 

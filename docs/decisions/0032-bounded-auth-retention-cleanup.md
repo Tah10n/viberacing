@@ -74,10 +74,11 @@ without granting Jobs any direct table access.
 
 Residual risk remains: no scheduler, cadence, overlap/retry policy, monitoring, capacity result,
 production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy exists. ADR
-0042 now covers eligible expired sessions, and ADR 0045 covers terminal deletion jobs;
-pairing-referenced session provenance, tombstones, historical passkey provenance, pairing rate
-windows, and any future expiring class still require separate reviewed rules. Recovery also still
-needs distributed attempt controls and deployment-owned pepper/timing evidence.
+0042 now covers eligible expired sessions, ADR 0045 covers terminal deletion jobs, and ADR 0048
+covers aged unreferenced revoked passkeys; pairing-referenced session provenance, tombstones,
+referenced passkey provenance, pairing rate windows, and any future expiring class still require
+separate reviewed rules. Recovery also still needs distributed attempt controls and deployment-owned
+pepper/timing evidence.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-AUTH-003, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-RECOVERY-ORACLE,
@@ -147,3 +148,4 @@ scheduler, production cadence/login/TLS, monitoring, backup purge, capacity, or 
 - [Restricted recovery authority](0007-restricted-recovery-authority.md)
 - [Bounded Community maintenance runner](0014-bounded-community-maintenance-job-runner.md)
 - [Bounded pairing retention cleanup](0029-bounded-pairing-retention-cleanup.md)
+- [Bounded revoked-passkey retention cleanup](0048-bounded-revoked-passkey-retention-cleanup.md)

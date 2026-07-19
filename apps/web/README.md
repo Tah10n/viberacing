@@ -257,7 +257,7 @@ and pending pairing authority derived from the target; activated devices remain 
 revocable. Only the authenticated revoke control/request receives the opaque target ID. Credential
 IDs, public keys, sign counters, exact activity times, and profile IDs remain server-only.
 
-The add control is available below the 32-record lifetime cap. `POST /auth/passkeys/add/options`
+The add control is available below the 32-retained-record cap. `POST /auth/passkeys/add/options`
 accepts and validates only the bounded NFC label before any prompt, creates independent five-minute
 assertion and registration challenges, and seals both plus that label. The first ceremony freshly
 verifies an existing active credential; the second creates a discoverable user-verified credential

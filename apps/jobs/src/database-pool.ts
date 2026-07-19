@@ -39,6 +39,10 @@ const runtimeBoundaryQuery = `SELECT
   ) AS login_scope_ok,
   pg_catalog.current_setting('search_path') = 'pg_catalog,pg_temp' AS search_path_ok`;
 
+const agedRevokedPasskeyCleanupQuery = `SELECT
+  cleanup.deleted_passkeys AS deleted_passkeys
+FROM viberacing_api.cleanup_aged_revoked_passkeys($1::integer) AS cleanup`;
+
 const cleanupQuery = `SELECT
   cleanup.deleted_origin_nonces AS deleted_origin_nonces,
   cleanup.deleted_nonces AS deleted_nonces,
@@ -96,6 +100,7 @@ export type JobsDatabasePoolSignal = "idle_client_error";
 export type JobsDatabasePoolSignalSink = (signal: JobsDatabasePoolSignal) => Promise<void> | void;
 
 export interface JobsDatabaseClient {
+  cleanupAgedRevokedPasskeys(batchSize: number): Promise<unknown>;
   cleanupExpiredAuthState(batchSize: number): Promise<unknown>;
   cleanupExpiredAuditEvents(batchSize: number): Promise<unknown>;
   cleanupExpiredCarRecipeProposals(batchSize: number): Promise<unknown>;
@@ -155,6 +160,9 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
   }
 
   return Object.freeze({
+    cleanupAgedRevokedPasskeys(batchSize: number): Promise<unknown> {
+      return fixedQuery(agedRevokedPasskeyCleanupQuery, [batchSize]);
+    },
     cleanupExpiredAuthState(batchSize: number): Promise<unknown> {
       return fixedQuery(authCleanupQuery, [batchSize]);
     },

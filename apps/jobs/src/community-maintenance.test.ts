@@ -22,6 +22,7 @@ const runtimeBoundary = [
 interface PoolFixture {
   readonly client: JobsDatabaseClient;
   readonly close: ReturnType<typeof vi.fn>;
+  readonly cleanupAgedRevokedPasskeys: ReturnType<typeof vi.fn>;
   readonly cleanupExpiredAuthState: ReturnType<typeof vi.fn>;
   readonly cleanupExpiredAuditEvents: ReturnType<typeof vi.fn>;
   readonly cleanupExpiredCarRecipeProposals: ReturnType<typeof vi.fn>;
@@ -41,6 +42,7 @@ interface PoolFixture {
 }
 
 function createPoolFixture(jobResult: unknown): PoolFixture {
+  const cleanupAgedRevokedPasskeys = vi.fn(() => Promise.resolve(jobResult));
   const cleanupExpiredAuthState = vi.fn(() => Promise.resolve(jobResult));
   const cleanupExpiredAuditEvents = vi.fn(() => Promise.resolve(jobResult));
   const cleanupExpiredCarRecipeProposals = vi.fn(() => Promise.resolve(jobResult));
@@ -56,6 +58,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
   const refreshCommunitySeason = vi.fn(() => Promise.resolve(jobResult));
   const verifyRuntimeBoundary = vi.fn(() => Promise.resolve(runtimeBoundary));
   const client: JobsDatabaseClient = {
+    cleanupAgedRevokedPasskeys,
     cleanupExpiredAuthState,
     cleanupExpiredAuditEvents,
     cleanupExpiredCarRecipeProposals,
@@ -76,6 +79,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
   return {
     client,
     close,
+    cleanupAgedRevokedPasskeys,
     cleanupExpiredAuthState,
     cleanupExpiredAuditEvents,
     cleanupExpiredCarRecipeProposals,
@@ -116,6 +120,16 @@ async function expectMaintenanceError(
 
 describe("Community maintenance runner", () => {
   it.each([
+    {
+      expected: {
+        deletedPasskeys: 4,
+        kind: "cleanup_aged_revoked_passkeys",
+      },
+      functionName: "cleanup_aged_revoked_passkeys",
+      input: { batchSize: 6, kind: "cleanup_aged_revoked_passkeys" },
+      rows: [{ deleted_passkeys: 4 }],
+      values: [6],
+    },
     {
       expected: {
         deletedChallenges: 6,
@@ -248,7 +262,9 @@ describe("Community maintenance runner", () => {
     expect(Object.isFrozen(result)).toBe(true);
     expect(fixture.connect).toHaveBeenCalledOnce();
     expect(fixture.verifyRuntimeBoundary).toHaveBeenCalledOnce();
-    if (testCase.input.kind === "cleanup_expired_auth_state") {
+    if (testCase.input.kind === "cleanup_aged_revoked_passkeys") {
+      expect(fixture.cleanupAgedRevokedPasskeys).toHaveBeenCalledWith(testCase.values[0]);
+    } else if (testCase.input.kind === "cleanup_expired_auth_state") {
       expect(fixture.cleanupExpiredAuthState).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "cleanup_expired_audit_events") {
       expect(fixture.cleanupExpiredAuditEvents).toHaveBeenCalledWith(testCase.values[0]);
@@ -274,7 +290,8 @@ describe("Community maintenance runner", () => {
       expect(fixture.finalizeCommunitySeason).toHaveBeenCalledWith(testCase.values[0]);
     }
     expect(
-      fixture.cleanupExpiredAuthState.mock.calls.length +
+      fixture.cleanupAgedRevokedPasskeys.mock.calls.length +
+        fixture.cleanupExpiredAuthState.mock.calls.length +
         fixture.cleanupExpiredAuditEvents.mock.calls.length +
         fixture.cleanupExpiredCarRecipeProposals.mock.calls.length +
         fixture.cleanupExpiredInvites.mock.calls.length +
@@ -293,6 +310,11 @@ describe("Community maintenance runner", () => {
   it.each([
     null,
     [],
+    { batchSize: 0, kind: "cleanup_aged_revoked_passkeys" },
+    { batchSize: 1_001, kind: "cleanup_aged_revoked_passkeys" },
+    { batchSize: 1.5, kind: "cleanup_aged_revoked_passkeys" },
+    { batchSize: "1", kind: "cleanup_aged_revoked_passkeys" },
+    { batchSize: 1, extra: true, kind: "cleanup_aged_revoked_passkeys" },
     { batchSize: 0, kind: "cleanup_expired_auth_state" },
     { batchSize: 1_001, kind: "cleanup_expired_auth_state" },
     { batchSize: 1.5, kind: "cleanup_expired_auth_state" },
@@ -443,6 +465,7 @@ describe("Community maintenance runner", () => {
     { cleanup: "deletion-job", rows: [{ deleted_deletion_job_count: 1 }] },
     { cleanup: "purge", rows: [{ purged_profile_count: 1 }] },
     { cleanup: "provenance", rows: [{ redacted_pairing_count: 1 }] },
+    { cleanup: "passkey", rows: [{ deleted_passkey_count: 1 }] },
     {
       cleanup: "auth",
       rows: [{ deleted_challenges: 1, deleted_recovery_authorities: 1 }],
@@ -452,27 +475,29 @@ describe("Community maintenance runner", () => {
   ])("rejects invalid fixed result shapes", async ({ cleanup, rows }) => {
     const fixture = createPoolFixture(rows);
     const job: CommunityMaintenanceJob =
-      cleanup === "auth"
-        ? { batchSize: 1, kind: "cleanup_expired_auth_state" }
-        : cleanup === "audit"
-          ? { batchSize: 1, kind: "cleanup_expired_audit_events" }
-          : cleanup === "deletion-job"
-            ? { batchSize: 1, kind: "cleanup_terminal_deletion_jobs" }
-            : cleanup === "invite"
-              ? { batchSize: 1, kind: "cleanup_expired_invites" }
-              : cleanup === "session"
-                ? { batchSize: 1, kind: "cleanup_expired_sessions" }
-                : cleanup === "car"
-                  ? { batchSize: 1, kind: "cleanup_expired_car_recipe_proposals" }
-                  : cleanup === "purge"
-                    ? { batchSize: 1, kind: "purge_profile_deletions" }
-                    : cleanup === "pairing"
-                      ? { batchSize: 1, kind: "cleanup_expired_pairing_state" }
-                      : cleanup === "provenance"
-                        ? { batchSize: 1, kind: "redact_aged_pairing_approval_provenance" }
-                        : cleanup
-                          ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
-                          : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
+      cleanup === "passkey"
+        ? { batchSize: 1, kind: "cleanup_aged_revoked_passkeys" }
+        : cleanup === "auth"
+          ? { batchSize: 1, kind: "cleanup_expired_auth_state" }
+          : cleanup === "audit"
+            ? { batchSize: 1, kind: "cleanup_expired_audit_events" }
+            : cleanup === "deletion-job"
+              ? { batchSize: 1, kind: "cleanup_terminal_deletion_jobs" }
+              : cleanup === "invite"
+                ? { batchSize: 1, kind: "cleanup_expired_invites" }
+                : cleanup === "session"
+                  ? { batchSize: 1, kind: "cleanup_expired_sessions" }
+                  : cleanup === "car"
+                    ? { batchSize: 1, kind: "cleanup_expired_car_recipe_proposals" }
+                    : cleanup === "purge"
+                      ? { batchSize: 1, kind: "purge_profile_deletions" }
+                      : cleanup === "pairing"
+                        ? { batchSize: 1, kind: "cleanup_expired_pairing_state" }
+                        : cleanup === "provenance"
+                          ? { batchSize: 1, kind: "redact_aged_pairing_approval_provenance" }
+                          : cleanup
+                            ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
+                            : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
 
     await expectMaintenanceError(
       createCommunityMaintenanceRunner(fixture.pool).execute(job),
@@ -521,6 +546,21 @@ describe("Community maintenance runner", () => {
       createCommunityMaintenanceRunner(fixture.pool).execute({
         batchSize: 1,
         kind: "cleanup_expired_ingest_state",
+      }),
+      "result_invalid",
+    );
+  });
+
+  it.each([
+    { batchSize: 1, row: { deleted_passkeys: 2 } },
+    { batchSize: 10, row: { deleted_passkeys: -1 } },
+    { batchSize: 10, row: { deleted_passkeys: "1" } },
+  ])("bounds the revoked-passkey cleanup result", async ({ batchSize, row }) => {
+    const fixture = createPoolFixture([row]);
+    await expectMaintenanceError(
+      createCommunityMaintenanceRunner(fixture.pool).execute({
+        batchSize,
+        kind: "cleanup_aged_revoked_passkeys",
       }),
       "result_invalid",
     );

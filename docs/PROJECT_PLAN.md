@@ -210,14 +210,14 @@ flowchart LR
   distributed rate/backpressure controls, deployment login/certificate, capacity evidence, real-user
   end-to-end integration, and deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
-  The local runner now wraps only the eight reviewed authentication/audit-event/invite/
-  CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job cleanup procedures, primary
-  profile purge, one pairing approval-provenance redaction procedure, Community refresh, and
-  finalization. One opt-in synthetic integration applies the reviewed migrations to disposable
-  PostgreSQL, runs every emitted command through a narrow login, rejects an extra-membership login
-  before mutation, and verifies exact state. An external audit sink, scheduling, monitoring,
-  production credentials/TLS, capacity, cache/backup/tombstone purge, restore replay, and deployment
-  remain separate gates.
+  The local runner now wraps only the nine reviewed authentication/audit-event/invite/
+  CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job/aged-revoked-passkey cleanup
+  procedures, primary profile purge, one pairing approval-provenance redaction procedure, Community
+  refresh, and finalization. One opt-in synthetic integration applies the reviewed migrations to
+  disposable PostgreSQL, runs every emitted command through a narrow login, rejects an
+  extra-membership login before mutation, and verifies exact state. An external audit sink,
+  scheduling, monitoring, production credentials/TLS, capacity, cache/backup/tombstone purge,
+  restore replay, and deployment remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.
@@ -401,9 +401,10 @@ event.
   key's sessions, unused ceremonies, and approved-but-not-activated pairing authority. Activated
   devices remain explicit separately revocable credentials.
 - Public database safety ceilings allow at most 32 retained passkey records and 32 active unexpired
-  browser sessions per profile. Revision 0030 adds bounded cleanup for expired rows with no retained
-  predecessor or pairing approval reference; scheduling, pairing-provenance history policy, and edge
-  limits remain independently required.
+  browser sessions per profile. Revision 0030 adds bounded cleanup for expired session rows with no
+  retained predecessor or pairing approval reference. Revision 0035 separately deletes only passkeys
+  revoked for at least 180 days with no session, verifying/authorized challenge, or pairing
+  reference; scheduling and edge limits remain independently required.
 - Recovery uses a short-lived restricted authority and cannot become a normal browser session until
   a replacement passkey is safely established.
 - Recovery-code regeneration requires an exact active-session passkey step-up and atomically
@@ -418,8 +419,8 @@ event.
   revocable because they have no profile-admin scope.
 - Recovery lookup and verification require generic responses and timing, body/attempt bounds,
   edge/service rate controls, protected deployment pepper, scheduled cleanup, and monitoring.
-  Recovery completion fails closed at the 32-lifetime-passkey provenance ceiling until bounded
-  cleanup is implemented.
+  Recovery completion fails closed at the 32-retained-passkey provenance ceiling until the bounded
+  cleanup has removed an eligible old unreferenced revoked row; the ceiling itself is unchanged.
 
 ### Device authorization
 
@@ -699,10 +700,13 @@ not provide the planned external append-only sink. Revision 0034 retains the exa
 approval references on activated pairings for at least 180 days, then permits maximum-1000
 oldest-first redaction of only those two references under the existing authentication and pairing
 mutexes. The pairing, profile/source/device binding, active device, and passkey remain, while a
-later session cleanup may remove a newly unreferenced expired session. Retained pairing/device
-history, historical passkeys/devices, other remaining expiry classes, keyed tombstone policy,
-cache/backup purge, and restore replay still require their own reviewed implementation and public
-policy, and no implemented cleanup or redaction has a scheduler or deployed cadence.
+later session cleanup may remove a newly unreferenced expired session. Revision 0035 separately
+removes maximum-1000 oldest-first passkey rows only after 180 days in revoked state and only when no
+session, verifying/authorized challenge, or pairing reference remains; this can free the unchanged
+32-row add/recovery ceiling. Retained pairing/device history, historical device keys, other
+remaining expiry classes, keyed tombstone policy, cache/backup purge, and restore replay still
+require their own reviewed implementation and public policy, and no implemented cleanup or redaction
+has a scheduler or deployed cadence.
 
 ## Administration and operations
 
