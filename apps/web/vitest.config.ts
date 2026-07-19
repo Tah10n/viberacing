@@ -29,6 +29,8 @@ export default defineConfig({
     },
     environment: "jsdom",
     include: ["**/*.test.{ts,tsx}"],
+    // Keep isolated route-module imports below their per-test timeout on high-core hosts.
+    maxWorkers: 4,
     mockReset: true,
     restoreMocks: true,
     setupFiles: ["./tests/setup.ts"],
