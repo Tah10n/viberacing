@@ -62,9 +62,8 @@ there is still no reviewed digest, expiry, backup, or restore-replay contract fo
 database predicates prevent cleanup from widening into pending deletion authority.
 
 Residual risk remains: there is no scheduler, cadence, retry/overlap policy, monitoring, capacity
-result, production Jobs login/TLS connection, public cache purge, backup-expiry proof, disclosed
-tombstone policy, restore replay, audit-event retention implementation, or deployed retention
-evidence.
+result, production Jobs login/TLS connection, external audit sink, public cache purge, backup-expiry
+proof, disclosed tombstone policy, restore replay, or deployed retention evidence.
 
 Affected invariants are VR-DATA-001 and VR-DELETE-001. Primary attacker stories are
 VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -104,17 +103,17 @@ must not widen Jobs table access or delete non-terminal work.
 
 Acceptance evidence recorded for this decision includes:
 
-- static validation of 32 contiguous immutable migration revisions and the exact checksum ledger;
+- static validation of 33 contiguous immutable migration revisions and the exact checksum ledger;
 - real PostgreSQL scenarios for oldest-first batch bounds, the exact 30-day terminal predicate,
   recent/non-terminal preservation, idempotency, invalid batches, missing mutex, supporting index,
   and exact role grants;
 - an observed two-worker race in which separate one-row batches serialize and each aged terminal job
   is removed once while recent evidence remains;
-- the complete isolated PostgreSQL suite with 27 tables, 32 observed lock-wait races, 12 direct
-  relation denials, and 49 cross-capability denials;
-- 180 focused Jobs tests with 100% statement, branch, function, and line coverage plus strict lint
+- the complete isolated PostgreSQL suite with 27 tables, 33 observed lock-wait races, 12 direct
+  relation denials, and 52 cross-capability denials;
+- 192 focused Jobs tests with 100% statement, branch, function, and line coverage plus strict lint
   and type checking; and
-- a separate disposable PostgreSQL integration that runs all ten built Jobs commands through a
+- a separate disposable PostgreSQL integration that runs all eleven built Jobs commands through a
   narrow login, rejects a deliberately widened login before mutation, preserves generic output,
   deletes an aged terminal job, and retains the newly completed purge job.
 
@@ -134,3 +133,4 @@ monitoring, cache or backup purge, tombstone/restore replay, capacity, or deploy
 - [Bounded Community maintenance runner](0014-bounded-community-maintenance-job-runner.md)
 - [Bounded primary profile deletion purge](0034-bounded-profile-deletion-purge.md)
 - [Bounded invite retention cleanup](0043-bounded-invite-retention-cleanup.md)
+- [Bounded database audit-event retention cleanup](0046-bounded-audit-event-retention-cleanup.md)

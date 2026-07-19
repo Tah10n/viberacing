@@ -32,6 +32,7 @@ const finalizedSeasonStart = "2000-01-03";
 
 const fixture = Object.freeze({
   authChallengeId: "00000000-0000-4000-8000-000000031101",
+  auditEventId: "00000000-0000-4000-8000-000000031901",
   carProfileId: "00000000-0000-4000-8000-000000031201",
   carProposalId: "00000000-0000-4000-8000-000000031202",
   inviteId: "00000000-0000-4000-8000-000000031701",
@@ -242,6 +243,21 @@ VALUES (
   pg_catalog.decode(pg_catalog.repeat('12', 32), 'hex'),
   pg_catalog.statement_timestamp() - INTERVAL '10 minutes',
   pg_catalog.statement_timestamp() - INTERVAL '5 minutes'
+);
+
+INSERT INTO viberacing_private.audit_events (
+  audit_event_id,
+  event_type,
+  actor_kind,
+  request_id,
+  occurred_at
+)
+VALUES (
+  '${fixture.auditEventId}',
+  'session.revoked',
+  'system',
+  'req_' || pg_catalog.repeat('K', 22),
+  pg_catalog.statement_timestamp() - INTERVAL '200 days'
 );
 
 INSERT INTO viberacing_private.invites (
@@ -509,15 +525,15 @@ COMMIT;`,
     seedSyntheticState(currentSeasonStart);
 
     const rejected = runJobsCommand(databasePort, wideJobsLogin, wideJobsPassword, [
-      "cleanup-expired-auth-state",
+      "cleanup-expired-audit-events",
     ]);
     assertRejectedCommand(rejected, "widened Jobs login");
     assert.equal(
       psqlScalar(
         `SET ROLE viberacing_owner;
 SELECT pg_catalog.count(*)::integer
-FROM viberacing_private.auth_challenges
-WHERE challenge_id = '${fixture.authChallengeId}';`,
+FROM viberacing_private.audit_events
+WHERE audit_event_id = '${fixture.auditEventId}';`,
         "rejected-login stored-state verification",
       ),
       "1",
@@ -526,6 +542,7 @@ WHERE challenge_id = '${fixture.authChallengeId}';`,
 
     const commands = [
       ["cleanup-expired-auth-state"],
+      ["cleanup-expired-audit-events"],
       ["cleanup-expired-car-recipe-proposals"],
       ["cleanup-expired-invites"],
       ["cleanup-expired-ingest-state"],
@@ -549,6 +566,11 @@ SELECT pg_catalog.jsonb_build_object(
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.auth_challenges
     WHERE challenge_id = '${fixture.authChallengeId}'
+  ),
+  'auditEventCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.audit_events
+    WHERE audit_event_id = '${fixture.auditEventId}'
   ),
   'carProposalCount', (
     SELECT pg_catalog.count(*)::integer
@@ -647,6 +669,7 @@ SELECT pg_catalog.jsonb_build_object(
     );
     assert.deepEqual(storedState, {
       authChallengeCount: 0,
+      auditEventCount: 0,
       carProposalCount: 0,
       finalizedAtSet: true,
       finalizedEntryCount: 0,
@@ -668,7 +691,7 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Jobs PostgreSQL integration passed (ten commands, least-privilege denial, generic output, and exact stored state).",
+      "Jobs PostgreSQL integration passed (eleven commands, least-privilege denial, generic output, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

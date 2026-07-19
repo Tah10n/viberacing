@@ -270,27 +270,30 @@ stable order, removes restrictive pairings and authority-free pending keys first
 the opaque job, and cascades identity, credentials, sources, devices, usage, and personal score rows
 atomically. It deliberately creates no unkeyed tombstone. A separate Jobs-only cleanup retains that
 opaque terminal job for at least 30 days after server-recorded completion, then permits bounded
-oldest-first batches while preserving recent and non-terminal deletion work. Revision 0010 adds a
-public 48-hour server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent
-finalization procedure whose terminal metadata and score projection reject silent rewrites while
-profile purge can still remove personal rows. One local one-shot Jobs runner now wraps exactly one
-of ten fixed functions: authentication cleanup, invite cleanup, CarRecipe-proposal cleanup, ingest
-cleanup, pairing cleanup, session cleanup, terminal deletion-job cleanup, primary profile purge,
-refresh, or finalization. It uses a distinct least-privileged configuration namespace, one-client
-pool, per-checkout role/login/search-path probe, fixed deadlines and prepared parameters, closed
-result validation, destructive release after failure, and stable non-reflective CLI output. An
-opt-in synthetic integration now builds that runner, applies the reviewed migration manifest to one
-disposable PostgreSQL container, proves all ten commands through a narrow login, rejects a
+oldest-first batches while preserving recent and non-terminal deletion work. Revision 0033 adds a
+separate Jobs-only audit cleanup that retains each database audit reference for at least 180 days
+after server-recorded occurrence, then permits bounded oldest-first batches while preserving recent
+evidence. It does not supply an external append-only audit sink. Revision 0010 adds a public 48-hour
+server-time grace rule, late-snapshot quarantine, and a Jobs-only idempotent finalization procedure
+whose terminal metadata and score projection reject silent rewrites while profile purge can still
+remove personal rows. One local one-shot Jobs runner now wraps exactly one of eleven fixed
+functions: authentication cleanup, audit-event cleanup, invite cleanup, CarRecipe-proposal cleanup,
+ingest cleanup, pairing cleanup, session cleanup, terminal deletion-job cleanup, primary profile
+purge, refresh, or finalization. It uses a distinct least-privileged configuration namespace,
+one-client pool, per-checkout role/login/search-path probe, fixed deadlines and prepared parameters,
+closed result validation, destructive release after failure, and stable non-reflective CLI output.
+An opt-in synthetic integration now builds that runner, applies the reviewed migration manifest to
+one disposable PostgreSQL container, proves all eleven commands through a narrow login, rejects a
 deliberately widened login before mutation, and verifies exact stored state before cleanup. It has
-no scheduler, production login/certificate, monitoring backend, retry loop, capacity result, or
-deployment. Revision 0011 gives only the Web database role a bounded active-profile score projection
-containing no raw values, private identifiers, or exact timestamps. The score response component and
-Web PostgreSQL adapter preserve only that public allowlist through the local score route. The
-visible race, leaderboard, and selectable participant summary now consume its validated current-week
-response with a credential-free same-origin request and an explicit synthetic fallback. Canonical
-`/?profile=handle#profile` links select only an exact public handle in that page, and a missing
-current top-32 row is not replaced with another participant. There is now a local
-invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
+no external audit sink, scheduler, production login/certificate, monitoring backend, retry loop,
+capacity result, or deployment. Revision 0011 gives only the Web database role a bounded
+active-profile score projection containing no raw values, private identifiers, or exact timestamps.
+The score response component and Web PostgreSQL adapter preserve only that public allowlist through
+the local score route. The visible race, leaderboard, and selectable participant summary now consume
+its validated current-week response with a credential-free same-origin request and an explicit
+synthetic fallback. Canonical `/?profile=handle#profile` links select only an exact public handle in
+that page, and a missing current top-32 row is not replaced with another participant. There is now a
+local invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
 rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey profile-deletion
 request flow. Recovery lookup returns only the selected unused PHC; admitted attempts use bounded
 Argon2id work, a protected pepper, generic responses, a configured minimum response floor, and a

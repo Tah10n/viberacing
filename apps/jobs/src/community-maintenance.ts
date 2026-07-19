@@ -22,6 +22,10 @@ export type CommunityMaintenanceJob =
     }>
   | Readonly<{
       batchSize: number;
+      kind: "cleanup_expired_audit_events";
+    }>
+  | Readonly<{
+      batchSize: number;
       kind: "cleanup_expired_car_recipe_proposals";
     }>
   | Readonly<{
@@ -63,6 +67,10 @@ export type CommunityMaintenanceResult =
       deletedRecoveryAuthorities: number;
       deletedUsedRecoveryCodes: number;
       kind: "cleanup_expired_auth_state";
+    }>
+  | Readonly<{
+      deletedAuditEvents: number;
+      kind: "cleanup_expired_audit_events";
     }>
   | Readonly<{
       deletedProposals: number;
@@ -199,6 +207,7 @@ function readJob(value: unknown): CommunityMaintenanceJob {
     }
     if (
       kind === "cleanup_expired_auth_state" ||
+      kind === "cleanup_expired_audit_events" ||
       kind === "cleanup_expired_car_recipe_proposals" ||
       kind === "cleanup_expired_invites" ||
       kind === "cleanup_expired_ingest_state" ||
@@ -308,6 +317,14 @@ function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaint
     });
   }
 
+  if (job.kind === "cleanup_expired_audit_events") {
+    const row = readSingleRow(value, new Set(["deleted_audit_events"]));
+    return Object.freeze({
+      deletedAuditEvents: readCount(row, "deleted_audit_events", job.batchSize),
+      kind: job.kind,
+    });
+  }
+
   if (job.kind === "cleanup_expired_car_recipe_proposals") {
     const row = readSingleRow(value, new Set(["deleted_proposals"]));
     return Object.freeze({
@@ -405,6 +422,9 @@ function executeCapability(
 ): Promise<unknown> {
   if (job.kind === "cleanup_expired_auth_state") {
     return client.cleanupExpiredAuthState(job.batchSize);
+  }
+  if (job.kind === "cleanup_expired_audit_events") {
+    return client.cleanupExpiredAuditEvents(job.batchSize);
   }
   if (job.kind === "cleanup_expired_car_recipe_proposals") {
     return client.cleanupExpiredCarRecipeProposals(job.batchSize);

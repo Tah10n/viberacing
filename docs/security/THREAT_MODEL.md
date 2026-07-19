@@ -13,14 +13,14 @@ public score/race/status routes, one local invite/OAuth/initial-passkey enrollme
 returning-passkey login plus private passkey/source/device inventory, source
 pause/reactivation/unlink, device/passkey revocation, fresh-passkey recovery-code rotation, and
 fresh-passkey profile-deletion-request slice plus one-time recovery-code replacement-passkey sign-in
-with encrypted cookies and logout, one local one-shot Jobs runner with seven bounded cleanup
+with encrypted cookies and logout, one local one-shot Jobs runner with eight bounded cleanup
 capabilities plus primary profile purge, and a synthetic disposable PostgreSQL integration for all
-ten Jobs commands, plus local Community sync verification, PostgreSQL-adapter, transport-free
-composition, and bounded Fastify HTTP boundaries; it does not yet contain a Jobs scheduler,
-cache/backup/tombstone purge, restore replay, deployed Ingest service, operational connector,
-deployment, or production data. A library-only Rust connector foundation now bounds and validates
-the stable App Server initialization and candidate account/usage exchanges, then composes them
-through a synthetic one-shot child supervisor and produces exact sync material behind a second
+eleven Jobs commands, plus local Community sync verification, PostgreSQL-adapter, transport-free
+composition, and bounded Fastify HTTP boundaries; it does not yet contain an external audit sink,
+Jobs scheduler, cache/backup/tombstone purge, restore replay, deployed Ingest service, operational
+connector, deployment, or production data. A library-only Rust connector foundation now bounds and
+validates the stable App Server initialization and candidate account/usage exchanges, then composes
+them through a synthetic one-shot child supervisor and produces exact sync material behind a second
 inaccessible reviewed context. An isolated one-use signer consumes that material only with a third
 inaccessible device-bound key capability and returns a closed signed envelope. A separate
 pending-key/challenge signer and pure Web verifier agree on an exact pairing-possession proof. A
@@ -264,17 +264,19 @@ and migration or rollback where applicable.
    no-store/same-origin posture, four-request no-queue admission, adapter deadline policy, generic
    error translation, and bounded response matrix. The visible home race requests the
    server-selected current week without credentials, accepts only closed public fields, and keeps a
-   labeled synthetic fallback on error. A local one-shot Jobs runner now validates one of ten fixed
-   authentication/invite/CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job cleanup,
-   primary-profile purge, or canonical-season refresh/finalization commands, probes its exact
-   least-privileged login/session before one prepared function call, holds one client through
-   settlement, and emits no input or database detail. A synthetic integration runs every emitted
-   command against disposable PostgreSQL, rejects an extra-membership login before mutation, and
-   checks exact stored state. Eligible expired invites are removed without deleting redeemed
-   provenance; eligible expired sessions are removed only when no retained predecessor or
-   activated-pairing provenance requires the row; terminal deletion jobs are removed only after 30
-   days. Production login/TLS and edge evidence, a Jobs scheduler, audited correction authority,
-   client-rate policy, and capacity evidence are still required before publishing durable results.
+   labeled synthetic fallback on error. A local one-shot Jobs runner now validates one of eleven
+   fixed authentication/audit-event/invite/CarRecipe-proposal/ingest/pairing/session/
+   terminal-deletion-job cleanup, primary-profile purge, or canonical-season refresh/finalization
+   commands, probes its exact least-privileged login/session before one prepared function call,
+   holds one client through settlement, and emits no input or database detail. A synthetic
+   integration runs every emitted command against disposable PostgreSQL, rejects an extra-membership
+   login before mutation, and checks exact stored state. Eligible expired invites are removed
+   without deleting redeemed provenance; eligible expired sessions are removed only when no retained
+   predecessor or activated-pairing provenance requires the row; terminal deletion jobs are removed
+   only after 30 days; database audit references are removed only after 180 days. An external
+   append-only audit sink, production login/TLS and edge evidence, a Jobs scheduler, audited
+   correction authority, client-rate policy, and capacity evidence are still required before
+   publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes.

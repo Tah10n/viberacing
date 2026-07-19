@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and forty-four accepted ADRs.
+  fail-closed compatibility policy and matrix, and forty-six accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -330,6 +330,10 @@ Versioning where its guarantees are applicable.
   server-recorded completion, with oldest-first partial-index selection, shared purge-mutex
   serialization, repeated eligibility predicates, recent/non-terminal preservation, and no implied
   tombstone, backup purge, restore replay, or scheduler.
+- Jobs-only maximum-1000 cleanup for database audit references only after at least 180 days from
+  server-recorded occurrence, with oldest-first index selection, a separate private mutex, repeated
+  cutoff enforcement, recent-evidence preservation, and no implied external audit sink, backup
+  purge, deployment, or scheduler.
 - Jobs-only atomic open-season Community scoring refresh with immutable formula/season binding,
   distinct-source aggregation under one profile cap, shared-rank semantics, private derived score
   tables, bounded lock/statement waits, no empty-season growth, and observed concurrent idempotent
@@ -337,17 +341,17 @@ Versioning where its guarantees are applicable.
 - Jobs-only immutable Community season finalization after an exact 48-hour server-time grace period,
   with whole-payload late quarantine, terminal no-data seasons, idempotent retry, bounded calendar
   support, and no implied scheduler, correction capability, or public read surface.
-- A private local one-shot Jobs workspace for exactly ten fixed capabilities: authentication,
-  invite, CarRecipe-proposal, ingest, pairing, or session cleanup; primary profile purge; terminal
-  deletion-job cleanup; open-season refresh; or terminal finalization. It has strict
+- A private local one-shot Jobs workspace for exactly eleven fixed capabilities: authentication,
+  audit-event, invite, CarRecipe-proposal, ingest, pairing, or session cleanup; primary profile
+  purge; terminal deletion-job cleanup; open-season refresh; or terminal finalization. It has strict
   command/object/result parsing, a distinct redacted database namespace, one-client pool, fixed
   deadlines, an exact role/login/capability/search-path probe, prepared procedure calls, destructive
-  failure release, stable non-reflective CLI output, production build, and 180 tests at 100%
-  coverage. A separate opt-in Docker gate now applies every reviewed migration, runs all ten emitted
-  commands through one synthetic least-privileged login, rejects a deliberately widened login before
-  mutation, verifies generic output and exact stored state, and cleans up its container, network,
-  and storage. It adds no scheduler, production credential/TLS path, monitoring, retry loop,
-  capacity result, or deployment claim.
+  failure release, stable non-reflective CLI output, production build, and 192 tests at 100%
+  coverage. A separate opt-in Docker gate now applies every reviewed migration, runs all eleven
+  emitted commands through one synthetic least-privileged login, rejects a deliberately widened
+  login before mutation, verifies generic output and exact stored state, and cleans up its
+  container, network, and storage. It adds no scheduler, production credential/TLS path, monitoring,
+  retry loop, capacity result, or deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.

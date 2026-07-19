@@ -42,6 +42,7 @@ function outputDependencies(
 describe("Jobs command", () => {
   it.each([
     [["cleanup-expired-auth-state"], { batchSize: 1_000, kind: "cleanup_expired_auth_state" }],
+    [["cleanup-expired-audit-events"], { batchSize: 1_000, kind: "cleanup_expired_audit_events" }],
     [
       ["cleanup-expired-car-recipe-proposals"],
       { batchSize: 1_000, kind: "cleanup_expired_car_recipe_proposals" },
@@ -77,6 +78,7 @@ describe("Jobs command", () => {
     {},
     [],
     ["cleanup-expired-auth-state", "unexpected"],
+    ["cleanup-expired-audit-events", "unexpected"],
     ["cleanup-expired-car-recipe-proposals", "unexpected"],
     ["cleanup-expired-invites", "unexpected"],
     ["cleanup-expired-ingest-state", "unexpected"],

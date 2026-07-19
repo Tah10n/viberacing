@@ -192,6 +192,12 @@
       "name": "terminal_deletion_job_retention_cleanup",
       "path": "database/migrations/0032_terminal_deletion_job_retention_cleanup.sql",
       "sha256": "c2920192b698696e55ec8b2355b9c3a616edf6412231ae70e48f28359012d02a"
+    },
+    {
+      "revision": 33,
+      "name": "audit_event_retention_cleanup",
+      "path": "database/migrations/0033_audit_event_retention_cleanup.sql",
+      "sha256": "922974450c51d5414be3a1f223abccb3bf5217f4008d4d35bb934e369ef4ba86"
     }
   ]
 }

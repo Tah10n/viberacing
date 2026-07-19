@@ -270,23 +270,25 @@ eligible expired browser sessions без retained rotation predecessor или pa
 `deletion_pending` профилей, сначала снимает restrictive pairing references, terminally settles
 opaque job и не создаёт неподтверждённый tombstone. Отдельная Jobs-only процедура хранит этот
 terminal job не менее 30 дней после server-recorded completion, а затем допускает bounded
-oldest-first batches, не затрагивая recent и non-terminal deletion work. Локальный one-shot Jobs
-runner вызывает только одну из десяти fixed capabilities:
-auth/invite/CarRecipe-proposal/ingest/pairing/session cleanup, terminal deletion-job cleanup,
-primary profile purge, scoring refresh или finalization через отдельный least-privileged config,
-single-client pool, проверку role/login/search path, fixed deadlines, prepared parameters, closed
-result validation и стабильный non-reflective CLI output. Отдельный opt-in Jobs scenario применяет
-reviewed migrations к одноразовой PostgreSQL, запускает все десять emitted commands через узкий
-synthetic login, отклоняет login с лишней role membership до мутации и проверяет точное состояние
-перед очисткой. Сама база не проверяет wire signature; локальные kernel, adapter и application
-объединены на synthetic/mock-pool evidence. Отдельный opt-in loopback Ingest scenario теперь
-проводит независимо подписанный HTTP request через emitted host и одноразовый least-privileged
-PostgreSQL login, включая duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed
-HTTP ingest route, operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs
-login/TLS integration, monitoring backend, deployed public score read, audited correction flow,
-cache/backup/tombstone purge, restore replay и scheduled deletion execution ещё не реализованы,
-поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
-данных пока нет.
+oldest-first batches, не затрагивая recent и non-terminal deletion work. Отдельный Jobs-only cleanup
+для audit events сохраняет database audit reference не менее 180 дней после server-recorded
+occurrence, затем допускает bounded oldest-first batches и сохраняет recent evidence; external
+append-only audit sink он не создаёт. Локальный one-shot Jobs runner вызывает только одну из
+одиннадцати fixed capabilities: auth/audit/invite/CarRecipe-proposal/ingest/pairing/session cleanup,
+terminal deletion-job cleanup, primary profile purge, scoring refresh или finalization через
+отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
+deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI output.
+Отдельный opt-in Jobs scenario применяет reviewed migrations к одноразовой PostgreSQL, запускает все
+одиннадцать emitted commands через узкий synthetic login, отклоняет login с лишней role membership
+до мутации и проверяет точное состояние перед очисткой. Сама база не проверяет wire signature;
+локальные kernel, adapter и application объединены на synthetic/mock-pool evidence. Отдельный opt-in
+loopback Ingest scenario теперь проводит независимо подписанный HTTP request через emitted host и
+одноразовый least-privileged PostgreSQL login, включая duplicate/replay/revoke и точную проверку
+сохранённого состояния. Deployed HTTP ingest route, operational sync connector, cleanup/scoring
+scheduler, deployment Ingest/Jobs login/TLS integration, monitoring backend, deployed public score
+read, audited correction flow, cache/backup/tombstone purge, restore replay и scheduled deletion
+execution ещё не реализованы, поэтому локальный enrollment ещё не является готовой
+production-авторизацией, а приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

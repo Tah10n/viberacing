@@ -3,7 +3,7 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and thirty-two checksum-ledgered database migrations. Repository verification uses synthetic data
+and thirty-three checksum-ledgered database migrations. Repository verification uses synthetic data
 and injected capabilities only. It has procedure-only identity, passkey login/management, restricted
 recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
 retention cleanup, bounded primary profile deletion, scoring, terminal finalization, and public
@@ -255,11 +255,24 @@ pnpm run test:jobs:coverage
 pnpm run build:jobs
 ```
 
-The built one-shot CLI accepts only `cleanup-expired-auth-state`, `cleanup-expired-ingest-state`,
-`cleanup-expired-pairing-state`, `purge-profile-deletions`, `refresh-community-season YYYY-MM-DD`,
-or `finalize-community-season YYYY-MM-DD`. Do not invoke it against a database until an
+The built one-shot CLI accepts only `cleanup-expired-auth-state`, `cleanup-expired-audit-events`,
+`cleanup-expired-car-recipe-proposals`, `cleanup-expired-invites`, `cleanup-expired-ingest-state`,
+`cleanup-expired-pairing-state`, `cleanup-expired-sessions`, `cleanup-terminal-deletion-jobs`,
+`purge-profile-deletions`, `refresh-community-season YYYY-MM-DD`, or
+`finalize-community-season YYYY-MM-DD`. Do not invoke it against a persistent database until an
 environment-owned login has been separately provisioned with only `viberacing_jobs`; the repository
-does not create that login or provide an application integration test. See
+does not create a deployment login.
+
+The separate synthetic Jobs application path is opt-in and requires Docker:
+
+```text
+pnpm run test:jobs:postgres-integration
+```
+
+It applies the reviewed migrations to one disposable PostgreSQL container, creates only synthetic
+narrow and negative-control logins, runs all eleven built commands, verifies generic output and
+exact state, and removes the container and storage. It proves no external audit sink, scheduler,
+production login/TLS, monitoring, capacity, real-user retention, or deployment. See
 [`apps/jobs/README.md`](../../apps/jobs/README.md) for the exact boundary and remaining
 scheduler/deployment work.
 

@@ -53,6 +53,9 @@ probe, output, or generic-query prohibitions.
 `cleanup-terminal-deletion-jobs`, with the fixed maximum batch of 1000 and the same one-shot
 boundary.
 
+[ADR 0046](0046-bounded-audit-event-retention-cleanup.md) adds an eleventh fixed command,
+`cleanup-expired-audit-events`, with the fixed maximum batch of 1000 and the same one-shot boundary.
+
 Season input must be one canonical Monday from `1999-12-27` through `2099-12-28`. Unknown commands,
 arguments, fields, sparse or exotic arrays, accessors, prototypes, and values fail before database
 configuration or connection. Programmatic job objects are separately revalidated as closed plain
@@ -74,16 +77,16 @@ Every checkout first verifies all of the following in one fixed query:
 - it has no other group membership; and
 - the search path is exactly `pg_catalog,pg_temp`.
 
-The second and only capability query is selected in code from a closed set of ten fixed
+The second and only capability query is selected in code from a closed set of eleven fixed
 parameterized SQL strings: the original three plus ADR 0029's pairing-retention cleanup, ADR 0032's
 authentication cleanup, ADR 0034's primary profile deletion purge, ADR 0036's CarRecipe-proposal
 cleanup, ADR 0042's session-retention cleanup, ADR 0043's invite-retention cleanup, and ADR 0045's
-terminal deletion-job cleanup. There is no generic query, table access, migration, owner, Web,
-Ingest, Admin, interactive auth, or correction capability. The returned array and row must contain
-exactly one plain dense row and the allowlisted integer columns. Cleanup counts cannot exceed the
-requested batch; scoring counts must fit PostgreSQL `integer`. Accessors, extra columns, missing
-rows, invalid counts, and driver/runtime exceptions produce one stable error type without reflecting
-values.
+terminal deletion-job cleanup plus ADR 0046's audit-event cleanup. There is no generic query, table
+access, migration, owner, Web, Ingest, Admin, interactive auth, or correction capability. The
+returned array and row must contain exactly one plain dense row and the allowlisted integer columns.
+Cleanup counts cannot exceed the requested batch; scoring counts must fit PostgreSQL `integer`.
+Accessors, extra columns, missing rows, invalid counts, and driver/runtime exceptions produce one
+stable error type without reflecting values.
 
 The CLI prints only one stable success or failure sentence. It does not print the command, season,
 counts, configuration, SQL, exception, or stack. The pool monitoring seam accepts only the closed
@@ -107,12 +110,13 @@ analytics or retention sink. Production scheduler metadata, run history, alerts,
 metrics still require a privacy-map and retention review before collection.
 
 A local synthetic integration now proves the emitted application can use one disposable narrow login
-for all ten capabilities and that an extra-membership login fails the runtime probe before mutation.
-Residual risk remains: no production login/certificate path proves deployment membership; no
-scheduler enforces cadence, backoff, overlap, or alerting; cleanup does not cover every expiring
-identity state; no correction, purge schedule, cache/backup purge, or restore replay exists; and no
-capacity test proves the selected deadlines under production load. A compromised Jobs login still
-has all ten database capabilities, so principal separation and revocation remain required.
+for all eleven capabilities and that an extra-membership login fails the runtime probe before
+mutation. Residual risk remains: no production login/certificate path proves deployment membership;
+no external audit sink exists; no scheduler enforces cadence, backoff, overlap, or alerting; cleanup
+does not cover every expiring identity state; no correction, purge schedule, cache/backup purge, or
+restore replay exists; and no capacity test proves the selected deadlines under production load. A
+compromised Jobs login still has all eleven database capabilities, so principal separation and
+revocation remain required.
 
 Affected invariants are VR-PUBLIC-001, VR-INGEST-002, VR-ABUSE-001, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-SEASON-RACE, VR-ABUSE-DATABASE-ROLE,
@@ -160,20 +164,20 @@ Current local evidence includes:
 - canonical season and batch bounds, closed object/array/result allowlists, sparse/exotic/accessor/
   proxy rejection, aggregate count bounds, and non-reflective failures;
 - effective-role/login/capability/search-path rejection before every procedure call;
-- exact prepared parameters for all ten functions, healthy versus destructive release, connection
+- exact prepared parameters for all eleven functions, healthy versus destructive release, connection
   and query translation, and a deferred query proving release occurs only after settlement;
 - CLI rejection before configuration, pool close after success or failure, stable output, writer
   failure containment, and no reflected command/error detail;
-- 180 unit tests with 100% statement, branch, function, and line coverage, including a lint-policy
+- 192 unit tests with 100% statement, branch, function, and line coverage, including a lint-policy
   regression that keeps direct `pg` imports inside the fixed pool adapter;
-- one opt-in Docker integration that revalidates and applies the migration manifest, runs all ten
+- one opt-in Docker integration that revalidates and applies the migration manifest, runs all eleven
   built commands through a synthetic narrow login, rejects a deliberately widened login before
   mutation, validates constant process output and exact stored state, and removes its container,
   network, and storage; and
 - strict lint, type checking, production TypeScript build, dependency/license inventory, root
   deterministic verification, and staged public-data review.
 
-The general SQL integration suite separately proves the ten procedure bodies and concurrency
+The general SQL integration suite separately proves the eleven procedure bodies and concurrency
 behavior in portless ephemeral PostgreSQL. The Jobs integration proves one synthetic loopback
 Node-to-PostgreSQL application path only. Scheduler behavior, production TLS/login, capacity,
 monitoring, real-user retention, and deployment evidence remain required before those behaviors may
@@ -198,3 +202,5 @@ be claimed.
 - [Bounded CarRecipe proposal retention cleanup](0036-bounded-car-recipe-proposal-cleanup.md)
 - [Bounded expired session retention cleanup](0042-bounded-expired-session-retention-cleanup.md)
 - [Bounded invite retention cleanup](0043-bounded-invite-retention-cleanup.md)
+- [Bounded terminal deletion-job retention cleanup](0045-bounded-terminal-deletion-job-retention-cleanup.md)
+- [Bounded database audit-event retention cleanup](0046-bounded-audit-event-retention-cleanup.md)

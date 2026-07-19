@@ -13,19 +13,20 @@ staged-review rules all apply.
 - Keep the database pool at one client. A job invocation calls exactly one reviewed `viberacing_api`
   function with positional parameters; do not add a generic query, migration, table, owner, Web,
   Ingest, Admin, or interactive-auth capability.
-- Authentication, invite, CarRecipe-proposal, ingest, pairing, session, and terminal deletion-job
-  cleanup each accept only the fixed 1000-row CLI batch. Scoring commands accept one canonical
-  Monday season inside the database contract. Primary profile purge accepts only the separate fixed
-  10-profile CLI batch. Unknown commands, fields, arguments, result columns, rows, accessors, and
-  prototypes fail before they can widen work.
+- Authentication, audit-event, invite, CarRecipe-proposal, ingest, pairing, session, and terminal
+  deletion-job cleanup each accept only the fixed 1000-row CLI batch. Scoring commands accept one
+  canonical Monday season inside the database contract. Primary profile purge accepts only the
+  separate fixed 10-profile CLI batch. Unknown commands, fields, arguments, result columns, rows,
+  accessors, and prototypes fail before they can widen work.
 - Hold the client until the PostgreSQL call settles. Destroy failed clients, close the pool on every
   CLI path, and keep the client deadline outside the database function's 30-second deadline.
 - Do not log dates, counts, identifiers, SQL, environment values, database errors, stack traces, or
   retained data. CLI output is one stable success/failure sentence; monitoring hooks receive only a
   closed signal enum.
-- This workspace is a local one-shot runner. Do not claim that a scheduler, production login/TLS
-  path, monitoring backend, deployment, correction flow, cache/backup/tombstone purge, restore
-  replay, or live retention policy exists without separate implementation and evidence.
+- This workspace is a local one-shot runner. Do not claim that an external audit sink, scheduler,
+  production login/TLS path, monitoring backend, deployment, correction flow, cache/backup/tombstone
+  purge, restore replay, or live retention policy exists without separate implementation and
+  evidence.
 
 ## Commands
 

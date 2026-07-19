@@ -514,6 +514,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/deletion_job_cleanup.sql"), "utf8"),
     },
     {
+      label: "audit-event retention cleanup scenarios",
+      sql: readFileSync(resolve(root, "database/tests/audit_event_cleanup.sql"), "utf8"),
+    },
+    {
       label: "CarRecipe proposal and approval scenarios",
       sql: readFileSync(resolve(root, "database/tests/car_recipe_proposals.sql"), "utf8"),
     },
@@ -602,6 +606,13 @@ try {
       label: "terminal deletion-job cleanup concurrency setup",
       sql: readFileSync(
         resolve(root, "database/tests/deletion_job_cleanup_concurrency_setup.sql"),
+        "utf8",
+      ),
+    },
+    {
+      label: "audit-event cleanup concurrency setup",
+      sql: readFileSync(
+        resolve(root, "database/tests/audit_event_cleanup_concurrency_setup.sql"),
         "utf8",
       ),
     },
@@ -916,6 +927,29 @@ SELECT * FROM viberacing_api.cleanup_terminal_deletion_jobs(1);`,
       ),
     ),
     "terminal deletion-job cleanup concurrency assertions",
+  );
+
+  await expectConcurrentSuccesses(
+    "bounded audit-event cleanup worker race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_expired_audit_events(1);
+\\echo audit-event-cleanup-worker-lock-ready`,
+    "audit-event-cleanup-worker-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_expired_audit_events(1);`,
+    ],
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/audit_event_cleanup_concurrency_assertions.sql"),
+        "utf8",
+      ),
+    ),
+    "audit-event cleanup concurrency assertions",
   );
 
   await expectOneConcurrentWinner(
@@ -2119,6 +2153,11 @@ SELECT viberacing_api.complete_passkey_login(
     );
     expectDenied(
       role,
+      "SELECT * FROM viberacing_api.cleanup_expired_audit_events(1);",
+      `${role} audit-event cleanup`,
+    );
+    expectDenied(
+      role,
       "SELECT * FROM viberacing_api.cleanup_expired_car_recipe_proposals(1);",
       `${role} CarRecipe proposal cleanup`,
     );
@@ -2168,7 +2207,7 @@ SELECT viberacing_api.complete_passkey_login(
   }
 
   console.log(
-    "Database integration passed (27 schema tables, 32 observed lock-wait races, 12 relation-denial and 49 cross-capability checks).",
+    "Database integration passed (27 schema tables, 33 observed lock-wait races, 12 relation-denial and 52 cross-capability checks).",
   );
 } finally {
   if (started) {

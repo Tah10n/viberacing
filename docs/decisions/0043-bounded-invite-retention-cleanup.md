@@ -100,17 +100,17 @@ must not delete redeemed provenance or widen Jobs table access.
 
 Acceptance evidence recorded for this decision includes:
 
-- static validation of 32 contiguous immutable migration revisions and the exact checksum ledger;
+- static validation of 33 contiguous immutable migration revisions and the exact checksum ledger;
 - real PostgreSQL scenarios for oldest-first batch bounds, active/revoked deletion, idempotency,
   live and redeemed preservation, invalid batches, missing mutex, supporting index, and exact role
   grants;
 - an observed two-worker race in which separate one-row batches serialize and each expired row is
   removed once while live authority remains;
-- the complete isolated PostgreSQL suite with 27 tables, 32 observed lock-wait races, 12 direct
-  relation denials, and 49 cross-capability denials;
-- 180 focused Jobs tests with 100% statement, branch, function, and line coverage plus strict lint
+- the complete isolated PostgreSQL suite with 27 tables, 33 observed lock-wait races, 12 direct
+  relation denials, and 52 cross-capability denials;
+- 192 focused Jobs tests with 100% statement, branch, function, and line coverage plus strict lint
   and type checking; and
-- a separate disposable PostgreSQL integration that runs all ten built Jobs commands through a
+- a separate disposable PostgreSQL integration that runs all eleven built Jobs commands through a
   narrow login, rejects a deliberately widened login before mutation, preserves generic output, and
   verifies exact stored state.
 

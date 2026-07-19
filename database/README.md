@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains thirty-two SQL-first revisions for identity, passkey login and management,
+This directory contains thirty-three SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
 finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
 PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,
@@ -130,6 +130,9 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 - `migrations/0032_terminal_deletion_job_retention_cleanup.sql` adds Jobs-only maximum-1000 physical
   deletion of `purged`, profile-free deletion jobs only after 30 days from server-recorded
   completion under the shared profile-deletion mutex.
+- `migrations/0033_audit_event_retention_cleanup.sql` adds Jobs-only maximum-1000 physical deletion
+  of database audit events only after 180 days from server-recorded occurrence under a separate
+  private mutex.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -178,6 +181,9 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 - `tests/deletion_job_cleanup.sql` exercises oldest-first 30-day terminal-job cleanup, recent,
   linked, and non-terminal preservation, idempotency, invalid bounds, supporting index, mutex
   failure, and exact role denial.
+- `tests/audit_event_cleanup.sql` exercises oldest-first 180-day audit cleanup, profile-linked and
+  redacted eligibility, recent-event preservation, idempotency, invalid bounds, supporting index,
+  mutex failure, and exact role denial.
 - `tests/identity_concurrency_setup.sql` and `tests/identity_concurrency_assertions.sql` prove one
   invite enrollment, one initial-passkey challenge consumption, one active-session rotation, and
   deletion dominance over concurrent session rotation without leaving stale authority.
@@ -222,6 +228,12 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 - `tests/profile_deletion_purge_concurrency_setup.sql` and
   `tests/profile_deletion_purge_concurrency_assertions.sql` prove two purge calls serialize and that
   purge holds the authentication-cleanup mutex before any primary profile cascade.
+- `tests/deletion_job_cleanup_concurrency_setup.sql` and
+  `tests/deletion_job_cleanup_concurrency_assertions.sql` prove two terminal-job cleanup calls
+  serialize, remove each aged batch once, and preserve recent evidence.
+- `tests/audit_event_cleanup_concurrency_setup.sql` and
+  `tests/audit_event_cleanup_concurrency_assertions.sql` prove two audit cleanup calls serialize,
+  remove each aged batch once, and preserve recent evidence.
 - `tests/season_scoring.sql` proves ISO-week grouping, exact logarithmic rounding and caps,
   distinct-source aggregation, same-rank semantics without a raw-token tie breaker, hidden and
   quarantined exclusion, immutable version/season definitions, idempotent refresh, role denial, and
@@ -257,7 +269,7 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 | `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                                   |
 | `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus score/race/status reads |
 | `viberacing_ingest` | No    | None           | Usage      | Origin replay, device verification, and Community sync only              |
-| `viberacing_jobs`   | No    | None           | Usage      | Six cleanup calls, profile purge, Community refresh/finalization         |
+| `viberacing_jobs`   | No    | None           | Usage      | Eight cleanup calls, profile purge, Community refresh/finalization       |
 | `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                             |
 | `PUBLIC`            | N/A   | None           | None       | None                                                                     |
 
@@ -334,6 +346,10 @@ Runtime access must remain procedure-only and must have positive and negative in
   deletes at most 1000 oldest-first `purged`, profile-free jobs at least 30 days after completion.
   PostgreSQL derives the cutoff; the function repeats every eligibility predicate and returns only
   one bounded count.
+- `cleanup_expired_audit_events` is Jobs-only, locks a separate private audit-retention mutex, and
+  deletes at most 1000 oldest-first audit rows at least 180 days after server-recorded occurrence.
+  PostgreSQL derives the cutoff; the function repeats it at delete and returns only one bounded
+  count.
 - `read_profile_visibility` maps only the possessed active session's current profile state to
   `public` or `hidden`. `set_profile_visibility` accepts no profile ID, moves only between active
   and hidden, preserves source sync, and treats repeated state as a no-op.
@@ -580,7 +596,7 @@ credential against the encrypted challenge continuation, one fixed function crea
 that five-minute profile-free challenge in the same transaction as the existing credential-derived
 session. It returns only profile ID, public handle, and locale so Web/Auth can seal its existing
 session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
-49 cross-capability denials. Physical challenge cleanup after expiry is supplied by revision 0023; a
+52 cross-capability denials. Physical challenge cleanup after expiry is supplied by revision 0023; a
 deployment login, edge attempt policy, monitoring, and live authenticator/database integration
 remain open.
 
@@ -710,9 +726,17 @@ Revision 0032 physically removes only terminal profile-deletion jobs whose profi
 whose server-recorded completion is at least 30 days old. It shares the profile-deletion mutex,
 orders the partial-index path by completion and identifier, uses `FOR UPDATE SKIP LOCKED`, and
 repeats every terminal/cutoff predicate. Recent evidence and non-terminal authority remain. The
-observed worker race and shared ten-command synthetic integration prove only local serialization,
-least-privileged execution, and exact stored state; they do not prove scheduling, audit retention,
-cache/backup purge, tombstone/restore replay, monitoring, capacity, or deployment.
+observed worker race and shared synthetic integration prove only local serialization,
+least-privileged execution, and exact stored state; they do not prove scheduling, cache/backup
+purge, tombstone/restore replay, monitoring, capacity, or deployment.
+
+Revision 0033 physically removes both profile-linked and already-redacted database audit events only
+after 180 days from server-recorded occurrence. It uses a separate private mutex, a deterministic
+time/identifier index, `FOR UPDATE SKIP LOCKED`, and a repeated cutoff predicate. Recent evidence
+remains. The observed worker race and shared eleven-command synthetic integration prove only local
+serialization, least-privileged execution, and exact stored state; they do not prove an external
+append-only sink, scheduling, production login/TLS, monitoring, capacity, backup purge, or deployed
+retention.
 
 The local account application consumes those capabilities through the same probed read-write pool.
 Its combined overview query reads visibility and the current week's derived score with one checkout,
@@ -812,11 +836,11 @@ hard failure, not something the script silently broadens or repairs.
   shaping, query-plan/load evidence, monitoring, and deployment verification.
 - Extend the separate profile surface only after authenticated profile detail has real persistence,
   privacy, compatibility, and lifecycle evidence; do not widen either closed legacy race response.
-- Schedule and monitor the implemented auth-, invite-, CarRecipe-proposal-, ingest-, pairing-,
-  session-, and terminal-deletion-job-retention procedures, and implement bounded cleanup or reset
-  policy for pairing-referenced sessions, passkey/device provenance, pairing rate windows, and
-  tombstones. Expiry columns outside revisions 0008, 0012, 0013, 0023, 0026, 0030, 0031, and 0032
-  are not cleanup.
+- Schedule and monitor the implemented retention-cleanup procedures for expired authentication,
+  invitation, CarRecipe-proposal, ingest, pairing, session, terminal-deletion-job, and database
+  audit-event state, and implement bounded cleanup or reset policy for pairing-referenced sessions,
+  passkey/device provenance, pairing rate windows, and tombstones. Expiry columns outside revisions
+  0008, 0012, 0013, 0023, 0026, 0030, 0031, 0032, and 0033 are not cleanup.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
   in isolated staging before real-user ingestion.

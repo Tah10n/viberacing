@@ -177,17 +177,18 @@ flowchart LR
   session/profile/handle/RP/origin, then atomically consumes that challenge while immediately hiding
   the profile, revoking authority, unlinking sources, and queueing one opaque purge job. A separate
   local Jobs command now performs bounded atomic primary purge, and a separate command removes only
-  terminal deletion jobs after 30 days; scheduling, cache invalidation, tombstone policy, backup
-  expiry, and restore replay remain separate gates. A transport-free pairing start boundary now owns
-  fresh server IDs/token/challenge/code, separate protected poll/code verifiers, closed device
-  metadata, nine-minute expiry, and one fixed call through a separate probed read-write pool
-  wrapper. A second activation boundary owns protected poll lookup, strict possession proof,
-  server-owned activation IDs, and fixed admission/timing. The local `/connect` slice now supplies
-  the intervening browser step: exact-session code lookup with a database-backed attempt window,
-  bounded device/fingerprint review, explicit new-source or active existing-source selection through
-  an encrypted session-bound control, and fresh-passkey atomic approval. Distributed
-  recovery/anonymous edge attempt policy, expired-state cleanup scheduling and notification, live
-  provider/database credentials, and deployment remain separate gates.
+  terminal deletion jobs after 30 days. Another command removes database audit references only after
+  180 days; it is not an external append-only audit sink. Scheduling, cache invalidation, tombstone
+  policy, backup expiry, and restore replay remain separate gates. A transport-free pairing start
+  boundary now owns fresh server IDs/token/challenge/code, separate protected poll/code verifiers,
+  closed device metadata, nine-minute expiry, and one fixed call through a separate probed
+  read-write pool wrapper. A second activation boundary owns protected poll lookup, strict
+  possession proof, server-owned activation IDs, and fixed admission/timing. The local `/connect`
+  slice now supplies the intervening browser step: exact-session code lookup with a database-backed
+  attempt window, bounded device/fingerprint review, explicit new-source or active existing-source
+  selection through an encrypted session-bound control, and fresh-passkey atomic approval.
+  Distributed recovery/anonymous edge attempt policy, expired-state cleanup scheduling and
+  notification, live provider/database credentials, and deployment remain separate gates.
 - Authenticated score view: the account server render reuses the exact possessed session and one
   combined Web/Auth pool checkout to read visibility plus the current Monday's existing seven
   derived daily scores and bounded summary. Hidden profiles return no score; raw usage, private
@@ -209,12 +210,13 @@ flowchart LR
   distributed rate/backpressure controls, deployment login/certificate, capacity evidence, real-user
   end-to-end integration, and deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
-  The local runner now wraps only the six reviewed authentication/invite/CarRecipe-proposal/ingest/
-  pairing/session cleanup procedures, primary profile purge, Community refresh, and finalization.
-  One opt-in synthetic integration applies the reviewed migrations to disposable PostgreSQL, runs
-  every emitted command through a narrow login, rejects an extra-membership login before mutation,
-  and verifies exact state. Scheduling, monitoring, production credentials/TLS, capacity,
-  cache/backup/tombstone purge, restore replay, and deployment remain separate gates.
+  The local runner now wraps only the eight reviewed authentication/audit-event/invite/
+  CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job cleanup procedures, primary
+  profile purge, Community refresh, and finalization. One opt-in synthetic integration applies the
+  reviewed migrations to disposable PostgreSQL, runs every emitted command through a narrow login,
+  rejects an extra-membership login before mutation, and verifies exact state. An external audit
+  sink, scheduling, monitoring, production credentials/TLS, capacity, cache/backup/tombstone purge,
+  restore replay, and deployment remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.
@@ -689,10 +691,12 @@ restrictive pairing references first, terminally settles the opaque job, and cas
 identity/credential/source/device/usage/personal-score data in one transaction. It retains only the
 opaque terminal job and redacted audit reference. Revision 0032 retains that job for at least 30
 days after server-recorded completion, then permits maximum-1000 oldest-first batches only when
-state remains `purged` and the profile link is null. Pairing-referenced sessions, other remaining
-expiry classes, keyed tombstone policy, cache/backup purge, audit retention, and restore replay
-still require their own reviewed implementation and public policy, and no implemented cleanup has a
-scheduler or deployed cadence.
+state remains `purged` and the profile link is null. Revision 0033 adds a maximum-1000 oldest-first
+cleanup for both profile-linked and already-redacted database audit events only after 180 days from
+server-recorded occurrence under a separate private mutex. It does not provide the planned external
+append-only sink. Pairing-referenced sessions, other remaining expiry classes, keyed tombstone
+policy, cache/backup purge, and restore replay still require their own reviewed implementation and
+public policy, and no implemented cleanup has a scheduler or deployed cadence.
 
 ## Administration and operations
 

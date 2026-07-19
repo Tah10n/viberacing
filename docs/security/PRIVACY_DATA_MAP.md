@@ -90,9 +90,9 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | CarRecipe and proposal state                                                | Public active recipe; Account proposal | Signed-in browser proposes enums, or a local agent reduces style intent before an active source-bound device proposes enums; browser decides | Proposal private; exact active recipe public only through the separate active-profile race read | Agent retains nothing in Vibe Racing; forced-RLS versioned recipe/proposal tables through exact session/device Web functions; bounded Web-only race projection | Maximum 24-hour logical proposal validity; replacement/reject/approve/profile purge or bounded Jobs cleanup removes it; cleanup schedule pending; active until change/delete |
 | IP-derived request signal and user-agent family                             | Operational                            | Edge/service; security, rate shaping, and reliability                                                                                        | Restricted operations; never leaderboard or behavioral advertising                              | Prefer aggregate/ephemeral edge controls; minimal event when necessary                                                                                         | Shortest operational window; exact scope and duration require launch privacy review                                                                                          |
 | Request ID, outcome, latency, and bounded error code                        | Operational                            | Server-generated correlation; debugging and SLO evidence                                                                                     | Response recipient and restricted operations; aggregate metrics                                 | Not retained today; future structured logs/metrics                                                                                                             | Future bounded logs exclude usage, credentials, bodies, and profiles                                                                                                         |
-| Security/admin audit event and reason                                       | Security; Operational                  | Auth/admin/jobs/release; accountability                                                                                                      | Restricted responders/auditors; user-visible subset where appropriate                           | Bounded `audit_events` reference; external append-only sink planned                                                                                            | Publicly documented bounded policy; profile link redacted on purge; delete unrelated personal data                                                                           |
+| Security/admin audit event and reason                                       | Security; Operational                  | Auth/admin/jobs/release; accountability                                                                                                      | Restricted responders/auditors; user-visible subset where appropriate                           | Bounded `audit_events` reference; external append-only sink planned but absent                                                                                 | Database reference retained at least 180 days then cleanup-eligible; profile link redacted on purge; external sink policy remains separate                                   |
 | Deletion state and security tombstone                                       | Security                               | Deletion workflow; prevent ingestion and restore resurrection                                                                                | Deletion/jobs/auth and limited audit                                                            | Local request queues and local Jobs terminally settle one opaque deletion job; minimal keyed tombstone remains planned                                         | Immediate lock-down and primary purge implemented; terminal job retained at least 30 days then cleanup-eligible; cache/backup purge, tombstone/restore replay remain         |
-| Maintenance capability mutex                                                | Operational                            | Database; serialize bounded cleanup, scoring, and primary deletion                                                                           | Owner-defined Jobs procedures only                                                              | Six fixed `maintenance_locks` enum rows; no user or request data                                                                                               | Retained while each capability exists; removed only by a reviewed migration                                                                                                  |
+| Maintenance capability mutex                                                | Operational                            | Database; serialize bounded cleanup, scoring, and primary deletion                                                                           | Owner-defined Jobs procedures only                                                              | Seven fixed `maintenance_locks` enum rows; no user or request data                                                                                             | Retained while each capability exists; removed only by a reviewed migration                                                                                                  |
 
 The local identity implementation reads the invite body as a bounded stream, hashes and clears the
 decoded secret during parsing, and never places plaintext invite or OAuth access token in a cookie,
@@ -398,8 +398,15 @@ remain for at least 30 days after server-recorded completion. Revision 0032 then
 to remove maximum-1000 oldest-first terminal, profile-free jobs under the profile-deletion mutex;
 recent and non-terminal rows remain. The local Jobs mapper discards both aggregate counts. No
 identity-derived tombstone is created because no reviewed keyed digest/expiry/restore contract
-exists. Scheduling, public cache purge, audit retention, backup expiry, restore replay, monitoring,
-capacity, live login, and deployed real-user evidence remain required.
+exists. Scheduling, public cache purge, backup expiry, restore replay, monitoring, capacity, live
+login, and deployed real-user evidence remain required.
+
+Revision 0033 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of database audit
+events only after 180 days from server-recorded occurrence. Both profile-linked and already redacted
+rows are eligible; recent rows remain. One separate private mutex serializes workers, and the local
+Jobs mapper discards the count. The table's random request/event uniqueness is therefore finite
+evidence, never authority. No external append-only sink, user-visible audit subset, scheduler,
+monitor, backup purge, production login/TLS, capacity result, or deployed retention evidence exists.
 
 Revision 0030 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of already
 expired session rows only when no retained predecessor points to the row and no pairing transaction
@@ -438,18 +445,18 @@ non-personal terminal season definition. A no-data closed week stores only that 
 public serializer/cache, audited correction record, finalized public-history retention rule, Jobs
 deployment/scheduler, or monitoring backend exists.
 
-ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, and 0045 store no user data. The local Jobs process
-transiently receives only one of seven fixed 1000-row cleanup batches, one fixed maximum-10 profile
-purge, or one Public season-start label, plus the private aggregate counts already returned by the
-procedures. It validates and discards those values within one process invocation. The CLI emits only
-one constant completion/failure sentence; it does not log the command, date, counts, identifiers,
-SQL, environment, exception, or stack. The optional pool hook receives only the closed Operational
-signal `idle_client_error` and has no built-in storage or network sink. The opt-in integration adds
-no retained field: it creates obviously synthetic fixture IDs and passwords inside one disposable
-local PostgreSQL container, observes only the constant process sentences, asserts state in memory,
-and removes the container, network, and storage. A future scheduler, run history, metric, alert,
-retry record, or monitoring backend must map its exact fields, access, retention, and deletion
-behavior here before collection.
+ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, 0045, and 0046 store no user data. The local Jobs
+process transiently receives only one of eight fixed 1000-row cleanup batches, one fixed maximum-10
+profile purge, or one Public season-start label, plus the private aggregate counts already returned
+by the procedures. It validates and discards those values within one process invocation. The CLI
+emits only one constant completion/failure sentence; it does not log the command, date, counts,
+identifiers, SQL, environment, exception, or stack. The optional pool hook receives only the closed
+Operational signal `idle_client_error` and has no built-in storage or network sink. The opt-in
+integration adds no retained field: it creates obviously synthetic fixture IDs and passwords inside
+one disposable local PostgreSQL container, observes only the constant process sentences, asserts
+state in memory, and removes the container, network, and storage. A future scheduler, run history,
+metric, alert, retry record, or monitoring backend must map its exact fields, access, retention, and
+deletion behavior here before collection.
 
 Revision 0011 stores no new data. One owner-defined function gives only the Web role a fixed
 ten-field score projection: season dates/version/finalized state, handle, weekly score, active days,
@@ -596,12 +603,13 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   other-platform admission, log/export capability, package, or release; the candidate remains
   unsupported until clean-machine platform, privacy-egress, packaging, provenance, and release gates
   pass.
-- Jobs currently receive only bounded expired authentication-, invite-, ingest-, pairing-, session-,
-  CarRecipe-proposal-, and terminal-deletion-job-state cleanup, maximum-10 primary profile deletion,
-  open-season Community scoring refresh, and terminal finalization. The local one-shot adapter
-  rechecks the exact Jobs-only login and invokes one prepared capability without logging inputs or
-  results. Correction, cache/backup purge, tombstone/restore replay, and remaining retention
-  capabilities require separate migrations and tests; migrations use a different non-runtime owner.
+- Jobs currently receive only bounded cleanup of expired authentication, invitation, ingest,
+  pairing, session, CarRecipe-proposal, terminal-deletion-job, and database audit-event state;
+  maximum-10 primary profile deletion; open-season Community scoring refresh; and terminal
+  finalization. The local one-shot adapter rechecks the exact Jobs-only login and invokes one
+  prepared capability without logging inputs or results. Correction, cache/backup purge,
+  tombstone/restore replay, and remaining retention capabilities require separate migrations and
+  tests; migrations use a different non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The
@@ -659,9 +667,10 @@ The local request slice itself does not execute background work. Revision 0024 a
 one-shot Jobs command now consume due queued/retry rows in maximum-10 transactions, terminally
 settle the opaque job, and purge the exact profile's primary identity, credential, source, device,
 usage, and personal score data. Revision 0032 makes only profile-free terminal jobs older than 30
-days cleanup-eligible through a separate one-shot command. The local Web build schedules neither
-command. Public cache purge, audit retention, disclosed keyed tombstone expiry, backup handling, and
-restore replay remain launch-blocking work.
+days cleanup-eligible through a separate one-shot command. Revision 0033 separately makes database
+audit references at least 180 days old cleanup-eligible. The local Web build schedules none of these
+commands. An external append-only audit sink, public cache purge, disclosed keyed tombstone expiry,
+backup handling, and restore replay remain launch-blocking work.
 
 Restore procedures replay deletion markers before restored data is made available. The UI reports
 progress without exposing internal record IDs. Legal retention exceptions, if any, require launch

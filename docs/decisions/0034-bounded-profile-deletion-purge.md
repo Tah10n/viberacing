@@ -61,9 +61,10 @@ remain unchanged. No caller chooses SQL, profile, cutoff, identifier, result col
 
 The capability now physically removes the requested profile's primary identity, credential, device,
 usage, and personal score data while retaining only the already documented opaque terminal job and
-audit record with its profile reference redacted. ADR 0045 subsequently bounds that job to 30 days
-after completion. It collects no new field, prints no count, and adds only one fixed non-personal
-mutex row.
+audit record with its profile reference redacted. ADR 0045 subsequently makes that job
+cleanup-eligible 30 days after completion, and ADR 0046 makes the database audit reference
+cleanup-eligible 180 days after occurrence. The profile-purge slice collects no new field, prints no
+count, and adds only one fixed non-personal mutex row.
 
 The maximum is 10 rather than the 1000-row retention-cleanup limit because one profile may own many
 cascaded rows. The 30-second database statement deadline and five-second lock deadline remain
@@ -148,3 +149,5 @@ tombstone/restore replay, cache invalidation, capacity, or deployment.
 - [Identity and device authority](0003-identity-step-up-and-device-authority.md)
 - [Bounded Community maintenance runner](0014-bounded-community-maintenance-job-runner.md)
 - [Bounded authentication retention cleanup](0032-bounded-auth-retention-cleanup.md)
+- [Bounded terminal deletion-job retention cleanup](0045-bounded-terminal-deletion-job-retention-cleanup.md)
+- [Bounded database audit-event retention cleanup](0046-bounded-audit-event-retention-cleanup.md)

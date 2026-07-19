@@ -1,9 +1,10 @@
 # Vibe Racing Jobs
 
-This private workspace is the local one-shot application boundary for ten existing PostgreSQL
+This private workspace is the local one-shot application boundary for eleven existing PostgreSQL
 maintenance capabilities:
 
 - delete one bounded batch of expired authentication challenges and restricted recovery state;
+- delete one bounded batch of database audit events only after 180 days of retention;
 - delete one bounded batch of expired unredeemed invites while preserving redeemed provenance;
 - delete one bounded batch of expired private CarRecipe proposals while preserving active recipes;
 - delete one bounded batch of expired ingest nonces and raw snapshots;
@@ -15,9 +16,10 @@ maintenance capabilities:
 - refresh one open Community season; and
 - idempotently finalize one Community season after its server-enforced grace deadline.
 
-It is not a scheduler, deployment, monitoring backend, correction system, cache/backup/tombstone
-purge system, or production-capacity claim. PostgreSQL remains authoritative for server time,
-serialization, scoring, grace closure, finalization, deletion state, and row bounds.
+It is not an external audit sink, scheduler, deployment, monitoring backend, correction system,
+cache/backup/tombstone purge system, or production-capacity claim. PostgreSQL remains authoritative
+for server time, serialization, scoring, grace closure, finalization, deletion state, and row
+bounds.
 
 ## Security boundary
 
@@ -53,6 +55,7 @@ From the repository root:
 pnpm run build:jobs
 pnpm run test:jobs:postgres-integration
 pnpm --filter @viberacing/jobs start -- cleanup-expired-auth-state
+pnpm --filter @viberacing/jobs start -- cleanup-expired-audit-events
 pnpm --filter @viberacing/jobs start -- cleanup-expired-car-recipe-proposals
 pnpm --filter @viberacing/jobs start -- cleanup-expired-invites
 pnpm --filter @viberacing/jobs start -- cleanup-expired-ingest-state
@@ -70,10 +73,10 @@ prints the command input, affected counts, configuration, SQL, or exception deta
 
 The Docker-backed integration command applies the checksum-validated migration manifest, creates a
 least-privileged synthetic Jobs login plus a deliberately widened negative-control login, runs all
-ten built CLI commands as separate processes, verifies their generic output and exact database
+eleven built CLI commands as separate processes, verifies their generic output and exact database
 effects, and cleans up its container, network, and storage. It proves only the local
-CLI-to-PostgreSQL boundary; it does not prove production TLS/credentials, a scheduler, monitoring,
-capacity, real-user retention, or deployment.
+CLI-to-PostgreSQL boundary; it does not prove an external audit sink, production TLS/credentials, a
+scheduler, monitoring, capacity, real-user retention, or deployment.
 
 The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
 Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package
