@@ -88,8 +88,12 @@ artifact size and SHA-256. Selection is either an explicit canonical path or bou
 discovery through at most 64 absolute `PATH` directories and four distinct exact-size hashes; both
 retain the same no-write-sharing handle. It creates fresh context and submits one closed signed
 request without automatic retry. It cannot admit another version or platform, produce clean-machine
-privacy evidence, negotiate support, or alter the empty matrix. ADRs 0021 through 0026, 0030, 0031,
-and 0051 record those distinctions.
+privacy evidence, negotiate support, or alter the empty matrix. A separate explicitly invoked
+`check-codex` command reuses only the same selector without origin, credential-store, process,
+account, persistence, or network access. It releases the handle before fixed output, explicitly says
+no version is supported, and creates no reusable result; `sync` always repeats admission after
+active-record validation. ADRs 0021 through 0026, 0030, 0031, 0051, and 0052 record those
+distinctions.
 
 Generated schema output is exact to the Codex version that produced it. The repository commits only
 reviewed relevant schema extracts and synthetic fixtures, not account data or a developer's local

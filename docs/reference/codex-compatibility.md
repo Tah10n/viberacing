@@ -9,9 +9,12 @@ implements the bounded initialization exchange and a candidate parser for exact 
 plus a bounded one-shot supervisor. After active-record validation, a Windows x86_64 development
 command can select the candidate through bounded fixed-name `PATH` discovery or an explicit path,
 construct its private launch capability only for the exact artifact size and SHA-256, and perform
-one signed upload. macOS/Linux admission, clean-machine real-account results, packaging, provenance,
-and a released connector do not exist. This empty matrix is fail-closed evidence, not an invitation
-to run an arbitrary local version.
+one signed upload. A separate explicit `check-codex` command can perform only that exact candidate
+admission without opening credential storage, starting Codex, reading an account, retaining a
+result, or using the network; success explicitly remains unsupported and later sync re-admits.
+macOS/Linux admission, clean-machine real-account results, packaging, provenance, and a released
+connector do not exist. This empty matrix is fail-closed evidence, not an invitation to run an
+arbitrary local version.
 
 | Codex version | Stable schema digest | Compatible connector | Platforms tested | Status and evidence                                 |
 | ------------- | -------------------- | -------------------- | ---------------- | --------------------------------------------------- |
@@ -26,7 +29,9 @@ The bundle was generated from a local CLI reporting `0.144.5` with experimental 
 Windows admission policy matches the recorded official release asset filename/size/digest. Its
 candidate-only discovery tests use synthetic files and fixed resource bounds; repository
 verification does not discover or execute an installed artifact, and this is not protected
-clean-machine release evidence.
+clean-machine release evidence. The credential-free diagnostic has only parser, selector,
+non-reflective-output, and error-mapping evidence; no repository test invokes it against an
+installed artifact.
 
 The candidate Rust adapter is reachable only after the handshake. It emits the fixed IDs `1` and `2`
 for `account/read` and `account/usage/read`, accepts only ChatGPT mode, discards email, plan, and
@@ -84,7 +89,9 @@ that active record before bounded fixed-name discovery or an explicit path, cano
 hash-admits only the exact candidate, keeps a no-write-sharing handle through launch, creates fresh
 request context, and sends one closed signed request without proxy, redirect, retry, or edge-origin
 credentials. It cannot admit another version or platform, create a release, or make the candidate
-supported. Every matrix row still requires the complete admission evidence above.
+supported. `check-codex` separately reuses only the artifact selector and grants no launch, account,
+credential, network, or cached authority. Every matrix row still requires the complete admission
+evidence above.
 
 ## Planned stable surface
 

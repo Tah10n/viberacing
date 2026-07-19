@@ -27,37 +27,39 @@ behavior. One Windows x86_64 development command validates the active native cre
 bounded fixed-name `PATH` discovery or the explicit path fallback, and can construct that private
 launch only after the selected artifact matches the exact `0.144.5` size and SHA-256. It then builds
 the previously inaccessible context/key, signs the exact bounded sync JSON, and makes one fixed
-upload. It does not retry the POST or establish support. A separate inaccessible
-pending-key/challenge signer and pure Web verifier agree on an exact synthetic pairing-possession
-proof. Two transport-free Web/Auth applications create bounded pending material and later handle
-protected poll-verifier derivation, a fixed approved-row lookup through a separately probed
-read-write pool, that strict proof, and exact atomic activation with server-owned IDs behind local
-admission/timing. They cannot perform pairing browser or WebAuthn approval themselves; the separate
-`/connect` flow supplies only that intervening step. Two exact local POST routes now compose those
-applications behind fixed distributed global/client-bucket admission, and one pairing-only Rust
-command generates a device key through the OS CSPRNG, stores resumable pairing state in the native
-credential store, and performs the exact start/poll proof. A separate exact local-only command
-deletes one origin/label native entry without reading it or revoking server authority. No supported
-Codex version, macOS/Linux admission, real-account/deployed sync result, package, release, or
-deployment exists. A local Ingest kernel bounds and authenticates a synthetic exact-body sync
-request, and a separate adapter constrains origin replay, database lookup, and submission mapping
-with mock-pool evidence. A transport-free application composes those exact boundaries, generates a
-server request ID, and validates the acknowledgement/problem decision; isolated PostgreSQL tests
-separately prove atomic replay and cleanup. A bounded local Fastify factory now preserves exact raw
-HTTP evidence, applies no-queue and deadline policy, and serializes only revalidated contracts. A
-separate local host now binds that exact composition only on loopback in development/test or under
-an explicit Railway-edge production declaration, with bounded partial-startup cleanup and process
-shutdown. A separate opt-in gate now proves one full synthetic loopback HTTP-to-PostgreSQL path
-through a disposable dedicated Ingest login. There is no deployment database credential/certificate,
-trusted external TLS/edge path, supported connector adapter, or deployment. A bounded local one-shot
-Jobs process now wraps only cleanup/refresh/finalization, but has no live login, scheduler, monitor,
-or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
-implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
-certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
-boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
-database role isolation; it does not prove a live adapter, deployed API, or production flow. The
-Ingest server tests bind only ephemeral loopback sockets and use synthetic requests; no development
-command exposes it to the LAN or Internet.
+upload. It does not retry the POST or establish support. A separate explicitly invoked `check-codex`
+command performs only that same point-in-time candidate admission without opening credential
+storage, starting Codex, reading an account, persisting a result, or using the network; later sync
+repeats admission. A separate inaccessible pending-key/challenge signer and pure Web verifier agree
+on an exact synthetic pairing-possession proof. Two transport-free Web/Auth applications create
+bounded pending material and later handle protected poll-verifier derivation, a fixed approved-row
+lookup through a separately probed read-write pool, that strict proof, and exact atomic activation
+with server-owned IDs behind local admission/timing. They cannot perform pairing browser or WebAuthn
+approval themselves; the separate `/connect` flow supplies only that intervening step. Two exact
+local POST routes now compose those applications behind fixed distributed global/client-bucket
+admission, and one pairing-only Rust command generates a device key through the OS CSPRNG, stores
+resumable pairing state in the native credential store, and performs the exact start/poll proof. A
+separate exact local-only command deletes one origin/label native entry without reading it or
+revoking server authority. No supported Codex version, macOS/Linux admission, real-account/deployed
+sync result, package, release, or deployment exists. A local Ingest kernel bounds and authenticates
+a synthetic exact-body sync request, and a separate adapter constrains origin replay, database
+lookup, and submission mapping with mock-pool evidence. A transport-free application composes those
+exact boundaries, generates a server request ID, and validates the acknowledgement/problem decision;
+isolated PostgreSQL tests separately prove atomic replay and cleanup. A bounded local Fastify
+factory now preserves exact raw HTTP evidence, applies no-queue and deadline policy, and serializes
+only revalidated contracts. A separate local host now binds that exact composition only on loopback
+in development/test or under an explicit Railway-edge production declaration, with bounded
+partial-startup cleanup and process shutdown. A separate opt-in gate now proves one full synthetic
+loopback HTTP-to-PostgreSQL path through a disposable dedicated Ingest login. There is no deployment
+database credential/certificate, trusted external TLS/edge path, supported connector adapter, or
+deployment. A bounded local one-shot Jobs process now wraps only cleanup/refresh/finalization, but
+has no live login, scheduler, monitor, or deployment. A bounded server-only Web PostgreSQL adapter
+and local public-score GET are implemented and unit/build-tested, but this repository supplies no
+working deployment login or TLS certificate. A successful setup proves repository gates, synthetic
+frontend behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
+lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
+deployed API, or production flow. The Ingest server tests bind only ephemeral loopback sockets and
+use synthetic requests; no development command exposes it to the LAN or Internet.
 
 ## Prerequisites
 
@@ -195,6 +197,17 @@ The `0.144.5` directory, synthetic process fixture, and exact signed sync vector
 development evidence, not a supported-version installation. The vector uses only synthetic
 identifiers, usage, public key, and signature; the private test seed is derived at runtime from an
 obvious fixed label. Repository tests never run a local account or open a real credential.
+
+Before pairing, a Windows x86_64 developer may explicitly check only the exact candidate artifact:
+
+```text
+cargo run -p viberacing-connector -- check-codex [--codex <absolute-codex-0.144.5-executable>]
+```
+
+Without `--codex`, this reads only the bounded fixed-name `PATH` search defined by ADR 0051. The
+explicit form uses identical canonical size/SHA-256 admission. The command starts no Codex process,
+opens no connector credential or account, persists nothing, and uses no network. Success is only a
+point-in-time candidate result, explicitly does not claim support, and is never reused by `sync`.
 
 After an explicit `connect` has activated the same origin and label, a Windows x86_64 developer may
 manually run one candidate sync:

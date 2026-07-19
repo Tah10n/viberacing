@@ -11,7 +11,9 @@ released connector. A third fixed command signs one explicit enum-only CarRecipe
 starting Codex or receiving proposal decision authority. A separate local repository Agent Skill can
 reduce a style request to that exact command; it adds no connector method or authority. A fourth
 local-only command removes one exact native credential without inspecting it or implying that the
-registered server device was revoked.
+registered server device was revoked. A fifth read-only command performs only point-in-time exact
+candidate artifact admission without opening credential storage, starting Codex, reading an account,
+or using the network.
 
 The implemented surface is deliberately narrow:
 
@@ -72,6 +74,9 @@ The implemented surface is deliberately narrow:
   regular-file size filtering, canonical deduplication, and at most four distinct hashes;
 - Windows x86_64 admission for the exact `0.144.5` official artifact byte count and SHA-256 digest,
   with exact-version-only output and a no-write-sharing handle retained through direct launch;
+- one exact `check-codex [--codex <absolute-path>]` command that reuses that same bounded selector,
+  releases the admitted handle, and prints only candidate admission plus the explicit unsupported
+  status, with no credential, process, account, persistence, or network access;
 - fresh OS-random sync ID and nonce, canonical millisecond UTC, active-record source/device/key
   binding, and one existing exact composition/signing path;
 - one fixed `/v1/community/sync` POST with proxies and redirects disabled, platform TLS, only the
@@ -92,7 +97,8 @@ The implemented surface is deliberately narrow:
 `ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public constructors. The
 private pairing command constructs only its two pending capabilities; the private sync command can
 construct the launch/context/key capabilities only after active-record review and exact artifact
-admission from bounded fixed-name discovery or an explicit path. There is no macOS/Linux executable
+admission from bounded fixed-name discovery or an explicit path. `check-codex` reuses only that
+selector without constructing any of those capabilities. There is no macOS/Linux executable
 admission, WebSocket transport, generic JSON-RPC or HTTP method, scheduler, installer, credential
 rotation, automatic server-revoke composition, package, or release artifact. Browser approval and
 edge origin proof remain separate server-side boundaries. The checked-in
@@ -105,6 +111,7 @@ The local command shapes are:
 ```text
 viberacing-connector connect --origin <https-origin> --label <device-label>
 viberacing-connector forget-local --origin <https-origin> --label <device-label>
+viberacing-connector check-codex [--codex <absolute-path>]
 viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]
 viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>
 ```
@@ -113,14 +120,16 @@ Plain HTTP with `localhost`, `127.0.0.1`, or `::1` is accepted only for explicit
 Running `connect` creates a real local keyring entry even when the server later fails; use one
 connect process at a time. `forget-local` deletes only the exact origin/label entry and is
 idempotent; it neither revokes the registered server device nor erases copied key material, so the
-user must reconcile and revoke that device separately in the authenticated account. `sync` is
-Windows x86_64 candidate development behavior: it reads the active native record before bounded
-fixed-name discovery or explicit-path admission, starts only the exact admitted artifact, and sends
-private daily usage once to the explicit origin. `propose-car` uses the same active native record
-but starts no Codex process and can only create a private proposal for later browser review. The
-Agent Skill requires explicit shell-safe origin/label values, invokes only `propose-car` once, and
-is forbidden from invoking local credential removal. No checked-in default server, credential, code,
-or released binary exists.
+user must reconcile and revoke that device separately in the authenticated account. `check-codex` is
+an explicit Windows x86_64 candidate diagnostic: it performs the same bounded default discovery or
+explicit-path admission without an origin, credential, child process, account read, or network, and
+its point-in-time result is never reused. `sync` still reads the active native record first, repeats
+admission, starts only the exact admitted artifact, and sends private daily usage once to the
+explicit origin. `propose-car` uses the same active native record but starts no Codex process and
+can only create a private proposal for later browser review. The Agent Skill requires explicit
+shell-safe origin/label values, invokes only `propose-car` once, and is forbidden from invoking
+local credential removal or the diagnostic. No checked-in default server, credential, code, or
+released binary exists.
 
 Run the focused gate from the repository root:
 

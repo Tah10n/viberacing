@@ -3,10 +3,11 @@
 //! This crate implements the stable initialization exchange, a candidate-only account/usage
 //! adapter for one exact schema extract, a bounded one-shot child supervisor, an exact-body
 //! pairing-possession signer, Community sync composer, and isolated one-use request signer. It also
-//! exposes bounded `connect`, `sync`, local-credential removal, and proposal-only commands. The
-//! candidate-only Windows sync path admits either one explicit executable or one exact executable
-//! found through bounded discovery before uploading the closed signed usage request once. It does
-//! not expose a generic JSON-RPC or HTTP client or claim compatibility with any Codex release.
+//! exposes bounded `connect`, `check-codex`, `sync`, local-credential removal, and proposal-only
+//! commands. The candidate-only Windows diagnostic performs only exact artifact admission, while
+//! the sync path separately re-admits either one explicit executable or one exact executable found
+//! through bounded discovery before uploading the closed signed usage request once. It does not
+//! expose a generic JSON-RPC or HTTP client or claim compatibility with any Codex release.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]

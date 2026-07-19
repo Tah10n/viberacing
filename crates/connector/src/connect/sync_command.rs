@@ -9,9 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 
 use crate::DailyUsage;
-use crate::admission::{
-    ADMITTED_CODEX_VERSION, AdmissionError, admit_candidate, discover_candidate,
-};
+use crate::admission::{ADMITTED_CODEX_VERSION, admit_candidate_selection};
 use crate::process::{
     CandidateCodex01445Collector, ReviewedCodexLaunch, current_allowed_environment,
 };
@@ -23,7 +21,8 @@ use crate::sync::{
 
 use super::{
     ConnectorCliError, CredentialRecord, CredentialStore, Origin, REQUEST_ID_HEADER, RecordState,
-    all_zero, digest_origin, new_http_agent, valid_json_content_type, valid_public_id,
+    all_zero, digest_origin, map_admission_error, new_http_agent, valid_json_content_type,
+    valid_public_id,
 };
 
 const DEVICE_ID_HEADER: &str = "x-viberacing-device-id";
@@ -47,11 +46,7 @@ pub(super) fn run_sync(
         return Err(ConnectorCliError::NotConnected);
     }
 
-    let admitted = match codex_path {
-        Some(path) => admit_candidate(path),
-        None => discover_candidate(),
-    }
-    .map_err(map_admission_error)?;
+    let admitted = admit_candidate_selection(codex_path).map_err(map_admission_error)?;
     writeln!(output, "Using admitted Codex {ADMITTED_CODEX_VERSION}.")
         .map_err(|_| ConnectorCliError::OutputUnavailable)?;
 
@@ -78,15 +73,6 @@ pub(super) fn run_sync(
         SyncOutcome::Accepted => write_line(output, "Usage synced."),
         SyncOutcome::Duplicate => write_line(output, "Usage was already synced."),
         SyncOutcome::Quarantined => write_line(output, "Usage received for review."),
-    }
-}
-
-fn map_admission_error(error: AdmissionError) -> ConnectorCliError {
-    match error {
-        AdmissionError::UnsupportedPlatform => ConnectorCliError::UnsupportedPlatform,
-        AdmissionError::DiscoveryUnavailable
-        | AdmissionError::InvalidPath
-        | AdmissionError::UnsupportedArtifact => ConnectorCliError::CodexNotAdmitted,
     }
 }
 

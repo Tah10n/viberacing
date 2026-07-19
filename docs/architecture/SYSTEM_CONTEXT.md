@@ -12,11 +12,12 @@ PostgreSQL-adapter, application-composition, and bounded HTTP-server boundaries,
 connector initialization and candidate `0.144.5` account/usage parser boundaries, a synthetic
 one-shot supervisor, an exact-body sync composer, isolated pairing/sync/proposal signers, pure Web
 pairing and proposal verifiers, one local connector command with native OS key custody and exact
-start/poll routes, one Windows candidate command with bounded fixed-name discovery plus an explicit
-path fallback that admits, collects, signs, and uploads a single sync, and one fixed proposal-only
-command that starts no Codex process. It also has one opt-in synthetic loopback integration through
-the emitted Ingest host and a disposable least-privileged PostgreSQL login, plus a separate
-synthetic integration through all fifteen emitted Jobs commands and a disposable narrow login with a
+start/poll routes, one credential-free Windows candidate diagnostic that performs only exact
+artifact admission, one Windows sync command with bounded fixed-name discovery plus an explicit path
+fallback that admits, collects, signs, and uploads once, and one fixed proposal-only command that
+starts no Codex process. It also has one opt-in synthetic loopback integration through the emitted
+Ingest host and a disposable least-privileged PostgreSQL login, plus a separate synthetic
+integration through all fifteen emitted Jobs commands and a disposable narrow login with a
 widened-login negative control. It still has no deployed application service, operational sync
 connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway deployment,
 live OAuth or production database login, or production database. Component status is tracked in
@@ -161,9 +162,12 @@ registered device remains until authenticated revoke. App Server launch and sync
 have no public constructor, so ADR 0031 lets only the private Windows x86_64 command construct them
 after exact artifact admission and active-record review. ADR 0051 permits selection only through a
 resource-bounded fixed-name `PATH` policy or the original explicit path; both retain the same exact
-size/SHA-256 and no-write-sharing handle. It creates fresh context and performs one fixed signed
-upload. macOS/Linux admission, scheduling, and release remain absent. Trusted external TLS/edge
-routing, live secret-manager/edge key injection, working deployment login/certificate, composed live
+size/SHA-256 and no-write-sharing handle. ADR 0052 separately permits an explicitly invoked
+`check-codex` to reuse only that selector without a credential, process, account read, persistence,
+or network; its result is not reusable authority. The sync command still creates fresh context only
+after active-record validation and repeated admission, then performs one fixed signed upload.
+macOS/Linux admission, scheduling, and release remain absent. Trusted external TLS/edge routing,
+live secret-manager/edge key injection, working deployment login/certificate, composed live
 end-to-end flow, edge/capacity evidence, a verified Cloudflare/Railway path, released sync
 connector, Jobs scheduler/monitoring, public cache, backup/tombstone/restore replay, and audited
 correction authority shown in the design remain planned.

@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fifty-one accepted ADRs.
+  fail-closed compatibility policy and matrix, and fifty-two accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -230,6 +230,13 @@ Versioning where its guarantees are applicable.
   available under identical admission. Relative entries, wrappers, arbitrary names, over-budget
   searches, and all artifacts that do not match fail closed without path diagnostics; tests remain
   synthetic and add no supported version, other platform, package, release, or clean-machine claim.
+- A separate explicit `check-codex [--codex <absolute-path>]` command that reuses only that exact
+  selector without opening credential storage, starting Codex, reading an account, persisting a
+  result, or using the network. It releases the admitted handle and prints only the exact candidate
+  version plus an explicit unsupported statement; failures disclose no path, digest, search entry,
+  metadata, or operating-system detail. Its point-in-time result grants no authority and `sync`
+  still validates the active record before repeating admission. This adds no support row, package,
+  release, clean-machine evidence, or other-platform result.
 - Bounded pairing start, possession, and dormant activation compositions. The start boundary accepts
   only closed device metadata, creates fresh server IDs, a 32-byte poll token and challenge, a
   60-bit human code, and a nine-minute expiry, then stores separate protected poll/code HMAC

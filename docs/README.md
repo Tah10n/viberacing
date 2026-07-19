@@ -31,11 +31,12 @@ remain safe to publish verbatim.
   supply-chain requirements.
 - [Dependency inventory](reference/dependency-inventory.json) — deterministic locked npm/Cargo and
   external artifact/license evidence.
-- [Connector protocol, candidate adapter, supervisor, pairing, and sync signers](../crates/connector/README.md)
+- [Connector protocol, candidate diagnostic, adapter, supervisor, pairing, and sync signers](../crates/connector/README.md)
   — bounded local App Server handshake, exact `0.144.5` account/usage parser, synthetic one-shot
-  process evidence, exact sync material/signing, a native-store `connect` command, and one explicit
-  Windows exact-artifact `sync` command with synthetic loopback upload evidence, plus the fixed
-  proposal-only command; no supported release, cross-platform result, or operational connector.
+  process evidence, exact sync material/signing, a native-store `connect` command, a process-free
+  exact-candidate diagnostic, and one Windows exact-artifact `sync` command with synthetic loopback
+  upload evidence, plus the fixed proposal-only command; no supported release, cross-platform
+  result, or operational connector.
 - [Bounded local car-proposal Agent Skill](../.agents/skills/viberacing-propose-car/SKILL.md) —
   exact enum reduction, shell-safe invocation policy, browser-only decision boundary, and
   production-derived drift checks without connector installation or release authority.

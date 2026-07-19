@@ -254,10 +254,14 @@ material availability cost.
   generation/native custody and only the two exact bounded start/poll paths. The separate
   `forget-local` command can only delete one derived native-store account, uses identical output for
   present and absent entries, and explicitly distinguishes that action from server revoke. The
-  operational connector still requires other-platform evidence, safe release diagnostics, packaging,
-  provenance, release, and clean-machine privacy evidence.
-- **Detection:** Local safe diagnostics for selected binary/version, bounded failure reason, and
-  child cleanup verification without uploading content.
+  separate `check-codex` command reuses only exact candidate admission, releases the handle, and has
+  no credential-store, child-process, account, persistence, or network capability. Its fixed success
+  text explicitly preserves unsupported status, and failure reflects no path or operating-system
+  detail. The operational connector still requires other-platform evidence, complete safe release
+  diagnostics, packaging, provenance, release, and clean-machine privacy evidence.
+- **Detection:** The local candidate check now reports only exact candidate admission success or a
+  stable generic failure without uploading content. Release provenance, packaged-binary, broader
+  failure-recovery, and real child-cleanup diagnostics remain separate gates.
 - **Recovery:** Stop and clean the child, disable scheduling, reject sync, restore a verified
   binary, revoke the registered device after suspected compromise, remove the exact local
   credential, and rotate the device key when that lifecycle exists.

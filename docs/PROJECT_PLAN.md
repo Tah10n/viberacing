@@ -274,9 +274,11 @@ stdout/stderr/time, and reap-before-success composition. Its launch capability h
 constructor. ADR 0031 lets only one private Windows x86_64 development command construct it after
 exact `0.144.5` size/SHA-256 admission while a no-write-sharing handle remains open. ADR 0051 adds
 only a bounded fixed-name `PATH` selection path after active-record review and retains the explicit
-path fallback under identical admission. The candidate still does not run on all platforms, create a
-supported release, or create a matrix row. ADR 0024 adds an inaccessible reviewed
-source/device/time/nonce context whose minimized daily usage produces one exact bounded
+path fallback under identical admission. ADR 0052 adds a distinct explicitly invoked `check-codex`
+command that reuses only that selector without credential-store, process, account, or network
+access; its point-in-time result is never reused by `sync`. The candidate still does not run on all
+platforms, create a supported release, or create a matrix row. ADR 0024 adds an inaccessible
+reviewed source/device/time/nonce context whose minimized daily usage produces one exact bounded
 `ConnectorSyncV1` body, SHA-256 digest, and LF-separated device message. ADR 0025 removes public
 access to that unsigned material and adds an isolated one-use signer behind an equally inaccessible
 device-bound key capability. A shared Rust/Ingest vector proves exact body, public-key, and
@@ -306,9 +308,11 @@ execution matrix, released binary, Codex support, scheduler, or deployed result.
 next one-shot Windows development command: exact artifact admission, fresh context from the active
 record, the existing composer/signer, and one fixed no-proxy/no-redirect upload with a closed
 acknowledgement. ADR 0051 adds resource-bounded discovery through two fixed filenames and at most
-four exact-size hashes, plus the unchanged explicit path fallback. It adds no retry, edge proof,
-cross-platform evidence, package, release, or support claim. ADR 0041 adds a separate exact
-`forget-local` command that deletes only the native origin/label record without reading it or
+four exact-size hashes, plus the unchanged explicit path fallback. ADR 0052 adds a credential-free
+candidate artifact check that performs only that admission and emits an explicit unsupported result;
+the sync command still re-admits only after active-record validation. These decisions add no retry,
+edge proof, cross-platform evidence, package, release, or support claim. ADR 0041 adds a separate
+exact `forget-local` command that deletes only the native origin/label record without reading it or
 contacting the service. It is idempotent and explicitly does not claim server revoke; rotation and
 revoke composition remain separate gates.
 
@@ -472,6 +476,9 @@ separate gates.
 - The connector resolves links, hash-admits the exact Codex artifact while preventing write
   substitution, displays only the admitted exact version, and does not accept a silent
   environment-variable override.
+- One explicit point-in-time candidate check reuses the identical bounded admission without opening
+  credential storage, starting Codex, reading an account, persisting a result, or using a network;
+  success explicitly states that no version is supported, and later sync repeats admission.
 - The App Server child process has a bounded lifetime, bounded output, separate stderr, sanitized
   environment, and guaranteed cleanup.
 - Scheduled execution uses an argument array, fixed executable path, fixed working directory,
@@ -1040,7 +1047,10 @@ measurements exist.
   style intent to the canonical fields, validates explicit shell-safe origin/label values, invokes
   that command once, and never forwards conversation text or gains decision authority. Cleanup
   scheduling and deployed retention evidence, distributed edge policy, live database result,
-  monitoring, capacity evidence, packaging, release, and deployment remain gates.
+  monitoring, capacity evidence, packaging, release, and deployment remain gates. A separate
+  explicit `check-codex` command now performs only point-in-time exact Windows candidate admission
+  without credential-store, process, account, persistence, or network access; broader release
+  diagnostics and clean-machine install/upgrade/revoke/uninstall evidence remain open.
 - Add versioned CarRecipe, bounded proposal API, browser preview and approval, theme rendering,
   asset provenance, and snapshot tests.
 - Package the fixed-command end-user connector workflow only after the CLI is stable.

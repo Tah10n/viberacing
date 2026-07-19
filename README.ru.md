@@ -1,7 +1,7 @@
 # Vibe Racing
 
-> Статус: реализуются локальные vertical slices Phase 2/3. Production-сервис и готовый connector не
-> выпущены.
+> Статус: реализуются локальные vertical slices Phase 2/3/4. Production-сервис и готовый connector
+> не выпущены.
 
 Внешние contributions пока закрыты: сначала нужны реальные публичные maintainers, CODEOWNERS и
 проверенные приватные каналы для security/conduct reports. Локальные имена и контакты не будут
@@ -189,15 +189,18 @@ credential store, доказывает владение ключом и возо
 challenge, source или device ID. Отдельная точная команда `forget-local` может удалить только эту
 нативную запись для canonical origin/label, не читая её и не обращаясь к Vibe Racing; фиксированный
 результат предупреждает, что команда не выполняет server device revoke: он остаётся отдельным
-authenticated account action. Отдельная Windows x86_64 команда `sync` сначала проверяет active
-record, затем рассматривает не более 64 абсолютных `PATH` directories и четырёх exact-size hashes
-только для двух фиксированных имён либо использует explicit path fallback. После одинаковой
-canonical size/SHA-256 admission она удерживает и запускает exact `0.144.5` executable в новом
-пустом working directory, создаёт свежие request time/ID/nonce, один раз отправляет точное signed
-body на фиксированный sync path и принимает только closed acknowledgement. Она не повторяет
-ambiguous POST и не отправляет edge origin proof. Всё ещё нет macOS/Linux admission, live database
-connection, capacity evidence, credential rotation, automatic server-revoke composition, packaging,
-release, поддерживаемого sync connector и deployment.
+authenticated account action. Отдельная явно вызываемая команда `check-codex` выполняет только ту же
+exact Windows candidate artifact admission без origin, доступа к credential store, запуска Codex,
+чтения account, сохранения результата или сети. Её фиксированный point-in-time результат прямо
+сообщает, что ни одна версия Codex не поддерживается. Отдельная Windows x86_64 команда `sync`
+сначала проверяет active record, затем рассматривает не более 64 абсолютных `PATH` directories и
+четырёх exact-size hashes только для двух фиксированных имён либо использует explicit path fallback.
+После одинаковой canonical size/SHA-256 admission она удерживает и запускает exact `0.144.5`
+executable в новом пустом working directory, создаёт свежие request time/ID/nonce, один раз
+отправляет точное signed body на фиксированный sync path и принимает только closed acknowledgement.
+Она не повторяет ambiguous POST и не отправляет edge origin proof. Всё ещё нет macOS/Linux
+admission, live database connection, capacity evidence, credential rotation, automatic server-revoke
+composition, packaging, release, поддерживаемого sync connector и deployment.
 
 Также добавлена 31 SQL-миграция: 27 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring/CarRecipe

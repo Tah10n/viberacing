@@ -256,9 +256,9 @@ output never enter returned errors. The only success result is the already mappe
 `DailyUsage`, returned after terminal-event checking and child reap. Synthetic tests use a
 target-built fixture and temporary directory only. `ReviewedCodexLaunch` has no public constructor;
 ADR 0031 permits only the private exact-admission command to construct it. No path, environment
-value, or child output is retained. A future executable-admission diagnostic or retained
-connector/Codex version must use the existing mapped Security/Operational class with an explicit
-purpose and bounded retention.
+value, or child output is retained. ADR 0052's later candidate admission diagnostic remains
+process-free and non-retained. Any future retained connector/Codex version or diagnostic export must
+use the existing mapped Security/Operational class with an explicit purpose and bounded retention.
 
 ADR 0024 adds no new data class or persistent field. It consumes the already mapped private daily
 usage plus reviewed opaque source, sync, device, millisecond UTC, and nonce values in transient
@@ -289,13 +289,22 @@ sent as diagnostics nor printed. The synthetic HTTP test uses only reserved valu
 never open a real credential or local account.
 
 ADR 0051 adds no collected or retained field and no new sink. Only after active-record validation,
-the candidate command may transiently read a `PATH` value of at most 65,536 encoded bytes, inspect
-at most 64 absolute directory strings, join only two fixed filenames, canonicalize candidate paths
-of at most 2,048 encoded bytes, inspect exact-size regular-file metadata, and hash at most four
-distinct candidates. Those local Security/Operational values, operating-system errors, paths,
+the candidate sync command may transiently read a `PATH` value of at most 65,536 encoded bytes,
+inspect at most 64 absolute directory strings, join only two fixed filenames, canonicalize candidate
+paths of at most 2,048 encoded bytes, inspect exact-size regular-file metadata, and hash at most
+four distinct candidates. Those local Security/Operational values, operating-system errors, paths,
 metadata, and digests are never logged, printed, retained, exported, written to a credential, or
 sent over the network. The explicit path fallback has the same non-reflective exact admission.
 Synthetic tests do not inspect an installed Codex binary or real user path.
+
+ADR 0052 adds no data class, retained field, or sink. An explicit `check-codex` invocation may
+perform only ADR 0051's same bounded local selection and exact admission before pairing. It opens no
+credential-store account, starts no process, reads no Codex account or usage, creates no request,
+and uses no network. The selected or discovered path, `PATH` entries, metadata, digest, and
+operating-system failure remain transient Security/Operational material and are never printed,
+logged, cached, exported, persisted, or converted into reusable sync authority. Success exposes only
+exact candidate version `0.144.5` plus the explicit statement that no version is supported; later
+sync independently re-admits after active-record validation.
 
 ADR 0026 adds no data class, persistent field, or sink. The Rust kernel transiently receives the
 already mapped pending private key plus pairing ID/challenge, derives the already mapped public key,
@@ -645,9 +654,11 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   capability. `connect` owns native key persistence and fixed start/poll egress. The separate
   private Windows sync command can construct those capabilities only after active-record review and
   exact artifact admission selected through bounded fixed-name discovery or an explicit path, then
-  make one fixed signed upload. It has no other-platform admission, log/export capability, package,
-  or release; the candidate remains unsupported until clean-machine platform, privacy-egress,
-  packaging, provenance, and release gates pass.
+  make one fixed signed upload. The separate `check-codex` command can perform only that admission
+  without credential, process, account, persistence, or network access and grants no authority to
+  the later sync. It has no other-platform admission, log/export capability, package, or release;
+  the candidate remains unsupported until clean-machine platform, privacy-egress, packaging,
+  provenance, and release gates pass.
 - Jobs currently receive only bounded cleanup of expired authentication, invitation, ingest,
   pairing, session, CarRecipe-proposal, terminal-deletion-job, database audit-event, and aged
   unreferenced revoked-passkey plus minimized revoked-device state; bounded aged pairing

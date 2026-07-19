@@ -39,7 +39,9 @@ authority was not revoked. No Codex launch or sync-context capability has a publ
 separate private Windows x86_64 development command can construct them only after active-record
 review and exact artifact admission selected through bounded fixed-name `PATH` discovery or an
 explicit path, then sends one fixed signed sync without retry or edge credentials. It cannot admit
-another platform/version or create a support claim. Its database-only Community ingest plus bounded
+another platform/version or create a support claim. A separate explicit `check-codex` command
+performs only that admission without credential-store, process, account, persistence, or network
+access; its result grants no later sync authority. Its database-only Community ingest plus bounded
 ingest- and authentication-retention boundaries have synthetic executable evidence. The kernel has
 raw-envelope, origin-proof, bounded-parser, contract, and strict device-signature evidence; the
 adapter has configuration, fixed-query, role-probe, mapper, and failure evidence with mock pools. A
@@ -179,7 +181,7 @@ and migration or rollback where applicable.
 | Public race and profiles            | A visitor injects markup through a handle/car, enumerates profiles, or infers exact work hours                                  | Plain-text bounded names, enum-only recipe, CSP, public-field allowlist, immediate hide, rounded freshness, optional streak, rate/cache policy                    | Score/race/status routes, fallback, recipe/status rejection, and hide/publish tested; cache, rate, load, live integration planned        |
 | OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up                          | OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke                                  | Enrollment/login/passkey controls, recovery and bounded expired/revoked-state cleanup tested; edge, schedule, notification, live planned |
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration                                | Short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, pause, unlink, revoke, and rotate                                         | DB, approval, lifecycle, exact HTTP/native client, proof/activation tested; live/cross-platform/edge evidence planned                    |
-| Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command                           | Bounded fixed-name selection, exact artifact admission, retained handle, bounded child/output/time, sanitized environment, no shell, strict adapter               | Protocol, supervisor, synthetic Windows discovery/admission tested; other platforms, support planned                                     |
+| Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command                           | Bounded fixed-name selection, exact artifact admission, retained handle, bounded child/output/time, sanitized environment, no shell, strict adapter               | Protocol, supervisor, synthetic Windows discovery/admission and process-free diagnostic tested; other platforms, support planned         |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                                         | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                                                         | Local signer/vector, verifier, replay stores, application, and HTTP tested; operational/live planned                                     |
 | Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                                          | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                                                   | Local verifier/config/replay/server/host tested; edge injection, trusted route, direct-origin planned                                    |
 | Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections                                  | Strict versioned schema, bounded bodies, fixed adapter, stored procedure, non-owner role, constraints, deadlines, backpressure                                    | Full synthetic loopback HTTP-to-PostgreSQL plus isolated SQL tested; deployment operations planned                                       |
@@ -225,20 +227,22 @@ and migration or rollback where applicable.
    checks late output, and gates success on reap. Its launch capability has no public constructor;
    the private Windows command can construct it only after active-record validation, bounded
    fixed-name discovery or an explicit path, canonical exact-size/digest admission, and a held
-   handle. This still cannot become a support claim. The composer separately consumes only the
-   bounded parser output plus an inaccessible reviewed context, revalidates every body and unsigned
-   device-header input it owns, and fixes exact JSON/digest/device-message bytes shared with Ingest.
-   The isolated signer removes public unsigned access, checks that its inaccessible one-use key
-   capability names the exact request device, signs only that message, and returns the same body
-   plus five header values. Drop paths zero the private byte buffers and key material, while errors
-   remain non-reflective. The pairing command owns OS entropy, native key custody, exact
-   HTTPS/loopback start/poll egress, bounded retries, and non-reflective output. The separate sync
-   command creates fresh context from only the active record and sends one fixed-path request with
-   five exact device headers, no proxy/redirect/retry, and a closed acknowledgement. The separate
-   `forget-local` command invokes only native deletion for one canonical origin/label, treats
-   absence idempotently, and explicitly says server authority was not revoked. Cross-platform
-   execution, real-account privacy evidence, credential rotation, safe release diagnostics,
-   packaging, and release review remain required.
+   handle. A separate explicitly invoked diagnostic reuses only that admission, releases the handle,
+   and cannot open credential storage, launch the child, read an account, persist a result, or use a
+   network; later sync repeats admission. This still cannot become a support claim. The composer
+   separately consumes only the bounded parser output plus an inaccessible reviewed context,
+   revalidates every body and unsigned device-header input it owns, and fixes exact
+   JSON/digest/device-message bytes shared with Ingest. The isolated signer removes public unsigned
+   access, checks that its inaccessible one-use key capability names the exact request device, signs
+   only that message, and returns the same body plus five header values. Drop paths zero the private
+   byte buffers and key material, while errors remain non-reflective. The pairing command owns OS
+   entropy, native key custody, exact HTTPS/loopback start/poll egress, bounded retries, and
+   non-reflective output. The separate sync command creates fresh context from only the active
+   record and sends one fixed-path request with five exact device headers, no proxy/redirect/retry,
+   and a closed acknowledgement. The separate `forget-local` command invokes only native deletion
+   for one canonical origin/label, treats absence idempotently, and explicitly says server authority
+   was not revoked. Cross-platform execution, real-account privacy evidence, credential rotation,
+   safe release diagnostics, packaging, and release review remain required.
 5. **Direct-origin and header spoofing.** A client avoids edge shaping or supplies a false
    forwarding address. The local kernel verifies one fresh, replay-consumed HMAC proof bound to key
    ID, method, path, exact body, time, and nonce before JSON or device work. A protected local

@@ -1,4 +1,4 @@
-//! Exact candidate Codex artifact admission for the one-shot sync command.
+//! Exact candidate Codex artifact selection and admission.
 
 use std::collections::HashSet;
 use std::ffi::OsStr;
@@ -79,6 +79,15 @@ pub(crate) fn discover_candidate() -> Result<AdmittedCodex, AdmissionError> {
     #[cfg(not(all(windows, target_arch = "x86_64")))]
     {
         Err(AdmissionError::UnsupportedPlatform)
+    }
+}
+
+pub(crate) fn admit_candidate_selection(
+    path: Option<&Path>,
+) -> Result<AdmittedCodex, AdmissionError> {
+    match path {
+        Some(path) => admit_candidate(path),
+        None => discover_candidate(),
     }
 }
 

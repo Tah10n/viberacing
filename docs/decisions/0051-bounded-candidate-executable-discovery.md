@@ -58,13 +58,19 @@ The explicit `--codex` form remains available for controlled development and dia
 cannot bypass exact admission. Discovery adds no scheduler, retry, updater, packaging, supported
 version, support-matrix row, macOS/Linux admission, or generic process-launch API.
 
+[ADR 0052](0052-bounded-candidate-artifact-diagnostic.md) later adds a distinct, explicitly invoked
+`check-codex` command that may perform only this same candidate admission without a credential,
+process, account read, or network. The active-credential-first rule and fresh admission remain
+mandatory for every `sync` invocation.
+
 ## Security and privacy consequences
 
 `PATH`, its bounded directory strings, candidate paths, metadata, and digests are transient local
 Security/Operational material. They are not logged, displayed, retained, exported, sent to Vibe
 Racing, placed in a credential record, or exposed through a diagnostic type. Only the already
 reviewed candidate version may be printed after exact admission. The active credential is checked
-first so an unpaired invocation performs no local executable search.
+first in `sync`, so an unpaired sync invocation performs no local executable search; ADR 0052's
+separate explicitly requested diagnostic is the only credential-free exception.
 
 Fixed directory, path, and hash budgets bound attacker-controlled work. Fixed leaf names reject
 command wrappers and arbitrary executables, while exact digest admission means `PATH` ordering does
@@ -105,8 +111,8 @@ discovery branch and again requires explicit `--codex`; exact artifact admission
 record, one-shot collection/signing/upload behavior, and the empty support matrix remain intact.
 
 A future supported release must replace this candidate-only decision with reviewed platform
-installation, ownership/link, signature/provenance, packaging, safe-diagnostic, clean-machine
-privacy, and release evidence. It must not widen these constants silently.
+installation, ownership/link, signature/provenance, packaging, complete safe release diagnostics,
+clean-machine privacy, and release evidence. It must not widen these constants silently.
 
 ## Verification
 
@@ -120,7 +126,7 @@ Repository evidence covers:
   candidate manifest;
 - CLI parsing for default discovery and the explicit-path fallback, with missing, extra, and
   duplicate argument rejection;
-- refusal before any admission or discovery when the native record is not active;
+- refusal by `sync` before any admission or discovery when the native record is not active;
 - the unchanged no-write-sharing handle retained through direct launch; and
 - 69 Rust tests plus strict formatting, check, and Clippy gates.
 

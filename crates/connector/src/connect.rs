@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::fmt;
 use std::io::{self, Write};
 use std::net::IpAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -16,6 +16,7 @@ use ureq::Agent;
 use ureq::http::Uri;
 use ureq::tls::{RootCerts, TlsConfig};
 
+use crate::admission::{ADMITTED_CODEX_VERSION, AdmissionError, admit_candidate_selection};
 use crate::car_proposal::CarRecipeSelection;
 use crate::pairing::{
     CandidatePairingPossessionV1Signer, PAIRING_CHALLENGE_BYTES, PendingDevicePairingSigningKey,
@@ -36,7 +37,7 @@ const KEYRING_SERVICE: &str = "viberacing.connector.pairing.v1";
 const KEYRING_ACCOUNT_PREFIX: &str = "device-";
 const ACCOUNT_DOMAIN: &[u8] = b"viberacing-connector-keyring-account-v1\0";
 const ORIGIN_DOMAIN: &[u8] = b"viberacing-connector-origin-v1\0";
-const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector forget-local --origin <https-origin> --label <device-label>\n  viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
+const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector forget-local --origin <https-origin> --label <device-label>\n  viberacing-connector check-codex [--codex <absolute-path>]\n  viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
 const MAX_ORIGIN_BYTES: usize = 512;
 const MAX_LABEL_CHARACTERS: usize = 64;
 const MAX_REQUEST_BYTES: usize = 1024;
@@ -67,7 +68,7 @@ const RECORD_BYTES: usize = 264;
 /// Stable, non-reflective failures from the bounded connector command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConnectorCliError {
-    /// The command line does not match one of the four bounded commands.
+    /// The command line does not match one of the five bounded commands.
     InvalidArguments,
     /// The supplied server origin is not an HTTPS origin or permitted loopback HTTP origin.
     InvalidOrigin,
@@ -147,6 +148,8 @@ impl std::error::Error for ConnectorCliError {}
 ///
 /// `connect` creates or resumes one device credential. `sync` admits one exact Codex candidate,
 /// collects only bounded daily usage, signs it with that active credential, and submits it once.
+/// `check-codex` performs only the same point-in-time candidate artifact admission, without opening
+/// credential storage, starting Codex, reading an account, or using the network.
 /// `propose-car` signs and submits one exact enum-only `CarRecipe` with the same active credential.
 /// `forget-local` removes only the exact local origin/label credential and performs no server call.
 ///
@@ -179,6 +182,9 @@ pub fn run_connector_cli() -> Result<(), ConnectorCliError> {
             validate_label(&label)?;
             let mut store = OsCredentialStore::new(&origin, &label)?;
             run_forget_local(&mut store, &mut io::stdout().lock())
+        }
+        ParsedCommand::CheckCodex { codex_path } => {
+            run_codex_check(codex_path.as_deref(), &mut io::stdout().lock())
         }
         ParsedCommand::Sync {
             codex_path,
@@ -222,6 +228,9 @@ enum ParsedCommand {
     ForgetLocal {
         label: String,
         origin: String,
+    },
+    CheckCodex {
+        codex_path: Option<PathBuf>,
     },
     Sync {
         codex_path: Option<PathBuf>,
@@ -292,7 +301,10 @@ fn parse_command(
         .first()
         .map(String::as_str)
         .ok_or(ConnectorCliError::InvalidArguments)?;
-    if !matches!(command, "connect" | "forget-local" | "sync" | "propose-car") {
+    if !matches!(
+        command,
+        "connect" | "forget-local" | "check-codex" | "sync" | "propose-car"
+    ) {
         return Err(ConnectorCliError::InvalidArguments);
     }
 
@@ -311,7 +323,11 @@ fn parse_command(
         match flag.as_str() {
             "--origin" if origin.is_none() => origin = Some(value.clone()),
             "--label" if label.is_none() => label = Some(value.clone()),
-            "--codex" if command == "sync" && codex_path.is_none() && value.len() <= 1024 => {
+            "--codex"
+                if matches!(command, "check-codex" | "sync")
+                    && codex_path.is_none()
+                    && value.len() <= 1024 =>
+            {
                 codex_path = Some(PathBuf::from(value));
             }
             "--chassis" if command == "propose-car" && pending_recipe.chassis.is_none() => {
@@ -355,6 +371,7 @@ fn parse_command(
         ("forget-local", Some(origin), Some(label), None) => {
             Ok(ParsedCommand::ForgetLocal { label, origin })
         }
+        ("check-codex", None, None, codex_path) => Ok(ParsedCommand::CheckCodex { codex_path }),
         ("sync", Some(origin), Some(label), codex_path) => Ok(ParsedCommand::Sync {
             codex_path,
             label,
@@ -1272,6 +1289,38 @@ fn run_forget_local(
     )
 }
 
+fn map_admission_error(error: AdmissionError) -> ConnectorCliError {
+    match error {
+        AdmissionError::UnsupportedPlatform => ConnectorCliError::UnsupportedPlatform,
+        AdmissionError::DiscoveryUnavailable
+        | AdmissionError::InvalidPath
+        | AdmissionError::UnsupportedArtifact => ConnectorCliError::CodexNotAdmitted,
+    }
+}
+
+fn run_codex_check(
+    codex_path: Option<&Path>,
+    output: &mut dyn Write,
+) -> Result<(), ConnectorCliError> {
+    run_codex_check_with(codex_path, output, |selection| {
+        admit_candidate_selection(selection).map(drop)
+    })
+}
+
+fn run_codex_check_with(
+    codex_path: Option<&Path>,
+    output: &mut dyn Write,
+    admit: impl FnOnce(Option<&Path>) -> Result<(), AdmissionError>,
+) -> Result<(), ConnectorCliError> {
+    admit(codex_path).map_err(map_admission_error)?;
+    write_line(
+        output,
+        &format!(
+            "Candidate Codex {ADMITTED_CODEX_VERSION} artifact admission passed; no Codex version is supported."
+        ),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1502,6 +1551,126 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn parses_only_the_bounded_codex_check_command() {
+        let command = parse_command(["check-codex".into()])
+            .expect("default candidate diagnostic arguments must parse");
+        assert!(matches!(
+            command,
+            ParsedCommand::CheckCodex { codex_path: None }
+        ));
+        assert!(
+            ConnectorCliError::InvalidArguments
+                .to_string()
+                .contains("\n  viberacing-connector check-codex [--codex <absolute-path>]\n")
+        );
+
+        let explicit_path = "C:\\synthetic-private\\codex.exe";
+        let command = parse_command(["check-codex".into(), "--codex".into(), explicit_path.into()])
+            .expect("explicit candidate diagnostic arguments must parse");
+        match command {
+            ParsedCommand::CheckCodex {
+                codex_path: Some(path),
+            } => assert_eq!(path, PathBuf::from(explicit_path)),
+            _ => panic!("the explicit diagnostic path must remain confined to check-codex"),
+        }
+
+        for arguments in [
+            vec!["check-codex".into(), "--codex".into()],
+            vec![
+                "check-codex".into(),
+                "--codex".into(),
+                explicit_path.into(),
+                "--codex".into(),
+                explicit_path.into(),
+            ],
+            vec![
+                "check-codex".into(),
+                "--origin".into(),
+                "https://race.example".into(),
+            ],
+            vec!["check-codex".into(), "--label".into(), "Desktop".into()],
+            vec![
+                "check-codex".into(),
+                "--codex".into(),
+                "C:\\synthetic\\codex.exe".into(),
+                "unexpected".into(),
+            ],
+            vec![
+                "check-codex".into(),
+                "--codex".into(),
+                "é".repeat(513).into(),
+            ],
+        ] {
+            assert!(matches!(
+                parse_command(arguments),
+                Err(ConnectorCliError::InvalidArguments)
+            ));
+        }
+    }
+
+    #[test]
+    fn codex_check_is_one_non_reflective_point_in_time_admission() {
+        let selected = PathBuf::from("C:\\synthetic-private\\codex.exe");
+        let mut calls = 0;
+        let mut output = Vec::new();
+        run_codex_check_with(Some(&selected), &mut output, |candidate| {
+            calls += 1;
+            assert_eq!(candidate, Some(selected.as_path()));
+            Ok(())
+        })
+        .expect("an admitted diagnostic candidate must succeed");
+        assert_eq!(calls, 1);
+        let rendered = String::from_utf8(output).expect("fixed output must be UTF-8");
+        assert_eq!(
+            rendered,
+            "Candidate Codex 0.144.5 artifact admission passed; no Codex version is supported.\n"
+        );
+        assert!(!rendered.contains("synthetic-private"));
+
+        let mut default_output = Vec::new();
+        run_codex_check_with(None, &mut default_output, |candidate| {
+            assert_eq!(candidate, None);
+            Ok(())
+        })
+        .expect("default diagnostic selection must use the same admission boundary");
+        assert_eq!(default_output, rendered.as_bytes());
+    }
+
+    #[test]
+    fn codex_check_maps_failures_without_partial_output() {
+        for (admission_error, expected) in [
+            (
+                AdmissionError::DiscoveryUnavailable,
+                ConnectorCliError::CodexNotAdmitted,
+            ),
+            (
+                AdmissionError::InvalidPath,
+                ConnectorCliError::CodexNotAdmitted,
+            ),
+            (
+                AdmissionError::UnsupportedArtifact,
+                ConnectorCliError::CodexNotAdmitted,
+            ),
+            (
+                AdmissionError::UnsupportedPlatform,
+                ConnectorCliError::UnsupportedPlatform,
+            ),
+        ] {
+            let mut output = Vec::new();
+            assert_eq!(
+                run_codex_check_with(None, &mut output, |_| Err(admission_error)),
+                Err(expected)
+            );
+            assert!(output.is_empty());
+        }
+
+        assert_eq!(
+            run_codex_check_with(None, &mut UnwritableOutput, |_| Ok(())),
+            Err(ConnectorCliError::OutputUnavailable)
+        );
     }
 
     #[test]

@@ -60,6 +60,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0049](0049-bounded-revoked-device-retention-cleanup.md)        | Bounded revoked-device retention cleanup                            | Accepted; database and local command; schedule pending |
 | [0050](0050-bounded-pairing-rate-window-retention-reset.md)     | Bounded pairing rate-window retention reset                         | Accepted; database and local command; schedule pending |
 | [0051](0051-bounded-candidate-executable-discovery.md)          | Bounded candidate executable discovery                              | Accepted; Windows candidate; release/support pending   |
+| [0052](0052-bounded-candidate-artifact-diagnostic.md)           | Bounded candidate artifact diagnostic                               | Accepted; local diagnostic; release/support pending    |
 
 ## Lifecycle
 

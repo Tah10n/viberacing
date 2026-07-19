@@ -24,12 +24,15 @@ changing it.
   which owns source binding, canonical time, and replay behavior. The composer/signer boundary must
   not grow a scheduler, generic upload client, or Codex network client. Pairing key
   generation/storage remains confined to the one-command native-store boundary.
-- Keep candidate executable discovery after exact active-record validation and confined to Windows
-  x86_64, the two reviewed fixed filenames, absolute `PATH` entries, canonical path/directory/hash
-  budgets, exact candidate size/SHA-256, and the retained no-write-sharing launch handle. Never add
-  environment-derived executable extensions, wrappers, shell lookup, recursive or registry search,
-  version negotiation, path reflection, or a way for explicit `--codex` to bypass identical
-  admission.
+- Keep candidate executable selection confined to Windows x86_64, the two reviewed fixed filenames,
+  absolute `PATH` entries, canonical path/directory/hash budgets, exact candidate size/SHA-256, and
+  the retained no-write-sharing handle. `sync` must perform that selection only after validation of
+  the exact active record. The sole credential-free exception is explicit `check-codex`, which may
+  reuse only the same selector and must not open credential storage, start a process, read an
+  account, persist a result, use a network, or become callable through the proposal-only Agent
+  Skill. Never add environment-derived executable extensions, wrappers, shell lookup, recursive or
+  registry search, version negotiation, path reflection, or a way for explicit `--codex` to bypass
+  identical admission.
 - Keep `propose-car` confined to explicit version 1 enum flags and a bounded seed. It may load only
   an active native device record, sign the exact proposal-domain body message, send once without
   retry, and accept only the generic acknowledgement. Never add prompts, conversation, arbitrary

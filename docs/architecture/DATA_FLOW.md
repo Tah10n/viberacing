@@ -48,19 +48,22 @@ that can construct the otherwise inaccessible launch/context/key capabilities on
 artifact and active-record review, then performs one fixed signed upload. ADR 0038 adds a third
 fixed command that starts no Codex process and signs one exact enum-only CarRecipe for the dedicated
 Web/Auth proposal route. ADR 0041 adds a fourth command that deletes only the exact native
-origin/label record without loading it or crossing the connector-to-edge boundary. There is still no
-supported version, cross-platform sync result, scheduling, packaging, or released connector. A local
-Ingest kernel now verifies the bounded exact-body origin/device request, while the separate adapter
-maps origin replay, device lookup, and submission through fixed calls. PostgreSQL now proves atomic
-origin replay consumption and bounded cleanup. A transport-free application now composes those exact
-local capabilities and validates only closed acknowledgement/problem decisions. A bounded local
-Fastify factory preserves exact raw HTTP evidence, enforces no-queue and deadline policy, and
-serializes only revalidated contracts. A separate local host now binds that exact composition under
-closed loopback or declared Railway-edge configuration and bounded process shutdown. There is no
-edge/live-database/deployment integration. No trusted external TLS route, deployment
-login/certificate, edge signer/direct-origin policy, or live route/Jobs evidence is supplied. Data
-labels refer to the classifications in the [privacy data map](../security/PRIVACY_DATA_MAP.md):
-Public, Account, Security, Usage, Operational, and Prohibited.
+origin/label record without loading it or crossing the connector-to-edge boundary. ADR 0052 adds a
+fifth explicit `check-codex` command that performs only the same exact candidate admission without
+credential-store, process, account, persistence, or network access; later sync repeats admission.
+There is still no supported version, cross-platform sync result, scheduling, packaging, or released
+connector. A local Ingest kernel now verifies the bounded exact-body origin/device request, while
+the separate adapter maps origin replay, device lookup, and submission through fixed calls.
+PostgreSQL now proves atomic origin replay consumption and bounded cleanup. A transport-free
+application now composes those exact local capabilities and validates only closed
+acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. A
+separate local host now binds that exact composition under closed loopback or declared Railway-edge
+configuration and bounded process shutdown. There is no edge/live-database/deployment integration.
+No trusted external TLS route, deployment login/certificate, edge signer/direct-origin policy, or
+live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+[privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
+and Prohibited.
 
 ## Enrollment and passkey bootstrap
 

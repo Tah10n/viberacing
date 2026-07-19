@@ -50,8 +50,9 @@ bounded infrastructure survives load tests.
 ## Phase 4 — Agent car proposal and connector packaging
 
 - Add the versioned bounded CarRecipe proposal/approval flow without arbitrary content.
-- Finish connector compatibility diagnostics and clean-machine install, upgrade, revoke, and
-  uninstall tests.
+- Continue connector compatibility diagnostics from the locally implemented point-in-time Windows
+  candidate admission check, then complete clean-machine install, upgrade, revoke, and uninstall
+  tests.
 - Produce signed, checksummed, SBOM- and provenance-backed connector artifacts.
 
 Exit criterion: no arbitrary content or conversation text enters the service, and supported
