@@ -38,17 +38,21 @@ pnpm run build:jobs
 pnpm run build:jobs-scheduler
 pnpm run check:jobs-scheduler-entrypoint
 pnpm run test:jobs-scheduler:postgres-integration
+pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 pnpm run test:jobs-scheduler:process-postgres-integration
 pnpm run verify
 ```
 
 The PostgreSQL commands are opt-in synthetic acceptance gates. The first composes the production
 scheduler core with a fixed injected UTC clock/timer, the real Jobs runner, and one disposable
-database. The second starts the built entry point with the real host clock, waits for the terminal
-startup-catalog marker without process output, and forcibly ends only its persistent test child. It
-does not prove controller settlement before that forced termination. Neither is evidence of a
-recurring timer callback, graceful process-signal settlement against PostgreSQL, deployed cadence,
-production credential/TLS, monitoring, capacity, or real-user behavior.
+database. The second composes the production process lifecycle, starts the penultimate real-runner
+call before injecting its first handler, proves that call settles without starting the later job,
+and requires graceful cleanup and code 0. The third starts the built entry point with the real host
+clock, waits for the terminal startup-catalog marker without process output, and forcibly ends only
+its persistent test child. The injected result is not OS-signal delivery, and the emitted child
+still has no observed controller settlement before forced termination. None is evidence of a
+recurring timer callback, deployed cadence, production credential/TLS, monitoring, capacity, or
+real-user behavior.
 
 Before committing, inspect the exact staged diff and run `git diff --cached --check` plus
 `pnpm run check:public:staged`.

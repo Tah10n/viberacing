@@ -105,7 +105,10 @@ retention, or deployment. The separate emitted-process mode starts the built sch
 with the real host clock, reaches the terminal startup-catalog marker without process output,
 forcibly ends only its persistent test child, and then verifies exact state. It does not prove
 controller settlement before that forced termination, a recurring timer callback, or graceful
-process-signal settlement against PostgreSQL.
+OS-signal settlement against PostgreSQL. A third mode injects the production first-signal handler
+during the penultimate real database call, proves that active call settles and no later scheduler
+job starts, and requires exact graceful lifecycle cleanup plus code 0. It invokes the omitted reset
+only afterward for the shared final-state oracle and does not prove OS-signal delivery.
 
 The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
 Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package

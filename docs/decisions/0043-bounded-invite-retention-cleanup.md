@@ -60,14 +60,15 @@ separate bounded event without the verifier digest. The row lock prevents cleanu
 invite underneath an already-running redemption, while the repeated predicates fail closed if a
 candidate changes before deletion.
 
-Residual risk remains: there is no invite issuance UI, recurring timer-callback or graceful
+Residual risk remains: there is no invite issuance UI, recurring timer-callback or OS-delivered
 process-signal/PostgreSQL result, deployed cadence, durable missed-slot recovery, monitoring,
 capacity result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention
 policy. ADR 0063 supplies a default-off in-memory local catalog, sequential execution, no-overlap
-lifecycle, fixed-clock core composition, and real-clock emitted-process terminal-marker evidence.
-Controller settlement before forced termination remains unproven. Tombstones, pairing-referenced
-sessions, historical passkey/device provenance, and any future expiring class still require separate
-reviewed rules; ADR 0045 separately bounds terminal deletion-job retention.
+lifecycle, fixed-clock core composition, directly injected lifecycle settlement, and real-clock
+emitted-process terminal-marker evidence. Emitted-child controller settlement before forced
+termination remains unproven. Tombstones, pairing-referenced sessions, historical passkey/device
+provenance, and any future expiring class still require separate reviewed rules; ADR 0045 separately
+bounds terminal deletion-job retention.
 
 Affected invariants are VR-AUTH-001 and VR-DATA-001. Primary attacker stories are
 VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -119,11 +120,11 @@ Acceptance evidence recorded for this decision includes:
 
 All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
 runner and clock, composes its production core with the real runner and disposable PostgreSQL under
-fixed injected UTC time, and starts the built entry point under the real host clock through its
-terminal startup-catalog marker without process output. These layers do not prove controller
-settlement before forced termination, recurring timer-callback or graceful process-signal/PostgreSQL
-behavior, production cadence/login/TLS, monitoring, backup purge, capacity, invite issuance UI, or
-deployment.
+fixed injected UTC time, directly invokes the production lifecycle handler after an active runner
+call starts, and starts the built entry point under the real host clock through its terminal
+startup-catalog marker without process output. These layers do not prove OS-signal delivery,
+emitted-child controller settlement before forced termination, recurring timer-callback behavior,
+production cadence/login/TLS, monitoring, backup purge, capacity, invite issuance UI, or deployment.
 
 ## References
 

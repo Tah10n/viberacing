@@ -638,13 +638,17 @@ network, and storage. Its combined mode additionally keeps only a fixed injected
 closed job objects, closed per-job outcome values, generic `cycle_failed` signal, canonical
 synthetic private-table state, and before/after SHA-256 fingerprints in test-process memory while it
 invokes the production scheduler core and real runner; none is written to the repository or retained
-after the disposable container is removed. Its emitted-process mode additionally holds only the
-synthetic narrow-login environment, real host/database UTC date and derived season targets, terminal
-reset count, two output-observed booleans, and child close code/signal in test memory. It discards
-every child output chunk without retaining its bytes, forcibly ends only that child after the
-terminal marker is visible, and runs the full exact-state oracle immediately afterward. A future
-durable scheduler state, run history, metric, alert, retry record, or monitoring backend must map
-its exact fields, access, retention, and deletion behavior here before collection.
+after the disposable container is removed. Its lifecycle mode additionally holds only closed job
+objects/outcomes, two injected signal-handler references, fixed interval/deadline handler references
+and tokens, closed cleanup counters, terminal kind/code, and the omitted reset marker in test
+memory; it invokes the omitted reset separately only after proving the scheduler did not start it.
+Its emitted-process mode additionally holds only the synthetic narrow-login environment, real
+host/database UTC date and derived season targets, terminal reset count, two output-observed
+booleans, and child close code/signal in test memory. It discards every child output chunk without
+retaining its bytes, forcibly ends only that child after the terminal marker is visible, and runs
+the full exact-state oracle immediately afterward. A future durable scheduler state, run history,
+metric, alert, retry record, or monitoring backend must map its exact fields, access, retention, and
+deletion behavior here before collection.
 
 Revision 0011 stores no new data. One owner-defined function gives only the Web role a fixed
 ten-field score projection: season dates/version/finalized state, handle, weekly score, active days,

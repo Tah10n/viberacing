@@ -645,12 +645,14 @@ sequential no-overlap invocation, and bounded signal shutdown. Ninety-four tests
 timer, and runner. A second opt-in synthetic integration composes the production scheduler core
 under one fixed injected UTC clock/timer with the real Jobs runner and disposable PostgreSQL; it
 proves exact catalog order, full private-table non-mutation for the widened login, and exact stored
-state for the narrow login. A third opt-in integration starts the built scheduler entry point under
-the real host clock, reaches the terminal startup-catalog marker without process output, forcibly
-ends only its persistent test child, and then verifies exact state. No controller settlement before
-that forced termination, recurring timer-callback, or graceful process-signal/PostgreSQL result,
-deployed scheduler, external audit sink, production login/certificate, audited correction,
-tombstone/restore replay, deployed route, or public cache exists.
+state for the narrow login. A third opt-in integration composes the process lifecycle, injects its
+first handler during the penultimate real database job, and proves active-call settlement, no later
+scheduler job, and exact graceful cleanup. A fourth starts the built scheduler entry point under the
+real host clock, reaches the terminal startup-catalog marker without process output, forcibly ends
+only its persistent test child, and then verifies exact state. No OS-signal delivery, emitted-child
+controller settlement before forced termination, recurring timer-callback result, deployed
+scheduler, external audit sink, production login/certificate, audited correction, tombstone/restore
+replay, deployed route, or public cache exists.
 
 ## CarRecipe proposal origins and browser approval
 

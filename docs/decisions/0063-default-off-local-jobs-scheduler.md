@@ -176,20 +176,26 @@ Local evidence includes:
   one fixed UTC clock/timer, executes the exact ordered seventeen-job catalog against one disposable
   PostgreSQL database, fingerprints every private table before and after a widened-login denial, and
   verifies exact stored state through the narrow login;
+- a separate opt-in lifecycle integration that composes the production process state machine with
+  that fixed-clock core and real runner, starts the penultimate real-runner call before injecting
+  its first handler, proves that active call settles and the later scheduler job does not start, and
+  requires exact interval/deadline/handler/runner cleanup plus exit code 0. The harness invokes the
+  omitted reset only afterward before the shared exact-state oracle;
 - a separate opt-in emitted-process integration that starts the built entry point with exact enable
   and narrow-login configuration, requires real host/disposable-database UTC-date agreement, waits
   for the terminal reset marker, requires no process output, forcibly ends only its otherwise
-  persistent test child, and then verifies the same exact stored state. Secretless CI declares both
-  scheduler commands, but this tree claims only the observed local passes.
+  persistent test child, and then verifies the same exact stored state. Secretless CI declares all
+  three scheduler commands, but this tree claims only the observed local passes.
 
-The fixed-clock integration invokes the production scheduler core in-process. The emitted-process
-integration observes only the immediate startup catalog through its terminal database marker and
-deliberately uses `SIGKILL` because Windows cannot deliver this child a catchable POSIX shutdown
-signal. It does not prove controller settlement before forced termination. Neither integration
-exercises a recurring timer callback or graceful process-signal settlement against PostgreSQL. None
-proves that a production clock remains stable, a deployment has one replica, durable cadence is
-maintained, missed historical seasons are recovered, production TLS/credentials work, or a real-user
-retention/deletion deadline is met.
+The fixed-clock and lifecycle integrations invoke production components in-process; the lifecycle
+signal handler is called directly and therefore does not exercise OS-signal delivery. The
+emitted-process integration observes only the immediate startup catalog through its terminal
+database marker and deliberately uses `SIGKILL` because Windows cannot deliver this child a
+catchable POSIX shutdown signal. It does not prove controller settlement before forced termination.
+None exercises a recurring timer callback or an OS-delivered graceful process signal against
+PostgreSQL. None proves that a production clock remains stable, a deployment has one replica,
+durable cadence is maintained, missed historical seasons are recovered, production TLS/credentials
+work, or a real-user retention/deletion deadline is met.
 
 ## References
 

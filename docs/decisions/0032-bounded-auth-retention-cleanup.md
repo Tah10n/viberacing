@@ -73,15 +73,16 @@ overlap between cleanup workers, while profile locks serialize cleanup with reco
 without granting Jobs any direct table access.
 
 Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
-execution, no-overlap lifecycle, fixed-clock core composition, and real-clock emitted-process
-terminal-marker evidence. There is no controller settlement before forced termination, recurring
-timer-callback or graceful process-signal/PostgreSQL result, deployed cadence, durable missed-slot
-recovery, monitoring, capacity result, production Jobs login/TLS connection, backup-expiry proof, or
-deployed retention policy. ADR 0042 now covers eligible expired sessions, ADR 0045 covers terminal
-deletion jobs, and ADR 0048 covers aged unreferenced revoked passkeys; pairing-referenced session
-provenance, tombstones, referenced passkey provenance, and any future expiring class still require
-separate reviewed rules. ADR 0050 now separately covers fixed pairing-rate-window reset. Recovery
-also still needs distributed attempt controls and deployment-owned pepper/timing evidence.
+execution, no-overlap lifecycle, fixed-clock core composition, directly injected lifecycle
+settlement, and real-clock emitted-process terminal-marker evidence. There is no OS-signal delivery,
+emitted-child controller settlement before forced termination, recurring timer-callback result,
+deployed cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs
+login/TLS connection, backup-expiry proof, or deployed retention policy. ADR 0042 now covers
+eligible expired sessions, ADR 0045 covers terminal deletion jobs, and ADR 0048 covers aged
+unreferenced revoked passkeys; pairing-referenced session provenance, tombstones, referenced passkey
+provenance, and any future expiring class still require separate reviewed rules. ADR 0050 now
+separately covers fixed pairing-rate-window reset. Recovery also still needs distributed attempt
+controls and deployment-owned pepper/timing evidence.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-AUTH-003, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-RECOVERY-ORACLE,
@@ -136,10 +137,11 @@ Acceptance evidence recorded for this decision included:
 The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project. Focused Jobs tests
 use an injected pool; the shared opt-in Jobs integration additionally proves this emitted command
 through one disposable narrow login, generic output, and exact stored state. ADR 0063 separately
-proves the default-off scheduler against a fake runner and clock and composes its production core
-with the real runner and disposable PostgreSQL under fixed injected UTC time. These layers do not
-prove recurring timer-callback or graceful process-signal/PostgreSQL behavior, production
-cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
+proves the default-off scheduler against a fake runner and clock, composes its production core with
+the real runner and disposable PostgreSQL under fixed injected UTC time, and directly invokes the
+production lifecycle handler after an active runner call starts. These layers do not prove OS-signal
+delivery, emitted-child controller settlement before forced termination, recurring timer-callback
+behavior, production cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
 
 ## References
 

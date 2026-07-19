@@ -32,6 +32,7 @@ const completedMessage = "Vibe Racing Jobs command completed.\n";
 const failedMessage = "Vibe Racing Jobs command failed.\n";
 const defaultFinalizedSeasonStart = "2000-01-03";
 const schedulerArgument = "--scheduler";
+const schedulerLifecycleArgument = "--scheduler-lifecycle";
 const schedulerProcessArgument = "--scheduler-process";
 const schedulerCycleTimeoutMs = 120_000;
 const schedulerProcessCloseTimeoutMs = 10_000;
@@ -44,6 +45,9 @@ function readIntegrationMode() {
   }
   if (process.argv.length === 3 && process.argv[2] === schedulerArgument) {
     return "scheduler";
+  }
+  if (process.argv.length === 3 && process.argv[2] === schedulerLifecycleArgument) {
+    return "scheduler_lifecycle";
   }
   if (process.argv.length === 3 && process.argv[2] === schedulerProcessArgument) {
     return "scheduler_process";
@@ -509,6 +513,207 @@ async function waitWithDeadline(promise, milliseconds, message) {
   } finally {
     clearTimeout(timeoutToken);
   }
+}
+
+async function runSchedulerLifecycle({ databasePort, expectedJobs, modules, nowEpochMs }) {
+  assert.equal(expectedJobs.length, 17, "the lifecycle integration requires the closed catalog");
+  const configuredRunner = modules.jobs.createConfiguredCommunityMaintenanceRunner(
+    jobsEnvironment(databasePort, jobsLogin, jobsPassword),
+  );
+  const attemptedJobs = [];
+  const outcomes = [];
+  const schedulerSignals = [];
+  const registeredHandlers = new Map();
+  const removedSignals = [];
+  const terminalEvents = [];
+  const schedulerIntervalHandlers = [];
+  const shutdownDeadlineHandlers = [];
+  const schedulerIntervalToken = Object.freeze({ schedulerLifecycleInterval: true });
+  const shutdownTimerToken = Object.freeze({ schedulerLifecycleShutdownTimer: true });
+  let schedulerController;
+  let schedulerIntervalsCleared = 0;
+  let shutdownTimersCleared = 0;
+  let runnerCloses = 0;
+  let shutdownSignalRequests = 0;
+  let resolveTerminal;
+  const terminal = new Promise((resolveTerminalPromise) => {
+    resolveTerminal = resolveTerminalPromise;
+  });
+  const recordTerminal = (kind, code) => {
+    const event = Object.freeze({ code, kind });
+    terminalEvents.push(event);
+    if (terminalEvents.length === 1) {
+      resolveTerminal(event);
+    }
+  };
+  const runner = Object.freeze({
+    close: async () => {
+      runnerCloses += 1;
+      await configuredRunner.close();
+    },
+    execute: async (job) => {
+      attemptedJobs.push(job);
+      const execution = configuredRunner.execute(job);
+      if (attemptedJobs.length === expectedJobs.length - 1) {
+        const handler = registeredHandlers.get("SIGTERM");
+        assert.equal(
+          typeof handler,
+          "function",
+          "the lifecycle signal must be registered before scheduler startup",
+        );
+        shutdownSignalRequests += 1;
+        handler();
+      }
+      try {
+        const result = await execution;
+        outcomes.push("completed");
+        return result;
+      } catch (error) {
+        outcomes.push("rejected");
+        throw error;
+      }
+    },
+  });
+
+  await modules.scheduler.runJobsSchedulerProcess(
+    Object.freeze({
+      clearTimer: (token) => {
+        assert.equal(token, shutdownTimerToken, "the lifecycle must clear its exact deadline");
+        shutdownTimersCleared += 1;
+      },
+      forceExit: (code) => {
+        recordTerminal("forced", code);
+      },
+      onSignal: (signal, handler) => {
+        assert.match(signal, /^SIG(?:INT|TERM)$/);
+        assert.equal(
+          registeredHandlers.has(signal),
+          false,
+          "the lifecycle must register each signal exactly once",
+        );
+        registeredHandlers.set(signal, handler);
+      },
+      removeSignal: (signal, handler) => {
+        assert.equal(
+          registeredHandlers.get(signal),
+          handler,
+          "the lifecycle must remove the exact registered handler",
+        );
+        removedSignals.push(signal);
+        registeredHandlers.delete(signal);
+      },
+      setExitCode: (code) => {
+        recordTerminal("exit", code);
+      },
+      setTimer: (handler, milliseconds) => {
+        assert.equal(
+          milliseconds,
+          modules.scheduler.jobsSchedulerShutdownDeadlineMs,
+          "the lifecycle must retain its fixed shutdown deadline",
+        );
+        shutdownDeadlineHandlers.push(handler);
+        return shutdownTimerToken;
+      },
+      start: async () => {
+        assert.deepEqual(
+          [...registeredHandlers.keys()],
+          ["SIGINT", "SIGTERM"],
+          "the lifecycle must register both handlers before scheduler startup",
+        );
+        assert.equal(
+          registeredHandlers.get("SIGINT"),
+          registeredHandlers.get("SIGTERM"),
+          "both process signals must share one first-signal state machine",
+        );
+        schedulerController = await modules.scheduler.startJobsScheduler(
+          Object.freeze({ enabled: true, pollIntervalMs: 60_000 }),
+          Object.freeze({
+            clearInterval: (token) => {
+              assert.equal(
+                token,
+                schedulerIntervalToken,
+                "the lifecycle scheduler must clear its exact interval",
+              );
+              schedulerIntervalsCleared += 1;
+            },
+            createRunner: () => runner,
+            createSchedule: () => modules.scheduler.createMaintenanceSchedule(),
+            now: () => nowEpochMs,
+            setInterval: (handler, milliseconds) => {
+              assert.equal(
+                milliseconds,
+                60_000,
+                "the lifecycle scheduler must retain its fixed poll slot",
+              );
+              schedulerIntervalHandlers.push(handler);
+              return schedulerIntervalToken;
+            },
+            signalSink: (signal) => {
+              schedulerSignals.push(signal);
+            },
+          }),
+        );
+        return schedulerController;
+      },
+    }),
+  );
+
+  let terminalResult;
+  try {
+    terminalResult = await waitWithDeadline(
+      terminal,
+      schedulerCycleTimeoutMs,
+      "Jobs scheduler lifecycle PostgreSQL settlement exceeded its fixed deadline.",
+    );
+  } finally {
+    if (schedulerController !== undefined) {
+      await schedulerController.close();
+    }
+  }
+
+  assert.deepEqual(terminalResult, { code: 0, kind: "exit" });
+  assert.deepEqual(terminalEvents, [{ code: 0, kind: "exit" }]);
+  assert.equal(shutdownSignalRequests, 1, "the harness must inject only the first signal");
+  assert.deepEqual(
+    attemptedJobs,
+    expectedJobs.slice(0, -1),
+    "shutdown must settle the active job without starting the later reset",
+  );
+  assert.deepEqual(
+    outcomes,
+    expectedJobs.slice(0, -1).map(() => "completed"),
+    "every job admitted before shutdown must settle successfully",
+  );
+  assert.deepEqual(schedulerSignals, [], "the graceful cycle must emit no failure signal");
+  assert.equal(runnerCloses, 1, "graceful shutdown must close the real Jobs runner exactly once");
+  assert.equal(schedulerIntervalsCleared, 1, "graceful shutdown must clear one scheduler interval");
+  assert.equal(schedulerIntervalHandlers.length, 1);
+  assert.equal(shutdownDeadlineHandlers.length, 1);
+  assert.equal(shutdownTimersCleared, 1, "graceful shutdown must clear one process deadline");
+  assert.deepEqual(removedSignals, ["SIGINT", "SIGTERM"]);
+  assert.equal(registeredHandlers.size, 0, "graceful shutdown must remove both signal handlers");
+  assert.equal(
+    psqlScalar(
+      `SET ROLE viberacing_owner;
+SELECT pg_catalog.concat(
+  pg_catalog.count(*) FILTER (
+    WHERE attempt_count = 0
+      AND window_started_at = TIMESTAMPTZ '1970-01-01 00:00:00+00'
+  ),
+  ':',
+  pg_catalog.count(*) FILTER (
+    WHERE attempt_count > 0
+      AND window_started_at < pg_catalog.statement_timestamp() - INTERVAL '1 hour'
+  )
+)
+FROM viberacing_private.pairing_request_windows
+WHERE operation = 'poll'
+  AND bucket IN (-1, 5);`,
+      "scheduler lifecycle omitted-job marker",
+    ),
+    "0:2",
+    "the job after the active shutdown call must not start or reset either retained row",
+  );
 }
 
 async function waitForEmittedSchedulerTerminalMarker(processState) {
@@ -1140,7 +1345,9 @@ COMMIT;`,
     let schedulerModules;
     let schedulerNowEpochMs;
     let schedulerSeasonStarts;
-    if (integrationMode === "scheduler") {
+    const usesFixedClockScheduler =
+      integrationMode === "scheduler" || integrationMode === "scheduler_lifecycle";
+    if (usesFixedClockScheduler) {
       const databaseDate = psqlScalar(
         "SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text;",
         "scheduler database-date discovery",
@@ -1187,7 +1394,7 @@ COMMIT;`,
     assertCanonicalMonday(finalizedSeasonStart);
     seedSyntheticState(currentSeasonStart);
 
-    if (integrationMode === "scheduler") {
+    if (usesFixedClockScheduler) {
       const stateBeforeRejectedCatalog = readPrivateStateFingerprint(
         "pre-rejection private-state fingerprint",
       );
@@ -1250,6 +1457,17 @@ SELECT (
         nowEpochMs: schedulerNowEpochMs,
         password: jobsPassword,
       });
+    } else if (integrationMode === "scheduler_lifecycle") {
+      await runSchedulerLifecycle({
+        databasePort,
+        expectedJobs: schedulerExpectedJobs,
+        modules: schedulerModules,
+        nowEpochMs: schedulerNowEpochMs,
+      });
+      const reset = runJobsCommand(databasePort, jobsLogin, jobsPassword, [
+        "reset-expired-pairing-request-windows",
+      ]);
+      assertSuccessfulCommand(reset, "post-lifecycle omitted Jobs command");
     } else if (integrationMode === "scheduler_process") {
       await runEmittedSchedulerProcess({
         databasePort,
@@ -1517,9 +1735,11 @@ SELECT pg_catalog.jsonb_build_object(
     const successMessage =
       integrationMode === "scheduler"
         ? "Jobs scheduler PostgreSQL integration passed (exact catalog, full-state least-privilege denial, and exact stored state)."
-        : integrationMode === "scheduler_process"
-          ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, forced test-child termination, and exact stored state)."
-          : "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).";
+        : integrationMode === "scheduler_lifecycle"
+          ? "Jobs scheduler lifecycle PostgreSQL integration passed (active-call settlement, no later scheduler job, graceful close, and exact final state)."
+          : integrationMode === "scheduler_process"
+            ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, forced test-child termination, and exact stored state)."
+            : "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).";
     console.log(successMessage);
   } catch (error) {
     primaryFailure = error;

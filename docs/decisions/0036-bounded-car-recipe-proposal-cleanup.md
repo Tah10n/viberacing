@@ -57,13 +57,14 @@ re-evaluates the row. Cleanup cannot activate a recipe and does not grant Jobs a
 device, or direct-table capability.
 
 Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
-execution, no-overlap lifecycle, fixed-clock core composition, and real-clock emitted-process
-terminal-marker evidence. There is no controller settlement before forced termination, recurring
-timer-callback or graceful process-signal/PostgreSQL result, deployed cadence, durable missed-slot
-recovery, monitoring, capacity result, production Jobs login/TLS connection, backup-expiry proof, or
-deployed retention policy. Active recipes remain until replacement or profile deletion. The separate
-public active-recipe projection, device proposal ingress, and local agent orchestration were later
-accepted in [ADR 0037](0037-bounded-public-community-race-projection.md),
+execution, no-overlap lifecycle, fixed-clock core composition, directly injected lifecycle
+settlement, and real-clock emitted-process terminal-marker evidence. There is no OS-signal delivery,
+emitted-child controller settlement before forced termination, recurring timer-callback result,
+deployed cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs
+login/TLS connection, backup-expiry proof, or deployed retention policy. Active recipes remain until
+replacement or profile deletion. The separate public active-recipe projection, device proposal
+ingress, and local agent orchestration were later accepted in
+[ADR 0037](0037-bounded-public-community-race-projection.md),
 [ADR 0038](0038-bounded-device-car-recipe-proposal-ingress.md), and
 [ADR 0039](0039-bounded-agent-car-proposal-orchestration.md); scheduling and deployed retention
 remain separate Phase 4 gates.
@@ -117,11 +118,12 @@ The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project.
 use an injected pool; the shared opt-in Jobs integration additionally proves this emitted command
 through one disposable narrow login and exact stored state. ADR 0063 separately proves the
 default-off scheduler against a fake runner and clock, composes its production core with the real
-runner and disposable PostgreSQL under fixed injected UTC time, and starts the built entry point
-under the real host clock through its terminal startup-catalog marker without process output. These
-layers do not prove controller settlement before forced termination, a recurring timer callback,
-graceful process-signal/PostgreSQL behavior, production cadence/login/TLS, monitoring, backup purge,
-capacity, or deployment.
+runner and disposable PostgreSQL under fixed injected UTC time, directly invokes the production
+lifecycle handler after an active real-runner call starts, and starts the built entry point under
+the real host clock through its terminal startup-catalog marker without process output. These layers
+do not prove OS-signal delivery, emitted-child controller settlement before forced termination, a
+recurring timer callback, production cadence/login/TLS, monitoring, backup purge, capacity, or
+deployment.
 
 ## References
 

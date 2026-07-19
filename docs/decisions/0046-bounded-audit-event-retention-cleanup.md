@@ -68,11 +68,11 @@ scheduler here, so no deployed deletion cadence or proof is implied.
 
 Residual risk remains: there is no external audit sink or user-visible audit subset. ADR 0063
 supplies a default-off in-memory local catalog, sequential execution, no-overlap lifecycle,
-fixed-clock core composition, and real-clock emitted-process terminal-marker evidence. There is no
-controller settlement before forced termination, recurring timer-callback or graceful
-process-signal/PostgreSQL result, deployed cadence, durable missed-slot recovery, monitoring,
-capacity result, production Jobs login/TLS connection, cache or backup purge, tombstone policy,
-restore replay, or deployed retention evidence.
+fixed-clock core composition, directly injected lifecycle settlement, and real-clock emitted-process
+terminal-marker evidence. There is no OS-signal delivery, emitted-child controller settlement before
+forced termination, recurring timer-callback result, deployed cadence, durable missed-slot recovery,
+monitoring, capacity result, production Jobs login/TLS connection, cache or backup purge, tombstone
+policy, restore replay, or deployed retention evidence.
 
 Affected invariant is VR-DATA-001. Primary attacker stories are VR-ABUSE-DATABASE-ROLE,
 VR-ABUSE-RESOURCE-EXHAUSTION, and VR-ABUSE-DELETE-RESURRECTION.
@@ -127,10 +127,12 @@ Acceptance evidence recorded for this decision includes:
   removes one aged audit event, and verifies exact stored state.
 
 All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
-runner and clock and composes its production core with the real runner and disposable PostgreSQL
-under fixed injected UTC time. These layers do not prove an external append-only sink, recurring
-timer-callback or graceful process-signal/PostgreSQL behavior, production cadence/login/TLS,
-monitoring, cache or backup purge, restore replay, capacity, or deployment.
+runner and clock, composes its production core with the real runner and disposable PostgreSQL under
+fixed injected UTC time, and directly invokes the production lifecycle handler after an active
+runner call starts. These layers do not prove an external append-only sink, OS-signal delivery,
+emitted-child controller settlement before forced termination, recurring timer-callback behavior,
+production cadence/login/TLS, monitoring, cache or backup purge, restore replay, capacity, or
+deployment.
 
 ## References
 

@@ -37,18 +37,21 @@ without overlap, retains slot state only in memory, and bounds first-signal shut
 opt-in synthetic integration composes that production scheduler core under a fixed injected UTC
 clock/timer with the real Jobs runner and one disposable PostgreSQL database; it proves the exact
 ordered catalog, full private-table non-mutation for a widened login, and exact narrow-login stored
-state. A third opt-in synthetic integration starts the built scheduler entry point under the real
-host clock, waits for the terminal catalog marker, forcibly ends only its otherwise persistent test
-child, and then verifies the same exact state. It does not prove controller settlement before that
-forced termination. Neither integration proves a recurring timer callback, graceful process-signal
-settlement against PostgreSQL, deployed replica, durable cadence, production login/TLS result,
-monitoring, or capacity evidence. A local Ingest kernel bounds the raw sync envelope and parser,
-verifies an injected replay-consumed origin proof, validates the sync contract, and strictly
-verifies the source-bound device request. A protected local reader supplies one mandatory and one
-optional rotation proof key from exact namespaced configuration without returning a reusable key
-container. A separate bounded Ingest PostgreSQL adapter wraps only reviewed origin replay, device
-lookup, and submission procedures through a probed least-privileged login contract. A forced-RLS
-origin replay tuple and separate Jobs
+state. A third opt-in synthetic integration composes the production process lifecycle under the
+fixed clock, injects its first signal during the penultimate database job, proves that active call
+settles and the later scheduler job does not start, and exits through the graceful cleanup path; the
+harness invokes the omitted reset only afterward before the shared exact-state oracle. A fourth
+starts the built scheduler entry point under the real host clock, waits for the terminal catalog
+marker, forcibly ends only its otherwise persistent test child, and then verifies the same exact
+state. The lifecycle result does not prove OS-signal delivery, and the emitted result does not prove
+controller settlement before forced termination. None proves a recurring timer callback, deployed
+replica, durable cadence, production login/TLS result, monitoring, or capacity evidence. A local
+Ingest kernel bounds the raw sync envelope and parser, verifies an injected replay-consumed origin
+proof, validates the sync contract, and strictly verifies the source-bound device request. A
+protected local reader supplies one mandatory and one optional rotation proof key from exact
+namespaced configuration without returning a reusable key container. A separate bounded Ingest
+PostgreSQL adapter wraps only reviewed origin replay, device lookup, and submission procedures
+through a probed least-privileged login contract. A forced-RLS origin replay tuple and separate Jobs
 ingest/pairing/auth/invite/session/abandoned-enrollment/CarRecipe-proposal/finalized-source-day,
 terminal-deletion-job, audit-event, revoked-passkey, and revoked-device cleanup plus pairing
 approval-provenance redaction capabilities have isolated PostgreSQL evidence. A transport-free
@@ -298,6 +301,12 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   deliberately widened login cannot mutate state, then verifies exact stored effects through the
   narrow login. It does not run the emitted scheduler process or prove deployed cadence, production
   credential/TLS, monitoring, capacity, real-user retention, or deployment.
+- `pnpm run test:jobs-scheduler:lifecycle-postgres-integration` composes the production process
+  lifecycle with the fixed-clock scheduler and real Jobs runner. It injects the first handler during
+  the penultimate database job, requires that call to settle, proves the later scheduler job never
+  starts, and requires exact interval/deadline/handler/runner cleanup plus exit code 0. The harness
+  invokes only the omitted reset afterward before the shared exact-state oracle. It does not prove
+  OS-signal delivery, an emitted-process graceful exit, recurring cadence, or deployment.
 - `pnpm run test:jobs-scheduler:process-postgres-integration` starts the built scheduler entry point
   with the real host clock and exact enable/configuration environment, waits for the terminal
   catalog marker in disposable PostgreSQL without process output, forcibly ends only the otherwise
@@ -337,9 +346,9 @@ Jobs, and Jobs-scheduler tests use synthetic/injected data and do not prove auth
 real-user ingestion, connector, live edge, deployed scheduler cadence, or production behavior. The
 general database integration proves only its isolated SQL boundary; the separate Ingest integration
 proves one synthetic loopback HTTP-to-PostgreSQL path, the Jobs CLI integration proves one synthetic
-CLI-to-PostgreSQL path, and the combined scheduler integration proves one fixed-clock in-process
-scheduler-core-to-PostgreSQL path. Rust process tests execute only a target-built synthetic child,
-not a discovered or installed Codex binary. Install dependencies with
+CLI-to-PostgreSQL path, and the scheduler integrations separately prove fixed-clock core,
+injected-lifecycle, and emitted terminal-marker paths. Rust process tests execute only a
+target-built synthetic child, not a discovered or installed Codex binary. Install dependencies with
 `pnpm install --frozen-lockfile --ignore-scripts`.
 
 ## Public repository boundary

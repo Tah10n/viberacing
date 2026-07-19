@@ -22,15 +22,16 @@ opt-in synthetic loopback integration through the emitted Ingest host and a disp
 least-privileged PostgreSQL login, plus a separate synthetic integration through all seventeen
 emitted Jobs commands and a disposable narrow login with a widened-login negative control. A second
 Jobs mode composes the production scheduler core under fixed injected UTC time with the real runner
-and disposable database. A third starts the built scheduler entry point under the real host clock,
-reaches the terminal startup-catalog marker without process output, forcibly ends only its
-persistent test child, and then verifies exact state. It still has no controller settlement before
-that forced termination, recurring timer-callback, or graceful process-signal/PostgreSQL result,
-deployed application service, durable Jobs cadence, operational sync connector, supported Codex
-version, distributed recovery perimeter, Cloudflare/Railway deployment, live OAuth or production
-database login, or production database. Component status is tracked in
-[implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
-not deployed evidence.
+and disposable database. A third composes the production process lifecycle, injects its first
+handler during the penultimate real database job, and proves graceful settlement plus no later
+scheduler job. A fourth starts the built scheduler entry point under the real host clock, reaches
+the terminal startup-catalog marker without process output, forcibly ends only its persistent test
+child, and then verifies exact state. It still has no OS-signal delivery, emitted-child controller
+settlement before forced termination, recurring timer-callback result, deployed application service,
+durable Jobs cadence, operational sync connector, supported Codex version, distributed recovery
+perimeter, Cloudflare/Railway deployment, live OAuth or production database login, or production
+database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
+diagrams describe required runtime boundaries, not deployed evidence.
 
 ## System context
 
@@ -140,21 +141,23 @@ exact-default-off local scheduler that derives only fixed UTC process slots, inv
 runner sequentially, keeps slot state in memory, prevents overlap and same-slot retry, and bounds
 signal shutdown. A second opt-in synthetic integration composes its production core under a fixed
 injected UTC clock/timer with the real Jobs runner and disposable PostgreSQL, proving exact catalog
-order, full private-table widened-login non-mutation, and exact narrow-login state. A third starts
-the built entry point under the real host clock, reaches the terminal startup-catalog marker without
+order, full private-table widened-login non-mutation, and exact narrow-login state. A third composes
+the production process lifecycle, injects its first handler during the penultimate real database
+job, and proves graceful active-call settlement plus no later scheduler job. A fourth starts the
+built entry point under the real host clock, reaches the terminal startup-catalog marker without
 process output, forcibly ends only its persistent test child, and then verifies exact state. It is
-not controller-settlement evidence before that forced termination. Neither is a recurring
-timer-callback, graceful process-signal/PostgreSQL, or deployed-cadence result. ADR 0015 adds a pure
-local Ingest kernel that bounds the raw envelope and JSON parser, verifies a replay-consumed
-body-bound origin proof before parsing, validates the sync contract, and verifies the exact
-source-bound device request under strict Ed25519 semantics. ADR 0016 adds a fixed-query four-client
-PostgreSQL adapter with strict TLS/config, per-checkout Ingest role/login/search-path verification,
-closed device/submission mappers, copied parameters, and destructive failure release. ADR 0017 adds
-an exact primary/secondary origin-key reader and config-backed verifier factory without exposing a
-reusable key container. ADR 0018 adds persistent atomic origin replay, and ADR 0019 composes the
-same replay/device/submission adapter behind one transport-free validated application decision. ADR
-0020 adds one confined Fastify server factory with exact raw-body/header preservation, closed
-POST/error serialization, local connection/deadline bounds, four-call no-queue admission, and no
+not controller-settlement evidence before that forced termination. None is an OS-signal-delivery,
+recurring timer-callback, or deployed-cadence result. ADR 0015 adds a pure local Ingest kernel that
+bounds the raw envelope and JSON parser, verifies a replay-consumed body-bound origin proof before
+parsing, validates the sync contract, and verifies the exact source-bound device request under
+strict Ed25519 semantics. ADR 0016 adds a fixed-query four-client PostgreSQL adapter with strict
+TLS/config, per-checkout Ingest role/login/search-path verification, closed device/submission
+mappers, copied parameters, and destructive failure release. ADR 0017 adds an exact
+primary/secondary origin-key reader and config-backed verifier factory without exposing a reusable
+key container. ADR 0018 adds persistent atomic origin replay, and ADR 0019 composes the same
+replay/device/submission adapter behind one transport-free validated application decision. ADR 0020
+adds one confined Fastify server factory with exact raw-body/header preservation, closed POST/error
+serialization, local connection/deadline bounds, four-call no-queue admission, and no
 proxy/request-ID trust. ADR 0033 adds a separate local host with exact loopback/Railway listener
 declarations, one bind, complete partial-startup cleanup, and bounded signal-driven shutdown. ADR
 0055 requires exact default-off enable admission before every other host/protected-application field

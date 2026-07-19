@@ -75,11 +75,11 @@ cross-capability deadlock paths.
 This decision does not create a security tombstone. The queued `profile_ref_digest` is random and
 cannot safely stand in for a keyed identity digest; the repository has no reviewed tombstone key,
 expiry, restore consumer, or backup policy. Cache invalidation, disclosed tombstone retention,
-restore replay, backup expiry, recurring timer-callback and graceful process-signal/PostgreSQL
+restore replay, backup expiry, recurring timer-callback and OS-delivered process-signal/PostgreSQL
 behavior, deployed cadence, monitoring, alerting, production Jobs login/TLS, capacity, and
-deployment remain launch-blocking gates. ADR 0063 provides only fixed-clock core composition and
-real-clock emitted-process terminal-marker evidence; controller settlement before forced termination
-remains unproven.
+deployment remain launch-blocking gates. ADR 0063 provides only fixed-clock core composition,
+directly injected lifecycle settlement, and real-clock emitted-process terminal-marker evidence;
+emitted-child controller settlement before forced termination remains unproven.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-003, VR-INGEST-001, VR-INGEST-002, VR-DATA-001, and
 VR-DELETE-001. Primary attacker stories are VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION,
@@ -136,11 +136,12 @@ The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project.
 use an injected pool; the shared opt-in Jobs integration additionally proves this emitted command
 through one disposable narrow login and exact terminal job/profile state. A separate ADR 0045
 integration proves only local terminal-job cleanup after the fixed retention boundary. ADR 0063
-separately proves the default-off scheduler against a fake runner and clock and composes its
-production core with the real runner and disposable PostgreSQL under fixed injected UTC time. These
-layers do not prove recurring timer-callback or graceful process-signal/PostgreSQL behavior, a
-published deletion window, production login/TLS, monitoring, backup expiry, tombstone/restore
-replay, cache invalidation, capacity, or deployment.
+separately proves the default-off scheduler against a fake runner and clock, composes its production
+core with the real runner and disposable PostgreSQL under fixed injected UTC time, and directly
+invokes the production lifecycle handler after an active runner call starts. These layers do not
+prove OS-signal delivery, emitted-child controller settlement before forced termination, recurring
+timer-callback behavior, a published deletion window, production login/TLS, monitoring, backup
+expiry, tombstone/restore replay, cache invalidation, capacity, or deployment.
 
 ## References
 

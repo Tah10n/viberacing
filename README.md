@@ -342,20 +342,23 @@ lifecycle. Its 94 tests and built-entrypoint check use fake time and a fake runn
 integration composes the production scheduler core under a fixed injected UTC clock/timer with the
 real Jobs runner and disposable PostgreSQL, proving exact catalog order, full-state widened-login
 denial, and exact narrow-login state. A third opt-in integration starts the built scheduler entry
-point with the real host clock, reaches the terminal startup-catalog marker without process output,
-forcibly ends only its persistent test child, and then verifies exact stored state. It does not
-prove controller settlement before that forced termination. Neither scheduler integration proves a
-recurring timer callback, graceful process-signal settlement against PostgreSQL, a durable or hosted
-cadence, cross-replica coordination, production TLS/login, monitoring, capacity, or real-user
-retention. Revision 0011 gives only the Web database role a bounded active-profile score projection
-containing no raw values, private identifiers, or exact timestamps. The score response component and
-Web PostgreSQL adapter preserve only that public allowlist through the local score route. All three
-public score/race/status routes require one exact default-off module-load gate before query/header
-parsing, admission acquisition, or storage work. The visible race, leaderboard, and selectable
-participant summary consume the validated current-week response only when enabled, using a
-credential-free same-origin request and an explicit synthetic fallback on disabled or failed state.
-Canonical `/?profile=handle#profile` links select only an exact public handle in that page, and a
-missing current top-32 row is not replaced with another participant. There is now a local
+process lifecycle under the fixed clock, injects its first handler during the penultimate database
+job, proves active-call settlement, no later scheduler job, exact graceful cleanup, and exit code 0,
+then invokes the omitted reset separately for the shared state oracle. A fourth starts the built
+scheduler entry point with the real host clock, reaches the terminal startup-catalog marker without
+process output, forcibly ends only its persistent test child, and then verifies exact stored state.
+The lifecycle result does not prove OS-signal delivery, and the emitted result does not prove
+controller settlement before forced termination. None proves a recurring timer callback, a durable
+or hosted cadence, cross-replica coordination, production TLS/login, monitoring, capacity, or
+real-user retention. Revision 0011 gives only the Web database role a bounded active-profile score
+projection containing no raw values, private identifiers, or exact timestamps. The score response
+component and Web PostgreSQL adapter preserve only that public allowlist through the local score
+route. All three public score/race/status routes require one exact default-off module-load gate
+before query/header parsing, admission acquisition, or storage work. The visible race, leaderboard,
+and selectable participant summary consume the validated current-week response only when enabled,
+using a credential-free same-origin request and an explicit synthetic fallback on disabled or failed
+state. Canonical `/?profile=handle#profile` links select only an exact public handle in that page,
+and a missing current top-32 row is not replaced with another participant. There is now a local
 invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
 rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey profile-deletion
 request flow. Recovery lookup returns only the selected unused PHC; admitted attempts use bounded
@@ -395,15 +398,16 @@ pnpm run test:connector:windows-portable
 pnpm run test:ingest:postgres-integration
 pnpm run test:jobs:postgres-integration
 pnpm run test:jobs-scheduler:postgres-integration
+pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 pnpm run test:jobs-scheduler:process-postgres-integration
 ```
 
 The connector lifecycle command is Windows x86_64-only. It builds from the locked Cargo graph and
 tests only a temporary portable copy; it does not install, package, sign, publish, run a connector
-network command, or contact a Vibe Racing/Codex service. The final four commands are opt-in
-Docker-backed synthetic integrations; secretless CI declares all four, and they are intentionally
+network command, or contact a Vibe Racing/Codex service. The final five commands are opt-in
+Docker-backed synthetic integrations; secretless CI declares all five, and they are intentionally
 outside the deterministic offline `verify` command. The current tree has local results only; no
-hosted pass is claimed for either Jobs-scheduler composition.
+hosted pass is claimed for any Jobs-scheduler integration.
 
 `pnpm run check:publication` is a separate fail-closed gate. It is expected to fail in the current
 pre-public state and must pass only after real hosted identities and controls are configured.
