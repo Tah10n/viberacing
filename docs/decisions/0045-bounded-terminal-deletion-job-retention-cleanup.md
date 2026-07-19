@@ -61,11 +61,11 @@ events remain under their separate policy. No identity-derived tombstone is crea
 there is still no reviewed digest, expiry, backup, or restore-replay contract for one. The repeated
 database predicates prevent cleanup from widening into pending deletion authority.
 
-Residual risk remains: ADR 0063 supplies only a default-off in-memory local catalog, sequential
-execution, and no-overlap lifecycle. There is no combined scheduler/PostgreSQL result, deployed
-cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs login/TLS
-connection, external audit sink, public cache purge, backup-expiry proof, disclosed tombstone
-policy, restore replay, or deployed retention evidence.
+Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
+execution, no-overlap lifecycle, and fixed-clock synthetic scheduler/PostgreSQL composition. There
+is no emitted-process timing, deployed cadence, durable missed-slot recovery, monitoring, capacity
+result, production Jobs login/TLS connection, external audit sink, public cache purge, backup-expiry
+proof, disclosed tombstone policy, restore replay, or deployed retention evidence.
 
 Affected invariants are VR-DATA-001 and VR-DELETE-001. Primary attacker stories are
 VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -120,7 +120,8 @@ Acceptance evidence recorded for this decision includes:
   deletes an aged terminal job, and retains the newly completed purge job.
 
 All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
-runner and clock. These layers do not prove combined scheduler/PostgreSQL execution, production
+runner and clock and composes its production core with the real runner and disposable PostgreSQL
+under fixed injected UTC time. These layers do not prove emitted-process timing, production
 cadence/login/TLS, monitoring, cache or backup purge, tombstone/restore replay, capacity, or
 deployment.
 

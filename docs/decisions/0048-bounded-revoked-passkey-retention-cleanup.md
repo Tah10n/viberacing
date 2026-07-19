@@ -79,9 +79,10 @@ credential material or select the affected profile.
 Residual risk remains: retained pairing/device transaction history, revoked device keys, tombstones,
 caches, backups, and restore replay still need separate policies and evidence. ADR 0050 separately
 bounds fixed pairing-rate-window reset. ADR 0063 supplies only a default-off in-memory local
-catalog, sequential execution, and no-overlap lifecycle. There is no combined scheduler/PostgreSQL
-result, deployed cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs
-login/TLS connection, backup purge, or deployed retention proof.
+catalog, sequential execution, no-overlap lifecycle, and fixed-clock synthetic scheduler/PostgreSQL
+composition. There is no emitted-process timing, deployed cadence, durable missed-slot recovery,
+monitoring, capacity result, production Jobs login/TLS connection, backup purge, or deployed
+retention proof.
 
 Affected invariants are VR-AUTH-002, VR-AUTH-003, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -140,7 +141,8 @@ Acceptance evidence recorded for this decision includes:
   deletes one aged unreferenced revoked passkey, and checks exact stored state.
 
 All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
-runner and clock. These layers do not prove combined scheduler/PostgreSQL execution, production
+runner and clock and exercises this cleanup after provenance/session cleanup in a fixed-clock
+production-core/PostgreSQL cycle. These layers do not prove emitted-process timing, production
 cadence/login/TLS, monitoring, cache or backup purge, restore replay, capacity, real-user retention,
 or deployment.
 

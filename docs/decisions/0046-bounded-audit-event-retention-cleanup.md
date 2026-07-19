@@ -67,10 +67,10 @@ selected local evidence irrecoverable except for independently governed backups.
 scheduler here, so no deployed deletion cadence or proof is implied.
 
 Residual risk remains: there is no external audit sink or user-visible audit subset. ADR 0063
-supplies only a default-off in-memory local catalog, sequential execution, and no-overlap lifecycle;
-there is no combined scheduler/PostgreSQL result, deployed cadence, durable missed-slot recovery,
-monitoring, capacity result, production Jobs login/TLS connection, cache or backup purge, tombstone
-policy, restore replay, or deployed retention evidence.
+supplies a default-off in-memory local catalog, sequential execution, no-overlap lifecycle, and
+fixed-clock synthetic scheduler/PostgreSQL composition. There is no emitted-process timing, deployed
+cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs login/TLS
+connection, cache or backup purge, tombstone policy, restore replay, or deployed retention evidence.
 
 Affected invariant is VR-DATA-001. Primary attacker stories are VR-ABUSE-DATABASE-ROLE,
 VR-ABUSE-RESOURCE-EXHAUSTION, and VR-ABUSE-DELETE-RESURRECTION.
@@ -125,9 +125,10 @@ Acceptance evidence recorded for this decision includes:
   removes one aged audit event, and verifies exact stored state.
 
 All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
-runner and clock. These layers do not prove an external append-only sink, combined
-scheduler/PostgreSQL execution, production cadence/login/TLS, monitoring, cache or backup purge,
-restore replay, capacity, or deployment.
+runner and clock and composes its production core with the real runner and disposable PostgreSQL
+under fixed injected UTC time. These layers do not prove an external append-only sink,
+emitted-process timing, production cadence/login/TLS, monitoring, cache or backup purge, restore
+replay, capacity, or deployment.
 
 ## References
 

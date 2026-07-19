@@ -57,14 +57,16 @@ shutdown. A separate opt-in gate now proves one full synthetic loopback HTTP-to-
 through a disposable dedicated Ingest login. There is no deployment database credential/certificate,
 trusted external TLS/edge path, supported connector adapter, or deployment. A bounded local one-shot
 Jobs process now wraps only cleanup/refresh/finalization. A separate default-off local scheduler
-invokes only that runner from fixed UTC process slots, but has no combined database result, live
-login, deployed cadence, monitor, or deployment. A bounded server-only Web PostgreSQL adapter and
-local public-score GET are implemented and unit/build-tested, but this repository supplies no
-working deployment login or TLS certificate. A successful setup proves repository gates, synthetic
-frontend behavior, route/adapter boundaries, SQL constraints, session-bound procedure behavior,
-lifecycle/scoring concurrency, and database role isolation; it does not prove a live adapter,
-deployed API, or production flow. The Ingest server tests bind only ephemeral loopback sockets and
-use synthetic requests; no development command exposes it to the LAN or Internet.
+invokes only that runner from fixed UTC process slots. An opt-in synthetic gate composes its
+production core under fixed injected UTC time with the real Jobs runner and disposable PostgreSQL;
+there is no production login, deployed cadence, monitor, or deployment. A bounded server-only Web
+PostgreSQL adapter and local public-score GET are implemented and unit/build-tested, but this
+repository supplies no working deployment login or TLS certificate. A successful setup proves
+repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
+session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
+does not prove a live adapter, deployed API, or production flow. The Ingest server tests bind only
+ephemeral loopback sockets and use synthetic requests; no development command exposes it to the LAN
+or Internet.
 
 ## Prerequisites
 
@@ -332,7 +334,15 @@ pnpm run test:jobs-scheduler:coverage
 pnpm run build:jobs
 pnpm run build:jobs-scheduler
 pnpm run check:jobs-scheduler-entrypoint
+pnpm run test:jobs-scheduler:postgres-integration
 ```
+
+The last command is a separate opt-in Docker gate. It builds the production scheduler core and Jobs
+runner, injects one fixed UTC clock/timer, runs the exact ordered seventeen-job catalog against one
+disposable PostgreSQL database, fingerprints every private table around a widened-login denial, and
+checks exact narrow-login stored state. It does not run the emitted scheduler process with a real
+clock or prove durable/deployed cadence, production credentials/TLS, monitoring, capacity, or
+real-user retention.
 
 The emitted process accepts no arguments and remains disabled unless the runtime supplies exact
 `VIBERACING_JOBS_SCHEDULER_ENABLED=true`. That latch is read before the Jobs runner or any database
@@ -425,7 +435,8 @@ continuation or pending session, invoke the separate abandoned-enrollment cleanu
 reload an existing worker, stop an enabled in-flight request, or prove deployed route denial. The
 explicit `cleanup-abandoned-enrollments` Jobs command is separately available only for canonical
 rows after every retained session/challenge expiry is past. The default-off local scheduler includes
-that exact object in its hourly catalog, but no combined/deployed invocation is proven.
+that exact object in its hourly catalog and combined synthetic PostgreSQL integration, but no
+deployed invocation is proven.
 
 The server-only score, enrollment, and local pairing adapters use only `VIBERACING_WEB_DATABASE_*`.
 Their tracked user/password are deliberately non-working placeholders and are checked against

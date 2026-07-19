@@ -11,13 +11,13 @@ const hourlyKinds = [
   "cleanup_expired_ingest_state",
   "cleanup_expired_pairing_state",
   "cleanup_expired_car_recipe_proposals",
+  "redact_aged_pairing_approval_provenance",
   "cleanup_expired_sessions",
   "cleanup_expired_invites",
   "cleanup_abandoned_enrollments",
   "cleanup_finalized_source_day_values",
   "cleanup_terminal_deletion_jobs",
   "cleanup_expired_audit_events",
-  "redact_aged_pairing_approval_provenance",
   "cleanup_aged_revoked_passkeys",
   "cleanup_aged_revoked_devices",
   "reset_expired_pairing_request_windows",
@@ -58,6 +58,21 @@ describe("createMaintenanceSchedule", () => {
       kind: "refresh_community_season",
       seasonStart: "2026-07-13",
     });
+  });
+
+  it("releases pairing provenance before dependent authentication and device retention", () => {
+    const kinds = createMaintenanceSchedule()
+      .due(wednesday)
+      .map((job) => job.kind);
+    const provenanceIndex = kinds.indexOf("redact_aged_pairing_approval_provenance");
+    const sessionIndex = kinds.indexOf("cleanup_expired_sessions");
+    const passkeyIndex = kinds.indexOf("cleanup_aged_revoked_passkeys");
+    const deviceIndex = kinds.indexOf("cleanup_aged_revoked_devices");
+
+    expect(provenanceIndex).toBeGreaterThanOrEqual(0);
+    expect(provenanceIndex).toBeLessThan(sessionIndex);
+    expect(sessionIndex).toBeLessThan(passkeyIndex);
+    expect(passkeyIndex).toBeLessThan(deviceIndex);
   });
 
   it("marks slots before returning and advances only changed fixed cadences", () => {

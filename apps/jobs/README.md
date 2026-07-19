@@ -92,12 +92,16 @@ The dates above are synthetic examples. A valid command prints only a stable com
 all failures print only a stable failure sentence and return a nonzero exit code. Neither path
 prints the command input, affected counts, configuration, SQL, or exception detail.
 
-The Docker-backed integration command applies the checksum-validated migration manifest, creates a
-least-privileged synthetic Jobs login plus a deliberately widened negative-control login, runs all
+The Docker-backed CLI integration command applies the checksum-validated migration manifest, creates
+a least-privileged synthetic Jobs login plus a deliberately widened negative-control login, runs all
 seventeen built CLI commands as separate processes, verifies their generic output and exact database
-effects, and cleans up its container, network, and storage. It proves only the local
-CLI-to-PostgreSQL boundary; it does not prove an external audit sink, production TLS/credentials,
-combined scheduler execution, monitoring, capacity, real-user retention, or deployment.
+effects, and cleans up its container, network, and storage. The separate opt-in
+`pnpm run test:jobs-scheduler:postgres-integration` mode composes the production scheduler core
+under a fixed injected UTC clock/timer directly with this real runner and the same disposable
+PostgreSQL boundary. It verifies the exact ordered catalog, a full private-table non-mutation
+fingerprint for the widened login, and exact narrow-login effects. Together they still do not prove
+an external audit sink, emitted scheduler process with a real clock, production TLS/credentials,
+durable cadence, monitoring, capacity, real-user retention, or deployment.
 
 The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
 Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package

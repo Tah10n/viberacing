@@ -37,8 +37,14 @@ pnpm run test:jobs-scheduler:coverage
 pnpm run build:jobs
 pnpm run build:jobs-scheduler
 pnpm run check:jobs-scheduler-entrypoint
+pnpm run test:jobs-scheduler:postgres-integration
 pnpm run verify
 ```
+
+The PostgreSQL command is an opt-in synthetic acceptance gate. It composes the production scheduler
+core with a fixed injected UTC clock/timer, the real Jobs runner, and one disposable database; it is
+not deployed cadence, process-entrypoint, production credential/TLS, monitoring, capacity, or
+real-user evidence.
 
 Before committing, inspect the exact staged diff and run `git diff --cached --check` plus
 `pnpm run check:public:staged`.

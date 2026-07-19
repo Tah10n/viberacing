@@ -11,6 +11,8 @@ const minimumSeasonStartMs = Date.UTC(1999, 11, 27);
 const minimumClockMs = Date.UTC(2000, 0, 3);
 const maximumClockExclusiveMs = Date.UTC(2100, 0, 4);
 
+// This catalog is ordered, not merely enumerated. Approval provenance must be redacted before
+// expired sessions and aged passkeys/devices can become eligible for physical deletion.
 const hourlyJobs: readonly CommunityMaintenanceJob[] = Object.freeze([
   Object.freeze({
     batchSize: maximumProfileDeletionPurgeBatchSize,
@@ -22,6 +24,10 @@ const hourlyJobs: readonly CommunityMaintenanceJob[] = Object.freeze([
   Object.freeze({
     batchSize: maximumCleanupBatchSize,
     kind: "cleanup_expired_car_recipe_proposals",
+  }),
+  Object.freeze({
+    batchSize: maximumCleanupBatchSize,
+    kind: "redact_aged_pairing_approval_provenance",
   }),
   Object.freeze({ batchSize: maximumCleanupBatchSize, kind: "cleanup_expired_sessions" }),
   Object.freeze({ batchSize: maximumCleanupBatchSize, kind: "cleanup_expired_invites" }),
@@ -40,10 +46,6 @@ const hourlyJobs: readonly CommunityMaintenanceJob[] = Object.freeze([
   Object.freeze({
     batchSize: maximumCleanupBatchSize,
     kind: "cleanup_expired_audit_events",
-  }),
-  Object.freeze({
-    batchSize: maximumCleanupBatchSize,
-    kind: "redact_aged_pairing_approval_provenance",
   }),
   Object.freeze({
     batchSize: maximumCleanupBatchSize,

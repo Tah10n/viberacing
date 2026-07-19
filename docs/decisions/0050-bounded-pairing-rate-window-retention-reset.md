@@ -76,10 +76,10 @@ that failure on a later row restores every earlier row in the same invocation.
 The self-asserted client ID remains cheap rate shaping, not authentication, a stable person/device
 identity, or a trusted network signal. The 130 rows themselves remain for the lifetime of the
 capability. ADR 0063 supplies only a default-off in-memory local catalog, sequential execution, and
-no-overlap lifecycle. Trusted edge limits, capacity evidence, combined scheduler/PostgreSQL
-execution, deployed cadence, durable missed-slot recovery, monitoring, production Jobs login/TLS,
-real-user evidence, and deployment remain absent. Keyed deletion tombstones, caches, backups, and
-restore replay still require separate policies and proof.
+no-overlap lifecycle plus fixed-clock synthetic scheduler/PostgreSQL composition. Trusted edge
+limits, capacity evidence, emitted-process timing, deployed cadence, durable missed-slot recovery,
+monitoring, production Jobs login/TLS, real-user evidence, and deployment remain absent. Keyed
+deletion tombstones, caches, backups, and restore replay still require separate policies and proof.
 
 Affected invariants are VR-DATA-001 and VR-ABUSE-001. Primary attacker stories are
 VR-ABUSE-PAIRING-HIJACK, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -134,9 +134,10 @@ Acceptance evidence recorded for this decision includes:
   generic output, and verifies both exact reset rows.
 
 All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
-runner and clock. These layers do not prove a trusted anonymous identity, edge limit, combined
-scheduler/PostgreSQL execution, production cadence/login/TLS, monitoring, capacity, backup or cache
-purge, restore replay, real-user retention, or deployment.
+runner and clock and exercises the reset in a fixed-clock production-core/PostgreSQL cycle. These
+layers do not prove a trusted anonymous identity, edge limit, emitted-process timing, production
+cadence/login/TLS, monitoring, capacity, backup or cache purge, restore replay, real-user retention,
+or deployment.
 
 ## References
 

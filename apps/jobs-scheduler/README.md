@@ -44,9 +44,13 @@ The example is incomplete by design: the separate Jobs database environment must
 through protected deployment configuration. The tracked repository contains no working credential,
 certificate, scheduler enable value, deployment manifest, or hosted schedule.
 
-Unit tests use a fake clock, timer, and runner to prove UTC dates, fixed cadence, non-overlap,
-failure containment, shutdown, and default-off ordering. The built-entrypoint gate proves disabled
-startup exits silently before Jobs configuration. Existing Jobs PostgreSQL integration separately
-proves all seventeen database calls. These tests do not prove the combined scheduler against a live
-database, production TLS/login, durable cadence, monitoring, capacity, deployment, or real-user
-retention.
+Unit tests use a fake clock, timer, and runner to prove UTC dates, fixed cadence, dependency order,
+non-overlap, failure containment, shutdown, and default-off ordering. The built-entrypoint gate
+proves disabled startup exits silently before Jobs configuration. The existing Jobs PostgreSQL
+integration separately proves all seventeen emitted CLI commands. The opt-in
+`pnpm run test:jobs-scheduler:postgres-integration` gate additionally composes the production
+scheduler core with a fixed injected UTC clock/timer, the real Jobs runner, and one disposable
+PostgreSQL database. It proves the exact ordered catalog, full private-table non-mutation for a
+deliberately widened login, and exact stored state for the narrow login. It does not execute the
+emitted scheduler process with a real clock or prove production TLS/login, durable cadence,
+monitoring, capacity, deployment, or real-user retention.

@@ -1,6 +1,6 @@
 # ADR 0063: Default-off local Jobs scheduler
 
-- Status: Accepted (local scheduler and process lifecycle; deployment pending)
+- Status: Accepted (local scheduler and synthetic PostgreSQL composition; deployment pending)
 - Date: 2026-07-19
 - Decision owners: Jobs, Security, Privacy, Operations, and Database
 - Supersedes: Scheduler-pending portion of ADR 0014
@@ -47,6 +47,11 @@ The schedule is compiled into one closed UTC catalog:
   most once per UTC day;
 - run the fifteen cleanup, redaction, reset, and profile-purge objects at most once per
   uninterrupted UTC-hour process slot.
+
+The hourly catalog is dependency-ordered. Aged pairing approval provenance is redacted before
+expired-session deletion, which runs before aged revoked-passkey and revoked-device deletion. This
+allows one sequential cycle to release and then remove newly unreferenced retained rows while every
+database function still repeats its own eligibility checks under the reviewed mutex order.
 
 On Monday and Tuesday the latest grace-eligible finalization target is the season starting two
 Mondays earlier. From Wednesday through Sunday it is the immediately preceding Monday. This avoids
@@ -160,16 +165,24 @@ Local evidence includes:
   combined shutdown failure;
 - first-signal graceful close, shutdown during startup, second-signal/deadline/close-failure forced
   exit, invalid controller/dependency denial, and hostile proxy containment;
-- 93 scheduler tests at 100% statement, branch, function, and line coverage, including a lint-policy
-  regression for static, exported, dynamic, and legacy forbidden runtime imports plus built-in
-  module-loader escape paths, strict TypeScript, production build, and a built-entrypoint check that
-  rejects disabled and argument-bearing startup without reflective output;
+- 94 scheduler tests at 100% statement, branch, function, and line coverage, including the explicit
+  provenance/session/passkey/device dependency order and a lint-policy regression for static,
+  exported, dynamic, and legacy forbidden runtime imports plus built-in module-loader escape paths,
+  strict TypeScript, production build, and a built-entrypoint check that rejects disabled and
+  argument-bearing startup without reflective output;
 - the existing separate synthetic Jobs PostgreSQL integration for all seventeen emitted database
-  capabilities.
+  capabilities;
+- an opt-in combined integration that builds the production scheduler core and Jobs runner, injects
+  one fixed UTC clock/timer, executes the exact ordered seventeen-job catalog against one disposable
+  PostgreSQL database, fingerprints every private table before and after a widened-login denial, and
+  verifies exact stored state through the narrow login; secretless CI declares the same command, but
+  this tree claims only the observed local pass.
 
-The two test layers are intentionally separate. They do not prove that the scheduler and a real
-database have run together, a production clock remains stable, a deployment has one replica, missed
-historical seasons are recovered, or a real retention/deletion deadline is met.
+The combined integration invokes the production scheduler core in-process; it does not execute the
+emitted process entry point or timer callback against PostgreSQL. None of these layers proves that a
+production clock remains stable, a deployment has one replica, durable cadence is maintained, missed
+historical seasons are recovered, production TLS/credentials work, or a real-user retention/deletion
+deadline is met.
 
 ## References
 

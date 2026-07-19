@@ -63,6 +63,9 @@ jobs:
       - name: Exercise the local Jobs CLI-to-PostgreSQL path
         run: pnpm run test:jobs:postgres-integration
 
+      - name: Exercise the fixed-clock Jobs scheduler-to-PostgreSQL path
+        run: pnpm run test:jobs-scheduler:postgres-integration
+
       - name: Audit the locked dependency graph
         run: pnpm audit --audit-level high --registry=https://registry.npmjs.org/
 

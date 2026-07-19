@@ -125,8 +125,9 @@ endpoints, streaming body limits, exact RP/origin/type/user-verification checks,
 calls. The pending session lasts at most 15 minutes; successful passkey registration atomically
 rotates it to a fresh 30-day passkey-bound session. The suite uses injected GitHub,
 authenticator-verifier, and database capabilities; there is no live OAuth app, invite issuer UI,
-real key/login, edge proof, aggregate/distributed attempt limit, combined/deployed expired-state
-cleanup cadence, recovery sign-in, or deployment evidence.
+real key/login, edge proof, aggregate/distributed attempt limit, deployed expired-state cleanup
+cadence, recovery sign-in, or deployment evidence. Fixed-clock synthetic scheduler/PostgreSQL
+cleanup composition is proven separately.
 
 ADR 0060 makes `/join`, `/join/passkey`, GitHub start/callback, and initial-passkey
 options/verification resolve exact `VIBERACING_ENROLLMENT_ENABLED=true` at module evaluation.
@@ -274,9 +275,10 @@ acquisition. Observed cross-connection tests prove rotation dominates a concurre
 code and completion dominates a concurrent login with an old passkey. Completion fails closed at the
 32-retained-passkey provenance ceiling until revision 0035 has removed an eligible aged unreferenced
 revoked row; the ceiling itself remains unchanged. The repository still lacks a distributed/edge
-anonymous attempt policy, combined/deployed cleanup cadence for expired authentication state,
-notifications, production secrets and timing values, live authenticator/database integration,
-monitoring, and deployment evidence; therefore the local recovery sign-in is not launch-ready.
+anonymous attempt policy, deployed cleanup cadence for expired authentication state, notifications,
+production secrets and timing values, live authenticator/database integration, monitoring, and
+deployment evidence; fixed-clock synthetic scheduler/PostgreSQL cleanup composition does not make
+the local recovery sign-in launch-ready.
 
 ## Device pairing and source choice
 
@@ -339,10 +341,11 @@ in-flight completion; the encrypted choice is included in the v2 context digest.
 also local and not dynamic/deployed. ADR 0041 adds only local idempotent deletion for the canonical
 origin/label account. It prints that the action did not revoke server device authority, so device
 revoke still follows the authenticated browser lifecycle below. Live Web/database credentials, edge
-enforcement and capacity evidence, combined/deployed cleanup cadence, cross-platform runtime
-evidence, packaging, and deployment remain planned. ADR 0015's later device-request verifier does
-not consume or activate this pairing transaction. The ceiling and first-winner assertions use
-separate PostgreSQL connections held behind a real row lock before simultaneous release.
+enforcement and capacity evidence, deployed cleanup cadence, cross-platform runtime evidence,
+packaging, and deployment remain planned. Fixed-clock synthetic scheduler/PostgreSQL cleanup
+composition is proven separately. ADR 0015's later device-request verifier does not consume or
+activate this pairing transaction. The ceiling and first-winner assertions use separate PostgreSQL
+connections held behind a real row lock before simultaneous release.
 
 ## Source and device lifecycle
 
@@ -534,40 +537,41 @@ Revisions 0008 and 0012 give Jobs a server-time, 1-to-1000 batch procedure for e
 nonces, device nonces, and raw snapshots. It serializes callers, caps each class independently,
 cascades raw entries, preserves current source/day values, and clears only their deleted raw
 reference. The expiry columns still do not delete rows by themselves. The local one-shot Jobs
-command can invoke one fixed 1000-row batch. The default-off local scheduler includes it in the
-hourly catalog, but no combined PostgreSQL result, monitor, production login/TLS path, or deployed
-cadence invokes it operationally.
+command can invoke one fixed 1000-row batch. The default-off local scheduler and combined synthetic
+PostgreSQL integration exercise it in the hourly catalog, but no monitor, production login/TLS path,
+or deployed cadence invokes it operationally.
 
 Revision 0013 adds a separate private mutex and oldest-first 1-to-1000 batch for expired `pending`,
 `approved`, or `cancelled` pairing transactions whose exact key is still pending and unbound. It
 deletes transaction-bound approval challenges by cascade, then the key, while contended rows wait
 for a later invocation and activated/live state remains. The local Jobs runner exposes a second
-fixed 1000-row cleanup command. The local catalog includes it, but no combined PostgreSQL result,
-production login/TLS path, monitoring, or deployed retention cadence invokes it operationally.
+fixed 1000-row cleanup command. The local catalog and combined synthetic PostgreSQL integration
+exercise it, but no production login/TLS path, monitoring, or deployed retention cadence invokes it
+operationally.
 
 Revision 0023 adds a third fixed 1000-row cleanup command for expired authentication challenges and
 an independently bounded set of expired restricted recovery authorities. It deletes only an exact
 still-present source code in used/scrubbed form, preserves live ceremonies and unused codes, and
 locks candidate profiles before authorities/codes to match recovery transitions. Worker and
-recovery-start races are observed locally. The local catalog includes it, but no combined PostgreSQL
-result, production login/TLS path, monitor, backup purge, or deployed retention cadence invokes it
-operationally.
+recovery-start races are observed locally. The local catalog and combined synthetic PostgreSQL
+integration exercise it, but no production login/TLS path, monitor, backup purge, or deployed
+retention cadence invokes it operationally.
 
 Revision 0024 adds a separate fixed maximum-10 primary-profile purge command. The database locks its
 fixed five maintenance mutexes in stable order, selects only due queued/retry work, requires
 committed `deletion_pending` state, removes restrictive pairing references and authority-free
 pending keys, terminally settles the opaque job, then cascades the exact profile in one transaction.
-Two purge workers and purge versus authentication cleanup are observed serializing locally. No
-combined scheduler/PostgreSQL result, production login/TLS path, cache/backup purge, keyed
-tombstone, restore replay, monitor, capacity result, or deployed retention cadence invokes or
-completes the broader deletion sequence.
+Two purge workers and purge versus authentication cleanup are observed serializing locally. The
+combined synthetic scheduler integration exercises this purge; no production login/TLS path,
+cache/backup purge, keyed tombstone, restore replay, monitor, capacity result, or deployed retention
+cadence invokes or completes the broader deletion sequence.
 
 Revision 0026 adds a fourth fixed 1000-row cleanup command for expired CarRecipe proposals. It
 serializes workers through a separate private mutex, captures the cutoff after that lock, deletes
 oldest-first with `SKIP LOCKED`, and preserves every live proposal and active recipe. One observed
-two-worker race proves exact deletion and live-state preservation. The local catalog includes it,
-but no combined PostgreSQL result, production login/TLS path, monitoring, backup-purge proof, or
-deployed cadence invokes it operationally.
+two-worker race proves exact deletion and live-state preservation. The local catalog and combined
+synthetic PostgreSQL integration exercise it, but no production login/TLS path, monitoring,
+backup-purge proof, or deployed cadence invokes it operationally.
 
 Revision 0030 adds a fifth fixed 1000-row cleanup command for expired browser sessions that have no
 retained rotation predecessor or pairing approval reference. It shares the authentication mutex,
@@ -589,9 +593,10 @@ a tenth fixed cleanup command for minimized activated pairing/revoked-device pai
 activation and revocation are at least 180 days old and no approval, authorization-challenge, nonce,
 or raw-snapshot reference remains. It deletes no raw evidence by cascade. Revision 0037 adds one
 zero-argument reset for only positive fixed pairing request windows older than the maximum one-hour
-duration. It preserves the 130-row matrix. Observed worker races prove local serialization only. No
-combined scheduler/PostgreSQL result, production login/TLS path, monitoring, backup-purge proof, or
-deployed cadence invokes these commands operationally.
+duration. It preserves the 130-row matrix. Observed worker races prove local serialization only. The
+combined synthetic scheduler integration exercises these commands in dependency order: provenance
+redaction, session cleanup, revoked-passkey cleanup, then revoked-device cleanup. No production
+login/TLS path, monitoring, backup-purge proof, or deployed cadence invokes them operationally.
 
 Revision 0038 adds an eleventh fixed cleanup command for canonical abandoned enrollment profiles. It
 locks the authentication and profile-purge mutexes in their existing order, captures one server
@@ -600,9 +605,9 @@ invite, has only expired exact enrollment sessions and registration challenges, 
 recovery, passkey, source, deletion, scoring, or recipe state. Repeated predicates and `SKIP LOCKED`
 preserve state drift and an in-flight initial-passkey activation. Existing cascades remove the
 redeemed invite and expired enrollment authority while audit rows retain a null profile link. Worker
-and activation-overlap races are observed locally. The local catalog includes it, but no combined
-PostgreSQL result, production login/TLS path, notification, monitoring, backup purge, restore
-replay, or deployed cadence invokes it operationally.
+and activation-overlap races are observed locally. The local catalog and combined synthetic
+PostgreSQL integration exercise it, but no production login/TLS path, notification, monitoring,
+backup purge, restore replay, or deployed cadence invokes it operationally.
 
 Revision 0009 adds only the private PostgreSQL scoring part of the planned Jobs step. One serialized
 transaction refreshes an open ISO-week season from current eligible source/day values, sums distinct
@@ -636,10 +641,13 @@ all reviewed migrations to a disposable loopback PostgreSQL container, runs each
 through a narrow login, rejects an extra-membership login before mutation, observes only generic
 process output, verifies exact stored state, and removes the container, network, and storage. ADR
 0063 separately wraps the runner with one exact-default-off UTC catalog, in-memory slot state,
-sequential no-overlap invocation, and bounded signal shutdown. Ninety-three tests use a fake clock,
-timer, and runner; they are not combined with the PostgreSQL integration. No deployed scheduler,
-external audit sink, production login/certificate, audited correction, tombstone/restore replay,
-deployed route, or public cache exists.
+sequential no-overlap invocation, and bounded signal shutdown. Ninety-four tests use a fake clock,
+timer, and runner. A second opt-in synthetic integration composes the production scheduler core
+under one fixed injected UTC clock/timer with the real Jobs runner and disposable PostgreSQL; it
+proves exact catalog order, full private-table non-mutation for the widened login, and exact stored
+state for the narrow login. No emitted-process clock result, deployed scheduler, external audit
+sink, production login/certificate, audited correction, tombstone/restore replay, deployed route, or
+public cache exists.
 
 ## CarRecipe proposal origins and browser approval
 
@@ -703,8 +711,9 @@ The local Agent Skill now provides bounded conversational orchestration without 
 retaining the request in Vibe Racing. It requires explicit shell-safe origin/label values, never
 discovers or installs a connector, invokes only `propose-car` once, accepts only its exact generic
 success line, and has no decision authority. The active recipe is projected separately and locally;
-combined/deployed physical cleanup cadence, live database login, distributed edge control,
-monitoring, capacity, released connector packaging, and deployment remain unproved.
+the combined synthetic scheduler/PostgreSQL integration exercises physical cleanup, while deployed
+cadence, production database login, distributed edge control, monitoring, capacity, released
+connector packaging, and deployment remain unproved.
 
 ## Public race read
 

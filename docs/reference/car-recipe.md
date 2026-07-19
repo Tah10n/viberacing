@@ -8,9 +8,9 @@ boundary, signed-in account editor, bounded device-authenticated proposal ingres
 native-store connector command, a checked local Agent Skill, Jobs-only expired-proposal cleanup, and
 separate compatible public race projection. Proposal creation and approval are independently
 default-off behind one exact local module decision while private read/reject remains available. The
-cleanup command is in the separate default-off local hourly scheduler catalog. This is
-synthetic/local evidence; no combined scheduler/PostgreSQL execution, deployed cadence, released
-connector, live credential, edge control, or deployment is claimed.
+cleanup command is in the separate default-off local hourly scheduler catalog and combined synthetic
+PostgreSQL integration. This is synthetic/local evidence; no deployed cadence, released connector,
+production credential, edge control, or deployment is claimed.
 
 ## Closed shape
 
@@ -72,8 +72,8 @@ only the current approved exact recipe for an `active` profile. It contains no p
 state, timestamp, private ID, or account authority, and the stable score response remains unchanged.
 An absent recipe uses a repository-owned presentation fallback. Expired proposal rows are unusable
 immediately and eligible for bounded physical cleanup. The default-off local scheduler can invoke
-that exact command through the closed Jobs runner, but no combined PostgreSQL result or deployed
-cadence is proven.
+that exact command through the closed Jobs runner, and the combined synthetic PostgreSQL integration
+exercises it; no deployed cadence is proven.
 
 ## Rendering and assets
 

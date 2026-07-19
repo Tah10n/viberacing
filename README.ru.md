@@ -111,8 +111,10 @@ pnpm run dev:web
 ```
 
 Полные синтетические loopback Ingest и Jobs paths отдельно проверяются командами
-`pnpm run test:ingest:postgres-integration` и `pnpm run test:jobs:postgres-integration`; они требуют
-Docker и не являются deployment evidence.
+`pnpm run test:ingest:postgres-integration` и `pnpm run test:jobs:postgres-integration`. Отдельная
+команда `pnpm run test:jobs-scheduler:postgres-integration` связывает production scheduler core под
+фиксированным UTC-временем с реальным Jobs runner и одноразовым PostgreSQL. Все три требуют Docker и
+не являются deployment evidence.
 
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.

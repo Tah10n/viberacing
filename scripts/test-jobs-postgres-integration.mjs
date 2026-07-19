@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 import { validateManifest } from "./check-database.mjs";
 
@@ -28,7 +30,22 @@ const wideJobsPassword = "synthetic-wide-jobs-integration-password";
 const extraRole = "viberacing_jobs_extra";
 const completedMessage = "Vibe Racing Jobs command completed.\n";
 const failedMessage = "Vibe Racing Jobs command failed.\n";
-const finalizedSeasonStart = "2000-01-03";
+const defaultFinalizedSeasonStart = "2000-01-03";
+const schedulerArgument = "--scheduler";
+const schedulerCycleTimeoutMs = 120_000;
+const oneDayMs = 24 * 60 * 60 * 1_000;
+
+function readIntegrationMode() {
+  if (process.argv.length === 2) {
+    return "commands";
+  }
+  if (process.argv.length === 3 && process.argv[2] === schedulerArgument) {
+    return "scheduler";
+  }
+  throw new Error("Jobs PostgreSQL integration arguments failed closed.");
+}
+
+const integrationMode = readIntegrationMode();
 
 const fixture = Object.freeze({
   abandonedInviteId: "00000000-0000-4000-8000-000000031951",
@@ -114,6 +131,46 @@ function psqlScalar(sql, label) {
   });
   requireSuccess(result, label);
   return result.stdout.trim();
+}
+
+function readPrivateStateFingerprint(label) {
+  const canonicalState = psqlScalar(
+    `CREATE TEMP TABLE jobs_integration_fingerprints (
+  table_name text PRIMARY KEY,
+  table_state jsonb NOT NULL
+);
+
+DO $fingerprint$
+DECLARE
+  private_table record;
+  table_state jsonb;
+BEGIN
+  FOR private_table IN
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'viberacing_private'
+      AND table_type = 'BASE TABLE'
+    ORDER BY table_name
+  LOOP
+    EXECUTE pg_catalog.format(
+      'SELECT COALESCE(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(candidate) ORDER BY pg_catalog.to_jsonb(candidate)::text), ''[]''::jsonb) FROM %I.%I AS candidate',
+      'viberacing_private',
+      private_table.table_name
+    )
+    INTO table_state;
+
+    INSERT INTO jobs_integration_fingerprints (table_name, table_state)
+    VALUES (private_table.table_name, table_state);
+  END LOOP;
+END
+$fingerprint$;
+
+SELECT pg_catalog.jsonb_object_agg(table_name, table_state ORDER BY table_name)::text
+FROM jobs_integration_fingerprints;`,
+    label,
+  );
+  assert.notEqual(canonicalState, "", `${label} must return canonical private state`);
+  return createHash("sha256").update(canonicalState, "utf8").digest("hex");
 }
 
 function buildWorkspace(relativePath, label) {
@@ -205,6 +262,108 @@ function jobsEnvironment(databasePort, login, password) {
   });
 }
 
+async function loadSchedulerModules() {
+  const jobs = await import(pathToFileURL(resolve(root, "apps", "jobs", "dist", "index.js")).href);
+  const scheduler = await import(
+    pathToFileURL(resolve(root, "apps", "jobs-scheduler", "dist", "index.js")).href
+  );
+  return Object.freeze({ jobs, scheduler });
+}
+
+async function runSchedulerCycle({
+  databasePort,
+  expectedJobs,
+  expectFailure,
+  login,
+  modules,
+  nowEpochMs,
+  password,
+}) {
+  const configuredRunner = modules.jobs.createConfiguredCommunityMaintenanceRunner(
+    jobsEnvironment(databasePort, login, password),
+  );
+  const attemptedJobs = [];
+  const outcomes = [];
+  const signals = [];
+  let resolveCycle;
+  const cycleSettled = new Promise((resolveCyclePromise) => {
+    resolveCycle = resolveCyclePromise;
+  });
+  const runner = Object.freeze({
+    close: () => configuredRunner.close(),
+    execute: async (job) => {
+      attemptedJobs.push(job);
+      try {
+        const result = await configuredRunner.execute(job);
+        outcomes.push("completed");
+        return result;
+      } catch (error) {
+        outcomes.push("rejected");
+        throw error;
+      } finally {
+        if (attemptedJobs.length === expectedJobs.length) {
+          resolveCycle();
+        }
+      }
+    },
+  });
+  const intervalToken = Object.freeze({ schedulerIntegrationTimer: true });
+  let clearedIntervals = 0;
+  const controller = await modules.scheduler.startJobsScheduler(
+    Object.freeze({ enabled: true, pollIntervalMs: 60_000 }),
+    Object.freeze({
+      clearInterval: (token) => {
+        assert.equal(token, intervalToken, "the combined scheduler must clear its exact timer");
+        clearedIntervals += 1;
+      },
+      createRunner: () => runner,
+      createSchedule: () => modules.scheduler.createMaintenanceSchedule(),
+      now: () => nowEpochMs,
+      setInterval: (_handler, milliseconds) => {
+        assert.equal(
+          milliseconds,
+          60_000,
+          "the combined scheduler must retain its fixed poll slot",
+        );
+        return intervalToken;
+      },
+      signalSink: (signal) => {
+        signals.push(signal);
+      },
+    }),
+  );
+
+  let timeoutToken;
+  const timeout = new Promise((_, reject) => {
+    timeoutToken = setTimeout(() => {
+      reject(new Error("Jobs scheduler PostgreSQL cycle exceeded its fixed test deadline."));
+    }, schedulerCycleTimeoutMs);
+  });
+  try {
+    await Promise.race([cycleSettled, timeout]);
+  } finally {
+    clearTimeout(timeoutToken);
+    await controller.close();
+  }
+
+  assert.equal(clearedIntervals, 1, "the combined scheduler must clear one timer on close");
+  assert.deepEqual(
+    attemptedJobs,
+    expectedJobs,
+    "the combined scheduler must attempt the exact reviewed catalog in order",
+  );
+  assert.deepEqual(
+    outcomes,
+    expectedJobs.map(() => (expectFailure ? "rejected" : "completed")),
+    "the combined scheduler must observe the exact outcome for every reviewed job",
+  );
+  assert.deepEqual(
+    signals,
+    expectFailure ? ["cycle_failed"] : [],
+    "the combined scheduler must emit only the expected closed cycle signal",
+  );
+}
+
 function runJobsCommand(databasePort, login, password, args) {
   return run(process.execPath, [resolve(root, "apps", "jobs", "dist", "main.js"), ...args], {
     env: jobsEnvironment(databasePort, login, password),
@@ -232,6 +391,47 @@ function assertCanonicalMonday(value) {
   const date = new Date(`${value}T00:00:00.000Z`);
   assert.equal(date.toISOString().slice(0, 10), value);
   assert.equal(date.getUTCDay(), 1);
+}
+
+function expectedSchedulerSeasonStarts(nowEpochMs) {
+  const now = new Date(nowEpochMs);
+  const daysSinceMonday = (now.getUTCDay() + 6) % 7;
+  const currentMondayMs = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() - daysSinceMonday,
+  );
+  const finalizationOffsetDays = daysSinceMonday >= 2 ? 7 : 14;
+  return Object.freeze({
+    current: new Date(currentMondayMs).toISOString().slice(0, 10),
+    finalization: new Date(currentMondayMs - finalizationOffsetDays * oneDayMs)
+      .toISOString()
+      .slice(0, 10),
+  });
+}
+
+function expectedSchedulerCatalog(currentSeasonStart, finalizedSeasonStart) {
+  return Object.freeze(
+    [
+      { kind: "finalize_community_season", seasonStart: finalizedSeasonStart },
+      { kind: "refresh_community_season", seasonStart: currentSeasonStart },
+      { batchSize: 10, kind: "purge_profile_deletions" },
+      { batchSize: 1_000, kind: "cleanup_expired_auth_state" },
+      { batchSize: 1_000, kind: "cleanup_expired_ingest_state" },
+      { batchSize: 1_000, kind: "cleanup_expired_pairing_state" },
+      { batchSize: 1_000, kind: "cleanup_expired_car_recipe_proposals" },
+      { batchSize: 1_000, kind: "redact_aged_pairing_approval_provenance" },
+      { batchSize: 1_000, kind: "cleanup_expired_sessions" },
+      { batchSize: 1_000, kind: "cleanup_expired_invites" },
+      { batchSize: 1_000, kind: "cleanup_abandoned_enrollments" },
+      { batchSize: 1_000, kind: "cleanup_finalized_source_day_values" },
+      { batchSize: 1_000, kind: "cleanup_terminal_deletion_jobs" },
+      { batchSize: 1_000, kind: "cleanup_expired_audit_events" },
+      { batchSize: 1_000, kind: "cleanup_aged_revoked_passkeys" },
+      { batchSize: 1_000, kind: "cleanup_aged_revoked_devices" },
+      { kind: "reset_expired_pairing_request_windows" },
+    ].map((job) => Object.freeze(job)),
+  );
 }
 
 function seedSyntheticState(currentSeasonStart) {
@@ -724,6 +924,9 @@ COMMIT;`,
 
 async function main() {
   buildWorkspace("apps/jobs", "Jobs production build");
+  if (integrationMode === "scheduler") {
+    buildWorkspace("apps/jobs-scheduler", "Jobs scheduler production build");
+  }
 
   let containerStarted = false;
   let primaryFailure;
@@ -780,22 +983,70 @@ COMMIT;`,
       "narrow and deliberately widened synthetic Jobs logins",
     );
 
-    const currentSeasonStart = psqlScalar(
-      `SELECT (
+    let currentSeasonStart;
+    let finalizedSeasonStart = defaultFinalizedSeasonStart;
+    let schedulerExpectedJobs;
+    let schedulerModules;
+    let schedulerNowEpochMs;
+    if (integrationMode === "scheduler") {
+      const databaseDate = psqlScalar(
+        "SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text;",
+        "scheduler database-date discovery",
+      );
+      assert.match(databaseDate, /^\d{4}-\d{2}-\d{2}$/);
+      schedulerNowEpochMs = Date.parse(`${databaseDate}T12:00:00.000Z`);
+      assert.equal(Number.isSafeInteger(schedulerNowEpochMs), true);
+      schedulerModules = await loadSchedulerModules();
+      const scheduledJobs = schedulerModules.scheduler
+        .createMaintenanceSchedule()
+        .due(schedulerNowEpochMs);
+      const seasonStarts = expectedSchedulerSeasonStarts(schedulerNowEpochMs);
+      currentSeasonStart = seasonStarts.current;
+      finalizedSeasonStart = seasonStarts.finalization;
+      schedulerExpectedJobs = expectedSchedulerCatalog(currentSeasonStart, finalizedSeasonStart);
+      assert.deepEqual(
+        scheduledJobs,
+        schedulerExpectedJobs,
+        "the combined catalog must match all 17 independently reviewed jobs in order",
+      );
+    } else {
+      currentSeasonStart = psqlScalar(
+        `SELECT (
   CURRENT_DATE - (pg_catalog.date_part('isodow', CURRENT_DATE)::integer - 1)
 )::text;`,
-      "current Community season discovery",
-    );
+        "current Community season discovery",
+      );
+    }
     assertCanonicalMonday(currentSeasonStart);
+    assertCanonicalMonday(finalizedSeasonStart);
     seedSyntheticState(currentSeasonStart);
 
-    const rejected = runJobsCommand(databasePort, wideJobsLogin, wideJobsPassword, [
-      "reset-expired-pairing-request-windows",
-    ]);
-    assertRejectedCommand(rejected, "widened Jobs login");
-    assert.equal(
-      psqlScalar(
-        `SET ROLE viberacing_owner;
+    if (integrationMode === "scheduler") {
+      const stateBeforeRejectedCatalog = readPrivateStateFingerprint(
+        "pre-rejection private-state fingerprint",
+      );
+      await runSchedulerCycle({
+        databasePort,
+        expectedJobs: schedulerExpectedJobs,
+        expectFailure: true,
+        login: wideJobsLogin,
+        modules: schedulerModules,
+        nowEpochMs: schedulerNowEpochMs,
+        password: wideJobsPassword,
+      });
+      assert.equal(
+        readPrivateStateFingerprint("post-rejection private-state fingerprint"),
+        stateBeforeRejectedCatalog,
+        "the widened login must not mutate any private table through the scheduler catalog",
+      );
+    } else {
+      const rejected = runJobsCommand(databasePort, wideJobsLogin, wideJobsPassword, [
+        "reset-expired-pairing-request-windows",
+      ]);
+      assertRejectedCommand(rejected, "widened Jobs login");
+      assert.equal(
+        psqlScalar(
+          `SET ROLE viberacing_owner;
 SELECT (
   (
     SELECT pg_catalog.count(*)
@@ -816,34 +1067,47 @@ SELECT (
       AND window_started_at < pg_catalog.statement_timestamp() - INTERVAL '1 hour'
   )
 )::integer;`,
-        "rejected-login stored-state verification",
-      ),
-      "4",
-      "the runtime probe must fail before the requested reset or retained-row cleanup mutates state",
-    );
+          "rejected-login stored-state verification",
+        ),
+        "4",
+        "the runtime probe must fail before the requested reset or retained-row cleanup mutates state",
+      );
+    }
 
-    const commands = [
-      ["cleanup-expired-auth-state"],
-      ["cleanup-expired-audit-events"],
-      ["cleanup-expired-car-recipe-proposals"],
-      ["cleanup-expired-invites"],
-      ["cleanup-abandoned-enrollments"],
-      ["cleanup-finalized-source-day-values"],
-      ["cleanup-expired-ingest-state"],
-      ["cleanup-expired-pairing-state"],
-      ["redact-aged-pairing-approval-provenance"],
-      ["cleanup-expired-sessions"],
-      ["cleanup-aged-revoked-passkeys"],
-      ["cleanup-aged-revoked-devices"],
-      ["reset-expired-pairing-request-windows"],
-      ["purge-profile-deletions"],
-      ["cleanup-terminal-deletion-jobs"],
-      ["refresh-community-season", currentSeasonStart],
-      ["finalize-community-season", finalizedSeasonStart],
-    ];
-    for (const args of commands) {
-      const result = runJobsCommand(databasePort, jobsLogin, jobsPassword, args);
-      assertSuccessfulCommand(result, `Jobs command ${args[0]}`);
+    if (integrationMode === "scheduler") {
+      await runSchedulerCycle({
+        databasePort,
+        expectedJobs: schedulerExpectedJobs,
+        expectFailure: false,
+        login: jobsLogin,
+        modules: schedulerModules,
+        nowEpochMs: schedulerNowEpochMs,
+        password: jobsPassword,
+      });
+    } else {
+      const commands = [
+        ["cleanup-expired-auth-state"],
+        ["cleanup-expired-audit-events"],
+        ["cleanup-expired-car-recipe-proposals"],
+        ["cleanup-expired-invites"],
+        ["cleanup-abandoned-enrollments"],
+        ["cleanup-finalized-source-day-values"],
+        ["cleanup-expired-ingest-state"],
+        ["cleanup-expired-pairing-state"],
+        ["redact-aged-pairing-approval-provenance"],
+        ["cleanup-expired-sessions"],
+        ["cleanup-aged-revoked-passkeys"],
+        ["cleanup-aged-revoked-devices"],
+        ["reset-expired-pairing-request-windows"],
+        ["purge-profile-deletions"],
+        ["cleanup-terminal-deletion-jobs"],
+        ["refresh-community-season", currentSeasonStart],
+        ["finalize-community-season", finalizedSeasonStart],
+      ];
+      for (const args of commands) {
+        const result = runJobsCommand(databasePort, jobsLogin, jobsPassword, args);
+        assertSuccessfulCommand(result, `Jobs command ${args[0]}`);
+      }
     }
 
     const storedState = JSON.parse(
@@ -1080,7 +1344,9 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).",
+      integrationMode === "scheduler"
+        ? "Jobs scheduler PostgreSQL integration passed (exact catalog, full-state least-privilege denial, and exact stored state)."
+        : "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

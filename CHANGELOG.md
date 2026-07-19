@@ -12,10 +12,14 @@ Versioning where its guarantees are applicable.
   accepts no arguments or schedule configuration, derives the current and latest grace-eligible
   Community Mondays in UTC, invokes a fixed five-minute/hour/day catalog sequentially through one
   runner, prevents overlapping cycles and same-slot retries, retains slots only in memory, and
-  bounds SIGINT/SIGTERM shutdown to the current Jobs call. Ninety-three adversarial tests reach 100%
-  statement/branch/function/line coverage, and a built-entrypoint gate rejects disabled or
-  argument-bearing startup without output. No deployed replica/cadence, combined PostgreSQL run,
-  production credential/TLS, monitoring, capacity, or real-user retention is claimed.
+  bounds SIGINT/SIGTERM shutdown to the current Jobs call. Ninety-four adversarial tests reach 100%
+  statement/branch/function/line coverage, including the provenance-before-session retention order,
+  and a built-entrypoint gate rejects disabled or argument-bearing startup without output. A second
+  opt-in integration composes the production scheduler core under a fixed injected UTC clock/timer
+  with the real Jobs runner and disposable PostgreSQL, proving the exact ordered catalog, full-state
+  widened-login denial, and exact narrow-login effects. No emitted-process clock result, deployed
+  replica/cadence, production credential/TLS, monitoring, capacity, or real-user retention is
+  claimed.
 - Public-safe repository baseline, implementation plan, security invariants, and contribution
   guidance.
 - Pinned Node, pnpm, Rust, PostgreSQL, dependency, formatting, documentation, and CI foundations.

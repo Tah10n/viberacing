@@ -25,8 +25,9 @@ apply.
   preference-gated derived streak; keep exact receipt time, daily scores, preferences, proposal
   identity, state, and timestamps private and both older contracts unchanged. The repository Agent
   Skill is only a local reducer into the same fixed device command and creates no Web route or
-  authority. Do not claim combined scheduler/PostgreSQL execution, a deployed cleanup cadence,
-  additional agent service ingress, live login, or deployment until separate evidence exists.
+  authority. Combined synthetic scheduler/PostgreSQL cleanup evidence exists; do not claim a
+  deployed cleanup cadence, additional agent service ingress, production login, or deployment until
+  separate evidence exists.
 - Keep browser proposal create/approve and device proposal POST behind exact
   `VIBERACING_CAR_PROPOSALS_ENABLED=true`, independently resolved at the account page and three
   mutation modules. Every alternate or unreadable value must fail before request parsing,

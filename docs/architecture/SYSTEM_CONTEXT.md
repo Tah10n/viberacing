@@ -20,12 +20,14 @@ bounded fixed-name discovery plus an explicit path fallback that admits, collect
 uploads once, and one fixed proposal-only command that starts no Codex process. It also has one
 opt-in synthetic loopback integration through the emitted Ingest host and a disposable
 least-privileged PostgreSQL login, plus a separate synthetic integration through all seventeen
-emitted Jobs commands and a disposable narrow login with a widened-login negative control. Scheduler
-tests use a fake runner and clock, not that database. It still has no deployed application service,
-durable Jobs cadence, operational sync connector, supported Codex version, distributed recovery
-perimeter, Cloudflare/Railway deployment, live OAuth or production database login, or production
-database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
-diagrams describe required runtime boundaries, not deployed evidence.
+emitted Jobs commands and a disposable narrow login with a widened-login negative control. A second
+Jobs mode composes the production scheduler core under fixed injected UTC time with the real runner
+and disposable database. It still has no emitted scheduler-process timing, deployed application
+service, durable Jobs cadence, operational sync connector, supported Codex version, distributed
+recovery perimeter, Cloudflare/Railway deployment, live OAuth or production database login, or
+production database. Component status is tracked in
+[implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
+not deployed evidence.
 
 ## System context
 
@@ -133,35 +135,37 @@ now runs all seventeen emitted commands against disposable PostgreSQL, proves th
 extra-membership denial, and checks exact stored state. ADR 0063 separately adds one
 exact-default-off local scheduler that derives only fixed UTC process slots, invokes the closed
 runner sequentially, keeps slot state in memory, prevents overlap and same-slot retry, and bounds
-signal shutdown. Its fake runner/clock evidence is not a combined PostgreSQL or deployed-cadence
-result. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and JSON parser,
-verifies a replay-consumed body-bound origin proof before parsing, validates the sync contract, and
-verifies the exact source-bound device request under strict Ed25519 semantics. ADR 0016 adds a
-fixed-query four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest
-role/login/search-path verification, closed device/submission mappers, copied parameters, and
-destructive failure release. ADR 0017 adds an exact primary/secondary origin-key reader and
-config-backed verifier factory without exposing a reusable key container. ADR 0018 adds persistent
-atomic origin replay, and ADR 0019 composes the same replay/device/submission adapter behind one
-transport-free validated application decision. ADR 0020 adds one confined Fastify server factory
-with exact raw-body/header preservation, closed POST/error serialization, local connection/deadline
-bounds, four-call no-queue admission, and no proxy/request-ID trust. ADR 0033 adds a separate local
-host with exact loopback/Railway listener declarations, one bind, complete partial-startup cleanup,
-and bounded signal-driven shutdown. ADR 0055 requires exact default-off enable admission before
-every other host/protected-application field or resource; neither that startup latch nor the
-external-TLS declaration is deployment evidence. The opt-in full-path gate composes those Ingest
-boundaries with a synthetic dedicated login in disposable PostgreSQL and verifies signed
-accepted/duplicate/replay/revoke HTTP behavior plus exact stored state. It remains local synthetic
-evidence, not external TLS, edge, secret-delivery, production-credential, capacity, or real-user
-evidence. The library-only ADR 0021 Rust foundation adds one bounded stable App Server JSONL
-initialization state machine and discards all server values. ADR 0022 adds the exact-version
-candidate account/usage adapter, and ADR 0023 composes both through a fixed,
-deadline/output-bounded, reap-before-success synthetic child supervisor. ADR 0024 adds a second
-inaccessible reviewed context and exact sync-body/digest/device-message composition shared with the
-Ingest verifier. ADR 0025 adds an isolated one-use signer behind a third inaccessible device-bound
-key capability and returns only the same body plus five signed header values. ADR 0026 adds an
-inaccessible pending-key/challenge signer and pure strict Web verifier for one exact
-pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed atomic
-activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
+signal shutdown. A second opt-in synthetic integration composes its production core under a fixed
+injected UTC clock/timer with the real Jobs runner and disposable PostgreSQL, proving exact catalog
+order, full private-table widened-login non-mutation, and exact narrow-login state. It is not an
+emitted-process clock or deployed-cadence result. ADR 0015 adds a pure local Ingest kernel that
+bounds the raw envelope and JSON parser, verifies a replay-consumed body-bound origin proof before
+parsing, validates the sync contract, and verifies the exact source-bound device request under
+strict Ed25519 semantics. ADR 0016 adds a fixed-query four-client PostgreSQL adapter with strict
+TLS/config, per-checkout Ingest role/login/search-path verification, closed device/submission
+mappers, copied parameters, and destructive failure release. ADR 0017 adds an exact
+primary/secondary origin-key reader and config-backed verifier factory without exposing a reusable
+key container. ADR 0018 adds persistent atomic origin replay, and ADR 0019 composes the same
+replay/device/submission adapter behind one transport-free validated application decision. ADR 0020
+adds one confined Fastify server factory with exact raw-body/header preservation, closed POST/error
+serialization, local connection/deadline bounds, four-call no-queue admission, and no
+proxy/request-ID trust. ADR 0033 adds a separate local host with exact loopback/Railway listener
+declarations, one bind, complete partial-startup cleanup, and bounded signal-driven shutdown. ADR
+0055 requires exact default-off enable admission before every other host/protected-application field
+or resource; neither that startup latch nor the external-TLS declaration is deployment evidence. The
+opt-in full-path gate composes those Ingest boundaries with a synthetic dedicated login in
+disposable PostgreSQL and verifies signed accepted/duplicate/replay/revoke HTTP behavior plus exact
+stored state. It remains local synthetic evidence, not external TLS, edge, secret-delivery,
+production-credential, capacity, or real-user evidence. The library-only ADR 0021 Rust foundation
+adds one bounded stable App Server JSONL initialization state machine and discards all server
+values. ADR 0022 adds the exact-version candidate account/usage adapter, and ADR 0023 composes both
+through a fixed, deadline/output-bounded, reap-before-success synthetic child supervisor. ADR 0024
+adds a second inaccessible reviewed context and exact sync-body/digest/device-message composition
+shared with the Ingest verifier. ADR 0025 adds an isolated one-use signer behind a third
+inaccessible device-bound key capability and returns only the same body plus five signed header
+values. ADR 0026 adds an inaccessible pending-key/challenge signer and pure strict Web verifier for
+one exact pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed
+atomic activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
 material and one fixed database call; ADR 0029 supplies bounded Jobs-only physical cleanup after
 pairing expiry, while ADR 0032 separately cleans expired authentication challenges and restricted
 recovery authority under the recovery profile-lock order. ADR 0043 deletes only expired unredeemed

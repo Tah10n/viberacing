@@ -43,6 +43,7 @@ pnpm run typecheck:jobs
 pnpm run test:jobs:coverage
 pnpm run build:jobs
 pnpm run test:jobs:postgres-integration
+pnpm run test:jobs-scheduler:postgres-integration
 pnpm run verify
 ```
 

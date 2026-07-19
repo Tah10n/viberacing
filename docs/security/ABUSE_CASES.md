@@ -40,8 +40,8 @@ material availability cost.
   distributed attempt policy, deployed worker coordination, invite revocation, or proof that
   already-running enabled requests were terminated. ADR 0061 separately permits only bounded Jobs
   cleanup after every retained enrollment authority expires. ADR 0063 includes that exact object in
-  a default-off local hourly catalog, but proves no combined PostgreSQL execution or deployed
-  cadence.
+  a default-off local hourly catalog and fixed-clock synthetic scheduler/PostgreSQL composition, but
+  proves no emitted-process or deployed cadence.
 - **Residual risk:** Vibe Racing cannot prove one human per GitHub account.
 
 ### VR-ABUSE-SOURCE-DUPLICATION — Duplicate declared Codex sources
@@ -124,8 +124,9 @@ material availability cost.
   through a disposable narrow login, rejects an extra-membership login, and checks open/finalized
   database state. ADR 0063 separately derives only the current and latest grace-eligible Monday from
   UTC time, marks slots before sequential invocation, prevents overlap and same-slot retry, and
-  bounds shutdown; its fake runner/clock tests are not combined with PostgreSQL. Correction
-  authority, deployed scheduling, production database login/TLS, historical backlog recovery, and
+  bounds shutdown. A second opt-in integration composes that production core under fixed injected
+  UTC time with the real runner and disposable PostgreSQL. Correction authority, emitted-process
+  timing, deployed scheduling, production database login/TLS, historical backlog recovery, and
   operational reconciliation remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
@@ -173,8 +174,8 @@ material availability cost.
   every fixed row and accepting no caller-selected scope. Revision 0013 adds a separate Jobs-only
   1-to-1000 cleanup for expired `pending`, `approved`, and `cancelled` transactions plus their exact
   still-pending keys; activated bindings and live rows are excluded. Live login/TLS integration,
-  trusted edge controls, capacity evidence, combined/deployed cleanup cadence, cross-platform
-  execution, and release remain absent.
+  trusted edge controls, capacity evidence, deployed cleanup cadence, cross-platform execution, and
+  release remain absent. Fixed-clock synthetic scheduler/PostgreSQL cleanup composition is proven.
 - **Detection:** Failed-code and concurrent-approval events, device/source binding audit, and user
   device inventory.
 - **Recovery:** Revoke the device, rotate source device authority where needed, and notify the
@@ -601,9 +602,10 @@ material availability cost.
   migration workflow. Web deployment login/TLS integration has not been exercised. Jobs now has a
   disposable synthetic least-privileged login, all seventeen emitted commands, a widened-login
   denial, and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged
-  loopback login and full HTTP integration result. Neither proves a deployment
-  credential/certificate, external TLS/edge route, external audit sink, capacity, combined/deployed
-  scheduler result, monitoring, or real-user behavior.
+  loopback login and full HTTP integration result. Jobs additionally has fixed-clock production
+  scheduler-core composition with its disposable PostgreSQL boundary. None proves a deployment
+  credential/certificate, external TLS/edge route, external audit sink, capacity, emitted-process or
+  deployed scheduler result, monitoring, or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -809,26 +811,29 @@ material availability cost.
   both operations. This is distributed across Web instances using one database, but the
   self-asserted ID is not a trusted edge/IP identity and still needs capacity evidence. Physical
   pairing cleanup exists as a separate local capability and in the default-off local hourly catalog,
-  but combined/deployed scheduling and edge controls are still pending. The local Jobs runner adds a
-  one-client ceiling, 2/31/32-second connect/server/client deadlines, twelve fixed 1000-row cleanup
-  commands, one zero-argument maximum-130 rate-window reset, one fixed 1000-row approval-provenance
-  redaction, one fixed maximum-10 primary-purge command, canonical season validation, closed one-row
-  results, and destructive release on failure. Its synthetic integration executes those commands
-  sequentially against one disposable database. The scheduler separately limits execution to one
-  non-overlapping sequential cycle, ignores timer ticks while it runs, and starts no later object
-  after shutdown; its fake runner evidence proves no combined scheduler/database or production-load
-  capacity. The kernel itself has no socket/stream authority. The separate Ingest adapter adds a
-  four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime
-  recycling, exact one-row origin consume, zero-or-one device lookup, and one-row submission
-  results, with destructive release on failure. The transport-free application generates request
-  correlation before verification, submits only after verification, waits for settlement, and
-  contains dependency failures without a retry loop. The local Fastify boundary caps the raw body at
-  8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests
-  per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
-  keep-alive, admits four unsettled application calls without a queue, holds each lease through
-  settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and partial
-  requests; injection tests cover overload and response policy. The separate host closes that
-  composition under a 36-second first-signal deadline, forces failure on a second
+  and the combined synthetic scheduler/PostgreSQL integration exercises it; deployed scheduling and
+  edge controls are still pending. The local Jobs runner adds a one-client ceiling, 2/31/32-second
+  connect/server/client deadlines, twelve fixed 1000-row cleanup commands, one zero-argument
+  maximum-130 rate-window reset, one fixed 1000-row approval-provenance redaction, one fixed
+  maximum-10 primary-purge command, canonical season validation, closed one-row results, and
+  destructive release on failure. Its synthetic integration executes those commands sequentially
+  against one disposable database. The scheduler separately limits execution to one non-overlapping
+  sequential cycle, ignores timer ticks while it runs, and starts no later object after shutdown. A
+  second opt-in synthetic integration composes that production scheduler core under fixed injected
+  time with the real runner/database, proves exact dependency order, and proves a widened login
+  cannot mutate any private table. It does not prove emitted-process timing, deployed cadence, or
+  production-load capacity. The kernel itself has no socket/stream authority. The separate Ingest
+  adapter adds a four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines,
+  idle/lifetime recycling, exact one-row origin consume, zero-or-one device lookup, and one-row
+  submission results, with destructive release on failure. The transport-free application generates
+  request correlation before verification, submits only after verification, waits for settlement,
+  and contains dependency failures without a retry loop. The local Fastify boundary caps the raw
+  body at 8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and
+  requests per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a
+  five-second keep-alive, admits four unsettled application calls without a queue, holds each lease
+  through settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and
+  partial requests; injection tests cover overload and response policy. The separate host closes
+  that composition under a 36-second first-signal deadline, forces failure on a second
   signal/deadline/close error, and requires the Railway drain declaration to leave at least four
   seconds beyond its local close bound. It also stays default-off unless exact
   `VIBERACING_INGEST_ENABLED=true` is read before every other host/protected-application field or

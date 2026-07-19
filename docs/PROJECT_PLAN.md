@@ -178,18 +178,18 @@ flowchart LR
   the profile, revoking authority, unlinking sources, and queueing one opaque purge job. A separate
   local Jobs command now performs bounded atomic primary purge, and a separate command removes only
   terminal deletion jobs after 30 days. Another command removes database audit references only after
-  180 days; it is not an external append-only audit sink. Combined/deployed scheduling, cache
-  invalidation, tombstone policy, backup expiry, and restore replay remain separate gates. A
-  transport-free pairing start boundary now owns fresh server IDs/token/challenge/code, separate
-  protected poll/code verifiers, closed device metadata, nine-minute expiry, and one fixed call
-  through a separate probed read-write pool wrapper. A second activation boundary owns protected
-  poll lookup, strict possession proof, server-owned activation IDs, and fixed admission/timing. The
-  local `/connect` slice now supplies the intervening browser step: exact-session code lookup with a
-  database-backed attempt window, bounded device/fingerprint review, explicit new-source or active
-  existing-source selection through an encrypted session-bound control, and fresh-passkey atomic
-  approval. Distributed recovery/anonymous edge attempt policy, deployed expired-state cleanup
-  cadence and notification, live provider/database credentials, and deployment remain separate
-  gates.
+  180 days; it is not an external append-only audit sink. Fixed-clock synthetic scheduler/PostgreSQL
+  composition is proven, while deployed scheduling, cache invalidation, tombstone policy, backup
+  expiry, and restore replay remain separate gates. A transport-free pairing start boundary now owns
+  fresh server IDs/token/challenge/code, separate protected poll/code verifiers, closed device
+  metadata, nine-minute expiry, and one fixed call through a separate probed read-write pool
+  wrapper. A second activation boundary owns protected poll lookup, strict possession proof,
+  server-owned activation IDs, and fixed admission/timing. The local `/connect` slice now supplies
+  the intervening browser step: exact-session code lookup with a database-backed attempt window,
+  bounded device/fingerprint review, explicit new-source or active existing-source selection through
+  an encrypted session-bound control, and fresh-passkey atomic approval. Distributed
+  recovery/anonymous edge attempt policy, deployed expired-state cleanup cadence and notification,
+  live provider/database credentials, and deployment remain separate gates.
 - Enrollment enable gate: `/join`, `/join/passkey`, GitHub start/callback, and initial-passkey
   options/verification each resolve exact `VIBERACING_ENROLLMENT_ENABLED=true` once at module
   evaluation. Every alternate or unreadable value omits both EN/RU forms and stops before request
@@ -200,7 +200,8 @@ flowchart LR
   operator policy, distributed rate limit, cleanup execution, or invite repair. Revision 0038 and
   ADR 0061 separately add bounded cleanup for an abandoned `enrolling` profile after all associated
   session/challenge authority expires; ADR 0063 includes only that exact object in the default-off
-  local catalog. None makes its redeemed invite reusable or proves combined/deployed execution.
+  local catalog and combined synthetic PostgreSQL integration. None makes its redeemed invite
+  reusable or proves deployed execution.
 - Pairing enable gate: connector start/poll and browser approval options/verification each resolve
   exact `VIBERACING_PAIRING_ENABLED=true` once at route-module evaluation. Every alternate or
   unreadable value cancels an available request body and returns the existing generic 503 before
@@ -263,9 +264,12 @@ flowchart LR
   extra-membership login before mutation, and verifies exact state. A separate exact-default-off
   local scheduler now derives the current and latest grace-eligible Monday in UTC, admits only fixed
   five-minute/hour/day process slots, invokes the runner sequentially without overlap or same-slot
-  retry, and bounds signal shutdown. An external audit sink, combined scheduler/PostgreSQL result,
-  durable or deployed cadence, historical backlog, monitoring, production credentials/TLS, capacity,
-  cache/backup/tombstone purge, restore replay, and deployment remain separate gates.
+  retry, and bounds signal shutdown. An opt-in synthetic integration now composes that production
+  scheduler core under a fixed injected UTC clock/timer with the real Jobs runner and disposable
+  PostgreSQL, proving exact catalog order, full-state widened-login denial, and exact narrow-login
+  effects. An external audit sink, emitted-process clock result, durable or deployed cadence,
+  historical backlog, monitoring, production credentials/TLS, capacity, cache/backup/tombstone
+  purge, restore replay, and deployment remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.
@@ -489,10 +493,10 @@ event.
   then creates a passkey-bound session. Activated source-bound devices remain visible and explicitly
   revocable because they have no profile-admin scope.
 - Recovery lookup and verification require generic responses and timing, body/attempt bounds,
-  edge/service rate controls, protected deployment pepper, combined/deployed cleanup cadence, and
-  monitoring. Recovery completion fails closed at the 32-retained-passkey provenance ceiling until
-  the bounded cleanup has removed an eligible old unreferenced revoked row; the ceiling itself is
-  unchanged.
+  edge/service rate controls, protected deployment pepper, deployed cleanup cadence, and monitoring.
+  Fixed-clock synthetic scheduler/PostgreSQL cleanup composition exists. Recovery completion fails
+  closed at the 32-retained-passkey provenance ceiling until the bounded cleanup has removed an
+  eligible old unreferenced revoked row; the ceiling itself is unchanged.
 
 ### Device authorization
 
@@ -827,11 +831,11 @@ public freshness result stable, and permits maximum-1000 oldest-first source/day
 after 30 days. Every deletion rechecks captured/live inventory under the existing scoring,
 Ingest-retention, and profile-purge mutex order. Open, recent, missing-projection, or drifted state
 remains ineligible. The separate default-off local scheduler now includes that exact command in its
-fixed hourly catalog, but no combined PostgreSQL run, deployed cadence, correction authority,
-monitoring, capacity, backup purge, or restore evidence exists. Other remaining expiry classes,
-keyed tombstone policy, cache/backup purge, and restore replay still require their own reviewed
-implementation and public policy, and no implemented cleanup, redaction, or reset has a deployed
-cadence.
+fixed hourly catalog and combined synthetic PostgreSQL integration, but no deployed cadence,
+correction authority, monitoring, capacity, backup purge, or restore evidence exists. Other
+remaining expiry classes, keyed tombstone policy, cache/backup purge, and restore replay still
+require their own reviewed implementation and public policy, and no implemented cleanup, redaction,
+or reset has a deployed cadence.
 
 ## Administration and operations
 
@@ -1150,8 +1154,10 @@ measurements exist.
   pre-activation profiles after all session/challenge authority expires and exact source/day rows
   only after terminal finalization plus 30 days while preserving rounded freshness. A separate
   default-off local scheduler now invokes the fixed maintenance catalog sequentially from UTC
-  process slots; combined PostgreSQL execution, durable/deployed cadence, historical backlog,
-  capacity, notification, correction, backup purge, and deployed retention evidence remain open.
+  process slots, and one opt-in synthetic integration composes its production core with the real
+  Jobs runner and disposable PostgreSQL under fixed injected time. Emitted-process clock behavior,
+  durable/deployed cadence, historical backlog, capacity, notification, correction, backup purge,
+  and deployed retention evidence remain open.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
   new-source creation while preserving active existing-source pairing, plus CarRecipe proposal
@@ -1172,15 +1178,16 @@ measurements exist.
   that command once, and never forwards conversation text or gains decision authority. Exact
   default-off module decisions now independently close browser creation/approval and device ingress
   while preserving private read/reject. The proposal cleanup command is present in the default-off
-  local scheduler catalog, while combined/deployed scheduling and retention evidence, distributed
-  edge policy, live database result, monitoring, capacity evidence, packaging, release, and
-  deployment remain gates. A separate explicit `check-codex` command now performs only point-in-time
-  exact Windows candidate admission without credential-store, process, account, persistence, or
-  network access. Its explicit diagnostic preview now adds one closed local failure-preserving and
-  support-denying summary with no output file or transport; automated support export and broader
-  release diagnostics remain open. A separate locked Windows release-profile portable copy/removal
-  smoke is implemented locally and declared in secretless no-upload CI, but its hosted result and
-  actual package install/upgrade/revoke/uninstall evidence remain open.
+  local scheduler catalog and combined synthetic PostgreSQL integration, while deployed scheduling
+  and retention evidence, distributed edge policy, production database result, monitoring, capacity
+  evidence, packaging, release, and deployment remain gates. A separate explicit `check-codex`
+  command now performs only point-in-time exact Windows candidate admission without
+  credential-store, process, account, persistence, or network access. Its explicit diagnostic
+  preview now adds one closed local failure-preserving and support-denying summary with no output
+  file or transport; automated support export and broader release diagnostics remain open. A
+  separate locked Windows release-profile portable copy/removal smoke is implemented locally and
+  declared in secretless no-upload CI, but its hosted result and actual package
+  install/upgrade/revoke/uninstall evidence remain open.
 - Add versioned CarRecipe, bounded proposal API, browser preview and approval, theme rendering,
   asset provenance, and snapshot tests.
 - Package the fixed-command end-user connector workflow only after the CLI is stable.

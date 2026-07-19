@@ -50,12 +50,12 @@ engine, do not upgrade or install it; use an already provisioned pinned runtime 
 report the mismatch as a blocker. Never bypass a hook or checker, weaken an allowlist, regenerate a
 lockfile or license inventory without review, or change fixtures only to obtain a pass.
 
-Treat Docker-backed database/Ingest/Jobs integrations and browser capture as separate local
-synthetic evidence. Run a named opt-in gate only when the user explicitly requests it or the active
-implementation task requires that exact acceptance gate. Do not run the online external-link check,
-live OAuth, real-account connector, production database, external edge/TLS, publication, release,
-push, or deployment from this skill. Those operations require a separate explicitly authorized
-workflow.
+Treat Docker-backed database/Ingest/Jobs integrations, the combined Jobs-scheduler/PostgreSQL
+integration, and browser capture as separate local synthetic evidence. Run a named opt-in gate only
+when the user explicitly requests it or the active implementation task requires that exact
+acceptance gate. Do not run the online external-link check, live OAuth, real-account connector,
+production database, external edge/TLS, publication, release, push, or deployment from this skill.
+Those operations require a separate explicitly authorized workflow.
 
 ## Verify a staged change
 
