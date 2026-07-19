@@ -42,6 +42,7 @@ const fixture = Object.freeze({
   scoringProfileId: "00000000-0000-4000-8000-000000031501",
   sessionId: "00000000-0000-4000-8000-000000031601",
   sessionProfileId: "00000000-0000-4000-8000-000000031602",
+  terminalDeletionJobId: "00000000-0000-4000-8000-000000031801",
 });
 
 function run(command, args, options = {}) {
@@ -397,6 +398,23 @@ VALUES (
   pg_catalog.statement_timestamp() - INTERVAL '1 hour'
 );
 
+INSERT INTO viberacing_private.deletion_jobs (
+  deletion_job_id,
+  profile_ref_digest,
+  state,
+  requested_at,
+  available_at,
+  completed_at
+)
+VALUES (
+  '${fixture.terminalDeletionJobId}',
+  pg_catalog.decode(pg_catalog.repeat('81', 32), 'hex'),
+  'purged',
+  pg_catalog.statement_timestamp() - INTERVAL '50 days',
+  pg_catalog.statement_timestamp() - INTERVAL '50 days',
+  pg_catalog.statement_timestamp() - INTERVAL '40 days'
+);
+
 INSERT INTO viberacing_private.codex_sources (source_id, profile_id)
 VALUES ('src_' || pg_catalog.repeat('J', 22), '${fixture.scoringProfileId}');
 
@@ -514,6 +532,7 @@ WHERE challenge_id = '${fixture.authChallengeId}';`,
       ["cleanup-expired-pairing-state"],
       ["cleanup-expired-sessions"],
       ["purge-profile-deletions"],
+      ["cleanup-terminal-deletion-jobs"],
       ["refresh-community-season", currentSeasonStart],
       ["finalize-community-season", finalizedSeasonStart],
     ];
@@ -581,6 +600,11 @@ SELECT pg_catalog.jsonb_build_object(
     FROM viberacing_private.deletion_jobs
     WHERE deletion_job_id = '${fixture.purgeJobId}'
   ),
+  'terminalDeletionJobCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.deletion_jobs
+    WHERE deletion_job_id = '${fixture.terminalDeletionJobId}'
+  ),
   'refreshSeasonState', (
     SELECT state
     FROM viberacing_private.seasons
@@ -640,10 +664,11 @@ SELECT pg_catalog.jsonb_build_object(
       refreshSeasonState: "open",
       sessionCount: 0,
       sourceDayTokens: 12345,
+      terminalDeletionJobCount: 0,
     });
 
     console.log(
-      "Jobs PostgreSQL integration passed (nine commands, least-privilege denial, generic output, and exact stored state).",
+      "Jobs PostgreSQL integration passed (ten commands, least-privilege denial, generic output, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

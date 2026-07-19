@@ -510,6 +510,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/profile_deletion_purge.sql"), "utf8"),
     },
     {
+      label: "terminal deletion-job retention cleanup scenarios",
+      sql: readFileSync(resolve(root, "database/tests/deletion_job_cleanup.sql"), "utf8"),
+    },
+    {
       label: "CarRecipe proposal and approval scenarios",
       sql: readFileSync(resolve(root, "database/tests/car_recipe_proposals.sql"), "utf8"),
     },
@@ -591,6 +595,13 @@ try {
       label: "profile deletion purge concurrency setup",
       sql: readFileSync(
         resolve(root, "database/tests/profile_deletion_purge_concurrency_setup.sql"),
+        "utf8",
+      ),
+    },
+    {
+      label: "terminal deletion-job cleanup concurrency setup",
+      sql: readFileSync(
+        resolve(root, "database/tests/deletion_job_cleanup_concurrency_setup.sql"),
         "utf8",
       ),
     },
@@ -882,6 +893,29 @@ SELECT * FROM viberacing_api.cleanup_expired_auth_state(1);`,
       ),
     ),
     "profile deletion purge concurrency assertions",
+  );
+
+  await expectConcurrentSuccesses(
+    "bounded terminal deletion-job cleanup worker race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_terminal_deletion_jobs(1);
+\\echo deletion-job-cleanup-worker-lock-ready`,
+    "deletion-job-cleanup-worker-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.cleanup_terminal_deletion_jobs(1);`,
+    ],
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/deletion_job_cleanup_concurrency_assertions.sql"),
+        "utf8",
+      ),
+    ),
+    "terminal deletion-job cleanup concurrency assertions",
   );
 
   await expectOneConcurrentWinner(
@@ -2105,6 +2139,11 @@ SELECT viberacing_api.complete_passkey_login(
     );
     expectDenied(
       role,
+      "SELECT * FROM viberacing_api.cleanup_terminal_deletion_jobs(1);",
+      `${role} terminal deletion-job cleanup`,
+    );
+    expectDenied(
+      role,
       "SELECT * FROM viberacing_api.refresh_community_season('2026-07-06');",
       `${role} Community season refresh`,
     );
@@ -2129,7 +2168,7 @@ SELECT viberacing_api.complete_passkey_login(
   }
 
   console.log(
-    "Database integration passed (27 schema tables, 31 observed lock-wait races, 12 relation-denial and 46 cross-capability checks).",
+    "Database integration passed (27 schema tables, 32 observed lock-wait races, 12 relation-denial and 49 cross-capability checks).",
   );
 } finally {
   if (started) {

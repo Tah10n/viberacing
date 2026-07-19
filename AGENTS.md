@@ -23,19 +23,20 @@ Community score query/response, compatible race and race-status responses, and C
 locally implemented OpenAPI GET and POST operations, bounded server-only PostgreSQL
 score/race/status adapters/mappers, a closed public problem-response factory and request/admission
 route, and procedure-only identity, passkey, restricted-recovery, pairing, source/device lifecycle,
-Community usage-ingest, Jobs-only ingest/pairing/auth/invite/session/CarRecipe-proposal retention,
-primary profile deletion, session-owned CarRecipe proposal/approval, and open-season Community
-scoring plus terminal finalization and bounded public score-projection database slices. A local
-one-shot Jobs runner now invokes only those nine reviewed maintenance functions through a probed
-least-privileged login contract. An opt-in synthetic integration runs all nine emitted CLI commands
-against one disposable least-privileged PostgreSQL login and proves a widened-login denial plus
-exact stored state. A local Ingest kernel bounds the raw sync envelope and parser, verifies an
-injected replay-consumed origin proof, validates the sync contract, and strictly verifies the
-source-bound device request. A protected local reader supplies one mandatory and one optional
-rotation proof key from exact namespaced configuration without returning a reusable key container. A
-separate bounded Ingest PostgreSQL adapter wraps only reviewed origin replay, device lookup, and
-submission procedures through a probed least-privileged login contract. A forced-RLS origin replay
-tuple and separate Jobs ingest/pairing/auth/invite/session/CarRecipe-proposal cleanup capabilities
+Community usage-ingest, Jobs-only ingest/pairing/auth/invite/session/CarRecipe-proposal and terminal
+deletion-job retention, primary profile deletion, session-owned CarRecipe proposal/approval, and
+open-season Community scoring plus terminal finalization and bounded public score-projection
+database slices. A local one-shot Jobs runner now invokes only those ten reviewed maintenance
+functions through a probed least-privileged login contract. An opt-in synthetic integration runs all
+ten emitted CLI commands against one disposable least-privileged PostgreSQL login and proves a
+widened-login denial plus exact stored state. A local Ingest kernel bounds the raw sync envelope and
+parser, verifies an injected replay-consumed origin proof, validates the sync contract, and strictly
+verifies the source-bound device request. A protected local reader supplies one mandatory and one
+optional rotation proof key from exact namespaced configuration without returning a reusable key
+container. A separate bounded Ingest PostgreSQL adapter wraps only reviewed origin replay, device
+lookup, and submission procedures through a probed least-privileged login contract. A forced-RLS
+origin replay tuple and separate Jobs
+ingest/pairing/auth/invite/session/CarRecipe-proposal/terminal-deletion-job cleanup capabilities
 have isolated PostgreSQL evidence. A transport-free Ingest application boundary now composes those
 exact capabilities, generates one server request ID, and returns only a validated sync
 acknowledgement or generic problem decision. A confined Fastify server factory now preserves raw
@@ -217,11 +218,11 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   is not a root or pull-request browser gate, and every regenerated diff still requires manual
   review.
 - `pnpm run lint:jobs`, `pnpm run typecheck:jobs`, `pnpm run test:jobs:coverage`, and
-  `pnpm run build:jobs` verify the local one-shot Jobs boundary, including bounded session cleanup.
-  They use injected fakes and do not by themselves prove a database login, scheduler, production
-  TLS, monitoring, capacity, or deployment.
+  `pnpm run build:jobs` verify the local one-shot Jobs boundary, including bounded session and
+  terminal deletion-job cleanup. They use injected fakes and do not by themselves prove a database
+  login, scheduler, production TLS, monitoring, capacity, or deployment.
 - `pnpm run test:jobs:postgres-integration` uses one disposable PostgreSQL container with a
-  synthetic narrow Jobs login. It runs all nine emitted CLI commands, proves an extra-membership
+  synthetic narrow Jobs login. It runs all ten emitted CLI commands, proves an extra-membership
   login fails before mutation, validates generic process output and exact stored state, and removes
   the container, network, and storage. It proves no scheduler, production credential/TLS path,
   monitoring, capacity, real-user retention, or deployment.

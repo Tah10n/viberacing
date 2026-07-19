@@ -37,7 +37,7 @@ proof alone reaches one atomic create-consume-session call. Its GitHub, passkey-
 and browser evidence is injected or synthetic; no working invite issuer, OAuth registration, secret,
 live authenticator/database login, distributed edge abuse control, scheduled recovery/deletion
 cleanup, cache/backup/tombstone purge, restore replay, notification, or deployment is supplied. A
-local one-shot Jobs runner invokes only the nine existing maintenance procedures through a bounded
+local one-shot Jobs runner invokes only the ten existing maintenance procedures through a bounded
 least-privileged adapter. One opt-in synthetic integration applies the reviewed migrations to
 disposable PostgreSQL, runs every emitted Jobs command through a narrow login, rejects an
 extra-membership login before mutation, and verifies exact stored state. A local Ingest kernel now
@@ -370,8 +370,15 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   remains and no unkeyed tombstone is invented. End-to-end request/purge, batch, retry/future,
   state-drift rollback, role-denial, idempotency, two-worker, and purge-versus-auth- cleanup
   scenarios pass in real isolated PostgreSQL. No scheduler, production Jobs login/TLS path,
-  published deletion window, terminal-job retention, cache/backup purge, keyed tombstone, restore
-  replay, monitoring, capacity result, or deployment is claimed.
+  published deletion window, cache/backup purge, keyed tombstone, restore replay, monitoring,
+  capacity result, or deployment is claimed.
+- A bounded terminal deletion-job retention boundary. Revision 0032 gives only Jobs one 1-to-1000
+  oldest-first cleanup under the profile-deletion mutex. PostgreSQL derives a fixed 30-day cutoff
+  after locking; only `purged`, profile-free jobs with non-null completion at or before that cutoff
+  are candidates, and every predicate is repeated at delete. Static scenarios and an observed
+  two-worker race prove recent/non-terminal preservation and exact progress. No scheduler,
+  production Jobs login/TLS path, audit retention, cache/backup purge, tombstone/restore replay,
+  monitoring, capacity result, or deployed retention evidence is claimed.
 - A transport-free Community sync application boundary. Its configured factory creates one bounded
   Ingest database object, injects that same object's atomic origin consume and minimal device lookup
   into the protected-key verifier, binds its submission capability, closes the pool after startup
@@ -780,32 +787,32 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
   credential entry. The separate candidate sync path is documented above; there is no cross-platform
   runtime result, real HTTP/Web/database pairing result, key rotation, server-revoke composition,
   package, signed release, or support claim.
-- A private TypeScript Jobs workspace now accepts exactly either a fixed 1000-row
-  authentication/invite/CarRecipe-proposal/ingest/pairing/session cleanup command, a separate fixed
-  10-profile primary purge, or one canonical Monday refresh/finalization command. It revalidates
-  closed plain job data, reads only redacted `VIBERACING_JOBS_DATABASE_*` configuration, permits
-  cleartext only for explicit development/test loopback, and otherwise requires
+- A private TypeScript Jobs workspace now accepts exactly either a fixed 1000-row authentication/
+  invite/CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job cleanup command, a separate
+  fixed 10-profile primary purge, or one canonical Monday refresh/finalization command. It
+  revalidates closed plain job data, reads only redacted `VIBERACING_JOBS_DATABASE_*` configuration,
+  permits cleartext only for explicit development/test loopback, and otherwise requires
   certificate-verifying TLS with a DNS hostname. Its pool maximum is one; client
   connect/statement/query deadlines are 2/31/32 seconds, outside the database functions' 30-second
   deadline. Every checkout probes the exact `viberacing_jobs` effective role, a distinct
   non-privileged login with only that membership, CONNECT without CREATE/TEMPORARY, and
-  `pg_catalog,pg_temp` search path. It then selects one of nine fixed prepared function calls,
+  `pg_catalog,pg_temp` search path. It then selects one of ten fixed prepared function calls,
   requires one exact allowlisted result row, holds the client through settlement, destroys it after
   failure, and closes the pool on every acquired CLI path. Success and failure output are stable
-  sentences without command/date/count/config/SQL/exception reflection. One hundred sixty-eight
-  focused tests cover config, TLS, pool/signal behavior, hostile command/object/array/result inputs,
-  exact SQL parameters, role mismatch, settlement/release/close, CLI output, and failure translation
-  at 100% statement/branch/function/line coverage. A lint-policy regression also prevents every
+  sentences without command/date/count/config/SQL/exception reflection. One hundred eighty focused
+  tests cover config, TLS, pool/signal behavior, hostile command/object/array/result inputs, exact
+  SQL parameters, role mismatch, settlement/release/close, CLI output, and failure translation at
+  100% statement/branch/function/line coverage. A lint-policy regression also prevents every
   production module except the fixed pool adapter from importing `pg`. A TypeScript production build
   passes. A separate opt-in Docker integration applies every checksum-validated migration to one
   disposable PostgreSQL container, creates a synthetic narrow Jobs login and a negative-control
-  login with one extra group membership, runs all nine emitted CLI commands as separate processes,
+  login with one extra group membership, runs all ten emitted CLI commands as separate processes,
   proves the widened login returns only the generic failure before mutation, and verifies generic
   success plus exact cleanup, purge, refresh, and finalization state before removing the container,
   network, and storage. No production Jobs login/TLS path, scheduler, monitoring backend, automatic
   retry policy, capacity result, correction, cache/backup/tombstone purge, restore replay, or
   deployment is claimed.
-- Thirty-one deterministic cross-connection races hold a relevant invite, challenge, session,
+- Thirty-two deterministic cross-connection races hold a relevant invite, challenge, session,
   source, device, pairing, or profile row, or a season advisory lock; tag every session; and observe
   every contender in the holder's transitive PostgreSQL blocker chain before releasing it.
   Protective races additionally prove the first contender is blocked before the competitor starts.
@@ -925,23 +932,24 @@ real-user ingestion, end-to-end public ranking, or finalization scheduler exists
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0031 from the checksum manifest,
-passed 27-table state/ownership/RLS assertions, thirty-one observed lock-wait races, twelve
-relation-denial checks, forty-six cross-capability denials, and the identity, passkey, recovery,
+reached `healthy`, validated and applied revisions 0001 through 0032 from the checksum manifest,
+passed 27-table state/ownership/RLS assertions, thirty-two observed lock-wait races, twelve
+relation-denial checks, forty-nine cross-capability denials, and the identity, passkey, recovery,
 pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention,
 pairing-retention, authentication-retention, invite-retention, session-retention, primary-profile
-deletion, CarRecipe proposal/approval and retention, scoring, finalization, and public
-score/race/status scenarios, then removed its portless container, network, and ephemeral storage.
+deletion, terminal deletion-job retention, CarRecipe proposal/approval and retention, scoring,
+finalization, and public score/race/status scenarios, then removed its portless container, network,
+and ephemeral storage.
 
 The separate Jobs integration also reached `healthy`, revalidated and applied revisions 0001 through
-0031, created only synthetic non-owner logins, rejected the one login with an extra group membership
-before its requested cleanup changed state, and ran all nine built Jobs commands through the narrow
+0032, created only synthetic non-owner logins, rejected the one login with an extra group membership
+before its requested cleanup changed state, and ran all ten built Jobs commands through the narrow
 login. It observed only the constant success/failure sentences and verified the exact
-authentication/invite/CarRecipe-proposal/ingest/pairing/session cleanup, profile-purge,
-current-season refresh, and closed-season finalization state before removing the loopback-published
-container, network, and storage. This is local synthetic application evidence, not a scheduler,
-production credential/TLS result, capacity result, real-user purge, monitoring backend, or
-deployment.
+authentication/invite/CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job cleanup,
+profile-purge, current-season refresh, and closed-season finalization state before removing the
+loopback-published container, network, and storage. This is local synthetic application evidence,
+not a scheduler, production credential/TLS result, capacity result, real-user purge, monitoring
+backend, or deployment.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and

@@ -91,7 +91,7 @@ public Privacy Policy and tested purge schedule must replace them before real-us
 | IP-derived request signal and user-agent family                             | Operational                            | Edge/service; security, rate shaping, and reliability                                                                                        | Restricted operations; never leaderboard or behavioral advertising                              | Prefer aggregate/ephemeral edge controls; minimal event when necessary                                                                                         | Shortest operational window; exact scope and duration require launch privacy review                                                                                          |
 | Request ID, outcome, latency, and bounded error code                        | Operational                            | Server-generated correlation; debugging and SLO evidence                                                                                     | Response recipient and restricted operations; aggregate metrics                                 | Not retained today; future structured logs/metrics                                                                                                             | Future bounded logs exclude usage, credentials, bodies, and profiles                                                                                                         |
 | Security/admin audit event and reason                                       | Security; Operational                  | Auth/admin/jobs/release; accountability                                                                                                      | Restricted responders/auditors; user-visible subset where appropriate                           | Bounded `audit_events` reference; external append-only sink planned                                                                                            | Publicly documented bounded policy; profile link redacted on purge; delete unrelated personal data                                                                           |
-| Deletion state and security tombstone                                       | Security                               | Deletion workflow; prevent ingestion and restore resurrection                                                                                | Deletion/jobs/auth and limited audit                                                            | Local request queues and local Jobs terminally settle one opaque deletion job; minimal keyed tombstone remains planned                                         | Immediate lock-down and primary purge implemented; terminal-job retention, cache/backup purge, tombstone expiry, and restore replay remain launch work                       |
+| Deletion state and security tombstone                                       | Security                               | Deletion workflow; prevent ingestion and restore resurrection                                                                                | Deletion/jobs/auth and limited audit                                                            | Local request queues and local Jobs terminally settle one opaque deletion job; minimal keyed tombstone remains planned                                         | Immediate lock-down and primary purge implemented; terminal job retained at least 30 days then cleanup-eligible; cache/backup purge, tombstone/restore replay remain         |
 | Maintenance capability mutex                                                | Operational                            | Database; serialize bounded cleanup, scoring, and primary deletion                                                                           | Owner-defined Jobs procedures only                                                              | Six fixed `maintenance_locks` enum rows; no user or request data                                                                                               | Retained while each capability exists; removed only by a reviewed migration                                                                                                  |
 
 The local identity implementation reads the invite body as a bounded stream, hashes and clears the
@@ -394,19 +394,21 @@ One maximum-10 transaction removes restrictive profile-bound pairing rows and au
 keys, marks the exact job terminal, then cascades primary invite, identity, session, passkey,
 recovery, source, device, usage, and personal score rows. The job's profile link and every retained
 audit profile link become null; the random 32-byte job reference, closed state, and timestamps
-remain. The local Jobs mapper discards the aggregate count. No identity-derived tombstone is created
-because no reviewed keyed digest/expiry/restore contract exists. Scheduling, terminal-job retention,
-public cache purge, backup expiry, restore replay, monitoring, capacity, live login, and deployed
-real-user evidence remain required.
+remain for at least 30 days after server-recorded completion. Revision 0032 then permits only Jobs
+to remove maximum-1000 oldest-first terminal, profile-free jobs under the profile-deletion mutex;
+recent and non-terminal rows remain. The local Jobs mapper discards both aggregate counts. No
+identity-derived tombstone is created because no reviewed keyed digest/expiry/restore contract
+exists. Scheduling, public cache purge, audit retention, backup expiry, restore replay, monitoring,
+capacity, live login, and deployed real-user evidence remain required.
 
 Revision 0030 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of already
 expired session rows only when no retained predecessor points to the row and no pairing transaction
 uses it as approval provenance. Session-bound challenges cascade with the selected row. One shared
 authentication-retention mutex serializes cleanup with authentication cleanup and primary profile
 purge; an observed two-worker race proves bounded serialization and live-authority preservation. The
-local Jobs runner discards the count. Pairing-referenced expired sessions, Jobs history, historical
-passkey/device provenance, backup expiry, scheduling, monitoring, and deployed real-user purge
-evidence remain outside this slice.
+local Jobs runner discards the count. Pairing-referenced expired sessions, historical passkey/device
+provenance, backup expiry, scheduling, monitoring, and deployed real-user purge evidence remain
+outside this slice.
 
 Revision 0031 adds no collected field. It deletes an oldest-first, 1-to-1000 batch of expired active
 or revoked invite rows after the shared authentication mutex. Candidate row locks and repeated
@@ -436,8 +438,8 @@ non-personal terminal season definition. A no-data closed week stores only that 
 public serializer/cache, audited correction record, finalized public-history retention rule, Jobs
 deployment/scheduler, or monitoring backend exists.
 
-ADRs 0014, 0029, 0032, 0034, 0036, 0042, and 0043 store no user data. The local Jobs process
-transiently receives only one of six fixed 1000-row cleanup batches, one fixed maximum-10 profile
+ADRs 0014, 0029, 0032, 0034, 0036, 0042, 0043, and 0045 store no user data. The local Jobs process
+transiently receives only one of seven fixed 1000-row cleanup batches, one fixed maximum-10 profile
 purge, or one Public season-start label, plus the private aggregate counts already returned by the
 procedures. It validates and discards those values within one process invocation. The CLI emits only
 one constant completion/failure sentence; it does not log the command, date, counts, identifiers,
@@ -595,11 +597,11 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   unsupported until clean-machine platform, privacy-egress, packaging, provenance, and release gates
   pass.
 - Jobs currently receive only bounded expired authentication-, invite-, ingest-, pairing-, session-,
-  and CarRecipe-proposal-state cleanup, maximum-10 primary profile deletion, open-season Community
-  scoring refresh, and terminal finalization. The local one-shot adapter rechecks the exact
-  Jobs-only login and invokes one prepared capability without logging inputs or results. Correction,
-  cache/backup purge, tombstone/restore replay, and remaining retention capabilities require
-  separate migrations and tests; migrations use a different non-runtime owner.
+  CarRecipe-proposal-, and terminal-deletion-job-state cleanup, maximum-10 primary profile deletion,
+  open-season Community scoring refresh, and terminal finalization. The local one-shot adapter
+  rechecks the exact Jobs-only login and invokes one prepared capability without logging inputs or
+  results. Correction, cache/backup purge, tombstone/restore replay, and remaining retention
+  capabilities require separate migrations and tests; migrations use a different non-runtime owner.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The
@@ -656,9 +658,10 @@ model and requires an ADR, consent/notice analysis, data-map update, and public 
 The local request slice itself does not execute background work. Revision 0024 and the separate
 one-shot Jobs command now consume due queued/retry rows in maximum-10 transactions, terminally
 settle the opaque job, and purge the exact profile's primary identity, credential, source, device,
-usage, and personal score data. The local Web build does not schedule that command. Public cache
-purge, terminal-job retention, disclosed keyed tombstone expiry, backup handling, and restore replay
-remain launch-blocking work.
+usage, and personal score data. Revision 0032 makes only profile-free terminal jobs older than 30
+days cleanup-eligible through a separate one-shot command. The local Web build schedules neither
+command. Public cache purge, audit retention, disclosed keyed tombstone expiry, backup handling, and
+restore replay remain launch-blocking work.
 
 Restore procedures replay deletion markers before restored data is made available. The UI reports
 progress without exposing internal record IDs. Legal retention exceptions, if any, require launch

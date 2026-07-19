@@ -62,8 +62,9 @@ candidate changes before deletion.
 
 Residual risk remains: no invite issuance UI, scheduler, cadence, retry/overlap policy, monitoring,
 capacity result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention
-policy exists. Terminal deletion jobs/tombstones, pairing-referenced sessions, historical
-passkey/device provenance, and any future expiring class still require separate reviewed rules.
+policy exists. Tombstones, pairing-referenced sessions, historical passkey/device provenance, and
+any future expiring class still require separate reviewed rules; ADR 0045 separately bounds terminal
+deletion-job retention.
 
 Affected invariants are VR-AUTH-001 and VR-DATA-001. Primary attacker stories are
 VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -99,17 +100,17 @@ must not delete redeemed provenance or widen Jobs table access.
 
 Acceptance evidence recorded for this decision includes:
 
-- static validation of 31 contiguous immutable migration revisions and the exact checksum ledger;
+- static validation of 32 contiguous immutable migration revisions and the exact checksum ledger;
 - real PostgreSQL scenarios for oldest-first batch bounds, active/revoked deletion, idempotency,
   live and redeemed preservation, invalid batches, missing mutex, supporting index, and exact role
   grants;
 - an observed two-worker race in which separate one-row batches serialize and each expired row is
   removed once while live authority remains;
-- the complete isolated PostgreSQL suite with 27 tables, 31 observed lock-wait races, 12 direct
-  relation denials, and 46 cross-capability denials;
-- 168 focused Jobs tests with 100% statement, branch, function, and line coverage plus strict lint
+- the complete isolated PostgreSQL suite with 27 tables, 32 observed lock-wait races, 12 direct
+  relation denials, and 49 cross-capability denials;
+- 180 focused Jobs tests with 100% statement, branch, function, and line coverage plus strict lint
   and type checking; and
-- a separate disposable PostgreSQL integration that runs all nine built Jobs commands through a
+- a separate disposable PostgreSQL integration that runs all ten built Jobs commands through a
   narrow login, rejects a deliberately widened login before mutation, preserves generic output, and
   verifies exact stored state.
 

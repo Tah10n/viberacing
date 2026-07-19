@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains thirty-one SQL-first revisions for identity, passkey login and management,
+This directory contains thirty-two SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
 finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
 PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,
@@ -127,6 +127,9 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
 - `migrations/0031_invite_retention_cleanup.sql` adds Jobs-only maximum-1000 physical deletion of
   expired active or revoked invite verifier rows under the shared authentication mutex while
   preserving live invites and redeemed enrollment provenance.
+- `migrations/0032_terminal_deletion_job_retention_cleanup.sql` adds Jobs-only maximum-1000 physical
+  deletion of `purged`, profile-free deletion jobs only after 30 days from server-recorded
+  completion under the shared profile-deletion mutex.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -172,6 +175,9 @@ local Jobs capability with no schedule, live login, monitoring, or deployment.
   idempotency, committed-state drift rollback, mutex failure, no-tombstone scope, and exact role
   denial. The identity capability scenario additionally runs the real request queue through purge
   and checks restrictive pairing, pending-key, identity/source/device, score, audit, and job state.
+- `tests/deletion_job_cleanup.sql` exercises oldest-first 30-day terminal-job cleanup, recent,
+  linked, and non-terminal preservation, idempotency, invalid bounds, supporting index, mutex
+  failure, and exact role denial.
 - `tests/identity_concurrency_setup.sql` and `tests/identity_concurrency_assertions.sql` prove one
   invite enrollment, one initial-passkey challenge consumption, one active-session rotation, and
   deletion dominance over concurrent session rotation without leaving stale authority.
@@ -324,6 +330,10 @@ Runtime access must remain procedure-only and must have positive and negative in
 - `cleanup_expired_invites` is Jobs-only, shares that private mutex, and deletes at most 1000
   expired active or revoked invites in deterministic order. It repeats state and expiry at delete,
   preserves every live or redeemed row, and returns only one bounded count.
+- `cleanup_terminal_deletion_jobs` is Jobs-only, shares the private profile-deletion mutex, and
+  deletes at most 1000 oldest-first `purged`, profile-free jobs at least 30 days after completion.
+  PostgreSQL derives the cutoff; the function repeats every eligibility predicate and returns only
+  one bounded count.
 - `read_profile_visibility` maps only the possessed active session's current profile state to
   `public` or `hidden`. `set_profile_visibility` accepts no profile ID, moves only between active
   and hidden, preserves source sync, and treats repeated state as a no-op.
@@ -443,8 +453,9 @@ restricted authority and never represents it as an ordinary session. The local a
 performs bounded matching/dummy Argon2id work under the protected pepper, generic configured-floor
 HTTP handling, and exact replacement WebAuthn verification before these fixed calls. Distributed
 edge attempt controls, cleanup scheduling, notifications, live integration, and operational
-monitoring remain absent. The deletion procedure implements immediate lock-down only; primary purge,
-cache purge, tombstones, backup replay, and user-visible progress remain unimplemented.
+monitoring remain absent. The deletion procedures now implement immediate lock-down, local primary
+purge, and 30-day terminal-job retention; cache purge, tombstones, backup replay, scheduling, and
+user-visible progress remain unimplemented.
 
 ## Data and privacy map
 
@@ -458,7 +469,7 @@ All current columns map to the canonical [privacy data map](../docs/security/PRI
 | `recovery_authorities`                      | Security                      | Keyed/challenge/context digests, terminal state, expiry, and opaque provenance                      |
 | `codex_sources`                             | Account                       | Opaque source ID, owning profile, and constrained lifecycle state                                   |
 | `device_keys`, `pairing_transactions`       | Security; metadata is Account | Ed25519 public key, exact source/device binding, keyed poll/code verifiers                          |
-| `deletion_jobs`, `deletion_tombstones`      | Security; Operational         | Keyed identity references, bounded work state, lease digest, and expiry                             |
+| `deletion_jobs`, `deletion_tombstones`      | Security; Operational         | Keyed identity references, bounded work state, lease digest, completion, and expiry                 |
 | `audit_events`                              | Security; Operational         | Closed event/actor enums, request reference, reason code, and server time                           |
 | `maintenance_locks`                         | Operational                   | Fixed owner-only cleanup/scoring mutex rows; no user or request data                                |
 | `origin_nonces`                             | Security                      | Origin key ID, domain-separated replay digest, and millisecond expiry                               |
@@ -569,7 +580,7 @@ credential against the encrypted challenge continuation, one fixed function crea
 that five-minute profile-free challenge in the same transaction as the existing credential-derived
 session. It returns only profile ID, public handle, and locale so Web/Auth can seal its existing
 session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
-46 cross-capability denials. Physical challenge cleanup after expiry is supplied by revision 0023; a
+49 cross-capability denials. Physical challenge cleanup after expiry is supplied by revision 0023; a
 deployment login, edge attempt policy, monitoring, and live authenticator/database integration
 remain open.
 
@@ -695,6 +706,14 @@ serialization and exact progress; the shared synthetic integration proves only t
 through a disposable narrow login and exact stored state. Neither proves invite issuance UI, a
 scheduler, production login/TLS, monitoring, capacity, backup purge, or deployed retention.
 
+Revision 0032 physically removes only terminal profile-deletion jobs whose profile link is null and
+whose server-recorded completion is at least 30 days old. It shares the profile-deletion mutex,
+orders the partial-index path by completion and identifier, uses `FOR UPDATE SKIP LOCKED`, and
+repeats every terminal/cutoff predicate. Recent evidence and non-terminal authority remain. The
+observed worker race and shared ten-command synthetic integration prove only local serialization,
+least-privileged execution, and exact stored state; they do not prove scheduling, audit retention,
+cache/backup purge, tombstone/restore replay, monitoring, capacity, or deployment.
+
 The local account application consumes those capabilities through the same probed read-write pool.
 Its combined overview query reads visibility and the current week's derived score with one checkout,
 then accepts only one all-null empty row or exactly seven consecutive, internally consistent daily
@@ -793,10 +812,11 @@ hard failure, not something the script silently broadens or repairs.
   shaping, query-plan/load evidence, monitoring, and deployment verification.
 - Extend the separate profile surface only after authenticated profile detail has real persistence,
   privacy, compatibility, and lifecycle evidence; do not widen either closed legacy race response.
-- Schedule and monitor the implemented auth-, invite-, CarRecipe-proposal-, ingest-, pairing-, and
-  session-retention procedures, and implement bounded cleanup or reset policy for pairing-referenced
-  sessions, jobs, passkey/device provenance, pairing rate windows, and tombstones. Expiry columns
-  outside revisions 0008, 0012, 0013, 0023, 0026, 0030, and 0031 are not cleanup.
+- Schedule and monitor the implemented auth-, invite-, CarRecipe-proposal-, ingest-, pairing-,
+  session-, and terminal-deletion-job-retention procedures, and implement bounded cleanup or reset
+  policy for pairing-referenced sessions, passkey/device provenance, pairing rate windows, and
+  tombstones. Expiry columns outside revisions 0008, 0012, 0013, 0023, 0026, 0030, 0031, and 0032
+  are not cleanup.
 - Replace every launch-decision retention item with public policy and purge evidence.
 - Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
   in isolated staging before real-user ingestion.

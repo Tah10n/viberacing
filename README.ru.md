@@ -268,12 +268,15 @@ live invites и redeemed enrollment provenance. Ещё одна Jobs-only proced
 eligible expired browser sessions без retained rotation predecessor или pairing approval provenance,
 сохраняя live и referenced sessions. Ещё одна Jobs-only procedure атомарно удаляет до 10 due
 `deletion_pending` профилей, сначала снимает restrictive pairing references, terminally settles
-opaque job и не создаёт неподтверждённый tombstone. Локальный one-shot Jobs runner вызывает только
-одну из девяти fixed capabilities: auth/invite/CarRecipe-proposal/ingest/pairing/session cleanup,
+opaque job и не создаёт неподтверждённый tombstone. Отдельная Jobs-only процедура хранит этот
+terminal job не менее 30 дней после server-recorded completion, а затем допускает bounded
+oldest-first batches, не затрагивая recent и non-terminal deletion work. Локальный one-shot Jobs
+runner вызывает только одну из десяти fixed capabilities:
+auth/invite/CarRecipe-proposal/ingest/pairing/session cleanup, terminal deletion-job cleanup,
 primary profile purge, scoring refresh или finalization через отдельный least-privileged config,
 single-client pool, проверку role/login/search path, fixed deadlines, prepared parameters, closed
 result validation и стабильный non-reflective CLI output. Отдельный opt-in Jobs scenario применяет
-reviewed migrations к одноразовой PostgreSQL, запускает все девять emitted commands через узкий
+reviewed migrations к одноразовой PostgreSQL, запускает все десять emitted commands через узкий
 synthetic login, отклоняет login с лишней role membership до мутации и проверяет точное состояние
 перед очисткой. Сама база не проверяет wire signature; локальные kernel, adapter и application
 объединены на synthetic/mock-pool evidence. Отдельный opt-in loopback Ingest scenario теперь

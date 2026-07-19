@@ -1,6 +1,6 @@
 # Vibe Racing Jobs
 
-This private workspace is the local one-shot application boundary for nine existing PostgreSQL
+This private workspace is the local one-shot application boundary for ten existing PostgreSQL
 maintenance capabilities:
 
 - delete one bounded batch of expired authentication challenges and restricted recovery state;
@@ -11,6 +11,7 @@ maintenance capabilities:
 - delete one bounded batch of expired sessions that are no longer retained by rotation or pairing
   provenance;
 - purge one bounded batch of due deletion-pending profiles and their primary data;
+- delete one bounded batch of terminal profile-deletion jobs only after 30 days of retention;
 - refresh one open Community season; and
 - idempotently finalize one Community season after its server-enforced grace deadline.
 
@@ -58,6 +59,7 @@ pnpm --filter @viberacing/jobs start -- cleanup-expired-ingest-state
 pnpm --filter @viberacing/jobs start -- cleanup-expired-pairing-state
 pnpm --filter @viberacing/jobs start -- cleanup-expired-sessions
 pnpm --filter @viberacing/jobs start -- purge-profile-deletions
+pnpm --filter @viberacing/jobs start -- cleanup-terminal-deletion-jobs
 pnpm --filter @viberacing/jobs start -- refresh-community-season 2026-07-13
 pnpm --filter @viberacing/jobs start -- finalize-community-season 2026-07-06
 ```
@@ -68,7 +70,7 @@ prints the command input, affected counts, configuration, SQL, or exception deta
 
 The Docker-backed integration command applies the checksum-validated migration manifest, creates a
 least-privileged synthetic Jobs login plus a deliberately widened negative-control login, runs all
-nine built CLI commands as separate processes, verifies their generic output and exact database
+ten built CLI commands as separate processes, verifies their generic output and exact database
 effects, and cleans up its container, network, and storage. It proves only the local
 CLI-to-PostgreSQL boundary; it does not prove production TLS/credentials, a scheduler, monitoring,
 capacity, real-user retention, or deployment.

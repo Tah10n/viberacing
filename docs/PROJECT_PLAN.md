@@ -176,17 +176,18 @@ flowchart LR
   session. The deletion control accepts the exact typed handle before a fresh assertion bound to
   session/profile/handle/RP/origin, then atomically consumes that challenge while immediately hiding
   the profile, revoking authority, unlinking sources, and queueing one opaque purge job. A separate
-  local Jobs command now performs bounded atomic primary purge; scheduling, cache invalidation,
-  tombstone policy, backup expiry, and restore replay remain separate gates. A transport-free
-  pairing start boundary now owns fresh server IDs/token/challenge/code, separate protected
-  poll/code verifiers, closed device metadata, nine-minute expiry, and one fixed call through a
-  separate probed read-write pool wrapper. A second activation boundary owns protected poll lookup,
-  strict possession proof, server-owned activation IDs, and fixed admission/timing. The local
-  `/connect` slice now supplies the intervening browser step: exact-session code lookup with a
-  database-backed attempt window, bounded device/fingerprint review, explicit new-source or active
-  existing-source selection through an encrypted session-bound control, and fresh-passkey atomic
-  approval. Distributed recovery/anonymous edge attempt policy, expired-state cleanup scheduling and
-  notification, live provider/database credentials, and deployment remain separate gates.
+  local Jobs command now performs bounded atomic primary purge, and a separate command removes only
+  terminal deletion jobs after 30 days; scheduling, cache invalidation, tombstone policy, backup
+  expiry, and restore replay remain separate gates. A transport-free pairing start boundary now owns
+  fresh server IDs/token/challenge/code, separate protected poll/code verifiers, closed device
+  metadata, nine-minute expiry, and one fixed call through a separate probed read-write pool
+  wrapper. A second activation boundary owns protected poll lookup, strict possession proof,
+  server-owned activation IDs, and fixed admission/timing. The local `/connect` slice now supplies
+  the intervening browser step: exact-session code lookup with a database-backed attempt window,
+  bounded device/fingerprint review, explicit new-source or active existing-source selection through
+  an encrypted session-bound control, and fresh-passkey atomic approval. Distributed
+  recovery/anonymous edge attempt policy, expired-state cleanup scheduling and notification, live
+  provider/database credentials, and deployment remain separate gates.
 - Authenticated score view: the account server render reuses the exact possessed session and one
   combined Web/Auth pool checkout to read visibility plus the current Monday's existing seven
   derived daily scores and bounded summary. Hidden profiles return no score; raw usage, private
@@ -686,10 +687,12 @@ maximum-10 Jobs-only primary-profile purge: it serializes against every intersec
 capability, accepts only due queued/retry work for committed `deletion_pending` profiles, removes
 restrictive pairing references first, terminally settles the opaque job, and cascades primary
 identity/credential/source/device/usage/personal-score data in one transaction. It retains only the
-opaque terminal job and redacted audit reference. Pairing-referenced sessions, other remaining
-expiry classes, keyed tombstone policy, cache/backup purge, and restore replay still require their
-own reviewed implementation and public policy, and no implemented cleanup has a scheduler or
-deployed cadence.
+opaque terminal job and redacted audit reference. Revision 0032 retains that job for at least 30
+days after server-recorded completion, then permits maximum-1000 oldest-first batches only when
+state remains `purged` and the profile link is null. Pairing-referenced sessions, other remaining
+expiry classes, keyed tombstone policy, cache/backup purge, audit retention, and restore replay
+still require their own reviewed implementation and public policy, and no implemented cleanup has a
+scheduler or deployed cadence.
 
 ## Administration and operations
 

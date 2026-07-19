@@ -61,8 +61,9 @@ remain unchanged. No caller chooses SQL, profile, cutoff, identifier, result col
 
 The capability now physically removes the requested profile's primary identity, credential, device,
 usage, and personal score data while retaining only the already documented opaque terminal job and
-audit record with its profile reference redacted. It collects no new field, prints no count, and
-adds only one fixed non-personal mutex row.
+audit record with its profile reference redacted. ADR 0045 subsequently bounds that job to 30 days
+after completion. It collects no new field, prints no count, and adds only one fixed non-personal
+mutex row.
 
 The maximum is 10 rather than the 1000-row retention-cleanup limit because one profile may own many
 cascaded rows. The 30-second database statement deadline and five-second lock deadline remain
@@ -129,8 +130,9 @@ Current evidence includes:
 
 The SQL evidence uses synthetic rows in a portless ephemeral PostgreSQL project. Focused Jobs tests
 use an injected pool; the shared opt-in Jobs integration additionally proves this emitted command
-through one disposable narrow login and exact terminal job/profile state. Neither proves a
-scheduler, published deletion window, production login/TLS, monitoring, backup expiry,
+through one disposable narrow login and exact terminal job/profile state. A separate ADR 0045
+integration proves only local terminal-job cleanup after the fixed retention boundary. Neither
+proves a scheduler, published deletion window, production login/TLS, monitoring, backup expiry,
 tombstone/restore replay, cache invalidation, capacity, or deployment.
 
 ## References

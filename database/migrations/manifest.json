@@ -186,6 +186,12 @@
       "name": "invite_retention_cleanup",
       "path": "database/migrations/0031_invite_retention_cleanup.sql",
       "sha256": "2945729eb84ba5f80702d3072742ca0f642eff7056d544651f0a4cdfac733715"
+    },
+    {
+      "revision": 32,
+      "name": "terminal_deletion_job_retention_cleanup",
+      "path": "database/migrations/0032_terminal_deletion_job_retention_cleanup.sql",
+      "sha256": "c2920192b698696e55ec8b2355b9c3a616edf6412231ae70e48f28359012d02a"
     }
   ]
 }

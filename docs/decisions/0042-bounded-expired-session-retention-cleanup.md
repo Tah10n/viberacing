@@ -71,8 +71,9 @@ implemented or the profile is purged.
 
 Residual risk remains: there is no scheduler, cadence, overlap/retry policy, monitoring, capacity
 result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy.
-Activated pairing-referenced sessions, deletion jobs/tombstones, historical passkey/device
-provenance, and fixed pairing-rate windows still need separate reviewed retention or reset evidence.
+Activated pairing-referenced sessions, tombstones, historical passkey/device provenance, and fixed
+pairing-rate windows still need separate reviewed retention or reset evidence. ADR 0045 separately
+bounds terminal deletion-job retention.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and

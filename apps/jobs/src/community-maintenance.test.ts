@@ -28,6 +28,7 @@ interface PoolFixture {
   readonly cleanupExpiredIngestState: ReturnType<typeof vi.fn>;
   readonly cleanupExpiredPairingState: ReturnType<typeof vi.fn>;
   readonly cleanupExpiredSessions: ReturnType<typeof vi.fn>;
+  readonly cleanupTerminalDeletionJobs: ReturnType<typeof vi.fn>;
   readonly connect: ReturnType<typeof vi.fn>;
   readonly finalizeCommunitySeason: ReturnType<typeof vi.fn>;
   readonly pool: JobsDatabasePool;
@@ -44,6 +45,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
   const cleanupExpiredIngestState = vi.fn(() => Promise.resolve(jobResult));
   const cleanupExpiredPairingState = vi.fn(() => Promise.resolve(jobResult));
   const cleanupExpiredSessions = vi.fn(() => Promise.resolve(jobResult));
+  const cleanupTerminalDeletionJobs = vi.fn(() => Promise.resolve(jobResult));
   const finalizeCommunitySeason = vi.fn(() => Promise.resolve(jobResult));
   const purgeProfileDeletions = vi.fn(() => Promise.resolve(jobResult));
   const release = vi.fn();
@@ -56,6 +58,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
     cleanupExpiredIngestState,
     cleanupExpiredPairingState,
     cleanupExpiredSessions,
+    cleanupTerminalDeletionJobs,
     finalizeCommunitySeason,
     purgeProfileDeletions,
     release,
@@ -73,6 +76,7 @@ function createPoolFixture(jobResult: unknown): PoolFixture {
     cleanupExpiredIngestState,
     cleanupExpiredPairingState,
     cleanupExpiredSessions,
+    cleanupTerminalDeletionJobs,
     connect,
     finalizeCommunitySeason,
     pool: { close, connect },
@@ -176,6 +180,16 @@ describe("Community maintenance runner", () => {
       values: [9],
     },
     {
+      expected: {
+        deletedDeletionJobs: 5,
+        kind: "cleanup_terminal_deletion_jobs",
+      },
+      functionName: "cleanup_terminal_deletion_jobs",
+      input: { batchSize: 7, kind: "cleanup_terminal_deletion_jobs" },
+      rows: [{ deleted_deletion_jobs: 5 }],
+      values: [7],
+    },
+    {
       expected: { kind: "purge_profile_deletions", purgedProfiles: 3 },
       functionName: "purge_profile_deletions",
       input: { batchSize: 5, kind: "purge_profile_deletions" },
@@ -218,6 +232,8 @@ describe("Community maintenance runner", () => {
       expect(fixture.cleanupExpiredPairingState).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "cleanup_expired_sessions") {
       expect(fixture.cleanupExpiredSessions).toHaveBeenCalledWith(testCase.values[0]);
+    } else if (testCase.input.kind === "cleanup_terminal_deletion_jobs") {
+      expect(fixture.cleanupTerminalDeletionJobs).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "purge_profile_deletions") {
       expect(fixture.purgeProfileDeletions).toHaveBeenCalledWith(testCase.values[0]);
     } else if (testCase.input.kind === "refresh_community_season") {
@@ -232,6 +248,7 @@ describe("Community maintenance runner", () => {
         fixture.cleanupExpiredIngestState.mock.calls.length +
         fixture.cleanupExpiredPairingState.mock.calls.length +
         fixture.cleanupExpiredSessions.mock.calls.length +
+        fixture.cleanupTerminalDeletionJobs.mock.calls.length +
         fixture.purgeProfileDeletions.mock.calls.length +
         fixture.refreshCommunitySeason.mock.calls.length +
         fixture.finalizeCommunitySeason.mock.calls.length,
@@ -270,6 +287,11 @@ describe("Community maintenance runner", () => {
     { batchSize: 1.5, kind: "cleanup_expired_sessions" },
     { batchSize: "1", kind: "cleanup_expired_sessions" },
     { batchSize: 1, extra: true, kind: "cleanup_expired_sessions" },
+    { batchSize: 0, kind: "cleanup_terminal_deletion_jobs" },
+    { batchSize: 1_001, kind: "cleanup_terminal_deletion_jobs" },
+    { batchSize: 1.5, kind: "cleanup_terminal_deletion_jobs" },
+    { batchSize: "1", kind: "cleanup_terminal_deletion_jobs" },
+    { batchSize: 1, extra: true, kind: "cleanup_terminal_deletion_jobs" },
     { batchSize: 0, kind: "purge_profile_deletions" },
     { batchSize: 11, kind: "purge_profile_deletions" },
     { batchSize: 1.5, kind: "purge_profile_deletions" },
@@ -373,6 +395,7 @@ describe("Community maintenance runner", () => {
     { cleanup: true, rows: [{ deleted_nonces: 2, deleted_snapshots: 0 }] },
     { cleanup: "pairing", rows: [{ deleted_pairings: 1 }] },
     { cleanup: "session", rows: [{ deleted_session_count: 1 }] },
+    { cleanup: "deletion-job", rows: [{ deleted_deletion_job_count: 1 }] },
     { cleanup: "purge", rows: [{ purged_profile_count: 1 }] },
     {
       cleanup: "auth",
@@ -385,19 +408,21 @@ describe("Community maintenance runner", () => {
     const job: CommunityMaintenanceJob =
       cleanup === "auth"
         ? { batchSize: 1, kind: "cleanup_expired_auth_state" }
-        : cleanup === "invite"
-          ? { batchSize: 1, kind: "cleanup_expired_invites" }
-          : cleanup === "session"
-            ? { batchSize: 1, kind: "cleanup_expired_sessions" }
-            : cleanup === "car"
-              ? { batchSize: 1, kind: "cleanup_expired_car_recipe_proposals" }
-              : cleanup === "purge"
-                ? { batchSize: 1, kind: "purge_profile_deletions" }
-                : cleanup === "pairing"
-                  ? { batchSize: 1, kind: "cleanup_expired_pairing_state" }
-                  : cleanup
-                    ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
-                    : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
+        : cleanup === "deletion-job"
+          ? { batchSize: 1, kind: "cleanup_terminal_deletion_jobs" }
+          : cleanup === "invite"
+            ? { batchSize: 1, kind: "cleanup_expired_invites" }
+            : cleanup === "session"
+              ? { batchSize: 1, kind: "cleanup_expired_sessions" }
+              : cleanup === "car"
+                ? { batchSize: 1, kind: "cleanup_expired_car_recipe_proposals" }
+                : cleanup === "purge"
+                  ? { batchSize: 1, kind: "purge_profile_deletions" }
+                  : cleanup === "pairing"
+                    ? { batchSize: 1, kind: "cleanup_expired_pairing_state" }
+                    : cleanup
+                      ? { batchSize: 1, kind: "cleanup_expired_ingest_state" }
+                      : { kind: "refresh_community_season", seasonStart: "2026-07-13" };
 
     await expectMaintenanceError(
       createCommunityMaintenanceRunner(fixture.pool).execute(job),
@@ -461,6 +486,21 @@ describe("Community maintenance runner", () => {
       createCommunityMaintenanceRunner(fixture.pool).execute({
         batchSize,
         kind: "cleanup_expired_sessions",
+      }),
+      "result_invalid",
+    );
+  });
+
+  it.each([
+    { batchSize: 1, row: { deleted_deletion_jobs: 2 } },
+    { batchSize: 10, row: { deleted_deletion_jobs: -1 } },
+    { batchSize: 10, row: { deleted_deletion_jobs: "1" } },
+  ])("bounds the terminal deletion-job cleanup result", async ({ batchSize, row }) => {
+    const fixture = createPoolFixture([row]);
+    await expectMaintenanceError(
+      createCommunityMaintenanceRunner(fixture.pool).execute({
+        batchSize,
+        kind: "cleanup_terminal_deletion_jobs",
       }),
       "result_invalid",
     );

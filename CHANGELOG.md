@@ -326,6 +326,10 @@ Versioning where its guarantees are applicable.
   `deletion_pending` validation, all-maintenance mutex ordering, restrictive-pairing and pending-key
   cleanup, atomic terminal job settlement, cascaded primary-data removal, redacted retained audit,
   two-worker/cross-capability race evidence, and no invented tombstone or implied scheduler.
+- Jobs-only maximum-1000 cleanup for terminal profile-deletion jobs only after at least 30 days from
+  server-recorded completion, with oldest-first partial-index selection, shared purge-mutex
+  serialization, repeated eligibility predicates, recent/non-terminal preservation, and no implied
+  tombstone, backup purge, restore replay, or scheduler.
 - Jobs-only atomic open-season Community scoring refresh with immutable formula/season binding,
   distinct-source aggregation under one profile cap, shared-rank semantics, private derived score
   tables, bounded lock/statement waits, no empty-season growth, and observed concurrent idempotent
@@ -333,17 +337,17 @@ Versioning where its guarantees are applicable.
 - Jobs-only immutable Community season finalization after an exact 48-hour server-time grace period,
   with whole-payload late quarantine, terminal no-data seasons, idempotent retry, bounded calendar
   support, and no implied scheduler, correction capability, or public read surface.
-- A private local one-shot Jobs workspace for exactly nine fixed capabilities: authentication,
-  invite, CarRecipe-proposal, ingest, pairing, or session cleanup; primary profile purge;
-  open-season refresh; or terminal finalization. It has strict command/object/result parsing, a
-  distinct redacted database namespace, one-client pool, fixed deadlines, an exact
-  role/login/capability/search-path probe, prepared procedure calls, destructive failure release,
-  stable non-reflective CLI output, production build, and 168 tests at 100% coverage. A separate
-  opt-in Docker gate now applies every reviewed migration, runs all nine emitted commands through
-  one synthetic least-privileged login, rejects a deliberately widened login before mutation,
-  verifies generic output and exact stored state, and cleans up its container, network, and storage.
-  It adds no scheduler, production credential/TLS path, monitoring, retry loop, capacity result, or
-  deployment claim.
+- A private local one-shot Jobs workspace for exactly ten fixed capabilities: authentication,
+  invite, CarRecipe-proposal, ingest, pairing, or session cleanup; primary profile purge; terminal
+  deletion-job cleanup; open-season refresh; or terminal finalization. It has strict
+  command/object/result parsing, a distinct redacted database namespace, one-client pool, fixed
+  deadlines, an exact role/login/capability/search-path probe, prepared procedure calls, destructive
+  failure release, stable non-reflective CLI output, production build, and 180 tests at 100%
+  coverage. A separate opt-in Docker gate now applies every reviewed migration, runs all ten emitted
+  commands through one synthetic least-privileged login, rejects a deliberately widened login before
+  mutation, verifies generic output and exact stored state, and cleans up its container, network,
+  and storage. It adds no scheduler, production credential/TLS path, monitoring, retry loop,
+  capacity result, or deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.

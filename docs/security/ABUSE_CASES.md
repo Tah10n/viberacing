@@ -515,29 +515,29 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 46 cross-capability denials.
-  Ingest has exactly three reviewed functions; Jobs has exactly nine reviewed functions: bounded
+  and usage/scoring-table reads or API-schema mutation, and proves 49 cross-capability denials.
+  Ingest has exactly three reviewed functions; Jobs has exactly ten reviewed functions: bounded
   authentication-, invite-, CarRecipe-proposal-, ingest-, pairing-, and session-retention cleanup,
-  primary profile deletion, open-season scoring refresh, and terminal season finalization. Web alone
-  receives the bounded public score and separate race functions; Ingest, Jobs, and Admin are
-  explicitly denied. The Web adapter uses one dedicated pool, fixed parameterized function calls,
-  and checks effective role, distinct non-privileged login, exact Web-only membership, database
-  capability, search path, and read-only state before every pooled read. Failed sessions are
-  destroyed and raw driver errors are not forwarded. The local Jobs adapter independently checks an
-  exact Jobs-only login/membership, CONNECT without CREATE/TEMPORARY, and safe search path before
-  exactly one of the nine prepared function calls. Its pool maximum is one, input/result shapes are
-  closed, failed clients are destroyed, and CLI output reflects no configuration, command, SQL,
-  count, or error detail. The local Ingest adapter independently caps its pool at four, probes the
-  exact Ingest login/role and safe search path before each capability, exposes only fixed
-  parameterized origin replay, device lookup, and submission calls, reconstructs and revalidates
-  inputs, copies mutable values, accepts only closed rows, and destroys failed clients without
-  forwarding driver/configuration details.
+  terminal deletion-job cleanup, primary profile deletion, open-season scoring refresh, and terminal
+  season finalization. Web alone receives the bounded public score and separate race functions;
+  Ingest, Jobs, and Admin are explicitly denied. The Web adapter uses one dedicated pool, fixed
+  parameterized function calls, and checks effective role, distinct non-privileged login, exact
+  Web-only membership, database capability, search path, and read-only state before every pooled
+  read. Failed sessions are destroyed and raw driver errors are not forwarded. The local Jobs
+  adapter independently checks an exact Jobs-only login/membership, CONNECT without
+  CREATE/TEMPORARY, and safe search path before exactly one of the ten prepared function calls. Its
+  pool maximum is one, input/result shapes are closed, failed clients are destroyed, and CLI output
+  reflects no configuration, command, SQL, count, or error detail. The local Ingest adapter
+  independently caps its pool at four, probes the exact Ingest login/role and safe search path
+  before each capability, exposes only fixed parameterized origin replay, device lookup, and
+  submission calls, reconstructs and revalidates inputs, copies mutable values, accepts only closed
+  rows, and destroys failed clients without forwarding driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Web deployment login/TLS integration has not been exercised. Jobs now has a
-  disposable synthetic least-privileged login, all nine emitted commands, a widened-login denial,
-  and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged loopback
-  login and full HTTP integration result. Neither proves a deployment credential/certificate,
-  external TLS/edge route, capacity, scheduler, monitoring, or real-user behavior.
+  disposable synthetic least-privileged login, all ten emitted commands, a widened-login denial, and
+  exact-state evidence; Ingest similarly has a disposable synthetic least-privileged loopback login
+  and full HTTP integration result. Neither proves a deployment credential/certificate, external
+  TLS/edge route, capacity, scheduler, monitoring, or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -692,7 +692,7 @@ material availability cost.
   one database, but the self-asserted ID is not a trusted edge/IP identity and still needs capacity
   evidence. Physical pairing cleanup exists as a separate local capability, but scheduling and edge
   controls are still pending. The local Jobs runner adds a one-client ceiling, 2/31/32-second
-  connect/server/client deadlines, six fixed 1000-row cleanup commands, one fixed maximum-10
+  connect/server/client deadlines, seven fixed 1000-row cleanup commands, one fixed maximum-10
   primary-purge command, canonical season validation, closed one-row results, and destructive
   release on failure. Its synthetic integration executes those commands sequentially against one
   disposable database and therefore proves no parallel scheduler or production-load capacity. The

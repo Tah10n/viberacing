@@ -53,6 +53,10 @@ describe("Jobs command", () => {
       { batchSize: 1_000, kind: "cleanup_expired_pairing_state" },
     ],
     [["cleanup-expired-sessions"], { batchSize: 1_000, kind: "cleanup_expired_sessions" }],
+    [
+      ["cleanup-terminal-deletion-jobs"],
+      { batchSize: 1_000, kind: "cleanup_terminal_deletion_jobs" },
+    ],
     [["purge-profile-deletions"], { batchSize: 10, kind: "purge_profile_deletions" }],
     [
       ["refresh-community-season", "2026-07-13"],
@@ -78,6 +82,7 @@ describe("Jobs command", () => {
     ["cleanup-expired-ingest-state", "unexpected"],
     ["cleanup-expired-pairing-state", "unexpected"],
     ["cleanup-expired-sessions", "unexpected"],
+    ["cleanup-terminal-deletion-jobs", "unexpected"],
     ["purge-profile-deletions", "unexpected"],
     ["refresh-community-season", "2026-07-13", "unexpected"],
     ["refresh-community-season"],
