@@ -159,6 +159,22 @@ const requiredNodeSteps = [
   { run: "pnpm run verify:node" },
   { run: "pnpm run test:ingest:postgres-integration" },
 ];
+const windowsPortableSteps = [
+  {
+    uses: pinnedCheckout,
+    with: { "fetch-depth": 0, "persist-credentials": false },
+  },
+  {
+    uses: `actions/setup-node@${"b".repeat(40)}`,
+    with: { "node-version-file": ".node-version", "package-manager-cache": false },
+  },
+  { run: "node scripts/check-public-files.mjs --all" },
+  { run: "rustup toolchain install 1.94.0 --profile minimal" },
+  {
+    run: "cargo build --release --locked --target-dir target --package viberacing-connector --bin viberacing-connector",
+  },
+  { run: "node scripts/test-connector-windows-portable.mjs" },
+];
 const goodCiWorkflow = {
   ...goodWorkflow,
   jobs: {
@@ -166,13 +182,114 @@ const goodCiWorkflow = {
       ...goodWorkflow.jobs.verify,
       steps: requiredNodeSteps,
     },
+    connector_windows_portable: {
+      ...goodWorkflow.jobs.verify,
+      "runs-on": "windows-2025",
+      "timeout-minutes": 15,
+      steps: windowsPortableSteps,
+    },
   },
 };
 assert.deepEqual(validateWorkflow(".github/workflows/ci.yml", goodCiWorkflow), []);
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
     ...goodCiWorkflow,
+    jobs: { node: goodCiWorkflow.jobs.node },
+  }).join("\n"),
+  /bounded Windows portable connector job/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
     jobs: {
+      ...goodCiWorkflow.jobs,
+      connector_windows_portable: {
+        ...goodCiWorkflow.jobs.connector_windows_portable,
+        "runs-on": "ubuntu-24.04",
+      },
+    },
+  }).join("\n"),
+  /exact windows-2025 runner/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      connector_windows_portable: {
+        ...goodCiWorkflow.jobs.connector_windows_portable,
+        "timeout-minutes": 30,
+      },
+    },
+  }).join("\n"),
+  /exact 15-minute timeout/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      connector_windows_portable: {
+        ...goodCiWorkflow.jobs.connector_windows_portable,
+        steps: windowsPortableSteps.slice(0, -1),
+      },
+    },
+  }).join("\n"),
+  /bounded smoke in exact order/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      connector_windows_portable: {
+        ...goodCiWorkflow.jobs.connector_windows_portable,
+        steps: [
+          windowsPortableSteps[2],
+          ...windowsPortableSteps.slice(0, 2),
+          ...windowsPortableSteps.slice(3),
+        ],
+      },
+    },
+  }).join("\n"),
+  /bounded smoke in exact order/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      connector_windows_portable: {
+        ...goodCiWorkflow.jobs.connector_windows_portable,
+        steps: [
+          ...windowsPortableSteps.slice(0, 2),
+          windowsPortableSteps[3],
+          windowsPortableSteps[2],
+          ...windowsPortableSteps.slice(4),
+        ],
+      },
+    },
+  }).join("\n"),
+  /bounded smoke in exact order/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      connector_windows_portable: {
+        ...goodCiWorkflow.jobs.connector_windows_portable,
+        steps: [...windowsPortableSteps, { uses: `actions/upload-artifact@${"c".repeat(40)}` }],
+      },
+    },
+  }).join("\n"),
+  /only checkout, pinned Node setup/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
       node: {
         ...goodCiWorkflow.jobs.node,
         steps: requiredNodeSteps.filter((step) => step.run !== "cargo fetch --locked"),
@@ -185,6 +302,7 @@ assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
     ...goodCiWorkflow,
     jobs: {
+      ...goodCiWorkflow.jobs,
       node: {
         ...goodCiWorkflow.jobs.node,
         steps: requiredNodeSteps.filter(
@@ -199,6 +317,7 @@ assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
     ...goodCiWorkflow,
     jobs: {
+      ...goodCiWorkflow.jobs,
       node: {
         ...goodCiWorkflow.jobs.node,
         steps: [
@@ -530,4 +649,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (38 cases).");
+console.log("Configuration checker tests passed (41 cases).");

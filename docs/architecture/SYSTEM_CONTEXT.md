@@ -164,13 +164,16 @@ after exact artifact admission and active-record review. ADR 0051 permits select
 resource-bounded fixed-name `PATH` policy or the original explicit path; both retain the same exact
 size/SHA-256 and no-write-sharing handle. ADR 0052 separately permits an explicitly invoked
 `check-codex` to reuse only that selector without a credential, process, account read, persistence,
-or network; its result is not reusable authority. The sync command still creates fresh context only
-after active-record validation and repeated admission, then performs one fixed signed upload.
-macOS/Linux admission, scheduling, and release remain absent. Trusted external TLS/edge routing,
-live secret-manager/edge key injection, working deployment login/certificate, composed live
-end-to-end flow, edge/capacity evidence, a verified Cloudflare/Railway path, released sync
-connector, Jobs scheduler/monitoring, public cache, backup/tombstone/restore replay, and audited
-correction authority shown in the design remain planned.
+or network; its result is not reusable authority. ADR 0053 adds only a secretless no-upload Windows
+release-profile copy/removal smoke for the repository-built connector and creates no runtime
+authority, package, or release path. The sync command still creates fresh context only after
+active-record validation and repeated admission, then performs one fixed signed upload. A hosted
+Windows result, macOS/Linux admission, real package lifecycle, scheduling, and release remain
+absent. Trusted external TLS/edge routing, live secret-manager/edge key injection, working
+deployment login/certificate, composed live end-to-end flow, edge/capacity evidence, a verified
+Cloudflare/Railway path, released sync connector, Jobs scheduler/monitoring, public cache,
+backup/tombstone/restore replay, and audited correction authority shown in the design remain
+planned.
 
 ## Component responsibilities
 
@@ -185,7 +188,7 @@ correction authority shown in the design remain planned.
 | PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                        | Public routing, connector trust, release credentials                                                             | TB-07                  |
 | Rust connector   | Local App Server lifecycle, compatibility adapter, local key custody/removal, canonical signing, safe scheduling                | Website commands, server revoke, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
 | Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                        | Normal user session reuse, shared identities, routine exact-usage access                                         | TB-08                  |
-| CI               | Evaluate untrusted source without secrets; produce read-only evidence                                                           | Deployment, signing, package publication from pull requests                                                      | TB-09                  |
+| CI               | Evaluate untrusted source without secrets; produce read-only and ephemeral no-upload Windows smoke evidence                     | Deployment, signing, package publication from pull requests                                                      | TB-09                  |
 | Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                          | Unreviewed pull-request execution, long-lived broad credentials                                                  | TB-10                  |
 
 The repository-verification Agent Skill is a local read-only TB-09 control. It may select checked-in

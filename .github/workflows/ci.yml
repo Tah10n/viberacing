@@ -84,6 +84,37 @@ jobs:
       - name: Validate the Rust workspace
         run: node scripts/check-rust.mjs
 
+  connector_windows_portable:
+    name: Windows portable connector lifecycle
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - name: Check out without persisted credentials
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Scan public files before the native build
+        run: node scripts/check-public-files.mjs --all
+
+      - name: Install the pinned minimal Rust toolchain
+        run: rustup toolchain install 1.94.0 --profile minimal
+
+      - name: Build the locked release-profile connector
+        run:
+          cargo build --release --locked --target-dir target --package viberacing-connector --bin
+          viberacing-connector
+
+      - name: Exercise bounded portable copy and removal
+        run: node scripts/test-connector-windows-portable.mjs
+
   database:
     name: PostgreSQL capability and invariant gate
     runs-on: ubuntu-24.04

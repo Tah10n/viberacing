@@ -41,25 +41,28 @@ review and exact artifact admission selected through bounded fixed-name `PATH` d
 explicit path, then sends one fixed signed sync without retry or edge credentials. It cannot admit
 another platform/version or create a support claim. A separate explicit `check-codex` command
 performs only that admission without credential-store, process, account, persistence, or network
-access; its result grants no later sync authority. Its database-only Community ingest plus bounded
-ingest- and authentication-retention boundaries have synthetic executable evidence. The kernel has
-raw-envelope, origin-proof, bounded-parser, contract, and strict device-signature evidence; the
-adapter has configuration, fixed-query, role-probe, mapper, and failure evidence with mock pools. A
-local server factory now has loopback framing and injection evidence. A separate local host proves
-exact loopback/Railway listener declarations, composition, bind, partial-startup cleanup, and
-bounded signal shutdown. One opt-in synthetic gate now exercises signed
-accepted/duplicate/replay/revoke HTTP through that emitted host and a disposable least-privileged
-PostgreSQL login with exact stored-state verification. It proves no live HTTP edge, trusted external
-TLS route, deployment credential/TLS connection, real-user result, or capacity. The public
-score/race/status routes have request/response, admission, production-build, and visible
-browser-consumer/fallback evidence, while the Jobs runner has strict command/config/pool/role/result
-evidence plus a synthetic CLI-to-PostgreSQL path with a widened-login denial and exact-state checks.
-The identity slice has exact-origin/body/cookie, state/PKCE, token minimization,
-initial-registration, returning-login, session-derived passkey inventory, non-current-key
-revocation, backup-key addition, exact-handle profile-deletion request, source
-inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile PostgreSQL
-evidence, fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence
-with injected dependencies. Raw source IDs stay server-only; source controls receive only a
+access; its result grants no later sync authority. A separate Windows release-profile smoke copies
+only the repository-built `0.0.0` connector under a bounded temporary root, runs its exact help and
+missing-candidate paths with cleared ambient environment, verifies digest/inventory stability, and
+removes it. The secretless CI declaration uploads no artifact and is not a package or release path.
+Its database-only Community ingest plus bounded ingest- and authentication-retention boundaries have
+synthetic executable evidence. The kernel has raw-envelope, origin-proof, bounded-parser, contract,
+and strict device-signature evidence; the adapter has configuration, fixed-query, role-probe,
+mapper, and failure evidence with mock pools. A local server factory now has loopback framing and
+injection evidence. A separate local host proves exact loopback/Railway listener declarations,
+composition, bind, partial-startup cleanup, and bounded signal shutdown. One opt-in synthetic gate
+now exercises signed accepted/duplicate/replay/revoke HTTP through that emitted host and a
+disposable least-privileged PostgreSQL login with exact stored-state verification. It proves no live
+HTTP edge, trusted external TLS route, deployment credential/TLS connection, real-user result, or
+capacity. The public score/race/status routes have request/response, admission, production-build,
+and visible browser-consumer/fallback evidence, while the Jobs runner has strict
+command/config/pool/role/result evidence plus a synthetic CLI-to-PostgreSQL path with a
+widened-login denial and exact-state checks. The identity slice has exact-origin/body/cookie,
+state/PKCE, token minimization, initial-registration, returning-login, session-derived passkey
+inventory, non-current-key revocation, backup-key addition, exact-handle profile-deletion request,
+source inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile
+PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI
+evidence with injected dependencies. Raw source IDs stay server-only; source controls receive only a
 15-minute encrypted token bound to the active session. None has a production database login, OAuth
 app, authenticator, edge, scheduler, cache/backup purge, tombstone/restore replay, or network
 deployment. Controls below are marked **implemented** only when executable evidence exists in
@@ -163,8 +166,10 @@ pass into trusted-source, hosted, or production evidence.
   omits experimental API capability, rejects unknown fields, and proves a bounded one-shot
   handshake/account/usage child lifecycle with a synthetic executable. Bounded fixed-name Windows
   x86_64 candidate selection, exact artifact admission, and one signed upload path now exist as
-  development code; clean-machine selected-artifact/account privacy evidence, other platforms,
-  release provenance, and operational account/usage remain blocked.
+  development code. A separate portable connector copy/removal smoke exists locally and in a
+  secretless no-upload Windows workflow declaration; its hosted result, real package lifecycle,
+  clean-machine selected-artifact/account privacy evidence, other platforms, release provenance, and
+  operational account/usage remain blocked.
 - Production anti-abuse thresholds and incident evidence remain private. Public code still defines
   safe maximum shapes, state machines, and tests so secrecy is never the only control.
 
@@ -189,8 +194,8 @@ and migration or rollback where applicable.
 | CarRecipe and assets                | A proposal, agent shell, or public row smuggles a URL, command, markup, executable value, copyrighted binary, or nondeterminism | Enum-only schema, checked one-command agent reducer, signed proposal-only device authority, browser-only decision, exact public projection, provenance, snapshots | Local agent/browser/device/DB/public race and Jobs cleanup tested; schedule, release, edge, deployment pending                           |
 | Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                | Invite role/reason/reference implemented; hosted controls planned                                                                        |
 | Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                                          | Immediate hide/revoke, idempotent purge, bounded tombstone, backup expiry, deletion replay after restore                                                          | Request, immediate lock-down, and bounded primary purge tested; cache/tombstone/backup/restore planned                                   |
-| Pull-request CI                     | A fork changes a workflow or package to steal a token or publish an artifact                                                    | Read-only secretless CI, no privileged environment, pinned inputs, no persisted checkout credentials, protected review                                            | Implemented locally; hosted controls pending                                                                                             |
-| Release and dependencies            | A compromised dependency or runner produces an official malicious connector                                                     | Exact locks, quarantine, review, isolated trusted build, signatures, SBOM, provenance, clean-machine verification                                                 | Dependency baseline implemented; release path planned                                                                                    |
+| Pull-request CI                     | A fork changes a workflow or package to steal a token or publish an artifact                                                    | Read-only secretless CI, no privileged environment, pinned inputs, no persisted checkout credentials, fixed no-upload Windows smoke, protected review             | Workflow and policy implemented locally; hosted controls and Windows result pending                                                      |
+| Release and dependencies            | A compromised dependency or runner produces an official malicious connector                                                     | Exact locks, quarantine, review, isolated trusted build, signatures, SBOM, provenance, clean-machine verification                                                 | Dependency baseline and untrusted portable smoke implemented; trusted release path planned                                               |
 | Public repository                   | A maintainer accidentally commits a credential, personal record, local path, or private incident detail                         | Public-file scan, exact staged-blob scan, synthetic-only policy, manual diff and history review                                                                   | Tree, staged-blob, and reachable-history scans implemented locally; hosted scans pending                                                 |
 
 ### High-value attacker stories

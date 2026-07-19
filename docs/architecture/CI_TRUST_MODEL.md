@@ -7,7 +7,8 @@ untrusted input. CI is an isolated evaluator, not a trusted release environment.
 
 The `CI` workflow runs on ephemeral GitHub-hosted runners with only read access to repository
 contents. It receives no production, deployment, signing, release, or application secrets. Checkout
-does not persist credentials, dependency caches are disabled, and every job has a timeout.
+does not persist credentials, dependency caches are disabled, every job has a timeout, and no job
+publishes an artifact.
 
 ## Execution flow
 
@@ -19,9 +20,11 @@ flowchart LR
   DI --> VG["Format, docs, config, policy, and unit gates"]
   VG --> AU["Registry advisory audit"]
   PR --> RT["Pinned Rust toolchain and workspace gate"]
+  PR --> WP["Secretless Windows build; portable copy/remove smoke"]
   PR --> DB["Pinned, portless PostgreSQL; synthetic role and invariant gate"]
   AU --> R["Read-only check result"]
   RT --> R
+  WP --> R
   DB --> R
   R -. "never" .-> DP["Deploy, sign, publish, or release"]
 ```
@@ -45,6 +48,10 @@ does not make the pull request trusted; review and protected-branch policy remai
 - Writable dependency caches, privileged environments, and mutable job/service containers are
   rejected.
 - Package installation uses the frozen lockfile, the official registry, and `--ignore-scripts`.
+- The Windows connector job uses only full-history checkout, pinned Node setup, the public scan,
+  pinned minimal Rust, one locked release-profile build, and the bounded portable copy/removal
+  smoke. Its exact step order is policy-checked; it has no artifact upload, package publication,
+  credential operation, networked connector command, signing step, or release environment.
 - Phase 1 viewport evidence is checked as committed PNG bytes, dimensions, digests, and metadata
   only. Pull-request CI does not discover or launch a workstation browser, reuse a browser profile,
   or regenerate visual evidence. The separate explicit local re-render gate requires the manifest's
@@ -60,10 +67,12 @@ still mandatory.
 
 ## Release separation
 
-This workflow cannot deploy or publish. Future release and deployment workflows will use separate
-events, protected environments, least-privileged short-lived credentials, approval gates, and
-artifact provenance. They must never execute an untrusted pull-request revision with privileged
-credentials.
+This workflow cannot deploy or publish. Its Windows release-profile output is an ephemeral untrusted
+test input and must not leave the runner; a successful portable smoke is not package, signature,
+provenance, clean-machine release, or support evidence. Future release and deployment workflows will
+use separate events, protected environments, least-privileged short-lived credentials, approval
+gates, and artifact provenance. They must never execute an untrusted pull-request revision with
+privileged credentials.
 
 ## Remote settings required before publication
 

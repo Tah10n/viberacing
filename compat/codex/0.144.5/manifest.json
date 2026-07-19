@@ -147,8 +147,8 @@
     "unsafe-integer"
   ],
   "supportBlockers": [
-    "The exact Windows x86_64 release digest is admitted locally, but protected clean-machine build, signature, SBOM, provenance, and release-pipeline evidence remain absent.",
+    "The Windows Codex digest is admitted locally and a no-upload connector copy/removal smoke is declared, but its hosted result, package, signature, SBOM, provenance, and protected release pipeline remain absent.",
     "The one-shot sync path is Windows x86_64 development evidence only; macOS/Linux executable admission and clean-machine account/privacy execution results remain absent.",
-    "No deployed edge/Ingest/database path, real-user end-to-end result, packaged connector, credential rotation/uninstall flow, scheduler, or connector release exists."
+    "No deployed edge/Ingest/database path, real-user end-to-end result, packaged connector, real install/upgrade/uninstall lifecycle, credential rotation or automated server-revoke composition, scheduler, or connector release exists."
   ]
 }

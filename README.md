@@ -325,13 +325,17 @@ choice under a database-backed session attempt window; the local start/poll rout
 Rust client complete that synthetic connection path. The separate candidate-only Windows sync
 command now joins the reviewed local collector, signer, and one bounded upload. A separate
 credential-free `check-codex` command verifies only point-in-time exact candidate admission and
-never launches it, reads an account, or uses the network. No repository test runs a real Codex
-account or deployed service. There is still no deployed Ingest/score/pairing API, supported sync
-connector, trusted edge limit or direct-origin policy, anonymous recovery edge policy, recovery
-notification, cleanup/scoring/deletion scheduler, audited correction flow, cache/backup/tombstone
-purge, restore replay, live OAuth/authenticator/Web/Jobs database integration, deployment Ingest
-credential/TLS integration, cross-platform connector evidence, credential rotation, released binary,
-or deployed database.
+never launches it, reads an account, or uses the network. A separate Windows release-profile smoke
+copies the `0.0.0` connector to an isolated temporary directory, checks the exact command surface
+and generic missing-candidate failure, then proves removal; secretless CI declares the same bounded
+job without uploading its binary. No repository test runs a real Codex account or deployed service,
+and no hosted Windows result is claimed from the local workflow definition. There is still no
+deployed Ingest/score/pairing API, supported sync connector, trusted edge limit or direct-origin
+policy, anonymous recovery edge policy, recovery notification, cleanup/scoring/deletion scheduler,
+audited correction flow, cache/backup/tombstone purge, restore replay, live
+OAuth/authenticator/Web/Jobs database integration, deployment Ingest credential/TLS integration,
+cross-platform connector evidence, installer, upgrade/revoke composition, credential rotation,
+released binary, or deployed database.
 
 ## Run and verify the synthetic prototype
 
@@ -339,12 +343,16 @@ or deployed database.
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm run dev:web
 pnpm run verify
+pnpm run test:connector:windows-portable
 pnpm run test:ingest:postgres-integration
 pnpm run test:jobs:postgres-integration
 ```
 
-The final two commands are opt-in Docker-backed synthetic loopback integrations; CI requires both,
-but they are intentionally outside the deterministic offline `verify` command.
+The connector lifecycle command is Windows x86_64-only. It builds from the locked Cargo graph and
+tests only a temporary portable copy; it does not install, package, sign, publish, run a connector
+network command, or contact a Vibe Racing/Codex service. The final two commands are opt-in
+Docker-backed synthetic loopback integrations; CI requires both, but they are intentionally outside
+the deterministic offline `verify` command.
 
 `pnpm run check:publication` is a separate fail-closed gate. It is expected to fail in the current
 pre-public state and must pass only after real hosted identities and controls are configured.

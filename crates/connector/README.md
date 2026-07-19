@@ -106,6 +106,14 @@ edge origin proof remain separate server-side boundaries. The checked-in
 only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty until
 clean-machine platform, privacy, packaging, provenance, and release evidence all pass.
 
+A separate repository harness can build the Windows x86_64 release profile, copy that `0.0.0` binary
+into one bounded temporary directory, exercise only the exact help surface and a missing candidate
+diagnostic, verify digest stability, and remove the copy. The secretless CI definition contains the
+same no-upload smoke. This is portable copy/removal evidence only: it does not install or package
+the connector, open native credentials, contact a Vibe Racing or Codex service, execute Codex, prove
+a hosted run, or create version, signature, checksum, SBOM, provenance, release, or support
+evidence.
+
 The local command shapes are:
 
 ```text
@@ -136,9 +144,11 @@ Run the focused gate from the repository root:
 ```text
 cargo test --workspace --all-targets --all-features --locked
 node scripts/check-codex-compatibility.mjs
+pnpm run test:connector:windows-portable
 ```
 
-The root `pnpm run verify` additionally checks formatting, Clippy, licenses, public-data safety, and
-the rest of the repository. Rust tests launch only target-built synthetic fixtures and ephemeral
-loopback HTTP; they never execute a local Codex account, open a real user credential, or upload real
-usage.
+The portable lifecycle command is Windows x86_64-only. The root `pnpm run verify` additionally
+checks formatting, Clippy, licenses, public-data safety, and the rest of the repository; on Windows
+x86_64 it also runs that release-profile smoke. Rust tests launch only target-built synthetic
+fixtures and ephemeral loopback HTTP; they never execute a local Codex account, open a real user
+credential, or upload real usage.

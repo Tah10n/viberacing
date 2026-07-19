@@ -276,7 +276,10 @@ exact `0.144.5` size/SHA-256 admission while a no-write-sharing handle remains o
 only a bounded fixed-name `PATH` selection path after active-record review and retains the explicit
 path fallback under identical admission. ADR 0052 adds a distinct explicitly invoked `check-codex`
 command that reuses only that selector without credential-store, process, account, or network
-access; its point-in-time result is never reused by `sync`. The candidate still does not run on all
+access; its point-in-time result is never reused by `sync`. ADR 0053 adds a separate Windows
+release-profile portable copy/removal smoke under a secretless no-upload CI declaration. It tests
+only the repository-built `0.0.0` connector's closed command surface and residue, not Codex
+execution, packaging, installation, release, or support. The candidate still does not run on all
 platforms, create a supported release, or create a matrix row. ADR 0024 adds an inaccessible
 reviewed source/device/time/nonce context whose minimized daily usage produces one exact bounded
 `ConnectorSyncV1` body, SHA-256 digest, and LF-separated device message. ADR 0025 removes public
@@ -310,11 +313,13 @@ record, the existing composer/signer, and one fixed no-proxy/no-redirect upload 
 acknowledgement. ADR 0051 adds resource-bounded discovery through two fixed filenames and at most
 four exact-size hashes, plus the unchanged explicit path fallback. ADR 0052 adds a credential-free
 candidate artifact check that performs only that admission and emits an explicit unsupported result;
-the sync command still re-admits only after active-record validation. These decisions add no retry,
-edge proof, cross-platform evidence, package, release, or support claim. ADR 0041 adds a separate
-exact `forget-local` command that deletes only the native origin/label record without reading it or
-contacting the service. It is idempotent and explicitly does not claim server revoke; rotation and
-revoke composition remain separate gates.
+the sync command still re-admits only after active-record validation. ADR 0053 then builds the
+locked Windows release profile, copies it under a bounded temporary root, checks only help and
+missing-candidate behavior with no ambient credential/network environment, and removes it. These
+decisions add no retry, edge proof, cross-platform evidence, package, installer, release, or support
+claim. ADR 0041 adds a separate exact `forget-local` command that deletes only the native
+origin/label record without reading it or contacting the service. It is idempotent and explicitly
+does not claim server revoke; rotation and revoke composition remain separate gates.
 
 ### Date semantics
 
@@ -461,9 +466,11 @@ table can grow without cleanup.
 
 Steps 3 through 8 now have one local executable path with synthetic/injected HTTP evidence and
 isolated PostgreSQL evidence. The later signed sync also has one separate Windows candidate command
-with synthetic loopback acknowledgement evidence. Step 2, a live authenticator/database/TLS/edge
-path, cross-platform runtime results, release provenance, and real-user end-to-end sync remain
-separate gates.
+with synthetic loopback acknowledgement evidence. A separate portable copy/removal smoke exercises
+only the repository-built Windows connector and declares the same secretless no-upload CI job; it is
+not the GitHub Release download/verification in step 2. A live authenticator/database/TLS/edge path,
+hosted Windows result, real package lifecycle, cross-platform runtime results, release provenance,
+and real-user end-to-end sync remain separate gates.
 
 ### Local connector safety
 
@@ -479,6 +486,10 @@ separate gates.
 - One explicit point-in-time candidate check reuses the identical bounded admission without opening
   credential storage, starting Codex, reading an account, persisting a result, or using a network;
   success explicitly states that no version is supported, and later sync repeats admission.
+- One Windows x86_64 repository smoke copies only the locked release-profile `0.0.0` connector into
+  a bounded temporary directory, checks its exact help and missing-candidate behavior under a
+  cleared environment, verifies digest stability and no residue, and removes the copy. It is not a
+  package, installer, upgrade, revoke, signature, provenance, or support result.
 - The App Server child process has a bounded lifetime, bounded output, separate stderr, sanitized
   environment, and guaranteed cleanup.
 - Scheduled execution uses an argument array, fixed executable path, fixed working directory,
@@ -1050,7 +1061,9 @@ measurements exist.
   monitoring, capacity evidence, packaging, release, and deployment remain gates. A separate
   explicit `check-codex` command now performs only point-in-time exact Windows candidate admission
   without credential-store, process, account, persistence, or network access; broader release
-  diagnostics and clean-machine install/upgrade/revoke/uninstall evidence remain open.
+  diagnostics remain open. A separate locked Windows release-profile portable copy/removal smoke is
+  implemented locally and declared in secretless no-upload CI, but its hosted result and actual
+  package install/upgrade/revoke/uninstall evidence remain open.
 - Add versioned CarRecipe, bounded proposal API, browser preview and approval, theme rendering,
   asset provenance, and snapshot tests.
 - Package the fixed-command end-user connector workflow only after the CLI is stable.

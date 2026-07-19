@@ -118,14 +118,19 @@ headers. A separate fixed `propose-car` command starts no Codex process, accepts
 flags and a bounded seed, signs one fresh proposal-domain request with the same active native key,
 sends once without retry, and validates only a generic acknowledgement. A checked local Agent Skill
 now reduces a styling request to those exact fields, requires explicit shell-safe origin/label
-values, invokes only that command once, and receives no read, approval, or activation authority.
-There is still no supported version, macOS/Linux admission, clean-machine real-account result,
-credential rotation or automatic server-revoke composition, packaging, release, live pairing result,
-deployment Ingest credential/TLS result, edge deployment, or capacity evidence. Do not claim that
-deployed browser/session HTTP authentication, production-ready recovery or remaining unimplemented
-critical-action verification, real-user ingestion, an operational connector, a Jobs scheduler or
-deployed public-race read, season correction, scheduled or broader cleanup, deployment, or a hosted
-security control exists until its implementation and verification are present in the working tree.
+values, invokes only that command once, and receives no read, approval, or activation authority. A
+separate Windows release-profile smoke copies the repository-built `0.0.0` connector into a bounded
+temporary directory, checks only exact help and missing-candidate behavior with a cleared
+environment, verifies digest/inventory stability, and removes the copy. Secretless no-upload CI
+declares the same `windows-2025` job, but no hosted pass is claimed from the local tree. There is
+still no supported version, macOS/Linux admission, clean-machine real-account result, real package
+install/upgrade/uninstall lifecycle, credential rotation or automatic server-revoke composition,
+packaging, release, live pairing result, deployment Ingest credential/TLS result, edge deployment,
+or capacity evidence. Do not claim that deployed browser/session HTTP authentication,
+production-ready recovery or remaining unimplemented critical-action verification, real-user
+ingestion, an operational connector, a Jobs scheduler or deployed public-race read, season
+correction, scheduled or broader cleanup, deployment, or a hosted security control exists until its
+implementation and verification are present in the working tree.
 
 A second checked local Agent Skill now selects only repository-owned read-only verification from the
 real Git scope, distinguishes focused, root, staged, history, synthetic, and live evidence, and has
@@ -194,6 +199,10 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   structure.
 - `pnpm run check:codex-compatibility` validates canonical exact-version manifests, extract/fixture
   digests, fixed stable methods, safe paths, evidence inventory, and candidate/matrix separation.
+- `pnpm run test:connector:windows-portable` builds the locked Windows x86_64 release profile,
+  copies it under one bounded temporary root, checks only the exact CLI surface and
+  missing-candidate failure, revalidates its digest/inventory, and removes the copy. It is not an
+  installer, package, hosted result, signature, provenance, release, or support claim.
 - `pnpm run check:contracts` validates bounded JSON Schema structure, authentication-policy
   inventory, the connector writable-field allowlist, generated TypeScript/OpenAPI drift, and
   version-manifest integrity.

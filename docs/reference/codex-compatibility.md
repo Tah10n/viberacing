@@ -11,10 +11,14 @@ command can select the candidate through bounded fixed-name `PATH` discovery or 
 construct its private launch capability only for the exact artifact size and SHA-256, and perform
 one signed upload. A separate explicit `check-codex` command can perform only that exact candidate
 admission without opening credential storage, starting Codex, reading an account, retaining a
-result, or using the network; success explicitly remains unsupported and later sync re-admits.
-macOS/Linux admission, clean-machine real-account results, packaging, provenance, and a released
-connector do not exist. This empty matrix is fail-closed evidence, not an invitation to run an
-arbitrary local version.
+result, or using the network; success explicitly remains unsupported and later sync re-admits. A
+separate Windows release-profile smoke copies only the repository-built `0.0.0` connector to a
+bounded temporary directory, checks its closed help and missing-candidate behavior, and removes it;
+the secretless CI declaration uploads no binary. macOS/Linux admission, a hosted Windows result,
+clean-machine real-account results, real package lifecycle, provenance, and a released connector do
+not exist. This empty matrix is fail-closed evidence, not permission to claim support.
+
+It is not an invitation to run an arbitrary local version.
 
 | Codex version | Stable schema digest | Compatible connector | Platforms tested | Status and evidence                                 |
 | ------------- | -------------------- | -------------------- | ---------------- | --------------------------------------------------- |
@@ -31,7 +35,8 @@ candidate-only discovery tests use synthetic files and fixed resource bounds; re
 verification does not discover or execute an installed artifact, and this is not protected
 clean-machine release evidence. The credential-free diagnostic has only parser, selector,
 non-reflective-output, and error-mapping evidence; no repository test invokes it against an
-installed artifact.
+installed artifact. The separate portable smoke executes the repository-built connector, not Codex;
+it verifies no official Codex artifact, account, usage response, package, signature, or support row.
 
 The candidate Rust adapter is reachable only after the handshake. It emits the fixed IDs `1` and `2`
 for `account/read` and `account/usage/read`, accepts only ChatGPT mode, discards email, plan, and

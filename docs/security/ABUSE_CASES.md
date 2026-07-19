@@ -257,8 +257,11 @@ material availability cost.
   separate `check-codex` command reuses only exact candidate admission, releases the handle, and has
   no credential-store, child-process, account, persistence, or network capability. Its fixed success
   text explicitly preserves unsupported status, and failure reflects no path or operating-system
-  detail. The operational connector still requires other-platform evidence, complete safe release
-  diagnostics, packaging, provenance, release, and clean-machine privacy evidence.
+  detail. A separate release-profile smoke exclusively copies the repository-built connector to a
+  random bounded temporary root, runs only exact help and missing-candidate behavior with no ambient
+  credential/network environment, rechecks source/copy digests and inventory, and removes the copy.
+  The operational connector still requires other-platform evidence, complete safe release
+  diagnostics, real packaging/lifecycle, provenance, release, and clean-machine privacy evidence.
 - **Detection:** The local candidate check now reports only exact candidate admission success or a
   stable generic failure without uploading content. Release provenance, packaged-binary, broader
   failure-recovery, and real child-cleanup diagnostics remain separate gates.
@@ -591,7 +594,9 @@ material availability cost.
   registry advisory audit reported no known vulnerability at review time. Fastify 5.10.0 is confined
   to one Ingest server file; its 42 added MIT/BSD-3-Clause package records have no lifecycle or
   native build scripts, and import-boundary plus transport regressions prevent an unreviewed second
-  listener.
+  listener. The Windows portable connector job is fixed to public scan, pinned Node/Rust setup, one
+  locked release-profile build, and one no-upload smoke. Configuration mutations reject a missing
+  job, runner drift, a missing smoke, and an added artifact action. No hosted pass is claimed.
 - **Residual risk:** A malicious change can modify its own tests; test success never authorizes
   merge or release by itself.
 
@@ -604,6 +609,10 @@ material availability cost.
 - **Impact:** Code execution on participant computers and theft of local Codex or project data.
 - **Controls:** Protected revision, isolated trusted build, platform and project signatures,
   checksums, SBOM, provenance, trademark clarity, and clean-machine verification instructions.
+- **Current evidence:** The untrusted Windows job may build only ephemeral test input, runs a
+  bounded portable copy/removal smoke, and has no artifact upload or release authority. This is
+  useful lifecycle regression evidence but satisfies none of the protected-build, package,
+  signature, checksum, SBOM, provenance, or hosted release requirements.
 - **Detection:** Signature/provenance validation, reproducibility comparison, release audit, and
   reports of signer or checksum mismatch.
 - **Recovery:** Revoke the artifact/signer, publish an advisory, disable affected connector

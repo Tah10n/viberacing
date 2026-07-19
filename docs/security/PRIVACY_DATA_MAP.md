@@ -306,6 +306,16 @@ logged, cached, exported, persisted, or converted into reusable sync authority. 
 exact candidate version `0.144.5` plus the explicit statement that no version is supported; later
 sync independently re-admits after active-record validation.
 
+ADR 0053 adds no data class, retained field, or sink. The Windows portable smoke transiently reads
+only the fixed repository-built connector path, its bounded size and SHA-256, one random temporary
+path, the exact child status/output, and the temporary directory inventory. Those local
+Security/Operational values are used only for copy integrity, the closed command decision, and
+removal; failure reflects only a fixed stage name. The child receives no profile, credential, proxy,
+repository, Git, Cargo, or CI environment value, and runs no account, usage, pairing, sync,
+proposal, credential-removal, or network operation. The copied binary and random directory are
+removed after each result. No path, digest, child output, artifact, log, metric, cache, credential,
+database field, analytics event, export, or network destination is retained or published.
+
 ADR 0026 adds no data class, persistent field, or sink. The Rust kernel transiently receives the
 already mapped pending private key plus pairing ID/challenge, derives the already mapped public key,
 and returns only the existing ID/signature class. The Web kernel transiently copies the approved

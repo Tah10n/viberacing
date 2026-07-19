@@ -61,6 +61,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0050](0050-bounded-pairing-rate-window-retention-reset.md)     | Bounded pairing rate-window retention reset                         | Accepted; database and local command; schedule pending |
 | [0051](0051-bounded-candidate-executable-discovery.md)          | Bounded candidate executable discovery                              | Accepted; Windows candidate; release/support pending   |
 | [0052](0052-bounded-candidate-artifact-diagnostic.md)           | Bounded candidate artifact diagnostic                               | Accepted; local diagnostic; release/support pending    |
+| [0053](0053-windows-portable-smoke.md)                          | Bounded Windows portable connector lifecycle smoke                  | Accepted; local/CI declaration; hosted/release pending |
 
 ## Lifecycle
 

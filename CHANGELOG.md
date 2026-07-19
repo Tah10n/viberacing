@@ -15,7 +15,7 @@ Versioning where its guarantees are applicable.
 - Structured issue and pull-request templates with public-data safeguards.
 - Community-health and publication-readiness policy checks with regression coverage.
 - Repository-scoped threat model, structured abuse cases, privacy data map, system/data-flow views,
-  fail-closed compatibility policy and matrix, and fifty-two accepted ADRs.
+  fail-closed compatibility policy and matrix, and fifty-three accepted ADRs.
 - Architecture-contract checks for policy sections, privacy classes, abuse-case completeness, ADR
   lifecycle/index integrity, empty Codex support state, and Mermaid fence structure.
 - Candidate Codex evidence checks for canonical manifests/fixtures, exact digests and methods, safe
@@ -237,6 +237,14 @@ Versioning where its guarantees are applicable.
   metadata, or operating-system detail. Its point-in-time result grants no authority and `sync`
   still validates the active record before repeating admission. This adds no support row, package,
   release, clean-machine evidence, or other-platform result.
+- A Windows x86_64 portable connector lifecycle smoke that builds the locked release profile,
+  exclusively copies the `0.0.0` binary into a random bounded temporary root, verifies its exact
+  five-command help surface and generic missing-candidate failure under a cleared environment, then
+  rechecks SHA-256 integrity and removes every copied entry. A new secretless read-only
+  `windows-2025` job runs only the public scan, pinned toolchain, locked build, and smoke; workflow
+  policy mutations reject another runner, missing steps, or an upload action. This creates no
+  package, installer, hosted result, upgrade/revoke evidence, signature, checksum publication, SBOM,
+  provenance, release, or support claim.
 - Bounded pairing start, possession, and dormant activation compositions. The start boundary accepts
   only closed device metadata, creates fresh server IDs, a 32-byte poll token and challenge, a
   60-bit human code, and a nine-minute expiry, then stores separate protected poll/code HMAC

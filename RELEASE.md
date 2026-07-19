@@ -13,6 +13,11 @@ Only protected `main` history can produce a release. Pull-request workflows rema
 never receive signing, deployment, registry, or production credentials. Trusted release and deploy
 workflows must be separate, environment-protected, least-privileged, and manually approvable.
 
+Secretless pull-request CI may compile a release-profile binary only as ephemeral test input. The
+bounded Windows portable copy/removal smoke uploads nothing and does not establish a package,
+installer, immutable version, signature, checksum publication, SBOM, provenance, clean-machine
+release result, or support claim.
+
 ## Required release evidence
 
 - Clean, reviewed source and generated artifacts at an immutable commit.

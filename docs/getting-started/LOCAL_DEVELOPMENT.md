@@ -209,6 +209,19 @@ explicit form uses identical canonical size/SHA-256 admission. The command start
 opens no connector credential or account, persists nothing, and uses no network. Success is only a
 point-in-time candidate result, explicitly does not claim support, and is never reused by `sync`.
 
+On Windows x86_64, the repository can also build and exercise only a disposable portable copy of the
+development connector:
+
+```text
+pnpm run test:connector:windows-portable
+```
+
+This command builds the locked release profile, copies the fixed `0.0.0` binary under the operating
+system temporary directory, runs only exact help and missing-candidate checks with a cleared
+environment, and removes the copy. It is not an installer, package, upgrade, revoke, signature,
+provenance, support, or clean-machine result. The secretless CI workflow declares the same smoke on
+`windows-2025`; the tracked declaration alone is not evidence that a hosted run passed.
+
 After an explicit `connect` has activated the same origin and label, a Windows x86_64 developer may
 manually run one candidate sync:
 

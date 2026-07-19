@@ -254,6 +254,30 @@ if (!nodeOnly) {
     process.execPath,
     [resolve(import.meta.dirname, "check-rust.mjs")],
   ]);
+  if (process.platform === "win32" && process.arch === "x64") {
+    checks.push(
+      [
+        "Windows release-profile connector build",
+        "cargo",
+        [
+          "build",
+          "--release",
+          "--locked",
+          "--target-dir",
+          "target",
+          "--package",
+          "viberacing-connector",
+          "--bin",
+          "viberacing-connector",
+        ],
+      ],
+      [
+        "Windows portable connector lifecycle",
+        process.execPath,
+        [resolve(import.meta.dirname, "test-connector-windows-portable.mjs")],
+      ],
+    );
+  }
 }
 
 for (const [label, command, args, cwd = root] of checks) {

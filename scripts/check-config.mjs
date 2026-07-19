@@ -11,6 +11,12 @@ const exactPackageSelector = /^(?:@[^/\s]+\/[^@\s]+|[^@\s]+)@\d+\.\d+\.\d+(?:-[0
 const exactOverrideSelector =
   /^(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?>(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)$/;
 const hostedRunners = new Set(["ubuntu-24.04", "windows-2025", "macos-15"]);
+const windowsPortableRuns = [
+  "node scripts/check-public-files.mjs --all",
+  "rustup toolchain install 1.94.0 --profile minimal",
+  "cargo build --release --locked --target-dir target --package viberacing-connector --bin viberacing-connector",
+  "node scripts/test-connector-windows-portable.mjs",
+];
 const requiredEnvExampleValues = new Map([
   ["DATABASE_HOST", "127.0.0.1"],
   ["DATABASE_NAME", "viberacing_local"],
@@ -211,6 +217,46 @@ export function validateWorkflow(path, workflow) {
     ) {
       findings.push(
         "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, and the Ingest PostgreSQL integration",
+      );
+    }
+
+    const windowsPortableJob = workflow.jobs?.connector_windows_portable;
+    if (!isObject(windowsPortableJob)) {
+      findings.push("primary CI must define the bounded Windows portable connector job");
+      return findings;
+    }
+    if (windowsPortableJob["runs-on"] !== "windows-2025") {
+      findings.push("Windows portable connector CI must use the exact windows-2025 runner");
+    }
+    if (windowsPortableJob["timeout-minutes"] !== 15) {
+      findings.push("Windows portable connector CI must retain the exact 15-minute timeout");
+    }
+    const windowsPortableSteps = windowsPortableJob.steps;
+    if (!Array.isArray(windowsPortableSteps)) {
+      findings.push("Windows portable connector CI must define its fixed steps");
+      return findings;
+    }
+    const checkoutStep = windowsPortableSteps[0];
+    const setupNodeStep = windowsPortableSteps[1];
+    const exactActionSurface =
+      isObject(checkoutStep) &&
+      typeof checkoutStep.uses === "string" &&
+      checkoutStep.uses.startsWith("actions/checkout@") &&
+      isObject(setupNodeStep) &&
+      typeof setupNodeStep.uses === "string" &&
+      setupNodeStep.uses.startsWith("actions/setup-node@") &&
+      setupNodeStep.with?.["node-version-file"] === ".node-version" &&
+      setupNodeStep.with?.["package-manager-cache"] === false;
+    const runSteps = windowsPortableSteps
+      .slice(2)
+      .map((step) => (isObject(step) && typeof step.run === "string" ? step.run : null));
+    if (
+      windowsPortableSteps.length !== 6 ||
+      !exactActionSurface ||
+      JSON.stringify(runSteps) !== JSON.stringify(windowsPortableRuns)
+    ) {
+      findings.push(
+        "Windows portable connector CI must use only checkout, pinned Node setup, public scan, pinned Rust, locked release build, and bounded smoke in exact order",
       );
     }
   }

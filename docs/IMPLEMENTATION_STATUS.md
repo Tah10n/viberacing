@@ -137,11 +137,16 @@ end-to-end public ranking, or finalization scheduler exists.
   manifests, every root/workspace importer, dependency scopes, direct notices, and external-artifact
   usage are checked with ten black-box cases.
 - Positive and negative workflow-policy tests for action pins, permissions, secrets, shell
-  interpolation, timeouts, complete-history checkout, checkout credentials, and forbidden triggers.
+  interpolation, timeouts, complete-history checkout, checkout credentials, forbidden triggers, and
+  the exact no-upload Windows portable-connector job surface.
 - A secretless, read-only GitHub Actions CI definition and bounded weekly Dependabot configuration.
   The Node job scans the public tree before installing anything, fetches the exact Cargo lock graph
   without builds for offline license metadata, and leaves compilation/tests to the separate Rust
-  job.
+  job. A separate `windows-2025` job scans first, installs pinned minimal Rust, builds the locked
+  connector release profile, and runs only the bounded portable copy/removal smoke. Its policy
+  permits no artifact upload, package publication, credential operation, signing, or release
+  environment. These are checked workflow declarations; no hosted run is claimed from the local
+  tree.
 - A loopback-only disposable PostgreSQL Compose service plus an opt-in portless `tmpfs` integration
   service, both pinned to the same version and index digest.
 - Cross-platform root verification entry point: `pnpm run verify`.
@@ -242,7 +247,7 @@ end-to-end public ranking, or finalization scheduler exists.
   prove enum, shell, invocation-allowlist, retry, authority, output, front matter, UI metadata,
   command, Git-scope, runtime, public-output, and evidence-claim drift fail closed. No released
   connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and fifty-two accepted design decisions covering Community trust,
+- An ADR lifecycle/template and fifty-three accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -261,7 +266,8 @@ end-to-end public ranking, or finalization scheduler exists.
   repository verification orchestration, terminal deletion-job retention, and database audit-event
   retention, pairing approval-provenance retention, revoked-passkey retention cleanup, plus
   revoked-device retention cleanup, bounded pairing-rate-window reset, bounded candidate executable
-  discovery, and the bounded candidate artifact diagnostic.
+  discovery, the bounded candidate artifact diagnostic, and the Windows portable connector lifecycle
+  smoke.
 - Architecture-contract validation and black-box regression cases for missing threat sections,
   duplicate/incomplete abuse cases, privacy-class drift, invalid/orphaned ADRs, unclosed Mermaid
   fences, and accidental compatibility claims.
@@ -857,9 +863,13 @@ end-to-end public ranking, or finalization scheduler exists.
   mapping, default candidate discovery, explicit-path fallback, hostile filename/directory cases,
   every discovery resource bound, and the closed credential-free `check-codex` parser/output/error
   boundary under format/check/Clippy. Tests use an injected store and synthetic files; they do not
-  touch a real OS credential entry or installed Codex binary. The separate candidate sync path is
-  documented above; there is no cross-platform runtime result, real HTTP/Web/database pairing
-  result, key rotation, server-revoke composition, package, signed release, or support claim.
+  touch a real OS credential entry or installed Codex binary. A separate Windows x86_64 black-box
+  smoke builds the locked release profile, exclusively copies the `0.0.0` connector under a random
+  bounded temporary root, compares SHA-256 before and after its exact help and missing-candidate
+  invocations under a cleared environment, proves the fixed inventory, and removes the copy. The
+  separate candidate sync path is documented above; there is no hosted Windows result,
+  cross-platform runtime result, real HTTP/Web/database pairing result, installer, upgrade, key
+  rotation, automated server-revoke composition, package, signed release, or support claim.
 - A private TypeScript Jobs workspace now accepts exactly either a fixed 1000-row authentication/
   audit-event/invite/CarRecipe-proposal/ingest/pairing/session/terminal-deletion-job/aged-
   revoked-passkey/aged-revoked-device cleanup command, a fixed 1000-row pairing approval-provenance
@@ -1075,15 +1085,16 @@ remaining expiring state, the Jobs scheduler and production login/TLS path, audi
 deployed public-score delivery, cache/backup/tombstone purge and restore replay, connector
 macOS/Linux executable admission, clean-machine live Codex/privacy evidence, supported operational
 account/usage integration, deployed signed-upload egress, credential rotation and automated
-server-revoke composition, packaging, release signing, deployment, and public beta operations remain
-proposed. The local Ingest key reader, kernel, adapter, application composer, Fastify server, and
-separate host now prove bounded protected configuration, raw-envelope/JSON/HTTP framing,
-origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query, orchestration,
-no-queue/deadline policy, exact listener modes, bounded startup/shutdown, result/problem
-serialization, and one full synthetic loopback persistence path, but not those deployed edge,
-secret, TLS, capacity, or operational boundaries. Bounded database score and compatible
-active-recipe race projections, versioned response-only schemas, fail-closed server mappers, bounded
-PostgreSQL adapters, and local HTTP routes now exist, including URL/media parsing,
+server-revoke composition, hosted Windows portable-smoke evidence, installer and real
+install/upgrade/uninstall lifecycle, packaging, release signing, deployment, and public beta
+operations remain proposed. The local Ingest key reader, kernel, adapter, application composer,
+Fastify server, and separate host now prove bounded protected configuration, raw-envelope/JSON/HTTP
+framing, origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query,
+orchestration, no-queue/deadline policy, exact listener modes, bounded startup/shutdown,
+result/problem serialization, and one full synthetic loopback persistence path, but not those
+deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database score and
+compatible active-recipe race projections, versioned response-only schemas, fail-closed server
+mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media parsing,
 admission/deadline policy, store translation, and final serialization. A third compatible local
 status projection/contract/route now supplies complete-UTC-day freshness and preference-gated streak
 without changing either older response. Cache/invalidation, deployed device-proposal ingress,
