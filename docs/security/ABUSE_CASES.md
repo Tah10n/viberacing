@@ -732,9 +732,13 @@ material availability cost.
   committed-state drift rollback, exact role denial, batch bounds, idempotency, and no invented
   tombstone; observed races cover purge workers and purge versus authentication cleanup. Revision
   0032 makes the terminal job cleanup-eligible after 30 days; revision 0033 makes the redacted audit
-  reference cleanup-eligible after 180 days. No external audit sink is supplied. Cache invalidation,
-  deployed scheduler/monitoring, keyed tombstone policy, backup expiry, and restore replay remain
-  unimplemented.
+  reference cleanup-eligible after 180 days. The isolated database gate now restores its current
+  synthetic snapshot twice, checks exact data digests/lengths, stable restored schema, all 28
+  forced-RLS tables and selected role grants, then executes all 44 post-restore lock-wait races and
+  the final runtime deny matrix on that state. It contains no pre-deletion backup or keyed marker
+  and therefore does not test resurrection or deletion replay. No external audit sink is supplied.
+  Cache invalidation, deployed scheduler/monitoring, keyed tombstone policy, backup expiry, and
+  stale-backup restore replay remain unimplemented.
 - **Residual risk:** Immutable backup media may retain encrypted data until documented expiry.
 
 ### VR-ABUSE-RESOURCE-EXHAUSTION — Expensive endpoint or state-table growth

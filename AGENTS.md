@@ -368,24 +368,28 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   private reporting controls are configured.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability
   policy. `pnpm run test:database:integration` separately uses an isolated, portless, ephemeral
-  PostgreSQL Compose project to apply the reviewed manifest in order and exercise state constraints,
-  session-bound identity, source/device lifecycle, Community ingest,
+  PostgreSQL Compose project to apply the reviewed manifest in order, create bounded container-only
+  current-snapshot archive generations, twice restore the database, require SHA-256/length-identical
+  canonical data plus a byte-stable second-generation schema, recheck all 28 forced-RLS tables and
+  selected role grants, and then exercise state constraints, session-bound identity, source/device
+  lifecycle, Community ingest,
   ingest/pairing/auth/abandoned-enrollment/CarRecipe-proposal/finalized-source-day retention, and
   scoring/finalization/public-score procedures, observed
   identity/pairing/lifecycle/ingest/cleanup/scoring/finalization lock-wait races, rollback, and
-  every current runtime deny matrix.
+  every current runtime deny matrix. It does not exercise an old backup, deletion-marker replay,
+  external backup storage or encryption, cluster-role recovery, production credentials, or RPO/RTO.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 
 These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`. The Web, Ingest,
 Jobs, and Jobs-scheduler tests use synthetic/injected data and do not prove authentication,
 real-user ingestion, connector, live edge, deployed scheduler cadence, or production behavior. The
-general database integration proves only its isolated SQL boundary; the separate Web and Ingest
-integrations prove synthetic loopback HTTP-to-PostgreSQL paths, the Jobs CLI integration proves one
-synthetic CLI-to-PostgreSQL path, and the scheduler integrations separately prove fixed-clock
-startup, injected repeated-timer, injected-lifecycle, and emitted terminal-marker paths. Rust
-process tests execute only a target-built synthetic child, not a discovered or installed Codex
-binary. Install dependencies with `pnpm install --frozen-lockfile --ignore-scripts`.
+general database integration proves only its isolated SQL/current-snapshot boundary; the separate
+Web and Ingest integrations prove synthetic loopback HTTP-to-PostgreSQL paths, the Jobs CLI
+integration proves one synthetic CLI-to-PostgreSQL path, and the scheduler integrations separately
+prove fixed-clock startup, injected repeated-timer, injected-lifecycle, and emitted terminal-marker
+paths. Rust process tests execute only a target-built synthetic child, not a discovered or installed
+Codex binary. Install dependencies with `pnpm install --frozen-lockfile --ignore-scripts`.
 
 ## Public repository boundary
 

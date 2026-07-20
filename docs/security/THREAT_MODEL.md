@@ -103,6 +103,11 @@ cache/backup purge, tombstone/restore replay, or network deployment. Controls be
 [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
 security claims about the current tree.
 
+The isolated database gate now twice restores its current synthetic snapshot inside one disposable
+container, rechecks exact data digests, forced-RLS state, selected grants, and then all 44
+post-restore lock-wait races plus the final runtime deny matrix. It has no stale backup, deletion
+marker, external storage/encryption, cluster-role recovery, or production authority.
+
 ### Assets and security objectives
 
 | Asset or objective                                | Why it matters                                                               | Required protection                                                                                            |
@@ -227,7 +232,7 @@ and migration or rollback where applicable.
 | Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work                      | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons                                              | SQL, CLI/PostgreSQL, fixed-clock core, injected timer/lifecycle, and real-clock emitted-process terminal-marker evidence tested; deployed cadence, production login, correction planned                                  |
 | CarRecipe and assets                | A proposal, agent shell, or public row smuggles a URL, command, markup, executable value, copyrighted binary, or nondeterminism | Default-off mutation, enum-only schema, checked reducer, proposal-only device authority, browser-only decision, projection, provenance, snapshots                      | Local gate/agent/browser/device/DB/public race, Jobs cleanup, and local catalog tested; deployed cadence, release, edge, deployment pending                                                                              |
 | Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                     | Invite role/reason/reference plus local Ingest, ranking, enrollment, pairing, new-source, and proposal gates implemented; hosted controls planned                                                                        |
-| Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                                          | Immediate hide/revoke, idempotent purge, bounded abandonment cleanup, bounded tombstone, backup expiry, deletion replay after restore                                  | Request/purge/cleanup plus fixed-clock core, injected timer/lifecycle, and real-clock emitted-process terminal-marker evidence tested; deployed cadence/cache/tombstone/backup/restore planned                           |
+| Deletion and retention              | Partial failure or backup restore resurrects a profile or keeps device authority alive                                          | Immediate hide/revoke, idempotent purge, bounded abandonment cleanup, bounded tombstone, backup expiry, deletion replay after restore                                  | Local current-snapshot restore plus request/purge/cleanup and scheduler lifecycle tested; stale-backup replay, cache/tombstone/backup, and deployment planned                                                            |
 | Pull-request CI                     | A fork changes a workflow or package to steal a token or publish an artifact                                                    | Read-only secretless CI, no privileged environment, pinned inputs, no persisted checkout credentials, fixed no-upload Windows smoke, protected review                  | Workflow and policy implemented locally; hosted controls and Windows result pending                                                                                                                                      |
 | Release and dependencies            | A compromised dependency or runner produces an official malicious connector                                                     | Exact locks, quarantine, review, isolated trusted build, signatures, SBOM, provenance, clean-machine verification                                                      | Dependency baseline and untrusted portable smoke implemented; trusted release path planned                                                                                                                               |
 | Public repository                   | A maintainer accidentally commits a credential, personal record, local path, or private incident detail                         | Public-file scan, exact staged-blob scan, synthetic-only policy, manual diff and history review                                                                        | Tree, staged-blob, and reachable-history scans implemented locally; hosted scans pending                                                                                                                                 |
@@ -374,7 +379,9 @@ and migration or rollback where applicable.
    durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
-   procedures replay deletion markers before service resumes.
+   procedures replay deletion markers before service resumes. The local current-snapshot drill
+   proves only exact synthetic state plus RLS/ACL restoration; because it has no pre-deletion backup
+   or keyed marker, this resurrection control remains a staging and deployment gate.
 8. **Malicious contribution.** A pull request modifies tests and workflows to appear safe while
    extracting credentials. PR execution remains disposable and secretless; protected review and
    CODEOWNERS, not self-modifiable tests alone, authorize merge and later release.

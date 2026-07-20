@@ -45,6 +45,16 @@ Versioning where its guarantees are applicable.
   OS-signal delivery, emitted-process graceful exit, wall-clock recurring process callback, deployed
   replica/cadence, production credential/TLS, monitoring, capacity, or real-user retention is
   claimed.
+- A deterministic current-snapshot restore drill in the isolated PostgreSQL integration. It keeps
+  two bounded custom archives only inside the disposable `tmpfs` container, replaces only that run's
+  database twice, and requires the source plus both restored canonical data dumps to retain their
+  exact SHA-256 digest and byte length. The two restored schema generations must also be
+  byte-stable, all 28 private tables must retain forced RLS, and selected Web/Jobs/Admin grants and
+  denials must survive each restore before all 44 lock-wait races, the early-completion overlap, and
+  the full runtime deny matrix execute on the twice-restored state. Dump content is never emitted;
+  bounded buffers are hashed and overwritten, and container removal deletes both archives. This is
+  not stale-backup deletion replay, external backup/encryption, cluster-role recovery, production
+  login/TLS, representative scale, or RPO/RTO evidence.
 - Public-safe repository baseline, implementation plan, security invariants, and contribution
   guidance.
 - Pinned Node, pnpm, Rust, PostgreSQL, dependency, formatting, documentation, and CI foundations.

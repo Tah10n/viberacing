@@ -333,6 +333,18 @@ VALUES
     'dev_AAAAAAAAAAAAAAAAAAAAAA',
     pg_catalog.statement_timestamp() - INTERVAL '7 days',
     pg_catalog.statement_timestamp() - INTERVAL '7 days'
+  ),
+  -- Keep finalized-profile freshness separate from the immediately previous ISO week, whose
+  -- 48-hour grace can still be active on UTC Monday or Tuesday.
+  (
+    'src_CCCCCCCCCCCCCCCCCCCCCC',
+    pg_temp.public_score_date(-8),
+    700,
+    NULL,
+    'syn_EEEEEEEEEEEEEEEEEEEEEE',
+    'dev_CCCCCCCCCCCCCCCCCCCCCC',
+    pg_catalog.statement_timestamp() - INTERVAL '7 days',
+    pg_catalog.statement_timestamp() - INTERVAL '7 days'
   );
 
 INSERT INTO viberacing_private.season_daily_scores (
@@ -357,6 +369,8 @@ FROM (
 ) AS profile_score(profile_id, positive_day_count)
 CROSS JOIN pg_catalog.generate_series(0, 6) AS day_record(day_offset);
 
+-- This open previous week supplies the cross-week streak. It must not be finalized merely to test
+-- terminal metadata because its grace boundary depends on the UTC day of the integration run.
 INSERT INTO viberacing_private.seasons (
   season_start,
   season_end,
@@ -404,11 +418,61 @@ SELECT
   100
 FROM pg_catalog.generate_series(0, 6) AS day_record(day_offset);
 
+-- Two weeks back is always beyond the public grace interval for the shared current-week anchor.
+-- Use a distinct profile so terminal freshness and streak assertions cannot disturb the open-week
+-- cross-week fixture above.
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  season_end,
+  score_version,
+  grace_ends_at
+)
+VALUES (
+  pg_temp.public_score_date(-14),
+  pg_temp.public_score_date(-8),
+  'community_v1',
+  viberacing_private.community_season_grace_ends_at(pg_temp.public_score_date(-14))
+);
+
+INSERT INTO viberacing_private.season_entries (
+  season_start,
+  profile_id,
+  weekly_score,
+  active_days,
+  contributing_source_count,
+  rank_position,
+  display_order,
+  computed_at
+)
+VALUES (
+  pg_temp.public_score_date(-14),
+  '00000000-0000-4000-8000-000000018103',
+  700,
+  7,
+  1,
+  1,
+  1,
+  pg_catalog.statement_timestamp()
+);
+
+INSERT INTO viberacing_private.season_daily_scores (
+  season_start,
+  profile_id,
+  score_date,
+  daily_score
+)
+SELECT
+  pg_temp.public_score_date(-14),
+  '00000000-0000-4000-8000-000000018103',
+  pg_temp.public_score_date(-14 + day_record.day_offset),
+  100
+FROM pg_catalog.generate_series(0, 6) AS day_record(day_offset);
+
 UPDATE viberacing_private.seasons
 SET refreshed_at = pg_catalog.statement_timestamp(),
   state = 'finalized',
   finalized_at = pg_catalog.statement_timestamp()
-WHERE season_start = pg_temp.public_score_date(-7);
+WHERE season_start = pg_temp.public_score_date(-14);
 
 SET LOCAL ROLE viberacing_web;
 
@@ -649,10 +713,10 @@ SELECT pg_temp.assert_true(
       AND freshness_days = 7
       AND streak_days = 7
     FROM viberacing_api.list_public_community_race_status(
-      pg_temp.public_score_date(-7),
+      pg_temp.public_score_date(-14),
       100
     )
-    WHERE handle = 'public_alpha'
+    WHERE handle = 'public_gamma'
   ),
   'a finalized past season anchors streak on Sunday and keeps freshness day-rounded'
 );
@@ -879,10 +943,10 @@ INSERT INTO viberacing_private.seasons (
   grace_ends_at
 )
 VALUES (
-  pg_temp.public_score_date(-14),
-  pg_temp.public_score_date(-8),
+  pg_temp.public_score_date(-21),
+  pg_temp.public_score_date(-15),
   'community_v1',
-  viberacing_private.community_season_grace_ends_at(pg_temp.public_score_date(-14))
+  viberacing_private.community_season_grace_ends_at(pg_temp.public_score_date(-21))
 );
 
 INSERT INTO viberacing_private.season_entries (
@@ -897,7 +961,7 @@ INSERT INTO viberacing_private.season_entries (
 )
 VALUES
   (
-    pg_temp.public_score_date(-14),
+    pg_temp.public_score_date(-21),
     '00000000-0000-4000-8000-000000018102',
     400,
     4,
@@ -907,7 +971,7 @@ VALUES
     pg_catalog.statement_timestamp()
   ),
   (
-    pg_temp.public_score_date(-14),
+    pg_temp.public_score_date(-21),
     '00000000-0000-4000-8000-000000018103',
     300,
     3,
@@ -921,7 +985,7 @@ UPDATE viberacing_private.seasons
 SET refreshed_at = pg_catalog.statement_timestamp(),
   state = 'finalized',
   finalized_at = pg_catalog.statement_timestamp()
-WHERE season_start = pg_temp.public_score_date(-14);
+WHERE season_start = pg_temp.public_score_date(-21);
 
 SET LOCAL ROLE viberacing_web;
 
@@ -929,10 +993,10 @@ SELECT pg_temp.assert_true(
   (
     SELECT pg_catalog.count(*) = 2
       AND pg_catalog.bool_and(season_finalized)
-      AND pg_catalog.bool_and(season_end = pg_temp.public_score_date(-8))
+      AND pg_catalog.bool_and(season_end = pg_temp.public_score_date(-15))
       AND pg_catalog.bool_and(score_version = 'community_v1')
     FROM viberacing_api.list_public_community_scores(
-      pg_temp.public_score_date(-14),
+      pg_temp.public_score_date(-21),
       100
     )
   ),

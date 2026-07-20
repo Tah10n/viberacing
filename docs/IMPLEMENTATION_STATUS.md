@@ -726,6 +726,15 @@ ranking, or deployed Jobs scheduler/cadence exists.
   `SECURITY DEFINER`, role options, passwords, and owner membership. The real PostgreSQL gate runs
   deterministic synthetic fixtures in rollbacks and proves four runtime roles cannot read identity
   or usage tables or create API objects.
+- A deterministic current-snapshot restore drill inside that isolated real PostgreSQL gate. It
+  retains two bounded custom archives only in the disposable container, replaces only the run's
+  database twice, requires the source and both restored canonical data dumps to have the same
+  SHA-256 digest and byte length, requires the first and second restored schema generations to be
+  byte-stable, and rechecks all 28 forced-RLS tables plus selected Web/Jobs/Admin grants and denials
+  after each restore. All 44 lock-wait races, the early-completion overlap, and the full runtime
+  deny matrix then execute on the twice-restored database. Dump buffers are bounded, hashed,
+  overwritten, and never emitted. This proves no old-backup deletion replay, external storage or
+  encryption, cluster-role recovery, production login/TLS, representative scale, or RPO/RTO.
 - A closed procedure-only API boundary: Admin can issue bounded, reasoned invites; Web can
   atomically redeem an invite, create an enrolling profile/session, create and consume exact-session
   challenges, register the initial passkey, rotate/revoke a possessed session, and request immediate

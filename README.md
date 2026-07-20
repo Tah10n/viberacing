@@ -227,6 +227,13 @@ closed acknowledgement. It does not retry an ambiguous POST or send edge origin 
 still no macOS/Linux admission or result, live protected key injection, edge signer/direct-origin
 denial, deployed host/TLS/database login, capacity evidence, credential rotation, automatic
 server-revoke composition, packaging, release, monitoring, supported connector, or deployment.
+
+The isolated PostgreSQL gate now twice restores its current synthetic state from bounded
+container-only archive generations. It requires matching canonical data digests/lengths, a
+byte-stable restored schema, all 28 forced-RLS tables, selected role grants, and then all 44
+post-restore lock-wait races plus the final runtime deny matrix. It is not an old-backup deletion
+replay, external backup, cluster-role recovery, production restore, scale, or RPO/RTO result.
+
 Thirty-nine SQL migrations now add 28 private identity, passkey, restricted-recovery, source,
 device, pairing, audit, deletion, replay, usage, Community scoring, and CarRecipe tables with
 deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift detection, and

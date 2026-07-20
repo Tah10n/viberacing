@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -17,6 +18,13 @@ const composePrefix = [
   "--profile",
   "test",
 ];
+const databaseName = "viberacing_local";
+const databaseUser = "viberacing_local";
+const sourceRestoreArchivePath = "/var/lib/postgresql/viberacing-source-snapshot.dump";
+const normalizedRestoreArchivePath = "/var/lib/postgresql/viberacing-normalized-snapshot.dump";
+const restoreDumpRestrictKey = "restoreTest1";
+const maximumCanonicalDumpBytes = 32 * 1024 * 1024;
+const maximumRestoreArchiveBytes = 64 * 1024 * 1024;
 // Every connection in one run shares this test-only ISO-week anchor, including a run that crosses
 // UTC Monday midnight between fixture setup and a lock-race assertion.
 const now = new Date();
@@ -42,6 +50,12 @@ function docker(args, options = {}) {
     ...options,
   });
   if (result.error) {
+    if (Buffer.isBuffer(result.stdout)) {
+      result.stdout.fill(0);
+    }
+    if (Buffer.isBuffer(result.stderr)) {
+      result.stderr.fill(0);
+    }
     throw new Error(`Docker command could not complete: ${result.error.message}`);
   }
   return result;
@@ -66,14 +80,296 @@ function psqlArguments() {
     "psql",
     "--no-psqlrc",
     "--username",
-    "viberacing_local",
+    databaseUser,
     "--dbname",
-    "viberacing_local",
+    databaseName,
     "--set",
     "ON_ERROR_STOP=1",
     "--set",
     "VERBOSITY=terse",
   ];
+}
+
+function containerCommand(command, args, options = {}) {
+  return docker([...composePrefix, "exec", "-T", "postgres-test", command, ...args], options);
+}
+
+function requireSilentContainerSuccess(result, label) {
+  const stdout = result.stdout;
+  const stderr = result.stderr;
+  const stdoutEmpty = stdout === null || stdout === undefined || stdout.length === 0;
+  const stderrEmpty = stderr === null || stderr === undefined || stderr.length === 0;
+  if (result.status === 0 && stdoutEmpty && stderrEmpty) {
+    return;
+  }
+  if (Buffer.isBuffer(stdout)) {
+    stdout.fill(0);
+  }
+  if (Buffer.isBuffer(stderr)) {
+    stderr.fill(0);
+  }
+  throw new Error(`${label} failed without retaining database tool output`);
+}
+
+function captureCanonicalArchiveDump(archivePath, section, label) {
+  if (section !== "schema" && section !== "data") {
+    throw new Error("canonical database dump section is invalid");
+  }
+  const result = containerCommand(
+    "pg_restore",
+    [
+      "--file=-",
+      `--restrict-key=${restoreDumpRestrictKey}`,
+      ...(section === "schema"
+        ? ["--schema-only", "--create"]
+        : ["--data-only", "--disable-triggers"]),
+      archivePath,
+    ],
+    {
+      encoding: null,
+      maxBuffer: maximumCanonicalDumpBytes,
+      timeout: 120_000,
+    },
+  );
+  const stdout = result.stdout;
+  const stderr = result.stderr;
+  if (
+    result.status !== 0 ||
+    !Buffer.isBuffer(stdout) ||
+    stdout.byteLength === 0 ||
+    stdout.byteLength > maximumCanonicalDumpBytes ||
+    !Buffer.isBuffer(stderr) ||
+    stderr.byteLength !== 0
+  ) {
+    if (Buffer.isBuffer(stdout)) {
+      stdout.fill(0);
+    }
+    if (Buffer.isBuffer(stderr)) {
+      stderr.fill(0);
+    }
+    throw new Error(`${label} failed without retaining database dump output`);
+  }
+  const byteLength = stdout.byteLength;
+  let digest;
+  try {
+    digest = createHash("sha256").update(stdout).digest("hex");
+  } finally {
+    stdout.fill(0);
+    stderr.fill(0);
+  }
+  return Object.freeze({ byteLength, digest });
+}
+
+function readRestoreArchiveSize(archivePath, label) {
+  const result = containerCommand("stat", ["-c", "%s", archivePath], {
+    encoding: "utf8",
+    maxBuffer: 1024,
+    timeout: 10_000,
+  });
+  if (result.status !== 0 || result.stderr.length !== 0) {
+    throw new Error(`${label} size check failed`);
+  }
+  const output = result.stdout.trim();
+  if (!/^[1-9][0-9]*$/.test(output)) {
+    throw new Error(`${label} returned an invalid size`);
+  }
+  const byteLength = Number(output);
+  if (!Number.isSafeInteger(byteLength) || byteLength > maximumRestoreArchiveBytes) {
+    throw new Error(`${label} exceeded its fixed size budget`);
+  }
+  return byteLength;
+}
+
+function createCurrentSnapshotArchive(archivePath, label) {
+  const archive = containerCommand(
+    "pg_dump",
+    [
+      "--no-password",
+      "--username",
+      databaseUser,
+      "--dbname",
+      databaseName,
+      "--format=custom",
+      "--create",
+      "--serializable-deferrable",
+      "--lock-wait-timeout=5s",
+      "--file",
+      archivePath,
+    ],
+    { encoding: null, maxBuffer: 1024 * 1024, timeout: 120_000 },
+  );
+  requireSilentContainerSuccess(archive, `${label} creation`);
+  return readRestoreArchiveSize(archivePath, label);
+}
+
+function replaceDatabaseFromArchive(archivePath, label) {
+  const drop = containerCommand(
+    "dropdb",
+    [
+      "--force",
+      "--no-password",
+      "--username",
+      databaseUser,
+      "--maintenance-db",
+      "postgres",
+      databaseName,
+    ],
+    { encoding: null, maxBuffer: 1024 * 1024, timeout: 30_000 },
+  );
+  requireSilentContainerSuccess(drop, `${label} source database removal`);
+
+  const restore = containerCommand(
+    "pg_restore",
+    [
+      "--no-password",
+      "--username",
+      databaseUser,
+      "--dbname",
+      "postgres",
+      "--create",
+      "--exit-on-error",
+      archivePath,
+    ],
+    { encoding: null, maxBuffer: 1024 * 1024, timeout: 120_000 },
+  );
+  requireSilentContainerSuccess(restore, label);
+}
+
+function assertRestoredSecurityBoundary() {
+  const state = psqlScalar(
+    `SELECT pg_catalog.concat_ws(
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace
+      ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = 'viberacing_private'
+      AND relation.relkind IN ('r', 'p')
+  ),
+  (
+    SELECT pg_catalog.count(*)
+    FROM pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace
+      ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = 'viberacing_private'
+      AND relation.relkind IN ('r', 'p')
+      AND relation.relrowsecurity
+      AND relation.relforcerowsecurity
+  ),
+  pg_catalog.has_function_privilege(
+    'viberacing_web',
+    'viberacing_api.list_public_community_scores(date,integer)',
+    'EXECUTE'
+  ),
+  pg_catalog.has_table_privilege(
+    'viberacing_web',
+    'viberacing_private.profiles',
+    'SELECT'
+  ),
+  pg_catalog.has_function_privilege(
+    'viberacing_jobs',
+    'viberacing_api.cleanup_expired_ingest_state(integer)',
+    'EXECUTE'
+  ),
+  pg_catalog.has_function_privilege(
+    'viberacing_jobs',
+    'viberacing_api.list_public_community_scores(date,integer)',
+    'EXECUTE'
+  ),
+  pg_catalog.has_function_privilege(
+    'viberacing_admin',
+    'viberacing_api.issue_invite(uuid,bytea,timestamptz,uuid,text,text)',
+    'EXECUTE'
+  ),
+  pg_catalog.has_function_privilege(
+    'viberacing_admin',
+    'viberacing_api.enroll_profile(uuid,bytea,uuid,bigint,text,text,text,text,boolean,uuid,bytea,timestamptz,uuid,text)',
+    'EXECUTE'
+  )
+) AS restore_security_state;`,
+    "restored database security boundary",
+  );
+  if (state !== "28:28:t:f:t:f:t:f") {
+    throw new Error(`restored database security boundary drifted (${state})`);
+  }
+}
+
+function exerciseCurrentSnapshotRestore() {
+  const sourceArchiveBytes = createCurrentSnapshotArchive(
+    sourceRestoreArchivePath,
+    "source current-snapshot archive",
+  );
+  const source = Object.freeze({
+    data: captureCanonicalArchiveDump(
+      sourceRestoreArchivePath,
+      "data",
+      "pre-restore canonical data dump",
+    ),
+  });
+  replaceDatabaseFromArchive(sourceRestoreArchivePath, "source current-snapshot restore");
+  assertRestoredSecurityBoundary();
+
+  const normalizedArchiveBytes = createCurrentSnapshotArchive(
+    normalizedRestoreArchivePath,
+    "normalized current-snapshot archive",
+  );
+
+  const firstRestore = Object.freeze({
+    data: captureCanonicalArchiveDump(
+      normalizedRestoreArchivePath,
+      "data",
+      "first restored canonical data dump",
+    ),
+    schema: captureCanonicalArchiveDump(
+      normalizedRestoreArchivePath,
+      "schema",
+      "first restored canonical schema dump",
+    ),
+  });
+  if (
+    firstRestore.data.byteLength !== source.data.byteLength ||
+    firstRestore.data.digest !== source.data.digest
+  ) {
+    throw new Error("first restored data dump drifted from the source snapshot");
+  }
+  replaceDatabaseFromArchive(normalizedRestoreArchivePath, "normalized current-snapshot restore");
+  assertRestoredSecurityBoundary();
+
+  const secondRestoreArchiveBytes = createCurrentSnapshotArchive(
+    sourceRestoreArchivePath,
+    "second-generation current-snapshot archive",
+  );
+
+  const secondRestore = Object.freeze({
+    data: captureCanonicalArchiveDump(
+      sourceRestoreArchivePath,
+      "data",
+      "second restored canonical data dump",
+    ),
+    schema: captureCanonicalArchiveDump(
+      sourceRestoreArchivePath,
+      "schema",
+      "second restored canonical schema dump",
+    ),
+  });
+  if (
+    secondRestore.data.byteLength !== source.data.byteLength ||
+    secondRestore.data.digest !== source.data.digest
+  ) {
+    throw new Error("second restored data dump drifted from the source snapshot");
+  }
+  if (
+    secondRestore.schema.byteLength !== firstRestore.schema.byteLength ||
+    secondRestore.schema.digest !== firstRestore.schema.digest
+  ) {
+    throw new Error("restored schema did not reach a byte-stable canonical form");
+  }
+  return Object.freeze({
+    archiveBytes: Math.max(sourceArchiveBytes, normalizedArchiveBytes, secondRestoreArchiveBytes),
+    dataBytes: secondRestore.data.byteLength,
+    schemaBytes: secondRestore.schema.byteLength,
+  });
 }
 
 function psql(sql) {
@@ -773,6 +1069,8 @@ try {
   for (const { sql, label } of databaseInputs) {
     requireSuccess(psql(sql), label);
   }
+
+  const restoreEvidence = exerciseCurrentSnapshotRestore();
 
   await expectConcurrentSuccesses(
     "bounded authentication cleanup worker race",
@@ -2602,7 +2900,7 @@ SELECT viberacing_api.complete_passkey_login(
   }
 
   console.log(
-    `Database integration passed (28 schema tables, ${observedLockWaitRaceCount} observed lock-wait races, ${observedEarlyCompletionOverlapCount} observed early-completion overlap, 12 relation-denial and 64 cross-capability checks).`,
+    `Database integration passed (28 forced-RLS tables after two current-snapshot restores from archives no larger than ${restoreEvidence.archiveBytes} bytes, SHA-256/length-identical ${restoreEvidence.dataBytes}-byte data dumps, a byte-stable ${restoreEvidence.schemaBytes}-byte canonical restored schema, ${observedLockWaitRaceCount} post-restore lock-wait races, ${observedEarlyCompletionOverlapCount} post-restore early-completion overlap, 12 relation-denial and 64 cross-capability checks).`,
   );
 } finally {
   if (started) {

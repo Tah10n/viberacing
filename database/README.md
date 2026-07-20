@@ -1014,6 +1014,22 @@ the original PostgreSQL entrypoint, and requires verified TLS from two emitted s
 processes. Both suites remove their process/container/network/storage resources in `finally`; Web
 also removes the ephemeral host key directory.
 
+Before its concurrency and deny matrices, the database suite creates custom current-snapshot archive
+generations only inside the disposable container and renders bounded canonical data/schema evidence
+from them into child-process memory. It drops only that run's database, restores it, then archives
+and restores the normalized result once more. Both restored generations must preserve the source
+data digest and byte length; the two restored schema generations must have the same digest and byte
+length; and each generation must retain all 28 forced-RLS tables plus selected least-privilege
+grants and denials. Every later lock-wait race and capability check therefore runs against the
+twice-restored database. The harness hashes and overwrites its bounded dump buffers, emits no dump
+content, and removes both container-only archives with the ephemeral `tmpfs` service.
+
+This is a current-snapshot test of the repository-owned database only. The cluster roles created by
+`bootstrap_roles.sql` deliberately remain a prerequisite outside the dropped database. The drill
+does not exercise an older backup containing a deleted profile, deletion-marker replay, external
+backup storage, encryption or key recovery, cluster-role recreation, production login/TLS,
+representative scale, or RPO/RTO.
+
 ## Rollback and deployment boundary
 
 Migrations are forward-only. A SQL error rolls back its revision atomically. Before any shared
@@ -1021,10 +1037,11 @@ environment exists, a disposable local/test database can be discarded and rebuil
 reaches a shared environment, repair it with a reviewed forward migration; do not add a destructive
 generic down script or edit the recorded file.
 
-Production bootstrap, login creation, role membership, TLS, credentials, backups, restore, retention
-schedules, and migration orchestration remain deployment work. The bootstrap file must run only
-through the protected migration principal. An unexpected pre-existing group-role membership is a
-hard failure, not something the script silently broadens or repairs.
+Production bootstrap, login creation, role membership, TLS, credentials, external backup storage and
+encryption, cluster-role recovery, stale-backup deletion replay, retention schedules, and migration
+orchestration remain deployment work. The bootstrap file must run only through the protected
+migration principal. An unexpected pre-existing group-role membership is a hard failure, not
+something the script silently broadens or repairs.
 
 ## Remaining security work
 
@@ -1060,5 +1077,6 @@ hard failure, not something the script silently broadens or repairs.
   markers outside revisions 0008, 0012, 0013, 0023, 0026, 0030, 0031, 0032, 0033, 0034, 0035, 0036,
   0037, 0038, and 0039 are not cleanup, redaction, or reset evidence.
 - Replace every launch-decision retention item with public policy and purge evidence.
-- Exercise migration overlap, backup restore, deletion replay, role rotation, and service rollback
-  in isolated staging before real-user ingestion.
+- Exercise migration overlap, deployment backup restore, stale-backup deletion replay, role
+  rotation, and service rollback in isolated staging before real-user ingestion. The local
+  current-snapshot drill is prerequisite evidence, not this staging gate.

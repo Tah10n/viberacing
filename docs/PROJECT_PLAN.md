@@ -855,10 +855,15 @@ after 30 days. Every deletion rechecks captured/live inventory under the existin
 Ingest-retention, and profile-purge mutex order. Open, recent, missing-projection, or drifted state
 remains ineligible. The separate default-off local scheduler now includes that exact command in its
 fixed hourly catalog and combined synthetic PostgreSQL integration, but no deployed cadence,
-correction authority, monitoring, capacity, backup purge, or restore evidence exists. Other
-remaining expiry classes, keyed tombstone policy, cache/backup purge, and restore replay still
-require their own reviewed implementation and public policy, and no implemented cleanup, redaction,
-or reset has a deployed cadence.
+correction authority, monitoring, capacity, backup purge, or deployed restore evidence exists. The
+isolated database integration separately performs two container-only restores of the current
+synthetic snapshot, checks exact data digests/lengths, stable restored schema, forced RLS, selected
+role grants, and then all 44 post-restore lock-wait races plus the final runtime deny matrix. It
+does not exercise a stale snapshot that contains a deleted profile, deletion-marker replay, external
+backup storage/encryption, cluster-role recovery, production credentials, representative scale, or
+RPO/RTO. Other remaining expiry classes, keyed tombstone policy, cache/backup purge, and
+stale-backup deletion replay still require their own reviewed implementation and public policy, and
+no implemented cleanup, redaction, or reset has a deployed cadence.
 
 ## Administration and operations
 
@@ -1235,7 +1240,9 @@ external TLS/edge, cache, capacity, or operational gate above.
 
 - Deploy isolated staging and production infrastructure.
 - Verify origin protection, migrations, backup restore, deletion replay, monitoring, incident
-  runbooks, connector signing, SBOM, provenance, and rollback.
+  runbooks, connector signing, SBOM, provenance, and rollback. The local current-snapshot database
+  drill is prerequisite implementation evidence and does not satisfy this stale-backup,
+  deletion-replay, or deployment gate.
 - Complete accessibility, privacy, legal, licensing, name/trademark, external security, and
   documentation review.
 - Start with a small invite cohort and expand only after reviewing reliability, cost, abuse,

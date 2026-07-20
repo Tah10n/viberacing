@@ -72,8 +72,11 @@ pnpm run verify
 ```
 
 The integration runner uses only the isolated `postgres-test` Compose profile. Do not point it at a
-shared database or change it to reuse the normal local volume. Before committing, run the exact
-staged public-data scan and manually inspect every staged SQL/manifest line.
+shared database or change it to reuse the normal local volume. Its current-snapshot drill may drop
+and restore only that uniquely named disposable database; both archives must remain inside its
+ephemeral container, and cluster roles remain an explicit bootstrap prerequisite. Do not present
+this as stale-backup deletion replay or deployment restore evidence. Before committing, run the
+exact staged public-data scan and manually inspect every staged SQL/manifest line.
 
 Document new columns in the privacy map and `database/README.md`, new authority in the capability
 matrix and threat model, and any durable design change in an ADR. Do not claim an application flow
