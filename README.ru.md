@@ -110,9 +110,13 @@ pnpm install --frozen-lockfile --ignore-scripts
 pnpm run dev:web
 ```
 
-Полные синтетические loopback Ingest и Jobs paths отдельно проверяются командами
-`pnpm run test:ingest:postgres-integration` и `pnpm run test:jobs:postgres-integration`. Отдельная
-команда `pnpm run test:jobs-scheduler:postgres-integration` связывает production scheduler core под
+Полные синтетические loopback Web, Ingest и Jobs paths отдельно проверяются командами
+`pnpm run test:web:postgres-integration`, `pnpm run test:ingest:postgres-integration` и
+`pnpm run test:jobs:postgres-integration`. Web-команда запускает три реальные Next development route
+против одноразовой PostgreSQL, отклоняет login с лишней role membership до проекционного чтения и
+подтверждает отсутствие мутаций, проверяет точные public contracts через узкий login и подтверждает
+неизменность всех private tables. Отдельная команда
+`pnpm run test:jobs-scheduler:postgres-integration` связывает production scheduler core под
 фиксированным UTC-временем с реальным Jobs runner и одноразовым PostgreSQL. Команда
 `pnpm run test:jobs-scheduler:timer-postgres-integration` сдвигает injected clock на следующий час,
 вызывает production interval handler дважды во время активного цикла, проверяет точный повторный
@@ -125,7 +129,7 @@ scheduler-задача не стартует, runner/timers/handlers закры�
 `pnpm run test:jobs-scheduler:process-postgres-integration` отдельно запускает built scheduler entry
 point с реальными часами, дожидается terminal marker стартового каталога без process output и
 принудительно завершает только тестовый child. Settlement контроллера до принудительного завершения
-не доказан. Все шесть требуют Docker и не являются deployment evidence.
+не доказан. Все семь требуют Docker и не являются deployment evidence.
 
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.
@@ -254,7 +258,10 @@ PostgreSQL adapter и локальные score/race/status routes проверя
 database role и contract до сериализации. Status route добавляет только complete-UTC-day freshness и
 optional preference-gated streak без exact timestamps или daily rows. Видимая гонка и таблица
 запрашивают у него текущую server-selected неделю без credentials, проверяют только public поля и
-честно сохраняют synthetic fallback при недоступности. Локальные invite/OAuth/
+честно сохраняют synthetic fallback при недоступности. Отдельная synthetic Web integration проводит
+все три реальные Next development GET через disposable least-privileged PostgreSQL login, проверяет
+widened-login denial, точные contracts и полную неизменность private tables; production login/TLS,
+cache, load, monitoring и deployment она не доказывает. Локальные invite/OAuth/
 initial-passkey/returning-login routes теперь существуют; login options хранят profile-free
 challenge только в encrypted cookie, а валидный assertion атомарно создаёт и тут же поглощает
 database challenge при выдаче сессии. Страница аккаунта по той же подтверждённой сессии показывает
@@ -317,23 +324,23 @@ rows для последующего recovery. Revision 0036 отдельно у
 activated pairing rows и связанных revoked device-key rows только после 180 дней от activation и
 revocation, redaction approval provenance и удаления всех authorization challenge, nonce и raw
 snapshot references. Active, recent и referenced device history сохраняется без каскадного удаления
-raw evidence. Локальный one-shot Jobs runner вызывает только одну из четырнадцати fixed
-capabilities: auth/audit/invite/CarRecipe-proposal/ingest/pairing/session cleanup, aged
-revoked-passkey и revoked-device cleanup, pairing approval-provenance redaction, terminal
-deletion-job cleanup, primary profile purge, scoring refresh или finalization через отдельный
-least-privileged config, single-client pool, проверку role/login/search path, fixed deadlines,
-prepared parameters, closed result validation и стабильный non-reflective CLI output. Отдельный
-opt-in Jobs scenario применяет reviewed migrations к одноразовой PostgreSQL, запускает все
-четырнадцать emitted commands через узкий synthetic login, отклоняет login с лишней role membership
-до мутации и проверяет точное состояние перед очисткой. Сама база не проверяет wire signature;
-локальные kernel, adapter и application объединены на synthetic/mock-pool evidence. Отдельный opt-in
-loopback Ingest scenario теперь проводит независимо подписанный HTTP request через emitted host и
-одноразовый least-privileged PostgreSQL login, включая duplicate/replay/revoke и точную проверку
-сохранённого состояния. Deployed HTTP ingest route, operational sync connector, cleanup/scoring
-scheduler, deployment Ingest/Jobs login/TLS integration, monitoring backend, deployed public score
-read, audited correction flow, cache/backup/tombstone purge, restore replay и scheduled deletion
-execution ещё не реализованы, поэтому локальный enrollment ещё не является готовой
-production-авторизацией, а приёма реальных данных пока нет.
+raw evidence. Локальный one-shot Jobs runner вызывает только одну из семнадцати fixed capabilities:
+auth/audit/invite/CarRecipe-proposal/ingest/pairing/session cleanup, aged revoked-passkey и
+revoked-device cleanup, pairing approval-provenance redaction, terminal deletion-job cleanup,
+primary profile purge, scoring refresh или finalization через отдельный least-privileged config,
+single-client pool, проверку role/login/search path, fixed deadlines, prepared parameters, closed
+result validation и стабильный non-reflective CLI output. Отдельный opt-in Jobs scenario применяет
+reviewed migrations к одноразовой PostgreSQL, запускает все семнадцать emitted commands через узкий
+synthetic login, отклоняет login с лишней role membership до мутации и проверяет точное состояние
+перед очисткой. Сама база не проверяет wire signature; локальные kernel, adapter и application
+объединены на synthetic/mock-pool evidence. Отдельный opt-in loopback Ingest scenario теперь
+проводит независимо подписанный HTTP request через emitted host и одноразовый least-privileged
+PostgreSQL login, включая duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed
+HTTP ingest route, operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs
+login/TLS integration, monitoring backend, deployed public score read, audited correction flow,
+cache/backup/tombstone purge, restore replay и scheduled deletion execution ещё не реализованы,
+поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
+данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

@@ -221,6 +221,7 @@ const requiredNodeSteps = [
   { run: "rustup toolchain install 1.94.0 --profile minimal" },
   { run: "cargo fetch --locked" },
   { run: "pnpm run verify:node" },
+  { run: "pnpm run test:web:postgres-integration" },
   { run: "pnpm run test:ingest:postgres-integration" },
 ];
 const windowsPortableSteps = [
@@ -255,6 +256,21 @@ const goodCiWorkflow = {
   },
 };
 assert.deepEqual(validateWorkflow(".github/workflows/ci.yml", goodCiWorkflow), []);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      node: {
+        ...goodCiWorkflow.jobs.node,
+        steps: requiredNodeSteps.filter(
+          (step) => step.run !== "pnpm run test:web:postgres-integration",
+        ),
+      },
+    },
+  }).join("\n"),
+  /Web and Ingest PostgreSQL integrations/,
+);
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
     ...goodCiWorkflow,
@@ -375,7 +391,7 @@ assert.match(
       },
     },
   }).join("\n"),
-  /Ingest PostgreSQL integration/,
+  /Web and Ingest PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {

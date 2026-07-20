@@ -419,6 +419,20 @@ environment sets exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` before their mod
 tracked example stays false, so the visible page keeps its synthetic fallback. This local gate does
 not prove deployed route/cache denial or reload already-running instances.
 
+The separate full public-read path is opt-in and requires Docker:
+
+```text
+pnpm run test:web:postgres-integration
+```
+
+It applies the reviewed migrations to a one-off `postgres-test` container, starts all three real
+Next development GETs on loopback, proves a login with extra membership fails generically without
+private-table mutation, validates exact score/race/status contracts through the narrow synthetic
+login, and repeats the full private-state fingerprint after successful reads. It restores the exact
+pre-run `next-env.d.ts`, bounds and discards server output, and removes both processes plus the
+container, network, and storage. It is not a production Next process, deployment credential/TLS,
+cache, edge, monitoring, load/capacity, real-user, or deployment test.
+
 Connector pairing start/poll and signed-in approval options/verification remain generically
 unavailable unless an ignored local environment sets exact `VIBERACING_PAIRING_ENABLED=true` before
 all four modules load. The tracked example stays false. Disabled POST cancels an available request

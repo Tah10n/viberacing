@@ -86,34 +86,36 @@ invite/OAuth/initial-passkey enrollment pages, HTTP routes, and service methods 
 login and recovery remain available. None of these local gates is a deployed dynamic kill switch.
 The public home also has a local-only EN/RU score simulator that persists or transmits no
 hypothetical input; the stable score and legacy race response contracts remain unchanged. These
-local boundaries still have no deployment proof key or secret-manager binding, externally verified
-TLS/edge route, deployment database credential, capacity evidence, deployment, or real-data result.
-A separate local enrollment slice now implements exact invite parsing, GitHub OAuth state plus PKCE
-with no extra scope, purpose-separated encrypted cookies, atomic profile enrollment, required
-initial WebAuthn registration plus pending-session rotation, returning discoverable-credential
-passkey login, a session-scoped minimal passkey inventory, an account page, same-origin
-public-profile hide/show, a session-derived active-device inventory, immediate source pause,
-passkey-protected paused-source reactivation, immediate owned-device revoke, passkey-protected
-terminal source unlink, backup-passkey addition, revocation of an owned non-current passkey,
-fresh-passkey recovery-code rotation with one-time plaintext display, an exact-handle fresh-passkey
-profile-deletion request, one-time recovery-code replacement-passkey sign-in, and logout through the
-same probed read-write Web/Auth pool. Login options retain their profile-free challenge only in a
-purpose-separated cookie; valid proof atomically creates and consumes its database challenge while
-minting the session. Recovery performs bounded Argon2id verification under a protected pepper,
-creates only a five-minute restricted authority, verifies the replacement WebAuthn ceremony, and
-returns a normal session only after atomic completion. It has an exact-session CarRecipe editor that
-validates one closed version 1 object, stores at most one 24-hour private proposal, previews
-active/pending recipes in all three themes, and activates or rejects only through an encrypted
-session-bound control. A separate bounded device-authenticated route and fixed connector command can
-only create or replace that pending exact recipe for an active source-bound device; they cannot
-read, approve, reject, or activate it. A separate compatible race projection exposes only an active
-profile's current approved recipe; proposal state stays private. A separate bounded Jobs-only
-capability physically removes expired proposals locally, and the default-off scheduler plus the
-combined synthetic PostgreSQL integration exercise it, but no deployed cadence, production login,
-monitoring, or deployment is proven. The enrollment slice has only injected/synthetic evidence and
-no invite issuer UI, working OAuth or database credential, distributed recovery attempt controls,
-deployed cleanup/deletion cadence or notification, cache/backup/tombstone purge, restore replay,
-edge abuse controls, or deployment. Bounded expired
+local boundaries include one opt-in synthetic path through all three real Next development GETs and
+a disposable narrow Web login, with widened-login denial, exact public contracts, and full private-
+table non-mutation. They still have no deployment proof key or secret-manager binding, externally
+verified TLS/edge route, deployment database credential, capacity evidence, deployment, or real-data
+result. A separate local enrollment slice now implements exact invite parsing, GitHub OAuth state
+plus PKCE with no extra scope, purpose-separated encrypted cookies, atomic profile enrollment,
+required initial WebAuthn registration plus pending-session rotation, returning
+discoverable-credential passkey login, a session-scoped minimal passkey inventory, an account page,
+same-origin public-profile hide/show, a session-derived active-device inventory, immediate source
+pause, passkey-protected paused-source reactivation, immediate owned-device revoke,
+passkey-protected terminal source unlink, backup-passkey addition, revocation of an owned
+non-current passkey, fresh-passkey recovery-code rotation with one-time plaintext display, an
+exact-handle fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey
+sign-in, and logout through the same probed read-write Web/Auth pool. Login options retain their
+profile-free challenge only in a purpose-separated cookie; valid proof atomically creates and
+consumes its database challenge while minting the session. Recovery performs bounded Argon2id
+verification under a protected pepper, creates only a five-minute restricted authority, verifies the
+replacement WebAuthn ceremony, and returns a normal session only after atomic completion. It has an
+exact-session CarRecipe editor that validates one closed version 1 object, stores at most one
+24-hour private proposal, previews active/pending recipes in all three themes, and activates or
+rejects only through an encrypted session-bound control. A separate bounded device-authenticated
+route and fixed connector command can only create or replace that pending exact recipe for an active
+source-bound device; they cannot read, approve, reject, or activate it. A separate compatible race
+projection exposes only an active profile's current approved recipe; proposal state stays private. A
+separate bounded Jobs-only capability physically removes expired proposals locally, and the
+default-off scheduler plus the combined synthetic PostgreSQL integration exercise it, but no
+deployed cadence, production login, monitoring, or deployment is proven. The enrollment slice has
+only injected/synthetic evidence and no invite issuer UI, working OAuth or database credential,
+distributed recovery attempt controls, deployed cleanup/deletion cadence or notification,
+cache/backup/tombstone purge, restore replay, edge abuse controls, or deployment. Bounded expired
 authentication/invite/CarRecipe-proposal/session, finalized source/day, aged revoked-passkey, and
 aged minimized revoked-device/pairing cleanup plus primary profile deletion exist locally. Finalized
 source/day cleanup retains a smaller UTC-day/count projection and waits 30 days after terminal
@@ -267,6 +269,12 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   `pnpm run typecheck:web`, `pnpm run test:web:coverage`, and `pnpm run build:web` are focused web
   gates. `pnpm run check:web-build` enforces the production asset/privacy budget after a build;
   focused gates do not replace root verification.
+- `pnpm run test:web:postgres-integration` starts one disposable PostgreSQL container and two
+  sequential real Next development processes on loopback. It proves all three public-ranking GETs
+  fail generically through an extra-membership login without private-table mutation, then validates
+  their exact score/race/status contracts through a narrow `viberacing_web` login and confirms the
+  successful reads remain non-mutating. It proves no production Next runtime, deployment login/TLS,
+  cache, edge policy, monitoring, load/capacity, real-user data, or deployment.
 - `pnpm run check:phase1-visual-baselines` verifies the exact 18-image synthetic viewport matrix,
   dimensions, digests, byte limits, and public PNG policy without launching a browser.
   `pnpm run verify:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium>`
@@ -352,12 +360,12 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
 These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`. The Web, Ingest,
 Jobs, and Jobs-scheduler tests use synthetic/injected data and do not prove authentication,
 real-user ingestion, connector, live edge, deployed scheduler cadence, or production behavior. The
-general database integration proves only its isolated SQL boundary; the separate Ingest integration
-proves one synthetic loopback HTTP-to-PostgreSQL path, the Jobs CLI integration proves one synthetic
-CLI-to-PostgreSQL path, and the scheduler integrations separately prove fixed-clock startup,
-injected repeated-timer, injected-lifecycle, and emitted terminal-marker paths. Rust process tests
-execute only a target-built synthetic child, not a discovered or installed Codex binary. Install
-dependencies with `pnpm install --frozen-lockfile --ignore-scripts`.
+general database integration proves only its isolated SQL boundary; the separate Web and Ingest
+integrations prove synthetic loopback HTTP-to-PostgreSQL paths, the Jobs CLI integration proves one
+synthetic CLI-to-PostgreSQL path, and the scheduler integrations separately prove fixed-clock
+startup, injected repeated-timer, injected-lifecycle, and emitted terminal-marker paths. Rust
+process tests execute only a target-built synthetic child, not a discovered or installed Codex
+binary. Install dependencies with `pnpm install --frozen-lockfile --ignore-scripts`.
 
 ## Public repository boundary
 

@@ -173,7 +173,10 @@ The Node CI job performs the public-file scan first, installs the pinned minimal
 runs `cargo fetch --locked` before deterministic repository verification. Fetch resolves only the
 committed checksums and does not execute crate build scripts. The license checker then runs Cargo
 metadata offline. The separate Rust job compiles and tests the same lock graph; neither job receives
-secrets or release authority.
+secrets or release authority. After deterministic Node verification, the secretless Node job runs
+seven separate synthetic disposable-PostgreSQL integrations, including the real local Web and Ingest
+HTTP boundaries; they use no production credential or artifact upload and are not release or
+deployment evidence.
 
 New crates require the same necessity, maintenance, license, provenance, and advisory review as npm
 packages. Native code, build scripts, proc macros, network clients, cryptography, parsers, and

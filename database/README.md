@@ -20,8 +20,11 @@ Ingest kernel verifies a bounded exact-body origin/device request, and a separat
 adapter maps origin replay plus its output to three capabilities through a probed least-privileged
 pool. Focused tests use mock pools. A separate opt-in integration creates a synthetic dedicated
 Ingest login, passes independently signed loopback HTTP through the emitted host, and verifies the
-exact database result. Local public score/race/status routes and one local one-shot Jobs runner wrap
-narrow capabilities without a working database login. The database-only ingest and Jobs-only
+exact database result. A separate opt-in Web integration starts all three real Next development
+score/race/status GETs against a disposable narrow `viberacing_web` login, rejects a deliberately
+widened login, validates exact public contracts, and fingerprints every private table before and
+after both paths. The local one-shot Jobs runner has its own synthetic disposable-login integration.
+No reusable or deployment login is supplied. The database-only ingest and Jobs-only
 ingest-retention, pairing-retention, authentication-retention, invite-retention, session-retention,
 abandoned-enrollment, CarRecipe-proposal, finalized-source-day, terminal-deletion-job, audit-event,
 revoked-passkey, and revoked-device retention, pairing approval-provenance redaction, primary
@@ -318,6 +321,11 @@ production login, monitoring, deployed cadence, or deployment exists.
   synthetic login with only `viberacing_ingest`, sends signed HTTP through emitted Ingest host code,
   validates accepted/duplicate/replay/revoke responses and exact stored state, then removes the
   container, network, and storage.
+- `scripts/test-web-postgres-integration.mjs` owns another one-off `postgres-test` container with an
+  ephemeral loopback-published port, applies the same reviewed manifest, starts the three real Next
+  development GETs, proves an extra-membership Web login fails generically without mutation,
+  validates exact public contracts through the narrow login, fingerprints every private table, and
+  removes both Web processes plus the container, network, and storage.
 
 ## Capability model
 
@@ -984,14 +992,16 @@ Focused commands:
 pnpm run test:database-check
 pnpm run check:database
 pnpm run test:database:integration
+pnpm run test:web:postgres-integration
 pnpm run test:ingest:postgres-integration
 ```
 
-The first two commands are offline and part of `pnpm run verify`. Both integration commands require
-Docker and never connect to the normal `postgres` volume. The database suite starts only the
+The first two commands are offline and part of `pnpm run verify`. All three integration commands
+require Docker and never connect to the normal `postgres` volume. The database suite starts only the
 portless `postgres-test` service in a uniquely named Compose project with ephemeral `tmpfs` storage.
-The Ingest suite starts a separate one-off `postgres-test` container with only an ephemeral
-loopback-published port, then removes that container, network, and storage in `finally`.
+The Web and Ingest suites each start a separate one-off `postgres-test` container with only an
+ephemeral loopback-published port, then remove their process/container/network/storage resources in
+`finally`.
 
 ## Rollback and deployment boundary
 

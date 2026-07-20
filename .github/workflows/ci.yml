@@ -57,6 +57,9 @@ jobs:
       - name: Run deterministic Node and repository gates
         run: pnpm run verify:node
 
+      - name: Exercise the local Web HTTP-to-PostgreSQL path
+        run: pnpm run test:web:postgres-integration
+
       - name: Exercise the local Ingest HTTP-to-PostgreSQL path
         run: pnpm run test:ingest:postgres-integration
 

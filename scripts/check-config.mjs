@@ -210,6 +210,7 @@ export function validateWorkflow(path, workflow) {
       "rustup toolchain install 1.94.0 --profile minimal",
       "cargo fetch --locked",
       "pnpm run verify:node",
+      "pnpm run test:web:postgres-integration",
       "pnpm run test:ingest:postgres-integration",
     ];
     const positions = requiredRuns.map((command) =>
@@ -217,13 +218,13 @@ export function validateWorkflow(path, workflow) {
     );
     if (positions.some((position) => position === -1)) {
       findings.push(
-        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run verify:node, and run the Ingest PostgreSQL integration using exact commands",
+        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run verify:node, and run the Web and Ingest PostgreSQL integrations using exact commands",
       );
     } else if (
       !positions.every((position, index) => index === 0 || position > positions[index - 1])
     ) {
       findings.push(
-        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, and the Ingest PostgreSQL integration",
+        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, and the Web and Ingest PostgreSQL integrations",
       );
     }
 

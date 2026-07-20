@@ -177,6 +177,7 @@ pnpm run typecheck:web
 pnpm run test:web:coverage
 pnpm run build:web
 pnpm run check:web-build
+pnpm run test:web:postgres-integration
 pnpm run check:phase1-visual-baselines
 pnpm run verify:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium>
 ```
@@ -189,6 +190,13 @@ executable and does not replace native screen-reader, cross-browser, field Core 
 staging SLO evidence. Regeneration uses the root `capture:phase1-visual-baselines` command only
 against the same explicit loopback production build; it does not replace manual image review or
 cross-browser release evidence.
+
+The PostgreSQL integration command is an opt-in Docker-backed synthetic gate, not part of root
+`verify`. It starts the real Next development HTTP boundary only on loopback, creates disposable
+narrow and deliberately widened Web logins, checks all three public score/race/status contracts and
+full private-table non-mutation, and removes every process/container/network/storage resource. It
+does not prove a production Next process, deployment credential/TLS, cache, edge policy, monitoring,
+load/capacity, real-user data, or deployment.
 
 Run `pnpm run verify` before completion. The focused commands do not replace repository history,
 public-data, license, documentation, or staged-snapshot gates.

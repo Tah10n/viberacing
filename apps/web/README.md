@@ -12,11 +12,12 @@ handle is carried only in a canonical `/?profile=handle#profile` URL. Invalid or
 are ignored, a missing current top-32 row is not replaced, and a public signed-in profile links to
 its current summary. An ordinary same-tab selection updates the summary and URL without a reload;
 modified clicks retain native link behavior. The fallback demo garage and default product shell
-remain synthetic and unauthenticated, with no working database login, real user data, or deployment.
-The same page exposes an EN/RU score simulator backed by the production scoring functions. It
-accepts only one canonical non-negative safe integer and one to seven active days, keeps both values
-only in component memory, and never fetches, logs, persists, submits, or preloads account or race
-data. A separate local Phase 2 slice now implements invite redemption, GitHub OAuth state plus PKCE,
+remain synthetic and unauthenticated, with no deployment database login, real user data, or
+deployment. A separate opt-in integration uses only disposable synthetic Web logins and data. The
+same page exposes an EN/RU score simulator backed by the production scoring functions. It accepts
+only one canonical non-negative safe integer and one to seven active days, keeps both values only in
+component memory, and never fetches, logs, persists, submits, or preloads account or race data. A
+separate local Phase 2 slice now implements invite redemption, GitHub OAuth state plus PKCE,
 encrypted HttpOnly continuations, initial passkey registration, returning login, a session-scoped
 passkey inventory, an account page, public-profile hide/show, source
 inventory/pause/reactivation/unlink, active-device revoke, fresh backup-passkey addition, revocation
@@ -57,7 +58,10 @@ false and the browser keeps the labeled synthetic fallback. The optional server-
 deployment; it is public configuration, not a secret. Focused checks are available as
 `pnpm run lint:web`, `pnpm run typecheck:web`, `pnpm run test:web:coverage`, and
 `pnpm run build:web`; `pnpm run check:web-build` validates the built artifact, and the root
-`pnpm run verify` runs all of them.
+`pnpm run verify` runs all of them. `pnpm run test:web:postgres-integration` is the separate
+Docker-backed synthetic boundary: it launches the real Next development routes on loopback against a
+disposable PostgreSQL database, verifies widened-login denial and exact narrow-login contracts, and
+confirms that neither path mutates private tables. It is intentionally outside root `verify`.
 
 The separate stored viewport evidence covers every combination of three reviewed breakpoints, both
 locales, and all three themes with motion disabled. `pnpm run check:phase1-visual-baselines`
@@ -185,6 +189,16 @@ daily score history enter no route. There is no deployment, live login/certifica
 cache, edge rate policy, or query-plan/load result. The local home page loads the status client only
 after hydration and keeps its synthetic fallback on every failure.
 
+The opt-in `test:web:postgres-integration` gate applies the reviewed migration ledger to a one-off
+PostgreSQL container, seeds only obviously synthetic profiles, and invokes all three real Next
+development GETs. A login with one extra role membership must receive only the closed generic 503 on
+every route while a full private-table fingerprint remains unchanged. A narrow login with only
+`viberacing_web` must return the exact score, race, and status contracts, omit hidden/private state,
+and leave the same fingerprint unchanged. The harness bounds and discards server output, then
+removes both processes, the container, network, and storage. This proves no production Next process,
+deployment credential/TLS, cache, edge rate policy, monitoring, query-plan/load result, real-user
+data, or deployment.
+
 ## Score database adapter configuration
 
 Only an exactly enabled route can reach the adapter. It is then constructed lazily when a client
@@ -194,7 +208,8 @@ the page does not connect. The module-load gate is not a deployed or dynamic swi
 old-instance drain, route/cache denial, or operator audit. The adapter uses only the
 `VIBERACING_WEB_DATABASE_*` settings documented in `.env.example`. The separate `DATABASE_*` values
 belong to the disposable compose bootstrap owner and are forbidden for Web reads. The repository
-intentionally creates no working login.
+creates no reusable working login; the integration harness creates only per-run synthetic logins in
+its disposable database.
 
 Local adapter work requires an infrastructure-provisioned login whose only group membership is
 `viberacing_web`. Cleartext requires explicit `NODE_ENV=development` or `test` plus loopback. Every
@@ -554,6 +569,12 @@ animated and no-context paths. Visible-score tests cover current-week selection,
 credential-free status fetch, closed public response mapping, freshness/streak presentation and
 bounds, legacy-component rejection, success/fallback states, and empty standings. Preference tests
 cover valid settings, reduced motion, pausing, invalid/blocked storage, and cleanup.
+
+The separate Docker-backed Web integration exercises the otherwise-thin framework entrypoints with
+real loopback HTTP and the actual `pg` adapter. It validates all three closed contracts, the
+every-checkout least-privilege probe, widened-login fail-closed behavior, hidden/private omission,
+and complete private-table non-mutation. It remains synthetic local evidence, not live or deployed
+behavior.
 
 Coverage thresholds apply to product components and libraries. Small framework entrypoints are
 excluded from unit coverage and exercised by `next build`; counting imports as unit coverage would

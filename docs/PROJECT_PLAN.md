@@ -649,8 +649,12 @@ only its weekly score, rank, active-day/source counts, rounded freshness, option
 visual-marker car; the UI explicitly keeps daily detail, device counts, exact usage/receipt time,
 proposal state, and identifiers out of that surface. The exact public handle can be shared as
 `/?profile=handle#profile`; invalid or duplicate values are ignored, and a missing top-32 row is
-never substituted with another profile. Authenticated daily/profile detail, cache, live database
-integration, query-plan/load evidence, monitoring, and deployment remain separate gates.
+never substituted with another profile. A separate opt-in synthetic gate now carries all three real
+Next development GETs through a disposable narrow Web login and reviewed PostgreSQL migrations,
+proves an extra-membership login fails without private-table mutation, validates the exact public
+contracts, and proves successful reads remain non-mutating. Authenticated daily/profile detail,
+cache, deployment login/TLS, query-plan/load evidence, monitoring, real-user data, and deployment
+remain separate gates.
 
 ### ConnectorSyncV1
 
@@ -1152,6 +1156,10 @@ measurements exist.
 - Implement isolated ingest procedure, strict contracts, scoring, season job, and public disclaimer.
 - Gate: one real user can pair and sync without any prompt, email, credential, or repository data
   leaving the machine.
+
+The public-read side now has a synthetic real-HTTP/disposable-PostgreSQL path for score, race, and
+status plus widened-login denial. It does not satisfy the one-real-user, pairing/sync, deployment
+credential/TLS, cache, capacity, or operational gate above.
 
 ### Phase 3 — Multi-source and lifecycle hardening
 

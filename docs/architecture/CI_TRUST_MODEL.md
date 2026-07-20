@@ -18,7 +18,8 @@ flowchart LR
   CO --> PS["Public-file and reachable-history scan"]
   PS --> DI["Frozen dependency install; lifecycle scripts disabled"]
   DI --> VG["Format, docs, config, policy, and unit gates"]
-  VG --> AU["Registry advisory audit"]
+  VG --> PG["Seven synthetic disposable PostgreSQL integrations"]
+  PG --> AU["Registry advisory audit"]
   PR --> RT["Pinned Rust toolchain and workspace gate"]
   PR --> WP["Secretless Windows build; portable copy/remove smoke"]
   PR --> DB["Pinned, portless PostgreSQL; synthetic role and invariant gate"]
@@ -60,6 +61,13 @@ does not make the pull request trusted; review and protected-branch policy remai
 - The database job uses the same digest-pinned PostgreSQL artifact as local development, no host
   port or persistent volume, a uniquely named Compose project, synthetic credentials/data, and
   cleanup in `finally`. It remains untrusted-code execution on a disposable, secretless runner.
+- After deterministic Node verification, the same secretless disposable Node runner executes seven
+  separate synthetic PostgreSQL integrations: Web HTTP, Ingest HTTP, Jobs CLI, and four distinct
+  Jobs-scheduler modes. Each owns a unique Compose project/container, uses only synthetic
+  credentials/data, exposes at most an ephemeral loopback port, retains no volume or artifact, and
+  cleans up in `finally`. The Web harness additionally bounds and discards its Next development
+  process output and removes both sequential children. These are untrusted pull-request checks, not
+  hosted-service, production credential, deployment, or release evidence.
 
 The repository tests these rules with positive and negative fixtures. The tests are defense in
 depth; a malicious pull request can edit its own tests, so protected review of workflow changes is

@@ -71,25 +71,27 @@ synthetic gate now exercises signed accepted/duplicate/replay/revoke HTTP throug
 and a disposable least-privileged PostgreSQL login with exact stored-state verification. It proves
 no live HTTP edge, trusted external TLS route, deployment credential/TLS connection, real-user
 result, or capacity. The public score/race/status routes have a shared exact default-off module gate
-plus request/response, admission, production-build, and visible browser-consumer/fallback evidence,
-while the Jobs runner has strict command/config/pool/role/result evidence plus a synthetic
-CLI-to-PostgreSQL path with a widened-login denial and exact-state checks. The scheduler separately
-has exact-default-off, fixed-UTC-catalog, sequential/no-overlap, in-memory-slot,
-failure-containment, bounded-shutdown, fixed-clock production-core/PostgreSQL composition, and
-injected repeated-timer and process-lifecycle settlement evidence plus one real-clock emitted
-startup path through its terminal catalog marker, exact stored state, and forced test-child
-termination. Host-timer delivery, OS-signal delivery, a wall-clock recurring process callback, and
-emitted-child controller settlement before forced termination are not proven. The identity slice has
-exact-origin/body/cookie, state/PKCE, token minimization, initial-registration, returning-login,
-session-derived passkey inventory, non-current-key revocation, backup-key addition, exact-handle
-profile-deletion request, source inventory/pause/reactivation/unlink, and active-device revoke
-including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth
-`form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay server-only;
-source controls receive only a 15-minute encrypted token bound to the active session. Pairing
-start/poll and approval options/verification have a second exact Web module gate with factory-level
-negative evidence. None has a production database login, OAuth app, authenticator, edge, deployed
-scheduler/cadence, cache/backup purge, tombstone/restore replay, or network deployment. Controls
-below are marked **implemented** only when executable evidence exists in
+plus request/response, admission, production-build, visible browser-consumer/fallback, and full
+synthetic Next-development-HTTP-to-disposable-PostgreSQL evidence with widened-login denial and
+private-table non-mutation. That path proves no reusable/deployment login, TLS, cache, load,
+monitoring, or production process. The Jobs runner has strict command/config/pool/role/result
+evidence plus a synthetic CLI-to-PostgreSQL path with a widened-login denial and exact-state checks.
+The scheduler separately has exact-default-off, fixed-UTC-catalog, sequential/no-overlap,
+in-memory-slot, failure-containment, bounded-shutdown, fixed-clock production-core/PostgreSQL
+composition, and injected repeated-timer and process-lifecycle settlement evidence plus one
+real-clock emitted startup path through its terminal catalog marker, exact stored state, and forced
+test-child termination. Host-timer delivery, OS-signal delivery, a wall-clock recurring process
+callback, and emitted-child controller settlement before forced termination are not proven. The
+identity slice has exact-origin/body/cookie, state/PKCE, token minimization, initial-registration,
+returning-login, session-derived passkey inventory, non-current-key revocation, backup-key addition,
+exact-handle profile-deletion request, source inventory/pause/reactivation/unlink, and active-device
+revoke including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only
+OAuth `form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay
+server-only; source controls receive only a 15-minute encrypted token bound to the active session.
+Pairing start/poll and approval options/verification have a second exact Web module gate with
+factory-level negative evidence. None has a production database login, OAuth app, authenticator,
+edge, deployed scheduler/cadence, cache/backup purge, tombstone/restore replay, or network
+deployment. Controls below are marked **implemented** only when executable evidence exists in
 [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
 security claims about the current tree.
 
@@ -207,7 +209,7 @@ and migration or rollback where applicable.
 
 | Surface                             | Realistic attacker story                                                                                                        | Required mitigations                                                                                                                                                   | Current status                                                                                                                                                                                 |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public race and profiles            | A visitor injects markup through a handle/car, enumerates profiles, or infers exact work hours                                  | Default-off route gate, plain-text bounded names, enum-only recipe, CSP, public-field allowlist, immediate hide, rounded freshness, optional streak, rate/cache policy | Route gate, score/race/status routes, fallback, recipe/status rejection, and hide/publish tested; cache, rate, load, live integration planned                                                  |
+| Public race and profiles            | A visitor injects markup through a handle/car, enumerates profiles, or infers exact work hours                                  | Default-off route gate, plain-text bounded names, enum-only recipe, CSP, public-field allowlist, immediate hide, rounded freshness, optional streak, rate/cache policy | Route gate, three real local HTTP/PostgreSQL reads, fallback, recipe/status rejection, and hide/publish tested; cache, rate, load, deployed integration planned                                |
 | OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up                          | Default-off enrollment, OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke               | Enrollment gate, login/passkey controls, recovery, cleanup, and local scheduler tested; edge, deployed cadence, notification, live planned                                                     |
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration                                | Default-off pairing gate, short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, pause, unlink, revoke, and rotate                    | Route gate, DB, approval, lifecycle, exact HTTP/native client, proof/activation tested; live/cross-platform/edge evidence planned                                                              |
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command                           | Bounded fixed-name selection, exact artifact admission, retained handle, bounded child/output/time, sanitized environment, no shell, strict adapter                    | Protocol, supervisor, synthetic Windows discovery/admission and redacted process-free preview tested; other platforms, support planned                                                         |
@@ -310,7 +312,10 @@ and migration or rollback where applicable.
    no-store/same-origin posture, four-request no-queue admission, adapter deadline policy, generic
    error translation, and bounded response matrix. The visible home race requests the
    server-selected current week without credentials, accepts only closed public fields, and keeps a
-   labeled synthetic fallback on error. ADR 0056 now keeps all three public GET compositions
+   labeled synthetic fallback on error. A separate opt-in gate starts the three real Next
+   development GETs against disposable PostgreSQL, proves a deliberately widened login returns only
+   generic problems without changing any private table, and validates exact non-mutating public
+   responses through the narrow Web login. ADR 0056 now keeps all three public GET compositions
    default-off before query/header parsing, admission acquisition, or storage work unless their
    module-load value is exact true; it proves no deployed or dynamic route/cache denial. A local
    one-shot Jobs runner now validates one of seventeen fixed

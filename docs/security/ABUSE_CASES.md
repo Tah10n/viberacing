@@ -465,12 +465,17 @@ material availability cost.
   any invalid or unavailable response. ADR 0056 keeps all three GET compositions unavailable unless
   exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` was resolved at module load; every alternate state
   returns generic 503 before query/header parsing, admission acquisition, or store work. It does not
-  prove deployed route/cache denial, worker reload, or scraping protection after enablement.
-  Revision 0015 lets only the exact possessed session read and set the closed `public`/`hidden`
-  state; the same-origin form carries no profile ID and repeated state is a no-op. Because the
-  public read already filters current state, a committed hide removes the profile from the next
-  no-store response while source sync may continue. Deployment, enumeration controls, cache purge,
-  edge rate policy, query-plan/load evidence, and monitoring are still unimplemented.
+  prove deployed route/cache denial, worker reload, or scraping protection after enablement. A
+  separate opt-in synthetic gate exercises all three real Next development GETs against disposable
+  PostgreSQL. The extra-membership login receives only generic 503 responses and cannot change any
+  private table; the narrow login returns exact contract-validated active-only rows while another
+  full private-state fingerprint remains unchanged. This is not deployment login/TLS, cache, edge,
+  load, monitoring, real-user, or production-process evidence. Revision 0015 lets only the exact
+  possessed session read and set the closed `public`/`hidden` state; the same-origin form carries no
+  profile ID and repeated state is a no-op. Because the public read already filters current state, a
+  committed hide removes the profile from the next no-store response while source sync may continue.
+  Deployment, enumeration controls, cache purge, edge rate policy, query-plan/load evidence, and
+  monitoring are still unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 
@@ -611,16 +616,17 @@ material availability cost.
   values, accepts only closed rows, and destroys failed clients without forwarding
   driver/configuration details.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
-  migration workflow. Web deployment login/TLS integration has not been exercised. Jobs now has a
-  disposable synthetic least-privileged login, all seventeen emitted commands, a widened-login
-  denial, and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged
-  loopback login and full HTTP integration result. Jobs additionally has fixed-clock production
-  scheduler-core composition, injected repeated-timer and process-lifecycle settlement with its
-  disposable PostgreSQL boundary, and one real-clock emitted startup path through its terminal
-  catalog marker. None proves host-timer delivery, OS-signal delivery, emitted-child controller
-  settlement before forced termination, a deployment credential/certificate, external TLS/edge
-  route, external audit sink, capacity, a wall-clock recurring process callback, deployed scheduler
-  operation, monitoring, or real-user behavior.
+  migration workflow. Web now has a disposable synthetic narrow login plus widened-login denial
+  through all three real Next development GETs, but deployment login/TLS has not been exercised.
+  Jobs now has a disposable synthetic least-privileged login, all seventeen emitted commands, a
+  widened-login denial, and exact-state evidence; Ingest similarly has a disposable synthetic
+  least-privileged loopback login and full HTTP integration result. Jobs additionally has
+  fixed-clock production scheduler-core composition, injected repeated-timer and process-lifecycle
+  settlement with its disposable PostgreSQL boundary, and one real-clock emitted startup path
+  through its terminal catalog marker. None proves host-timer delivery, OS-signal delivery,
+  emitted-child controller settlement before forced termination, a deployment
+  credential/certificate, external TLS/edge route, external audit sink, capacity, a wall-clock
+  recurring process callback, deployed scheduler operation, monitoring, or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 

@@ -8,7 +8,8 @@ one full synthetic loopback signed-request path through a disposable least-privi
 contains library-only connector protocol/parser boundaries, a synthetic one-shot process supervisor,
 an exact-body composer, isolated pairing/request signers, a pure Web pairing verifier, local pairing
 applications/routes and bounded native-store connect/local-removal commands, a visible public-race
-consumer with a synthetic fallback, a browser-memory-only hypothetical score simulator, and bounded
+consumer with a synthetic fallback, a separate synthetic all-three-route Next-development-to-
+disposable-PostgreSQL gate, a browser-memory-only hypothetical score simulator, and bounded
 database/local Jobs ingest, pairing, authentication, CarRecipe-proposal, eligible
 expired-invite/session, abandoned-enrollment, aged unreferenced revoked-passkey, and aged minimized
 revoked-device cleanup plus primary profile purge. A local invite/OAuth/initial-passkey enrollment,
@@ -31,6 +32,13 @@ Vibe Racing applies these rules:
 - avoid advertising, behavioral analytics, tracking pixels, and remote web fonts in the MVP;
 - make pause, hide, device revoke, source unlink, and deletion understandable and testable;
 - use synthetic data in development, CI, documentation, screenshots, and support reproduction.
+
+The Web integration adds no product collection or retention class. Its obviously synthetic login
+passwords and private fixture identifiers exist only in the checked harness, disposable database,
+and child-process memory; the container, processes, network, and storage are removed after each run.
+Bounded Next output is checked for those values and discarded, HTTP bodies are checked against the
+closed public allowlists, and no result is cached or written as an artifact. Deployment Web
+credentials remain protected environment/secret-manager data under the table below.
 
 ## Classification
 

@@ -4,37 +4,38 @@
 
 This is the planned runtime architecture. The current repository contains a tested SQL persistence
 foundation, default-off local public score/race/status routes with a visible validated status
-consumer and synthetic fallback, four default-off local pairing routes plus an independent
-default-off new-source control and an independent default-off CarRecipe proposal mutation control,
-default-off local invite/OAuth/initial-passkey enrollment, returning-passkey login, exact-session
-public-profile visibility, and private passkey-inventory/add/revocation slices with encrypted
-cookies, local recovery-code replacement-passkey sign-in, and logout, one local one-shot Jobs runner
-including bounded primary profile deletion, a separate default-off local UTC scheduler around only
-that runner, and local Ingest request-verification, PostgreSQL-adapter, application-composition, and
-bounded HTTP-server boundaries, plus library-only connector initialization and candidate `0.144.5`
-account/usage parser boundaries, a synthetic one-shot supervisor, an exact-body sync composer,
-isolated pairing/sync/proposal signers, pure Web pairing and proposal verifiers, one local connector
-command with native OS key custody and exact start/poll routes, one credential-free Windows
-candidate diagnostic that performs only exact artifact admission, one Windows sync command with
-bounded fixed-name discovery plus an explicit path fallback that admits, collects, signs, and
-uploads once, and one fixed proposal-only command that starts no Codex process. It also has one
-opt-in synthetic loopback integration through the emitted Ingest host and a disposable
-least-privileged PostgreSQL login, plus a separate synthetic integration through all seventeen
-emitted Jobs commands and a disposable narrow login with a widened-login negative control. A second
-Jobs mode composes the production scheduler core under fixed injected UTC time with the real runner
-and disposable database. A third advances the fixed clock by one hour, invokes the production
-interval handler twice during the active real-runner cycle, proves the exact recurring catalog plus
-overlap and same-slot suppression, and verifies the rearmed terminal reset. A fourth composes the
-production process lifecycle, injects its first handler during the penultimate real database job,
-and proves graceful settlement plus no later scheduler job. A fifth starts the built scheduler entry
-point under the real host clock, reaches the terminal startup-catalog marker without process output,
-forcibly ends only its persistent test child, and then verifies exact state. It still has no
-host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
-termination, wall-clock recurring process callback, deployed application service, durable Jobs
-cadence, operational sync connector, supported Codex version, distributed recovery perimeter,
-Cloudflare/Railway deployment, live OAuth or production database login, or production database.
-Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams
-describe required runtime boundaries, not deployed evidence.
+consumer and synthetic fallback plus one disposable synthetic Next-development-to-PostgreSQL path
+with widened-login denial and full private-table non-mutation, four default-off local pairing routes
+plus an independent default-off new-source control and an independent default-off CarRecipe proposal
+mutation control, default-off local invite/OAuth/initial-passkey enrollment, returning-passkey
+login, exact-session public-profile visibility, and private passkey-inventory/add/revocation slices
+with encrypted cookies, local recovery-code replacement-passkey sign-in, and logout, one local
+one-shot Jobs runner including bounded primary profile deletion, a separate default-off local UTC
+scheduler around only that runner, and local Ingest request-verification, PostgreSQL-adapter,
+application-composition, and bounded HTTP-server boundaries, plus library-only connector
+initialization and candidate `0.144.5` account/usage parser boundaries, a synthetic one-shot
+supervisor, an exact-body sync composer, isolated pairing/sync/proposal signers, pure Web pairing
+and proposal verifiers, one local connector command with native OS key custody and exact start/poll
+routes, one credential-free Windows candidate diagnostic that performs only exact artifact
+admission, one Windows sync command with bounded fixed-name discovery plus an explicit path fallback
+that admits, collects, signs, and uploads once, and one fixed proposal-only command that starts no
+Codex process. It also has one opt-in synthetic loopback integration through the emitted Ingest host
+and a disposable least-privileged PostgreSQL login, plus a separate synthetic integration through
+all seventeen emitted Jobs commands and a disposable narrow login with a widened-login negative
+control. A second Jobs mode composes the production scheduler core under fixed injected UTC time
+with the real runner and disposable database. A third advances the fixed clock by one hour, invokes
+the production interval handler twice during the active real-runner cycle, proves the exact
+recurring catalog plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A
+fourth composes the production process lifecycle, injects its first handler during the penultimate
+real database job, and proves graceful settlement plus no later scheduler job. A fifth starts the
+built scheduler entry point under the real host clock, reaches the terminal startup-catalog marker
+without process output, forcibly ends only its persistent test child, and then verifies exact state.
+It still has no host-timer delivery, OS-signal delivery, emitted-child controller settlement before
+forced termination, wall-clock recurring process callback, deployed application service, durable
+Jobs cadence, operational sync connector, supported Codex version, distributed recovery perimeter,
+Cloudflare/Railway deployment, live OAuth, a reusable/production database login, or production
+database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
+diagrams describe required runtime boundaries, not deployed evidence.
 
 ## System context
 

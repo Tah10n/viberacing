@@ -126,59 +126,63 @@ procedure calls. A server-only HTTP problem factory now generates opaque 128-bit
 closed, contract-validated, no-store error responses. A shared server-only boundary now enforces the
 exact score/race/status paths, query, GET-only method and `Accept` policy, four-request no-queue
 admission, adapter deadline policy, store-error translation, final response validation, and
-no-store/no-CORS headers. It is locally implemented, not deployed: there is still no cache,
-deployment login/TLS integration, edge rate policy, query-plan/load evidence, or live API, and this
-is not evidence that real Codex data can be submitted. A separate pure local Ingest kernel now
-copies and bounds the exact Community sync body and raw headers, verifies a replay-consumed
-body-bound origin HMAC before JSON or device work, rejects duplicate headers/decoded keys and
-excessive parser structure, validates the generated sync contract, and strictly verifies the
-source-bound Ed25519 request. It returns only a frozen database-ready allowlist. A separate bounded
-Ingest PostgreSQL adapter now revalidates that allowlist, copies all binary/array parameters,
-verifies the exact least-privileged Ingest login/role boundary on every checkout, and exposes only
-fixed origin-replay, device-lookup, and submission calls through a four-client deadline-bound pool.
-Its transport config is loopback-only without TLS and otherwise certificate-verified; focused tests
-use mock pools. A protected local factory now requires one exact primary origin HMAC pair and
-permits one complete distinct rotation pair through namespaced configuration; it returns only the
-verifier and the repository contains no real key or secret-manager binding. A forced-RLS PostgreSQL
-replay table now stores only the origin key ID, domain-separated nonce digest, and millisecond
-expiry; one Ingest procedure atomically consumes it, and an observed race proves one winner for an
-expired tuple. A transport-free application boundary now generates one server request ID, composes
-that replay/device/submission adapter with the exact verifier, waits for database settlement, and
-returns only a validated acknowledgement or generic problem decision. A separate local Fastify
-server factory now preserves the exact raw body/header evidence for `POST /v1/community/sync`,
-rejects proxy and inbound request ID trust, admits four application calls without a queue, applies
-bounded parser/header/connection and 5/33/34-second request/handler/connection deadlines, and
-serializes only revalidated `no-store` success/problem contracts. A separate local host now binds
-that exact factory under loopback-only development/test or explicit Railway-edge production
-configuration only after exact `VIBERACING_INGEST_ENABLED=true`. Missing or alternate state fails
-before any protected application configuration, pool, server, or listener; the tracked example is
-explicitly disabled. The host closes partial startup and handles SIGINT/SIGTERM under a fixed
-deadline. Its 130 tests and built entrypoint check are synthetic/local evidence, not proof of a
-deployed restart/route denial, Railway, external TLS, edge routing, live credentials, or deployment.
-A separate opt-in integration builds the emitted host, creates a synthetic dedicated Ingest login in
-disposable PostgreSQL, sends independently signed loopback HTTP requests, and proves accepted,
-duplicate, persistent origin-replay, revoked-device, response-header, and exact persistence behavior
-before cleanup. It supplies no deployment credential, certificate, protected secret delivery,
-external edge route, real-user data, or capacity result. A library-only Rust foundation now emits
-the fixed stable App Server handshake and, only after it succeeds, a candidate `0.144.5`
-account/usage sequence. It confirms ChatGPT mode while discarding email/plan/summary values and
-returns at most 31 sorted strict date/token entries. Exact release metadata, schema digests, minimal
-extracts, fixtures, and a drift/matrix checker are committed. The Windows x86_64 development command
-admits only the exact official artifact size and SHA-256; repository tests still do not execute a
-user's Codex account and the compatibility matrix remains empty. A one-shot supervisor proves the
-exact sequence against a target-built synthetic child with a fixed `app-server` argument, local
-pipes, cleared ambient environment, bounded stdout/stderr/time, late-output rejection, and
-reap-before-success cleanup. Its reviewed-launch capability remains private to exact admission. A
-second inaccessible reviewed context now lets a candidate composer consume the minimized entries
-into the exact `ConnectorSyncV1` JSON, SHA-256 digest, unpadded base64url nonce, and LF-separated
-device-signature message. An isolated one-use signer consumes that closed material with an equally
-inaccessible device-bound Ed25519 key capability and returns only the same body plus five exact
-header values. A shared synthetic vector proves the exact public key/signature across Rust and the
-production Ingest verifier. A separate inaccessible pending-key/challenge signer and server-only Web
-verifier now agree on the exact domain-separated pairing-possession message and a second shared
-vector. A transport-free Web/Auth start boundary generates fresh server identifiers, poll token,
-challenge, 60-bit human code, separate keyed verifiers, and a nine-minute pending transaction from
-closed device metadata. A second activation boundary uses the same separately probed read-write pool
+no-store/no-CORS headers. A separate opt-in synthetic integration starts those three real Next
+development-route modules against one disposable PostgreSQL database, proves a deliberately widened
+login returns only generic problems without mutating any private table, validates exact successful
+contracts through a narrow `viberacing_web` login, and confirms the successful reads are also
+non-mutating. It is local evidence, not deployment: there is still no cache, deployment login/TLS
+integration, edge rate policy, query-plan/load evidence, or live API, and this is not evidence that
+real Codex data can be submitted. A separate pure local Ingest kernel now copies and bounds the
+exact Community sync body and raw headers, verifies a replay-consumed body-bound origin HMAC before
+JSON or device work, rejects duplicate headers/decoded keys and excessive parser structure,
+validates the generated sync contract, and strictly verifies the source-bound Ed25519 request. It
+returns only a frozen database-ready allowlist. A separate bounded Ingest PostgreSQL adapter now
+revalidates that allowlist, copies all binary/array parameters, verifies the exact least-privileged
+Ingest login/role boundary on every checkout, and exposes only fixed origin-replay, device-lookup,
+and submission calls through a four-client deadline-bound pool. Its transport config is
+loopback-only without TLS and otherwise certificate-verified; focused tests use mock pools. A
+protected local factory now requires one exact primary origin HMAC pair and permits one complete
+distinct rotation pair through namespaced configuration; it returns only the verifier and the
+repository contains no real key or secret-manager binding. A forced-RLS PostgreSQL replay table now
+stores only the origin key ID, domain-separated nonce digest, and millisecond expiry; one Ingest
+procedure atomically consumes it, and an observed race proves one winner for an expired tuple. A
+transport-free application boundary now generates one server request ID, composes that
+replay/device/submission adapter with the exact verifier, waits for database settlement, and returns
+only a validated acknowledgement or generic problem decision. A separate local Fastify server
+factory now preserves the exact raw body/header evidence for `POST /v1/community/sync`, rejects
+proxy and inbound request ID trust, admits four application calls without a queue, applies bounded
+parser/header/connection and 5/33/34-second request/handler/connection deadlines, and serializes
+only revalidated `no-store` success/problem contracts. A separate local host now binds that exact
+factory under loopback-only development/test or explicit Railway-edge production configuration only
+after exact `VIBERACING_INGEST_ENABLED=true`. Missing or alternate state fails before any protected
+application configuration, pool, server, or listener; the tracked example is explicitly disabled.
+The host closes partial startup and handles SIGINT/SIGTERM under a fixed deadline. Its 130 tests and
+built entrypoint check are synthetic/local evidence, not proof of a deployed restart/route denial,
+Railway, external TLS, edge routing, live credentials, or deployment. A separate opt-in integration
+builds the emitted host, creates a synthetic dedicated Ingest login in disposable PostgreSQL, sends
+independently signed loopback HTTP requests, and proves accepted, duplicate, persistent
+origin-replay, revoked-device, response-header, and exact persistence behavior before cleanup. It
+supplies no deployment credential, certificate, protected secret delivery, external edge route,
+real-user data, or capacity result. A library-only Rust foundation now emits the fixed stable App
+Server handshake and, only after it succeeds, a candidate `0.144.5` account/usage sequence. It
+confirms ChatGPT mode while discarding email/plan/summary values and returns at most 31 sorted
+strict date/token entries. Exact release metadata, schema digests, minimal extracts, fixtures, and a
+drift/matrix checker are committed. The Windows x86_64 development command admits only the exact
+official artifact size and SHA-256; repository tests still do not execute a user's Codex account and
+the compatibility matrix remains empty. A one-shot supervisor proves the exact sequence against a
+target-built synthetic child with a fixed `app-server` argument, local pipes, cleared ambient
+environment, bounded stdout/stderr/time, late-output rejection, and reap-before-success cleanup. Its
+reviewed-launch capability remains private to exact admission. A second inaccessible reviewed
+context now lets a candidate composer consume the minimized entries into the exact `ConnectorSyncV1`
+JSON, SHA-256 digest, unpadded base64url nonce, and LF-separated device-signature message. An
+isolated one-use signer consumes that closed material with an equally inaccessible device-bound
+Ed25519 key capability and returns only the same body plus five exact header values. A shared
+synthetic vector proves the exact public key/signature across Rust and the production Ingest
+verifier. A separate inaccessible pending-key/challenge signer and server-only Web verifier now
+agree on the exact domain-separated pairing-possession message and a second shared vector. A
+transport-free Web/Auth start boundary generates fresh server identifiers, poll token, challenge,
+60-bit human code, separate keyed verifiers, and a nine-minute pending transaction from closed
+device metadata. A second activation boundary uses the same separately probed read-write pool
 wrapper for protected poll lookup, verifies the exact approved proof, and alone invokes atomic
 activation with server-owned identifiers behind four-call admission and a settlement floor. A local
 signed-in `/connect` page now accepts one pending human code, shows the exact bounded device
@@ -398,6 +402,7 @@ pnpm install --frozen-lockfile --ignore-scripts
 pnpm run dev:web
 pnpm run verify
 pnpm run test:connector:windows-portable
+pnpm run test:web:postgres-integration
 pnpm run test:ingest:postgres-integration
 pnpm run test:jobs:postgres-integration
 pnpm run test:jobs-scheduler:postgres-integration
@@ -408,23 +413,24 @@ pnpm run test:jobs-scheduler:process-postgres-integration
 
 The connector lifecycle command is Windows x86_64-only. It builds from the locked Cargo graph and
 tests only a temporary portable copy; it does not install, package, sign, publish, run a connector
-network command, or contact a Vibe Racing/Codex service. The final six commands are opt-in
-Docker-backed synthetic integrations; secretless CI declares all six, and they are intentionally
+network command, or contact a Vibe Racing/Codex service. The final seven commands are opt-in
+Docker-backed synthetic integrations; secretless CI declares all seven, and they are intentionally
 outside the deterministic offline `verify` command. The current tree has local results only; no
-hosted pass is claimed for any Jobs-scheduler integration.
+hosted pass is claimed for any Docker-backed integration.
 
 `pnpm run check:publication` is a separate fail-closed gate. It is expected to fail in the current
 pre-public state and must pass only after real hosted identities and controls are configured.
 
 The development site binds to loopback and remains fully usable with committed synthetic fixtures.
 If a separately provisioned Web login is configured, the browser can display the current public
-Community projection through the same-origin route; the repository still supplies no working
-credential or real user data. See [local development](docs/getting-started/LOCAL_DEVELOPMENT.md)
-before running it or starting PostgreSQL. The local enrollment application fails closed without an
-externally issued invite, dedicated GitHub OAuth app, fresh cookie key, exact RP/origin settings,
-and separately provisioned read-write Web login. No live OAuth, authenticator, or database-login
-result is claimed; real-user ingestion does not exist, and database evidence uses only rolled-back
-or disposable synthetic fixtures.
+Community projection through the same-origin route; the repository supplies only disposable,
+obviously synthetic integration credentials and no reusable deployment credential or real user data.
+See [local development](docs/getting-started/LOCAL_DEVELOPMENT.md) before running it or starting
+PostgreSQL. The local enrollment application fails closed without an externally issued invite,
+dedicated GitHub OAuth app, fresh cookie key, exact RP/origin settings, and separately provisioned
+read-write Web login. No live OAuth, authenticator, or database-login result is claimed; real-user
+ingestion does not exist, and database evidence uses only rolled-back or disposable synthetic
+fixtures.
 
 ## Important warning
 
