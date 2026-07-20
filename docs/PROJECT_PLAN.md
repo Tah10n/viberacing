@@ -652,9 +652,10 @@ proposal state, and identifiers out of that surface. The exact public handle can
 never substituted with another profile. A separate opt-in synthetic gate now carries all three real
 Next development GETs through a disposable narrow Web login and reviewed PostgreSQL migrations,
 proves an extra-membership login fails without private-table mutation, validates the exact public
-contracts, and proves successful reads remain non-mutating. Authenticated daily/profile detail,
-cache, deployment login/TLS, query-plan/load evidence, monitoring, real-user data, and deployment
-remain separate gates.
+contracts, proves successful reads remain non-mutating, and exercises the exact four-request
+no-queue boundary with four observed database waits plus a rejected fifth request. Authenticated
+daily/profile detail, cache, deployment login/TLS, query-plan/load/capacity evidence, monitoring,
+real-user data, and deployment remain separate gates.
 
 ### ConnectorSyncV1
 
@@ -1187,8 +1188,10 @@ credential/TLS, cache, capacity, or operational gate above.
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
   new-source creation while preserving active existing-source pairing, plus CarRecipe proposal
   creation/approval while preserving private read/reject, plus invite/OAuth/initial-passkey
-  enrollment while preserving returning login/recovery. Deployed operation remains open for every
-  local gate.
+  enrollment while preserving returning login/recovery. The public score route also has one
+  controlled real-HTTP/PostgreSQL four-slot admission scenario with a fifth request rejected before
+  a fifth public-score query. Distributed limits, representative load/capacity, and deployed
+  operation remain open.
 - Gate: source multiplication cannot exceed the profile score cap or gain privilege, and
   infrastructure limits survive load tests.
 

@@ -61,7 +61,9 @@ deployment; it is public configuration, not a secret. Focused checks are availab
 `pnpm run verify` runs all of them. `pnpm run test:web:postgres-integration` is the separate
 Docker-backed synthetic boundary: it launches the real Next development routes on loopback against a
 disposable PostgreSQL database, verifies widened-login denial and exact narrow-login contracts, and
-confirms that neither path mutates private tables. It is intentionally outside root `verify`.
+confirms that neither path mutates private tables. It also proves the four-request no-queue
+admission boundary with four observed blocked score queries and a rejected fifth request. It is
+intentionally outside root `verify`.
 
 The separate stored viewport evidence covers every combination of three reviewed breakpoints, both
 locales, and all three themes with motion disabled. `pnpm run check:phase1-visual-baselines`
@@ -194,9 +196,12 @@ PostgreSQL container, seeds only obviously synthetic profiles, and invokes all t
 development GETs. A login with one extra role membership must receive only the closed generic 503 on
 every route while a full private-table fingerprint remains unchanged. A narrow login with only
 `viberacing_web` must return the exact score, race, and status contracts, omit hidden/private state,
-and leave the same fingerprint unchanged. The harness bounds and discards server output, then
-removes both processes, the container, network, and storage. This proves no production Next process,
-deployment credential/TLS, cache, edge rate policy, monitoring, query-plan/load result, real-user
+and leave the same fingerprint unchanged. The harness then uses a bounded owner-held table lock to
+hold exactly four observed score queries, requires a fifth request to return the same closed generic
+503 without adding a fifth public-score query, rolls back the lock, and validates the first four
+exact 200 responses. It bounds and discards both Next and blocker output, then removes all three
+processes, the container, network, and storage. This proves no production Next process, deployment
+credential/TLS, cache, edge rate policy, monitoring, query-plan/load/capacity result, real-user
 data, or deployment.
 
 ## Score database adapter configuration
@@ -573,8 +578,8 @@ cover valid settings, reduced motion, pausing, invalid/blocked storage, and clea
 The separate Docker-backed Web integration exercises the otherwise-thin framework entrypoints with
 real loopback HTTP and the actual `pg` adapter. It validates all three closed contracts, the
 every-checkout least-privilege probe, widened-login fail-closed behavior, hidden/private omission,
-and complete private-table non-mutation. It remains synthetic local evidence, not live or deployed
-behavior.
+four-slot no-queue admission, and complete private-table non-mutation. It remains synthetic local
+evidence, not live, capacity, or deployed behavior.
 
 Coverage thresholds apply to product components and libraries. Small framework entrypoints are
 excluded from unit coverage and exercised by `next build`; counting imports as unit coverage would

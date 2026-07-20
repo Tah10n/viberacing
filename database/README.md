@@ -23,17 +23,19 @@ Ingest login, passes independently signed loopback HTTP through the emitted host
 exact database result. A separate opt-in Web integration starts all three real Next development
 score/race/status GETs against a disposable narrow `viberacing_web` login, rejects a deliberately
 widened login, validates exact public contracts, and fingerprints every private table before and
-after both paths. The local one-shot Jobs runner has its own synthetic disposable-login integration.
-No reusable or deployment login is supplied. The database-only ingest and Jobs-only
-ingest-retention, pairing-retention, authentication-retention, invite-retention, session-retention,
-abandoned-enrollment, CarRecipe-proposal, finalized-source-day, terminal-deletion-job, audit-event,
-revoked-passkey, and revoked-device retention, pairing approval-provenance redaction, primary
-profile deletion, open-season scoring, and terminal finalization procedures plus Web-only public
-score/race/status and exact-session private score projections are implemented; deployed HTTP ingest,
-host-timer delivery, a wall-clock recurring scheduler process callback, OS-delivered
-process-signal/PostgreSQL behavior, deployed cadence, audited corrections, cache/backup/tombstone
-purge, and restore replay are not. Fixed-clock startup, injected repeated timer, injected lifecycle,
-and real-clock emitted-process terminal-marker evidence are proven synthetically.
+after both paths. It also holds exactly four score queries behind an owner lock, rejects a fifth
+without a fifth public-score query, and validates all four after rollback. The local one-shot Jobs
+runner has its own synthetic disposable-login integration. No reusable or deployment login is
+supplied. The database-only ingest and Jobs-only ingest-retention, pairing-retention,
+authentication-retention, invite-retention, session-retention, abandoned-enrollment,
+CarRecipe-proposal, finalized-source-day, terminal-deletion-job, audit-event, revoked-passkey, and
+revoked-device retention, pairing approval-provenance redaction, primary profile deletion,
+open-season scoring, and terminal finalization procedures plus Web-only public score/race/status and
+exact-session private score projections are implemented; deployed HTTP ingest, host-timer delivery,
+a wall-clock recurring scheduler process callback, OS-delivered process-signal/PostgreSQL behavior,
+deployed cadence, audited corrections, cache/backup/tombstone purge, and restore replay are not.
+Fixed-clock startup, injected repeated timer, injected lifecycle, and real-clock emitted-process
+terminal-marker evidence are proven synthetically.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -324,8 +326,9 @@ production login, monitoring, deployed cadence, or deployment exists.
 - `scripts/test-web-postgres-integration.mjs` owns another one-off `postgres-test` container with an
   ephemeral loopback-published port, applies the same reviewed manifest, starts the three real Next
   development GETs, proves an extra-membership Web login fails generically without mutation,
-  validates exact public contracts through the narrow login, fingerprints every private table, and
-  removes both Web processes plus the container, network, and storage.
+  validates exact public contracts through the narrow login, fingerprints every private table,
+  proves the four-request no-queue boundary with a controlled owner lock, and removes both Web
+  processes plus the blocker, container, network, and storage.
 
 ## Capability model
 

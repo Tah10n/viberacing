@@ -194,9 +194,10 @@ cross-browser release evidence.
 The PostgreSQL integration command is an opt-in Docker-backed synthetic gate, not part of root
 `verify`. It starts the real Next development HTTP boundary only on loopback, creates disposable
 narrow and deliberately widened Web logins, checks all three public score/race/status contracts and
-full private-table non-mutation, and removes every process/container/network/storage resource. It
-does not prove a production Next process, deployment credential/TLS, cache, edge policy, monitoring,
-load/capacity, real-user data, or deployment.
+full private-table non-mutation, and proves the four-request no-queue boundary with a controlled
+database lock plus a rejected fifth request. It removes every process/container/network/storage
+resource. It does not prove a production Next process, deployment credential/TLS, cache, edge
+policy, monitoring, load/capacity, real-user data, or deployment.
 
 Run `pnpm run verify` before completion. The focused commands do not replace repository history,
 public-data, license, documentation, or staged-snapshot gates.

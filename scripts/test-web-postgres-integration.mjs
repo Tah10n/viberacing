@@ -10,7 +10,7 @@ import { pathToFileURL } from "node:url";
 
 import { validateManifest } from "./check-database.mjs";
 
-// cspell:ignore WINDIR
+// cspell:ignore usename WINDIR
 
 const root = resolve(import.meta.dirname, "..");
 const webRoot = resolve(root, "apps", "web");
@@ -38,9 +38,14 @@ const extraRole = "viberacing_web_extra";
 const requestIdPattern = /^req_[A-Za-z0-9_-]{22}$/;
 const maximumResponseBytes = 16 * 1024;
 const maximumServerOutputBytes = 512 * 1024;
+const maximumBlockerOutputBytes = 64 * 1024;
 const serverStartupTimeoutMs = 60_000;
 const serverRequestTimeoutMs = 30_000;
 const serverCloseTimeoutMs = 15_000;
+const databaseBlockerTimeoutMs = 10_000;
+const blockedQueryObservationTimeoutMs = 2_000;
+const admissionRejectionTimeoutMs = 1_500;
+const databaseBlockerReadyMarker = "viberacing_web_admission_blocker_ready";
 const productionNextEnvironmentReference = 'import "./.next/types/routes.d.ts";';
 const developmentNextEnvironmentReference = 'import "./.next/dev/types/routes.d.ts";';
 
@@ -125,6 +130,159 @@ function psqlScalar(sql, label) {
   });
   requireSuccess(result, label);
   return result.stdout.trim();
+}
+
+async function stopDatabaseReadBlocker(blocker) {
+  if (!blocker.hasExited()) {
+    blocker.child.stdin.end("ROLLBACK;\n");
+  }
+  let result;
+  try {
+    result = await waitWithDeadline(
+      blocker.closed,
+      databaseBlockerTimeoutMs,
+      "PostgreSQL read blocker did not stop within its fixed deadline.",
+    );
+  } catch (error) {
+    if (!blocker.hasExited()) {
+      blocker.child.kill("SIGKILL");
+      await waitWithDeadline(
+        blocker.closed,
+        databaseBlockerTimeoutMs,
+        "PostgreSQL read blocker did not close after forced termination.",
+      );
+    }
+    throw error;
+  }
+  if (blocker.hasPrivateOutput()) {
+    throw new Error("PostgreSQL read blocker output exposed a private integration value.");
+  }
+  if (blocker.hasOutputOverflow()) {
+    throw new Error("PostgreSQL read blocker exceeded its bounded output budget.");
+  }
+  if (result.code !== 0 || result.signal !== null) {
+    throw new Error("PostgreSQL read blocker did not close cleanly.");
+  }
+}
+
+async function startDatabaseReadBlocker() {
+  let exited = false;
+  let outputBytes = 0;
+  let outputOverflow = false;
+  let privateOutput = false;
+  let outputTail = "";
+  let readySettled = false;
+  let resolveReady;
+  let rejectReady;
+  const maximumMarkerLength = Math.max(
+    databaseBlockerReadyMarker.length,
+    ...privateValueMarkers.map((marker) => marker.length),
+  );
+  const ready = new Promise((resolvePromise, rejectPromise) => {
+    resolveReady = resolvePromise;
+    rejectReady = rejectPromise;
+  });
+  const child = spawn("docker", psqlArguments(), {
+    cwd: root,
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  const observeOutput = (chunk) => {
+    outputBytes += chunk.byteLength;
+    const text = `${outputTail}${chunk.toString("utf8")}`;
+    outputTail = text.slice(-(maximumMarkerLength - 1));
+    if (privateValueMarkers.some((marker) => text.includes(marker))) {
+      privateOutput = true;
+      child.kill("SIGKILL");
+    } else if (outputBytes > maximumBlockerOutputBytes) {
+      outputOverflow = true;
+      child.kill("SIGKILL");
+    } else if (!readySettled && text.includes(databaseBlockerReadyMarker)) {
+      readySettled = true;
+      resolveReady();
+    }
+  };
+  child.stdout.on("data", observeOutput);
+  child.stderr.on("data", observeOutput);
+  child.stdin.on("error", () => undefined);
+  const closed = new Promise((resolveClose, rejectClose) => {
+    child.once("error", () => {
+      exited = true;
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error("PostgreSQL read blocker could not start."));
+      }
+      rejectClose(new Error("PostgreSQL read blocker could not start."));
+    });
+    child.once("close", (code, signal) => {
+      exited = true;
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error("PostgreSQL read blocker exited before acquiring its lock."));
+      }
+      resolveClose(Object.freeze({ code, signal }));
+    });
+  });
+  void ready.catch(() => undefined);
+  void closed.catch(() => undefined);
+  const blocker = Object.freeze({
+    child,
+    closed,
+    hasExited: () => exited,
+    hasOutputOverflow: () => outputOverflow,
+    hasPrivateOutput: () => privateOutput,
+  });
+
+  try {
+    child.stdin.write(`BEGIN;
+SET LOCAL ROLE viberacing_owner;
+LOCK TABLE viberacing_private.season_entries IN ACCESS EXCLUSIVE MODE;
+\\echo ${databaseBlockerReadyMarker}
+`);
+    await waitWithDeadline(
+      ready,
+      databaseBlockerTimeoutMs,
+      "PostgreSQL read blocker did not acquire its lock in time.",
+    );
+    if (privateOutput || outputOverflow || exited) {
+      throw new Error("PostgreSQL read blocker failed before admission evidence began.");
+    }
+    return blocker;
+  } catch (error) {
+    await stopDatabaseReadBlocker(blocker).catch(() => undefined);
+    throw error;
+  }
+}
+
+function readBlockedScoreQueryCount(label) {
+  const value = psqlScalar(
+    `SELECT pg_catalog.count(*)::text
+FROM pg_catalog.pg_stat_activity AS activity
+WHERE activity.datname = '${databaseName}'
+  AND activity.usename = '${webLogin}'
+  AND activity.state = 'active'
+  AND activity.wait_event_type = 'Lock'
+  AND pg_catalog.strpos(
+    activity.query,
+    'viberacing_api.list_public_community_scores('
+  ) > 0;`,
+    label,
+  );
+  assert.match(value, /^[0-4]$/);
+  return Number(value);
+}
+
+async function waitForBlockedScoreQueries() {
+  const deadline = Date.now() + blockedQueryObservationTimeoutMs;
+  let lastCount = 0;
+  while (Date.now() < deadline) {
+    lastCount = readBlockedScoreQueryCount("blocked Web score-query observation");
+    if (lastCount === 4) {
+      return;
+    }
+    await sleep(25);
+  }
+  throw new Error(`expected four blocked Web score queries, observed ${lastCount}`);
 }
 
 function buildWorkspace(relativePath, label) {
@@ -485,11 +643,11 @@ async function readBoundedResponseBytes(response, path) {
   }
 }
 
-async function getJson(baseUrl, path, seasonStart) {
+async function getJson(baseUrl, path, seasonStart, timeoutMs = serverRequestTimeoutMs) {
   const response = await fetch(`${baseUrl}${path}?seasonStart=${seasonStart}`, {
     headers: { accept: "application/json" },
     redirect: "error",
-    signal: AbortSignal.timeout(serverRequestTimeoutMs),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const bodyBytes = await readBoundedResponseBytes(response, path);
   assert.ok(bodyBytes.byteLength > 0, `${path} must return a body`);
@@ -895,6 +1053,42 @@ async function exerciseUnavailableRoutes(databasePort, seasonStart, validateProb
   }
 }
 
+async function exerciseNoQueueAdmission(baseUrl, seasonStart, expectedScore, contracts) {
+  const blocker = await startDatabaseReadBlocker();
+  const inFlightRequests = [];
+  let blockerStopped = false;
+  try {
+    for (let index = 0; index < 4; index += 1) {
+      const request = getJson(baseUrl, "/v1/community/scores", seasonStart);
+      void request.catch(() => undefined);
+      inFlightRequests.push(request);
+    }
+    await waitForBlockedScoreQueries();
+
+    assertUnavailable(
+      await getJson(baseUrl, "/v1/community/scores", seasonStart, admissionRejectionTimeoutMs),
+      contracts.validateProblemDetailsV1,
+    );
+    assert.equal(
+      readBlockedScoreQueryCount("post-rejection blocked Web score-query observation"),
+      4,
+      "the rejected fifth request must not add a fifth public-score query",
+    );
+
+    await stopDatabaseReadBlocker(blocker);
+    blockerStopped = true;
+    const settledRequests = await Promise.all(inFlightRequests);
+    for (const result of settledRequests) {
+      assertSuccess(result, expectedScore, contracts.validateCommunityScorePageV1);
+    }
+  } finally {
+    if (!blockerStopped) {
+      await stopDatabaseReadBlocker(blocker).catch(() => undefined);
+    }
+    await Promise.allSettled(inFlightRequests);
+  }
+}
+
 async function exerciseSuccessfulRoutes(databasePort, seasonStart, acceptedDate, contracts) {
   const server = await startConfiguredNextServer(databasePort, webLogin, webPassword);
   const baseUrl = `http://127.0.0.1:${server.port}`;
@@ -910,6 +1104,7 @@ async function exerciseSuccessfulRoutes(databasePort, seasonStart, acceptedDate,
       stableExpected.race,
       contracts.validateCommunityRacePageV1,
     );
+    let statusValidated = false;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const beforeDate = readCurrentUtcDate(`pre-status UTC date attempt ${attempt}`);
       const result = await getJson(baseUrl, "/v1/community/race/status", seasonStart);
@@ -920,10 +1115,14 @@ async function exerciseSuccessfulRoutes(databasePort, seasonStart, acceptedDate,
           expectedPages(seasonStart, beforeDate, acceptedDate).status,
           contracts.validateCommunityRaceStatusPageV1,
         );
-        return;
+        statusValidated = true;
+        break;
       }
     }
-    throw new Error("UTC date did not remain stable around the bounded status request.");
+    if (!statusValidated) {
+      throw new Error("UTC date did not remain stable around the bounded status request.");
+    }
+    await exerciseNoQueueAdmission(baseUrl, seasonStart, stableExpected.score, contracts);
   } finally {
     await stopNextServer(server);
   }
@@ -1053,7 +1252,7 @@ COMMIT;`,
     );
 
     console.log(
-      "Web PostgreSQL integration passed (three real HTTP routes, full-state least-privilege denial, exact contracts, and read-only stored state).",
+      "Web PostgreSQL integration passed (three real HTTP routes, four-slot no-queue admission, least-privilege denial, exact contracts, and read-only stored state).",
     );
   } catch (error) {
     primaryFailure = error;

@@ -36,9 +36,11 @@ Vibe Racing applies these rules:
 The Web integration adds no product collection or retention class. Its obviously synthetic login
 passwords and private fixture identifiers exist only in the checked harness, disposable database,
 and child-process memory; the container, processes, network, and storage are removed after each run.
-Bounded Next output is checked for those values and discarded, HTTP bodies are checked against the
-closed public allowlists, and no result is cached or written as an artifact. Deployment Web
-credentials remain protected environment/secret-manager data under the table below.
+Bounded Next and database-blocker output is checked for those values and discarded, HTTP bodies are
+checked against the closed public allowlists, and the no-queue scenario inspects only a synthetic
+login's aggregate count of lock-waiting score queries. No result is cached or written as an
+artifact. Deployment Web credentials remain protected environment/secret-manager data under the
+table below.
 
 ## Classification
 

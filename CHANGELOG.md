@@ -13,11 +13,14 @@ Versioning where its guarantees are applicable.
   Next development processes on loopback. All three public score/race/status GETs return the exact
   generic 503 through a deliberately widened Web login without changing any private table, then
   return their exact contract-validated active-only pages through a narrow `viberacing_web` login
-  while the full private-state fingerprint remains unchanged. Server output is bounded, checked for
-  private fixture/credential reflection, discarded, and every process/container/network/storage
-  resource is removed. Secretless CI requires the command, but no production Next process,
-  deployment login/TLS, cache, edge policy, load/capacity, monitoring, real-user data, hosted pass,
-  or deployment is claimed.
+  while the full private-state fingerprint remains unchanged. A controlled owner-held database lock
+  then proves the four-request application admission boundary: four observed score queries remain in
+  flight, a fifth request returns the closed generic 503 without adding a fifth public-score query,
+  and the first four return their exact 200 contracts after rollback. Server and blocker output is
+  bounded, checked for private fixture/credential reflection, discarded, and every
+  process/container/network/storage resource is removed. Secretless CI requires the command, but no
+  production Next process, deployment login/TLS, cache, edge policy, load/capacity, monitoring,
+  real-user data, hosted pass, or deployment is claimed.
 - A separate default-off local Jobs scheduler around the existing seventeen-command runner. It
   accepts no arguments or schedule configuration, derives the current and latest grace-eligible
   Community Mondays in UTC, invokes a fixed five-minute/hour/day catalog sequentially through one

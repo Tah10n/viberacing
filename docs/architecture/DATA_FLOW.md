@@ -22,63 +22,65 @@ rounded-freshness/optional-streak status projection. Local score/race/status GET
 exact default-off module-load decision, then construct their bounded adapters lazily after closed
 request admission. One opt-in synthetic gate now invokes those three real Next development GETs
 through reviewed migrations and a disposable Web login, with an extra-membership negative control
-and full private-table fingerprints before and after both rejected and successful paths. The visible
-home race requests its current server-selected week from the exact same-origin status route,
-validates the public score, rounded freshness, optional preference-gated streak, and optional
-recipe, lets one canonical public-handle URL select a same-page summary from only those fields, and
-retains a clearly labeled synthetic fallback on failure. A public signed-in account links to that
-URL; invalid, duplicate, and unranked selections grant no authority and add no score query field or
-browser persistence. One local one-shot Jobs runner can invoke exactly one of seventeen fixed
-functions: any of the twelve cleanup functions, pairing approval-provenance redaction, fixed
-pairing-rate-window reset, primary profile purge, refresh, or finalization, but no broader
-recovery/step-up, deployed ingest endpoint, operational connector, purge cache/backup/tombstone
-handling, Jobs monitor, audited correction, or deployed service executes the complete sequences. A
-library-only Rust connector foundation validates the bounded stable App Server initialization
-exchange and candidate `0.144.5` account/usage responses. A synthetic one-shot supervisor composes
-those states with fixed local process mechanics, while an exact-body composer and isolated one-use
-signer produce a synthetic signed envelope. A separate pending-key and challenge signer plus a pure
-server-only Web verifier agree on one exact pairing-possession message. The Web/Auth start
-application generates fresh IDs, token, challenge, 60-bit code, separate protected poll/code
-verifiers, and a nine-minute pending transaction from closed device metadata. A second application
-performs protected keyed poll lookup, mandates that proof, and invokes only exact atomic activation
-behind local admission/timing. The local signed-in `/connect` flow counts pending-code attempts on
-the exact session, renders bounded device evidence plus the full public-key fingerprint, and
-consumes a fresh WebAuthn assertion into atomic approval for an explicitly selected new or active
-existing opaque source. Existing choices use only encrypted session-bound controls; raw source IDs
-stay server-only. ADR 0030 adds exact start/poll HTTP routes, fixed-storage aggregate admission, and
-one pairing-only Rust command that creates and retains its device key only in a native OS credential
-store. ADR 0057 places those routes and both browser approval operations behind exact default-off
-module-load decisions before parsing, runtime/service construction, admission acquisition, protected
-configuration, or database work. ADR 0058 separately keeps new-source selection and both approval
-service steps default-off while active existing-source pairing remains available. Exact source
-choice is sealed and v2-digest-bound so a restarted disabled verifier also rejects in-flight
-new-source completion. ADR 0059 separately keeps browser proposal create/approve and device proposal
-ingress default-off while private reads and exact session-bound rejection remain available. ADR 0060
-separately keeps invite/OAuth/initial-passkey enrollment default-off across both pages, all four
-route modules, and all four service methods while returning login and restricted recovery remain
-available. ADR 0031 adds a separate Windows candidate command that can construct the otherwise
-inaccessible launch/context/key capabilities only after exact artifact and active-record review,
-then performs one fixed signed upload. ADR 0038 adds a third fixed command that starts no Codex
-process and signs one exact enum-only CarRecipe for the dedicated Web/Auth proposal route. ADR 0041
-adds a fourth command that deletes only the exact native origin/label record without loading it or
-crossing the connector-to-edge boundary. ADR 0052 adds a fifth explicit `check-codex` command that
-performs only the same exact candidate admission without credential-store, process, account,
-persistence, or network access; later sync repeats admission. ADR 0053 adds a secretless no-upload
-Windows release-profile copy/removal smoke for only the repository-built connector; it adds no
-connector data flow or runtime authority. ADR 0054 adds an opt-in stdout preview to the same
-candidate check containing only fixed versions/support state and one coarse Operational admission
-class. It adds no filesystem sink, support transport, reusable authority, or connector-to-edge flow.
-There is still no hosted Windows result, supported version, cross-platform sync result, real package
-lifecycle, scheduling, packaging, or released connector. A local Ingest kernel now verifies the
-bounded exact-body origin/device request, while the separate adapter maps origin replay, device
-lookup, and submission through fixed calls. PostgreSQL now proves atomic origin replay consumption
-and bounded cleanup. A transport-free application now composes those exact local capabilities and
-validates only closed acknowledgement/problem decisions. A bounded local Fastify factory preserves
-exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes only revalidated
-contracts. A separate local host now binds that exact composition under closed loopback or declared
-Railway-edge configuration and bounded process shutdown. There is no edge/live-database/deployment
-integration. No trusted external TLS route, deployment login/certificate, edge signer/direct-origin
-policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+and full private-table fingerprints before and after both rejected and successful paths. It also
+uses a controlled owner lock to observe four in-flight score queries, reject a fifth without a fifth
+public-score query, and validate the four original responses after rollback. The visible home race
+requests its current server-selected week from the exact same-origin status route, validates the
+public score, rounded freshness, optional preference-gated streak, and optional recipe, lets one
+canonical public-handle URL select a same-page summary from only those fields, and retains a clearly
+labeled synthetic fallback on failure. A public signed-in account links to that URL; invalid,
+duplicate, and unranked selections grant no authority and add no score query field or browser
+persistence. One local one-shot Jobs runner can invoke exactly one of seventeen fixed functions: any
+of the twelve cleanup functions, pairing approval-provenance redaction, fixed pairing-rate-window
+reset, primary profile purge, refresh, or finalization, but no broader recovery/step-up, deployed
+ingest endpoint, operational connector, purge cache/backup/tombstone handling, Jobs monitor, audited
+correction, or deployed service executes the complete sequences. A library-only Rust connector
+foundation validates the bounded stable App Server initialization exchange and candidate `0.144.5`
+account/usage responses. A synthetic one-shot supervisor composes those states with fixed local
+process mechanics, while an exact-body composer and isolated one-use signer produce a synthetic
+signed envelope. A separate pending-key and challenge signer plus a pure server-only Web verifier
+agree on one exact pairing-possession message. The Web/Auth start application generates fresh IDs,
+token, challenge, 60-bit code, separate protected poll/code verifiers, and a nine-minute pending
+transaction from closed device metadata. A second application performs protected keyed poll lookup,
+mandates that proof, and invokes only exact atomic activation behind local admission/timing. The
+local signed-in `/connect` flow counts pending-code attempts on the exact session, renders bounded
+device evidence plus the full public-key fingerprint, and consumes a fresh WebAuthn assertion into
+atomic approval for an explicitly selected new or active existing opaque source. Existing choices
+use only encrypted session-bound controls; raw source IDs stay server-only. ADR 0030 adds exact
+start/poll HTTP routes, fixed-storage aggregate admission, and one pairing-only Rust command that
+creates and retains its device key only in a native OS credential store. ADR 0057 places those
+routes and both browser approval operations behind exact default-off module-load decisions before
+parsing, runtime/service construction, admission acquisition, protected configuration, or database
+work. ADR 0058 separately keeps new-source selection and both approval service steps default-off
+while active existing-source pairing remains available. Exact source choice is sealed and
+v2-digest-bound so a restarted disabled verifier also rejects in-flight new-source completion. ADR
+0059 separately keeps browser proposal create/approve and device proposal ingress default-off while
+private reads and exact session-bound rejection remain available. ADR 0060 separately keeps
+invite/OAuth/initial-passkey enrollment default-off across both pages, all four route modules, and
+all four service methods while returning login and restricted recovery remain available. ADR 0031
+adds a separate Windows candidate command that can construct the otherwise inaccessible
+launch/context/key capabilities only after exact artifact and active-record review, then performs
+one fixed signed upload. ADR 0038 adds a third fixed command that starts no Codex process and signs
+one exact enum-only CarRecipe for the dedicated Web/Auth proposal route. ADR 0041 adds a fourth
+command that deletes only the exact native origin/label record without loading it or crossing the
+connector-to-edge boundary. ADR 0052 adds a fifth explicit `check-codex` command that performs only
+the same exact candidate admission without credential-store, process, account, persistence, or
+network access; later sync repeats admission. ADR 0053 adds a secretless no-upload Windows
+release-profile copy/removal smoke for only the repository-built connector; it adds no connector
+data flow or runtime authority. ADR 0054 adds an opt-in stdout preview to the same candidate check
+containing only fixed versions/support state and one coarse Operational admission class. It adds no
+filesystem sink, support transport, reusable authority, or connector-to-edge flow. There is still no
+hosted Windows result, supported version, cross-platform sync result, real package lifecycle,
+scheduling, packaging, or released connector. A local Ingest kernel now verifies the bounded
+exact-body origin/device request, while the separate adapter maps origin replay, device lookup, and
+submission through fixed calls. PostgreSQL now proves atomic origin replay consumption and bounded
+cleanup. A transport-free application now composes those exact local capabilities and validates only
+closed acknowledgement/problem decisions. A bounded local Fastify factory preserves exact raw HTTP
+evidence, enforces no-queue and deadline policy, and serializes only revalidated contracts. A
+separate local host now binds that exact composition under closed loopback or declared Railway-edge
+configuration and bounded process shutdown. There is no edge/live-database/deployment integration.
+No trusted external TLS route, deployment login/certificate, edge signer/direct-origin policy, or
+live route/Jobs evidence is supplied. Data labels refer to the classifications in the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 

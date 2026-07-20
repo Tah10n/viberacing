@@ -66,8 +66,9 @@ does not make the pull request trusted; review and protected-branch policy remai
   Jobs-scheduler modes. Each owns a unique Compose project/container, uses only synthetic
   credentials/data, exposes at most an ephemeral loopback port, retains no volume or artifact, and
   cleans up in `finally`. The Web harness additionally bounds and discards its Next development
-  process output and removes both sequential children. These are untrusted pull-request checks, not
-  hosted-service, production credential, deployment, or release evidence.
+  process output, bounds a separate PostgreSQL blocker child used for its no-queue check, and
+  removes all three children. These are untrusted pull-request checks, not hosted-service,
+  production credential, deployment, capacity, or release evidence.
 
 The repository tests these rules with positive and negative fixtures. The tests are defense in
 depth; a malicious pull request can edit its own tests, so protected review of workflow changes is

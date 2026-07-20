@@ -115,7 +115,9 @@ pnpm run dev:web
 `pnpm run test:jobs:postgres-integration`. Web-команда запускает три реальные Next development route
 против одноразовой PostgreSQL, отклоняет login с лишней role membership до проекционного чтения и
 подтверждает отсутствие мутаций, проверяет точные public contracts через узкий login и подтверждает
-неизменность всех private tables. Отдельная команда
+неизменность всех private tables. Затем она удерживает четыре score query на контролируемом DB lock,
+отклоняет пятый request без пятого public-score query и после rollback проверяет четыре исходных
+exact 200 response. Это локальная no-queue проверка, а не load/capacity evidence. Отдельная команда
 `pnpm run test:jobs-scheduler:postgres-integration` связывает production scheduler core под
 фиксированным UTC-временем с реальным Jobs runner и одноразовым PostgreSQL. Команда
 `pnpm run test:jobs-scheduler:timer-postgres-integration` сдвигает injected clock на следующий час,
@@ -260,87 +262,87 @@ optional preference-gated streak без exact timestamps или daily rows. Ви
 запрашивают у него текущую server-selected неделю без credentials, проверяют только public поля и
 честно сохраняют synthetic fallback при недоступности. Отдельная synthetic Web integration проводит
 все три реальные Next development GET через disposable least-privileged PostgreSQL login, проверяет
-widened-login denial, точные contracts и полную неизменность private tables; production login/TLS,
-cache, load, monitoring и deployment она не доказывает. Локальные invite/OAuth/
-initial-passkey/returning-login routes теперь существуют; login options хранят profile-free
-challenge только в encrypted cookie, а валидный assertion атомарно создаёт и тут же поглощает
-database challenge при выдаче сессии. Страница аккаунта по той же подтверждённой сессии показывает
-только названия ключей, active/revoked state, округлённую дату создания и отметку текущего
-authenticator; credential IDs и key material не рендерятся. Для owned non-current passkey страница
-отправляет только opaque ID, требует свежий user-verified assertion с привязкой к сессии и цели и
-вызывает атомарный consume-and-revoke; текущий или последний активный ключ удалить нельзя. Отдельный
-add-flow заранее валидирует и шифрует label, затем требует независимые assertion существующим ключом
-и регистрацию нового; один database statement атомарно consume-ит step-up и добавляет credential в
-пределах лимита 32 retained rows. Application verifier для ротации кодов восстановления теперь после
-свежего passkey assertion создаёт десять кодов, атомарно сохраняет только защищённые verifier values
-и показывает plaintext один раз. Локальные recovery-code sign-in, replacement-passkey и WebAuthn
-pairing approval реализованы только с injected/synthetic evidence; live authenticator/database
-integration, edge rate/capacity controls и deployment всё ещё отсутствуют. Отдельный локальный
-CarRecipe slice принимает только точный versioned enum-only объект, хранит не более одного
-приватного proposal на 24 часа для выведенного из сессии профиля, показывает его во всех трёх темах
-и требует явный зашифрованный session-bound approve или reject control. Approval атомарно заменяет
-active recipe. Отдельный device-authenticated Web route и фиксированная команда `propose-car` могут
-только создать или заменить тот же pending exact recipe для активного source-bound device; читать,
-approve, reject или activate его они не могут. Cross-profile и non-Web database capabilities
-запрещены. Browser create/approve и device ingress теперь остаются выключенными, пока их точные
-module не получат `VIBERACING_CAR_PROPOSALS_ENABLED=true`; tracked default равен `false`. В
-выключенном состоянии EN/RU account UI сохраняет active/private preview и точный session-bound
-reject, но не показывает editor/approve, а обе browser service mutation повторяют literal-true
-проверку. Проверяемый локальный Agent Skill сводит style request к точным recipe flags, требует явно
-переданные shell-safe origin/label, один раз вызывает только эту команду и не получает read или
-decision authority. Отдельная Jobs-only capability теперь bounded oldest-first batches физически
-удаляет expired proposal, сохраняя live proposals и active recipes. Отдельный совместимый public
-race contract показывает только текущий approved recipe активного профиля. Третий совместимый public
-race-status contract отдельно добавляет округлённую freshness и включённый пользователем streak;
-proposal identity, state, exact timestamps, daily scores и private preference не выходят наружу, а
-стабильные score и прежний race response не меняются. Schedule для cleanup, live credentials,
-release/packaging connector, edge controls и deployment остаются отдельными воротами. Database-only
-Community ingest capability уже выдаёт минимальный материал активного устройства и принимает bounded
-source-bound snapshots с exact retry, nonce replay, monotonic source/date, quarantine и
-lifecycle-race enforcement. Отдельная Jobs-only procedure независимо удаляет bounded batches
-истёкших origin nonces, device nonces и raw snapshots, сохраняя current source/day values. Ещё две
-отдельные Jobs-only процедуры удаляют bounded expired pairing state и истёкшие auth
-challenges/restricted recovery authorities, сохраняя live ceremonies, unused recovery codes,
-sessions, passkeys и audit evidence. Ещё одна Jobs-only procedure удаляет не более 1000 expired
-CarRecipe proposals за вызов под отдельным private mutex и не затрагивает active recipes. Отдельная
-Jobs-only procedure bounded batches удаляет истёкшие active/revoked invite verifier rows, сохраняя
-live invites и redeemed enrollment provenance. Ещё одна Jobs-only procedure bounded batches удаляет
-eligible expired browser sessions без retained rotation predecessor или pairing approval provenance,
-сохраняя live и referenced sessions. Ещё одна Jobs-only procedure атомарно удаляет до 10 due
-`deletion_pending` профилей, сначала снимает restrictive pairing references, terminally settles
-opaque job и не создаёт неподтверждённый tombstone. Отдельная Jobs-only процедура хранит этот
-terminal job не менее 30 дней после server-recorded completion, а затем допускает bounded
-oldest-first batches, не затрагивая recent и non-terminal deletion work. Отдельный Jobs-only cleanup
-для audit events сохраняет database audit reference не менее 180 дней после server-recorded
-occurrence, затем допускает bounded oldest-first batches и сохраняет recent evidence; external
-append-only audit sink он не создаёт. Revision 0034 отдельно хранит точные session/passkey ссылки
-одобрения активированного pairing не менее 180 дней, а затем допускает bounded oldest-first
-redaction только этих двух ссылок, сохраняя profile/source/device binding, pairing row, active
-device и passkey; следующий session-cleanup может удалить ставшую свободной expired session.
-Revision 0035 отдельно удаляет не более 1000 passkey rows только после 180 дней в revoked state и
-только при отсутствии session, verifying/authorized challenge и pairing references. Active и
-referenced credentials сохраняются, а безопасная очистка освобождает неизменный лимит 32 retained
-rows для последующего recovery. Revision 0036 отдельно удаляет не более 1000 минимизированных
-activated pairing rows и связанных revoked device-key rows только после 180 дней от activation и
-revocation, redaction approval provenance и удаления всех authorization challenge, nonce и raw
-snapshot references. Active, recent и referenced device history сохраняется без каскадного удаления
-raw evidence. Локальный one-shot Jobs runner вызывает только одну из семнадцати fixed capabilities:
-auth/audit/invite/CarRecipe-proposal/ingest/pairing/session cleanup, aged revoked-passkey и
-revoked-device cleanup, pairing approval-provenance redaction, terminal deletion-job cleanup,
-primary profile purge, scoring refresh или finalization через отдельный least-privileged config,
-single-client pool, проверку role/login/search path, fixed deadlines, prepared parameters, closed
-result validation и стабильный non-reflective CLI output. Отдельный opt-in Jobs scenario применяет
-reviewed migrations к одноразовой PostgreSQL, запускает все семнадцать emitted commands через узкий
-synthetic login, отклоняет login с лишней role membership до мутации и проверяет точное состояние
-перед очисткой. Сама база не проверяет wire signature; локальные kernel, adapter и application
-объединены на synthetic/mock-pool evidence. Отдельный opt-in loopback Ingest scenario теперь
-проводит независимо подписанный HTTP request через emitted host и одноразовый least-privileged
-PostgreSQL login, включая duplicate/replay/revoke и точную проверку сохранённого состояния. Deployed
-HTTP ingest route, operational sync connector, cleanup/scoring scheduler, deployment Ingest/Jobs
-login/TLS integration, monitoring backend, deployed public score read, audited correction flow,
-cache/backup/tombstone purge, restore replay и scheduled deletion execution ещё не реализованы,
-поэтому локальный enrollment ещё не является готовой production-авторизацией, а приёма реальных
-данных пока нет.
+widened-login denial, точные contracts, четырёхслотовый no-queue admission и полную неизменность
+private tables; production login/TLS, cache, load/capacity, monitoring и deployment она не
+доказывает. Локальные invite/OAuth/ initial-passkey/returning-login routes теперь существуют; login
+options хранят profile-free challenge только в encrypted cookie, а валидный assertion атомарно
+создаёт и тут же поглощает database challenge при выдаче сессии. Страница аккаунта по той же
+подтверждённой сессии показывает только названия ключей, active/revoked state, округлённую дату
+создания и отметку текущего authenticator; credential IDs и key material не рендерятся. Для owned
+non-current passkey страница отправляет только opaque ID, требует свежий user-verified assertion с
+привязкой к сессии и цели и вызывает атомарный consume-and-revoke; текущий или последний активный
+ключ удалить нельзя. Отдельный add-flow заранее валидирует и шифрует label, затем требует
+независимые assertion существующим ключом и регистрацию нового; один database statement атомарно
+consume-ит step-up и добавляет credential в пределах лимита 32 retained rows. Application verifier
+для ротации кодов восстановления теперь после свежего passkey assertion создаёт десять кодов,
+атомарно сохраняет только защищённые verifier values и показывает plaintext один раз. Локальные
+recovery-code sign-in, replacement-passkey и WebAuthn pairing approval реализованы только с
+injected/synthetic evidence; live authenticator/database integration, edge rate/capacity controls и
+deployment всё ещё отсутствуют. Отдельный локальный CarRecipe slice принимает только точный
+versioned enum-only объект, хранит не более одного приватного proposal на 24 часа для выведенного из
+сессии профиля, показывает его во всех трёх темах и требует явный зашифрованный session-bound
+approve или reject control. Approval атомарно заменяет active recipe. Отдельный device-authenticated
+Web route и фиксированная команда `propose-car` могут только создать или заменить тот же pending
+exact recipe для активного source-bound device; читать, approve, reject или activate его они не
+могут. Cross-profile и non-Web database capabilities запрещены. Browser create/approve и device
+ingress теперь остаются выключенными, пока их точные module не получат
+`VIBERACING_CAR_PROPOSALS_ENABLED=true`; tracked default равен `false`. В выключенном состоянии
+EN/RU account UI сохраняет active/private preview и точный session-bound reject, но не показывает
+editor/approve, а обе browser service mutation повторяют literal-true проверку. Проверяемый
+локальный Agent Skill сводит style request к точным recipe flags, требует явно переданные shell-safe
+origin/label, один раз вызывает только эту команду и не получает read или decision authority.
+Отдельная Jobs-only capability теперь bounded oldest-first batches физически удаляет expired
+proposal, сохраняя live proposals и active recipes. Отдельный совместимый public race contract
+показывает только текущий approved recipe активного профиля. Третий совместимый public race-status
+contract отдельно добавляет округлённую freshness и включённый пользователем streak; proposal
+identity, state, exact timestamps, daily scores и private preference не выходят наружу, а стабильные
+score и прежний race response не меняются. Schedule для cleanup, live credentials, release/packaging
+connector, edge controls и deployment остаются отдельными воротами. Database-only Community ingest
+capability уже выдаёт минимальный материал активного устройства и принимает bounded source-bound
+snapshots с exact retry, nonce replay, monotonic source/date, quarantine и lifecycle-race
+enforcement. Отдельная Jobs-only procedure независимо удаляет bounded batches истёкших origin
+nonces, device nonces и raw snapshots, сохраняя current source/day values. Ещё две отдельные
+Jobs-only процедуры удаляют bounded expired pairing state и истёкшие auth challenges/restricted
+recovery authorities, сохраняя live ceremonies, unused recovery codes, sessions, passkeys и audit
+evidence. Ещё одна Jobs-only procedure удаляет не более 1000 expired CarRecipe proposals за вызов
+под отдельным private mutex и не затрагивает active recipes. Отдельная Jobs-only procedure bounded
+batches удаляет истёкшие active/revoked invite verifier rows, сохраняя live invites и redeemed
+enrollment provenance. Ещё одна Jobs-only procedure bounded batches удаляет eligible expired browser
+sessions без retained rotation predecessor или pairing approval provenance, сохраняя live и
+referenced sessions. Ещё одна Jobs-only procedure атомарно удаляет до 10 due `deletion_pending`
+профилей, сначала снимает restrictive pairing references, terminally settles opaque job и не создаёт
+неподтверждённый tombstone. Отдельная Jobs-only процедура хранит этот terminal job не менее 30 дней
+после server-recorded completion, а затем допускает bounded oldest-first batches, не затрагивая
+recent и non-terminal deletion work. Отдельный Jobs-only cleanup для audit events сохраняет database
+audit reference не менее 180 дней после server-recorded occurrence, затем допускает bounded
+oldest-first batches и сохраняет recent evidence; external append-only audit sink он не создаёт.
+Revision 0034 отдельно хранит точные session/passkey ссылки одобрения активированного pairing не
+менее 180 дней, а затем допускает bounded oldest-first redaction только этих двух ссылок, сохраняя
+profile/source/device binding, pairing row, active device и passkey; следующий session-cleanup может
+удалить ставшую свободной expired session. Revision 0035 отдельно удаляет не более 1000 passkey rows
+только после 180 дней в revoked state и только при отсутствии session, verifying/authorized
+challenge и pairing references. Active и referenced credentials сохраняются, а безопасная очистка
+освобождает неизменный лимит 32 retained rows для последующего recovery. Revision 0036 отдельно
+удаляет не более 1000 минимизированных activated pairing rows и связанных revoked device-key rows
+только после 180 дней от activation и revocation, redaction approval provenance и удаления всех
+authorization challenge, nonce и raw snapshot references. Active, recent и referenced device history
+сохраняется без каскадного удаления raw evidence. Локальный one-shot Jobs runner вызывает только
+одну из семнадцати fixed capabilities: auth/audit/invite/CarRecipe-proposal/ingest/pairing/session
+cleanup, aged revoked-passkey и revoked-device cleanup, pairing approval-provenance redaction,
+terminal deletion-job cleanup, primary profile purge, scoring refresh или finalization через
+отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
+deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI output.
+Отдельный opt-in Jobs scenario применяет reviewed migrations к одноразовой PostgreSQL, запускает все
+семнадцать emitted commands через узкий synthetic login, отклоняет login с лишней role membership до
+мутации и проверяет точное состояние перед очисткой. Сама база не проверяет wire signature;
+локальные kernel, adapter и application объединены на synthetic/mock-pool evidence. Отдельный opt-in
+loopback Ingest scenario теперь проводит независимо подписанный HTTP request через emitted host и
+одноразовый least-privileged PostgreSQL login, включая duplicate/replay/revoke и точную проверку
+сохранённого состояния. Deployed HTTP ingest route, operational sync connector, cleanup/scoring
+scheduler, deployment Ingest/Jobs login/TLS integration, monitoring backend, deployed public score
+read, audited correction flow, cache/backup/tombstone purge, restore replay и scheduled deletion
+execution ещё не реализованы, поэтому локальный enrollment ещё не является готовой
+production-авторизацией, а приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.

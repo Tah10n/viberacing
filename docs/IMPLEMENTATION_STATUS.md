@@ -21,21 +21,23 @@ score/race/status GETs now exist behind one exact default-off module-load gate. 
 synthetic integration applies the reviewed migrations to disposable PostgreSQL, starts those three
 real Next development GETs on loopback, rejects a deliberately widened Web login without changing
 any private table, validates exact contracts through a narrow login, and proves the successful reads
-are also non-mutating. The visible home race requests the current server-selected Community week
-from the separate same-origin status route, replaces only its race/leaderboard after closed
-browser-side validation, uses an exact current approved recipe or repository-owned absence fallback,
-shows only complete-UTC-day freshness and an optional preference-gated streak, lets a handle select
-a same-page summary from those public fields, exposes that selection through a canonical
-public-handle URL and public-account link, and retains a labeled synthetic fallback on failure. The
-same public page now exposes a local-only EN/RU score simulator that validates one hypothetical
-daily token total, applies the production daily and weekly scoring functions for one to seven active
-days, and never requests, logs, stores, preloads, or submits that value or changes a standing. Local
-identity slices now implement exact same-origin bounded forms, GitHub OAuth state and S256 PKCE with
-no extra scope, purpose-separated encrypted HttpOnly continuations, atomic profile/session creation,
-required initial WebAuthn registration, returning discoverable-credential login, a session-scoped
-minimal passkey inventory, an active account page, immediate public-profile hide/show, source
-inventory and pause, fresh-passkey paused-source reactivation and terminal unlink, fresh
-backup-passkey addition, revocation of an owned non-current passkey, a bounded active-device
+are also non-mutating. It additionally proves the four-request no-queue boundary through four
+observed blocked score queries, a rejected fifth request with no fifth public-score query, and four
+successful responses after release. The visible home race requests the current server-selected
+Community week from the separate same-origin status route, replaces only its race/leaderboard after
+closed browser-side validation, uses an exact current approved recipe or repository-owned absence
+fallback, shows only complete-UTC-day freshness and an optional preference-gated streak, lets a
+handle select a same-page summary from those public fields, exposes that selection through a
+canonical public-handle URL and public-account link, and retains a labeled synthetic fallback on
+failure. The same public page now exposes a local-only EN/RU score simulator that validates one
+hypothetical daily token total, applies the production daily and weekly scoring functions for one to
+seven active days, and never requests, logs, stores, preloads, or submits that value or changes a
+standing. Local identity slices now implement exact same-origin bounded forms, GitHub OAuth state
+and S256 PKCE with no extra scope, purpose-separated encrypted HttpOnly continuations, atomic
+profile/session creation, required initial WebAuthn registration, returning discoverable-credential
+login, a session-scoped minimal passkey inventory, an active account page, immediate public-profile
+hide/show, source inventory and pause, fresh-passkey paused-source reactivation and terminal unlink,
+fresh backup-passkey addition, revocation of an owned non-current passkey, a bounded active-device
 inventory with immediate owned-device revoke, fresh-passkey recovery-code rotation with one-time
 display, an exact-handle fresh-passkey profile-deletion request, one-time recovery-code
 replacement-passkey sign-in, and database-backed logout. Login options retain the profile-free
@@ -618,11 +620,14 @@ ranking, or deployed Jobs scheduler/cadence exists.
   unchanged. The narrow login then returns the exact score, race, and status pages, including
   active-only visibility, current recipe, rounded freshness, and preference-gated streak omission.
   Contract validators plus private-marker checks prove a public-only response, while the same
-  full-state fingerprint proves non-mutating behavior. Server output is bounded, checked for private
-  fixture/credential reflection, and discarded; both processes, the container, network, and storage
-  are removed. Secretless CI declares the command. It proves no production Next process, deployment
-  login/TLS/certificate, cache, edge rate policy, query-plan/load result, monitoring, real-user
-  data, capacity, hosted pass, or deployment.
+  full-state fingerprint proves non-mutating behavior. A bounded owner-held table lock then leaves
+  exactly four narrow-login score queries observable in PostgreSQL. A fifth HTTP request must return
+  the exact generic 503 under a narrower harness deadline without adding a fifth public-score query;
+  rollback releases the original four, which must all return exact 200 contracts. Next and blocker
+  output is bounded, checked for private fixture/credential reflection, and discarded; all three
+  processes, the container, network, and storage are removed. Secretless CI declares the command. It
+  proves no production Next process, deployment login/TLS/certificate, cache, edge rate policy,
+  query-plan/load/capacity result, monitoring, real-user data, hosted pass, or deployment.
 - A visible public-race consumer. The dynamic server page derives the current ISO Monday and passes
   only that public label to the client. After hydration, the browser lazily loads its compact
   independent validator and issues one credential-free, `no-store`, same-origin request to the exact
