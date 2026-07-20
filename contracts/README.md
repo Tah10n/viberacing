@@ -167,4 +167,6 @@ route. The local transport bounds one process but does not replace edge rate sha
 denial, distributed backpressure, capacity testing, monitoring, or database constraints.
 `pnpm run test:ingest:postgres-integration` additionally checks the complete synthetic loopback
 contract against disposable PostgreSQL, including accepted, duplicate, replay, and revoked-device
-decisions plus exact stored state.
+decisions plus exact stored state. It also observes four valid requests blocked at the first
+replay-store call, rejects a fifth without a fifth replay call, and validates the four accepted
+responses after release; this is no-queue correctness evidence, not capacity testing.

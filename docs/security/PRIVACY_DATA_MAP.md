@@ -4,13 +4,15 @@
 
 The current repository contains a private SQL schema, synthetic PostgreSQL integration tests, local
 Community sync verification kernel, bounded database adapter, HTTP server and executable host, plus
-one full synthetic loopback signed-request path through a disposable least-privileged login. It also
-contains library-only connector protocol/parser boundaries, a synthetic one-shot process supervisor,
-an exact-body composer, isolated pairing/request signers, a pure Web pairing verifier, local pairing
-applications/routes and bounded native-store connect/local-removal commands, a visible public-race
-consumer with a synthetic fallback, a separate synthetic all-three-route Next-development-to-
-disposable-PostgreSQL gate, a browser-memory-only hypothetical score simulator, and bounded
-database/local Jobs ingest, pairing, authentication, CarRecipe-proposal, eligible
+one full synthetic loopback signed-request path through a disposable least-privileged login. That
+path also holds four synthetic requests at the first replay-store call, observes only their
+aggregate lock-waiting count, rejects a fifth before replay work, and retains no timing or query
+history. It also contains library-only connector protocol/parser boundaries, a synthetic one-shot
+process supervisor, an exact-body composer, isolated pairing/request signers, a pure Web pairing
+verifier, local pairing applications/routes and bounded native-store connect/local-removal commands,
+a visible public-race consumer with a synthetic fallback, a separate synthetic all-three-route
+Next-development-to-disposable-PostgreSQL gate, a browser-memory-only hypothetical score simulator,
+and bounded database/local Jobs ingest, pairing, authentication, CarRecipe-proposal, eligible
 expired-invite/session, abandoned-enrollment, aged unreferenced revoked-passkey, and aged minimized
 revoked-device cleanup plus primary profile purge. A local invite/OAuth/initial-passkey enrollment,
 returning-passkey login, private passkey inventory, and private active-device inventory and revoke
@@ -195,8 +197,8 @@ with exactly the key ID, domain-separated digest, and exact expiry through a str
 The transport-free ADR 0019 application composes that verifier and adapter with synthetic/mock-pool
 evidence; the separate PostgreSQL suite proves access and bounded deletion. The full synthetic
 loopback gate additionally proves the composed transient flow and exact stored allowlist through a
-disposable login, without adding a retained field, log/export sink, deployment connection, or
-production schedule.
+disposable login, including controlled four-slot no-queue settlement, without adding a retained
+field, timing history, log/export sink, deployment connection, or production schedule.
 
 ADR 0017 implements only the process-side reader for the already mapped origin key/key-ID class. It
 requires one primary and at most one complete secondary pair, passes decoded copies directly into
@@ -209,12 +211,13 @@ ADRs 0016 and 0018 add no user field. The adapter reconstructs the origin key ID
 expiry, then reconstructs the verifier allowlist, copies the existing digests, signature, canonical
 payload, and identifiers, creates one opaque snapshot UUID, reads the existing minimal device tuple,
 and sends only those values to fixed procedures. Mock pools retain nothing. The opt-in integration
-uses only an obviously synthetic password in a disposable process/container and removes its
-container, network, and storage; owner-only stored state is asserted in process and not logged or
-exported. The Ingest deployment login and password remain a separate Security configuration class:
-protected environment and driver memory only, never a tracked value, log field, metric, response, or
-error cause. The config makes the password non-enumerable and JSON-redacted, and monitoring receives
-only `idle_client_error`. Real secret delivery, rotation, access review, and deployment TLS/login
+uses only an obviously synthetic password in a disposable process/container and removes its blocker,
+container, network, and storage; owner-only stored state plus the aggregate count of four
+lock-waiting Ingest queries are asserted in process and not logged, retained, or exported. The
+Ingest deployment login and password remain a separate Security configuration class: protected
+environment and driver memory only, never a tracked value, log field, metric, response, or error
+cause. The config makes the password non-enumerable and JSON-redacted, and monitoring receives only
+`idle_client_error`. Real secret delivery, rotation, access review, and deployment TLS/login
 evidence remain deployment work. Existing 15-minute device-nonce and 30-day raw-snapshot retention
 are unchanged.
 
@@ -898,11 +901,12 @@ returns it only in its validated body decision; its configuration reader, kernel
 and composer have no request-ID or log sink. The local Ingest HTTP boundary returns that application
 ID or a newly generated generic transport-problem ID in the bounded body/header, disables Fastify
 logging, rejects inbound correlation values, and retains no copy. The full synthetic integration
-asserts only the returned IDs and keeps no diagnostic sink. Future operational logs may use stable
-event names, those request IDs, coarse outcomes, and bounded numeric metrics only after a retention
-review. They omit raw URLs, request bodies, raw token values, handles when not needed, OAuth/passkey
-material, device public keys/signatures/nonces, origin keys/proofs/nonces, idempotency keys,
-recovery selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
+asserts only the returned IDs, closed decisions, exact stored state, and transient aggregate blocked
+query count and keeps no diagnostic sink. Future operational logs may use stable event names, those
+request IDs, coarse outcomes, and bounded numeric metrics only after a retention review. They omit
+raw URLs, request bodies, raw token values, handles when not needed, OAuth/passkey material, device
+public keys/signatures/nonces, origin keys/proofs/nonces, idempotency keys, recovery
+selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
 
 Connector telemetry is off by default. The implemented candidate diagnostic preview is local,
 explicit, stdout-only, redacted, reviewed before sharing, and generated from a fixed allowlist; the

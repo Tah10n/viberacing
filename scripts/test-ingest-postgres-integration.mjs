@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash, createHmac, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -9,6 +9,8 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 import { validateManifest } from "./check-database.mjs";
+
+// cspell:ignore usename
 
 const root = resolve(import.meta.dirname, "..");
 const projectName = `vr-ingest-it-${process.pid}`;
@@ -30,12 +32,42 @@ const profileId = "00000000-0000-4000-8000-000000026101";
 const deviceKeyId = "00000000-0000-4000-8000-000000026201";
 const sourceId = `src_${"S".repeat(22)}`;
 const deviceId = `dev_${"D".repeat(22)}`;
+const admissionDeviceKeyId = "00000000-0000-4000-8000-000000026202";
+const admissionSourceId = `src_${"N".repeat(22)}`;
+const admissionDeviceId = `dev_${"N".repeat(22)}`;
 const acceptedSyncId = `syn_${"A".repeat(22)}`;
 const revokedSyncId = `syn_${"R".repeat(22)}`;
+const admissionSyncIds = Object.freeze(
+  Array.from({ length: 4 }, (_, index) => `syn_${String(index + 1).repeat(22)}`),
+);
+const rejectedAdmissionSyncId = `syn_${"5".repeat(22)}`;
 const originKeyId = "edge_integration";
 const originSecret = Buffer.alloc(32, 0x33);
 const requestIdPattern = /^req_[A-Za-z0-9_-]{22}$/;
 const maximumResponseBytes = 2_048;
+const maximumBlockerOutputBytes = 64 * 1024;
+const databaseBlockerTimeoutMs = 10_000;
+const blockedOriginObservationTimeoutMs = 2_000;
+const admissionRejectionTimeoutMs = 1_500;
+const databaseBlockerReadyMarker = "viberacing_ingest_admission_blocker_ready";
+const privateValueMarkers = Object.freeze([
+  profileId,
+  deviceKeyId,
+  sourceId,
+  deviceId,
+  admissionDeviceKeyId,
+  admissionSourceId,
+  admissionDeviceId,
+  acceptedSyncId,
+  revokedSyncId,
+  ...admissionSyncIds,
+  rejectedAdmissionSyncId,
+  originKeyId,
+  originSecret.toString("base64url"),
+  ingestLogin,
+  ingestPassword,
+  "ingest-local-e2e",
+]);
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -96,6 +128,161 @@ function psqlScalar(sql, label) {
   return result.stdout.trim();
 }
 
+async function stopDatabaseOriginReplayBlocker(blocker) {
+  if (!blocker.hasExited()) {
+    blocker.child.stdin.end("ROLLBACK;\n");
+  }
+  let result;
+  try {
+    result = await waitWithDeadline(
+      blocker.closed,
+      databaseBlockerTimeoutMs,
+      "PostgreSQL origin-replay blocker did not stop within its fixed deadline.",
+    );
+  } catch (error) {
+    if (!blocker.hasExited()) {
+      blocker.child.kill("SIGKILL");
+      await waitWithDeadline(
+        blocker.closed,
+        databaseBlockerTimeoutMs,
+        "PostgreSQL origin-replay blocker did not close after forced termination.",
+      );
+    }
+    throw error;
+  }
+  if (blocker.hasPrivateOutput()) {
+    throw new Error("PostgreSQL origin-replay blocker output exposed a private integration value.");
+  }
+  if (blocker.hasOutputOverflow()) {
+    throw new Error("PostgreSQL origin-replay blocker exceeded its bounded output budget.");
+  }
+  if (result.code !== 0 || result.signal !== null) {
+    throw new Error("PostgreSQL origin-replay blocker did not close cleanly.");
+  }
+}
+
+async function startDatabaseOriginReplayBlocker() {
+  let exited = false;
+  let outputBytes = 0;
+  let outputOverflow = false;
+  let privateOutput = false;
+  let outputTail = "";
+  let readySettled = false;
+  let resolveReady;
+  let rejectReady;
+  const maximumMarkerLength = Math.max(
+    databaseBlockerReadyMarker.length,
+    ...privateValueMarkers.map((marker) => marker.length),
+  );
+  const ready = new Promise((resolvePromise, rejectPromise) => {
+    resolveReady = resolvePromise;
+    rejectReady = rejectPromise;
+  });
+  const child = spawn("docker", psqlArguments(), {
+    cwd: root,
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  const observeOutput = (chunk) => {
+    outputBytes += chunk.byteLength;
+    const text = `${outputTail}${chunk.toString("utf8")}`;
+    outputTail = text.slice(-(maximumMarkerLength - 1));
+    if (privateValueMarkers.some((marker) => text.includes(marker))) {
+      privateOutput = true;
+      child.kill("SIGKILL");
+    } else if (outputBytes > maximumBlockerOutputBytes) {
+      outputOverflow = true;
+      child.kill("SIGKILL");
+    } else if (!readySettled && text.includes(databaseBlockerReadyMarker)) {
+      readySettled = true;
+      resolveReady();
+    }
+  };
+  child.stdout.on("data", observeOutput);
+  child.stderr.on("data", observeOutput);
+  child.stdin.on("error", () => undefined);
+  const closed = new Promise((resolveClose, rejectClose) => {
+    child.once("error", () => {
+      exited = true;
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error("PostgreSQL origin-replay blocker could not start."));
+      }
+      rejectClose(new Error("PostgreSQL origin-replay blocker could not start."));
+    });
+    child.once("close", (code, signal) => {
+      exited = true;
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(
+          new Error("PostgreSQL origin-replay blocker exited before acquiring its lock."),
+        );
+      }
+      resolveClose(Object.freeze({ code, signal }));
+    });
+  });
+  void ready.catch(() => undefined);
+  void closed.catch(() => undefined);
+  const blocker = Object.freeze({
+    child,
+    closed,
+    hasExited: () => exited,
+    hasOutputOverflow: () => outputOverflow,
+    hasPrivateOutput: () => privateOutput,
+  });
+
+  try {
+    child.stdin.write(`BEGIN;
+SET LOCAL ROLE viberacing_owner;
+LOCK TABLE viberacing_private.origin_nonces IN ACCESS EXCLUSIVE MODE;
+\\echo ${databaseBlockerReadyMarker}
+`);
+    await waitWithDeadline(
+      ready,
+      databaseBlockerTimeoutMs,
+      "PostgreSQL origin-replay blocker did not acquire its lock in time.",
+    );
+    if (privateOutput || outputOverflow || exited) {
+      throw new Error("PostgreSQL origin-replay blocker failed before admission evidence began.");
+    }
+    return blocker;
+  } catch (error) {
+    await stopDatabaseOriginReplayBlocker(blocker).catch(() => undefined);
+    throw error;
+  }
+}
+
+function readBlockedOriginConsumeCount(label) {
+  const value = psqlScalar(
+    `SELECT pg_catalog.count(*)::text
+FROM pg_catalog.pg_stat_activity AS activity
+WHERE activity.datname = '${databaseName}'
+  AND activity.usename = '${ingestLogin}'
+  AND activity.state = 'active'
+  AND activity.wait_event_type = 'Lock'
+  AND pg_catalog.strpos(
+    activity.query,
+    'viberacing_api.consume_origin_nonce('
+  ) > 0;`,
+    label,
+  );
+  assert.match(value, /^[0-4]$/);
+  return Number(value);
+}
+
+async function waitForBlockedOriginConsumes() {
+  const deadline = Date.now() + blockedOriginObservationTimeoutMs;
+  let lastCount = 0;
+  while (Date.now() < deadline) {
+    lastCount = readBlockedOriginConsumeCount("blocked Ingest origin-consume observation");
+    if (lastCount === 4) {
+      return;
+    }
+    await sleep(25);
+  }
+  throw new Error(`expected four blocked Ingest origin-consume queries, observed ${lastCount}`);
+}
+
 function buildWorkspace(relativePath, label) {
   const workspaceRoot = resolve(root, relativePath);
   const workspaceRequire = createRequire(resolve(workspaceRoot, "package.json"));
@@ -135,6 +322,18 @@ function loadReviewedMigrations() {
 
 function sleep(milliseconds) {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
+}
+
+async function waitWithDeadline(promise, milliseconds, message) {
+  let timeoutToken;
+  const timeout = new Promise((_, reject) => {
+    timeoutToken = setTimeout(() => reject(new Error(message)), milliseconds);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timeoutToken);
+  }
 }
 
 async function waitForHealthyContainer() {
@@ -234,15 +433,20 @@ function readDevicePublicKey(keyPair) {
   return publicKey;
 }
 
-function createPayload(syncId, observedAt, tokens) {
+function createPayload(
+  syncId,
+  observedAt,
+  tokens,
+  { codexReportedDate = observedAt.slice(0, 10), payloadSourceId = sourceId } = {},
+) {
   return {
     schemaVersion: 1,
-    sourceId,
+    sourceId: payloadSourceId,
     syncId,
     observedAt,
     connectorVersion: "1.2.3",
     codexVersion: "0.144.5",
-    dailyEntries: [{ codexReportedDate: observedAt.slice(0, 10), tokens }],
+    dailyEntries: [{ codexReportedDate, tokens }],
   };
 }
 
@@ -253,6 +457,7 @@ function buildSignedRequest({
   originTimestamp,
   payload,
   policy,
+  requestDeviceId = deviceId,
 }) {
   const body = Buffer.from(JSON.stringify(payload), "utf8");
   const bodyDigestBase64Url = createHash("sha256").update(body).digest("base64url");
@@ -263,7 +468,7 @@ function buildSignedRequest({
     method: policy.method,
     requestTarget: policy.requestTarget,
     bodyDigestBase64Url,
-    deviceId,
+    deviceId: requestDeviceId,
     nonce: deviceNonce,
     timestamp: payload.observedAt,
     idempotencyKey: payload.syncId,
@@ -281,7 +486,7 @@ function buildSignedRequest({
   const originProof = createHmac("sha256", originSecret).update(originMessage).digest("base64url");
   const headers = new Headers({
     accept: policy.mediaType,
-    [policy.deviceSignature.headers.deviceId]: deviceId,
+    [policy.deviceSignature.headers.deviceId]: requestDeviceId,
     [policy.deviceSignature.headers.idempotencyKey]: payload.syncId,
     [policy.deviceSignature.headers.nonce]: deviceNonce,
     [policy.deviceSignature.headers.signature]: deviceSignature,
@@ -308,12 +513,13 @@ function assertResponseHeaders(response, body, problem) {
   );
 }
 
-async function postSignedRequest(baseUrl, policy, request) {
+async function postSignedRequest(baseUrl, policy, request, timeoutMilliseconds = 30_000) {
   const response = await fetch(`${baseUrl}${policy.requestTarget}`, {
     body: request.body,
     headers: request.headers,
     method: policy.method,
     redirect: "error",
+    signal: AbortSignal.timeout(timeoutMilliseconds),
   });
   const responseText = await response.text();
   assert.ok(Buffer.byteLength(responseText, "utf8") <= maximumResponseBytes);
@@ -378,6 +584,108 @@ function assertUnauthorized(result) {
   );
 }
 
+function assertTemporarilyUnavailable(result) {
+  assert.equal(result.status, 503);
+  assert.deepEqual(Object.keys(result.body).sort(), [
+    "errorCode",
+    "requestId",
+    "retryable",
+    "schemaVersion",
+    "status",
+    "title",
+  ]);
+  assert.deepEqual(
+    {
+      errorCode: result.body.errorCode,
+      retryable: result.body.retryable,
+      schemaVersion: result.body.schemaVersion,
+      status: result.body.status,
+      title: result.body.title,
+    },
+    {
+      errorCode: "temporarily_unavailable",
+      retryable: true,
+      schemaVersion: 1,
+      status: 503,
+      title: "Temporarily unavailable",
+    },
+  );
+}
+
+function utcDateDaysBefore(baseTimestamp, days) {
+  const value = new Date(baseTimestamp);
+  value.setUTCDate(value.getUTCDate() - days);
+  return value.toISOString().slice(0, 10);
+}
+
+async function exerciseNoQueueAdmission(baseUrl, policy, keyPair) {
+  const blocker = await startDatabaseOriginReplayBlocker();
+  const inFlightRequests = [];
+  let blockerStopped = false;
+  try {
+    const observedAt = new Date().toISOString();
+    for (let index = 0; index < admissionSyncIds.length; index += 1) {
+      const request = buildSignedRequest({
+        deviceNonceBytes: Buffer.alloc(16, 0x31 + index),
+        keyPair,
+        originNonceBytes: Buffer.alloc(16, 0x41 + index),
+        originTimestamp: observedAt,
+        payload: createPayload(admissionSyncIds[index], observedAt, 200 + index, {
+          codexReportedDate: utcDateDaysBefore(observedAt, 4 - index),
+          payloadSourceId: admissionSourceId,
+        }),
+        policy,
+        requestDeviceId: admissionDeviceId,
+      });
+      const pending = postSignedRequest(baseUrl, policy, request, databaseBlockerTimeoutMs);
+      void pending.catch(() => undefined);
+      inFlightRequests.push(pending);
+    }
+    await waitForBlockedOriginConsumes();
+
+    const rejectedRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x35),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x45),
+      originTimestamp: observedAt,
+      payload: createPayload(rejectedAdmissionSyncId, observedAt, 204, {
+        codexReportedDate: utcDateDaysBefore(observedAt, 5),
+        payloadSourceId: admissionSourceId,
+      }),
+      policy,
+      requestDeviceId: admissionDeviceId,
+    });
+    const rejectedResult = await waitWithDeadline(
+      postSignedRequest(baseUrl, policy, rejectedRequest, admissionRejectionTimeoutMs),
+      admissionRejectionTimeoutMs,
+      "the fifth Ingest request did not receive a no-queue decision within the fixed deadline",
+    );
+    assertTemporarilyUnavailable(rejectedResult);
+    assert.equal(
+      readBlockedOriginConsumeCount("post-rejection blocked Ingest origin-consume observation"),
+      4,
+      "the rejected fifth request must not add a fifth origin-consume query",
+    );
+
+    await stopDatabaseOriginReplayBlocker(blocker);
+    blockerStopped = true;
+    const settledRequests = await Promise.all(inFlightRequests);
+    for (let index = 0; index < settledRequests.length; index += 1) {
+      assertSuccess(settledRequests[index], {
+        acceptedEntries: 1,
+        outcome: "accepted",
+        syncId: admissionSyncIds[index],
+      });
+    }
+    return [...settledRequests, rejectedResult];
+  } finally {
+    if (!blockerStopped) {
+      await stopDatabaseOriginReplayBlocker(blocker).catch(() => undefined);
+    }
+    await Promise.allSettled(inFlightRequests);
+  }
+}
+
 async function startHost(startConfiguredIngestHost, databasePort) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const listenerPort = await findAvailableListenerPort();
@@ -416,6 +724,8 @@ async function main() {
   const policy = readAuthenticationPolicy();
   const keyPair = generateKeyPairSync("ed25519");
   const publicKey = readDevicePublicKey(keyPair);
+  const admissionKeyPair = generateKeyPairSync("ed25519");
+  const admissionPublicKey = readDevicePublicKey(admissionKeyPair);
   let containerStarted = false;
   let controller;
   let primaryFailure;
@@ -474,7 +784,9 @@ VALUES (
 );
 
 INSERT INTO viberacing_private.codex_sources (source_id, profile_id, state)
-VALUES ('${sourceId}', '${profileId}', 'active');
+VALUES
+  ('${sourceId}', '${profileId}', 'active'),
+  ('${admissionSourceId}', '${profileId}', 'active');
 
 INSERT INTO viberacing_private.device_keys (
   device_key_id,
@@ -488,18 +800,31 @@ INSERT INTO viberacing_private.device_keys (
   state,
   activated_at
 )
-VALUES (
-  '${deviceKeyId}',
-  '${deviceId}',
-  '${sourceId}',
-  pg_catalog.decode('${publicKey.toString("hex")}', 'hex'),
-  'Synthetic integration device',
-  '1.2.3',
-  'linux',
-  'x86_64',
-  'active',
-  pg_catalog.statement_timestamp()
-);
+VALUES
+  (
+    '${deviceKeyId}',
+    '${deviceId}',
+    '${sourceId}',
+    pg_catalog.decode('${publicKey.toString("hex")}', 'hex'),
+    'Synthetic integration device',
+    '1.2.3',
+    'linux',
+    'x86_64',
+    'active',
+    pg_catalog.statement_timestamp()
+  ),
+  (
+    '${admissionDeviceKeyId}',
+    '${admissionDeviceId}',
+    '${admissionSourceId}',
+    pg_catalog.decode('${admissionPublicKey.toString("hex")}', 'hex'),
+    'Synthetic admission device',
+    '1.2.3',
+    'linux',
+    'x86_64',
+    'active',
+    pg_catalog.statement_timestamp()
+  );
 COMMIT;`,
       "least-privileged Ingest login and synthetic device setup",
     );
@@ -576,13 +901,16 @@ COMMIT;`,
     const revokedResult = await postSignedRequest(host.baseUrl, policy, revokedRequest);
     assertUnauthorized(revokedResult);
 
+    const admissionResults = await exerciseNoQueueAdmission(host.baseUrl, policy, admissionKeyPair);
+
     const requestIds = new Set([
       acceptedResult.body.requestId,
       duplicateResult.body.requestId,
       replayResult.body.requestId,
       revokedResult.body.requestId,
+      ...admissionResults.map((result) => result.body.requestId),
     ]);
-    assert.equal(requestIds.size, 4);
+    assert.equal(requestIds.size, 9);
 
     await controller.close();
     controller = undefined;
@@ -596,10 +924,20 @@ SELECT pg_catalog.jsonb_build_object(
     FROM viberacing_private.device_nonces
     WHERE device_key_id = '${deviceKeyId}'
   ),
+  'admissionDeviceNonceCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.device_nonces
+    WHERE device_key_id = '${admissionDeviceKeyId}'
+  ),
   'deviceState', (
     SELECT state
     FROM viberacing_private.device_keys
     WHERE device_key_id = '${deviceKeyId}'
+  ),
+  'admissionDeviceState', (
+    SELECT state
+    FROM viberacing_private.device_keys
+    WHERE device_key_id = '${admissionDeviceKeyId}'
   ),
   'originCount', (
     SELECT pg_catalog.count(*)::integer
@@ -611,12 +949,24 @@ SELECT pg_catalog.jsonb_build_object(
     FROM viberacing_private.usage_snapshots
     WHERE device_key_id = '${deviceKeyId}'
   ),
+  'admissionSnapshotCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_snapshots
+    WHERE device_key_id = '${admissionDeviceKeyId}'
+  ),
   'snapshotEntryCount', (
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.usage_snapshot_entries AS entry_record
     JOIN viberacing_private.usage_snapshots AS snapshot_record
       ON snapshot_record.usage_snapshot_id = entry_record.usage_snapshot_id
     WHERE snapshot_record.device_key_id = '${deviceKeyId}'
+  ),
+  'admissionSnapshotEntryCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_snapshot_entries AS entry_record
+    JOIN viberacing_private.usage_snapshots AS snapshot_record
+      ON snapshot_record.usage_snapshot_id = entry_record.usage_snapshot_id
+    WHERE snapshot_record.device_key_id = '${admissionDeviceKeyId}'
   ),
   'snapshotOutcome', (
     SELECT outcome
@@ -628,24 +978,46 @@ SELECT pg_catalog.jsonb_build_object(
     FROM viberacing_private.source_day_values
     WHERE source_id = '${sourceId}'
   ),
+  'admissionSourceDayCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.source_day_values
+    WHERE source_id = '${admissionSourceId}'
+  ),
   'sourceTokens', (
     SELECT tokens
     FROM viberacing_private.source_day_values
     WHERE source_id = '${sourceId}'
   ),
+  'admissionSourceTokens', (
+    SELECT pg_catalog.jsonb_agg(source_value.tokens ORDER BY source_value.codex_reported_date)
+    FROM viberacing_private.source_day_values AS source_value
+    WHERE source_value.source_id = '${admissionSourceId}'
+  ),
   'unexpectedSyncCount', (
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.usage_snapshots
     WHERE sync_id = '${revokedSyncId}'
+  ),
+  'rejectedAdmissionSyncCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_snapshots
+    WHERE sync_id = '${rejectedAdmissionSyncId}'
   )
 )::text;`,
         "Ingest stored-state verification",
       ),
     );
     assert.deepEqual(storedState, {
+      admissionDeviceNonceCount: 4,
+      admissionDeviceState: "active",
+      admissionSnapshotCount: 4,
+      admissionSnapshotEntryCount: 4,
+      admissionSourceDayCount: 4,
+      admissionSourceTokens: [200, 201, 202, 203],
       deviceNonceCount: 1,
       deviceState: "revoked",
-      originCount: 3,
+      originCount: 7,
+      rejectedAdmissionSyncCount: 0,
       snapshotCount: 1,
       snapshotEntryCount: 1,
       snapshotOutcome: "accepted",
@@ -655,7 +1027,7 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Ingest PostgreSQL integration passed (accepted, duplicate, replay denial, revocation denial, and exact stored state).",
+      "Ingest PostgreSQL integration passed (accepted, duplicate, replay denial, revocation denial, four-slot no-queue admission, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

@@ -176,15 +176,17 @@ Current local evidence includes:
 - two generated OpenAPI operations and 40 checker regression cases, including missing evidence,
   method-specific contract drift, referenced authentication-policy digest drift, and stale output;
 - one opt-in emitted-host integration proving accepted/duplicate/replay/revoke response status,
-  headers, unique request IDs, and exact PostgreSQL state through a disposable synthetic login; and
+  headers, unique request IDs, exact PostgreSQL state, and four admitted calls held through the
+  first replay query while a fifth returns generic 503 without a fifth query; and
 - exact lockfile, registry metadata, direct notice, inventory, license, script, and online advisory
   review for Fastify 5.10.0.
 
 The configured 33-second handler limit is bound to executable policy and generic 503 handling; the
-suite does not claim a wall-clock production capacity result. No test proves Cloudflare signing,
-direct-origin denial, trusted deployment routing, a real protected key, TLS termination, a working
-deployment Ingest login/certificate, distributed rate limits, monitoring, connector behavior,
-real-user synchronization, or production capacity.
+controlled four-plus-one contention scenario does not claim representative load or a wall-clock
+production capacity result. No test proves Cloudflare signing, direct-origin denial, trusted
+deployment routing, a real protected key, TLS termination, a working deployment Ingest
+login/certificate, distributed rate limits, monitoring, connector behavior, real-user
+synchronization, or production capacity.
 
 ## References
 

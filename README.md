@@ -164,10 +164,13 @@ evidence, not proof of a deployed restart/route denial, Railway, external TLS, e
 credentials, or deployment. A separate opt-in integration builds the emitted host, creates a
 synthetic dedicated Ingest login in disposable PostgreSQL, sends independently signed loopback HTTP
 requests, and proves accepted, duplicate, persistent origin-replay, revoked-device, response-header,
-and exact persistence behavior before cleanup. It supplies no deployment credential, certificate,
-protected secret delivery, external edge route, real-user data, or capacity result. A library-only
-Rust foundation now emits the fixed stable App Server handshake and, only after it succeeds, a
-candidate `0.144.5` account/usage sequence. It confirms ChatGPT mode while discarding
+and exact persistence behavior. It also holds four valid requests at the first replay-store call,
+requires a fifth to return generic 503 without a fifth replay call, then releases and proves the
+four accepted responses and exact state before cleanup. This is controlled no-queue evidence, not a
+representative load result; it supplies no deployment credential, certificate, protected secret
+delivery, distributed control, external edge route, real-user data, or capacity result. A
+library-only Rust foundation now emits the fixed stable App Server handshake and, only after it
+succeeds, a candidate `0.144.5` account/usage sequence. It confirms ChatGPT mode while discarding
 email/plan/summary values and returns at most 31 sorted strict date/token entries. Exact release
 metadata, schema digests, minimal extracts, fixtures, and a drift/matrix checker are committed. The
 Windows x86_64 development command admits only the exact official artifact size and SHA-256;

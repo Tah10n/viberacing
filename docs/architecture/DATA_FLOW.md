@@ -506,10 +506,13 @@ mandatory and live infrastructure evidence remains absent.
 
 The opt-in `test:ingest:postgres-integration` gate composes ADRs 0015 through 0020, 0033, and 0055
 as one synthetic loopback path. It applies the reviewed migration ledger, creates only a disposable
-least-privileged Ingest login and synthetic source/device, sends independently signed HTTP, and
-checks accepted, duplicate, persistent origin-replay, revoked-device, response-contract, and exact
-persistence results before teardown. It supplies no external TLS, protected secret delivery,
-Cloudflare/Railway route, production credential, real-user result, or capacity evidence.
+least-privileged Ingest login and two synthetic source/device pairs, sends independently signed
+HTTP, and checks accepted, duplicate, persistent origin-replay, revoked-device, response-contract,
+and exact persistence results. It then holds four independent valid requests at the first
+origin-replay call, observes exactly four lock-waiting least-privileged queries, rejects a fifth
+without a fifth replay call, and proves the four accepted responses after releasing the owner lock.
+It supplies no external TLS, protected secret delivery, Cloudflare/Railway route, distributed
+control, production credential, representative load, real-user result, or capacity evidence.
 
 ADR 0021 implements the first local App Server protocol step: a fixed capability-free `initialize`,
 one 16 KiB LF-only closed response, discarded initialization strings, and fixed `initialized`. ADR

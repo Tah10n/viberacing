@@ -228,14 +228,15 @@ material availability cost.
   material after local activation/expiry. Exact HTTP start/poll and retry-safe activation are
   locally tested. A separate opt-in synthetic gate now carries independently signed requests through
   the emitted host and a disposable least-privileged PostgreSQL login, proving accepted/duplicate,
-  persistent replay, revoked-device denial, and exact stored state. ADR 0041 adds one idempotent
-  `forget-local` command that deletes only the exact native origin/label entry without loading it or
-  contacting the service, and warns that it did not revoke server authority. Key rotation, metrics,
-  cross-platform runtime evidence, deployment credentials/TLS, release, edge routing, and real-user
-  operation remain unimplemented. ADR 0038 separately binds an exact enum recipe body, fresh
-  nonce/time, and device ID under another signature domain. Web performs dummy-key work for unknown
-  devices, and revision 0028 rechecks active profile/source/device state before replacing only the
-  pending recipe; browser approval remains mandatory. ADR 0059 keeps that device POST and browser
+  persistent replay, revoked-device denial, exact stored state, and four admitted requests settling
+  after a fifth is rejected before replay-store work. ADR 0041 adds one idempotent `forget-local`
+  command that deletes only the exact native origin/label entry without loading it or contacting the
+  service, and warns that it did not revoke server authority. Key rotation, metrics, cross-platform
+  runtime evidence, deployment credentials/TLS, release, edge routing, and real-user operation
+  remain unimplemented. ADR 0038 separately binds an exact enum recipe body, fresh nonce/time, and
+  device ID under another signature domain. Web performs dummy-key work for unknown devices, and
+  revision 0028 rechecks active profile/source/device state before replacing only the pending
+  recipe; browser approval remains mandatory. ADR 0059 keeps that device POST and browser
   creation/approval default-off; disabled device requests stop before signature/service/database
   work, while private browser review and exact rejection remain available.
 - **Residual risk:** Request signatures cannot distinguish the legitimate connector from malware
@@ -575,7 +576,9 @@ material availability cost.
   `0.0.0.0:$PORT` with an explicit `railway-edge` declaration, but that declaration neither trusts
   forwarding nor proves the route; the origin HMAC remains mandatory. The full synthetic loopback
   gate proves an HTTP replay of the same origin nonce is rejected without another stored snapshot,
-  but it does not prove an edge signer or direct-origin policy.
+  and rejects a fifth request before replay-store work while four independent replay calls are
+  lock-waiting before settling after release. It does not prove an edge signer, distributed shaping,
+  or direct-origin policy.
 - **Residual risk:** Infrastructure metadata exposure can increase probing but must not be the only
   protection.
 
@@ -616,7 +619,9 @@ material availability cost.
   login/role and safe search path before each capability, exposes only fixed parameterized origin
   replay, device lookup, and submission calls, reconstructs and revalidates inputs, copies mutable
   values, accepts only closed rows, and destroys failed clients without forwarding
-  driver/configuration details.
+  driver/configuration details. Its full synthetic gate additionally observes four lock-waiting
+  origin-consume queries and rejects a fifth HTTP request without a fifth database call before the
+  four settle successfully.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Web now has a disposable synthetic narrow login plus widened-login denial
   through all three real Next development GETs plus one controlled four-slot admission scenario, but
@@ -871,9 +876,10 @@ material availability cost.
   `VIBERACING_INGEST_ENABLED=true` is read before every other host/protected-application field or
   resource; the tracked example remains false. This is no deployed/dynamic kill-switch result. There
   is no live identity or deployment database integration, distributed rate/backpressure policy,
-  monitoring, or combined capacity evidence. The full synthetic Ingest gate proves correctness under
-  four sequential signed requests, not load capacity. Deployed scheduling, cache, scoring/read
-  capacity evidence, quotas, edge shaping, and production load evidence remain unimplemented.
+  monitoring, or combined capacity evidence. The full synthetic Ingest gate proves controlled
+  four-plus-one no-queue correctness at the first replay-store call and exact settlement after
+  release, not representative load or capacity. Deployed scheduling, cache, scoring/read capacity
+  evidence, quotas, edge shaping, and production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

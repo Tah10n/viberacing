@@ -165,14 +165,16 @@ Current local evidence includes:
   100% statement, branch, function, and line coverage, plus strict lint, type checking, and
   production TypeScript compilation; and
 - one opt-in emitted-host integration using a synthetic dedicated login against disposable
-  PostgreSQL, with accepted/duplicate/replay/revoke responses and exact stored-state verification.
+  PostgreSQL, with accepted/duplicate/replay/revoke responses, exact stored-state verification, four
+  observed lock-waiting replay calls, and a fifth HTTP request rejected without a fifth database
+  call before the original four settle successfully.
 
 Focused tests use synthetic inputs and mock pools. The full-path gate separately executes these
 calls through a real disposable PostgreSQL instance and synthetic least-privileged login without
 TLS. The existing isolated PostgreSQL suite additionally proves functions, grants, constraints,
 deadlines, role denials, and concurrency. Deployment origin-secret delivery, credential/TLS,
-admission/load, monitoring, connector, Cloudflare/Railway, real-user, and deployment evidence remain
-open.
+distributed admission/rate policy, representative load/capacity, monitoring, connector,
+Cloudflare/Railway, real-user, and deployment evidence remain open.
 
 ## References
 

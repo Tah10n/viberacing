@@ -321,8 +321,9 @@ production login, monitoring, deployed cadence, or deployment exists.
 - `scripts/test-ingest-postgres-integration.mjs` owns a separate one-off `postgres-test` container
   with only an ephemeral loopback-published port. It applies the same reviewed manifest, creates a
   synthetic login with only `viberacing_ingest`, sends signed HTTP through emitted Ingest host code,
-  validates accepted/duplicate/replay/revoke responses and exact stored state, then removes the
-  container, network, and storage.
+  validates accepted/duplicate/replay/revoke responses and exact stored state, then holds four valid
+  requests at the first replay-store call, rejects a fifth without a fifth replay call, releases the
+  four to exact accepted results, and removes the blocker, container, network, and storage.
 - `scripts/test-web-postgres-integration.mjs` owns another one-off `postgres-test` container with an
   ephemeral loopback-published port, applies the same reviewed manifest, starts the three real Next
   development GETs, proves an extra-membership Web login fails generically without mutation,

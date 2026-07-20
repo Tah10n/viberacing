@@ -131,13 +131,14 @@ Current local evidence includes:
   application/pool composition that starts and closes without a database checkout;
 - shutdown requested before startup, both signals, second-signal forcing, timer failure/expiry,
   close rejection, handler cleanup, and startup rejection;
-- 121 tests at 100% statement, branch, function, and line coverage with strict lint, type checking,
+- 130 tests at 100% statement, branch, function, and line coverage with strict lint, type checking,
   and production builds for contracts, Ingest, and the host; and
 - a black-box emitted-JavaScript gate proving invalid startup exits with status 1 and produces no
   stdout, stderr, module-resolution stack, or reflected value; and
 - one opt-in emitted-host integration that applies all reviewed migrations, creates a synthetic
-  dedicated Ingest login/device in disposable PostgreSQL, sends independently signed loopback HTTP,
-  and proves accepted/duplicate/replay/revoke response plus exact persistence behavior before
+  dedicated Ingest login and two devices in disposable PostgreSQL, sends independently signed
+  loopback HTTP, proves accepted/duplicate/replay/revoke response plus exact persistence, and holds
+  four admitted calls at the first replay query while rejecting a fifth without another query before
   teardown.
 
 No current test proves Railway or Cloudflare configuration, external TLS, a public hostname,

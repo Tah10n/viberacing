@@ -578,14 +578,18 @@ ranking, or deployed Jobs scheduler/cadence exists.
 - An opt-in full local Ingest HTTP-to-PostgreSQL gate. It builds emitted contracts, Ingest, and host
   code; starts one disposable `postgres-test` container with an ephemeral loopback-only port;
   applies all 39 reviewed migrations; creates a synthetic login with only `viberacing_ingest`; and
-  seeds one synthetic source-bound Ed25519 device. Independently composed signed requests prove an
+  seeds two synthetic source-bound Ed25519 devices. Independently composed signed requests prove an
   accepted write, an exact duplicate under a fresh origin nonce, persistent origin replay denial,
-  revoked-device denial, the closed success/problem headers, and four unique server request IDs.
-  Owner-only state verification then proves three consumed origin nonces, one device nonce, one
-  accepted snapshot/entry/current value, terminal device revocation, and no revoked-device snapshot.
-  The command removes its host, container, network, and storage and is required by CI. It proves no
+  revoked-device denial, and the closed success/problem headers. A controlled owner lock then holds
+  four valid requests at `consume_origin_nonce`; `pg_stat_activity` observes exactly four
+  lock-waiting Ingest calls, a fifth valid request returns generic 503 without a fifth replay call,
+  and all four original requests return exact accepted acknowledgements after release. Nine server
+  request IDs are unique. Owner-only state verification proves seven consumed origin nonces, five
+  device nonces, five exact accepted snapshots/entries/current values, terminal first-device
+  revocation, no revoked-device snapshot, and no state for the rejected fifth request. The command
+  removes its blocker, host, container, network, and storage and is required by CI. It proves no
   external TLS/edge route, protected secret delivery, production credential, real-user input,
-  monitoring, distributed load control, capacity, or deployment.
+  monitoring, distributed load control, representative load/capacity, or deployment.
 - A server-only public HTTP problem boundary that requests exactly 16 cryptographic random bytes,
   returns a frozen opaque request token, owns all eleven status/title/retry mappings including
   explicit 405/406 semantics, validates the complete `ProblemDetailsV1`, and emits only
@@ -1295,13 +1299,14 @@ and public beta operations remain proposed. The local Ingest key reader, kernel,
 application composer, Fastify server, and separate host now prove bounded protected configuration,
 raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
 pool, fixed-query, orchestration, no-queue/deadline policy, exact listener modes, bounded
-startup/shutdown, result/problem serialization, and one full synthetic loopback persistence path,
-but not those deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database
-score and compatible active-recipe race projections, versioned response-only schemas, fail-closed
-server mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media
-parsing, admission/deadline policy, store translation, and final serialization. A third compatible
-local status projection/contract/route now supplies complete-UTC-day freshness and preference-gated
-streak without changing either older response. Cache/invalidation, deployed device-proposal ingress,
+startup/shutdown, result/problem serialization, and one full synthetic loopback persistence plus
+controlled no-queue-contention path, but not those deployed edge, secret, TLS, representative
+load/capacity, or operational boundaries. Bounded database score and compatible active-recipe race
+projections, versioned response-only schemas, fail-closed server mappers, bounded PostgreSQL
+adapters, and local HTTP routes now exist, including URL/media parsing, admission/deadline policy,
+store translation, and final serialization. A third compatible local status
+projection/contract/route now supplies complete-UTC-day freshness and preference-gated streak
+without changing either older response. Cache/invalidation, deployed device-proposal ingress,
 authenticated profile detail, client-rate and production-capacity controls, query-plan evidence,
 monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
 The visible web scoring and ranking experience now consumes a validated current-week status response

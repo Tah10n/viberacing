@@ -69,18 +69,20 @@ resource creation but is not a deployed dynamic kill switch. An opt-in synthetic
 integration now builds that host, creates a disposable least-privileged Ingest login in one
 ephemeral PostgreSQL container, sends independently signed HTTP requests, and proves accepted,
 duplicate, persistent origin-replay, revoked-device, response-contract, and exact persistence
-behavior before removing the container. The three public score/race/status routes now share a second
-exact default-off module-load gate before query/header parsing, admission acquisition, or storage
-work. Their visible current-week browser consumer retains rounded freshness, optional
-preference-gated streak, and an explicit validated synthetic fallback while the tracked gate is
-false. Connector pairing start/poll and signed-in approval options/verification now use a third
-exact default-off capability gate, independently resolved at module load before request parsing,
-runtime/service construction, admission acquisition, protected configuration, or database work. A
-fourth exact default-off decision now independently prevents new-source approval initiation and
-completion unless the `/connect` page and both browser approval modules resolved exact enablement;
-active existing-source pairing remains available, and the source choice is sealed and digest-bound
-to the passkey challenge. A fifth exact default-off decision now closes browser proposal creation,
-browser approval, and device proposal ingress before request or state work; account UI preserves
+behavior. It also holds four independently signed requests at the first replay-store call, rejects a
+fifth with generic 503 without a fifth replay call, then releases and proves all four accepted
+before removing the container. The three public score/race/status routes now share a second exact
+default-off module-load gate before query/header parsing, admission acquisition, or storage work.
+Their visible current-week browser consumer retains rounded freshness, optional preference-gated
+streak, and an explicit validated synthetic fallback while the tracked gate is false. Connector
+pairing start/poll and signed-in approval options/verification now use a third exact default-off
+capability gate, independently resolved at module load before request parsing, runtime/service
+construction, admission acquisition, protected configuration, or database work. A fourth exact
+default-off decision now independently prevents new-source approval initiation and completion unless
+the `/connect` page and both browser approval modules resolved exact enablement; active
+existing-source pairing remains available, and the source choice is sealed and digest-bound to the
+passkey challenge. A fifth exact default-off decision now closes browser proposal creation, browser
+approval, and device proposal ingress before request or state work; account UI preserves
 active/private previews and exact rejection. A sixth exact default-off decision now closes the
 invite/OAuth/initial-passkey enrollment pages, HTTP routes, and service methods while returning
 login and recovery remain available. None of these local gates is a deployed dynamic kill switch.
@@ -347,8 +349,11 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
 - `pnpm run test:ingest:postgres-integration` uses one disposable PostgreSQL container with an
   ephemeral loopback-only port and a synthetic dedicated Ingest login. It builds the emitted host,
   sends independently signed HTTP requests, verifies accepted/duplicate/replay/revocation results
-  plus exact persistence, and removes its container, network, and storage. It proves no external
-  TLS, protected secret delivery, edge route, production credential, real-user data, or capacity.
+  plus exact persistence, and holds four valid requests at the first replay-store call so a fifth
+  returns generic 503 without a fifth database call; the four settle successfully after release. It
+  then removes its container, network, and storage. It proves no external TLS, protected secret
+  delivery, edge route, distributed control, production credential, real-user data, representative
+  load, or capacity.
 - `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS, and
   private reporting controls are configured.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability

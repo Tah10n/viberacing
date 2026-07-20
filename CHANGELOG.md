@@ -207,11 +207,14 @@ Versioning where its guarantees are applicable.
   secret, live login, edge policy, monitoring, capacity, or deployment is claimed.
 - An opt-in synthetic Ingest HTTP-to-PostgreSQL integration gate. It builds the emitted contracts,
   Ingest, and host workspaces; applies every reviewed migration to one disposable PostgreSQL
-  container; creates a dedicated least-privileged login and synthetic device; sends independently
-  signed loopback requests; and proves accepted, duplicate, persistent replay denial, revoked-device
-  denial, closed response headers, unique server request IDs, and exact stored state before cleanup.
-  CI requires the gate, but it supplies no external TLS, protected secret, edge route, production
-  credential, real-user input, or capacity evidence.
+  container; creates a dedicated least-privileged login and two synthetic devices; sends
+  independently signed loopback requests; and proves accepted, duplicate, persistent replay denial,
+  revoked-device denial, closed response headers, unique server request IDs, and exact stored state.
+  A controlled owner lock then holds four valid requests at the first replay-store call, observes
+  exactly four lock-waiting Ingest queries, rejects a fifth with generic 503 without a fifth query,
+  and proves the four exact accepted responses after release before cleanup. CI requires the gate,
+  but it supplies no external TLS, protected secret, edge route, distributed control, production
+  credential, representative load, real-user input, or capacity evidence.
 - A library-only Rust connector protocol foundation with one fixed stable App Server initialization
   exchange, 16 KiB LF-only framing, manual duplicate/unknown-field rejection, bounded discarded
   response values, terminal hostile-input state, and non-reflective errors. Seven public-API tests

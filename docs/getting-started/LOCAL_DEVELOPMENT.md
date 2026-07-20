@@ -401,10 +401,12 @@ This command builds emitted contracts, Ingest, and host code; starts one one-off
 container with only an ephemeral `127.0.0.1` port; applies the reviewed migration manifest; and
 creates an obviously synthetic login with only `viberacing_ingest`. It sends independently composed
 signed HTTP requests through the real loopback host and checks accepted, duplicate, persistent
-origin-replay, revoked-device, response-header, request-ID, and exact persistence behavior. The
-container, network, and storage are removed in `finally`; the normal local database volume is never
-used. This is synthetic local evidence, not a deployment credential, external TLS/edge route,
-secret-manager integration, real-user result, or capacity test.
+origin-replay, revoked-device, response-header, request-ID, and exact persistence behavior. It also
+holds four valid requests at the first replay-store call, requires a fifth generic 503 without a
+fifth replay call, and proves the four accepted responses after release. The blocker, container,
+network, and storage are removed in `finally`; the normal local database volume is never used. This
+is synthetic local evidence, not a deployment credential, external TLS/edge route, secret-manager
+integration, real-user result, or capacity test.
 
 ## Local configuration
 

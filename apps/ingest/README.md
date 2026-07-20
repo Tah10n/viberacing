@@ -65,15 +65,17 @@ persistent atomic consume and cleanup races. Loopback socket tests prove malform
 duplicate-header evidence, and partial-request closure; injection tests prove the remaining route,
 overload, timeout policy, and serialization behavior. The current 426-test Ingest suite has 100%
 statement, branch, function, and line coverage. This workspace still owns no listener or process
-lifecycle; the separate host's 121 local tests prove only its closed configuration, composition,
+lifecycle; the separate host's 130 local tests prove only its closed configuration, composition,
 bind, and shutdown behavior. A separate opt-in root integration builds the emitted host, creates a
 synthetic dedicated Ingest login in disposable PostgreSQL, sends independently composed signed
 loopback requests, and proves accepted, duplicate, persistent replay denial, revoked-device denial,
-closed response headers, four unique server request IDs, and exact stored state. There is still no
-deployment protected-key injection, edge signer, direct-origin denial, trusted external TLS route,
-monitoring backend, deployment database login/certificate, connector, load/capacity evidence, or
-deployment. These boundaries therefore do not prove real-user synchronization or production
-capacity.
+closed response headers, and exact stored state. A controlled owner lock additionally holds four
+valid requests at `consume_origin_nonce`, proves a fifth receives generic 503 without a fifth replay
+call, and then proves the first four accept after release. There is still no deployment
+protected-key injection, edge signer, direct-origin denial, trusted external TLS route, monitoring
+backend, distributed control, deployment database login/certificate, connector, representative
+load/capacity evidence, or deployment. These boundaries therefore do not prove real-user
+synchronization or production capacity.
 
 Run from the repository root:
 

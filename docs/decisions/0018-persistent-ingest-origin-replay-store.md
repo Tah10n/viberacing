@@ -130,12 +130,14 @@ Acceptance evidence recorded for this decision included:
   current suites to 426 and 120 tests respectively at 100% statement, branch, function, and line
   coverage; and
 - one opt-in signed loopback scenario proving a fresh origin nonce reaches persistence while an
-  exact repeated HTTP proof returns generic unauthorized without a second snapshot.
+  exact repeated HTTP proof returns generic unauthorized without a second snapshot; the same
+  scenario holds four independent fresh consumes behind one owner lock, rejects a fifth HTTP request
+  without a fifth consume, and proves the first four persist after release.
 
 Focused tests use synthetic tuples and mock application pools; the full-path scenario uses a
 disposable synthetic Ingest login and real PostgreSQL. It does not prove deployment credentials or
 TLS, Cloudflare signing, direct-origin denial, production scheduling, physical purge latency, backup
-expiry, deployment, real-user behavior, or capacity.
+expiry, distributed control, representative load, deployment, real-user behavior, or capacity.
 
 ## References
 

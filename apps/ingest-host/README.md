@@ -73,5 +73,8 @@ Ingest, and host code; starts one disposable PostgreSQL container with an epheme
 port; creates a synthetic login with only `viberacing_ingest`; and sends independently signed
 requests through this host. It proves accepted and duplicate acknowledgements, persistent origin
 replay and revoked-device denial, closed response headers, unique request IDs, and exact database
-stored state before removing the container, network, and storage. It does not prove Railway,
-external TLS, secret delivery, a production credential, edge routing, real-user input, or capacity.
+stored state. It also holds four valid requests at the first replay-store call, requires a fifth
+generic 503 without a fifth replay call, and proves the four accepted responses after release before
+removing the container, network, and storage. It does not prove Railway, external TLS, secret
+delivery, distributed control, a production credential, edge routing, representative load, real-user
+input, or capacity.

@@ -118,12 +118,15 @@ pnpm run dev:web
 неизменность всех private tables. Затем она удерживает четыре score query на контролируемом DB lock,
 отклоняет пятый request без пятого public-score query и после rollback проверяет четыре исходных
 exact 200 response. Это локальная no-queue проверка, а не load/capacity evidence. Отдельная команда
-`pnpm run test:jobs-scheduler:postgres-integration` связывает production scheduler core под
-фиксированным UTC-временем с реальным Jobs runner и одноразовым PostgreSQL. Команда
-`pnpm run test:jobs-scheduler:timer-postgres-integration` сдвигает injected clock на следующий час,
-вызывает production interval handler дважды во время активного цикла, проверяет точный повторный
-каталог, подавление overlap и того же slot, а также повторный terminal reset. Это не доказательство
-доставки callback реальным host timer. Команда
+Ingest удерживает четыре независимо подписанных request на первом replay-store call, требует generic
+503 для пятого без пятого DB call, затем отпускает lock и проверяет четыре accepted response и
+точное состояние. Это также контролируемая no-queue проверка, а не representative load/capacity
+evidence. Отдельная команда `pnpm run test:jobs-scheduler:postgres-integration` связывает production
+scheduler core под фиксированным UTC-временем с реальным Jobs runner и одноразовым PostgreSQL.
+Команда `pnpm run test:jobs-scheduler:timer-postgres-integration` сдвигает injected clock на
+следующий час, вызывает production interval handler дважды во время активного цикла, проверяет
+точный повторный каталог, подавление overlap и того же slot, а также повторный terminal reset. Это
+не доказательство доставки callback реальным host timer. Команда
 `pnpm run test:jobs-scheduler:lifecycle-postgres-integration` отдельно проверяет injected
 first-signal shutdown production lifecycle: активная DB-задача завершается, следующая
 scheduler-задача не стартует, runner/timers/handlers закрываются и выставляется код 0. Это не
@@ -172,13 +175,15 @@ evidence для `POST /v1/community/sync`, не доверяет proxy headers �
 5/33/34-second request/handler/connection deadlines, после чего сериализует только повторно
 проверенные `no-store` success/problem contracts. Отдельный локальный host теперь запускает именно
 эту factory только в loopback development/test либо с явным Railway-edge production contract,
-закрывает частично созданные boundary и ограниченно обрабатывает SIGINT/SIGTERM. Его 121 test и
+закрывает частично созданные boundary и ограниченно обрабатывает SIGINT/SIGTERM. Его 130 tests и
 built-entrypoint check не доказывают Railway, внешний TLS, edge route, live credentials или
 deployment. Отдельный opt-in integration test собирает emitted host, создаёт синтетический
 выделенный Ingest login в одноразовом PostgreSQL, отправляет независимо подписанные loopback HTTP
 requests и проверяет accepted, duplicate, persistent replay, revoked device, response headers и
-точные сохранённые строки до полного cleanup. Он не доказывает deployment credential/certificate,
-protected secret delivery, внешний edge route, real-user data или capacity. Live protected key
+точные сохранённые строки. Она также удерживает четыре request на первом replay-store call,
+отклоняет пятый generic 503 без пятого DB call, затем проверяет четыре accepted response до полного
+cleanup. Она не доказывает deployment credential/certificate, protected secret delivery, distributed
+control, внешний edge route, representative load, real-user data или capacity. Live protected key
 injection, edge signer, direct-origin denial, distributed rate policy и monitoring всё ещё
 отсутствуют. Library-only Rust foundation теперь выполняет фиксированный stable handshake и только
 после него — candidate `0.144.5` account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает

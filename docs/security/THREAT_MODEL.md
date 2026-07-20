@@ -68,32 +68,35 @@ loopback/Railway listener declarations, composition, bind, partial-startup clean
 signal shutdown. Its default-off exact enable latch fails before another host/protected-application
 field or resource, but proves no deployed restart, route denial, or dynamic kill switch. One opt-in
 synthetic gate now exercises signed accepted/duplicate/replay/revoke HTTP through that emitted host
-and a disposable least-privileged PostgreSQL login with exact stored-state verification. It proves
-no live HTTP edge, trusted external TLS route, deployment credential/TLS connection, real-user
-result, or capacity. The public score/race/status routes have a shared exact default-off module gate
-plus request/response, admission, production-build, visible browser-consumer/fallback, and full
-synthetic Next-development-HTTP-to-disposable-PostgreSQL evidence with widened-login denial and
-private-table non-mutation. The same path now observes four lock-waiting score queries, rejects a
-fifth HTTP request without a fifth public-score query, and validates the four original responses
-after rollback. It proves no reusable/deployment login, TLS, cache, representative load/capacity,
-monitoring, or production process. The Jobs runner has strict command/config/pool/role/result
-evidence plus a synthetic CLI-to-PostgreSQL path with a widened-login denial and exact-state checks.
-The scheduler separately has exact-default-off, fixed-UTC-catalog, sequential/no-overlap,
-in-memory-slot, failure-containment, bounded-shutdown, fixed-clock production-core/PostgreSQL
-composition, and injected repeated-timer and process-lifecycle settlement evidence plus one
-real-clock emitted startup path through its terminal catalog marker, exact stored state, and forced
-test-child termination. Host-timer delivery, OS-signal delivery, a wall-clock recurring process
-callback, and emitted-child controller settlement before forced termination are not proven. The
-identity slice has exact-origin/body/cookie, state/PKCE, token minimization, initial-registration,
-returning-login, session-derived passkey inventory, non-current-key revocation, backup-key addition,
-exact-handle profile-deletion request, source inventory/pause/reactivation/unlink, and active-device
-revoke including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only
-OAuth `form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay
-server-only; source controls receive only a 15-minute encrypted token bound to the active session.
-Pairing start/poll and approval options/verification have a second exact Web module gate with
-factory-level negative evidence. None has a production database login, OAuth app, authenticator,
-edge, deployed scheduler/cadence, cache/backup purge, tombstone/restore replay, or network
-deployment. Controls below are marked **implemented** only when executable evidence exists in
+and a disposable least-privileged PostgreSQL login with exact stored-state verification. A
+controlled owner lock also holds four valid requests at the first replay query, rejects a fifth
+without a fifth replay call, and proves the four settle after release. It proves no live HTTP edge,
+trusted external TLS route, distributed control, deployment credential/TLS connection,
+representative load, real-user result, or capacity. The public score/race/status routes have a
+shared exact default-off module gate plus request/response, admission, production-build, visible
+browser-consumer/fallback, and full synthetic Next-development-HTTP-to-disposable-PostgreSQL
+evidence with widened-login denial and private-table non-mutation. The same path now observes four
+lock-waiting score queries, rejects a fifth HTTP request without a fifth public-score query, and
+validates the four original responses after rollback. It proves no reusable/deployment login, TLS,
+cache, representative load/capacity, monitoring, or production process. The Jobs runner has strict
+command/config/pool/role/result evidence plus a synthetic CLI-to-PostgreSQL path with a
+widened-login denial and exact-state checks. The scheduler separately has exact-default-off,
+fixed-UTC-catalog, sequential/no-overlap, in-memory-slot, failure-containment, bounded-shutdown,
+fixed-clock production-core/PostgreSQL composition, and injected repeated-timer and
+process-lifecycle settlement evidence plus one real-clock emitted startup path through its terminal
+catalog marker, exact stored state, and forced test-child termination. Host-timer delivery,
+OS-signal delivery, a wall-clock recurring process callback, and emitted-child controller settlement
+before forced termination are not proven. The identity slice has exact-origin/body/cookie,
+state/PKCE, token minimization, initial-registration, returning-login, session-derived passkey
+inventory, non-current-key revocation, backup-key addition, exact-handle profile-deletion request,
+source inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile
+PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI
+evidence with injected dependencies. Raw source IDs stay server-only; source controls receive only a
+15-minute encrypted token bound to the active session. Pairing start/poll and approval
+options/verification have a second exact Web module gate with factory-level negative evidence. None
+has a production database login, OAuth app, authenticator, edge, deployed scheduler/cadence,
+cache/backup purge, tombstone/restore replay, or network deployment. Controls below are marked
+**implemented** only when executable evidence exists in
 [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
 security claims about the current tree.
 
@@ -217,7 +220,7 @@ and migration or rollback where applicable.
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command                           | Bounded fixed-name selection, exact artifact admission, retained handle, bounded child/output/time, sanitized environment, no shell, strict adapter                    | Protocol, supervisor, synthetic Windows discovery/admission and redacted process-free preview tested; other platforms, support planned                                                             |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                                         | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                                                              | Local signer/vector, verifier, replay stores, application, and HTTP tested; operational/live planned                                                                                               |
 | Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                                          | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                                                        | Local verifier/config/replay/server/host tested; edge injection, trusted route, direct-origin planned                                                                                              |
-| Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections                                  | Default-off startup, strict schema, bounded bodies, fixed adapter/procedure, non-owner role, constraints, deadlines, backpressure                                      | Startup latch, full synthetic loopback HTTP-to-PostgreSQL, and isolated SQL tested; deployed operation planned                                                                                     |
+| Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections                                  | Default-off startup, strict schema, bounded bodies, fixed adapter/procedure, non-owner role, constraints, deadlines, backpressure                                      | Startup latch, full synthetic loopback HTTP-to-PostgreSQL including controlled four-slot no-queue contention, and isolated SQL tested; deployed operation planned                                  |
 | Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work                      | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons                                              | SQL, CLI/PostgreSQL, fixed-clock core, injected timer/lifecycle, and real-clock emitted-process terminal-marker evidence tested; deployed cadence, production login, correction planned            |
 | CarRecipe and assets                | A proposal, agent shell, or public row smuggles a URL, command, markup, executable value, copyrighted binary, or nondeterminism | Default-off mutation, enum-only schema, checked reducer, proposal-only device authority, browser-only decision, projection, provenance, snapshots                      | Local gate/agent/browser/device/DB/public race, Jobs cleanup, and local catalog tested; deployed cadence, release, edge, deployment pending                                                        |
 | Admin and operations                | A user session reaches admin, an operator acts without reason, or logs reveal usage                                             | Separate origin/policy, passkey step-up, least privilege, external audit, redaction, kill switches                                                                     | Invite role/reason/reference plus local Ingest, ranking, enrollment, pairing, new-source, and proposal gates implemented; hosted controls planned                                                  |
@@ -251,14 +254,16 @@ and migration or rollback where applicable.
    tests prove verifier-to-adapter ordering through a mock pool and the isolated database proves the
    procedures. A separate synthetic loopback gate now carries independently signed requests through
    the emitted host and a disposable least-privileged PostgreSQL login, proving accepted, duplicate,
-   persistent replay, revoke, closed response, and exact persistence behavior. No deployment
-   credential/TLS connection, trusted edge path, real-user end-to-end result, or capacity evidence
-   exists. The separate CarRecipe proposal message contains no source/profile identifier; its Web
-   lookup and revision 0028 derive the profile only from the exact active device, recheck active
-   source binding under lock, and can change only the pending enum recipe. Isolated tests cover
-   key/device mismatch, inactive source, nonce replay, and no active-recipe mutation. ADR 0059 now
-   keeps device/browser creation and browser approval default-off before parser/runtime/proof/state
-   work while retaining private review and exact rejection.
+   persistent replay, revoke, closed response, exact persistence, and a fifth-request rejection
+   while four requests remain blocked at the replay store. The four then accept after release. No
+   deployment credential/TLS connection, trusted edge path, distributed policy, representative load,
+   real-user end-to-end result, or capacity evidence exists. The separate CarRecipe proposal message
+   contains no source/profile identifier; its Web lookup and revision 0028 derive the profile only
+   from the exact active device, recheck active source binding under lock, and can change only the
+   pending enum recipe. Isolated tests cover key/device mismatch, inactive source, nonce replay, and
+   no active-recipe mutation. ADR 0059 now keeps device/browser creation and browser approval
+   default-off before parser/runtime/proof/state work while retaining private review and exact
+   rejection.
 4. **Local data overcollection.** A connector update starts reading prompts, account email,
    repositories, credentials, or broad App Server events. The candidate `0.144.5` adapter has only
    two fixed requests, closes every response object, validates then discards email/plan/summary,
@@ -299,8 +304,9 @@ and migration or rollback where applicable.
    public decisions. The separate host requires exact `0.0.0.0:$PORT` and an explicit `railway-edge`
    declaration in production, but treats that value only as startup policy: it does not authenticate
    the platform, forwarded headers, or request path. The full synthetic loopback gate proves that
-   the persistent origin nonce rejects a repeated HTTP proof before a second write, but it does not
-   prove edge signing or direct-origin denial.
+   the persistent origin nonce rejects a repeated HTTP proof before a second write and that local
+   admission rejects a fifth request before a fifth replay query while four queries are
+   lock-waiting, but it does not prove edge signing, distributed shaping, or direct-origin denial.
 6. **Season race and cap bypass.** Parallel source updates or jobs double count, exceed the daily
    profile cap, or mutate a finalized season. Current SQL proves unique source/day state, one
    transactional profile cap, immutable formula/season binding, serialized idempotent open-season

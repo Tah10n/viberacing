@@ -67,8 +67,10 @@ does not make the pull request trusted; review and protected-branch policy remai
   credentials/data, exposes at most an ephemeral loopback port, retains no volume or artifact, and
   cleans up in `finally`. The Web harness additionally bounds and discards its Next development
   process output, bounds a separate PostgreSQL blocker child used for its no-queue check, and
-  removes all three children. These are untrusted pull-request checks, not hosted-service,
-  production credential, deployment, capacity, or release evidence.
+  removes all three children. The Ingest harness independently bounds, scans, and discards its own
+  PostgreSQL blocker output before removing that child. These are untrusted pull-request checks, not
+  hosted-service, production credential, deployment, representative load/capacity, or release
+  evidence.
 
 The repository tests these rules with positive and negative fixtures. The tests are defense in
 depth; a malicious pull request can edit its own tests, so protected review of workflow changes is

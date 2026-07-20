@@ -141,13 +141,15 @@ Current local evidence includes:
 - 54 new adversarial/composition cases, bringing the Ingest suite to 317 tests at 100% statement,
   branch, function, and line coverage, plus strict lint, type checking, and production build; and
 - one opt-in emitted-host scenario proving this composition against a synthetic dedicated login in
-  disposable PostgreSQL for accepted, duplicate, replay, and revoked-device decisions.
+  disposable PostgreSQL for accepted, duplicate, replay, and revoked-device decisions plus four
+  database-blocked admitted calls, one rejected fifth call with no fifth replay query, and exact
+  settlement after release.
 
 The focused production-path test uses a synthetic key and mock PostgreSQL pool. The full-path gate
 separately proves loopback framing, public header/serialization policy, and the real procedure calls
 under a disposable synthetic login. It does not prove a deployment credential/certificate,
 Cloudflare signer, direct-origin denial, external TLS, distributed backpressure/rate limits,
-capacity, connector behavior, or real-user synchronization.
+representative load/capacity, connector behavior, or real-user synchronization.
 
 ## References
 

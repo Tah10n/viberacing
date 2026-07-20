@@ -250,9 +250,11 @@ flowchart LR
   reviewed factories, and bounds partial-startup cleanup plus SIGINT/SIGTERM shutdown. One opt-in
   synthetic integration now builds that emitted host, provisions only a disposable least-privileged
   Ingest login, sends independently signed loopback requests, and proves
-  accepted/duplicate/replay/revoke plus exact PostgreSQL state. Trusted external TLS and edge
-  routing, secret-manager/edge key injection, direct-origin denial, distributed rate/backpressure
-  controls, deployment login/certificate, capacity evidence, real-user end-to-end integration, and
+  accepted/duplicate/replay/revoke plus exact PostgreSQL state. It also holds four valid requests at
+  the first replay-store call, rejects a fifth without a fifth replay call, and proves the four
+  accepted results after release. Trusted external TLS and edge routing, secret-manager/edge key
+  injection, direct-origin denial, distributed rate/backpressure controls, deployment
+  login/certificate, representative load/capacity evidence, real-user end-to-end integration, and
   deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
   The local runner now wraps only the twelve reviewed authentication/abandoned-enrollment/
@@ -694,8 +696,8 @@ not live secret-manager/edge integration, a verified external TLS route, a deplo
 login/TLS connection, direct-origin denial, a connector, capacity evidence, or deployment. A
 separate opt-in gate carries independently signed requests through the emitted loopback host and a
 synthetic dedicated login in disposable PostgreSQL, checking accepted, duplicate, replay, revoke,
-response, and exact persistence behavior. This local evidence does not satisfy any deployment gate
-above.
+response, exact persistence, and controlled four-slot no-queue behavior at the first replay-store
+call. This local evidence does not satisfy any deployment or representative-load gate above.
 
 ### Storage
 
