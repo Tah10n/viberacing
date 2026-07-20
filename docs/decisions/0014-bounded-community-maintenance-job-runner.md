@@ -215,10 +215,12 @@ Node-to-PostgreSQL application path. ADR 0063 proves the local scheduler against
 clock, separately composes its production core under fixed injected UTC time with this real runner
 and disposable PostgreSQL, directly invokes its repeated interval handler, directly injects the
 production lifecycle handler after an active runner call starts, and starts the built entry point
-under the real host clock through its terminal startup-catalog marker without process output.
-Host-timer delivery, deployed OS-signal routing, emitted-child controller settlement before forced
-termination, a wall-clock recurring process callback, production TLS/login, capacity, monitoring,
-real-user retention, and deployment evidence remain required before those behaviors may be claimed.
+under the real host clock through its terminal startup-catalog marker without process output. A
+separate unchanged emitted-process gate now observes one native minute-timer refresh through this
+runner in a later real five-minute slot, and a pinned-Linux gate delivers one OS `SIGTERM` while a
+runner call is active. These prove local recurring-refresh and signal paths, not emitted-child
+controller/orchestrator settlement, durable cadence, production TLS/login, capacity, monitoring,
+real-user retention, or deployment evidence.
 
 ## References
 

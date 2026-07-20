@@ -43,9 +43,10 @@ material availability cost.
   a default-off local hourly catalog, fixed-clock synthetic scheduler/PostgreSQL composition, an
   injected repeated-timer path with overlap and same-slot suppression, an injected lifecycle path
   that settles an active real-runner call without starting the later job, and one real-clock emitted
-  startup path through its terminal catalog marker. It does not prove host-timer delivery, OS-signal
-  delivery, emitted-child controller settlement before forced termination, a wall-clock recurring
-  process callback, or deployed cadence.
+  startup path through its terminal catalog marker. A separate unchanged emitted path observes one
+  native minute-timer refresh in a later real five-minute slot, and a pinned-Linux path delivers one
+  OS `SIGTERM` during an active database call. These prove local host-timer and OS-signal paths, not
+  emitted-child controller/orchestrator settlement or deployed cadence.
 - **Residual risk:** Vibe Racing cannot prove one human per GitHub account.
 
 ### VR-ABUSE-SOURCE-DUPLICATION — Duplicate declared Codex sources
@@ -137,12 +138,15 @@ material availability cost.
   the penultimate real-runner call before injecting its first handler, and proves that call settles
   without starting the later job. A fifth starts the built entry point under real host time, reaches
   the terminal startup-catalog marker without process output, then forcibly ends only its persistent
-  test child. A sixth mounts a link-free production-only runtime read-only under the pinned Linux
-  Node image, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves
-  graceful settlement without starting refresh or a later job. Host-timer delivery, controller
-  settlement in the forcibly ended child, a deployed signal route, correction authority, a
-  wall-clock recurring process callback, deployed scheduling, production database login/TLS,
-  representative or deployed backlog recovery, and operational reconciliation remain unimplemented.
+  test child. A sixth starts that unchanged emitted process, holds the scoring mutex after startup,
+  observes refresh in a later real five-minute slot, releases it, and requires a newer refresh
+  timestamp before ending the test child. A seventh mounts a link-free production-only runtime
+  read-only under the pinned Linux Node image, blocks the emitted first finalization call, delivers
+  an OS `SIGTERM`, and proves graceful settlement without starting refresh or a later job. The sixth
+  proves one local host-timer recurring refresh. Controller settlement in the forcibly ended
+  children, a deployed signal route, correction authority, deployed scheduling, production database
+  login/TLS, representative or deployed backlog recovery, and operational reconciliation remain
+  unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -656,11 +660,12 @@ material availability cost.
   and full HTTP integration result. Jobs additionally has fixed-clock production scheduler-core
   composition, injected repeated-timer and process-lifecycle settlement with its disposable
   PostgreSQL boundary, one real-clock emitted startup path through its terminal catalog marker, and
-  one pinned-Linux emitted OS-`SIGTERM` path with active-call settlement and no later job. None
-  proves host-timer delivery, emitted-child controller settlement before forced termination, a
+  one pinned-Linux emitted OS-`SIGTERM` path with active-call settlement and no later job. A
+  separate unchanged emitted path also proves one native host-timer refresh in a later real
+  five-minute slot. None proves emitted-child controller settlement before forced termination, a
   deployed signal route or orchestrator grace policy, a deployment credential/certificate, external
-  TLS/edge route, external audit sink, capacity, a wall-clock recurring process callback, deployed
-  scheduler operation, monitoring, or real-user behavior.
+  TLS/edge route, external audit sink, capacity, deployed scheduler operation, monitoring, or
+  real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -887,28 +892,31 @@ material availability cost.
   first handler, and proves graceful settlement without starting the later job. A fifth starts the
   built entry point under the real host clock, reaches the terminal startup-catalog marker without
   process output, forcibly ends only its persistent test child, and then verifies exact state. A
-  sixth holds the emitted first finalization call inside the pinned Linux runtime, delivers an OS
-  `SIGTERM`, and proves silent graceful settlement with no later job. These do not prove host-timer
-  delivery, controller settlement in the forcibly ended child, a deployed signal route, wall-clock
-  recurring process behavior, deployed cadence, or production-load capacity. The kernel itself has
-  no socket/stream authority. The separate Ingest adapter adds a four-client ceiling,
-  2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row
-  origin consume, zero-or-one device lookup, and one-row submission results, with destructive
-  release on failure. The transport-free application generates request correlation before
-  verification, submits only after verification, waits for settlement, and contains dependency
-  failures without a retry loop. The local Fastify boundary caps the raw body at 8192 bytes, parsed
-  headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests per socket at 16;
-  it sets 5/33/34-second request/handler/connection deadlines and a five-second keep-alive, admits
-  four unsettled application calls without a queue, holds each lease through settlement, and returns
-  generic 503 on exhaustion. Real loopback tests close malformed and partial requests; injection
-  tests cover overload and response policy. The separate host closes that composition under a
-  36-second first-signal deadline, forces failure on a second signal/deadline/close error, and
-  requires the Railway drain declaration to leave at least four seconds beyond its local close
-  bound. It also stays default-off unless exact `VIBERACING_INGEST_ENABLED=true` is read before
-  every other host/protected-application field or resource; the tracked example remains false. This
-  is no deployed/dynamic kill-switch result. There is no live identity or deployment database
-  integration, distributed rate/backpressure policy, monitoring, or combined capacity evidence. The
-  full synthetic Ingest gate proves controlled four-plus-one no-queue correctness at the first
+  sixth starts that unchanged emitted process, holds the scoring mutex after startup, observes a
+  native minute-timer refresh in a later real five-minute slot, releases it, and requires a newer
+  refresh timestamp before ending the test child. A seventh holds the emitted first finalization
+  call inside the pinned Linux runtime, delivers an OS `SIGTERM`, and proves silent graceful
+  settlement with no later job. These prove one local host-timer refresh and one local OS-signal
+  path, but not controller settlement in the forcibly ended children, a deployed signal route,
+  durable/deployed cadence, or production-load capacity. The kernel itself has no socket/stream
+  authority. The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
+  checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row origin consume,
+  zero-or-one device lookup, and one-row submission results, with destructive release on failure.
+  The transport-free application generates request correlation before verification, submits only
+  after verification, waits for settlement, and contains dependency failures without a retry loop.
+  The local Fastify boundary caps the raw body at 8192 bytes, parsed headers at 16384 bytes, raw
+  header pairs at 64, connections at 32, and requests per socket at 16; it sets 5/33/34-second
+  request/handler/connection deadlines and a five-second keep-alive, admits four unsettled
+  application calls without a queue, holds each lease through settlement, and returns generic 503 on
+  exhaustion. Real loopback tests close malformed and partial requests; injection tests cover
+  overload and response policy. The separate host closes that composition under a 36-second
+  first-signal deadline, forces failure on a second signal/deadline/close error, and requires the
+  Railway drain declaration to leave at least four seconds beyond its local close bound. It also
+  stays default-off unless exact `VIBERACING_INGEST_ENABLED=true` is read before every other
+  host/protected-application field or resource; the tracked example remains false. This is no
+  deployed/dynamic kill-switch result. There is no live identity or deployment database integration,
+  distributed rate/backpressure policy, monitoring, or combined capacity evidence. The full
+  synthetic Ingest gate proves controlled four-plus-one no-queue correctness at the first
   replay-store call and exact settlement after release, then one separate silent built-entry-point
   request before forced test-child termination. A second gate mounts the exact emitted production
   graph read-only under pinned Linux Node, holds one independently signed request at that replay

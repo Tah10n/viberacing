@@ -36,11 +36,10 @@ abandoned-enrollment, CarRecipe-proposal, finalized-source-day, terminal-deletio
 revoked-passkey, and revoked-device retention, pairing approval-provenance redaction, primary
 profile deletion, open-season scoring, and terminal finalization procedures plus Web-only public
 score/race/status and exact-session private score projections are implemented; deployed HTTP ingest,
-host-timer delivery, a wall-clock recurring scheduler process callback, deployed signal routing and
-orchestrator grace policy, deployed cadence, audited corrections, cache/backup/tombstone purge, and
-restore replay are not. Fixed-clock startup, injected repeated timer, injected lifecycle, real-clock
-emitted-process terminal-marker, and pinned-Linux OS-signal/PostgreSQL evidence are proven
-synthetically.
+deployed signal routing and orchestrator grace policy, durable/deployed cadence, audited
+corrections, cache/backup/tombstone purge, and restore replay are not. Fixed-clock startup, injected
+repeated timer, injected lifecycle, real-clock emitted-process terminal-marker, native host-timer
+recurring refresh, and pinned-Linux OS-signal/PostgreSQL evidence are proven synthetically.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -665,10 +664,13 @@ and same-slot suppression, and verifies the rearmed terminal reset. A fourth com
 process lifecycle under fixed time, injects its first handler during the penultimate real database
 job, and proves graceful settlement plus no later scheduler job. A fifth starts the built entry
 point under real host time, reaches the terminal startup-catalog marker without process output, then
-forcibly ends only its persistent test child. These do not supply host-timer delivery, OS-signal
-delivery, emitted-child controller settlement before forced termination, a wall-clock recurring
-process callback, production login/TLS, deployed cadence, monitoring, capacity, or real-user purge
-evidence.
+forcibly ends only its persistent test child. A sixth starts that unchanged emitted process, holds
+the scoring mutex after startup, observes a native minute-timer refresh in a later real five-minute
+slot, releases it, and requires a newer refresh timestamp before ending the child. A seventh
+pinned-Linux gate delivers an OS `SIGTERM` while finalization is active and proves graceful
+settlement without a later job. These supply local host-timer and OS-signal evidence, not
+emitted-child controller/orchestrator settlement, production login/TLS, durable/deployed cadence,
+monitoring, capacity, or real-user purge evidence.
 
 Revision 0009 materializes only an open Community season. It binds each ISO Monday-through-Sunday
 season to immutable `community_v1` parameters, sums current eligible source/day values with numeric
@@ -969,7 +971,7 @@ Revision 0040 adds no table, column, public contract, personal field, or durable
 Its Jobs-only no-argument function discovers only one oldest grace-eligible open or data-backed
 season under the existing scoring mutex, then delegates to the unchanged finalization function. The
 pre-existing source-date index and one new partial open-season index cover only already-mapped
-private date/source and public season-state keys. The eighteen-command integration and all five
+private date/source and public season-state keys. The eighteen-command integration and all six
 scheduler/PostgreSQL modes prove exact local progress, but not representative backlog capacity,
 production login/TLS, deployed cadence, monitoring, or real-user recovery.
 
@@ -1107,10 +1109,10 @@ something the script silently broadens or repairs.
 - Deploy the default-off local scheduler with a production Jobs login/TLS path,
   single-replica/cadence policy, monitoring, representative backlog-recovery and capacity evidence,
   plus audited corrections. The pinned-Linux emitted signal gate proves one local OS `SIGTERM` while
-  the first finalization call is lock-waiting, but the fixed-clock, injected-timer,
-  injected-lifecycle, terminal-marker, and signal evidence do not provide host-timer delivery,
-  controller settlement in the forcibly ended child, a deployed signal route, a wall-clock recurring
-  process callback, production configuration, or deployed evidence.
+  the first finalization call is lock-waiting, and the separate unchanged emitted-process gate
+  proves one local native host-timer recurring refresh. The evidence still does not provide
+  controller settlement in the forcibly ended children, a deployed signal route, durable cadence,
+  production configuration, or deployed evidence.
 - Integrate the bounded database adapter and local score/race/status routes with a
   deployment-provisioned Web-only login and verified TLS, then add cache/invalidation, edge request
   shaping, representative/deployed query-plan and load/capacity evidence, monitoring, and deployment

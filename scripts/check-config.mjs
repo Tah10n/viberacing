@@ -204,6 +204,9 @@ export function validateWorkflow(path, workflow) {
       findings.push("primary CI must define the Node repository-gate job");
       return findings;
     }
+    if (workflow.jobs.node["timeout-minutes"] !== 25) {
+      findings.push("Node repository-gate CI must retain the exact 25-minute timeout");
+    }
 
     const requiredRuns = [
       "node scripts/check-public-files.mjs --all",
@@ -219,6 +222,7 @@ export function validateWorkflow(path, workflow) {
       "pnpm run test:jobs-scheduler:timer-postgres-integration",
       "pnpm run test:jobs-scheduler:lifecycle-postgres-integration",
       "pnpm run test:jobs-scheduler:process-postgres-integration",
+      "pnpm run test:jobs-scheduler:wall-clock-postgres-integration",
       "pnpm run test:jobs-scheduler:signal-postgres-integration",
     ];
     const positions = requiredRuns.map((command) =>
@@ -226,13 +230,13 @@ export function validateWorkflow(path, workflow) {
     );
     if (positions.some((position) => position === -1)) {
       findings.push(
-        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run verify:node, and run all ten synthetic PostgreSQL integrations using exact commands",
+        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run verify:node, and run all eleven synthetic PostgreSQL integrations using exact commands",
       );
     } else if (
       !positions.every((position, index) => index === 0 || position > positions[index - 1])
     ) {
       findings.push(
-        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, and all ten synthetic PostgreSQL integrations",
+        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, and all eleven synthetic PostgreSQL integrations",
       );
     }
 

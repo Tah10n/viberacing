@@ -283,16 +283,19 @@ flowchart LR
   settlement and no later scheduler job, and requires exact graceful cleanup and exit code 0 before
   invoking the omitted reset separately. A fourth integration starts the built entry point under the
   real host clock, reaches the terminal startup-catalog marker without process output, forcibly ends
-  only its persistent test child, and then verifies exact stored state. A fifth integration builds a
-  link-free production-only runtime from the exact installed graph, mounts it read-only under a
-  pinned Linux Node image, holds the emitted first finalization call, delivers an OS `SIGTERM`, and
-  proves graceful settlement without refresh or any later job. It requires silent code-0 exit,
-  session release, immutable runtime contents, and the same final state after the seventeen omitted
-  commands run separately. Host-timer delivery, controller settlement in the forcibly ended child, a
-  deployed signal route, an external audit sink, a wall-clock recurring process callback, durable or
-  deployed cadence, representative or deployed backlog recovery, monitoring, production
-  credentials/TLS, capacity, cache/backup/tombstone purge, restore replay, and deployment remain
-  separate gates.
+  only its persistent test child, and then verifies exact stored state. A fifth integration starts
+  that unchanged emitted process, waits for the startup catalog, holds the scoring mutex until a
+  native minute-timer callback reaches refresh in a later real five-minute slot, releases it,
+  requires the refresh timestamp to advance, and only then forcibly ends the persistent child. A
+  sixth integration builds a link-free production-only runtime from the exact installed graph and
+  mounts it read-only under a pinned Linux Node image. It holds the emitted first finalization call,
+  delivers an OS `SIGTERM`, and proves graceful settlement without refresh or any later job. It
+  requires silent code-0 exit, session release, immutable runtime contents, and the same final state
+  after the seventeen omitted commands run separately. The fifth gate proves one local host-timer
+  recurring refresh. Controller settlement in the forcibly ended children, a deployed signal route,
+  an external audit sink, durable or deployed cadence, representative or deployed backlog recovery,
+  monitoring, production credentials/TLS, capacity, cache/backup/tombstone purge, restore replay,
+  and deployment remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.
@@ -1236,12 +1239,13 @@ external TLS/edge, cache, capacity, or operational gate above.
   injects its first handler during an active real database job, and proves graceful settlement plus
   no later scheduler job. A fourth starts the built entry point under real host time, reaches the
   terminal startup-catalog marker without process output, and then forcibly ends only the test
-  child. A fifth uses a pinned Linux Node image and read-only link-free copy of the production
-  graph, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves graceful
-  active-call settlement plus suppression of every later job. Host-timer delivery, controller
-  settlement in the forcibly ended child, a deployed signal route, a wall-clock recurring process
-  callback, durable/deployed cadence, representative or deployed backlog recovery, capacity,
-  notification, correction, backup purge, and deployed retention evidence remain open.
+  child. A fifth starts that unchanged emitted process and proves one native host-timer refresh in a
+  later real five-minute slot. A sixth uses a pinned Linux Node image and read-only link-free copy
+  of the production graph, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and
+  proves graceful active-call settlement plus suppression of every later job. Controller settlement
+  in the forcibly ended children, a deployed signal route, durable/deployed cadence, representative
+  or deployed backlog recovery, capacity, notification, correction, backup purge, and deployed
+  retention evidence remain open.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
   new-source creation while preserving active existing-source pairing, plus CarRecipe proposal

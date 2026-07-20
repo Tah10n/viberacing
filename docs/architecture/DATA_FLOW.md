@@ -671,10 +671,13 @@ and verifies the rearmed terminal reset. A fourth composes the process lifecycle
 handler during the penultimate real database job, and proves active-call settlement, no later
 scheduler job, and exact graceful cleanup. A fifth starts the built scheduler entry point under the
 real host clock, reaches the terminal startup-catalog marker without process output, forcibly ends
-only its persistent test child, and then verifies exact state. A sixth mounts a link-free
-production-only runtime read-only under the pinned Linux Node image, holds the first finalization
-call, delivers an OS `SIGTERM`, and proves graceful settlement without starting refresh or a later
-job. No host-timer recurring callback, controller settlement in the forcibly ended child, deployed
+only its persistent test child, and then verifies exact state. A sixth starts that unchanged emitted
+process, holds the scoring mutex after startup, observes a native minute-timer refresh in a later
+real five-minute slot, releases it, and requires a newer refresh timestamp before forcing the
+persistent child to end. A seventh mounts a link-free production-only runtime read-only under the
+pinned Linux Node image, holds the first finalization call, delivers an OS `SIGTERM`, and proves
+graceful settlement without starting refresh or a later job. The sixth gate proves one local
+host-timer recurring refresh. No controller settlement in the forcibly ended children, deployed
 signal route or scheduler, representative backlog/capacity result, external audit sink, production
 login/certificate, audited correction, tombstone/restore replay, deployed route, or public cache
 exists.

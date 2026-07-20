@@ -22,7 +22,7 @@ jobs:
   node:
     name: Node and repository gates
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Check out without persisted credentials
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -83,6 +83,9 @@ jobs:
 
       - name: Exercise the real-clock Jobs scheduler process-to-PostgreSQL path
         run: pnpm run test:jobs-scheduler:process-postgres-integration
+
+      - name: Exercise the recurring wall-clock Jobs scheduler process-to-PostgreSQL path
+        run: pnpm run test:jobs-scheduler:wall-clock-postgres-integration
 
       - name: Exercise the OS-signalled Jobs scheduler process-to-PostgreSQL path
         run: pnpm run test:jobs-scheduler:signal-postgres-integration

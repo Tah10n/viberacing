@@ -31,14 +31,17 @@ fourth composes the production process lifecycle, injects its first handler duri
 real database job, and proves graceful settlement plus no later scheduler job. A fifth starts the
 built scheduler entry point under the real host clock, reaches the terminal startup-catalog marker
 without process output, forcibly ends only its persistent test child, and then verifies exact state.
-A sixth runs a link-free production-only copy in the pinned Linux Node image, blocks its first
-finalization call, delivers an OS `SIGTERM`, and proves graceful settlement without starting any
-later job. It still has no host-timer recurring callback, controller settlement in the forcibly
-ended child, deployed signal route, deployed application service, durable Jobs cadence, operational
-sync connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway
-deployment, live OAuth, a reusable/production database login, or production database. Component
-status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
-required runtime boundaries, not deployed evidence.
+A sixth starts that unchanged emitted process, observes a native minute-timer refresh in a later
+real five-minute slot, requires the database refresh timestamp to advance, and only then forcibly
+ends the persistent child. A seventh runs a link-free production-only copy in the pinned Linux Node
+image, blocks its first finalization call, delivers an OS `SIGTERM`, and proves graceful settlement
+without starting any later job. It now has one local host-timer recurring-refresh result, but still
+no controller settlement in the forcibly ended children, deployed signal route, deployed application
+service, durable Jobs cadence, operational sync connector, supported Codex version, distributed
+recovery perimeter, Cloudflare/Railway deployment, live OAuth, a reusable/production database login,
+or production database. Component status is tracked in
+[implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe required runtime boundaries,
+not deployed evidence.
 
 ## System context
 
@@ -158,79 +161,83 @@ handler during the penultimate real database job, and proves graceful active-cal
 later scheduler job. A fifth starts the built entry point under the real host clock, reaches the
 terminal startup-catalog marker without process output, forcibly ends only its persistent test
 child, and then verifies exact state. It is not controller-settlement evidence before that forced
-termination. None is a host-timer-delivery, OS-signal-delivery, wall-clock recurring process, or
-deployed-cadence result. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and
-JSON parser, verifies a replay-consumed body-bound origin proof before parsing, validates the sync
-contract, and verifies the exact source-bound device request under strict Ed25519 semantics. ADR
-0016 adds a fixed-query four-client PostgreSQL adapter with strict TLS/config, per-checkout Ingest
-role/login/search-path verification, closed device/submission mappers, copied parameters, and
-destructive failure release. ADR 0017 adds an exact primary/secondary origin-key reader and
-config-backed verifier factory without exposing a reusable key container. ADR 0018 adds persistent
-atomic origin replay, and ADR 0019 composes the same replay/device/submission adapter behind one
-transport-free validated application decision. ADR 0020 adds one confined Fastify server factory
-with exact raw-body/header preservation, closed POST/error serialization, local connection/deadline
-bounds, four-call no-queue admission, and no proxy/request-ID trust. ADR 0033 adds a separate local
-host with exact loopback/Railway listener declarations, one bind, complete partial-startup cleanup,
-and bounded signal-driven shutdown. ADR 0055 requires exact default-off enable admission before
-every other host/protected-application field or resource; neither that startup latch nor the
-external-TLS declaration is deployment evidence. The opt-in full-path gate composes those Ingest
-boundaries with a synthetic dedicated login in disposable PostgreSQL and verifies signed
-accepted/duplicate/replay/revoke HTTP behavior plus exact stored state. It also proves the local
-four-slot no-queue decision under a controlled first-replay-call lock, without allowing a fifth
-replay call. After closing the imported host, it starts the built entry point as a separate silent
-process, observes its listener without application work, proves another accepted request, and
-forcibly ends only that test child. A separate pinned-Linux gate mounts the exact emitted production
-graph read-only, blocks one independently signed request at origin replay, delivers a real
-`SIGTERM`, and proves exact HTTP/database settlement, silent code-0 exit, session release, runtime
-immutability, and cleanup. Both remain local synthetic evidence, not Railway/orchestrator drain,
-external TLS, edge, secret delivery, distributed control, production credentials, representative
-load/capacity, or real-user evidence. The library-only ADR 0021 Rust foundation adds one bounded
-stable App Server JSONL initialization state machine and discards all server values. ADR 0022 adds
-the exact-version candidate account/usage adapter, and ADR 0023 composes both through a fixed,
-deadline/output-bounded, reap-before-success synthetic child supervisor. ADR 0024 adds a second
-inaccessible reviewed context and exact sync-body/digest/device-message composition shared with the
-Ingest verifier. ADR 0025 adds an isolated one-use signer behind a third inaccessible device-bound
-key capability and returns only the same body plus five signed header values. ADR 0026 adds an
-inaccessible pending-key/challenge signer and pure strict Web verifier for one exact
-pairing-possession message. ADR 0027 composes protected poll lookup, that proof, and fixed atomic
-activation behind local admission/timing. ADR 0028 composes fresh server-owned pairing start
-material and one fixed database call; ADR 0029 supplies bounded Jobs-only physical cleanup after
-pairing expiry, while ADR 0032 separately cleans expired authentication challenges and restricted
-recovery authority under the recovery profile-lock order. ADR 0043 deletes only expired unredeemed
-invite verifier rows under the shared authentication mutex. ADR 0034 adds all-maintenance-serialized
-maximum-10 primary profile purge without inventing a tombstone policy. A separate local `/connect`
-flow supplies session-rate-limited pending-code review and fresh-passkey approval for an explicitly
-selected new or active existing opaque source, without exposing raw source IDs. ADR 0030 now exposes
-only the pairing journey through one Rust `connect` command, exact local start/poll routes,
-fixed-storage database admission, and native OS credential custody. ADR 0057 places those two
-connector routes and both signed-in approval routes behind exact default-off module-load decisions
-before parsing, runtime/service construction, admission acquisition, protected configuration, or
-database work. ADR 0058 separately requires exact default-off enablement for a new source in the
-page and both approval modules while preserving active existing-source pairing. Both service steps
-repeat the decision, and exact source choice enters the sealed challenge plus v2 context digest so
-an in-flight new-source approval closes after a restarted verification module resolves disabled. ADR
-0059 separately closes browser proposal creation/approval and device proposal ingress while
-preserving private read and exact session-bound rejection. ADR 0060 separately closes both
-enrollment pages, all four enrollment route modules, and all four service methods before private
-work while preserving active-session redirects, returning login, restricted recovery, logout, and
-account security actions. ADR 0041 separately adds exact, idempotent deletion of one local
-origin/label record with no credential read or server call; the registered device remains until
-authenticated revoke. App Server launch and sync capabilities still have no public constructor, so
-ADR 0031 lets only the private Windows x86_64 command construct them after exact artifact admission
-and active-record review. ADR 0051 permits selection only through a resource-bounded fixed-name
-`PATH` policy or the original explicit path; both retain the same exact size/SHA-256 and
-no-write-sharing handle. ADR 0052 separately permits an explicitly invoked `check-codex` to reuse
-only that selector without a credential, process, account read, persistence, or network; its result
-is not reusable authority. ADR 0053 adds only a secretless no-upload Windows release-profile
-copy/removal smoke for the repository-built connector and creates no runtime authority, package, or
-release path. ADR 0054 permits only one opt-in redacted stdout preview of fixed
-version/admission/support state and adds no stored or network data flow. The sync command still
-creates fresh context only after active-record validation and repeated admission, then performs one
-fixed signed upload. A hosted Windows result, macOS/Linux admission, real package lifecycle,
-scheduling, and release remain absent. Trusted external TLS/edge routing, live secret-manager/edge
-key injection, working deployment login/certificate, composed live end-to-end flow, edge/capacity
-evidence, a verified Cloudflare/Railway path, released sync connector, deployed Jobs
-scheduler/monitoring, public cache, backup/tombstone/restore replay, and audited correction
+termination. A sixth starts the unchanged emitted entry point, holds the scoring mutex after
+startup, observes a native minute-timer refresh in a later real five-minute slot, releases it, and
+requires a newer refresh timestamp before forcing the persistent child to end. A seventh
+pinned-Linux gate delivers an OS `SIGTERM` while the first finalization call is active and proves
+graceful settlement without a later job. These are local host-timer and OS-signal results, not
+controller/orchestrator settlement or deployed-cadence evidence. ADR 0015 adds a pure local Ingest
+kernel that bounds the raw envelope and JSON parser, verifies a replay-consumed body-bound origin
+proof before parsing, validates the sync contract, and verifies the exact source-bound device
+request under strict Ed25519 semantics. ADR 0016 adds a fixed-query four-client PostgreSQL adapter
+with strict TLS/config, per-checkout Ingest role/login/search-path verification, closed
+device/submission mappers, copied parameters, and destructive failure release. ADR 0017 adds an
+exact primary/secondary origin-key reader and config-backed verifier factory without exposing a
+reusable key container. ADR 0018 adds persistent atomic origin replay, and ADR 0019 composes the
+same replay/device/submission adapter behind one transport-free validated application decision. ADR
+0020 adds one confined Fastify server factory with exact raw-body/header preservation, closed
+POST/error serialization, local connection/deadline bounds, four-call no-queue admission, and no
+proxy/request-ID trust. ADR 0033 adds a separate local host with exact loopback/Railway listener
+declarations, one bind, complete partial-startup cleanup, and bounded signal-driven shutdown. ADR
+0055 requires exact default-off enable admission before every other host/protected-application field
+or resource; neither that startup latch nor the external-TLS declaration is deployment evidence. The
+opt-in full-path gate composes those Ingest boundaries with a synthetic dedicated login in
+disposable PostgreSQL and verifies signed accepted/duplicate/replay/revoke HTTP behavior plus exact
+stored state. It also proves the local four-slot no-queue decision under a controlled
+first-replay-call lock, without allowing a fifth replay call. After closing the imported host, it
+starts the built entry point as a separate silent process, observes its listener without application
+work, proves another accepted request, and forcibly ends only that test child. A separate
+pinned-Linux gate mounts the exact emitted production graph read-only, blocks one independently
+signed request at origin replay, delivers a real `SIGTERM`, and proves exact HTTP/database
+settlement, silent code-0 exit, session release, runtime immutability, and cleanup. Both remain
+local synthetic evidence, not Railway/orchestrator drain, external TLS, edge, secret delivery,
+distributed control, production credentials, representative load/capacity, or real-user evidence.
+The library-only ADR 0021 Rust foundation adds one bounded stable App Server JSONL initialization
+state machine and discards all server values. ADR 0022 adds the exact-version candidate
+account/usage adapter, and ADR 0023 composes both through a fixed, deadline/output-bounded,
+reap-before-success synthetic child supervisor. ADR 0024 adds a second inaccessible reviewed context
+and exact sync-body/digest/device-message composition shared with the Ingest verifier. ADR 0025 adds
+an isolated one-use signer behind a third inaccessible device-bound key capability and returns only
+the same body plus five signed header values. ADR 0026 adds an inaccessible pending-key/challenge
+signer and pure strict Web verifier for one exact pairing-possession message. ADR 0027 composes
+protected poll lookup, that proof, and fixed atomic activation behind local admission/timing. ADR
+0028 composes fresh server-owned pairing start material and one fixed database call; ADR 0029
+supplies bounded Jobs-only physical cleanup after pairing expiry, while ADR 0032 separately cleans
+expired authentication challenges and restricted recovery authority under the recovery profile-lock
+order. ADR 0043 deletes only expired unredeemed invite verifier rows under the shared authentication
+mutex. ADR 0034 adds all-maintenance-serialized maximum-10 primary profile purge without inventing a
+tombstone policy. A separate local `/connect` flow supplies session-rate-limited pending-code review
+and fresh-passkey approval for an explicitly selected new or active existing opaque source, without
+exposing raw source IDs. ADR 0030 now exposes only the pairing journey through one Rust `connect`
+command, exact local start/poll routes, fixed-storage database admission, and native OS credential
+custody. ADR 0057 places those two connector routes and both signed-in approval routes behind exact
+default-off module-load decisions before parsing, runtime/service construction, admission
+acquisition, protected configuration, or database work. ADR 0058 separately requires exact
+default-off enablement for a new source in the page and both approval modules while preserving
+active existing-source pairing. Both service steps repeat the decision, and exact source choice
+enters the sealed challenge plus v2 context digest so an in-flight new-source approval closes after
+a restarted verification module resolves disabled. ADR 0059 separately closes browser proposal
+creation/approval and device proposal ingress while preserving private read and exact session-bound
+rejection. ADR 0060 separately closes both enrollment pages, all four enrollment route modules, and
+all four service methods before private work while preserving active-session redirects, returning
+login, restricted recovery, logout, and account security actions. ADR 0041 separately adds exact,
+idempotent deletion of one local origin/label record with no credential read or server call; the
+registered device remains until authenticated revoke. App Server launch and sync capabilities still
+have no public constructor, so ADR 0031 lets only the private Windows x86_64 command construct them
+after exact artifact admission and active-record review. ADR 0051 permits selection only through a
+resource-bounded fixed-name `PATH` policy or the original explicit path; both retain the same exact
+size/SHA-256 and no-write-sharing handle. ADR 0052 separately permits an explicitly invoked
+`check-codex` to reuse only that selector without a credential, process, account read, persistence,
+or network; its result is not reusable authority. ADR 0053 adds only a secretless no-upload Windows
+release-profile copy/removal smoke for the repository-built connector and creates no runtime
+authority, package, or release path. ADR 0054 permits only one opt-in redacted stdout preview of
+fixed version/admission/support state and adds no stored or network data flow. The sync command
+still creates fresh context only after active-record validation and repeated admission, then
+performs one fixed signed upload. A hosted Windows result, macOS/Linux admission, real package
+lifecycle, scheduling, and release remain absent. Trusted external TLS/edge routing, live
+secret-manager/edge key injection, working deployment login/certificate, composed live end-to-end
+flow, edge/capacity evidence, a verified Cloudflare/Railway path, released sync connector, deployed
+Jobs scheduler/monitoring, public cache, backup/tombstone/restore replay, and audited correction
 authority shown in the design remain planned.
 
 ## Component responsibilities

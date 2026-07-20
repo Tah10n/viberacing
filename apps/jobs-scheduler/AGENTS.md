@@ -41,6 +41,7 @@ pnpm run test:jobs-scheduler:postgres-integration
 pnpm run test:jobs-scheduler:timer-postgres-integration
 pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 pnpm run test:jobs-scheduler:process-postgres-integration
+pnpm run test:jobs-scheduler:wall-clock-postgres-integration
 pnpm run test:jobs-scheduler:signal-postgres-integration
 pnpm run verify
 ```
@@ -56,11 +57,15 @@ code 0. The fourth starts the built entry point with the real host clock, waits 
 startup-catalog marker without process output, and forcibly ends only its persistent test child. The
 timer result is not host-timer delivery, the lifecycle result is not OS-signal delivery, and the
 forced emitted child still has no observed controller settlement before termination. The fifth
+starts the same emitted process with unchanged native clock/timer dependencies, holds the scoring
+mutex only after startup, observes refresh in a later real five-minute slot, releases it, and
+requires the database refresh timestamp to advance before forcibly ending the child. The sixth
 packages a link-free production-only runtime under a pinned Linux Node image, blocks the emitted
 first finalization call, delivers a real `SIGTERM`, and proves graceful settlement without starting
-refresh or any later job. It is local synthetic OS-signal evidence, not evidence of a deployed
-signal route, wall-clock recurring process callback, deployed cadence, production credential/TLS,
-monitoring, capacity, or real-user behavior.
+refresh or any later job. The fifth is local synthetic host-timer evidence and the sixth is local
+synthetic OS-signal evidence. Neither proves controller/orchestrator settlement, a deployed signal
+route, durable/deployed cadence, production credential/TLS, monitoring, capacity, or real-user
+behavior.
 
 Before committing, inspect the exact staged diff and run `git diff --cached --check` plus
 `pnpm run check:public:staged`.

@@ -91,6 +91,7 @@
     "test:jobs-scheduler:postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler",
     "test:jobs-scheduler:signal-postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler-signal-process",
     "test:jobs-scheduler:timer-postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler-timer",
+    "test:jobs-scheduler:wall-clock-postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler-wall-clock-process",
     "test:migrate": "pnpm --filter @viberacing/migrate run test",
     "test:migrate:coverage": "pnpm --filter @viberacing/migrate run test:coverage",
     "test:migrate:postgres-integration": "node scripts/test-migrate-postgres-integration.mjs",

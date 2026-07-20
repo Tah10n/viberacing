@@ -67,15 +67,21 @@ prove OS-signal delivery or emitted-process graceful shutdown. The separate opt-
 the real host clock, requires host/database UTC-date agreement, waits for the terminal catalog
 marker without process output, forcibly ends only its otherwise persistent test child, and then
 verifies the same exact stored state. It does not prove controller settlement before that forced
-termination. The separate opt-in `pnpm run test:jobs-scheduler:signal-postgres-integration` gate
-copies only the built scheduler, built Jobs runner, and exact 14-package installed production graph
-into a link-free temporary runtime, mounts it read-only under the pinned Linux Node 24.18 image, and
-joins only the disposable PostgreSQL container's network namespace. An owner session holds the first
-finalization mutex until the emitted scheduler is observed in an exact database lock wait; the
-harness then delivers a real `SIGTERM`, releases the mutex before the database deadline, and
-requires the finalization call to settle without starting refresh or any later job. The process must
-exit silently with code 0, release its database session, leave the runtime fingerprint unchanged,
-and pass the shared exact state oracle after the seventeen omitted one-shot commands run separately.
-This is local synthetic Linux OS-signal evidence. None proves a deployed signal route or
-orchestrator grace policy, a wall-clock recurring callback, production TLS/login, durable cadence,
-monitoring, capacity, deployment, or real-user retention.
+termination. The separate opt-in `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` gate
+starts the same built process without replacing `Date.now()` or native `setInterval(60_000)`. After
+the startup catalog settles, an owner session holds the scoring mutex until the emitted production
+refresh is observed in a later real five-minute slot; the harness releases it, requires a newer
+`refreshed_at`, verifies silence, and only then forcibly ends the persistent child. This proves one
+local recurring host-timer refresh but not controller settlement or durable cadence. The separate
+opt-in `pnpm run test:jobs-scheduler:signal-postgres-integration` gate copies only the built
+scheduler, built Jobs runner, and exact 14-package installed production graph into a link-free
+temporary runtime, mounts it read-only under the pinned Linux Node 24.18 image, and joins only the
+disposable PostgreSQL container's network namespace. An owner session holds the first finalization
+mutex until the emitted scheduler is observed in an exact database lock wait; the harness then
+delivers a real `SIGTERM`, releases the mutex before the database deadline, and requires the
+finalization call to settle without starting refresh or any later job. The process must exit
+silently with code 0, release its database session, leave the runtime fingerprint unchanged, and
+pass the shared exact state oracle after the seventeen omitted one-shot commands run separately.
+This is local synthetic Linux OS-signal evidence. Together the emitted gates still prove no deployed
+signal route or orchestrator grace policy, production TLS/login, durable cadence, monitoring,
+capacity, deployment, or real-user retention.

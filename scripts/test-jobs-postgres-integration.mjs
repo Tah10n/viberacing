@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
+import { performance } from "node:perf_hooks";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { parse } from "yaml";
@@ -40,9 +41,12 @@ const schedulerLifecycleArgument = "--scheduler-lifecycle";
 const schedulerProcessArgument = "--scheduler-process";
 const schedulerSignalProcessArgument = "--scheduler-signal-process";
 const schedulerTimerArgument = "--scheduler-timer";
+const schedulerWallClockProcessArgument = "--scheduler-wall-clock-process";
 const schedulerCycleTimeoutMs = 120_000;
 const schedulerProcessCloseTimeoutMs = 10_000;
 const schedulerProcessPollIntervalMs = 250;
+const schedulerWallClockPollIntervalMs = 1_000;
+const schedulerWallClockTimeoutMs = 7 * 60_000;
 const schedulerSignalContainerImage = (() => {
   const compose = parse(readFileSync(resolve(root, "compose.yaml"), "utf8"));
   const image = compose?.services?.["node-process-signal-test"]?.image;
@@ -51,7 +55,7 @@ const schedulerSignalContainerImage = (() => {
   return image;
 })();
 const schedulerSignalContainerName = `${projectName}-scheduler-signal`;
-const schedulerSignalLockReadyMarker = "scheduler-signal-lock-ready";
+const schedulerScoringLockReadyMarker = "scheduler-scoring-lock-ready";
 const schedulerSignalRuntimeInventory = Object.freeze([
   "pg-cloudflare@1.4.0",
   "pg-connection-string@2.14.0",
@@ -68,6 +72,7 @@ const schedulerSignalRuntimeInventory = Object.freeze([
   "split2@4.2.0",
   "xtend@4.0.2",
 ]);
+const fiveMinutesMs = 5 * 60 * 1_000;
 const oneHourMs = 60 * 60 * 1_000;
 const oneDayMs = 24 * oneHourMs;
 
@@ -89,6 +94,9 @@ function readIntegrationMode() {
   }
   if (process.argv.length === 3 && process.argv[2] === schedulerTimerArgument) {
     return "scheduler_timer";
+  }
+  if (process.argv.length === 3 && process.argv[2] === schedulerWallClockProcessArgument) {
+    return "scheduler_wall_clock_process";
   }
   throw new Error("Jobs PostgreSQL integration arguments failed closed.");
 }
@@ -557,7 +565,7 @@ function removePortableSchedulerRuntime(runtime) {
   removePortableNodeRuntime(runtime);
 }
 
-function startSchedulerSignalLockHolder() {
+function startSchedulerScoringLockHolder() {
   let exited = false;
   let output = "";
   let readySettled = false;
@@ -578,11 +586,11 @@ function startSchedulerSignalLockHolder() {
       child.kill("SIGKILL");
       if (!readySettled) {
         readySettled = true;
-        rejectReady(new Error("Scheduler signal lock holder exceeded its output budget."));
+        rejectReady(new Error("Scheduler scoring lock holder exceeded its output budget."));
       }
       return;
     }
-    if (!readySettled && output.includes(schedulerSignalLockReadyMarker)) {
+    if (!readySettled && output.includes(schedulerScoringLockReadyMarker)) {
       readySettled = true;
       resolveReady();
     }
@@ -594,15 +602,15 @@ function startSchedulerSignalLockHolder() {
       exited = true;
       if (!readySettled) {
         readySettled = true;
-        rejectReady(new Error("Scheduler signal lock holder could not start."));
+        rejectReady(new Error("Scheduler scoring lock holder could not start."));
       }
-      rejectClose(new Error("Scheduler signal lock holder could not start."));
+      rejectClose(new Error("Scheduler scoring lock holder could not start."));
     });
     child.once("close", (code, signal) => {
       exited = true;
       if (!readySettled) {
         readySettled = true;
-        rejectReady(new Error("Scheduler signal lock holder exited before readiness."));
+        rejectReady(new Error("Scheduler scoring lock holder exited before readiness."));
       }
       resolveClose(Object.freeze({ code, signal }));
     });
@@ -610,13 +618,13 @@ function startSchedulerSignalLockHolder() {
   void ready.catch(() => undefined);
   void closed.catch(() => undefined);
   child.stdin.write(`BEGIN;
-SET LOCAL application_name = 'viberacing-jobs-scheduler-signal-holder';
+SET LOCAL application_name = 'viberacing-jobs-scheduler-scoring-holder';
 SET LOCAL ROLE viberacing_owner;
 SELECT lock_record.capability
 FROM viberacing_private.maintenance_locks AS lock_record
 WHERE lock_record.capability = 'community_scoring_refresh'
 FOR UPDATE;
-\\echo ${schedulerSignalLockReadyMarker}
+\\echo ${schedulerScoringLockReadyMarker}
 `);
   return Object.freeze({
     child,
@@ -629,7 +637,7 @@ FOR UPDATE;
   });
 }
 
-async function stopSchedulerSignalLockHolder(holder, commit) {
+async function stopSchedulerScoringLockHolder(holder, commit) {
   if (!holder.hasExited()) {
     holder.release(commit);
   }
@@ -638,7 +646,7 @@ async function stopSchedulerSignalLockHolder(holder, commit) {
     result = await waitWithDeadline(
       holder.closed,
       schedulerProcessCloseTimeoutMs,
-      "Scheduler signal lock holder did not close within its fixed deadline.",
+      "Scheduler scoring lock holder did not close within its fixed deadline.",
     );
   } catch (error) {
     if (!holder.hasExited()) {
@@ -646,7 +654,7 @@ async function stopSchedulerSignalLockHolder(holder, commit) {
       await waitWithDeadline(
         holder.closed,
         schedulerProcessCloseTimeoutMs,
-        "Scheduler signal lock holder did not close after forced test cleanup.",
+        "Scheduler scoring lock holder did not close after forced test cleanup.",
       ).catch(() => undefined);
     }
     throw error;
@@ -806,11 +814,11 @@ async function runEmittedSchedulerSignalProcess({ expectedSeasonStarts }) {
   let holder;
   let holderReleased = false;
   try {
-    holder = startSchedulerSignalLockHolder();
+    holder = startSchedulerScoringLockHolder();
     await waitWithDeadline(
       holder.ready,
       schedulerProcessCloseTimeoutMs,
-      "Scheduler signal lock holder did not become ready.",
+      "Scheduler scoring lock holder did not become ready.",
     );
     createSchedulerSignalContainer(runtime.runtimeDirectory);
     containerCreated = true;
@@ -830,7 +838,7 @@ async function runEmittedSchedulerSignalProcess({ expectedSeasonStarts }) {
       }),
       "scheduler signal delivery",
     );
-    await stopSchedulerSignalLockHolder(holder, true);
+    await stopSchedulerScoringLockHolder(holder, true);
     holderReleased = true;
 
     const state = await waitForSchedulerSignalContainerExit();
@@ -887,7 +895,7 @@ SELECT pg_catalog.concat(
   } finally {
     try {
       if (holder !== undefined && !holderReleased) {
-        await stopSchedulerSignalLockHolder(holder, false).catch(() => undefined);
+        await stopSchedulerScoringLockHolder(holder, false).catch(() => undefined);
       }
     } finally {
       try {
@@ -1382,6 +1390,173 @@ async function runEmittedSchedulerProcess({ databasePort, expectedSeasonStarts }
     { code: null, signal: "SIGKILL" },
     "the synthetic harness must end the otherwise persistent scheduler only after its terminal marker",
   );
+}
+
+function readLatestOpenSeasonRefreshEpochMs(label) {
+  const rawEpochMs = psqlScalar(
+    `SET ROLE viberacing_owner;
+SELECT COALESCE(
+  (EXTRACT(EPOCH FROM pg_catalog.max(refreshed_at)) * 1000)::bigint,
+  (-1)::bigint
+)::text
+FROM viberacing_private.seasons
+WHERE state = 'open';`,
+    label,
+  );
+  assert.match(rawEpochMs, /^\d{13}$/);
+  const epochMs = Number(rawEpochMs);
+  assert.equal(Number.isSafeInteger(epochMs), true);
+  return epochMs;
+}
+
+async function waitForEmittedSchedulerRefreshDatabaseWait(processState) {
+  const deadline = performance.now() + schedulerWallClockTimeoutMs;
+  while (performance.now() < deadline) {
+    if (processState.outputObserved()) {
+      throw new Error("Emitted Jobs scheduler process produced output before recurring refresh.");
+    }
+    if (processState.hasExited()) {
+      throw new Error("Emitted Jobs scheduler process exited before recurring refresh.");
+    }
+    const observed = psqlScalar(
+      `SELECT pg_catalog.concat(
+  pg_catalog.count(*),
+  ':',
+  pg_catalog.count(*) FILTER (
+    WHERE state = 'active'
+      AND wait_event_type = 'Lock'
+      AND query LIKE '%viberacing_api.refresh_community_season%'
+  )
+)
+FROM pg_catalog.pg_stat_activity
+WHERE application_name = 'viberacing-jobs-community-maintenance'
+  AND usename = '${jobsLogin}';`,
+      "emitted scheduler wall-clock database-wait observation",
+    );
+    if (observed === "1:1") {
+      return Date.now();
+    }
+    assert.match(observed, /^(?:0:0|1:0)$/);
+    await sleep(schedulerWallClockPollIntervalMs);
+  }
+  throw new Error("Emitted Jobs scheduler did not reach a recurring refresh database wait.");
+}
+
+async function waitForEmittedSchedulerRefreshSettlement(processState, baselineEpochMs) {
+  const deadline = Date.now() + schedulerCycleTimeoutMs;
+  while (Date.now() < deadline) {
+    if (processState.outputObserved()) {
+      throw new Error("Emitted Jobs scheduler process produced output during recurring refresh.");
+    }
+    if (processState.hasExited()) {
+      throw new Error("Emitted Jobs scheduler process exited during recurring refresh.");
+    }
+    const refreshedAtEpochMs = readLatestOpenSeasonRefreshEpochMs(
+      "emitted scheduler recurring-refresh settlement observation",
+    );
+    if (refreshedAtEpochMs > baselineEpochMs) {
+      return refreshedAtEpochMs;
+    }
+    assert.equal(refreshedAtEpochMs, baselineEpochMs);
+    await sleep(schedulerProcessPollIntervalMs);
+  }
+  throw new Error("Emitted Jobs scheduler recurring refresh did not settle in time.");
+}
+
+async function waitForEmittedSchedulerSessionRelease() {
+  const deadline = Date.now() + schedulerProcessCloseTimeoutMs;
+  while (Date.now() < deadline) {
+    const sessionCount = psqlScalar(
+      `SELECT pg_catalog.count(*)::integer
+FROM pg_catalog.pg_stat_activity
+WHERE application_name = 'viberacing-jobs-community-maintenance'
+  AND usename = '${jobsLogin}';`,
+      "emitted scheduler released-session observation",
+    );
+    if (sessionCount === "0") {
+      return;
+    }
+    assert.equal(sessionCount, "1");
+    await sleep(schedulerProcessPollIntervalMs);
+  }
+  throw new Error("Emitted Jobs scheduler session was not released after test termination.");
+}
+
+async function runEmittedSchedulerWallClockProcess({ databasePort, expectedSeasonStarts }) {
+  assertSchedulerSeasonStarts(
+    expectedSeasonStarts,
+    "the host clock must retain the reviewed scheduler season targets before wall-clock startup",
+  );
+  const processStartedAtEpochMs = Date.now();
+  const processState = startEmittedSchedulerProcess(databasePort);
+  let closeResult;
+  let holder;
+  let holderReleased = false;
+  let recurringRefreshEpochMs;
+  let recurringWaitObserved = false;
+  let terminationRequested = false;
+  try {
+    await waitForEmittedSchedulerTerminalMarker(processState);
+    const startupRefreshEpochMs = readLatestOpenSeasonRefreshEpochMs(
+      "emitted scheduler startup-refresh timestamp",
+    );
+    holder = startSchedulerScoringLockHolder();
+    await waitWithDeadline(
+      holder.ready,
+      schedulerProcessCloseTimeoutMs,
+      "Scheduler scoring lock holder did not become ready.",
+    );
+
+    const recurringWaitEpochMs = await waitForEmittedSchedulerRefreshDatabaseWait(processState);
+    assert.equal(
+      Math.floor(recurringWaitEpochMs / fiveMinutesMs) >
+        Math.floor(processStartedAtEpochMs / fiveMinutesMs),
+      true,
+      "the recurring refresh must be admitted in a later real host-clock five-minute slot",
+    );
+    recurringWaitObserved = true;
+
+    await stopSchedulerScoringLockHolder(holder, true);
+    holderReleased = true;
+    recurringRefreshEpochMs = await waitForEmittedSchedulerRefreshSettlement(
+      processState,
+      startupRefreshEpochMs,
+    );
+  } finally {
+    try {
+      if (holder !== undefined && !holderReleased) {
+        await stopSchedulerScoringLockHolder(holder, false).catch(() => undefined);
+      }
+    } finally {
+      if (!processState.hasExited()) {
+        terminationRequested = processState.child.kill("SIGKILL");
+      }
+      closeResult = await waitWithDeadline(
+        processState.closed,
+        schedulerProcessCloseTimeoutMs,
+        "Emitted Jobs scheduler wall-clock process did not terminate within its fixed test deadline.",
+      );
+    }
+  }
+
+  assert.equal(recurringWaitObserved, true);
+  assert.equal(Number.isSafeInteger(recurringRefreshEpochMs), true);
+  assert.equal(
+    terminationRequested,
+    true,
+    "the synthetic harness must terminate only its persistent emitted scheduler child",
+  );
+  assert.equal(
+    processState.outputObserved(),
+    false,
+    "the wall-clock scheduler process must remain silent through recurring refresh and stdio close",
+  );
+  assert.deepEqual(
+    closeResult,
+    { code: null, signal: "SIGKILL" },
+    "the synthetic harness must end the persistent scheduler only after recurring refresh settles",
+  );
+  await waitForEmittedSchedulerSessionRelease();
 }
 
 function seedSyntheticState(currentSeasonStart) {
@@ -1976,7 +2151,8 @@ COMMIT;`,
       );
     } else if (
       integrationMode === "scheduler_process" ||
-      integrationMode === "scheduler_signal_process"
+      integrationMode === "scheduler_signal_process" ||
+      integrationMode === "scheduler_wall_clock_process"
     ) {
       const databaseDate = psqlScalar(
         "SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text;",
@@ -2086,6 +2262,11 @@ SELECT (
       assertSuccessfulCommand(reset, "post-lifecycle omitted Jobs command");
     } else if (integrationMode === "scheduler_process") {
       await runEmittedSchedulerProcess({
+        databasePort,
+        expectedSeasonStarts: schedulerSeasonStarts,
+      });
+    } else if (integrationMode === "scheduler_wall_clock_process") {
+      await runEmittedSchedulerWallClockProcess({
         databasePort,
         expectedSeasonStarts: schedulerSeasonStarts,
       });
@@ -2408,9 +2589,11 @@ SELECT pg_catalog.jsonb_build_object(
             ? "Jobs scheduler lifecycle PostgreSQL integration passed (active-call settlement, no later scheduler job, graceful close, and exact final state)."
             : integrationMode === "scheduler_process"
               ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, forced test-child termination, and exact stored state)."
-              : integrationMode === "scheduler_signal_process"
-                ? "Emitted Jobs scheduler signal PostgreSQL integration passed (OS SIGTERM, active finalization settlement, no later scheduler job, silent graceful exit, and exact final state)."
-                : "Jobs PostgreSQL integration passed (eighteen commands, least-privilege denial, generic output, and exact stored state).";
+              : integrationMode === "scheduler_wall_clock_process"
+                ? "Emitted Jobs scheduler wall-clock PostgreSQL integration passed (real host-timer recurring refresh, observed database wait, settled refresh, silent forced test-child termination, and exact stored state)."
+                : integrationMode === "scheduler_signal_process"
+                  ? "Emitted Jobs scheduler signal PostgreSQL integration passed (OS SIGTERM, active finalization settlement, no later scheduler job, silent graceful exit, and exact final state)."
+                  : "Jobs PostgreSQL integration passed (eighteen commands, least-privilege denial, generic output, and exact stored state).";
     console.log(successMessage);
   } catch (error) {
     primaryFailure = error;

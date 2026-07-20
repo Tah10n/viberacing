@@ -230,6 +230,7 @@ const requiredNodeSteps = [
   { run: "pnpm run test:jobs-scheduler:timer-postgres-integration" },
   { run: "pnpm run test:jobs-scheduler:lifecycle-postgres-integration" },
   { run: "pnpm run test:jobs-scheduler:process-postgres-integration" },
+  { run: "pnpm run test:jobs-scheduler:wall-clock-postgres-integration" },
   { run: "pnpm run test:jobs-scheduler:signal-postgres-integration" },
 ];
 const windowsPortableSteps = [
@@ -253,6 +254,7 @@ const goodCiWorkflow = {
   jobs: {
     node: {
       ...goodWorkflow.jobs.verify,
+      "timeout-minutes": 25,
       steps: requiredNodeSteps,
     },
     connector_windows_portable: {
@@ -269,6 +271,16 @@ assert.match(
     ...goodCiWorkflow,
     jobs: {
       ...goodCiWorkflow.jobs,
+      node: { ...goodCiWorkflow.jobs.node, "timeout-minutes": 15 },
+    },
+  }).join("\n"),
+  /exact 25-minute timeout/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
       node: {
         ...goodCiWorkflow.jobs.node,
         steps: requiredNodeSteps.filter(
@@ -277,7 +289,22 @@ assert.match(
       },
     },
   }).join("\n"),
-  /all ten synthetic PostgreSQL integrations/,
+  /all eleven synthetic PostgreSQL integrations/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      node: {
+        ...goodCiWorkflow.jobs.node,
+        steps: requiredNodeSteps.filter(
+          (step) => step.run !== "pnpm run test:jobs-scheduler:wall-clock-postgres-integration",
+        ),
+      },
+    },
+  }).join("\n"),
+  /all eleven synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -292,7 +319,7 @@ assert.match(
       },
     },
   }).join("\n"),
-  /all ten synthetic PostgreSQL integrations/,
+  /all eleven synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -307,7 +334,7 @@ assert.match(
       },
     },
   }).join("\n"),
-  /all ten synthetic PostgreSQL integrations/,
+  /all eleven synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -322,7 +349,7 @@ assert.match(
       },
     },
   }).join("\n"),
-  /all ten synthetic PostgreSQL integrations/,
+  /all eleven synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -337,7 +364,7 @@ assert.match(
       },
     },
   }).join("\n"),
-  /all ten synthetic PostgreSQL integrations/,
+  /all eleven synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -352,7 +379,7 @@ assert.match(
       },
     },
   }).join("\n"),
-  /all ten synthetic PostgreSQL integrations/,
+  /all eleven synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -474,7 +501,7 @@ assert.match(
       },
     },
   }).join("\n"),
-  /all ten synthetic PostgreSQL integrations/,
+  /all eleven synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -877,4 +904,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (53 cases).");
+console.log("Configuration checker tests passed (55 cases).");
