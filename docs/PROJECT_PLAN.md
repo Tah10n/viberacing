@@ -270,26 +270,27 @@ flowchart LR
   Community refresh, and finalization. One opt-in synthetic integration applies the reviewed
   migrations to disposable PostgreSQL, runs every emitted command through a narrow login, rejects an
   extra-membership login before mutation, and verifies exact state. A separate exact-default-off
-  local scheduler now derives the current and latest grace-eligible Monday in UTC, admits only fixed
-  five-minute/hour/day process slots, invokes the runner sequentially without overlap or same-slot
-  retry, and bounds signal shutdown. An opt-in synthetic integration now composes that production
-  scheduler core under a fixed injected UTC clock/timer with the real Jobs runner and disposable
-  PostgreSQL, proving exact catalog order, full-state widened-login denial, and exact narrow-login
-  effects. A separate timer integration advances the fixed clock by one hour, invokes the production
-  interval handler twice during the active real-runner cycle, proves the exact recurring catalog
-  plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A third lifecycle
-  integration starts the penultimate real-runner call before injecting its first handler, proves
-  active-call settlement and no later scheduler job, and requires exact graceful cleanup and exit
-  code 0 before invoking the omitted reset separately. A fourth integration starts the built entry
-  point under the real host clock, reaches the terminal startup-catalog marker without process
-  output, forcibly ends only its persistent test child, and then verifies exact stored state. A
-  fifth integration builds a link-free production-only runtime from the exact installed graph,
-  mounts it read-only under a pinned Linux Node image, holds the emitted first finalization call,
-  delivers an OS `SIGTERM`, and proves graceful settlement without refresh or any later job. It
-  requires silent code-0 exit, session release, immutable runtime contents, and the same final state
-  after the sixteen omitted commands run separately. Host-timer delivery, controller settlement in
-  the forcibly ended child, a deployed signal route, an external audit sink, a wall-clock recurring
-  process callback, durable or deployed cadence, historical backlog, monitoring, production
+  local scheduler now derives the current and latest grace-eligible Monday in UTC plus at most one
+  oldest known data-backed historical season per hour, admits only fixed five-minute/hour/day
+  process slots, invokes the runner sequentially without overlap or same-slot retry, and bounds
+  signal shutdown. An opt-in synthetic integration now composes that production scheduler core under
+  a fixed injected UTC clock/timer with the real Jobs runner and disposable PostgreSQL, proving
+  exact catalog order, full-state widened-login denial, and exact narrow-login effects. A separate
+  timer integration advances the fixed clock by one hour, invokes the production interval handler
+  twice during the active real-runner cycle, proves the exact recurring catalog plus overlap and
+  same-slot suppression, and verifies the rearmed terminal reset. A third lifecycle integration
+  starts the penultimate real-runner call before injecting its first handler, proves active-call
+  settlement and no later scheduler job, and requires exact graceful cleanup and exit code 0 before
+  invoking the omitted reset separately. A fourth integration starts the built entry point under the
+  real host clock, reaches the terminal startup-catalog marker without process output, forcibly ends
+  only its persistent test child, and then verifies exact stored state. A fifth integration builds a
+  link-free production-only runtime from the exact installed graph, mounts it read-only under a
+  pinned Linux Node image, holds the emitted first finalization call, delivers an OS `SIGTERM`, and
+  proves graceful settlement without refresh or any later job. It requires silent code-0 exit,
+  session release, immutable runtime contents, and the same final state after the seventeen omitted
+  commands run separately. Host-timer delivery, controller settlement in the forcibly ended child, a
+  deployed signal route, an external audit sink, a wall-clock recurring process callback, durable or
+  deployed cadence, representative or deployed backlog recovery, monitoring, production
   credentials/TLS, capacity, cache/backup/tombstone purge, restore replay, and deployment remain
   separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
@@ -870,12 +871,20 @@ after 30 days. Every deletion rechecks captured/live inventory under the existin
 Ingest-retention, and profile-purge mutex order. Open, recent, missing-projection, or drifted state
 remains ineligible. The separate default-off local scheduler now includes that exact command in its
 fixed hourly catalog and combined synthetic PostgreSQL integration, but no deployed cadence,
-correction authority, monitoring, capacity, backup purge, or deployed restore evidence exists. The
-isolated database integration first holds revision 0039's advisory lock until two exact migration
-processes are observed waiting. One then applies the reviewed transaction, one rolls back with the
-expected duplicate-object `42P07`, and exactly one ledger row plus the canonical table must remain.
-It next performs two container-only restores of the current synthetic snapshot, checks exact data
-digests/lengths, stable restored schema, forced RLS, selected role grants, and then all 44
+correction authority, monitoring, capacity, backup purge, or deployed restore evidence exists.
+Revision 0040 separately adds one zero-argument Jobs-only function that takes the shared Community
+scoring mutex, derives the oldest grace-eligible open or retained-data-backed season, and invokes
+the existing finalization function for at most one season. It returns only a closed 0-or-1 season
+count and the bounded profile count; Web, Ingest, Admin, and `PUBLIC` remain denied. The existing
+source-date index and one new partial open-season index support the oldest-first lookup without
+adding a queue, run ledger, selected date, retry counter, or new retained field. The default-off
+scheduler places this capability first in its hourly catalog, but representative backlog size,
+capacity, monitoring, real-user recovery, and deployed cadence remain unproven. The isolated
+database integration first holds revision 0039's advisory lock until two exact migration processes
+are observed waiting. One then applies the reviewed transaction, one rolls back with the expected
+duplicate-object `42P07`, and exactly one ledger row plus the canonical table must remain. It next
+performs two container-only restores of the current synthetic snapshot, checks exact data
+digests/lengths, stable restored schema, forced RLS, selected role grants, and then all 45
 post-restore lock-wait races plus the final runtime deny matrix. It does not prove a successful
 concurrent deployment controller or staging migration orchestration/rollback, and it does not
 exercise a stale snapshot that contains a deleted profile, deletion-marker replay, external backup
@@ -891,7 +900,7 @@ ledger, and applies only an exact reviewed suffix before requiring the complete 
 opt-in synthetic gate now runs one widened and two narrow emitted processes over hostname-verified
 TLS to one disposable PostgreSQL database. It proves widened-login denial before schema creation,
 observes both narrow controllers behind one external lock holder, requires both to converge on the
-exact 39-row ledger after release, and verifies all 28 forced-RLS private tables, identity
+exact 40-row ledger after release, and verifies all 28 forced-RLS private tables, identity
 invariants, and resource cleanup. The next independent prerequisite is protected staging
 orchestration with environment-owned credentials/trust, intended replica topology, service
 compatibility, forward rollback, monitoring, and recovery; the disposable result satisfies none of
@@ -1231,8 +1240,8 @@ external TLS/edge, cache, capacity, or operational gate above.
   graph, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves graceful
   active-call settlement plus suppression of every later job. Host-timer delivery, controller
   settlement in the forcibly ended child, a deployed signal route, a wall-clock recurring process
-  callback, durable/deployed cadence, historical backlog, capacity, notification, correction, backup
-  purge, and deployed retention evidence remain open.
+  callback, durable/deployed cadence, representative or deployed backlog recovery, capacity,
+  notification, correction, backup purge, and deployed retention evidence remain open.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
   new-source creation while preserving active existing-source pairing, plus CarRecipe proposal

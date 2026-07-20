@@ -17,7 +17,7 @@ const dependencyKeys = new Set([
 ]);
 const runnerKeys = new Set(["close", "execute"]);
 const scheduleKeys = new Set(["due"]);
-const maximumDueJobs = 17;
+const maximumDueJobs = 18;
 
 export const jobsSchedulerShutdownDeadlineMs = 35_000;
 

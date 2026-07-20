@@ -42,6 +42,7 @@ function outputDependencies(
 describe("Jobs command", () => {
   it.each([
     [["reset-expired-pairing-request-windows"], { kind: "reset_expired_pairing_request_windows" }],
+    [["finalize-community-backlog"], { kind: "finalize_community_season_backlog" }],
     [
       ["cleanup-abandoned-enrollments"],
       { batchSize: 1_000, kind: "cleanup_abandoned_enrollments" },
@@ -96,6 +97,7 @@ describe("Jobs command", () => {
     {},
     [],
     ["reset-expired-pairing-request-windows", "unexpected"],
+    ["finalize-community-backlog", "unexpected"],
     ["cleanup-abandoned-enrollments", "unexpected"],
     ["cleanup-finalized-source-day-values", "unexpected"],
     ["cleanup-aged-revoked-devices", "unexpected"],

@@ -122,26 +122,27 @@ material availability cost.
   admits exact source/day deletion only after 30 days, repeated live/captured inventory checks, and
   the existing scoring/Ingest-retention/profile-purge mutex order. Worker and finalization races
   preserve public freshness and prevent an open or newly finalized season from becoming eligible. A
-  local one-shot Jobs runner now admits only canonical refresh/finalization commands, probes the
-  exact role/login boundary, calls one prepared function, holds one client through settlement, and
-  discards invalid results. The shared synthetic integration runs both emitted scoring commands
-  through a disposable narrow login, rejects an extra-membership login, and checks open/finalized
-  database state. ADR 0063 separately derives only the current and latest grace-eligible Monday from
-  UTC time, marks slots before sequential invocation, prevents overlap and same-slot retry, and
-  bounds shutdown. A second opt-in integration composes that production core under fixed injected
-  UTC time with the real runner and disposable PostgreSQL. A third advances the fixed clock by one
-  hour, invokes the production interval handler twice during the active real-runner cycle, proves
-  the exact recurring catalog plus overlap and same-slot suppression, and verifies the rearmed
-  terminal reset. A fourth composes the production process lifecycle, starts the penultimate
-  real-runner call before injecting its first handler, and proves that call settles without starting
-  the later job. A fifth starts the built entry point under real host time, reaches the terminal
-  startup-catalog marker without process output, then forcibly ends only its persistent test child.
-  A sixth mounts a link-free production-only runtime read-only under the pinned Linux Node image,
-  blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves graceful
-  settlement without starting refresh or a later job. Host-timer delivery, controller settlement in
-  the forcibly ended child, a deployed signal route, correction authority, a wall-clock recurring
-  process callback, deployed scheduling, production database login/TLS, historical backlog recovery,
-  and operational reconciliation remain unimplemented.
+  local one-shot Jobs runner now admits only canonical refresh/finalization commands plus one
+  zero-argument oldest-known-season backlog command, probes the exact role/login boundary, calls one
+  prepared function, holds one client through settlement, and discards invalid results. The shared
+  synthetic integration runs all emitted scoring commands through a disposable narrow login, rejects
+  an extra-membership login, and checks open/finalized database state. ADR 0063 separately derives
+  only the current and latest grace-eligible Monday from UTC time plus at most one oldest known
+  data-backed season per hour, marks slots before sequential invocation, prevents overlap and
+  same-slot retry, and bounds shutdown. A second opt-in integration composes that production core
+  under fixed injected UTC time with the real runner and disposable PostgreSQL. A third advances the
+  fixed clock by one hour, invokes the production interval handler twice during the active
+  real-runner cycle, proves the exact recurring catalog plus overlap and same-slot suppression, and
+  verifies the rearmed terminal reset. A fourth composes the production process lifecycle, starts
+  the penultimate real-runner call before injecting its first handler, and proves that call settles
+  without starting the later job. A fifth starts the built entry point under real host time, reaches
+  the terminal startup-catalog marker without process output, then forcibly ends only its persistent
+  test child. A sixth mounts a link-free production-only runtime read-only under the pinned Linux
+  Node image, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves
+  graceful settlement without starting refresh or a later job. Host-timer delivery, controller
+  settlement in the forcibly ended child, a deployed signal route, correction authority, a
+  wall-clock recurring process callback, deployed scheduling, production database login/TLS,
+  representative or deployed backlog recovery, and operational reconciliation remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -607,7 +608,7 @@ material availability cost.
 - **Recovery:** Revoke/rotate the role, isolate the service, restore from verified state, replay
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
-  and usage/scoring-table reads or API-schema mutation, and proves 64 cross-capability denials.
+  and usage/scoring-table reads or API-schema mutation, and proves 67 cross-capability denials.
   Before its restore and role matrices, the same disposable gate holds revision 0039's advisory
   migration lock until two exact tagged processes are observed waiting, then requires one complete
   application, one duplicate-object `42P07` rollback, one ledger row, and the canonical table. This
@@ -620,29 +621,29 @@ material availability cost.
   emitted process and two narrow emitted processes over hostname-verified TLS to one disposable
   database, proves the widened process cannot create the application schema, observes both narrow
   controllers behind one external holder, and requires exact two-controller ledger/schema
-  convergence plus cleanup. Ingest has exactly three reviewed functions; Jobs has exactly seventeen
+  convergence plus cleanup. Ingest has exactly three reviewed functions; Jobs has exactly eighteen
   reviewed functions: bounded authentication-, abandoned-enrollment-, audit-event-, invite-,
   CarRecipe-proposal-, ingest-, pairing-, session-, and finalized-source-day retention cleanup,
   terminal deletion-job cleanup, aged revoked-passkey cleanup, aged minimized revoked-device
   cleanup, pairing approval-provenance redaction, fixed pairing-rate-window reset, primary profile
-  deletion, open-season scoring refresh, and terminal season finalization. Web alone receives the
-  bounded public score and separate race functions; Ingest, Jobs, and Admin are explicitly denied.
-  The Web adapter uses one dedicated pool, fixed parameterized function calls, and checks effective
-  role, distinct non-privileged login, exact Web-only membership, database capability, search path,
-  and read-only state before every pooled read. Failed sessions are destroyed and raw driver errors
-  are not forwarded. The local Jobs adapter independently checks an exact Jobs-only
-  login/membership, CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the
-  seventeen prepared function calls. Its pool maximum is one, input/result shapes are closed, failed
-  clients are destroyed, and CLI output reflects no configuration, command, SQL, count, or error
-  detail. The separate default-off scheduler can construct only that runner, selects only a frozen
-  maximum-17 fixed UTC catalog, and validates each object again through the runner; it adds no SQL
-  or database capability. The local Ingest adapter independently caps its pool at four, probes the
-  exact Ingest login/role and safe search path before each capability, exposes only fixed
-  parameterized origin replay, device lookup, and submission calls, reconstructs and revalidates
-  inputs, copies mutable values, accepts only closed rows, and destroys failed clients without
-  forwarding driver/configuration details. Its full synthetic gate additionally observes four
-  lock-waiting origin-consume queries and rejects a fifth HTTP request without a fifth database call
-  before the four settle successfully.
+  deletion, open-season scoring refresh, terminal season finalization, and bounded oldest-known
+  historical season finalization. Web alone receives the bounded public score and separate race
+  functions; Ingest, Jobs, and Admin are explicitly denied. The Web adapter uses one dedicated pool,
+  fixed parameterized function calls, and checks effective role, distinct non-privileged login,
+  exact Web-only membership, database capability, search path, and read-only state before every
+  pooled read. Failed sessions are destroyed and raw driver errors are not forwarded. The local Jobs
+  adapter independently checks an exact Jobs-only login/membership, CONNECT without
+  CREATE/TEMPORARY, and safe search path before exactly one of the eighteen prepared function calls.
+  Its pool maximum is one, input/result shapes are closed, failed clients are destroyed, and CLI
+  output reflects no configuration, command, SQL, count, or error detail. The separate default-off
+  scheduler can construct only that runner, selects only a frozen maximum-18 fixed UTC catalog, and
+  validates each object again through the runner; it adds no SQL or database capability. The local
+  Ingest adapter independently caps its pool at four, probes the exact Ingest login/role and safe
+  search path before each capability, exposes only fixed parameterized origin replay, device lookup,
+  and submission calls, reconstructs and revalidates inputs, copies mutable values, accepts only
+  closed rows, and destroys failed clients without forwarding driver/configuration details. Its full
+  synthetic gate additionally observes four lock-waiting origin-consume queries and rejects a fifth
+  HTTP request without a fifth database call before the four settle successfully.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Its local emitted-controller gate has no production credential/trust, staging
   service-compatibility/rollback, deployed replica, monitoring, or recovery result. Web now has a
@@ -650,15 +651,16 @@ material availability cost.
   production processes, certificate-verified TLS, and one controlled four-slot admission scenario,
   plus bounded synthetic nested-plan evidence, but a deployment certificate/login, external TLS/edge
   path, and representative plan/load/capacity have not been exercised. Jobs now has a disposable
-  synthetic least-privileged login, all seventeen emitted commands, a widened-login denial, and
+  synthetic least-privileged login, all eighteen emitted commands, a widened-login denial, and
   exact-state evidence; Ingest similarly has a disposable synthetic least-privileged loopback login
   and full HTTP integration result. Jobs additionally has fixed-clock production scheduler-core
   composition, injected repeated-timer and process-lifecycle settlement with its disposable
-  PostgreSQL boundary, and one real-clock emitted startup path through its terminal catalog marker.
-  None proves host-timer delivery, OS-signal delivery, emitted-child controller settlement before
-  forced termination, a deployment credential/certificate, external TLS/edge route, external audit
-  sink, capacity, a wall-clock recurring process callback, deployed scheduler operation, monitoring,
-  or real-user behavior.
+  PostgreSQL boundary, one real-clock emitted startup path through its terminal catalog marker, and
+  one pinned-Linux emitted OS-`SIGTERM` path with active-call settlement and no later job. None
+  proves host-timer delivery, emitted-child controller settlement before forced termination, a
+  deployed signal route or orchestrator grace policy, a deployment credential/certificate, external
+  TLS/edge route, external audit sink, capacity, a wall-clock recurring process callback, deployed
+  scheduler operation, monitoring, or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -755,7 +757,7 @@ material availability cost.
   0032 makes the terminal job cleanup-eligible after 30 days; revision 0033 makes the redacted audit
   reference cleanup-eligible after 180 days. The isolated database gate now restores its current
   synthetic snapshot twice, checks exact data digests/lengths, stable restored schema, all 28
-  forced-RLS tables and selected role grants, then executes all 44 post-restore lock-wait races and
+  forced-RLS tables and selected role grants, then executes all 45 post-restore lock-wait races and
   the final runtime deny matrix on that state. It contains no pre-deletion backup or keyed marker
   and therefore does not test resurrection or deletion replay. No external audit sink is supplied.
   Cache invalidation, deployed scheduler/monitoring, keyed tombstone policy, backup expiry, and

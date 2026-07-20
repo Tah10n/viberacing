@@ -22,7 +22,7 @@ admission, one Windows sync command with bounded fixed-name discovery plus an ex
 that admits, collects, signs, and uploads once, and one fixed proposal-only command that starts no
 Codex process. It also has one opt-in synthetic loopback integration through the emitted Ingest host
 and a disposable least-privileged PostgreSQL login, plus a separate synthetic integration through
-all seventeen emitted Jobs commands and a disposable narrow login with a widened-login negative
+all eighteen emitted Jobs commands and a disposable narrow login with a widened-login negative
 control. A second Jobs mode composes the production scheduler core under fixed injected UTC time
 with the real runner and disposable database. A third advances the fixed clock by one hour, invokes
 the production interval handler twice during the active real-runner cycle, proves the exact
@@ -138,23 +138,25 @@ the current active recipe. ADR 0040 adds the separate compatible rounded status 
 places all three GET compositions behind one exact default-off module-load decision before
 query/header parsing, admission acquisition, or store work. These capabilities have role, contract,
 route, adapter, mapping, and concurrency evidence. ADR 0014 adds a local one-shot Jobs adapter/CLI;
-ADRs 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, 0061, and 0062 extend
-it to exactly twelve cleanup commands, one pairing approval-provenance redaction, one fixed
-pairing-rate-window reset, one primary purge, one refresh, and one finalization command with the
-same role/login probe, one-client pool, and fixed deadlines. A separate opt-in synthetic integration
-now runs all seventeen emitted commands against disposable PostgreSQL, proves the narrow login and
-extra-membership denial, and checks exact stored state. ADR 0063 separately adds one
-exact-default-off local scheduler that derives only fixed UTC process slots, invokes the closed
-runner sequentially, keeps slot state in memory, prevents overlap and same-slot retry, and bounds
-signal shutdown. A second opt-in synthetic integration composes its production core under a fixed
-injected UTC clock/timer with the real Jobs runner and disposable PostgreSQL, proving exact catalog
-order, full private-table widened-login non-mutation, and exact narrow-login state. A third advances
-the fixed clock by one hour, invokes the production interval handler twice during the active
-real-runner cycle, proves the exact recurring catalog plus overlap and same-slot suppression, and
-verifies the rearmed terminal reset. A fourth composes the production process lifecycle, injects its
-first handler during the penultimate real database job, and proves graceful active-call settlement
-plus no later scheduler job. A fifth starts the built entry point under the real host clock, reaches
-the terminal startup-catalog marker without process output, forcibly ends only its persistent test
+ADRs 0029, 0032, 0034, 0036, 0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, 0061, 0062, and 0065
+extend it to exactly twelve cleanup commands, one pairing approval-provenance redaction, one fixed
+pairing-rate-window reset, one primary purge, one refresh, one explicit finalization, and one
+oldest-known-season backlog-finalization command with the same role/login probe, one-client pool,
+and fixed deadlines. A separate opt-in synthetic integration now runs all eighteen emitted commands
+against disposable PostgreSQL, proves the narrow login and extra-membership denial, and checks exact
+stored state. ADR 0063 separately adds one exact-default-off local scheduler that derives only fixed
+UTC process slots, invokes the closed runner sequentially, keeps slot state in memory, prevents
+overlap and same-slot retry, and bounds signal shutdown. ADR 0065 places one oldest-known
+data-backed finalization first in its hourly catalog without adding a queue or scheduler database
+authority. A second opt-in synthetic integration composes its production core under a fixed injected
+UTC clock/timer with the real Jobs runner and disposable PostgreSQL, proving exact catalog order,
+full private-table widened-login non-mutation, and exact narrow-login state. A third advances the
+fixed clock by one hour, invokes the production interval handler twice during the active real-runner
+cycle, proves the exact recurring catalog plus overlap and same-slot suppression, and verifies the
+rearmed terminal reset. A fourth composes the production process lifecycle, injects its first
+handler during the penultimate real database job, and proves graceful active-call settlement plus no
+later scheduler job. A fifth starts the built entry point under the real host clock, reaches the
+terminal startup-catalog marker without process output, forcibly ends only its persistent test
 child, and then verifies exact state. It is not controller-settlement evidence before that forced
 termination. None is a host-timer-delivery, OS-signal-delivery, wall-clock recurring process, or
 deployed-cadence result. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and

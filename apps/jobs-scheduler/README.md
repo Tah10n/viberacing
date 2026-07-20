@@ -8,6 +8,7 @@ catalog once at startup and then every minute. It:
 
 - refreshes the current Monday-based Community season at most once per five-minute process slot;
 - finalizes the latest season whose Wednesday grace boundary has elapsed at most once per UTC day;
+- advances at most one oldest data-backed historical season per UTC hour without accepting a date;
 - invokes every bounded cleanup, redaction, reset, and primary-deletion capability at most once per
   UTC hour.
 
@@ -47,7 +48,7 @@ certificate, scheduler enable value, deployment manifest, or hosted schedule.
 Unit tests use a fake clock, timer, and runner to prove UTC dates, fixed cadence, dependency order,
 non-overlap, failure containment, shutdown, and default-off ordering. The built-entrypoint gate
 proves disabled startup exits silently before Jobs configuration. The existing Jobs PostgreSQL
-integration separately proves all seventeen emitted CLI commands. The opt-in
+integration separately proves all eighteen emitted CLI commands. The opt-in
 `pnpm run test:jobs-scheduler:postgres-integration` gate additionally composes the production
 scheduler core with a fixed injected UTC clock/timer, the real Jobs runner, and one disposable
 PostgreSQL database. It proves the exact ordered catalog, full private-table non-mutation for a
@@ -74,7 +75,7 @@ finalization mutex until the emitted scheduler is observed in an exact database 
 harness then delivers a real `SIGTERM`, releases the mutex before the database deadline, and
 requires the finalization call to settle without starting refresh or any later job. The process must
 exit silently with code 0, release its database session, leave the runtime fingerprint unchanged,
-and pass the shared exact state oracle after the sixteen omitted one-shot commands run separately.
+and pass the shared exact state oracle after the seventeen omitted one-shot commands run separately.
 This is local synthetic Linux OS-signal evidence. None proves a deployed signal route or
 orchestrator grace policy, a wall-clock recurring callback, production TLS/login, durable cadence,
 monitoring, capacity, deployment, or real-user retention.

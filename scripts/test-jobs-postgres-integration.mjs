@@ -463,6 +463,7 @@ function expectedSchedulerCatalog(currentSeasonStart, finalizedSeasonStart) {
     [
       { kind: "finalize_community_season", seasonStart: finalizedSeasonStart },
       { kind: "refresh_community_season", seasonStart: currentSeasonStart },
+      { kind: "finalize_community_season_backlog" },
       { batchSize: 10, kind: "purge_profile_deletions" },
       { batchSize: 1_000, kind: "cleanup_expired_auth_state" },
       { batchSize: 1_000, kind: "cleanup_expired_ingest_state" },
@@ -915,9 +916,9 @@ async function waitWithDeadline(promise, milliseconds, message) {
 }
 
 async function runSchedulerTimerCycle({ databasePort, expectedJobs, modules, nowEpochMs }) {
-  assert.equal(expectedJobs.length, 17, "the timer integration requires the closed catalog");
+  assert.equal(expectedJobs.length, 18, "the timer integration requires the closed catalog");
   const recurringExpectedJobs = Object.freeze(expectedJobs.slice(1));
-  assert.equal(recurringExpectedJobs.length, 16, "the repeated hour must omit daily finalization");
+  assert.equal(recurringExpectedJobs.length, 17, "the repeated hour must omit daily finalization");
   const nextHourEpochMs = (Math.floor(nowEpochMs / oneHourMs) + 1) * oneHourMs;
   assert.equal(
     new Date(nextHourEpochMs).toISOString().slice(0, 10),
@@ -1109,7 +1110,7 @@ WHERE operation = 'poll'
 }
 
 async function runSchedulerLifecycle({ databasePort, expectedJobs, modules, nowEpochMs }) {
-  assert.equal(expectedJobs.length, 17, "the lifecycle integration requires the closed catalog");
+  assert.equal(expectedJobs.length, 18, "the lifecycle integration requires the closed catalog");
   const configuredRunner = modules.jobs.createConfiguredCommunityMaintenanceRunner(
     jobsEnvironment(databasePort, jobsLogin, jobsPassword),
   );
@@ -1811,6 +1812,7 @@ VALUES (
 INSERT INTO viberacing_private.codex_sources (source_id, profile_id)
 VALUES
   ('src_' || pg_catalog.repeat('J', 22), '${fixture.scoringProfileId}'),
+  ('src_' || pg_catalog.repeat('Q', 22), '${fixture.scoringProfileId}'),
   (
     'src_' || pg_catalog.lpad('31954', 22, 'R'),
     '${fixture.finalizedSourceProfileId}'
@@ -1843,6 +1845,15 @@ VALUES
     'dev_' || pg_catalog.lpad('31954', 22, 'R'),
     TIMESTAMPTZ '2001-01-10 08:00:00+00',
     TIMESTAMPTZ '2001-01-10 09:00:00+00'
+  ),
+  (
+    'src_' || pg_catalog.repeat('Q', 22),
+    DATE '2001-02-05',
+    23456,
+    'syn_' || pg_catalog.repeat('Q', 22),
+    'dev_' || pg_catalog.repeat('Q', 22),
+    TIMESTAMPTZ '2001-02-06 08:00:00+00',
+    TIMESTAMPTZ '2001-02-06 09:00:00+00'
   );
 
 INSERT INTO viberacing_private.seasons (
@@ -1961,7 +1972,7 @@ COMMIT;`,
       assert.deepEqual(
         scheduledJobs,
         schedulerExpectedJobs,
-        "the combined catalog must match all 17 independently reviewed jobs in order",
+        "the combined catalog must match all 18 independently reviewed jobs in order",
       );
     } else if (
       integrationMode === "scheduler_process" ||
@@ -2081,6 +2092,7 @@ SELECT (
     } else if (integrationMode === "scheduler_signal_process") {
       await runEmittedSchedulerSignalProcess({ expectedSeasonStarts: schedulerSeasonStarts });
       const omittedCommands = [
+        ["finalize-community-backlog"],
         ["refresh-community-season", currentSeasonStart],
         ["purge-profile-deletions"],
         ["cleanup-expired-auth-state"],
@@ -2104,6 +2116,7 @@ SELECT (
       }
     } else {
       const commands = [
+        ["finalize-community-backlog"],
         ["cleanup-expired-auth-state"],
         ["cleanup-expired-audit-events"],
         ["cleanup-expired-car-recipe-proposals"],
@@ -2132,6 +2145,27 @@ SELECT (
       psqlScalar(
         `SET ROLE viberacing_owner;
 SELECT pg_catalog.jsonb_build_object(
+  'backlogDailyCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.season_daily_scores
+    WHERE season_start = DATE '2001-02-05'
+  ),
+  'backlogEntryCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.season_entries
+    WHERE season_start = DATE '2001-02-05'
+  ),
+  'backlogSeasonState', (
+    SELECT state
+    FROM viberacing_private.seasons
+    WHERE season_start = DATE '2001-02-05'
+  ),
+  'backlogSourceDayTokens', (
+    SELECT tokens
+    FROM viberacing_private.source_day_values
+    WHERE source_id = 'src_' || pg_catalog.repeat('Q', 22)
+      AND codex_reported_date = DATE '2001-02-05'
+  ),
   'abandonedInviteCount', (
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.invites
@@ -2325,6 +2359,10 @@ SELECT pg_catalog.jsonb_build_object(
       ),
     );
     assert.deepEqual(storedState, {
+      backlogDailyCount: 7,
+      backlogEntryCount: 1,
+      backlogSeasonState: "finalized",
+      backlogSourceDayTokens: 23456,
       abandonedInviteCount: 0,
       abandonedProfileCount: 0,
       abandonedSessionCount: 0,
@@ -2372,7 +2410,7 @@ SELECT pg_catalog.jsonb_build_object(
               ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, forced test-child termination, and exact stored state)."
               : integrationMode === "scheduler_signal_process"
                 ? "Emitted Jobs scheduler signal PostgreSQL integration passed (OS SIGTERM, active finalization settlement, no later scheduler job, silent graceful exit, and exact final state)."
-                : "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).";
+                : "Jobs PostgreSQL integration passed (eighteen commands, least-privilege denial, generic output, and exact stored state).";
     console.log(successMessage);
   } catch (error) {
     primaryFailure = error;

@@ -375,7 +375,7 @@ function loadReviewedManifest() {
   if (findings.length > 0) {
     throw new Error(`migration manifest validation failed:\n- ${findings.join("\n- ")}`);
   }
-  assert.equal(manifest.migrations.length, 39);
+  assert.equal(manifest.migrations.length, 40);
   return manifest;
 }
 
@@ -936,7 +936,7 @@ async function main() {
     assertControllerCleanup();
 
     console.log(
-      "Migration PostgreSQL integration passed (widened-login denial, two emitted controllers behind one holder, verified TLS, exact 39-row ledger, 28 forced-RLS tables, and released connections/lock).",
+      "Migration PostgreSQL integration passed (widened-login denial, two emitted controllers behind one holder, verified TLS, exact 40-row ledger, 28 forced-RLS tables, and released connections/lock).",
     );
   } catch (error) {
     primaryFailure = error;

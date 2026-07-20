@@ -14,6 +14,7 @@ const maximumClockExclusiveMs = Date.UTC(2100, 0, 4);
 // This catalog is ordered, not merely enumerated. Approval provenance must be redacted before
 // expired sessions and aged passkeys/devices can become eligible for physical deletion.
 const hourlyJobs: readonly CommunityMaintenanceJob[] = Object.freeze([
+  Object.freeze({ kind: "finalize_community_season_backlog" }),
   Object.freeze({
     batchSize: maximumProfileDeletionPurgeBatchSize,
     kind: "purge_profile_deletions",

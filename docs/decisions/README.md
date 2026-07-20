@@ -73,6 +73,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0062](0062-finalized-source-day-retention-cleanup.md)          | Finalized source-day retention cleanup                              | Accepted; local catalog; deployment pending            |
 | [0063](0063-default-off-local-jobs-scheduler.md)                | Default-off local Jobs scheduler                                    | Accepted; local scheduler; deployment pending          |
 | [0064](0064-default-off-reviewed-migration-runner.md)           | Default-off reviewed migration runner                               | Accepted; local PostgreSQL gate; deployment pending    |
+| [0065](0065-bounded-historical-season-backlog-finalization.md)  | Bounded historical season backlog finalization                      | Accepted; local catalog; deployment pending            |
 
 ## Lifecycle
 

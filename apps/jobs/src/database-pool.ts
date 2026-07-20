@@ -113,6 +113,11 @@ const finalizationQuery = `SELECT
   finalization.profile_count AS profile_count
 FROM viberacing_api.finalize_community_season($1::date) AS finalization`;
 
+const backlogFinalizationQuery = `SELECT
+  finalization.finalized_season_count AS finalized_season_count,
+  finalization.profile_count AS profile_count
+FROM viberacing_api.finalize_community_season_backlog() AS finalization`;
+
 export type JobsDatabasePoolSignal = "idle_client_error";
 export type JobsDatabasePoolSignalSink = (signal: JobsDatabasePoolSignal) => Promise<void> | void;
 
@@ -129,6 +134,7 @@ export interface JobsDatabaseClient {
   cleanupExpiredPairingState(batchSize: number): Promise<unknown>;
   cleanupExpiredSessions(batchSize: number): Promise<unknown>;
   cleanupTerminalDeletionJobs(batchSize: number): Promise<unknown>;
+  finalizeCommunitySeasonBacklog(): Promise<unknown>;
   finalizeCommunitySeason(seasonStart: string): Promise<unknown>;
   purgeProfileDeletions(batchSize: number): Promise<unknown>;
   redactAgedPairingApprovalProvenance(batchSize: number): Promise<unknown>;
@@ -216,6 +222,9 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
     },
     cleanupTerminalDeletionJobs(batchSize: number): Promise<unknown> {
       return fixedQuery(terminalDeletionJobCleanupQuery, [batchSize]);
+    },
+    finalizeCommunitySeasonBacklog(): Promise<unknown> {
+      return fixedQuery(backlogFinalizationQuery);
     },
     finalizeCommunitySeason(seasonStart: string): Promise<unknown> {
       return fixedQuery(finalizationQuery, [seasonStart]);

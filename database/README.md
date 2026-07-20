@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains thirty-nine SQL-first revisions for identity, passkey login and management,
+This directory contains forty SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
 finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
 PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,
@@ -170,6 +170,9 @@ production login, monitoring, deployed cadence, or deployment exists.
   projection at terminal finalization, keeps the compatible public race-status result stable, and
   adds Jobs-only maximum-1000 physical deletion of exact source/day rows only after 30 days and
   repeated live/captured integrity checks.
+- `migrations/0040_historical_season_backlog_finalization.sql` adds a Jobs-only zero-argument
+  oldest-known-season finalization step plus one partial open-season index, reusing the existing
+  source-date index without a queue, run ledger, caller-selected date, or new retained field.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -310,9 +313,13 @@ production login, monitoring, deployed cadence, or deployment exists.
 - `tests/season_finalization.sql` proves the exact grace boundary, early and no-data behavior, late
   whole-snapshot quarantine, terminal idempotency and mutation denial, role isolation, and
   profile-purge compatibility.
+- `tests/season_backlog.sql` proves empty, oldest-open, data-backed missing, current-week,
+  supporting-index, exact-role, and missing-mutex behavior for one bounded backlog step.
 - `tests/finalization_concurrency_setup.sql` and `tests/finalization_concurrency_assertions.sql`
   prove finalization and late Ingest share a deadlock-free canonical lock order and converge on one
   terminal projection.
+- `tests/season_backlog_concurrency_setup.sql` and `tests/season_backlog_concurrency_assertions.sql`
+  prove two backlog workers serialize and finalize exactly the two oldest known eligible seasons.
 - `tests/public_score_read.sql` proves the exact public field allowlist, active-only visibility,
   post-hide re-ranking, open/finalized metadata, fixed result ceiling, generic failure, and role
   isolation.
@@ -344,14 +351,14 @@ production login, monitoring, deployed cadence, or deployment exists.
 
 ## Capability model
 
-| Role                | Login | Private schema | API schema | Current executable capability                                                       |
-| ------------------- | ----- | -------------- | ---------- | ----------------------------------------------------------------------------------- |
-| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                                              |
-| `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus score/race/status reads            |
-| `viberacing_ingest` | No    | None           | Usage      | Origin replay, device verification, and Community sync only                         |
-| `viberacing_jobs`   | No    | None           | Usage      | Twelve cleanup calls, one redaction, one reset, profile purge, scoring/finalization |
-| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                                        |
-| `PUBLIC`            | N/A   | None           | None       | None                                                                                |
+| Role                | Login | Private schema | API schema | Current executable capability                                                                       |
+| ------------------- | ----- | -------------- | ---------- | --------------------------------------------------------------------------------------------------- |
+| `viberacing_owner`  | No    | Owns objects   | Owns       | Migration and procedure implementation                                                              |
+| `viberacing_web`    | No    | None           | Usage      | Identity/passkey/recovery/pairing/lifecycle plus score/race/status reads                            |
+| `viberacing_ingest` | No    | None           | Usage      | Origin replay, device verification, and Community sync only                                         |
+| `viberacing_jobs`   | No    | None           | Usage      | Twelve cleanup calls, one redaction, one reset, profile purge, scoring, latest/backlog finalization |
+| `viberacing_admin`  | No    | None           | Usage      | Bounded invite issuance only                                                                        |
+| `PUBLIC`            | N/A   | None           | None       | None                                                                                                |
 
 Deployment login principals are environment-owned secrets and are not declared here. Each service
 will receive one group role through protected infrastructure. Runtime roles are not members of the
@@ -529,6 +536,10 @@ Runtime access must remain procedure-only and must have positive and negative in
 - `finalize_community_season` accepts the same bounded ISO calendar only at or after grace,
   rematerializes once, and records an immutable terminal timestamp. Exact retries return the stored
   result; a closed no-data week records one terminal definition, and no runtime correction exists.
+- `finalize_community_season_backlog` is Jobs-only and accepts no argument. It serializes on the
+  scoring mutex, selects only the oldest grace-eligible open season or week already represented by
+  retained source/day state, invokes the unchanged terminal finalization function once, and returns
+  only a 0–1 season count plus profile count.
 - `list_public_community_scores` is Web-only and returns at most 100 active-profile rows for one
   bounded ISO season. It exposes only dates, score version/finalized state, handle, score, active
   days, source count, shared rank, and deterministic display position. Visibility filtering happens
@@ -716,7 +727,7 @@ credential against the encrypted challenge continuation, one fixed function crea
 that five-minute profile-free challenge in the same transaction as the existing credential-derived
 session. It returns only profile ID, public handle, and locale so Web/Auth can seal its existing
 session shape. Ingest, Jobs, Admin, and `PUBLIC` are denied; the complete isolated suite now proves
-64 cross-capability denials. Physical challenge cleanup after expiry is supplied by revision 0023; a
+67 cross-capability denials. Physical challenge cleanup after expiry is supplied by revision 0023; a
 deployment login, edge attempt policy, monitoring, and live authenticator/database integration
 remain open.
 
@@ -867,11 +878,11 @@ deployed cadence, cache/backup purge, tombstone/restore replay, monitoring, capa
 Revision 0033 physically removes both profile-linked and already-redacted database audit events only
 after 180 days from server-recorded occurrence. It uses a separate private mutex, a deterministic
 time/identifier index, `FOR UPDATE SKIP LOCKED`, and a repeated cutoff predicate. Recent evidence
-remains. The observed worker race and shared seventeen-command synthetic integration prove only
-local serialization, least-privileged execution, and exact stored state. The object is in the
-default-off local catalog; the combined synthetic scheduler/PostgreSQL integration exercises it.
-These layers do not prove an external append-only sink, deployed cadence, production login/TLS,
-monitoring, capacity, backup purge, or deployed retention.
+remains. The observed worker race and shared eighteen-command synthetic integration prove only local
+serialization, least-privileged execution, and exact stored state. The object is in the default-off
+local catalog; the combined synthetic scheduler/PostgreSQL integration exercises it. These layers do
+not prove an external append-only sink, deployed cadence, production login/TLS, monitoring,
+capacity, backup purge, or deployed retention.
 
 Revision 0034 redacts only `approved_by_session_id` and `approved_by_passkey_id` from activated
 pairings at least 180 days after server-recorded activation. It locks the existing authentication
@@ -880,7 +891,7 @@ and pairing mutexes in profile-purge order, uses an ordered partial index and
 trigger transition only when every other approval and activation binding remains immutable. Partial
 or pre-activation redaction fails closed. The pairing, source, active device, passkey, and
 activation evidence remain; a separate session-cleanup call can then remove a newly unreferenced
-expired session. The observed worker race and shared seventeen-command synthetic integration prove
+expired session. The observed worker race and shared eighteen-command synthetic integration prove
 local serialization, least-privileged execution, and exact stored state. This redaction does not
 itself delete device history; revision 0036 separately handles only an aged minimized pair. The
 object is in the default-off local catalog. The combined synthetic scheduler/PostgreSQL integration
@@ -893,7 +904,7 @@ It locks the existing authentication and pairing mutexes in profile-purge order,
 partial index plus `FOR UPDATE SKIP LOCKED`, and repeats every state/cutoff/reference predicate at
 delete. Active, recent, and referenced credentials remain. A recovery scenario first fails
 atomically at the unchanged 32-row ceiling, deletes 31 eligible historical rows, then completes with
-the existing replacement-passkey proof. The observed worker race and shared seventeen-command
+the existing replacement-passkey proof. The observed worker race and shared eighteen-command
 integration prove only local serialization, least-privileged execution, and exact state. The object
 is in the default-off local catalog, and the combined synthetic scheduler/PostgreSQL integration
 exercises it after provenance/session cleanup. These layers do not prove deployed cadence,
@@ -906,7 +917,7 @@ locks the existing Ingest and pairing mutexes in profile-purge order, locks both
 `FOR UPDATE SKIP LOCKED`, deletes the pairing before the key, repeats every predicate, and requires
 exactly one row at each step so failure rolls back the pair. Active, recent, and referenced history
 remains, and configured challenge/raw cascades never define eligibility. The observed worker race
-and shared seventeen-command integration prove only local serialization, least-privileged execution,
+and shared eighteen-command integration prove only local serialization, least-privileged execution,
 and exact state. The object is in the default-off local catalog. The combined synthetic
 scheduler/PostgreSQL integration exercises it after provenance, session, and passkey cleanup. These
 layers do not prove deployed cadence, production login/TLS, monitoring, capacity, backup purge, or
@@ -920,7 +931,7 @@ epoch/zero state. The table rows, operations, buckets, Web-only admission functi
 limits, and absence of client ID/digest storage remain unchanged. A failed later-row update rolls
 back the whole reset. Observed worker/worker and reset/admission races prove convergence and a fresh
 admission count surviving reset. The object is in the default-off local catalog. The separate
-seventeen-command integration proves the no-argument Jobs path and exact stored state, not trusted
+eighteen-command integration proves the no-argument Jobs path and exact stored state, not trusted
 edge identity. The combined synthetic scheduler/PostgreSQL integration also exercises the reset;
 neither proves deployed cadence, monitoring, capacity, production login/TLS, or deployment.
 
@@ -932,14 +943,13 @@ no-other-profile-state predicates at deletion. The existing profile cascade remo
 redeemed invite and expired enrollment authority; audit rows remain with null profile linkage. Live
 or equal-boundary authority, active profiles, and every non-enrollment, recovery, passkey/source,
 deletion, scoring, recipe, or missing-invite drift remain. Worker serialization and an in-flight
-initial-passkey activation race pass in isolated PostgreSQL. The shared seventeen-command
-integration proves only the emitted command through a disposable narrow login and exact stored
-state. The object is in the default-off local catalog, and the combined synthetic
-scheduler/PostgreSQL integration exercises this cleanup. None of these layers proves invite
-repair/reuse, a deletion job/tombstone, notification, deployed cadence, production login/TLS,
-monitoring, capacity, backup purge, restore replay, or deployed retention. Revision 0039 repeats its
-eligibility boundary with a finalized-freshness exclusion so the new direct profile foreign key
-cannot widen this cascade.
+initial-passkey activation race pass in isolated PostgreSQL. The shared eighteen-command integration
+proves only the emitted command through a disposable narrow login and exact stored state. The object
+is in the default-off local catalog, and the combined synthetic scheduler/PostgreSQL integration
+exercises this cleanup. None of these layers proves invite repair/reuse, a deletion job/tombstone,
+notification, deployed cadence, production login/TLS, monitoring, capacity, backup purge, restore
+replay, or deployed retention. Revision 0039 repeats its eligibility boundary with a
+finalized-freshness exclusion so the new direct profile foreign key cannot widen this cascade.
 
 Revision 0039 captures one private profile/season projection when an open season becomes finalized:
 the latest accepted receipt's UTC date, retained source count, exact source/day row count, and zero
@@ -954,6 +964,14 @@ prove local serialization. Open, recent, missing-projection, or drifted state re
 fails closed. The exact command is in ADR 0063's default-off local hourly catalog. The combined
 synthetic scheduler/PostgreSQL integration exercises it, but there is no production login/TLS path,
 correction authority, backup purge, capacity result, or deployed retention evidence.
+
+Revision 0040 adds no table, column, public contract, personal field, or durable scheduler state.
+Its Jobs-only no-argument function discovers only one oldest grace-eligible open or data-backed
+season under the existing scoring mutex, then delegates to the unchanged finalization function. The
+pre-existing source-date index and one new partial open-season index cover only already-mapped
+private date/source and public season-state keys. The eighteen-command integration and all five
+scheduler/PostgreSQL modes prove exact local progress, but not representative backlog capacity,
+production login/TLS, deployed cadence, monitoring, or real-user recovery.
 
 The local account application consumes those capabilities through the same probed read-write pool.
 Its combined overview query reads visibility and the current week's derived score with one checkout,
@@ -1028,7 +1046,7 @@ Migration and Web also remove their ephemeral host key directories.
 The Migration suite runs one widened emitted controller and requires generic denial before either
 application schema exists. It then holds the fixed session advisory key externally, observes two
 narrow emitted controllers waiting behind that holder over TLS 1.2/1.3, releases it, and requires
-both controllers to succeed. The final oracle checks the exact 39-row manifest ledger, all 28
+both controllers to succeed. The final oracle checks the exact 40-row manifest ledger, all 28
 owner-owned forced-RLS private tables, identity invariants, zero controller connections, and a free
 session lock. This is local disposable controller convergence, not staging orchestration, a
 production login/certificate, deployed replica behavior, monitoring, rollback, or recovery.
@@ -1087,12 +1105,12 @@ something the script silently broadens or repairs.
   distributed backpressure/rate controls, monitoring, and load evidence. The synthetic loopback
   integration does not replace those gates.
 - Deploy the default-off local scheduler with a production Jobs login/TLS path,
-  single-replica/cadence policy, monitoring, missed-backlog recovery, and capacity evidence, plus
-  audited corrections. The pinned-Linux emitted signal gate proves one local OS `SIGTERM` while the
-  first finalization call is lock-waiting, but the fixed-clock, injected-timer, injected-lifecycle,
-  terminal-marker, and signal evidence do not provide host-timer delivery, controller settlement in
-  the forcibly ended child, a deployed signal route, a wall-clock recurring process callback,
-  production configuration, or deployed evidence.
+  single-replica/cadence policy, monitoring, representative backlog-recovery and capacity evidence,
+  plus audited corrections. The pinned-Linux emitted signal gate proves one local OS `SIGTERM` while
+  the first finalization call is lock-waiting, but the fixed-clock, injected-timer,
+  injected-lifecycle, terminal-marker, and signal evidence do not provide host-timer delivery,
+  controller settlement in the forcibly ended child, a deployed signal route, a wall-clock recurring
+  process callback, production configuration, or deployed evidence.
 - Integrate the bounded database adapter and local score/race/status routes with a
   deployment-provisioned Web-only login and verified TLS, then add cache/invalidation, edge request
   shaping, representative/deployed query-plan and load/capacity evidence, monitoring, and deployment

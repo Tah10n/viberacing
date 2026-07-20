@@ -54,8 +54,9 @@ describe("Jobs database pool", () => {
     await expect(client.resetExpiredPairingRequestWindows()).resolves.toEqual([{ value: 1 }]);
     await expect(client.cleanupAbandonedEnrollments(17)).resolves.toEqual([{ value: 1 }]);
     await expect(client.cleanupFinalizedSourceDayValues(18)).resolves.toEqual([{ value: 1 }]);
+    await expect(client.finalizeCommunitySeasonBacklog()).resolves.toEqual([{ value: 1 }]);
     expect(client).not.toHaveProperty("query");
-    expect(query).toHaveBeenCalledTimes(18);
+    expect(query).toHaveBeenCalledTimes(19);
     expect(query.mock.calls[0]![0]).toMatchObject({ values: [] });
     expect(query.mock.calls[0]![0].text).toContain("CURRENT_USER = 'viberacing_jobs'");
     expect(query.mock.calls[1]![0]).toMatchObject({ values: [6] });
@@ -161,6 +162,13 @@ describe("Jobs database pool", () => {
     );
     expect(query.mock.calls[17]![0].text).toContain(
       "cleanup.deleted_source_day_values AS deleted_source_day_values",
+    );
+    expect(query.mock.calls[18]![0]).toMatchObject({ values: [] });
+    expect(query.mock.calls[18]![0].text).toContain(
+      "viberacing_api.finalize_community_season_backlog()",
+    );
+    expect(query.mock.calls[18]![0].text).toContain(
+      "finalization.finalized_season_count AS finalized_season_count",
     );
     client.release(true);
     expect(release).toHaveBeenCalledWith(true);

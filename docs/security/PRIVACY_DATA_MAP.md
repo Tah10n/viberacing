@@ -14,15 +14,16 @@ a visible public-race consumer with a synthetic fallback, a separate synthetic a
 emitted-Next-production-to-TLS-enabled-disposable-PostgreSQL gate, a browser-memory-only
 hypothetical score simulator, and bounded database/local Jobs ingest, pairing, authentication,
 CarRecipe-proposal, eligible expired-invite/session, abandoned-enrollment, aged unreferenced
-revoked-passkey, and aged minimized revoked-device cleanup plus primary profile purge. A local
-invite/OAuth/initial-passkey enrollment, returning-passkey login, private passkey inventory, and
-private active-device inventory and revoke slice now add encrypted short-lived cookies, fixed
-Web/Auth database calls, an account page, and logout with injected/synthetic evidence, but there is
-no live OAuth app, authenticator-backed result, deployed application database, production service,
-operational connector, or real user data. This document remains the required inventory for
-implementation. A field may not be collected merely because it appears here: its schema, purpose,
-visibility, retention, deletion, and access tests must exist first. The implemented column-level
-mapping is documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
+revoked-passkey, and aged minimized revoked-device cleanup plus primary profile purge and bounded
+oldest-known historical season finalization. A local invite/OAuth/initial-passkey enrollment,
+returning-passkey login, private passkey inventory, and private active-device inventory and revoke
+slice now add encrypted short-lived cookies, fixed Web/Auth database calls, an account page, and
+logout with injected/synthetic evidence, but there is no live OAuth app, authenticator-backed
+result, deployed application database, production service, operational connector, or real user data.
+This document remains the required inventory for implementation. A field may not be collected merely
+because it appears here: its schema, purpose, visibility, retention, deletion, and access tests must
+exist first. The implemented column-level mapping is documented in
+[`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
 
@@ -842,11 +843,17 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   terminal-deletion-job, database audit-event, and aged unreferenced revoked-passkey plus minimized
   revoked-device state; bounded aged pairing approval-provenance redaction; fixed anonymous
   pairing-rate-window reset; maximum-10 primary profile deletion; open-season Community scoring
-  refresh; and terminal finalization. The local one-shot adapter rechecks the exact Jobs-only login
-  and invokes one prepared capability without logging inputs or results. The separate default-off
-  scheduler can supply only those fixed objects from UTC in-memory slots and retains only the closed
-  Operational state described above. Correction, cache/backup purge, tombstone/restore replay, and
-  remaining retention capabilities require separate migrations and tests; migrations use a different
+  refresh; explicit terminal finalization; and zero-argument oldest-known historical season
+  finalization. The backlog function derives its selected date only from already-retained
+  open-season or source/day state, returns only a closed 0-or-1 count plus the existing bounded
+  profile count, and the application discards both values. The existing source-date index and one
+  new partial open-season index cover only already-mapped private date/source and season-state keys;
+  it adds no field, row, queue, run ledger, retry counter, log, metric, cache, export, or
+  destination. The local one-shot adapter rechecks the exact Jobs-only login and invokes one
+  prepared capability without logging inputs or results. The separate default-off scheduler can
+  supply only those fixed objects from UTC in-memory slots and retains only the closed Operational
+  state described above. Correction, cache/backup purge, tombstone/restore replay, and remaining
+  retention capabilities require separate migrations and tests; migrations use a different
   non-runtime owner.
 - The local database integration may copy only its own synthetic current state into bounded
   child-process buffers and two custom archives inside one disposable container. It hashes and
@@ -932,7 +939,7 @@ commands. An external append-only audit sink, public cache purge, disclosed keye
 backup handling, and stale-backup deletion replay remain launch-blocking work.
 
 The isolated database gate now proves that its current synthetic snapshot can be restored twice
-without data-digest, forced-RLS, or selected-grant drift before all 44 later lock-wait races and the
+without data-digest, forced-RLS, or selected-grant drift before all 45 later lock-wait races and the
 final runtime deny matrix run. It does not contain a pre-deletion snapshot or keyed deletion marker,
 so it does not satisfy backup expiry or restore replay for this user-control flow.
 

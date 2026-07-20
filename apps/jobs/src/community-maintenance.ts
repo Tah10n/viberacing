@@ -77,6 +77,9 @@ export type CommunityMaintenanceJob =
       kind: "reset_expired_pairing_request_windows";
     }>
   | Readonly<{
+      kind: "finalize_community_season_backlog";
+    }>
+  | Readonly<{
       kind: "finalize_community_season";
       seasonStart: string;
     }>
@@ -151,6 +154,11 @@ export type CommunityMaintenanceResult =
   | Readonly<{
       kind: "reset_expired_pairing_request_windows";
       resetWindows: number;
+    }>
+  | Readonly<{
+      finalizedSeasonCount: number;
+      kind: "finalize_community_season_backlog";
+      profileCount: number;
     }>
   | Readonly<{
       kind: "finalize_community_season";
@@ -239,7 +247,10 @@ function readJob(value: unknown): CommunityMaintenanceJob {
       fail("job_invalid");
     }
     const kind = ownDataValue(value, "kind");
-    if (kind === "reset_expired_pairing_request_windows") {
+    if (
+      kind === "reset_expired_pairing_request_windows" ||
+      kind === "finalize_community_season_backlog"
+    ) {
       if (!hasExactKeys(value, new Set(["kind"]))) {
         fail("job_invalid");
       }
@@ -350,6 +361,20 @@ function readCount(row: object, key: string, maximum: number): number {
 }
 
 function mapResult(job: CommunityMaintenanceJob, value: unknown): CommunityMaintenanceResult {
+  if (job.kind === "finalize_community_season_backlog") {
+    const row = readSingleRow(value, new Set(["finalized_season_count", "profile_count"]));
+    const finalizedSeasonCount = readCount(row, "finalized_season_count", 1);
+    const profileCount = readCount(row, "profile_count", maximumPostgresInteger);
+    if (finalizedSeasonCount === 0 && profileCount !== 0) {
+      fail("result_invalid");
+    }
+    return Object.freeze({
+      finalizedSeasonCount,
+      kind: job.kind,
+      profileCount,
+    });
+  }
+
   if (job.kind === "reset_expired_pairing_request_windows") {
     const row = readSingleRow(value, new Set(["reset_windows"]));
     return Object.freeze({
@@ -534,6 +559,9 @@ function executeCapability(
   client: JobsDatabaseClient,
   job: CommunityMaintenanceJob,
 ): Promise<unknown> {
+  if (job.kind === "finalize_community_season_backlog") {
+    return client.finalizeCommunitySeasonBacklog();
+  }
   if (job.kind === "reset_expired_pairing_request_windows") {
     return client.resetExpiredPairingRequestWindows();
   }

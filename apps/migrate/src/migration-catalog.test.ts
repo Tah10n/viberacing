@@ -84,11 +84,11 @@ describe("reviewed migration catalog", () => {
   it("loads and freezes the exact repository catalog after removing only the psql preamble", () => {
     const catalog = loadReviewedMigrationCatalog();
 
-    expect(catalog).toHaveLength(39);
+    expect(catalog).toHaveLength(40);
     expect(catalog[0]).toMatchObject({ name: "identity_foundation", revision: 1 });
     expect(catalog.at(-1)).toMatchObject({
-      name: "finalized_source_day_retention_cleanup",
-      revision: 39,
+      name: "historical_season_backlog_finalization",
+      revision: 40,
     });
     expect(catalog.every((entry) => !entry.sql.startsWith("\\set"))).toBe(true);
     expect(catalog.every((entry) => Object.isFrozen(entry))).toBe(true);

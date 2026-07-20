@@ -194,7 +194,7 @@ describe("startJobsScheduler", () => {
 
   it.each([
     Object.freeze({}),
-    Object.freeze(Array.from({ length: 18 }, () => firstJob)),
+    Object.freeze(Array.from({ length: 19 }, () => firstJob)),
     [firstJob],
     Object.freeze(Object.assign([firstJob], { extra: true })),
     Object.freeze(new Array(1)),
@@ -449,7 +449,7 @@ describe("startConfiguredJobsScheduler", () => {
     await flush();
 
     expect(createConfiguredCommunityMaintenanceRunner).toHaveBeenCalledExactlyOnceWith(environment);
-    expect(execute).toHaveBeenCalledTimes(17);
+    expect(execute).toHaveBeenCalledTimes(18);
     await controller.close();
     expect(close).toHaveBeenCalledOnce();
   });

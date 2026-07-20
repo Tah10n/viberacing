@@ -35,7 +35,7 @@ testWeekStartDate.setUTCDate(
   testWeekStartDate.getUTCDate() - ((testWeekStartDate.getUTCDay() + 6) % 7),
 );
 const testWeekStart = testWeekStartDate.toISOString().slice(0, 10);
-const expectedObservedLockWaitRaceCount = 45;
+const expectedObservedLockWaitRaceCount = 46;
 const expectedObservedMigrationOverlapCount = 1;
 const expectedObservedEarlyCompletionOverlapCount = 1;
 let raceSequence = 0;
@@ -976,6 +976,10 @@ try {
       sql: readFileSync(resolve(root, "database/tests/season_finalization.sql"), "utf8"),
     },
     {
+      label: "Community historical season backlog scenarios",
+      sql: readFileSync(resolve(root, "database/tests/season_backlog.sql"), "utf8"),
+    },
+    {
       label: "Community public score projection scenarios",
       sql: readFileSync(resolve(root, "database/tests/public_score_read.sql"), "utf8"),
     },
@@ -1093,6 +1097,13 @@ try {
     {
       label: "Community finalization concurrency setup",
       sql: readFileSync(resolve(root, "database/tests/finalization_concurrency_setup.sql"), "utf8"),
+    },
+    {
+      label: "Community historical backlog concurrency setup",
+      sql: readFileSync(
+        resolve(root, "database/tests/season_backlog_concurrency_setup.sql"),
+        "utf8",
+      ),
     },
     {
       label: "pairing concurrency setup",
@@ -2219,6 +2230,34 @@ SELECT * FROM viberacing_api.refresh_community_season(
   );
 
   await expectConcurrentSuccesses(
+    "bounded Community historical backlog worker race",
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+SELECT capability
+FROM viberacing_private.maintenance_locks
+WHERE capability = 'community_scoring_refresh'
+FOR UPDATE;
+\\echo season-backlog-lock-ready`,
+    "season-backlog-lock-ready",
+    [
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.finalize_community_season_backlog();`,
+      `SET ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.finalize_community_season_backlog();`,
+    ],
+  );
+
+  requireSuccess(
+    psql(
+      readFileSync(
+        resolve(root, "database/tests/season_backlog_concurrency_assertions.sql"),
+        "utf8",
+      ),
+    ),
+    "Community historical backlog concurrency assertions",
+  );
+
+  await expectConcurrentSuccesses(
     "Community finalization versus late ingest race",
     `BEGIN;
 SET LOCAL ROLE viberacing_owner;
@@ -2924,6 +2963,11 @@ SELECT viberacing_api.complete_passkey_login(
       "SELECT * FROM viberacing_api.finalize_community_season('2026-07-06');",
       `${role} Community season finalization`,
     );
+    expectDenied(
+      role,
+      "SELECT * FROM viberacing_api.finalize_community_season_backlog();",
+      `${role} Community historical season backlog finalization`,
+    );
   }
 
   for (const role of ["viberacing_ingest", "viberacing_jobs", "viberacing_admin"]) {
@@ -2951,7 +2995,7 @@ SELECT viberacing_api.complete_passkey_login(
   const postRestoreLockWaitRaceCount = observedLockWaitRaceCount - observedMigrationOverlapCount;
 
   console.log(
-    `Database integration passed (${observedMigrationOverlapCount} pre-restore serialized migration-overlap race, 28 forced-RLS tables after two current-snapshot restores from archives no larger than ${restoreEvidence.archiveBytes} bytes, SHA-256/length-identical ${restoreEvidence.dataBytes}-byte data dumps, a byte-stable ${restoreEvidence.schemaBytes}-byte canonical restored schema, ${postRestoreLockWaitRaceCount} post-restore lock-wait races, ${observedEarlyCompletionOverlapCount} post-restore early-completion overlap, 12 relation-denial and 64 cross-capability checks).`,
+    `Database integration passed (${observedMigrationOverlapCount} pre-restore serialized migration-overlap race, 28 forced-RLS tables after two current-snapshot restores from archives no larger than ${restoreEvidence.archiveBytes} bytes, SHA-256/length-identical ${restoreEvidence.dataBytes}-byte data dumps, a byte-stable ${restoreEvidence.schemaBytes}-byte canonical restored schema, ${postRestoreLockWaitRaceCount} post-restore lock-wait races, ${observedEarlyCompletionOverlapCount} post-restore early-completion overlap, 12 relation-denial and 67 cross-capability checks).`,
   );
 } finally {
   if (started) {

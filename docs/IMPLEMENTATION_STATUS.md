@@ -50,7 +50,7 @@ proof alone reaches one atomic create-consume-session call. Its GitHub, passkey-
 and browser evidence is injected or synthetic; no working invite issuer, OAuth registration, secret,
 live authenticator/database login, distributed edge abuse control, deployed recovery/deletion
 cleanup cadence, cache/backup/tombstone purge, restore replay, notification, or deployment is
-supplied. A local one-shot Jobs runner invokes only the seventeen existing maintenance procedures
+supplied. A local one-shot Jobs runner invokes only the eighteen existing maintenance functions
 through a bounded least-privileged adapter. One opt-in synthetic integration applies the reviewed
 migrations to disposable PostgreSQL, runs every emitted Jobs command through a narrow login, rejects
 an extra-membership login before mutation, and verifies exact stored state. A separate
@@ -87,7 +87,7 @@ plus strict build and built disabled-startup checks. A separate opt-in synthetic
 one widened and two narrow emitted processes against one disposable hostname-verified TLS PostgreSQL
 database. It denies the widened login before schema creation, observes both narrow controllers
 behind one external holder, requires both to converge successfully after release, and verifies the
-exact 39-row ledger, all 28 owner-owned forced-RLS private tables, identity invariants, and
+exact 40-row ledger, all 28 owner-owned forced-RLS private tables, identity invariants, and
 connection/lock cleanup. It proves no production credential/TLS, staging orchestration/rollback,
 deployed-replica behavior, monitoring, deployment, or recovery. A local Ingest kernel now bounds and
 authenticates the exact Community sync envelope, consumes an injected origin nonce, parses bounded
@@ -607,7 +607,7 @@ ranking, or deployed Jobs scheduler/cadence exists.
   audit, monitoring, or other capability switch.
 - An opt-in full local Ingest HTTP-to-PostgreSQL gate. It builds emitted contracts, Ingest, and host
   code; starts one disposable `postgres-test` container with an ephemeral loopback-only port;
-  applies all 39 reviewed migrations; creates a synthetic login with only `viberacing_ingest`; and
+  applies all 40 reviewed migrations; creates a synthetic login with only `viberacing_ingest`; and
   seeds two synthetic source-bound Ed25519 devices. Independently composed signed requests prove an
   accepted write, an exact duplicate under a fresh origin nonce, persistent origin replay denial,
   revoked-device denial, and the closed success/problem headers. A controlled owner lock then holds
@@ -665,7 +665,7 @@ ranking, or deployed Jobs scheduler/cadence exists.
 - An opt-in full local Web HTTP-to-PostgreSQL gate. It builds the emitted contract runtime and Web
   standalone artifact, explicitly bundles Next's otherwise externalized reviewed `pg` driver,
   generates one ephemeral self-signed DNS certificate, starts one TLS-enabled disposable
-  `postgres-test` container with an ephemeral loopback-only port, applies all 39 reviewed
+  `postgres-test` container with an ephemeral loopback-only port, applies all 40 reviewed
   migrations, seeds only synthetic public/private state, and starts two sequential emitted Next
   production processes. The deliberately widened login receives exact generic 503 contracts from all
   three public-ranking GETs while a SHA-256 fingerprint over every private table remains unchanged.
@@ -764,6 +764,17 @@ ranking, or deployed Jobs scheduler/cadence exists.
   synthetic scheduler integration exercises this capability; there is no correction authority,
   production login/TLS path, monitoring, capacity, backup purge, restore replay, deployment, or
   real-user retention evidence.
+- A bounded historical Community season finalization boundary. Revision 0040 exposes one
+  zero-argument Jobs-only function that takes the existing Community scoring mutex, derives the
+  oldest grace-eligible open or retained-data-backed season, and invokes the existing finalization
+  function for at most one season. It returns only a closed 0-or-1 season count and the bounded
+  profile count; Web, Ingest, Admin, and `PUBLIC` remain denied. The existing source-date index and
+  one new partial open-season index support oldest-first lookup without adding a queue, run ledger,
+  caller-selected date, retry counter, or retained field. The default-off scheduler places the step
+  first in its hourly catalog, and the disposable PostgreSQL gates prove empty, no-data open,
+  data-backed missing, current-week, denial, missing-lock, exact-state, and two-worker serialization
+  behavior. Representative backlog size, production credentials/TLS, capacity, monitoring, real-user
+  recovery, deployed cadence, and deployment remain unproven.
 - A database policy checker with 23 black-box cases for migration drift/path/revision, transaction
   and timeout omissions, unsafe SQL features, `PUBLIC`/direct runtime grants, unsafe
   `SECURITY DEFINER`, role options, passwords, and owner membership. The real PostgreSQL gate runs
@@ -788,7 +799,7 @@ ranking, or deployed Jobs scheduler/cadence exists.
   the emitted entry point with a widened negative login and two narrow logins against one disposable
   hostname-verified TLS PostgreSQL database. It proves the widened process fails generically before
   schema creation, observes both narrow processes behind one external holder of the fixed session
-  key, then requires both to succeed and converge on the exact 39-row ledger. The same oracle checks
+  key, then requires both to succeed and converge on the exact 40-row ledger. The same oracle checks
   all 28 private tables remain owner-owned with forced RLS, runs the identity invariants, and proves
   the controller sessions and lock are gone before deleting every resource. This is actual local
   DDL/driver/TLS/convergence evidence, but not production TLS/login, staging rollout/rollback,
@@ -798,7 +809,7 @@ ranking, or deployed Jobs scheduler/cadence exists.
   database twice, requires the source and both restored canonical data dumps to have the same
   SHA-256 digest and byte length, requires the first and second restored schema generations to be
   byte-stable, and rechecks all 28 forced-RLS tables plus selected Web/Jobs/Admin grants and denials
-  after each restore. The 44 post-restore lock-wait races, the early-completion overlap, and the
+  after each restore. The 45 post-restore lock-wait races, the early-completion overlap, and the
   full runtime deny matrix then execute on the twice-restored database. Dump buffers are bounded,
   hashed, overwritten, and never emitted. This proves no old-backup deletion replay, external
   storage or encryption, cluster-role recovery, production login/TLS, representative scale, or
@@ -1109,71 +1120,73 @@ ranking, or deployed Jobs scheduler/cadence exists.
   abandoned-enrollment/audit-event/invite/CarRecipe-proposal/ingest/finalized-source-day/pairing/session/
   terminal-deletion-job/aged-revoked-passkey/aged-revoked-device cleanup command, a fixed 1000-row
   pairing approval-provenance redaction, a zero-argument maximum-130 pairing-rate-window reset, a
-  separate fixed 10-profile primary purge, or one canonical Monday refresh/finalization command. It
-  revalidates closed plain job data, reads only redacted `VIBERACING_JOBS_DATABASE_*` configuration,
-  permits cleartext only for explicit development/test loopback, and otherwise requires
-  certificate-verifying TLS with a DNS hostname. Its pool maximum is one; client
-  connect/statement/query deadlines are 2/31/32 seconds, outside the database functions' 30-second
-  deadline. Every checkout probes the exact `viberacing_jobs` effective role, a distinct
-  non-privileged login with only that membership, CONNECT without CREATE/TEMPORARY, and
-  `pg_catalog,pg_temp` search path. It then selects one of seventeen fixed prepared function calls,
-  requires one exact allowlisted result row, holds the client through settlement, destroys it after
-  failure, and closes the pool on every acquired CLI path. Success and failure output are stable
-  sentences without command/date/count/config/SQL/exception reflection. Two hundred sixty-six
-  focused tests cover config, TLS, pool/signal behavior, hostile command/object/array/result inputs,
-  exact SQL parameters, role mismatch, settlement/release/close, CLI output, and failure translation
-  at 100% statement/branch/function/line coverage. A lint-policy regression also prevents every
-  production module except the fixed pool adapter from importing `pg`. A TypeScript production build
-  passes. A separate opt-in Docker integration applies every checksum-validated migration to one
-  disposable PostgreSQL container, creates a synthetic narrow Jobs login and a negative-control
-  login with one extra group membership, runs all seventeen emitted CLI commands as separate
-  processes, proves the widened login returns only the generic failure before mutation, and verifies
-  generic success plus exact cleanup, purge, refresh, and finalization state before removing the
-  container, network, and storage. No external audit sink, production Jobs login/TLS path, deployed
+  separate fixed 10-profile primary purge, one no-argument oldest-known-season backlog finalization,
+  or one canonical Monday refresh/finalization command. It revalidates closed plain job data, reads
+  only redacted `VIBERACING_JOBS_DATABASE_*` configuration, permits cleartext only for explicit
+  development/test loopback, and otherwise requires certificate-verifying TLS with a DNS hostname.
+  Its pool maximum is one; client connect/statement/query deadlines are 2/31/32 seconds, outside the
+  database functions' 30-second deadline. Every checkout probes the exact `viberacing_jobs`
+  effective role, a distinct non-privileged login with only that membership, CONNECT without
+  CREATE/TEMPORARY, and `pg_catalog,pg_temp` search path. It then selects one of eighteen fixed
+  prepared function calls, requires one exact allowlisted result row, holds the client through
+  settlement, destroys it after failure, and closes the pool on every acquired CLI path. Success and
+  failure output are stable sentences without command/date/count/config/SQL/exception reflection.
+  Two hundred seventy-three focused tests cover config, TLS, pool/signal behavior, hostile
+  command/object/array/result inputs, exact SQL parameters, role mismatch, settlement/release/close,
+  CLI output, and failure translation at 100% statement/branch/function/line coverage. A lint-policy
+  regression also prevents every production module except the fixed pool adapter from importing
+  `pg`. A TypeScript production build passes. A separate opt-in Docker integration applies every
+  checksum-validated migration to one disposable PostgreSQL container, creates a synthetic narrow
+  Jobs login and a negative-control login with one extra group membership, runs all eighteen emitted
+  CLI commands as separate processes, proves the widened login returns only the generic failure
+  before mutation, and verifies generic success plus exact cleanup, purge, refresh, latest-season
+  finalization, and oldest-known historical-season finalization state before removing the container,
+  network, and storage. No external audit sink, production Jobs login/TLS path, deployed
   scheduler/cadence, monitoring backend, automatic retry policy, capacity result, correction,
   cache/backup/tombstone purge, restore replay, or deployment is claimed.
 - A separate private Jobs-scheduler workspace accepts no arguments or schedule configuration and
   starts only after exact `VIBERACING_JOBS_SCHEDULER_ENABLED=true`. It resolves that latch before
   constructing the Jobs runner or reading database configuration. One closed UTC catalog refreshes
   the current Monday season at most once per uninterrupted five-minute slot, submits finalization
-  only for the latest grace-eligible season at most once per UTC day, and invokes all fifteen
-  cleanup, redaction, reset, and purge objects at most once per UTC-hour slot. It marks slots in
-  memory before invocation, validates a frozen dense maximum-17 collection, runs through one runner
-  sequentially, ignores overlapping ticks, continues later fixed objects after a failure, and emits
-  only `cycle_failed` once for that cycle. SIGINT/SIGTERM prevents a later object, waits for the
-  current bounded Jobs call and runner close under 35 seconds, and fails on a second signal,
-  deadline, or cleanup error. Ninety-four tests cover the UTC bounds, default-off and retention
-  dependency ordering, hostile shapes/dependencies, runtime-import policy, non-overlap, failure
-  containment, and process lifecycle at 100% statement/branch/function/line coverage. Strict lint,
-  TypeScript, build, and built-entrypoint gates pass locally. An opt-in synthetic integration builds
-  the production scheduler core and Jobs runner, injects one fixed UTC clock/timer, executes the
-  exact ordered seventeen-job catalog against disposable PostgreSQL, fingerprints every private
-  table around a widened-login denial, and verifies exact narrow-login stored state. A separate
-  timer integration advances the fixed clock by one hour, invokes the production interval handler
-  twice during the active real-runner cycle, proves the exact recurring catalog plus overlap and
-  same-slot suppression, and verifies the rearmed terminal reset. A third lifecycle integration
-  injects its first handler during the penultimate real database job, requires active-call
-  settlement, proves no later scheduler job, and observes exact graceful cleanup and exit code 0
-  before invoking the omitted reset separately for the shared state oracle. A fourth integration
-  starts the built entry point with exact configuration and the real host clock, requires
-  host/database UTC-date agreement, waits for the terminal reset marker, requires no process output,
-  forcibly ends only its persistent test child, and then verifies the same exact state. A fifth
-  constructs a link-free runtime from only the built scheduler, built Jobs runner, and exact
-  14-package installed production graph, mounts it read-only under the pinned Linux Node 24.18
-  image, and joins only the disposable database network namespace. It holds the emitted first
-  finalization call, observes the exact lock wait, delivers a real `SIGTERM`, releases the holder
-  before the database deadline, and proves active-call settlement without refresh or a later job,
-  silent code-0 exit, session release, unchanged runtime contents, and the shared final state after
-  the sixteen omitted commands run separately. These checks do not prove host-timer delivery,
-  controller settlement in the forcibly ended child, a deployed signal route or orchestrator grace
-  policy, a wall-clock recurring process callback, historical backlog, a stable production clock, a
-  replica lease, durable/deployed cadence, production login/TLS, monitoring, capacity, or real-user
-  retention. Secretless CI declares all five scheduler commands, but no hosted pass is claimed from
-  this local tree.
-- Forty-five deterministic lock-wait races tag every session and observe every contender in the
+  only for the latest grace-eligible season at most once per UTC day, advances at most one oldest
+  known data-backed historical season per UTC-hour slot, and then invokes all fifteen cleanup,
+  redaction, reset, and purge objects in that same hourly slot. It marks slots in memory before
+  invocation, validates a frozen dense maximum-18 collection, runs through one runner sequentially,
+  ignores overlapping ticks, continues later fixed objects after a failure, and emits only
+  `cycle_failed` once for that cycle. SIGINT/SIGTERM prevents a later object, waits for the current
+  bounded Jobs call and runner close under 35 seconds, and fails on a second signal, deadline, or
+  cleanup error. Ninety-four tests cover the UTC bounds, default-off and retention dependency
+  ordering, hostile shapes/dependencies, runtime-import policy, non-overlap, failure containment,
+  and process lifecycle at 100% statement/branch/function/line coverage. Strict lint, TypeScript,
+  build, and built-entrypoint gates pass locally. An opt-in synthetic integration builds the
+  production scheduler core and Jobs runner, injects one fixed UTC clock/timer, executes the exact
+  ordered eighteen-job catalog against disposable PostgreSQL, fingerprints every private table
+  around a widened-login denial, and verifies exact narrow-login stored state. A separate timer
+  integration advances the fixed clock by one hour, invokes the production interval handler twice
+  during the active real-runner cycle, proves the exact recurring catalog plus overlap and same-slot
+  suppression, and verifies the rearmed terminal reset. A third lifecycle integration injects its
+  first handler during the penultimate real database job, requires active-call settlement, proves no
+  later scheduler job, and observes exact graceful cleanup and exit code 0 before invoking the
+  omitted reset separately for the shared state oracle. A fourth integration starts the built entry
+  point with exact configuration and the real host clock, requires host/database UTC-date agreement,
+  waits for the terminal reset marker, requires no process output, forcibly ends only its persistent
+  test child, and then verifies the same exact state. A fifth constructs a link-free runtime from
+  only the built scheduler, built Jobs runner, and exact 14-package installed production graph,
+  mounts it read-only under the pinned Linux Node 24.18 image, and joins only the disposable
+  database network namespace. It holds the emitted first finalization call, observes the exact lock
+  wait, delivers a real `SIGTERM`, releases the holder before the database deadline, and proves
+  active-call settlement without refresh or a later job, silent code-0 exit, session release,
+  unchanged runtime contents, and the shared final state after the seventeen omitted commands run
+  separately. These checks do not prove host-timer delivery, controller settlement in the forcibly
+  ended child, a deployed signal route or orchestrator grace policy, a wall-clock recurring process
+  callback, representative or deployed backlog recovery, a stable production clock, a replica lease,
+  durable/deployed cadence, production login/TLS, monitoring, capacity, or real-user retention.
+  Secretless CI declares all five scheduler commands, but no hosted pass is claimed from this local
+  tree.
+- Forty-six deterministic lock-wait races tag every session and observe every contender in the
   holder's transitive PostgreSQL blocker chain before releasing it. The one pre-restore migration
   overlap holds revision 0039's advisory lock around two exact migration processes, then requires
-  one complete application and one duplicate-object rollback. The 44 post-restore races hold a
+  one complete application and one duplicate-object rollback. The 45 post-restore races hold a
   relevant invite, challenge, session, source, device, pairing, or profile row, or a season advisory
   lock. Protective races additionally prove the first contender is blocked before the competitor
   starts. One separate early-completion overlap holds an in-flight initial-passkey activation and
@@ -1306,11 +1319,11 @@ ranking, or deployed Jobs scheduler/cadence exists.
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0039 from the checksum manifest,
+reached `healthy`, validated and applied revisions 0001 through 0040 from the checksum manifest,
 passed one pre-restore serialized migration-overlap race with one successful application and one
-expected `42P07` rollback, 28-table state/ownership/RLS assertions, forty-four observed post-restore
+expected `42P07` rollback, 28-table state/ownership/RLS assertions, forty-five observed post-restore
 lock-wait races, one observed early-completion activation overlap, twelve relation-denial checks,
-sixty-four cross-capability denials, and the identity, passkey, recovery, pairing, source/device
+sixty-seven cross-capability denials, and the identity, passkey, recovery, pairing, source/device
 lifecycle, Community ingest, origin replay, ingest-retention, pairing-retention,
 authentication-retention, invite-retention, session-retention, abandoned-enrollment retention,
 primary-profile deletion, terminal deletion-job retention, audit-event retention, pairing
@@ -1320,30 +1333,35 @@ and public score/race/status scenarios, then removed its portless container, net
 storage.
 
 The separate Jobs integration also reached `healthy`, revalidated and applied revisions 0001 through
-0039, created only synthetic non-owner logins, rejected the one login with an extra group membership
-before its requested reset changed state, and ran all seventeen built Jobs commands through the
+0040, created only synthetic non-owner logins, rejected the one login with an extra group membership
+before its requested reset changed state, and ran all eighteen built Jobs commands through the
 narrow login. It observed only the constant success/failure sentences and verified the exact
 authentication/abandoned-enrollment/audit-event/invite/CarRecipe-proposal/ingest/pairing/session/
 terminal-deletion-job/finalized-source-day/aged-revoked-passkey/aged-revoked-device cleanup, pairing
 approval-provenance redaction and subsequent session deletion, pairing-rate-window reset,
-profile-purge, current-season refresh, and closed-season finalization state before removing the
-loopback-published container, network, and storage. A second run built the production scheduler core
-and Jobs runner, injected one fixed UTC clock/timer, attempted the exact ordered seventeen-job
-catalog through a deliberately widened login, proved every private-table fingerprint stayed
-unchanged, then ran the catalog through the narrow login and verified the same exact stored-state
-oracle. A third run advanced the fixed clock by one hour, invoked the production interval handler
-twice during the active real-runner cycle, observed the exact recurring catalog once, proved the
-same slot produced no jobs, and verified the rearmed terminal reset. A fourth run composed the
-production process lifecycle under the fixed clock, started the penultimate real-runner call before
-injecting the first signal handler, proved active-call settlement and no later scheduler job,
-observed exact graceful cleanup plus exit code 0, then invoked only the omitted reset before the
-shared state oracle. A fifth run started the built scheduler entry point under the real host clock,
-required host/database UTC-date agreement, observed no process output, waited for the terminal
-catalog marker, forcibly ended only its otherwise persistent test child, and then verified the same
-exact state. This is local synthetic application evidence, not host-timer delivery, OS-signal
-delivery, emitted-child controller settlement before forced termination, a wall-clock recurring
-process callback, production credential/TLS result, capacity result, real-user purge, monitoring
-backend, durable cadence, or deployment.
+profile-purge, current-season refresh, closed-season finalization, and oldest-known historical
+season finalization state before removing the loopback-published container, network, and storage. A
+second run built the production scheduler core and Jobs runner, injected one fixed UTC clock/timer,
+attempted the exact ordered eighteen-job catalog through a deliberately widened login, proved every
+private-table fingerprint stayed unchanged, then ran the catalog through the narrow login and
+verified the same exact stored-state oracle. A third run advanced the fixed clock by one hour,
+invoked the production interval handler twice during the active real-runner cycle, observed the
+exact recurring catalog once, proved the same slot produced no jobs, and verified the rearmed
+terminal reset. A fourth run composed the production process lifecycle under the fixed clock,
+started the penultimate real-runner call before injecting the first signal handler, proved
+active-call settlement and no later scheduler job, observed exact graceful cleanup plus exit code 0,
+then invoked only the omitted reset before the shared state oracle. A fifth run started the built
+scheduler entry point under the real host clock, required host/database UTC-date agreement, observed
+no process output, waited for the terminal catalog marker, forcibly ended only its otherwise
+persistent test child, and then verified the same exact state. A sixth run built a link-free
+production-only runtime, mounted it read-only under the pinned Linux Node image, held the emitted
+first finalization call, delivered a real OS `SIGTERM`, and proved graceful active-call settlement,
+no refresh or later job, silent code-0 exit, session release, and unchanged runtime contents before
+the seventeen omitted commands completed the shared exact-state oracle. This is local synthetic
+application evidence, not host-timer delivery, emitted-child controller settlement before forced
+termination, a deployed signal route or orchestrator grace policy, a wall-clock recurring process
+callback, production credential/TLS result, capacity result, real-user purge, monitoring backend,
+durable cadence, or deployment.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and

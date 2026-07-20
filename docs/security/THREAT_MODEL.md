@@ -15,25 +15,26 @@ pause/reactivation/unlink, device/passkey revocation, fresh-passkey recovery-cod
 fresh-passkey profile-deletion-request slice plus one-time recovery-code replacement-passkey sign-in
 with encrypted cookies and logout, one local one-shot Jobs runner with twelve bounded cleanup
 capabilities, one bounded pairing approval-provenance redaction, one fixed pairing-rate-window
-reset, and primary profile purge, plus a synthetic disposable PostgreSQL integration for all
-seventeen Jobs commands, plus a separate default-off local UTC scheduler with a fake runner/clock,
-plus fixed-clock production scheduler-core/Jobs/disposable-PostgreSQL composition, plus local
-Community sync verification, PostgreSQL-adapter, transport-free composition, and bounded Fastify
-HTTP boundaries; it does not yet contain an external audit sink, deployed scheduler/database result,
-deployed Jobs cadence, cache/backup/tombstone purge, restore replay, deployed Ingest service,
-operational connector, deployment, or production data. A library-only Rust connector foundation now
-bounds and validates the stable App Server initialization and candidate account/usage exchanges,
-then composes them through a synthetic one-shot child supervisor and produces exact sync material
-behind a second inaccessible reviewed context. An isolated one-use signer consumes that material
-only with a third inaccessible device-bound key capability and returns a closed signed envelope. A
-separate pending-key/challenge signer and pure Web verifier agree on an exact pairing-possession
-proof. A Web/Auth start application generates bounded pending-transaction material, separate
-protected poll/code verifiers, and one fixed database call. A second application composes protected
-keyed poll lookup, strict proof, and exact atomic activation through the separately probed
-read-write pool with local admission/timing. Between those boundaries, a local `/connect` flow
-performs session-rate-limited pending-code lookup, exact device/fingerprint review, opaque new or
-active existing source selection, and fresh-passkey atomic approval of that exact choice. Exact
-local start/poll routes now add closed framing/contracts, shared four-call admission, and fixed
+reset, primary profile purge, and bounded oldest-known historical season finalization, plus a
+synthetic disposable PostgreSQL integration for all eighteen Jobs commands, plus a separate
+default-off local UTC scheduler with a fake runner/clock, plus fixed-clock production
+scheduler-core/Jobs/disposable-PostgreSQL composition, plus local Community sync verification,
+PostgreSQL-adapter, transport-free composition, and bounded Fastify HTTP boundaries; it does not yet
+contain an external audit sink, deployed scheduler/database result, deployed Jobs cadence,
+cache/backup/tombstone purge, restore replay, deployed Ingest service, operational connector,
+deployment, or production data. A library-only Rust connector foundation now bounds and validates
+the stable App Server initialization and candidate account/usage exchanges, then composes them
+through a synthetic one-shot child supervisor and produces exact sync material behind a second
+inaccessible reviewed context. An isolated one-use signer consumes that material only with a third
+inaccessible device-bound key capability and returns a closed signed envelope. A separate
+pending-key/challenge signer and pure Web verifier agree on an exact pairing-possession proof. A
+Web/Auth start application generates bounded pending-transaction material, separate protected
+poll/code verifiers, and one fixed database call. A second application composes protected keyed poll
+lookup, strict proof, and exact atomic activation through the separately probed read-write pool with
+local admission/timing. Between those boundaries, a local `/connect` flow performs
+session-rate-limited pending-code lookup, exact device/fingerprint review, opaque new or active
+existing source selection, and fresh-passkey atomic approval of that exact choice. Exact local
+start/poll routes now add closed framing/contracts, shared four-call admission, and fixed
 global/client-bucket PostgreSQL windows. All four pairing route modules now require one exact
 default-off enable decision before parsing, runtime/service construction, admission acquisition,
 protected configuration, or database work. A second exact default-off decision independently blocks
@@ -111,7 +112,7 @@ The isolated database gate now first holds revision 0039's advisory lock until t
 migration processes are observed waiting. One applies the reviewed transaction, one rolls back with
 the expected duplicate-object `42P07`, and one exact ledger row plus the canonical table remain. It
 then twice restores its current synthetic snapshot inside one disposable container, rechecks exact
-data digests, forced-RLS state, selected grants, and all 44 post-restore lock-wait races plus the
+data digests, forced-RLS state, selected grants, and all 45 post-restore lock-wait races plus the
 final runtime deny matrix. This proves no successful concurrent deployment controller or staging
 migration orchestration/rollback, and it has no stale backup, deletion marker, external
 storage/encryption, cluster-role recovery, or production authority.
@@ -360,17 +361,19 @@ and migration or rollback where applicable.
    representative cardinality, latency, capacity, monitoring, or deployment evidence. ADR 0056 now
    keeps all three public GET compositions default-off before query/header parsing, admission
    acquisition, or storage work unless their module-load value is exact true; it proves no deployed
-   or dynamic route/cache denial. A local one-shot Jobs runner now validates one of seventeen fixed
+   or dynamic route/cache denial. A local one-shot Jobs runner now validates one of eighteen fixed
    authentication/abandoned-enrollment/audit-event/invite/CarRecipe-proposal/ingest/finalized-source-day/pairing/session/
    terminal-deletion-job/aged-revoked-passkey/aged-revoked-device cleanup, pairing
-   approval-provenance redaction, fixed pairing-rate-window reset, primary-profile purge, or
-   canonical-season refresh/finalization commands, probes its exact least-privileged login/session
-   before one prepared function call, holds one client through settlement, and emits no input or
-   database detail. A synthetic integration runs every emitted command against disposable
-   PostgreSQL, rejects an extra-membership login before mutation, and checks exact stored state. A
-   separate exact-default-off scheduler derives only the current and latest grace-eligible Monday
-   from UTC time, marks fixed slots in memory before sequential invocation, prevents overlap and
-   same-slot retry, and bounds first-signal shutdown. Its 94 tests use a fake runner and clock. A
+   approval-provenance redaction, fixed pairing-rate-window reset, primary-profile purge,
+   canonical-season refresh/explicit-finalization, or bounded oldest-known-season backlog commands,
+   probes its exact least-privileged login/session before one prepared function call, holds one
+   client through settlement, and emits no input or database detail. A synthetic integration runs
+   every emitted command against disposable PostgreSQL, rejects an extra-membership login before
+   mutation, and checks exact stored state. A separate exact-default-off scheduler derives only the
+   current and latest grace-eligible Monday plus at most one oldest known data-backed season per
+   hour from UTC and retained state, marks fixed slots in memory before sequential invocation,
+   prevents overlap and same-slot retry, and bounds first-signal shutdown. It has no queue,
+   caller-selected date, or added database authority. Its 94 tests use a fake runner and clock. A
    second opt-in integration composes the production scheduler core under fixed injected UTC time
    with the real Jobs runner and disposable PostgreSQL, proving exact dependency order, full
    private-table widened-login non-mutation, and exact narrow-login state. A third advances the

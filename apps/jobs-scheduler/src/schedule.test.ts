@@ -6,6 +6,7 @@ const monday = Date.parse("2026-07-13T12:34:00.000Z");
 const wednesday = Date.parse("2026-07-15T12:34:00.000Z");
 
 const hourlyKinds = [
+  "finalize_community_season_backlog",
   "purge_profile_deletions",
   "cleanup_expired_auth_state",
   "cleanup_expired_ingest_state",
@@ -28,7 +29,7 @@ describe("createMaintenanceSchedule", () => {
     const jobs = createMaintenanceSchedule().due(monday);
 
     expect(Object.isFrozen(jobs)).toBe(true);
-    expect(jobs).toHaveLength(17);
+    expect(jobs).toHaveLength(18);
     expect(jobs[0]).toEqual({
       kind: "finalize_community_season",
       seasonStart: "2026-06-29",
@@ -38,8 +39,9 @@ describe("createMaintenanceSchedule", () => {
       seasonStart: "2026-07-13",
     });
     expect(jobs.slice(2).map((job) => job.kind)).toEqual(hourlyKinds);
-    expect(jobs[2]).toEqual({ batchSize: 10, kind: "purge_profile_deletions" });
-    for (const job of jobs.slice(3, -1)) {
+    expect(jobs[2]).toEqual({ kind: "finalize_community_season_backlog" });
+    expect(jobs[3]).toEqual({ batchSize: 10, kind: "purge_profile_deletions" });
+    for (const job of jobs.slice(4, -1)) {
       expect(job).toMatchObject({ batchSize: 1_000 });
     }
     expect(jobs.at(-1)).toEqual({ kind: "reset_expired_pairing_request_windows" });
@@ -49,7 +51,7 @@ describe("createMaintenanceSchedule", () => {
   it("moves finalization to the prior season when Wednesday begins", () => {
     const jobs = createMaintenanceSchedule().due(wednesday);
 
-    expect(jobs).toHaveLength(17);
+    expect(jobs).toHaveLength(18);
     expect(jobs[0]).toEqual({
       kind: "finalize_community_season",
       seasonStart: "2026-07-06",
@@ -78,7 +80,7 @@ describe("createMaintenanceSchedule", () => {
   it("marks slots before returning and advances only changed fixed cadences", () => {
     const schedule = createMaintenanceSchedule();
 
-    expect(schedule.due(wednesday)).toHaveLength(17);
+    expect(schedule.due(wednesday)).toHaveLength(18);
     expect(schedule.due(wednesday)).toEqual([]);
     expect(schedule.due(wednesday + 5 * 60_000)).toEqual([
       { kind: "refresh_community_season", seasonStart: "2026-07-13" },
@@ -125,7 +127,7 @@ describe("createMaintenanceSchedule", () => {
   it("starts at the first supported week without inventing an older season", () => {
     const jobs = createMaintenanceSchedule().due(Date.UTC(2000, 0, 3));
 
-    expect(jobs).toHaveLength(16);
+    expect(jobs).toHaveLength(17);
     expect(jobs[0]).toEqual({
       kind: "refresh_community_season",
       seasonStart: "2000-01-03",

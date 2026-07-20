@@ -1,6 +1,6 @@
 # Vibe Racing Jobs
 
-This private workspace is the local one-shot application boundary for seventeen existing PostgreSQL
+This private workspace is the local one-shot application boundary for eighteen existing PostgreSQL
 maintenance capabilities:
 
 - delete one bounded batch of abandoned `enrolling` profiles only after all exact enrollment-session
@@ -27,7 +27,9 @@ maintenance capabilities:
   provenance;
 - purge one bounded batch of due deletion-pending profiles and their primary data;
 - delete one bounded batch of terminal profile-deletion jobs only after 30 days of retention;
-- refresh one open Community season; and
+- refresh one open Community season;
+- finalize at most one oldest grace-eligible Community season already represented by open or
+  retained source/day state, without a caller-selected date; and
 - idempotently finalize one Community season after its server-enforced grace deadline.
 
 It is not an external audit sink, scheduler, deployment, monitoring backend, correction system,
@@ -85,6 +87,7 @@ pnpm --filter @viberacing/jobs start -- cleanup-expired-sessions
 pnpm --filter @viberacing/jobs start -- purge-profile-deletions
 pnpm --filter @viberacing/jobs start -- cleanup-terminal-deletion-jobs
 pnpm --filter @viberacing/jobs start -- refresh-community-season 2026-07-13
+pnpm --filter @viberacing/jobs start -- finalize-community-backlog
 pnpm --filter @viberacing/jobs start -- finalize-community-season 2026-07-06
 ```
 
@@ -94,7 +97,7 @@ prints the command input, affected counts, configuration, SQL, or exception deta
 
 The Docker-backed CLI integration command applies the checksum-validated migration manifest, creates
 a least-privileged synthetic Jobs login plus a deliberately widened negative-control login, runs all
-seventeen built CLI commands as separate processes, verifies their generic output and exact database
+eighteen built CLI commands as separate processes, verifies their generic output and exact database
 effects, and cleans up its container, network, and storage. The separate opt-in
 `pnpm run test:jobs-scheduler:postgres-integration` mode composes the production scheduler core
 under a fixed injected UTC clock/timer directly with this real runner and the same disposable
@@ -114,7 +117,7 @@ OS-signal settlement against PostgreSQL. A separate signal-process mode construc
 production-only runtime from this built runner and its exact installed `pg` graph, mounts it
 read-only in the pinned Linux Node image, holds the emitted first finalization call, and delivers an
 OS `SIGTERM`. It proves that active call settles, no later job starts, the process exits silently
-with code 0, and the database session closes; the sixteen omitted one-shot commands run only
+with code 0, and the database session closes; the seventeen omitted one-shot commands run only
 afterward for the shared exact-state oracle. Together these modes still do not prove an external
 audit sink, deployed signal path, production TLS/credentials, durable cadence, monitoring, capacity,
 real-user retention, or deployment.

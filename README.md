@@ -242,7 +242,7 @@ processes are observed waiting. After release, one applies the migration, one ro
 expected duplicate-object `42P07`, and the gate requires one exact ledger row plus the canonical
 table. It then twice restores its current synthetic state from bounded container-only archive
 generations and requires matching canonical data digests/lengths, a byte-stable restored schema, all
-28 forced-RLS tables, selected role grants, and all 44 post-restore lock-wait races plus the final
+28 forced-RLS tables, selected role grants, and all 45 post-restore lock-wait races plus the final
 runtime deny matrix. This is not a successful concurrent deployment controller, staging migration
 orchestration/rollback, old-backup deletion replay, external backup, cluster-role recovery,
 production restore, scale, or RPO/RTO result.
@@ -255,13 +255,13 @@ exact missing suffix, and requires the complete ledger before success. In additi
 unit/policy tests plus strict build and built disabled-startup checks, an opt-in synthetic gate runs
 one widened and two narrow emitted processes against a disposable certificate-verified PostgreSQL
 database. The widened process fails before schema creation; both narrow controllers are observed
-behind one external lock holder and then converge successfully on the exact 39-row ledger, all 28
+behind one external lock holder and then converge successfully on the exact 40-row ledger, all 28
 forced-RLS private tables, and the identity invariant oracle. This proves local driver/TLS/lock
 behavior only, not production credentials, staging migration/rollback, deployed replicas,
 monitoring, deployment, or recovery.
 
-Thirty-nine SQL migrations now add 28 private identity, passkey, restricted-recovery, source,
-device, pairing, audit, deletion, replay, usage, Community scoring, and CarRecipe tables with
+Forty SQL migrations now add 28 private identity, passkey, restricted-recovery, source, device,
+pairing, audit, deletion, replay, usage, Community scoring, and CarRecipe tables with
 deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift detection, and
 an isolated PostgreSQL capability test. A narrow procedure boundary implements invite issuance,
 atomic enrollment, session-bound initial-passkey challenges, credential-derived login, bounded
@@ -371,76 +371,80 @@ no authorization challenge, nonce, or raw snapshot remains. It preserves active,
 referenced device history and never cascades raw evidence. Revision 0037 adds a separate no-argument
 Jobs-only reset for positive anonymous pairing transport rate windows only after the maximum
 permitted one-hour duration. It preserves the fixed 130-row matrix and scrubs only aggregate
-timestamp/count state. One local one-shot Jobs runner now wraps exactly one of seventeen fixed
-functions: abandoned-enrollment cleanup, authentication cleanup, audit-event cleanup, invite
-cleanup, CarRecipe-proposal cleanup, ingest cleanup, finalized source/day cleanup, pairing cleanup,
-aged revoked-passkey cleanup, aged revoked-device cleanup, pairing approval-provenance redaction,
-pairing-rate-window reset, session cleanup, terminal deletion-job cleanup, primary profile purge,
-refresh, or finalization. It uses a distinct least-privileged configuration namespace, one-client
-pool, per-checkout role/login/search-path probe, fixed deadlines and prepared parameters, closed
-result validation, destructive release after failure, and stable non-reflective CLI output. An
-opt-in synthetic integration now builds that runner, applies the reviewed migration manifest to one
-disposable PostgreSQL container, proves all seventeen commands through a narrow login, rejects a
+timestamp/count state. Revision 0040 adds a no-argument Jobs-only step that finalizes at most one
+oldest grace-eligible open or data-backed historical season without returning or accepting a date.
+It adds no queue, run ledger, or retained field. One local one-shot Jobs runner now wraps exactly
+one of eighteen fixed functions: abandoned-enrollment cleanup, authentication cleanup, audit-event
+cleanup, invite cleanup, CarRecipe-proposal cleanup, ingest cleanup, finalized source/day cleanup,
+pairing cleanup, aged revoked-passkey cleanup, aged revoked-device cleanup, pairing
+approval-provenance redaction, pairing-rate-window reset, session cleanup, terminal deletion-job
+cleanup, primary profile purge, refresh, latest-season finalization, or historical-backlog
+finalization. It uses a distinct least-privileged configuration namespace, one-client pool,
+per-checkout role/login/search-path probe, fixed deadlines and prepared parameters, closed result
+validation, destructive release after failure, and stable non-reflective CLI output. An opt-in
+synthetic integration now builds that runner, applies the reviewed migration manifest to one
+disposable PostgreSQL container, proves all eighteen commands through a narrow login, rejects a
 deliberately widened login before mutation, and verifies exact stored state before cleanup. It has
 no external audit sink, production login/certificate, monitoring backend, capacity result, or
 deployment. A separate default-off local scheduler now invokes only that closed catalog: it derives
-the current and latest grace-eligible Monday in UTC, marks fixed five-minute/hour/day slots in
-memory, runs sequentially without overlap or same-slot retry, and stops under a bounded signal
-lifecycle. Its 94 tests and built-entrypoint check use fake time and a fake runner. A second opt-in
-integration composes the production scheduler core under a fixed injected UTC clock/timer with the
-real Jobs runner and disposable PostgreSQL, proving exact catalog order, full-state widened-login
-denial, and exact narrow-login state. A third advances that fixed clock by one hour, invokes the
-production interval handler twice while the real-runner cycle is active, proves exact recurring
-catalog execution plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A
-fourth composes the process lifecycle under the fixed clock, injects its first handler during the
-penultimate database job, proves active-call settlement, no later scheduler job, exact graceful
-cleanup, and exit code 0, then invokes the omitted reset separately for the shared state oracle. A
-fifth starts the built scheduler entry point with the real host clock, reaches the terminal
-startup-catalog marker without process output, forcibly ends only its persistent test child, and
-then verifies exact stored state. A sixth uses the pinned Linux Node image and a link-free read-only
-copy of only the built production graph, holds the emitted first finalization call, delivers a real
-`SIGTERM`, and proves active-call settlement, no later job, silent code-0 exit, database-session
-release, and an unchanged runtime fingerprint. The timer result still does not prove host-timer
-delivery, and the forcibly ended emitted result still does not prove its own controller settlement.
-None proves a wall-clock recurring process callback, a deployed signal route, a durable or hosted
-cadence, cross-replica coordination, production TLS/login, monitoring, capacity, or real-user
-retention. Revision 0011 gives only the Web database role a bounded active-profile score projection
-containing no raw values, private identifiers, or exact timestamps. The score response component and
-Web PostgreSQL adapter preserve only that public allowlist through the local score route. All three
-public score/race/status routes require one exact default-off module-load gate before query/header
-parsing, admission acquisition, or storage work. The visible race, leaderboard, and selectable
-participant summary consume the validated current-week response only when enabled, using a
-credential-free same-origin request and an explicit synthetic fallback on disabled or failed state.
-Canonical `/?profile=handle#profile` links select only an exact public handle in that page, and a
-missing current top-32 row is not replaced with another participant. There is now a local
-invite/OAuth/initial-passkey enrollment, returning-passkey login, fresh-passkey recovery-code
-rotation, one-time recovery-code replacement-passkey sign-in, and a fresh-passkey profile-deletion
-request flow. Recovery lookup returns only the selected unused PHC; admitted attempts use bounded
-Argon2id work, a protected pepper, generic responses, a configured minimum response floor, and a
-four-call local no-queue limit. A valid code creates only the sealed five-minute replacement-passkey
-continuation; the normal session is returned only after exact WebAuthn verification and atomic
-database completion. The local `/connect` flow now reviews one pending device, explicitly selects a
-new or active owned opaque source without exposing its raw ID, and fresh-passkey approves that exact
-choice under a database-backed session attempt window; the local start/poll routes and native-store
-Rust client complete that synthetic connection path only when all four pairing modules were
-explicitly enabled before load. New-source review and completion additionally require the separate
-exact default-off source-creation decision; disabled UI retains active existing-source choices and
-the server rejects an in-flight new-source challenge before passkey or database completion. These
-local controls are not dynamic/deployed switches. The separate candidate-only Windows sync command
-now joins the reviewed local collector, signer, and one bounded upload. A separate credential-free
-`check-codex` command verifies only point-in-time exact candidate admission and never launches it,
-reads an account, or uses the network. Its explicit redacted preview gives a user one complete
-stdout result to inspect before sharing and still declares that no Codex version is supported. A
-separate Windows release-profile smoke copies the `0.0.0` connector to an isolated temporary
-directory, checks the exact command surface and generic missing-candidate failure, then proves
-removal; secretless CI declares the same bounded job without uploading its binary. No repository
-test runs a real Codex account or deployed service, and no hosted Windows result is claimed from the
-local workflow definition. There is still no deployed Ingest/score/pairing API, supported sync
-connector, trusted edge limit or direct-origin policy, anonymous recovery edge policy, recovery
-notification, deployed cleanup/scoring/deletion cadence, audited correction flow,
-cache/backup/tombstone purge, restore replay, live OAuth/authenticator/Web/Jobs database
-integration, deployment Ingest credential/TLS integration, cross-platform connector evidence,
-installer, upgrade/revoke composition, credential rotation, released binary, or deployed database.
+the current and latest grace-eligible Monday in UTC, advances one oldest known historical season per
+hour, marks fixed five-minute/hour/day slots in memory, runs sequentially without overlap or
+same-slot retry, and stops under a bounded signal lifecycle. Its 94 tests and built-entrypoint check
+use fake time and a fake runner. A second opt-in integration composes the production scheduler core
+under a fixed injected UTC clock/timer with the real Jobs runner and disposable PostgreSQL, proving
+exact catalog order, full-state widened-login denial, and exact narrow-login state. A third advances
+that fixed clock by one hour, invokes the production interval handler twice while the real-runner
+cycle is active, proves exact recurring catalog execution plus overlap and same-slot suppression,
+and verifies the rearmed terminal reset. A fourth composes the process lifecycle under the fixed
+clock, injects its first handler during the penultimate database job, proves active-call settlement,
+no later scheduler job, exact graceful cleanup, and exit code 0, then invokes the omitted reset
+separately for the shared state oracle. A fifth starts the built scheduler entry point with the real
+host clock, reaches the terminal startup-catalog marker without process output, forcibly ends only
+its persistent test child, and then verifies exact stored state. A sixth uses the pinned Linux Node
+image and a link-free read-only copy of only the built production graph, holds the emitted first
+finalization call, delivers a real `SIGTERM`, and proves active-call settlement, no later job,
+silent code-0 exit, database-session release, and an unchanged runtime fingerprint. The timer result
+still does not prove host-timer delivery, and the forcibly ended emitted result still does not prove
+its own controller settlement. None proves a wall-clock recurring process callback, a deployed
+signal route, a durable or hosted cadence, cross-replica coordination, production TLS/login,
+monitoring, capacity, or real-user retention. Revision 0011 gives only the Web database role a
+bounded active-profile score projection containing no raw values, private identifiers, or exact
+timestamps. The score response component and Web PostgreSQL adapter preserve only that public
+allowlist through the local score route. All three public score/race/status routes require one exact
+default-off module-load gate before query/header parsing, admission acquisition, or storage work.
+The visible race, leaderboard, and selectable participant summary consume the validated current-week
+response only when enabled, using a credential-free same-origin request and an explicit synthetic
+fallback on disabled or failed state. Canonical `/?profile=handle#profile` links select only an
+exact public handle in that page, and a missing current top-32 row is not replaced with another
+participant. There is now a local invite/OAuth/initial-passkey enrollment, returning-passkey login,
+fresh-passkey recovery-code rotation, one-time recovery-code replacement-passkey sign-in, and a
+fresh-passkey profile-deletion request flow. Recovery lookup returns only the selected unused PHC;
+admitted attempts use bounded Argon2id work, a protected pepper, generic responses, a configured
+minimum response floor, and a four-call local no-queue limit. A valid code creates only the sealed
+five-minute replacement-passkey continuation; the normal session is returned only after exact
+WebAuthn verification and atomic database completion. The local `/connect` flow now reviews one
+pending device, explicitly selects a new or active owned opaque source without exposing its raw ID,
+and fresh-passkey approves that exact choice under a database-backed session attempt window; the
+local start/poll routes and native-store Rust client complete that synthetic connection path only
+when all four pairing modules were explicitly enabled before load. New-source review and completion
+additionally require the separate exact default-off source-creation decision; disabled UI retains
+active existing-source choices and the server rejects an in-flight new-source challenge before
+passkey or database completion. These local controls are not dynamic/deployed switches. The separate
+candidate-only Windows sync command now joins the reviewed local collector, signer, and one bounded
+upload. A separate credential-free `check-codex` command verifies only point-in-time exact candidate
+admission and never launches it, reads an account, or uses the network. Its explicit redacted
+preview gives a user one complete stdout result to inspect before sharing and still declares that no
+Codex version is supported. A separate Windows release-profile smoke copies the `0.0.0` connector to
+an isolated temporary directory, checks the exact command surface and generic missing-candidate
+failure, then proves removal; secretless CI declares the same bounded job without uploading its
+binary. No repository test runs a real Codex account or deployed service, and no hosted Windows
+result is claimed from the local workflow definition. There is still no deployed
+Ingest/score/pairing API, supported sync connector, trusted edge limit or direct-origin policy,
+anonymous recovery edge policy, recovery notification, deployed cleanup/scoring/deletion cadence,
+audited correction flow, cache/backup/tombstone purge, restore replay, live
+OAuth/authenticator/Web/Jobs database integration, deployment Ingest credential/TLS integration,
+cross-platform connector evidence, installer, upgrade/revoke composition, credential rotation,
+released binary, or deployed database.
 
 ## Run and verify the synthetic prototype
 

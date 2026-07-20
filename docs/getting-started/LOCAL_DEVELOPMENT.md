@@ -317,7 +317,7 @@ The built one-shot CLI accepts only `cleanup-expired-auth-state`, `cleanup-aband
 `cleanup-finalized-source-day-values`, `cleanup-aged-revoked-passkeys`,
 `cleanup-aged-revoked-devices`, `reset-expired-pairing-request-windows`,
 `cleanup-terminal-deletion-jobs`, `redact-aged-pairing-approval-provenance`,
-`purge-profile-deletions`, `refresh-community-season YYYY-MM-DD`, or
+`purge-profile-deletions`, `finalize-community-backlog`, `refresh-community-season YYYY-MM-DD`, or
 `finalize-community-season YYYY-MM-DD`. Do not invoke it against a persistent database until an
 environment-owned login has been separately provisioned with only `viberacing_jobs`; the repository
 does not create a deployment login.
@@ -329,7 +329,7 @@ pnpm run test:jobs:postgres-integration
 ```
 
 It applies the reviewed migrations to one disposable PostgreSQL container, creates only synthetic
-narrow and negative-control logins, runs all seventeen built commands, verifies generic output and
+narrow and negative-control logins, runs all eighteen built commands, verifies generic output and
 exact state, and removes the container and storage. It proves no external audit sink, combined
 scheduler execution, production login/TLS, monitoring, capacity, real-user retention, or deployment.
 See [`apps/jobs/README.md`](../../apps/jobs/README.md) for the exact boundary.
@@ -351,34 +351,34 @@ pnpm run test:jobs-scheduler:signal-postgres-integration
 ```
 
 The first PostgreSQL command is a separate opt-in Docker gate. It builds the production scheduler
-core and Jobs runner, injects one fixed UTC clock/timer, runs the exact ordered seventeen-job
-catalog against one disposable PostgreSQL database, fingerprints every private table around a
-widened-login denial, and checks exact narrow-login stored state. The second advances the fixed
-clock by one hour, invokes the production interval handler twice during the active real-runner
-cycle, proves the exact recurring catalog plus overlap and same-slot suppression, and verifies the
-rearmed terminal reset. The third injects the production first-signal handler during the penultimate
-real database job, proves active-call settlement and no later scheduler job, and requires exact
-graceful cleanup plus code 0 before invoking the omitted reset separately. The fourth starts the
-built scheduler entry point under the real host clock, requires host/database UTC-date agreement,
-waits for the terminal startup-catalog marker without process output, forcibly ends only its
-persistent test child, and then verifies the same exact state. It does not prove controller
-settlement before that forced termination. The timer mode does not prove host-timer delivery, and
-the lifecycle mode by itself does not prove OS-signal delivery. The fifth copies only the built
-scheduler, built runner, and exact installed production graph into a link-free temporary runtime,
-mounts it read-only under the pinned Linux Node image, holds the emitted first finalization call,
-and delivers a real `SIGTERM`. It requires graceful active-call settlement, no refresh or later job,
-silent exit code 0, session release, and an unchanged runtime fingerprint before the sixteen omitted
-commands complete the shared final-state oracle. This proves one local Docker-delivered Linux signal
-path, not a deployed controller or orchestrator grace policy. None proves a wall-clock recurring
-process callback, durable/deployed cadence, production credentials/TLS, monitoring, capacity, or
-real-user retention.
+core and Jobs runner, injects one fixed UTC clock/timer, runs the exact ordered eighteen-job catalog
+against one disposable PostgreSQL database, fingerprints every private table around a widened-login
+denial, and checks exact narrow-login stored state. The second advances the fixed clock by one hour,
+invokes the production interval handler twice during the active real-runner cycle, proves the exact
+recurring catalog plus overlap and same-slot suppression, and verifies the rearmed terminal reset.
+The third injects the production first-signal handler during the penultimate real database job,
+proves active-call settlement and no later scheduler job, and requires exact graceful cleanup plus
+code 0 before invoking the omitted reset separately. The fourth starts the built scheduler entry
+point under the real host clock, requires host/database UTC-date agreement, waits for the terminal
+startup-catalog marker without process output, forcibly ends only its persistent test child, and
+then verifies the same exact state. It does not prove controller settlement before that forced
+termination. The timer mode does not prove host-timer delivery, and the lifecycle mode by itself
+does not prove OS-signal delivery. The fifth copies only the built scheduler, built runner, and
+exact installed production graph into a link-free temporary runtime, mounts it read-only under the
+pinned Linux Node image, holds the emitted first finalization call, and delivers a real `SIGTERM`.
+It requires graceful active-call settlement, no refresh or later job, silent exit code 0, session
+release, and an unchanged runtime fingerprint before the seventeen omitted commands complete the
+shared final-state oracle. This proves one local Docker-delivered Linux signal path, not a deployed
+controller or orchestrator grace policy. None proves a wall-clock recurring process callback,
+durable/deployed cadence, production credentials/TLS, monitoring, capacity, or real-user retention.
 
 The emitted process accepts no arguments and remains disabled unless the runtime supplies exact
 `VIBERACING_JOBS_SCHEDULER_ENABLED=true`. That latch is read before the Jobs runner or any database
-configuration. The fixed catalog derives only the current and latest grace-eligible Community
-Monday, stores slot state in memory, and invokes the existing runner sequentially. Do not enable it
-against a persistent database until the separate narrow Jobs login, single-replica deployment,
-cadence, monitoring, capacity, and missed-backlog policy have been reviewed. See
+configuration. The fixed catalog derives only the current and latest grace-eligible Community Monday
+plus at most one oldest known data-backed historical season per hour, stores slot state in memory,
+and invokes the existing runner sequentially. Do not enable it against a persistent database until
+the separate narrow Jobs login, single-replica deployment, cadence, monitoring, capacity, and
+representative backlog policy have been reviewed. See
 [`apps/jobs-scheduler/README.md`](../../apps/jobs-scheduler/README.md) for the exact local boundary.
 
 The product components and libraries must meet the committed coverage thresholds. Small Next.js
@@ -400,7 +400,7 @@ pnpm run test:migrate:postgres-integration
 The integration builds the emitted entry point and starts one TLS-enabled disposable `postgres-test`
 container on an ephemeral loopback port. It proves one deliberately widened login fails before
 schema creation, holds the fixed session lock externally until two narrow emitted controllers are
-observed waiting over hostname-verified TLS, and then requires both to converge on the exact 39-row
+observed waiting over hostname-verified TLS, and then requires both to converge on the exact 40-row
 ledger. It also checks all 28 owner-owned forced-RLS private tables, identity invariants, and
 complete connection/lock cleanup before removing the generated certificate/key, container, network,
 and storage. It never uses the normal local database volume and proves no production credential/TLS,
@@ -632,7 +632,7 @@ docker compose ps
 The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
 index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
 stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
-this persistent service automatically; revisions 0001 through 0039 are currently exercised by the
+this persistent service automatically; revisions 0001 through 0040 are currently exercised by the
 isolated integration runner only.
 
 Stop the service without deleting its volume:

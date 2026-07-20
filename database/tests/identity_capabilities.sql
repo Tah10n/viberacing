@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 70
+    SELECT pg_catalog.count(*) = 71
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 27
+    SELECT pg_catalog.count(*) = 28
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -92,6 +92,7 @@ SELECT pg_temp.assert_true(
         'redact_aged_pairing_approval_provenance',
         'reset_expired_pairing_request_windows',
         'refresh_community_season',
+        'finalize_community_season_backlog',
         'finalize_community_season',
         'submit_community_sync'
       )
@@ -115,7 +116,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 18
+    SELECT pg_catalog.count(*) = 19
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -140,6 +141,7 @@ SELECT pg_temp.assert_true(
         'reset_expired_pairing_request_windows',
         'submit_community_sync',
         'refresh_community_season',
+        'finalize_community_season_backlog',
         'finalize_community_season'
       )
   ),
@@ -242,6 +244,7 @@ SELECT pg_temp.assert_true(
           'redact_aged_pairing_approval_provenance',
           'reset_expired_pairing_request_windows',
           'refresh_community_season',
+          'finalize_community_season_backlog',
           'finalize_community_season'
         )
       )
@@ -290,6 +293,7 @@ SELECT pg_temp.assert_true(
           'redact_aged_pairing_approval_provenance',
           'reset_expired_pairing_request_windows',
           'refresh_community_season',
+          'finalize_community_season_backlog',
           'finalize_community_season'
         )
       )

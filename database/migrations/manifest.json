@@ -234,6 +234,12 @@
       "name": "finalized_source_day_retention_cleanup",
       "path": "database/migrations/0039_finalized_source_day_retention_cleanup.sql",
       "sha256": "eb0866ea6cf10e42b2f4bd424eaaba5d0a5d83ca93bd91c4c622ff3dde8e4303"
+    },
+    {
+      "revision": 40,
+      "name": "historical_season_backlog_finalization",
+      "path": "database/migrations/0040_historical_season_backlog_finalization.sql",
+      "sha256": "6aca9854a412bade1aefb43488ee5ad41c4efdefb6b84a17a59c4f02d5d423fd"
     }
   ]
 }

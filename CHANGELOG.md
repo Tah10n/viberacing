@@ -30,31 +30,42 @@ Versioning where its guarantees are applicable.
   requires the command, but no deployment certificate/login, external TLS/edge route, cache, edge
   policy, representative plan/load/capacity, monitoring, real-user data, hosted pass, or deployment
   is claimed.
-- A separate default-off local Jobs scheduler around the existing seventeen-command runner. It
+- A Jobs-only bounded historical Community season finalization capability. Revision 0040 takes the
+  existing scoring mutex, derives only the oldest grace-eligible open or retained-data-backed
+  season, and invokes the existing finalization function for at most one season without accepting or
+  returning a date. The existing source-date index and one new partial open-season index support
+  oldest-first discovery; no queue, run ledger, retry counter, retained field, or public capability
+  is added. The one-shot runner exposes one fixed no-argument command, and the default-off scheduler
+  places it first in the hourly catalog. Disposable PostgreSQL evidence covers empty, no-data open,
+  data-backed missing, current-week, denial, missing-lock, exact-state, and two-worker serialization
+  behavior, but not representative backlog size, capacity, production credentials/TLS, monitoring,
+  real-user recovery, deployed cadence, or deployment.
+- A separate default-off local Jobs scheduler around the existing eighteen-command runner. It
   accepts no arguments or schedule configuration, derives the current and latest grace-eligible
-  Community Mondays in UTC, invokes a fixed five-minute/hour/day catalog sequentially through one
-  runner, prevents overlapping cycles and same-slot retries, retains slots only in memory, and
-  bounds SIGINT/SIGTERM shutdown to the current Jobs call. Ninety-four adversarial tests reach 100%
-  statement/branch/function/line coverage, including the provenance-before-session retention order,
-  and a built-entrypoint gate rejects disabled or argument-bearing startup without output. A second
-  opt-in integration composes the production scheduler core under a fixed injected UTC clock/timer
-  with the real Jobs runner and disposable PostgreSQL, proving the exact ordered catalog, full-state
-  widened-login denial, and exact narrow-login effects. A third opt-in integration starts the built
-  scheduler entry point with the real host clock, reaches the terminal startup-catalog marker
-  without process output, forcibly ends only its persistent test child, and then verifies exact
-  stored state. A separate timer integration advances the fixed clock by one hour, invokes the
-  production interval handler twice during the active real-runner cycle, proves the exact recurring
-  catalog plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A
-  separate process-lifecycle integration injects its first signal during the penultimate database
-  job, proves active-call settlement, no later scheduler job, exact graceful cleanup, and exit code
-  0, then invokes the omitted reset separately for the shared state oracle. A sixth integration
-  assembles a link-free production-only runtime from the installed graph, mounts it read-only under
-  a pinned Linux Node image, blocks the emitted first finalization call, delivers an OS `SIGTERM`,
-  and proves that call settles without starting refresh or any later job. The process exits silently
-  with code 0, releases its database session, and leaves the runtime fingerprint unchanged before
-  the omitted sixteen one-shot commands complete the shared exact-state oracle. No host-timer
-  recurring callback, deployed signal route or orchestrator grace policy, deployed replica/cadence,
-  production credential/TLS, monitoring, capacity, or real-user retention is claimed.
+  Community Mondays in UTC plus at most one oldest known data-backed historical season per hour,
+  invokes a fixed five-minute/hour/day catalog sequentially through one runner, prevents overlapping
+  cycles and same-slot retries, retains slots only in memory, and bounds SIGINT/SIGTERM shutdown to
+  the current Jobs call. Ninety-four adversarial tests reach 100% statement/branch/function/line
+  coverage, including the provenance-before-session retention order, and a built-entrypoint gate
+  rejects disabled or argument-bearing startup without output. A second opt-in integration composes
+  the production scheduler core under a fixed injected UTC clock/timer with the real Jobs runner and
+  disposable PostgreSQL, proving the exact ordered catalog, full-state widened-login denial, and
+  exact narrow-login effects. A third opt-in integration starts the built scheduler entry point with
+  the real host clock, reaches the terminal startup-catalog marker without process output, forcibly
+  ends only its persistent test child, and then verifies exact stored state. A separate timer
+  integration advances the fixed clock by one hour, invokes the production interval handler twice
+  during the active real-runner cycle, proves the exact recurring catalog plus overlap and same-slot
+  suppression, and verifies the rearmed terminal reset. A separate process-lifecycle integration
+  injects its first signal during the penultimate database job, proves active-call settlement, no
+  later scheduler job, exact graceful cleanup, and exit code 0, then invokes the omitted reset
+  separately for the shared state oracle. A sixth integration assembles a link-free production-only
+  runtime from the installed graph, mounts it read-only under a pinned Linux Node image, blocks the
+  emitted first finalization call, delivers an OS `SIGTERM`, and proves that call settles without
+  starting refresh or any later job. The process exits silently with code 0, releases its database
+  session, and leaves the runtime fingerprint unchanged before the omitted seventeen one-shot
+  commands complete the shared exact-state oracle. No host-timer recurring callback, deployed signal
+  route or orchestrator grace policy, deployed replica/cadence, production credential/TLS,
+  monitoring, capacity, or real-user retention is claimed.
 - A deterministic pre-restore migration-overlap drill in the isolated PostgreSQL integration. It
   holds revision 0039's own advisory lock, observes two tagged processes running the exact reviewed
   migration in the holder's blocker chain, and then requires one successful application plus one
@@ -71,7 +82,7 @@ Versioning where its guarantees are applicable.
   emitted process and two narrow emitted processes against one disposable PostgreSQL database. It
   denies the widened login before schema creation, observes both narrow controllers behind one
   external advisory-lock holder, requires both to converge successfully after release, and verifies
-  the exact 39-row ledger, 28 forced-RLS tables, identity invariants, and resource cleanup. No
+  the exact 40-row ledger, 28 forced-RLS tables, identity invariants, and resource cleanup. No
   production TLS/login, deployed replica, staging migration/rollback, monitoring, deployment, or
   recovery result is claimed.
 - A deterministic current-snapshot restore drill in the isolated PostgreSQL integration. It keeps
@@ -79,7 +90,7 @@ Versioning where its guarantees are applicable.
   database twice, and requires the source plus both restored canonical data dumps to retain their
   exact SHA-256 digest and byte length. The two restored schema generations must also be
   byte-stable, all 28 private tables must retain forced RLS, and selected Web/Jobs/Admin grants and
-  denials must survive each restore before all 44 lock-wait races, the early-completion overlap, and
+  denials must survive each restore before all 45 lock-wait races, the early-completion overlap, and
   the full runtime deny matrix execute on the twice-restored state. Dump content is never emitted;
   bounded buffers are hashed and overwritten, and container removal deletes both archives. This is
   not stale-backup deletion replay, external backup/encryption, cluster-role recovery, production
@@ -533,19 +544,19 @@ Versioning where its guarantees are applicable.
   race-status output, repeated live/captured integrity checks, shared maintenance-lock ordering,
   worker/finalization/profile-purge race evidence, and no implied scheduler, correction process,
   backup purge, or deployment.
-- A private local one-shot Jobs workspace for exactly seventeen fixed capabilities: authentication,
+- A private local one-shot Jobs workspace for exactly eighteen fixed capabilities: authentication,
   abandoned-enrollment, audit-event, invite, CarRecipe-proposal, ingest, finalized-source-day,
   pairing, session, aged revoked-passkey, or aged minimized revoked-device cleanup; pairing
   approval-provenance redaction; primary profile purge; fixed pairing-rate-window reset; terminal
-  deletion-job cleanup; open-season refresh; or terminal finalization. It has strict
-  command/object/result parsing, a distinct redacted database namespace, one-client pool, fixed
-  deadlines, an exact role/login/capability/search-path probe, prepared procedure calls, destructive
-  failure release, stable non-reflective CLI output, production build, and 266 tests at 100%
-  coverage. A separate opt-in Docker gate now applies every reviewed migration, runs all seventeen
-  emitted commands through one synthetic least-privileged login, rejects a deliberately widened
-  login before mutation, verifies generic output and exact stored state, and cleans up its
-  container, network, and storage. It adds no scheduler, production credential/TLS path, monitoring,
-  retry loop, capacity result, or deployment claim.
+  deletion-job cleanup; open-season refresh; terminal finalization; or oldest-known historical
+  season finalization. It has strict command/object/result parsing, a distinct redacted database
+  namespace, one-client pool, fixed deadlines, an exact role/login/capability/search-path probe,
+  prepared procedure calls, destructive failure release, stable non-reflective CLI output,
+  production build, and 273 tests at 100% coverage. A separate opt-in Docker gate now applies every
+  reviewed migration, runs all eighteen emitted commands through one synthetic least-privileged
+  login, rejects a deliberately widened login before mutation, verifies generic output and exact
+  stored state, and cleans up its container, network, and storage. It adds no scheduler, production
+  credential/TLS path, monitoring, retry loop, capacity result, or deployment claim.
 - Web-only bounded Community score projection for open or finalized seasons, with an exact public
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.
