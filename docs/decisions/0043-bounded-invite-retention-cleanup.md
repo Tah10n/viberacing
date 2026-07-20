@@ -122,11 +122,11 @@ All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler
 runner and clock, composes its production core with the real runner and disposable PostgreSQL under
 fixed injected UTC time, directly invokes the production interval handler for a repeated fixed-clock
 cycle and the lifecycle handler after an active runner call starts, and starts the built entry point
-under the real host clock through its terminal startup-catalog marker without process output. Later
-ADR 0063 restart/post-startup, native-timer, and active-call OS-signal gates prove one local
-recurring callback and three local emitted signal paths, but these layers still do not prove
-deployed signal routing or controller/orchestrator grace, production cadence/login/TLS, monitoring,
-backup purge, capacity, invite issuance UI, or deployment.
+under the real host clock through one controlled backlog failure, later terminal-job settlement, and
+successful restart retry. Later ADR 0063 failure/retry/restart, native-timer, and active-call
+OS-signal gates prove one local recurring callback and three local emitted signal paths, but these
+layers still do not prove deployed signal routing or controller/orchestrator grace, production
+cadence/login/TLS, monitoring, backup purge, capacity, invite issuance UI, or deployment.
 
 ## References
 

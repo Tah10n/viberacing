@@ -64,21 +64,23 @@ proves the later scheduler reset does not start, and requires exact graceful lif
 exit code 0. It invokes the omitted reset only afterward before the shared state oracle; it does not
 prove OS-signal delivery or emitted-process graceful shutdown. The separate opt-in
 `pnpm run test:jobs-scheduler:process-postgres-integration` gate starts the built entry point with
-the real clock from a link-free read-only production graph under pinned Linux Node, requires
-host/database UTC-date agreement, waits for the terminal catalog marker without process output,
-delivers an OS `SIGTERM`, and requires silent code-0 exit and session release. It removes the
-stopped container, rearms only the two exact terminal-marker rows, repeats startup and graceful
-signaling from the same runtime, and requires a second silent code-0 exit, second session release,
-runtime-fingerprint revalidation, and the same exact stored state. This is local restart and signal
-settlement, not a deployed-controller restart or orchestrator grace policy. The separate opt-in
-`pnpm run test:jobs-scheduler:wall-clock-postgres-integration` gate starts the same built process
-from the same bounded runtime shape without replacing `Date.now()` or native `setInterval(60_000)`.
-After the startup catalog settles, an owner session holds the scoring mutex until the emitted
-production refresh is observed in a later real five-minute slot; the harness delivers a real
-`SIGTERM`, releases the mutex before the database deadline, and requires the active refresh to
-commit before silent code-0 exit, session release, and runtime-fingerprint revalidation. This proves
-one local recurring host-timer refresh and graceful signal settlement but not a deployed controller,
-orchestrator grace, or durable cadence. The separate opt-in
+the real clock from a link-free read-only production graph under pinned Linux Node and requires
+host/database UTC-date agreement. The harness temporarily revokes only the Jobs role's exact
+backlog-function execution grant. The first process emits one generic cycle-failure line, leaves the
+backlog unchanged, reaches the later terminal marker, and exits with code 0 after an OS `SIGTERM`.
+The harness restores and verifies the grant, rearms the marker, and restarts from the same runtime;
+the retry finalizes the backlog before a silent code-0 signal exit. One more rearm/restart proves a
+silent repeated cycle. All three starts leave no scheduler sessions, the runtime fingerprint is
+unchanged, and the exact stored-state oracle passes. This is local failure containment and restart
+retry, not automatic privilege repair, a deployed-controller restart, or orchestrator grace policy.
+The separate opt-in `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` gate starts the
+same built process from the same bounded runtime shape without replacing `Date.now()` or native
+`setInterval(60_000)`. After the startup catalog settles, an owner session holds the scoring mutex
+until the emitted production refresh is observed in a later real five-minute slot; the harness
+delivers a real `SIGTERM`, releases the mutex before the database deadline, and requires the active
+refresh to commit before silent code-0 exit, session release, and runtime-fingerprint revalidation.
+This proves one local recurring host-timer refresh and graceful signal settlement but not a deployed
+controller, orchestrator grace, or durable cadence. The separate opt-in
 `pnpm run test:jobs-scheduler:signal-postgres-integration` gate copies only the built scheduler,
 built Jobs runner, and exact 14-package installed production graph into a link-free temporary
 runtime, mounts it read-only under the pinned Linux Node 24.18 image, and joins only the disposable

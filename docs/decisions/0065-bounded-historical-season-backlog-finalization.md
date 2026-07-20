@@ -107,14 +107,16 @@ Repository evidence includes:
 - scheduler UTC catalog, maximum-18 collection, ordering, non-overlap, shutdown, and 100% coverage
   tests;
 - the emitted eighteen-command least-privileged PostgreSQL integration; and
-- fixed-clock startup/timer/lifecycle plus pinned-Linux restart/post-startup, native-timer
-  active-refresh, and active-finalization OS-signal scheduler integrations with an exact historical
-  terminal-state oracle.
+- fixed-clock startup/timer/lifecycle plus pinned-Linux controlled backlog denial, later-job
+  continuation, restart retry, a second local restart, native-timer active-refresh, and
+  active-finalization OS-signal scheduler integrations with an exact historical terminal-state
+  oracle.
 
-These are local synthetic results. They prove one local restart, post-startup signal settlement, one
-native host-timer recurring callback, and active-call signal settlement, not deployed cadence,
-production Jobs login/TLS, single-replica policy, representative backlog size, capacity, monitoring,
-alert ownership, real-user recovery, or deployment.
+These are local synthetic results. They prove controlled failure containment, later-job
+continuation, successful restart retry, a second local restart, post-startup signal settlement, one
+native host-timer recurring callback, and active-call signal settlement. They do not prove automatic
+privilege repair, deployed cadence, production Jobs login/TLS, single-replica policy, representative
+backlog size, capacity, monitoring, alert ownership, real-user recovery, or deployment.
 
 ## References
 

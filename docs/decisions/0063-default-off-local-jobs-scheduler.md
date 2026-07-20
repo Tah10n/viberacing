@@ -190,12 +190,14 @@ Local evidence includes:
   requires exact interval/deadline/handler/runner cleanup plus exit code 0. The harness invokes the
   omitted reset only afterward before the shared exact-state oracle;
 - a separate opt-in emitted-process integration that creates a bounded link-free production-only
-  runtime under pinned Linux Node, starts the built entry point with exact enable and narrow-login
-  configuration, requires real host/disposable-database UTC-date agreement, waits for the terminal
-  reset marker, delivers an OS `SIGTERM`, and requires silent code-0 exit plus session release. It
-  removes the stopped container, rearms only the two exact terminal-marker rows, repeats startup and
-  graceful signaling from the same runtime, and requires a second silent code-0 exit, second session
-  release, runtime-fingerprint revalidation, and the same exact stored state;
+  runtime under pinned Linux Node and starts the built entry point with exact enable and
+  narrow-login configuration. The harness temporarily revokes only the Jobs role's exact
+  backlog-function grant. The first process must emit one generic cycle-failure line, leave that
+  backlog unchanged, reach the later terminal reset, and exit with code 0 after `SIGTERM`. The
+  harness restores and rechecks the grant, rearms the marker, and restarts from the same runtime;
+  that retry must finalize the backlog before a silent code-0 signal exit. A second rearm/restart
+  must prove another silent repeated cycle, session cleanup after all three starts,
+  runtime-fingerprint revalidation, and the same exact stored state;
 - a separate opt-in wall-clock integration that uses the same bounded link-free production-only
   runtime shape under pinned Linux Node, starts the unchanged emitted entry point, waits for the
   startup catalog, records its open-season refresh timestamp, and then holds the scoring mutex until
@@ -217,20 +219,23 @@ Local evidence includes:
 The fixed-clock, timer, and lifecycle integrations invoke production components in-process. The
 timer handler is called directly and therefore does not exercise host-timer delivery; the lifecycle
 signal handler is called directly and therefore does not exercise OS-signal delivery. The
-emitted-process integration observes the immediate startup catalog through its terminal database
-marker, delivers an OS `SIGTERM` to the pinned-Linux container, and requires silent code-0 exit plus
-session release. It removes the stopped container, rearms only that exact marker, then repeats
-startup and graceful signaling from the same runtime before revalidating its fingerprint. It
-therefore proves one local restart plus two post-startup signal settlements. The separate wall-clock
-emitted integration leaves `Date.now()` and native `setInterval(60_000)` unchanged, observes a
-later-slot production refresh blocked on PostgreSQL, delivers an OS `SIGTERM`, and requires that
-refresh to settle before silent code-0 exit. It therefore proves one local host-timer recurring call
-and graceful signal settlement. The other pinned-Linux integration exercises the same OS-delivered
-graceful `SIGTERM` boundary while the first finalization call is active and proves that no later job
-starts. None exercises a deployment-controller restart or orchestrator stop grace. None proves that
-a production clock remains stable, a deployment has one replica, durable cadence is maintained, a
-representative or real-user historical backlog is recovered, production TLS/credentials work, or a
-real-user retention/deletion deadline is met.
+emitted-process integration temporarily removes only the Jobs role's backlog-function grant. It
+requires one generic failure signal, an unchanged backlog, and later terminal-job settlement before
+a code-0 `SIGTERM` exit. The harness restores and rechecks the exact grant, rearms the marker, and
+restarts the pinned-Linux container from the same runtime; the retry finalizes the backlog before a
+silent signal exit. A second rearm/restart proves another silent repeated cycle before the runtime
+fingerprint is revalidated. It therefore proves local failure containment, later-job continuation,
+successful restart retry, a second local restart, and three post-startup signal settlements. The
+separate wall-clock emitted integration leaves `Date.now()` and native `setInterval(60_000)`
+unchanged, observes a later-slot production refresh blocked on PostgreSQL, delivers an OS `SIGTERM`,
+and requires that refresh to settle before silent code-0 exit. It therefore proves one local
+host-timer recurring call and graceful signal settlement. The other pinned-Linux integration
+exercises the same OS-delivered graceful `SIGTERM` boundary while the first finalization call is
+active and proves that no later job starts. None proves automatic privilege repair or exercises a
+deployment-controller restart or orchestrator stop grace. None proves that a production clock
+remains stable, a deployment has one replica, durable cadence is maintained, a representative or
+real-user historical backlog is recovered, production TLS/credentials work, or a real-user
+retention/deletion deadline is met.
 
 ## References
 

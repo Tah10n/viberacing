@@ -46,20 +46,23 @@ its first signal during the penultimate database job, proves that active call se
 scheduler job does not start, and exits through the graceful cleanup path; the harness invokes the
 omitted reset only afterward before the shared exact-state oracle. A fifth packages only the built
 scheduler, built Jobs runner, and exact installed production dependency graph into a link-free
-read-only runtime under a pinned Linux Node image. It starts the built entry point under the real
-clock, waits for the terminal catalog marker, delivers a real `SIGTERM`, and requires silent code-0
-exit and session release. The harness removes that stopped container, rearms only the two exact
-terminal-marker rows, and repeats the startup and graceful signal from the same runtime before
-requiring its unchanged fingerprint and the same exact state. A sixth uses the same bounded runtime
-shape. Under the unchanged native clock and minute interval it waits for startup, holds the scoring
-mutex until a later real five-minute slot reaches the production refresh call, delivers a real
-`SIGTERM`, releases the holder, and requires that refresh to commit with a newer timestamp before
-silent code-0 exit, session release, and an unchanged runtime fingerprint. A seventh uses the same
-bounded Linux runtime shape, holds the first finalization call in PostgreSQL, delivers a real
-`SIGTERM`, then proves that call settles, no later job starts, the emitted process exits silently
-with code 0, its session closes, and the runtime fingerprint is unchanged. The injected-timer result
-still does not prove a host-timer callback. All three emitted gates are local synthetic restart,
-native-timer, and OS-signal settlement evidence only. None proves a deployed replica or signal path,
+read-only runtime under a pinned Linux Node image. Before the first real-clock start, the harness
+revokes only the Jobs role's backlog-function execution grant in disposable PostgreSQL. The process
+emits one generic cycle-failure line while the terminal marker proves later jobs still settled, then
+accepts a real `SIGTERM`, exits with code 0, and releases its session without creating the backlog
+season. The harness restores and rechecks that exact grant, rearms only the two marker rows, and
+restarts from the same runtime; the retry finalizes the backlog before a silent code-0 signal exit.
+It rearms and repeats one more silent start/exit before requiring the unchanged runtime fingerprint
+and exact state. A sixth uses the same bounded runtime shape. Under the unchanged native clock and
+minute interval it waits for startup, holds the scoring mutex until a later real five-minute slot
+reaches the production refresh call, delivers a real `SIGTERM`, releases the holder, and requires
+that refresh to commit with a newer timestamp before silent code-0 exit, session release, and an
+unchanged runtime fingerprint. A seventh uses the same bounded Linux runtime shape, holds the first
+finalization call in PostgreSQL, delivers a real `SIGTERM`, then proves that call settles, no later
+job starts, the emitted process exits silently with code 0, its session closes, and the runtime
+fingerprint is unchanged. The injected-timer result still does not prove a host-timer callback. All
+three emitted gates are local synthetic failure/retry, restart, native-timer, and OS-signal
+settlement evidence only. None proves automatic privilege repair, a deployed replica or signal path,
 controller/orchestrator grace, managed restart, durable cadence, production login/TLS result,
 monitoring, or capacity evidence. A local default-off one-shot migration runner now loads only the
 exact repository manifest/file inventory, revalidates every source digest, probes one distinct
@@ -395,13 +398,15 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   OS-signal delivery, an emitted-process graceful exit, recurring cadence, or deployment.
 - `pnpm run test:jobs-scheduler:process-postgres-integration` starts the built scheduler entry point
   from a link-free read-only production-only graph under pinned Linux Node with the real clock and
-  exact enable/configuration environment. It waits for the terminal catalog marker in disposable
-  PostgreSQL without process output, delivers an OS `SIGTERM`, and requires silent code-0 exit,
-  session release, and stopped-container removal. It then rearms only the two exact terminal-marker
-  rows, repeats the startup and graceful signal from the same runtime, and requires a second silent
-  code-0 exit, second session release, runtime-fingerprint revalidation, and exact stored state. It
-  proves one local process restart, not a wall-clock recurring callback, deployed-controller restart
-  or orchestrator grace policy, durable/deployed cadence, production credentials/TLS, monitoring,
+  exact enable/configuration environment. The harness temporarily removes only the Jobs role's exact
+  backlog-function execution grant. The first process emits one generic cycle-failure line, leaves
+  that backlog unchanged, reaches the later terminal marker, and exits with code 0 after an OS
+  `SIGTERM`. The harness restores and verifies the grant, rearms the marker, and restarts from the
+  same runtime; the retry finalizes the backlog and exits silently. A second rearm/restart proves
+  one more silent repeated cycle. All three starts leave no scheduler sessions, and the runtime
+  fingerprint remains unchanged. This proves local failure containment and restart retry, not
+  automatic grant repair, a wall-clock recurring callback, deployed-controller restart or
+  orchestrator grace policy, durable/deployed cadence, production credentials/TLS, monitoring,
   capacity, real-user retention, or deployment.
 - `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` starts the same built entry point
   from a link-free read-only production-only graph under pinned Linux Node. Under unchanged native

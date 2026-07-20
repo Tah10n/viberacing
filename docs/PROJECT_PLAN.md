@@ -283,21 +283,24 @@ flowchart LR
   settlement and no later scheduler job, and requires exact graceful cleanup and exit code 0 before
   invoking the omitted reset separately. A fourth integration builds a link-free production-only
   runtime from the exact installed graph, mounts it read-only under a pinned Linux Node image, and
-  starts the built entry point under the real host clock. It reaches the terminal startup-catalog
-  marker without process output, delivers an OS `SIGTERM`, and proves silent code-0 exit, session
-  release, and stopped-container removal. It rearms only the two exact terminal-marker rows, repeats
-  startup and graceful signaling from the same runtime, and proves a second silent code-0 exit,
-  second session release, immutable runtime contents, and exact stored state. A fifth integration
-  uses the same bounded runtime shape. It leaves the native clock and minute timer unchanged, waits
-  for startup, holds the scoring mutex until refresh is active in a later real five-minute slot,
-  delivers an OS `SIGTERM`, releases the mutex, and proves refresh settlement, a newer timestamp,
-  silent code-0 exit, session release, and immutable runtime contents. A sixth integration uses the
-  same bounded runtime shape, holds the emitted first finalization call, delivers an OS `SIGTERM`,
-  and proves graceful settlement without refresh or any later job. It requires silent code-0 exit,
-  session release, immutable runtime contents, and the same final state after the seventeen omitted
-  commands run separately. The fourth gate proves one local restart plus two post-startup signal
-  settlements, and the fifth proves one local host-timer recurring refresh plus active-call signal
-  settlement. A deployed signal route, controller/orchestrator grace policy, managed restart, an
+  starts the built entry point under the real host clock after temporarily revoking only the Jobs
+  role's exact backlog-function execution grant. The first process emits one generic cycle signal,
+  leaves the backlog unchanged, reaches the later terminal marker, and exits with code 0 after an OS
+  `SIGTERM`. The harness restores and rechecks the grant, rearms the marker, and restarts from the
+  same runtime; the retry finalizes the backlog before a silent code-0 signal exit. A second
+  rearm/restart proves another silent repeated cycle, session cleanup after all three starts,
+  immutable runtime contents, and exact stored state. A fifth integration uses the same bounded
+  runtime shape. It leaves the native clock and minute timer unchanged, waits for startup, holds the
+  scoring mutex until refresh is active in a later real five-minute slot, delivers an OS `SIGTERM`,
+  releases the mutex, and proves refresh settlement, a newer timestamp, silent code-0 exit, session
+  release, and immutable runtime contents. A sixth integration uses the same bounded runtime shape,
+  holds the emitted first finalization call, delivers an OS `SIGTERM`, and proves graceful
+  settlement without refresh or any later job. It requires silent code-0 exit, session release,
+  immutable runtime contents, and the same final state after the seventeen omitted commands run
+  separately. The fourth gate proves local failure containment, later-job continuation, successful
+  restart retry, a second local restart, and three post-startup signal settlements; the fifth proves
+  one local host-timer recurring refresh plus active-call signal settlement. Automatic privilege
+  repair, a deployed signal route, controller/orchestrator grace policy, managed restart, an
   external audit sink, durable or deployed cadence, representative or deployed backlog recovery,
   monitoring, production credentials/TLS, capacity, cache/backup/tombstone purge, restore replay,
   and deployment remain separate gates.
@@ -1243,17 +1246,18 @@ external TLS/edge, cache, capacity, or operational gate above.
   rearmed terminal reset. A third composes the production process lifecycle under fixed time,
   injects its first handler during an active real database job, and proves graceful settlement plus
   no later scheduler job. A fourth starts the built entry point under real host time from a pinned
-  Linux Node image and read-only link-free copy of the production graph, reaches the terminal
-  startup-catalog marker without process output, delivers an OS `SIGTERM`, and proves silent code-0
-  exit plus session release. It rearms only the exact terminal marker, repeats startup and graceful
-  signaling from the same runtime, and proves a second silent code-0 exit plus session release. A
-  fifth uses the same bounded runtime shape, leaves the native clock/timer unchanged, and proves one
-  host-timer refresh in a later real five-minute slot settles through OS `SIGTERM` before silent
-  code-0 exit. A sixth uses the same bounded runtime shape, blocks the emitted first finalization
-  call, delivers an OS `SIGTERM`, and proves graceful active-call settlement plus suppression of
-  every later job. A deployed signal route, controller/orchestrator grace, managed restart,
-  durable/deployed cadence, representative or deployed backlog recovery, capacity, notification,
-  correction, backup purge, and deployed retention evidence remain open.
+  Linux Node image and read-only link-free copy of the production graph after temporarily denying
+  only the Jobs role's backlog function. It proves one generic cycle signal, no backlog mutation,
+  and later terminal-job settlement before a code-0 `SIGTERM` exit. The harness restores the exact
+  grant and restarts from the same runtime; the retry finalizes the backlog before a silent signal
+  exit, and a second restart proves another silent repeated cycle. A fifth uses the same bounded
+  runtime shape, leaves the native clock/timer unchanged, and proves one host-timer refresh in a
+  later real five-minute slot settles through OS `SIGTERM` before silent code-0 exit. A sixth uses
+  the same bounded runtime shape, blocks the emitted first finalization call, delivers an OS
+  `SIGTERM`, and proves graceful active-call settlement plus suppression of every later job.
+  Automatic privilege repair, a deployed signal route, controller/orchestrator grace, managed
+  restart, durable/deployed cadence, representative or deployed backlog recovery, capacity,
+  notification, correction, backup purge, and deployed retention evidence remain open.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
   new-source creation while preserving active existing-source pairing, plus CarRecipe proposal

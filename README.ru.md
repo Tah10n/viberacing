@@ -135,27 +135,29 @@ first-signal shutdown production lifecycle: активная DB-задача з�
 scheduler-задача не стартует, runner/timers/handlers закрываются и выставляется код 0. Это не
 доказательство доставки реального OS signal. Команда
 `pnpm run test:jobs-scheduler:process-postgres-integration` отдельно запускает built scheduler entry
-point с реальными часами из link-free production-only runtime под pinned Linux Node, дожидается
-terminal marker стартового каталога без process output, доставляет настоящий `SIGTERM` и требует
-тихий выход с кодом 0 и закрытие DB session. Затем harness удаляет остановленный container, заново
-вооружает только две точные terminal-marker строки, повторяет startup и graceful signal из того же
-runtime и требует второй тихий выход с кодом 0, второе закрытие DB session, неизменность runtime
-fingerprint и точное состояние. Это локальное restart evidence, а не deployed-controller restart или
-orchestrator grace. Команда `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` запускает
-тот же неизменённый entry point из того же bounded runtime shape. После startup она удерживает
-scoring mutex, наблюдает production refresh от нативного минутного timer в следующем реальном
-пятиминутном slot, доставляет настоящий `SIGTERM`, отпускает mutex и требует commit активного
-refresh, тихий выход с кодом 0, закрытие DB session и неизменность runtime fingerprint. Это
-локальное доказательство одного повторного host-timer refresh и graceful signal settlement, а не
-deployed controller, orchestrator grace или durable cadence. Команда
-`pnpm run test:jobs-scheduler:signal-postgres-integration` создаёт link-free production-only runtime
-из built scheduler, Jobs runner и точного установленного dependency graph, монтирует его read-only в
-pinned Linux Node image, удерживает первый finalization call и доставляет реальный `SIGTERM`. Она
-доказывает settlement активного call, отсутствие refresh и всех следующих jobs, тихий выход с кодом
-0, закрытие DB session и неизменность runtime fingerprint; семнадцать пропущенных one-shot commands
-выполняются только после этого для общего exact-state oracle. Это локальное synthetic Linux
-OS-signal evidence, но не deployed signal route или orchestrator policy. Все девять требуют Docker и
-не являются deployment evidence.
+point с реальными часами из link-free production-only runtime под pinned Linux Node. Harness сначала
+временно снимает только право Jobs-роли на выполнение backlog-функции. Первый process выдаёт ровно
+одну generic cycle-failure строку, оставляет backlog неизменённым, но доходит до более позднего
+terminal marker, после чего принимает настоящий `SIGTERM`, выходит с кодом 0 и закрывает DB session.
+Harness восстанавливает и проверяет точный grant, заново вооружает marker и перезапускает тот же
+runtime; retry финализирует backlog перед тихим code-0 signal exit. Ещё один rearm/restart
+доказывает тихий повторный цикл; после каждого из трёх запусков scheduler DB sessions закрыты,
+runtime fingerprint и итоговое состояние точны. Это локальное failure-containment/restart-retry
+evidence, а не automatic privilege repair, deployed-controller restart или orchestrator grace.
+Команда `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` запускает тот же неизменённый
+entry point из того же bounded runtime shape. После startup она удерживает scoring mutex, наблюдает
+production refresh от нативного минутного timer в следующем реальном пятиминутном slot, доставляет
+настоящий `SIGTERM`, отпускает mutex и требует commit активного refresh, тихий выход с кодом 0,
+закрытие DB session и неизменность runtime fingerprint. Это локальное доказательство одного
+повторного host-timer refresh и graceful signal settlement, а не deployed controller, orchestrator
+grace или durable cadence. Команда `pnpm run test:jobs-scheduler:signal-postgres-integration`
+создаёт link-free production-only runtime из built scheduler, Jobs runner и точного установленного
+dependency graph, монтирует его read-only в pinned Linux Node image, удерживает первый finalization
+call и доставляет реальный `SIGTERM`. Она доказывает settlement активного call, отсутствие refresh и
+всех следующих jobs, тихий выход с кодом 0, закрытие DB session и неизменность runtime fingerprint;
+семнадцать пропущенных one-shot commands выполняются только после этого для общего exact-state
+oracle. Это локальное synthetic Linux OS-signal evidence, но не deployed signal route или
+orchestrator policy. Все девять требуют Docker и не являются deployment evidence.
 
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.

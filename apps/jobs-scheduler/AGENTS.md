@@ -54,21 +54,23 @@ and same-slot suppression, and verifies the rearmed terminal reset. The third co
 production process lifecycle, starts the penultimate real-runner call before injecting its first
 handler, proves that call settles without starting the later job, and requires graceful cleanup and
 code 0. The fourth starts the built entry point from a link-free read-only production graph under
-pinned Linux Node with the real clock, waits for the terminal startup-catalog marker without output,
-delivers a real `SIGTERM`, and proves silent code-0 exit and session release. It removes the stopped
-container, rearms only the two exact terminal-marker rows, repeats startup and graceful signaling
-from the same runtime, and proves a second silent code-0 exit, second session release, runtime
-immutability, and exact state. The timer result is not host-timer delivery and the lifecycle result
-is not OS-signal delivery. The fifth uses the same bounded runtime shape, leaves the native
-clock/timer unchanged, holds the scoring mutex only after startup, observes refresh in a later real
-five-minute slot, delivers a real `SIGTERM`, releases the mutex, and proves active-refresh
-settlement, silent code-0 exit, session release, and runtime immutability. The sixth uses the same
-bounded runtime shape, blocks the emitted first finalization call, delivers a real `SIGTERM`, and
-proves graceful settlement without starting refresh or any later job. The fourth is local restart
-and OS-signal evidence, the fifth is local host-timer plus OS-signal evidence, and the sixth is a
-third local OS-signal path. None proves a deployed controller or orchestrator grace policy, a
-deployed signal route, managed restart, durable/deployed cadence, production credential/TLS,
-monitoring, capacity, or real-user behavior.
+pinned Linux Node with the real clock after temporarily removing only the Jobs role's exact
+backlog-function execution grant. It requires one generic failure signal, no backlog mutation, and
+later terminal-job settlement before a code-0 `SIGTERM` exit and session release. The harness
+restores and rechecks the grant, rearms the marker, and restarts from the same runtime; the retry
+finalizes the backlog before a silent code-0 signal exit. It rearms and restarts once more to prove
+a silent repeated cycle, session cleanup after all three starts, runtime immutability, and exact
+state. The timer result is not host-timer delivery and the lifecycle result is not OS-signal
+delivery. The fifth uses the same bounded runtime shape, leaves the native clock/timer unchanged,
+holds the scoring mutex only after startup, observes refresh in a later real five-minute slot,
+delivers a real `SIGTERM`, releases the mutex, and proves active-refresh settlement, silent code-0
+exit, session release, and runtime immutability. The sixth uses the same bounded runtime shape,
+blocks the emitted first finalization call, delivers a real `SIGTERM`, and proves graceful
+settlement without starting refresh or any later job. The fourth is local failure-containment,
+restart-retry, and OS-signal evidence, the fifth is local host-timer plus OS-signal evidence, and
+the sixth is a third local OS-signal path. None proves automatic privilege repair, a deployed
+controller or orchestrator grace policy, a deployed signal route, managed restart, durable/deployed
+cadence, production credential/TLS, monitoring, capacity, or real-user behavior.
 
 Before committing, inspect the exact staged diff and run `git diff --cached --check` plus
 `pnpm run check:public:staged`.

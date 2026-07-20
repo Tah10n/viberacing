@@ -35,6 +35,7 @@ const wideJobsPassword = "synthetic-wide-jobs-integration-password";
 const extraRole = "viberacing_jobs_extra";
 const completedMessage = "Vibe Racing Jobs command completed.\n";
 const failedMessage = "Vibe Racing Jobs command failed.\n";
+const schedulerCycleFailedMessage = "Vibe Racing Jobs scheduler cycle failed.\n";
 const defaultFinalizedSeasonStart = "2000-01-03";
 const schedulerArgument = "--scheduler";
 const schedulerLifecycleArgument = "--scheduler-lifecycle";
@@ -1272,10 +1273,11 @@ WHERE operation = 'poll'
   );
 }
 
-async function waitForEmittedSchedulerTerminalMarker(processState) {
+async function waitForEmittedSchedulerTerminalMarker(processState, expectedOutput = "") {
   const deadline = performance.now() + schedulerCycleTimeoutMs;
   while (performance.now() < deadline) {
-    if (processState.outputObserved()) {
+    const observedOutput = readSchedulerProcessContainerOutput();
+    if (!expectedOutput.startsWith(observedOutput)) {
       throw new Error("Emitted Jobs scheduler process produced unexpected output.");
     }
     if (processState.hasExited()) {
@@ -1324,9 +1326,71 @@ FROM updated;`,
   );
 }
 
+function setSchedulerBacklogExecutionAllowed(allowed) {
+  const privilegeStatement = allowed
+    ? `GRANT EXECUTE ON FUNCTION viberacing_api.finalize_community_season_backlog()
+  TO viberacing_jobs;`
+    : `REVOKE EXECUTE ON FUNCTION viberacing_api.finalize_community_season_backlog()
+  FROM viberacing_jobs;`;
+  assert.equal(
+    psqlScalar(
+      `SET ROLE viberacing_owner;
+${privilegeStatement}
+SELECT pg_catalog.has_function_privilege(
+  'viberacing_jobs',
+  'viberacing_api.finalize_community_season_backlog()',
+  'EXECUTE'
+);`,
+      allowed
+        ? "emitted scheduler backlog execution restoration"
+        : "emitted scheduler backlog execution denial",
+    ),
+    allowed ? "t" : "f",
+    `the Jobs role must ${allowed ? "regain" : "lose"} only backlog execution authority`,
+  );
+}
+
+function assertSchedulerBacklogState(expected, label) {
+  assert.equal(
+    psqlScalar(
+      `SET ROLE viberacing_owner;
+SELECT pg_catalog.concat(
+  COALESCE((
+    SELECT state::text
+    FROM viberacing_private.seasons
+    WHERE season_start = DATE '2001-02-05'
+  ), 'absent'),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.season_entries
+    WHERE season_start = DATE '2001-02-05'
+  ),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.season_daily_scores
+    WHERE season_start = DATE '2001-02-05'
+  ),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.source_day_values
+    WHERE source_id = 'src_' || pg_catalog.repeat('Q', 22)
+      AND codex_reported_date = DATE '2001-02-05'
+  )
+);`,
+      label,
+    ),
+    expected,
+    label,
+  );
+}
+
 async function runEmittedSchedulerStartupCycle({
   cycleLabel,
   expectedSeasonStarts,
+  expectedOutput = "",
   runtimeDirectory,
 }) {
   assertSchedulerSeasonStarts(
@@ -1343,7 +1407,7 @@ async function runEmittedSchedulerStartupCycle({
       `${cycleLabel} scheduler container start`,
     );
     const processState = createSchedulerProcessContainerState();
-    await waitForEmittedSchedulerTerminalMarker(processState);
+    await waitForEmittedSchedulerTerminalMarker(processState, expectedOutput);
     assertSchedulerSeasonStarts(
       expectedSeasonStarts,
       `the host clock must retain the reviewed scheduler season targets through ${cycleLabel} execution`,
@@ -1366,8 +1430,8 @@ async function runEmittedSchedulerStartupCycle({
     assert.equal(state.Error, "");
     assert.equal(
       readSchedulerProcessContainerOutput(),
-      "",
-      `the ${cycleLabel} post-startup OS-signalled scheduler must remain silent through graceful exit`,
+      expectedOutput,
+      `the ${cycleLabel} post-startup OS-signalled scheduler must emit only its expected output through graceful exit`,
     );
     await waitForEmittedSchedulerSessionRelease();
     gracefulExitObserved = true;
@@ -1380,12 +1444,32 @@ async function runEmittedSchedulerStartupCycle({
 
 async function runEmittedSchedulerProcess({ expectedSeasonStarts }) {
   const runtime = createPortableSchedulerRuntime();
+  let backlogExecutionNeedsRestore = false;
   try {
+    backlogExecutionNeedsRestore = true;
+    setSchedulerBacklogExecutionAllowed(false);
     await runEmittedSchedulerStartupCycle({
-      cycleLabel: "initial",
+      cycleLabel: "controlled-failure",
+      expectedSeasonStarts,
+      expectedOutput: schedulerCycleFailedMessage,
+      runtimeDirectory: runtime.runtimeDirectory,
+    });
+    assertSchedulerBacklogState(
+      "absent:0:0:1",
+      "the denied backlog job must remain unchanged while later scheduler jobs settle",
+    );
+    setSchedulerBacklogExecutionAllowed(true);
+    backlogExecutionNeedsRestore = false;
+    rearmEmittedSchedulerTerminalMarker();
+    await runEmittedSchedulerStartupCycle({
+      cycleLabel: "recovery",
       expectedSeasonStarts,
       runtimeDirectory: runtime.runtimeDirectory,
     });
+    assertSchedulerBacklogState(
+      "finalized:1:7:1",
+      "the restarted scheduler must retry and finalize the previously denied backlog job",
+    );
     rearmEmittedSchedulerTerminalMarker();
     await runEmittedSchedulerStartupCycle({
       cycleLabel: "restarted",
@@ -1393,7 +1477,13 @@ async function runEmittedSchedulerProcess({ expectedSeasonStarts }) {
       runtimeDirectory: runtime.runtimeDirectory,
     });
   } finally {
-    removePortableSchedulerRuntime(runtime);
+    try {
+      if (backlogExecutionNeedsRestore) {
+        setSchedulerBacklogExecutionAllowed(true);
+      }
+    } finally {
+      removePortableSchedulerRuntime(runtime);
+    }
   }
 }
 
@@ -2579,7 +2669,7 @@ SELECT pg_catalog.jsonb_build_object(
           : integrationMode === "scheduler_lifecycle"
             ? "Jobs scheduler lifecycle PostgreSQL integration passed (active-call settlement, no later scheduler job, graceful close, and exact final state)."
             : integrationMode === "scheduler_process"
-              ? "Emitted Jobs scheduler PostgreSQL integration passed (two real-clock starts, rearmed terminal catalog marker, two OS SIGTERMs, silent code-0 exits, released sessions, immutable reused runtime, and exact stored state)."
+              ? "Emitted Jobs scheduler PostgreSQL integration passed (controlled backlog denial, generic cycle signal, later terminal-job settlement, harness-restored authority, successful restart retry, three OS SIGTERMs, two silent post-failure cycles, released sessions, immutable reused runtime, and exact stored state)."
               : integrationMode === "scheduler_wall_clock_process"
                 ? "Emitted Jobs scheduler wall-clock PostgreSQL integration passed (real host-timer recurring refresh, OS SIGTERM, active-refresh settlement, silent code-0 exit, released session, immutable runtime, and exact stored state)."
                 : integrationMode === "scheduler_signal_process"
