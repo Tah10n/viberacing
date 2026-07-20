@@ -78,9 +78,9 @@ expiry, restore consumer, or backup policy. Cache invalidation, disclosed tombst
 restore replay, backup expiry, deployed signal routing and orchestrator grace policy, deployed
 cadence, monitoring, alerting, production Jobs login/TLS, capacity, and deployment remain
 launch-blocking gates. ADR 0063 provides fixed-clock core composition, directly injected
-repeated-timer execution and lifecycle settlement, real-clock emitted-process terminal-marker
-evidence, one local native-timer callback, and two pinned-Linux OS-signal/PostgreSQL settlement
-paths; controller settlement in the separately forcibly ended startup child remains unproven.
+repeated-timer execution and lifecycle settlement, real-clock emitted-process post-startup signal
+settlement, one local native-timer callback, and three pinned-Linux OS-signal/PostgreSQL settlement
+paths.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-003, VR-INGEST-001, VR-INGEST-002, VR-DATA-001, and
 VR-DELETE-001. Primary attacker stories are VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION,
@@ -140,11 +140,11 @@ integration proves only local terminal-job cleanup after the fixed retention bou
 separately proves the default-off scheduler against a fake runner and clock, composes its production
 core with the real runner and disposable PostgreSQL under fixed injected UTC time, and directly
 invokes the production interval handler for a repeated fixed-clock cycle and the lifecycle handler
-after an active runner call starts. Later ADR 0063 native-timer and OS-signal gates prove one local
-recurring callback and graceful settlement, but these layers still do not prove controller
-settlement in the separately forcibly ended startup child, deployed signal routing or orchestrator
-grace, a published deletion window, production login/TLS, monitoring, backup expiry,
-tombstone/restore replay, cache invalidation, capacity, or deployment.
+after an active runner call starts. Later ADR 0063 post-startup, native-timer, and active-call
+OS-signal gates prove one local recurring callback and three local signal settlements, but these
+layers still do not prove deployed signal routing or controller/orchestrator grace, a published
+deletion window, production login/TLS, monitoring, backup expiry, tombstone/restore replay, cache
+invalidation, capacity, or deployment.
 
 ## References
 

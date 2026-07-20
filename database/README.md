@@ -663,13 +663,14 @@ handler twice during the active real-runner cycle, proves the exact recurring ca
 and same-slot suppression, and verifies the rearmed terminal reset. A fourth composes the production
 process lifecycle under fixed time, injects its first handler during the penultimate real database
 job, and proves graceful settlement plus no later scheduler job. A fifth starts the built entry
-point under real host time, reaches the terminal startup-catalog marker without process output, then
-forcibly ends only its persistent test child. A sixth runs that unchanged entry point from a
-link-free read-only graph under pinned Linux Node, holds the scoring mutex after startup, observes a
-native minute-timer refresh in a later real five-minute slot, delivers an OS `SIGTERM`, releases the
-mutex, and proves active-refresh settlement before silent code-0 exit. A seventh pinned-Linux gate
-delivers an OS `SIGTERM` while finalization is active and proves graceful settlement without a later
-job. These supply local host-timer and OS-signal settlement evidence, not a deployed
+point from a link-free read-only graph under pinned Linux Node with the real clock, reaches the
+terminal startup-catalog marker without process output, delivers an OS `SIGTERM`, and proves silent
+code-0 exit, session release, and runtime immutability. A sixth runs that unchanged entry point from
+the same bounded runtime shape, holds the scoring mutex after startup, observes a native
+minute-timer refresh in a later real five-minute slot, delivers an OS `SIGTERM`, releases the mutex,
+and proves active-refresh settlement before silent code-0 exit. A seventh pinned-Linux gate delivers
+an OS `SIGTERM` while finalization is active and proves graceful settlement without a later job.
+These supply local host-timer and OS-signal settlement evidence, not a deployed
 controller/orchestrator grace policy, production login/TLS, durable/deployed cadence, monitoring,
 capacity, or real-user purge evidence.
 
@@ -1110,11 +1111,10 @@ something the script silently broadens or repairs.
 - Deploy the default-off local scheduler with a production Jobs login/TLS path,
   single-replica/cadence policy, monitoring, representative backlog-recovery and capacity evidence,
   plus audited corrections. The pinned-Linux emitted signal gate proves one local OS `SIGTERM` while
-  the first finalization call is lock-waiting, and the separate unchanged native-timer gate proves
-  one local recurring refresh settles through OS `SIGTERM` before silent code-0 exit. The evidence
-  still does not provide controller settlement in the separately forcibly ended startup child, a
-  deployed signal route or orchestrator grace policy, durable cadence, production configuration, or
-  deployed evidence.
+  the first finalization call is lock-waiting, the separate native-timer gate proves one local
+  recurring refresh settles through OS `SIGTERM`, and the startup gate proves post-catalog signal
+  settlement. The evidence still does not provide a deployed signal route or controller/orchestrator
+  grace policy, restart, durable cadence, production configuration, or deployed evidence.
 - Integrate the bounded database adapter and local score/race/status routes with a
   deployment-provisioned Web-only login and verified TLS, then add cache/invalidation, edge request
   shaping, representative/deployed query-plan and load/capacity evidence, monitoring, and deployment

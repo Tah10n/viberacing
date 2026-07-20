@@ -58,13 +58,13 @@ device, or direct-table capability.
 
 Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
 execution, no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer
-execution and lifecycle settlement, real-clock emitted-process terminal-marker evidence, and later
-native-timer plus OS-signal settlement paths. Those later paths prove one local recurring callback,
-not controller settlement in the separately forcibly ended startup child, deployed OS-signal routing
-or orchestrator grace, deployed cadence, durable missed-slot recovery, monitoring, capacity result,
-production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. Active
-recipes remain until replacement or profile deletion. The separate public active-recipe projection,
-device proposal ingress, and local agent orchestration were later accepted in
+execution and lifecycle settlement, real-clock emitted-process post-startup signal settlement, and
+later native-timer plus active-call OS-signal paths. Those emitted paths prove one local recurring
+callback and three local signal settlements, not deployed OS-signal routing or
+controller/orchestrator grace, deployed cadence, durable missed-slot recovery, monitoring, capacity
+result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy.
+Active recipes remain until replacement or profile deletion. The separate public active-recipe
+projection, device proposal ingress, and local agent orchestration were later accepted in
 [ADR 0037](0037-bounded-public-community-race-projection.md),
 [ADR 0038](0038-bounded-device-car-recipe-proposal-ingress.md), and
 [ADR 0039](0039-bounded-agent-car-proposal-orchestration.md); scheduling and deployed retention
@@ -122,11 +122,10 @@ default-off scheduler against a fake runner and clock, composes its production c
 runner and disposable PostgreSQL under fixed injected UTC time, directly invokes the production
 interval handler for a repeated fixed-clock cycle and the lifecycle handler after an active
 real-runner call starts, and starts the built entry point under the real host clock through its
-terminal startup-catalog marker without process output. Later ADR 0063 native-timer and OS-signal
-gates prove one local recurring callback and graceful settlement, but these layers still do not
-prove controller settlement in the separately forcibly ended startup child, deployed signal routing
-or orchestrator grace, production cadence/login/TLS, monitoring, backup purge, capacity, or
-deployment.
+terminal startup-catalog marker without process output. Later ADR 0063 post-startup, native-timer,
+and active-call OS-signal gates prove one local recurring callback and three local signal
+settlements, but these layers still do not prove deployed signal routing or controller/orchestrator
+grace, production cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
 
 ## References
 

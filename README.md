@@ -398,19 +398,20 @@ cycle is active, proves exact recurring catalog execution plus overlap and same-
 and verifies the rearmed terminal reset. A fourth composes the process lifecycle under the fixed
 clock, injects its first handler during the penultimate database job, proves active-call settlement,
 no later scheduler job, exact graceful cleanup, and exit code 0, then invokes the omitted reset
-separately for the shared state oracle. A fifth starts the built scheduler entry point with the real
-host clock, reaches the terminal startup-catalog marker without process output, forcibly ends only
-its persistent test child, and then verifies exact stored state. A sixth runs the same unchanged
-entry point from a link-free read-only production graph under pinned Linux Node, waits for startup,
-holds the scoring mutex, and observes a native minute-timer callback reach refresh in a later real
-five-minute slot. It then delivers a real `SIGTERM`, releases the mutex, and requires that refresh
-to commit before silent code-0 exit, database-session release, and runtime-fingerprint revalidation.
-A seventh uses the same bounded Linux runtime shape, holds the emitted first finalization call,
-delivers a real `SIGTERM`, and proves active-call settlement, no later job, silent code-0 exit,
-database-session release, and an unchanged runtime fingerprint. The injected timer result still does
-not prove host-timer delivery, and the forcibly ended startup result still does not prove its own
-controller settlement. The sixth gate proves one local wall-clock recurring refresh plus graceful
-OS-signal settlement, not a deployed signal route or orchestrator grace, durable or hosted cadence,
+separately for the shared state oracle. A fifth runs the built scheduler entry point from a
+link-free read-only production graph under pinned Linux Node with the real clock, reaches the
+terminal startup-catalog marker without process output, delivers a real `SIGTERM`, and proves silent
+code-0 exit, session release, runtime immutability, and exact stored state. A sixth runs the same
+unchanged entry point from the same bounded runtime shape, waits for startup, holds the scoring
+mutex, and observes a native minute-timer callback reach refresh in a later real five-minute slot.
+It then delivers a real `SIGTERM`, releases the mutex, and requires that refresh to commit before
+silent code-0 exit, database-session release, and runtime-fingerprint revalidation. A seventh uses
+the same bounded Linux runtime shape, holds the emitted first finalization call, delivers a real
+`SIGTERM`, and proves active-call settlement, no later job, silent code-0 exit, database-session
+release, and an unchanged runtime fingerprint. The injected timer result still does not prove
+host-timer delivery. The three emitted gates prove local post-startup, recurring-refresh, and
+active-finalization OS-signal settlement, including one wall-clock recurring refresh; they do not
+prove a deployed signal route or controller/orchestrator grace, restart, durable or hosted cadence,
 cross-replica coordination, production TLS/login, monitoring, capacity, or real-user retention.
 Revision 0011 gives only the Web database role a bounded active-profile score projection containing
 no raw values, private identifiers, or exact timestamps. The score response component and Web

@@ -64,15 +64,16 @@ the active real-runner cycle, proves the exact recurring catalog plus overlap an
 suppression, and verifies the rearmed terminal reset. A third composes the production process
 lifecycle, injects its first handler during the penultimate real database job, and proves graceful
 active-call settlement plus no later scheduler job. A fourth starts the built entry point under the
-real host clock, reaches the terminal startup-catalog marker without process output, then forcibly
-ends only its persistent test child. A fifth runs the unchanged entry point from a link-free
-read-only production graph under pinned Linux Node, holds the scoring mutex after startup, observes
-a native minute-timer refresh in a later real five-minute slot, delivers an OS `SIGTERM`, releases
-the mutex, and proves active-refresh settlement before silent code-0 exit. A sixth uses the same
-bounded runtime shape, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and
-proves graceful settlement without starting a later job. The fifth gate proves one local host-timer
-recurring refresh and graceful signal settlement; there is still no controller settlement in the
-separately forcibly ended startup child, deployed signal route or orchestrator grace, production
+real host clock from a link-free read-only production graph under pinned Linux Node, reaches the
+terminal startup-catalog marker without process output, delivers an OS `SIGTERM`, and proves silent
+code-0 exit, session release, runtime immutability, and exact state. A fifth runs the unchanged
+entry point from the same bounded runtime shape, holds the scoring mutex after startup, observes a
+native minute-timer refresh in a later real five-minute slot, delivers an OS `SIGTERM`, releases the
+mutex, and proves active-refresh settlement before silent code-0 exit. A sixth uses the same bounded
+runtime shape, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves
+graceful settlement without starting a later job. The fourth gate proves local post-startup signal
+settlement, and the fifth proves one local host-timer recurring refresh plus active-call signal
+settlement; there is still no deployed signal route or controller/orchestrator grace, production
 login, durable/deployed cadence, monitor, or deployment. A bounded server-only Web PostgreSQL
 adapter and local public-score GET are implemented and unit/build-tested, but this repository
 supplies no working deployment login or TLS certificate. A successful setup proves repository gates,
@@ -363,21 +364,21 @@ invokes the production interval handler twice during the active real-runner cycl
 recurring catalog plus overlap and same-slot suppression, and verifies the rearmed terminal reset.
 The third injects the production first-signal handler during the penultimate real database job,
 proves active-call settlement and no later scheduler job, and requires exact graceful cleanup plus
-code 0 before invoking the omitted reset separately. The fourth starts the built scheduler entry
-point under the real host clock, requires host/database UTC-date agreement, waits for the terminal
-startup-catalog marker without process output, forcibly ends only its persistent test child, and
-then verifies the same exact state. It does not prove controller settlement before that forced
-termination. The timer mode does not prove host-timer delivery, and the lifecycle mode by itself
-does not prove OS-signal delivery. The fifth copies only the built scheduler, built runner, and
-exact installed production graph into a link-free temporary runtime under pinned Linux Node, leaves
-the native clock/timer unchanged, waits for startup, and holds the scoring mutex until refresh
-reaches it in a later real five-minute slot. It delivers a real `SIGTERM`, releases the mutex, and
-requires active-refresh settlement, a newer timestamp, silent exit code 0, session release, and
-runtime fingerprint revalidation. The sixth uses the same bounded runtime shape, holds the emitted
-first finalization call, and delivers a real `SIGTERM`. It requires graceful active-call settlement,
-no refresh or later job, silent exit code 0, session release, and an unchanged runtime fingerprint
-before the seventeen omitted commands complete the shared final-state oracle. These prove two local
-Docker-delivered Linux signal paths, including one native host-timer callback, not a deployed
+code 0 before invoking the omitted reset separately. The fourth copies only the built scheduler,
+built runner, and exact installed production graph into a link-free temporary runtime under pinned
+Linux Node, starts the built entry point under the real host clock, requires host/database UTC-date
+agreement, waits for the terminal startup-catalog marker without process output, delivers a real
+`SIGTERM`, and requires silent exit code 0, session release, runtime fingerprint revalidation, and
+the same exact state. The timer mode does not prove host-timer delivery, and the lifecycle mode by
+itself does not prove OS-signal delivery. The fifth uses the same bounded runtime shape, leaves the
+native clock/timer unchanged, waits for startup, and holds the scoring mutex until refresh reaches
+it in a later real five-minute slot. It delivers a real `SIGTERM`, releases the mutex, and requires
+active-refresh settlement, a newer timestamp, silent exit code 0, session release, and runtime
+fingerprint revalidation. The sixth uses the same bounded runtime shape, holds the emitted first
+finalization call, and delivers a real `SIGTERM`. It requires graceful active-call settlement, no
+refresh or later job, silent exit code 0, session release, and an unchanged runtime fingerprint
+before the seventeen omitted commands complete the shared final-state oracle. These prove three
+local Docker-delivered Linux signal paths, including one native host-timer callback, not a deployed
 controller or orchestrator grace policy. None proves durable/deployed cadence, production
 credentials/TLS, monitoring, capacity, or real-user retention.
 

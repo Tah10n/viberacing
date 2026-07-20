@@ -670,16 +670,17 @@ active real-runner cycle, proves the exact recurring catalog plus overlap and sa
 and verifies the rearmed terminal reset. A fourth composes the process lifecycle, injects its first
 handler during the penultimate real database job, and proves active-call settlement, no later
 scheduler job, and exact graceful cleanup. A fifth starts the built scheduler entry point under the
-real host clock, reaches the terminal startup-catalog marker without process output, forcibly ends
-only its persistent test child, and then verifies exact state. A sixth mounts a link-free
-production-only runtime read-only under pinned Linux Node, leaves the native clock/timer unchanged,
-holds the scoring mutex after startup, and observes a refresh in a later real five-minute slot. It
-delivers an OS `SIGTERM`, releases the mutex, and requires active-refresh settlement, a newer
-timestamp, silent code-0 exit, session release, and runtime-fingerprint revalidation. A seventh uses
-the same bounded runtime shape, holds the first finalization call, delivers an OS `SIGTERM`, and
-proves graceful settlement without starting refresh or a later job. The sixth gate proves one local
-host-timer recurring refresh plus graceful signal settlement. No controller settlement in the
-separately forcibly ended startup child, deployed signal route or scheduler, representative
+real host clock from a link-free production-only runtime mounted read-only under pinned Linux Node,
+reaches the terminal startup-catalog marker without process output, delivers an OS `SIGTERM`, and
+proves silent code-0 exit, session release, runtime-fingerprint revalidation, and exact state. A
+sixth uses the same bounded runtime shape, leaves the native clock/timer unchanged, holds the
+scoring mutex after startup, and observes a refresh in a later real five-minute slot. It delivers an
+OS `SIGTERM`, releases the mutex, and requires active-refresh settlement, a newer timestamp, silent
+code-0 exit, session release, and runtime-fingerprint revalidation. A seventh uses the same bounded
+runtime shape, holds the first finalization call, delivers an OS `SIGTERM`, and proves graceful
+settlement without starting refresh or a later job. The fifth gate proves local post-startup signal
+settlement, and the sixth proves one local host-timer recurring refresh plus active-call signal
+settlement. No deployed signal route or scheduler, controller/orchestrator grace, representative
 backlog/capacity result, external audit sink, production login/certificate, audited correction,
 tombstone/restore replay, deployed route, or public cache exists.
 

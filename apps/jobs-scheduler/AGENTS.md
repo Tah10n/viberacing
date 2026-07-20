@@ -53,20 +53,19 @@ handler twice during the active real-runner cycle, proves the exact recurring ca
 and same-slot suppression, and verifies the rearmed terminal reset. The third composes the
 production process lifecycle, starts the penultimate real-runner call before injecting its first
 handler, proves that call settles without starting the later job, and requires graceful cleanup and
-code 0. The fourth starts the built entry point with the real host clock, waits for the terminal
-startup-catalog marker without process output, and forcibly ends only its persistent test child. The
-timer result is not host-timer delivery, the lifecycle result is not OS-signal delivery, and the
-forced emitted startup child still has no observed controller settlement before termination. The
-fifth packages the same emitted production graph into a link-free read-only runtime under pinned
-Linux Node, leaves the native clock/timer unchanged, holds the scoring mutex only after startup,
-observes refresh in a later real five-minute slot, delivers a real `SIGTERM`, releases the mutex,
-and proves active-refresh settlement, silent code-0 exit, session release, and runtime immutability.
-The sixth uses the same bounded runtime shape, blocks the emitted first finalization call, delivers
-a real `SIGTERM`, and proves graceful settlement without starting refresh or any later job. The
-fifth is local synthetic host-timer plus OS-signal evidence and the sixth is a second local
-OS-signal path. Neither proves a deployed controller or orchestrator grace policy, a deployed signal
-route, durable/deployed cadence, production credential/TLS, monitoring, capacity, or real-user
-behavior.
+code 0. The fourth starts the built entry point from a link-free read-only production graph under
+pinned Linux Node with the real clock, waits for the terminal startup-catalog marker without output,
+delivers a real `SIGTERM`, and proves silent code-0 exit, session release, and runtime immutability.
+The timer result is not host-timer delivery and the lifecycle result is not OS-signal delivery. The
+fifth uses the same bounded runtime shape, leaves the native clock/timer unchanged, holds the
+scoring mutex only after startup, observes refresh in a later real five-minute slot, delivers a real
+`SIGTERM`, releases the mutex, and proves active-refresh settlement, silent code-0 exit, session
+release, and runtime immutability. The sixth uses the same bounded runtime shape, blocks the emitted
+first finalization call, delivers a real `SIGTERM`, and proves graceful settlement without starting
+refresh or any later job. The fourth is local post-startup OS-signal evidence, the fifth is local
+host-timer plus OS-signal evidence, and the sixth is a third local OS-signal path. None proves a
+deployed controller or orchestrator grace policy, a deployed signal route, restart, durable/deployed
+cadence, production credential/TLS, monitoring, capacity, or real-user behavior.
 
 Before committing, inspect the exact staged diff and run `git diff --cached --check` plus
 `pnpm run check:public:staged`.

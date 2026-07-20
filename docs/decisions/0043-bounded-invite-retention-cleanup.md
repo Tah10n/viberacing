@@ -65,11 +65,10 @@ policy, deployed cadence, durable missed-slot recovery, monitoring, capacity res
 login/TLS connection, backup-expiry proof, or deployed retention policy. ADR 0063 supplies a
 default-off in-memory local catalog, sequential execution, no-overlap lifecycle, fixed-clock core
 composition, directly injected repeated-timer execution and lifecycle settlement, real-clock
-emitted-process terminal-marker evidence, one local native-timer callback, and two pinned-Linux
-OS-signal/PostgreSQL settlement paths. Controller settlement in the separately forcibly ended
-startup child remains unproven. Tombstones, pairing-referenced sessions, historical passkey/device
-provenance, and any future expiring class still require separate reviewed rules; ADR 0045 separately
-bounds terminal deletion-job retention.
+emitted-process post-startup signal settlement, one local native-timer callback, and three
+pinned-Linux OS-signal/PostgreSQL settlement paths. Tombstones, pairing-referenced sessions,
+historical passkey/device provenance, and any future expiring class still require separate reviewed
+rules; ADR 0045 separately bounds terminal deletion-job retention.
 
 Affected invariants are VR-AUTH-001 and VR-DATA-001. Primary attacker stories are
 VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -124,10 +123,10 @@ runner and clock, composes its production core with the real runner and disposab
 fixed injected UTC time, directly invokes the production interval handler for a repeated fixed-clock
 cycle and the lifecycle handler after an active runner call starts, and starts the built entry point
 under the real host clock through its terminal startup-catalog marker without process output. Later
-ADR 0063 native-timer and OS-signal gates prove one local recurring callback and graceful
-settlement, but these layers still do not prove controller settlement in the separately forcibly
-ended startup child, deployed signal routing or orchestrator grace, production cadence/login/TLS,
-monitoring, backup purge, capacity, invite issuance UI, or deployment.
+ADR 0063 post-startup, native-timer, and active-call OS-signal gates prove one local recurring
+callback and three local signal settlements, but these layers still do not prove deployed signal
+routing or controller/orchestrator grace, production cadence/login/TLS, monitoring, backup purge,
+capacity, invite issuance UI, or deployment.
 
 ## References
 

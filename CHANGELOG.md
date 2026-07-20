@@ -50,28 +50,30 @@ Versioning where its guarantees are applicable.
   rejects disabled or argument-bearing startup without output. A second opt-in integration composes
   the production scheduler core under a fixed injected UTC clock/timer with the real Jobs runner and
   disposable PostgreSQL, proving the exact ordered catalog, full-state widened-login denial, and
-  exact narrow-login effects. A third opt-in integration starts the built scheduler entry point with
-  the real host clock, reaches the terminal startup-catalog marker without process output, forcibly
-  ends only its persistent test child, and then verifies exact stored state. A separate timer
-  integration advances the fixed clock by one hour, invokes the production interval handler twice
-  during the active real-runner cycle, proves the exact recurring catalog plus overlap and same-slot
-  suppression, and verifies the rearmed terminal reset. A separate process-lifecycle integration
-  injects its first signal during the penultimate database job, proves active-call settlement, no
-  later scheduler job, exact graceful cleanup, and exit code 0, then invokes the omitted reset
-  separately for the shared state oracle. Another integration starts the unchanged emitted process,
-  assembles a link-free production-only runtime from the installed graph, mounts it read-only under
-  a pinned Linux Node image, waits for startup completion, holds the scoring mutex, and observes the
-  native minute timer reach the production refresh in a later real five-minute slot. It delivers an
-  OS `SIGTERM`, releases the mutex, and proves the active refresh commits with a newer timestamp
-  before silent code-0 exit, session release, and runtime-fingerprint revalidation. A seventh
-  integration uses the same bounded runtime shape, blocks the emitted first finalization call,
-  delivers an OS `SIGTERM`, and proves that call settles without starting refresh or any later job.
-  The process exits silently with code 0, releases its database session, and leaves the runtime
-  fingerprint unchanged before the omitted seventeen one-shot commands complete the shared
-  exact-state oracle. The recurring gate is local synthetic host-timer and OS-signal settlement
-  evidence only; no deployed signal route or controller/orchestrator grace policy, deployed
-  replica/durable cadence, production credential/TLS, monitoring, capacity, or real-user retention
-  is claimed.
+  exact narrow-login effects. A third opt-in integration starts the built scheduler entry point from
+  a link-free read-only production graph under pinned Linux Node with the real clock, reaches the
+  terminal startup-catalog marker without process output, delivers an OS `SIGTERM`, and proves
+  silent code-0 exit, session release, runtime immutability, and exact stored state. A separate
+  timer integration advances the fixed clock by one hour, invokes the production interval handler
+  twice during the active real-runner cycle, proves the exact recurring catalog plus overlap and
+  same-slot suppression, and verifies the rearmed terminal reset. A separate process-lifecycle
+  integration injects its first signal during the penultimate database job, proves active-call
+  settlement, no later scheduler job, exact graceful cleanup, and exit code 0, then invokes the
+  omitted reset separately for the shared state oracle. Another integration starts the unchanged
+  emitted process, assembles a link-free production-only runtime from the installed graph, mounts it
+  read-only under a pinned Linux Node image, waits for startup completion, holds the scoring mutex,
+  and observes the native minute timer reach the production refresh in a later real five-minute
+  slot. It delivers an OS `SIGTERM`, releases the mutex, and proves the active refresh commits with
+  a newer timestamp before silent code-0 exit, session release, and runtime-fingerprint
+  revalidation. A seventh integration uses the same bounded runtime shape, blocks the emitted first
+  finalization call, delivers an OS `SIGTERM`, and proves that call settles without starting refresh
+  or any later job. The process exits silently with code 0, releases its database session, and
+  leaves the runtime fingerprint unchanged before the omitted seventeen one-shot commands complete
+  the shared exact-state oracle. The three emitted gates provide local synthetic post-startup,
+  recurring-refresh, and active-finalization OS-signal settlement evidence, including one native
+  host-timer callback; no deployed signal route or controller/orchestrator grace policy, restart,
+  deployed replica/durable cadence, production credential/TLS, monitoring, capacity, or real-user
+  retention is claimed.
 - A deterministic pre-restore migration-overlap drill in the isolated PostgreSQL integration. It
   holds revision 0039's own advisory lock, observes two tagged processes running the exact reviewed
   migration in the holder's blocker chain, and then requires one successful application plus one

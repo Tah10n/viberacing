@@ -66,49 +66,50 @@ third composes the production process lifecycle under that fixed clock, injects 
 during the penultimate database job, proves the active call settles and no later scheduler job
 starts, and requires exact graceful interval/deadline/handler/runner cleanup plus exit code 0; only
 afterward does the harness invoke the omitted reset for the shared exact-state oracle. A fourth
-starts the built scheduler entry point under the real host clock, requires host/database UTC-date
-agreement, reaches the terminal startup-catalog marker without process output, forcibly ends only
-its persistent test child, and then verifies the same exact state. A fifth constructs a link-free
-production-only runtime from the built scheduler, built runner, and exact installed dependency
-graph, mounts it read-only under a pinned Linux Node image, and leaves the native clock and minute
-timer unchanged. After startup it holds the scoring mutex until refresh is active in a later real
-five-minute slot, delivers an OS `SIGTERM`, releases the mutex, and proves refresh settlement with a
-newer timestamp, silent code-0 exit, session release, and an unchanged runtime fingerprint. A sixth
-uses the same bounded runtime shape, holds the emitted first finalization call, delivers an OS
-`SIGTERM`, and proves graceful settlement, no later job, silent code-0 exit, session release, and an
-unchanged runtime fingerprint. The injected-timer result still does not prove host-timer delivery,
-and the forcibly ended startup result still does not prove its own controller settlement. The fifth
-gate proves one local wall-clock recurring refresh plus graceful signal settlement; none proves a
-deployed signal route, controller/orchestrator grace policy, or durable/deployed cadence. A separate
-exact-default-off one-shot migration runner now loads only the canonical repository catalog,
-verifies closed manifest/file inventory plus every SHA-256 digest, creates one maximum-one pool, and
-probes a distinct login that can set only the NOLOGIN owner group. Under one fixed session advisory
-lock it sets the owner role, rereads an exact ledger prefix, applies only the missing reviewed SQL
-bodies sequentially, requires the complete ledger, resets the role, and releases the lock. Missing
-or malformed enablement fails before catalog, protected configuration, or pool work; every failure
-destroys the client and process output is generic. Its evidence is 97 injected unit/policy tests at
-99.34% statements, 98.59% branches, 100% functions, and 99.34% lines plus strict build and built
-disabled-startup checks. A separate opt-in synthetic integration runs one widened and two narrow
-emitted processes against one disposable hostname-verified TLS PostgreSQL database. It denies the
-widened login before schema creation, observes both narrow controllers behind one external holder,
-requires both to converge successfully after release, and verifies the exact 40-row ledger, all 28
-owner-owned forced-RLS private tables, identity invariants, and connection/lock cleanup. It proves
-no production credential/TLS, staging orchestration/rollback, deployed-replica behavior, monitoring,
-deployment, or recovery. A local Ingest kernel now bounds and authenticates the exact Community sync
-envelope, consumes an injected origin nonce, parses bounded JSON, validates the generated contract,
-and strictly verifies the source-bound device request. A separate bounded Ingest PostgreSQL adapter
-revalidates that output and exposes only atomic origin-nonce consumption, device lookup, and
-submission through a probed least-privileged pool. A protected local reader supplies one mandatory
-and one optional rotation origin key directly to the verifier without returning raw configuration. A
-forced-RLS replay tuple, Ingest-only atomic consume, separate Jobs cleanup paths for ingest,
-pairing, authentication, invites, sessions, abandoned enrollments, CarRecipe proposals, finalized
-source/day values, terminal deletion jobs, audit events, aged revoked passkeys, and aged minimized
-revoked devices plus pairing approval-provenance redaction and primary profile deletion now have
-real isolated PostgreSQL evidence. A transport-free Ingest application now composes those exact
-verifier and database capabilities, generates a server-owned request ID, waits for submission, and
-returns only a validated acknowledgement or generic problem decision. A bounded local Fastify server
-factory now preserves exact raw HTTP evidence, admits four application calls without a queue,
-applies fixed parser/header/connection/deadline policies, and serializes only revalidated sync
+constructs a link-free production-only runtime from the built scheduler, built runner, and exact
+installed dependency graph, mounts it read-only under a pinned Linux Node image, and starts the
+built entry point under the real host clock. It requires host/database UTC-date agreement, reaches
+the terminal startup-catalog marker without process output, delivers an OS `SIGTERM`, and proves
+silent code-0 exit, session release, an unchanged runtime fingerprint, and the same exact state. A
+fifth uses the same bounded runtime shape and leaves the native clock and minute timer unchanged.
+After startup it holds the scoring mutex until refresh is active in a later real five-minute slot,
+delivers an OS `SIGTERM`, releases the mutex, and proves refresh settlement with a newer timestamp,
+silent code-0 exit, session release, and an unchanged runtime fingerprint. A sixth holds the emitted
+first finalization call, delivers an OS `SIGTERM`, and proves graceful settlement, no later job,
+silent code-0 exit, session release, and an unchanged runtime fingerprint. The injected-timer result
+still does not prove host-timer delivery. The fourth gate proves local post-startup signal
+settlement, and the fifth proves one local wall-clock recurring refresh plus active-call signal
+settlement; none proves a deployed signal route, controller/orchestrator grace policy, or
+durable/deployed cadence. A separate exact-default-off one-shot migration runner now loads only the
+canonical repository catalog, verifies closed manifest/file inventory plus every SHA-256 digest,
+creates one maximum-one pool, and probes a distinct login that can set only the NOLOGIN owner group.
+Under one fixed session advisory lock it sets the owner role, rereads an exact ledger prefix,
+applies only the missing reviewed SQL bodies sequentially, requires the complete ledger, resets the
+role, and releases the lock. Missing or malformed enablement fails before catalog, protected
+configuration, or pool work; every failure destroys the client and process output is generic. Its
+evidence is 97 injected unit/policy tests at 99.34% statements, 98.59% branches, 100% functions, and
+99.34% lines plus strict build and built disabled-startup checks. A separate opt-in synthetic
+integration runs one widened and two narrow emitted processes against one disposable
+hostname-verified TLS PostgreSQL database. It denies the widened login before schema creation,
+observes both narrow controllers behind one external holder, requires both to converge successfully
+after release, and verifies the exact 40-row ledger, all 28 owner-owned forced-RLS private tables,
+identity invariants, and connection/lock cleanup. It proves no production credential/TLS, staging
+orchestration/rollback, deployed-replica behavior, monitoring, deployment, or recovery. A local
+Ingest kernel now bounds and authenticates the exact Community sync envelope, consumes an injected
+origin nonce, parses bounded JSON, validates the generated contract, and strictly verifies the
+source-bound device request. A separate bounded Ingest PostgreSQL adapter revalidates that output
+and exposes only atomic origin-nonce consumption, device lookup, and submission through a probed
+least-privileged pool. A protected local reader supplies one mandatory and one optional rotation
+origin key directly to the verifier without returning raw configuration. A forced-RLS replay tuple,
+Ingest-only atomic consume, separate Jobs cleanup paths for ingest, pairing, authentication,
+invites, sessions, abandoned enrollments, CarRecipe proposals, finalized source/day values, terminal
+deletion jobs, audit events, aged revoked passkeys, and aged minimized revoked devices plus pairing
+approval-provenance redaction and primary profile deletion now have real isolated PostgreSQL
+evidence. A transport-free Ingest application now composes those exact verifier and database
+capabilities, generates a server-owned request ID, waits for submission, and returns only a
+validated acknowledgement or generic problem decision. A bounded local Fastify server factory now
+preserves exact raw HTTP evidence, admits four application calls without a queue, applies fixed
+parser/header/connection/deadline policies, and serializes only revalidated sync
 acknowledgement/problem contracts. A separate exact-default-off local host composes that factory
 under closed listener and process-lifecycle policy. Its required synthetic PostgreSQL gate now
 closes the imported emitted host after the full request/no-queue matrix, starts the built entry
@@ -1173,25 +1174,26 @@ ranking, or deployed Jobs scheduler/cadence exists.
   first handler during the penultimate real database job, requires active-call settlement, proves no
   later scheduler job, and observes exact graceful cleanup and exit code 0 before invoking the
   omitted reset separately for the shared state oracle. A fourth integration starts the built entry
-  point with exact configuration and the real host clock, requires host/database UTC-date agreement,
-  waits for the terminal reset marker, requires no process output, forcibly ends only its persistent
-  test child, and then verifies the same exact state. A fifth starts the same emitted process with
-  its unchanged native clock and timer from a link-free read-only runtime under pinned Linux Node,
-  holds the scoring mutex after startup, observes refresh in a later real five-minute slot, delivers
-  a real `SIGTERM`, releases the holder, and requires active-refresh settlement, a newer timestamp,
-  silent code-0 exit, session release, and unchanged runtime contents. A sixth constructs the same
-  bounded runtime shape from only the built scheduler, built Jobs runner, and exact 14-package
-  installed production graph and joins only the disposable database network namespace. It holds the
-  emitted first finalization call, observes the exact lock wait, delivers a real `SIGTERM`, releases
-  the holder before the database deadline, and proves active-call settlement without refresh or a
-  later job, silent code-0 exit, session release, unchanged runtime contents, and the shared final
-  state after the seventeen omitted commands run separately. The fifth check proves one local
-  host-timer recurring refresh and graceful OS-signal settlement. These checks do not prove
-  controller settlement in the separately forcibly ended startup child, a deployed signal route or
-  orchestrator grace policy, representative or deployed backlog recovery, a stable production clock,
-  a replica lease, durable/deployed cadence, production login/TLS, monitoring, capacity, or
-  real-user retention. Secretless CI declares all six scheduler commands, but no hosted pass is
-  claimed from this local tree.
+  point with exact configuration and the real host clock from a link-free read-only runtime under
+  pinned Linux Node, requires host/database UTC-date agreement, waits for the terminal reset marker,
+  delivers a real `SIGTERM`, and requires silent code-0 exit, session release, unchanged runtime
+  contents, and the same exact state. A fifth starts the same emitted process with its unchanged
+  native clock and timer from the same bounded runtime shape, holds the scoring mutex after startup,
+  observes refresh in a later real five-minute slot, delivers a real `SIGTERM`, releases the holder,
+  and requires active-refresh settlement, a newer timestamp, silent code-0 exit, session release,
+  and unchanged runtime contents. A sixth constructs the same bounded runtime shape from only the
+  built scheduler, built Jobs runner, and exact 14-package installed production graph and joins only
+  the disposable database network namespace. It holds the emitted first finalization call, observes
+  the exact lock wait, delivers a real `SIGTERM`, releases the holder before the database deadline,
+  and proves active-call settlement without refresh or a later job, silent code-0 exit, session
+  release, unchanged runtime contents, and the shared final state after the seventeen omitted
+  commands run separately. The fourth check proves local post-startup OS-signal settlement, and the
+  fifth proves one local host-timer recurring refresh plus active-call OS-signal settlement. These
+  checks do not prove a deployed signal route or controller/orchestrator grace policy,
+  representative or deployed backlog recovery, a stable production clock, a replica lease,
+  durable/deployed cadence, production login/TLS, monitoring, capacity, or real-user retention.
+  Secretless CI declares all six scheduler commands, but no hosted pass is claimed from this local
+  tree.
 - Forty-six deterministic lock-wait races tag every session and observe every contender in the
   holder's transitive PostgreSQL blocker chain before releasing it. The one pre-restore migration
   overlap holds revision 0039's advisory lock around two exact migration processes, then requires
@@ -1360,21 +1362,21 @@ terminal reset. A fourth run composed the production process lifecycle under the
 started the penultimate real-runner call before injecting the first signal handler, proved
 active-call settlement and no later scheduler job, observed exact graceful cleanup plus exit code 0,
 then invoked only the omitted reset before the shared state oracle. A fifth run started the built
-scheduler entry point under the real host clock, required host/database UTC-date agreement, observed
-no process output, waited for the terminal catalog marker, forcibly ended only its otherwise
-persistent test child, and then verified the same exact state. A sixth run started the unchanged
-emitted process from a link-free read-only runtime under pinned Linux Node, observed the startup
-refresh, held the scoring mutex until a native minute-timer callback reached refresh in a later real
-five-minute slot, delivered a real OS `SIGTERM`, released the mutex, and proved active-refresh
-settlement, a newer refresh timestamp, silent code-0 exit, session release, and unchanged runtime
-contents. A seventh run used the same bounded runtime shape, held the emitted first finalization
-call, delivered a real OS `SIGTERM`, and proved graceful active-call settlement, no refresh or later
-job, silent code-0 exit, session release, and unchanged runtime contents before the seventeen
-omitted commands completed the shared exact-state oracle. This is local synthetic application
-evidence including one local host-timer recurring refresh and two OS-signal settlement paths, not
-controller settlement in the separately forcibly ended startup child, a deployed signal route or
-orchestrator grace policy, production credential/TLS result, capacity result, real-user purge,
-monitoring backend, durable cadence, or deployment.
+scheduler entry point under the real host clock from a link-free read-only runtime under pinned
+Linux Node, required host/database UTC-date agreement, observed no process output, waited for the
+terminal catalog marker, delivered a real OS `SIGTERM`, and proved silent code-0 exit, session
+release, unchanged runtime contents, and the same exact state. A sixth run started the unchanged
+emitted process from the same bounded runtime shape, observed the startup refresh, held the scoring
+mutex until a native minute-timer callback reached refresh in a later real five-minute slot,
+delivered a real OS `SIGTERM`, released the mutex, and proved active-refresh settlement, a newer
+refresh timestamp, silent code-0 exit, session release, and unchanged runtime contents. A seventh
+run used the same bounded runtime shape, held the emitted first finalization call, delivered a real
+OS `SIGTERM`, and proved graceful active-call settlement, no refresh or later job, silent code-0
+exit, session release, and unchanged runtime contents before the seventeen omitted commands
+completed the shared exact-state oracle. This is local synthetic application evidence including one
+local host-timer recurring refresh and three OS-signal settlement paths, not a deployed signal route
+or controller/orchestrator grace policy, production credential/TLS result, capacity result,
+real-user purge, monitoring backend, durable cadence, or deployment.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and

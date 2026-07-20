@@ -495,59 +495,6 @@ function assertSchedulerSeasonStarts(expectedSeasonStarts, label) {
   assert.deepEqual(expectedSchedulerSeasonStarts(Date.now()), expectedSeasonStarts, label);
 }
 
-function startEmittedSchedulerProcess(databasePort) {
-  let exitObserved = false;
-  let stdoutObserved = false;
-  let stderrObserved = false;
-  const child = spawn(
-    process.execPath,
-    [resolve(root, "apps", "jobs-scheduler", "dist", "main.js")],
-    {
-      cwd: root,
-      env: Object.freeze({
-        ...jobsEnvironment(databasePort, jobsLogin, jobsPassword),
-        VIBERACING_JOBS_SCHEDULER_ENABLED: "true",
-      }),
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    },
-  );
-  const terminateOnOutput = (stream) => {
-    if (stream === "stdout") {
-      stdoutObserved = true;
-    } else {
-      stderrObserved = true;
-    }
-    child.kill("SIGKILL");
-  };
-  child.stdout.on("data", () => {
-    terminateOnOutput("stdout");
-  });
-  child.stderr.on("data", () => {
-    terminateOnOutput("stderr");
-  });
-  child.once("exit", () => {
-    exitObserved = true;
-  });
-  const closed = new Promise((resolveClose, rejectClose) => {
-    child.once("error", () => {
-      exitObserved = true;
-      rejectClose(new Error("Emitted Jobs scheduler process could not start."));
-    });
-    child.once("close", (code, signal) => {
-      exitObserved = true;
-      resolveClose(Object.freeze({ code, signal }));
-    });
-  });
-  void closed.catch(() => undefined);
-  return Object.freeze({
-    child,
-    closed,
-    hasExited: () => exitObserved,
-    outputObserved: () => stdoutObserved || stderrObserved,
-  });
-}
-
 function createPortableSchedulerRuntime() {
   return createPortableNodeRuntime({
     entryWorkspaceDirectory: resolve(root, "apps", "jobs-scheduler"),
@@ -1355,48 +1302,57 @@ WHERE operation = 'poll'
   );
 }
 
-async function runEmittedSchedulerProcess({ databasePort, expectedSeasonStarts }) {
+async function runEmittedSchedulerProcess({ expectedSeasonStarts }) {
   assertSchedulerSeasonStarts(
     expectedSeasonStarts,
     "the host clock must retain the reviewed scheduler season targets before process startup",
   );
-  const processState = startEmittedSchedulerProcess(databasePort);
-  let terminalMarkerObserved = false;
-  let closeResult;
-  let terminationRequested = false;
+  const runtime = createPortableSchedulerRuntime();
+  let containerCreated = false;
   try {
+    createSchedulerProcessContainer(runtime.runtimeDirectory);
+    containerCreated = true;
+    requireSuccess(
+      docker(["start", schedulerProcessContainerName], { timeout: 15_000 }),
+      "scheduler startup container start",
+    );
+    const processState = createSchedulerProcessContainerState();
     await waitForEmittedSchedulerTerminalMarker(processState);
     assertSchedulerSeasonStarts(
       expectedSeasonStarts,
       "the host clock must retain the reviewed scheduler season targets through process execution",
     );
-    terminalMarkerObserved = true;
-  } finally {
-    if (!processState.hasExited()) {
-      terminationRequested = processState.child.kill("SIGKILL");
-    }
-    closeResult = await waitWithDeadline(
-      processState.closed,
-      schedulerProcessCloseTimeoutMs,
-      "Emitted Jobs scheduler process did not terminate and close stdio within its fixed test deadline.",
+
+    requireSuccess(
+      docker(["kill", "--signal", "SIGTERM", schedulerProcessContainerName], {
+        timeout: 10_000,
+      }),
+      "scheduler startup signal delivery",
     );
+    const state = await waitForSchedulerProcessContainerExit();
+    assert.equal(state.Status, "exited");
+    assert.equal(
+      state.ExitCode,
+      0,
+      "the post-startup OS-signalled scheduler must exit successfully",
+    );
+    assert.equal(state.OOMKilled, false);
+    assert.equal(state.Error, "");
+    assert.equal(
+      readSchedulerProcessContainerOutput(),
+      "",
+      "the post-startup OS-signalled scheduler must remain silent through graceful exit",
+    );
+    await waitForEmittedSchedulerSessionRelease();
+  } finally {
+    try {
+      if (containerCreated || schedulerProcessContainerExists()) {
+        removeSchedulerProcessContainer(true);
+      }
+    } finally {
+      removePortableSchedulerRuntime(runtime);
+    }
   }
-  assert.equal(terminalMarkerObserved, true);
-  assert.equal(
-    terminationRequested,
-    true,
-    "the synthetic harness must terminate only its emitted scheduler child",
-  );
-  assert.equal(
-    processState.outputObserved(),
-    false,
-    "the scheduler process must remain silent through its terminal marker and stdio close",
-  );
-  assert.deepEqual(
-    closeResult,
-    { code: null, signal: "SIGKILL" },
-    "the synthetic harness must end the otherwise persistent scheduler only after its terminal marker",
-  );
 }
 
 function readLatestOpenSeasonRefreshEpochMs(label) {
@@ -2257,7 +2213,6 @@ SELECT (
       assertSuccessfulCommand(reset, "post-lifecycle omitted Jobs command");
     } else if (integrationMode === "scheduler_process") {
       await runEmittedSchedulerProcess({
-        databasePort,
         expectedSeasonStarts: schedulerSeasonStarts,
       });
     } else if (integrationMode === "scheduler_wall_clock_process") {
@@ -2582,7 +2537,7 @@ SELECT pg_catalog.jsonb_build_object(
           : integrationMode === "scheduler_lifecycle"
             ? "Jobs scheduler lifecycle PostgreSQL integration passed (active-call settlement, no later scheduler job, graceful close, and exact final state)."
             : integrationMode === "scheduler_process"
-              ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, forced test-child termination, and exact stored state)."
+              ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, OS SIGTERM, silent code-0 exit, released session, immutable runtime, and exact stored state)."
               : integrationMode === "scheduler_wall_clock_process"
                 ? "Emitted Jobs scheduler wall-clock PostgreSQL integration passed (real host-timer recurring refresh, OS SIGTERM, active-refresh settlement, silent code-0 exit, released session, immutable runtime, and exact stored state)."
                 : integrationMode === "scheduler_signal_process"

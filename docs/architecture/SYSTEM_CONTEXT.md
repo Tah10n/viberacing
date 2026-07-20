@@ -29,20 +29,20 @@ the production interval handler twice during the active real-runner cycle, prove
 recurring catalog plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A
 fourth composes the production process lifecycle, injects its first handler during the penultimate
 real database job, and proves graceful settlement plus no later scheduler job. A fifth starts the
-built scheduler entry point under the real host clock, reaches the terminal startup-catalog marker
-without process output, forcibly ends only its persistent test child, and then verifies exact state.
-A sixth runs that unchanged entry point from a link-free read-only production graph under pinned
-Linux Node, observes a native minute-timer refresh in a later real five-minute slot, delivers an OS
-`SIGTERM`, and proves refresh settlement, a newer timestamp, silent code-0 exit, session release,
-and runtime immutability. A seventh uses the same bounded runtime shape, blocks its first
-finalization call, delivers an OS `SIGTERM`, and proves graceful settlement without starting any
-later job. It now has one local host-timer recurring-refresh result and two OS-signal settlement
-results, but still no controller settlement in the separately forcibly ended startup child, deployed
-signal route or orchestrator grace, deployed application service, durable Jobs cadence, operational
-sync connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway
-deployment, live OAuth, a reusable/production database login, or production database. Component
-status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
-required runtime boundaries, not deployed evidence.
+built scheduler entry point under the real host clock from a link-free read-only production graph
+under pinned Linux Node, reaches the terminal startup-catalog marker without process output,
+delivers an OS `SIGTERM`, and proves silent code-0 exit, session release, runtime immutability, and
+exact state. A sixth runs that unchanged entry point from the same bounded runtime shape, observes a
+native minute-timer refresh in a later real five-minute slot, delivers an OS `SIGTERM`, and proves
+refresh settlement, a newer timestamp, silent code-0 exit, session release, and runtime
+immutability. A seventh uses the same bounded runtime shape, blocks its first finalization call,
+delivers an OS `SIGTERM`, and proves graceful settlement without starting any later job. It now has
+one local host-timer recurring-refresh result and three OS-signal settlement results, but still no
+deployed signal route or controller/orchestrator grace, deployed application service, durable Jobs
+cadence, operational sync connector, supported Codex version, distributed recovery perimeter,
+Cloudflare/Railway deployment, live OAuth, a reusable/production database login, or production
+database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
+diagrams describe required runtime boundaries, not deployed evidence.
 
 ## System context
 
@@ -159,15 +159,15 @@ fixed clock by one hour, invokes the production interval handler twice during th
 cycle, proves the exact recurring catalog plus overlap and same-slot suppression, and verifies the
 rearmed terminal reset. A fourth composes the production process lifecycle, injects its first
 handler during the penultimate real database job, and proves graceful active-call settlement plus no
-later scheduler job. A fifth starts the built entry point under the real host clock, reaches the
-terminal startup-catalog marker without process output, forcibly ends only its persistent test
-child, and then verifies exact state. It is not controller-settlement evidence before that forced
-termination. A sixth runs the unchanged emitted entry point from a link-free read-only graph under
-pinned Linux Node, holds the scoring mutex after startup, observes a native minute-timer refresh in
-a later real five-minute slot, delivers an OS `SIGTERM`, releases the mutex, and proves
-active-refresh settlement before silent code-0 exit. A seventh pinned-Linux gate delivers an OS
-`SIGTERM` while the first finalization call is active and proves graceful settlement without a later
-job. These are local host-timer and OS-signal results, not deployed controller/orchestrator grace or
+later scheduler job. A fifth starts the built entry point under the real host clock from a link-free
+read-only graph under pinned Linux Node, reaches the terminal startup-catalog marker without process
+output, delivers an OS `SIGTERM`, and proves silent code-0 exit, session release, runtime
+immutability, and exact state. A sixth runs the unchanged emitted entry point from the same bounded
+runtime shape, holds the scoring mutex after startup, observes a native minute-timer refresh in a
+later real five-minute slot, delivers an OS `SIGTERM`, releases the mutex, and proves active-refresh
+settlement before silent code-0 exit. A seventh pinned-Linux gate delivers an OS `SIGTERM` while the
+first finalization call is active and proves graceful settlement without a later job. These are
+local host-timer and OS-signal results, not deployed controller/orchestrator grace or
 durable-cadence evidence. ADR 0015 adds a pure local Ingest kernel that bounds the raw envelope and
 JSON parser, verifies a replay-consumed body-bound origin proof before parsing, validates the sync
 contract, and verifies the exact source-bound device request under strict Ed25519 semantics. ADR

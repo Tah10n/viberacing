@@ -109,24 +109,25 @@ verifies the rearmed terminal reset; it does not prove host-timer delivery. The 
 injects the production first-signal handler during the penultimate real database call, proves that
 active call settles and no later scheduler job starts, and requires exact graceful lifecycle cleanup
 plus code 0. It invokes the omitted reset only afterward for the shared final-state oracle and does
-not prove OS-signal delivery. The emitted-process mode starts the built scheduler entry point with
-the real host clock, reaches the terminal startup-catalog marker without process output, forcibly
-ends only its persistent test child, and then verifies exact state. It does not prove controller
-settlement before that forced termination, a wall-clock recurring process callback, or graceful
-OS-signal settlement against PostgreSQL. A separate wall-clock process mode starts the same built
-entry point from a link-free read-only production graph under pinned Linux Node without replacing
-its native clock or minute interval, waits for startup, holds the scoring mutex, and observes the
-production refresh in a later real five-minute slot. It delivers an OS `SIGTERM`, releases the
-mutex, and requires the active refresh to commit before silent code-0 exit, session release, and
-runtime fingerprint revalidation. It proves one local recurring host-timer refresh and graceful
-signal settlement, not durable cadence or a deployed controller/orchestrator policy. A separate
-signal-process mode constructs a link-free, production-only runtime from this built runner and its
-exact installed `pg` graph, mounts it read-only in the pinned Linux Node image, holds the emitted
-first finalization call, and delivers an OS `SIGTERM`. It proves that active call settles, no later
-job starts, the process exits silently with code 0, and the database session closes; the seventeen
-omitted one-shot commands run only afterward for the shared exact-state oracle. Together these modes
-still do not prove an external audit sink, deployed signal path, production TLS/credentials, durable
-cadence, monitoring, capacity, real-user retention, or deployment.
+not prove OS-signal delivery. The emitted-process mode starts the built scheduler entry point from a
+link-free read-only production graph under pinned Linux Node with the real clock, reaches the
+terminal startup-catalog marker without process output, delivers an OS `SIGTERM`, and proves silent
+code-0 exit, session release, runtime immutability, and exact state. This is local post-startup
+signal settlement, not a wall-clock recurring process callback or a deployed controller policy. A
+separate wall-clock process mode starts the same built entry point from the same bounded runtime
+shape without replacing its native clock or minute interval, waits for startup, holds the scoring
+mutex, and observes the production refresh in a later real five-minute slot. It delivers an OS
+`SIGTERM`, releases the mutex, and requires the active refresh to commit before silent code-0 exit,
+session release, and runtime fingerprint revalidation. It proves one local recurring host-timer
+refresh and graceful signal settlement, not durable cadence or a deployed controller/orchestrator
+policy. A separate signal-process mode constructs a link-free, production-only runtime from this
+built runner and its exact installed `pg` graph, mounts it read-only in the pinned Linux Node image,
+holds the emitted first finalization call, and delivers an OS `SIGTERM`. It proves that active call
+settles, no later job starts, the process exits silently with code 0, and the database session
+closes; the seventeen omitted one-shot commands run only afterward for the shared exact-state
+oracle. Together these modes still do not prove an external audit sink, deployed signal path,
+production TLS/credentials, durable cadence, monitoring, capacity, real-user retention, or
+deployment.
 
 The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
 Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package
