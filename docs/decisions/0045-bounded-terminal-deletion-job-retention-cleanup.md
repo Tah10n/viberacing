@@ -63,9 +63,9 @@ database predicates prevent cleanup from widening into pending deletion authorit
 
 Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
 execution, no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer
-execution and lifecycle settlement, real-clock emitted-process post-startup signal settlement, and
-later native-timer plus active-call OS-signal paths. Those emitted paths prove one local recurring
-callback and three local signal settlements, not deployed OS-signal routing or
+execution and lifecycle settlement, real-clock emitted-process restart and post-startup signal
+settlement, and later native-timer plus active-call OS-signal paths. Those emitted paths prove one
+local recurring callback and three local emitted signal paths, not deployed OS-signal routing or
 controller/orchestrator grace, deployed cadence, durable missed-slot recovery, monitoring, capacity
 result, production Jobs login/TLS connection, external audit sink, public cache purge, backup-expiry
 proof, disclosed tombstone policy, restore replay, or deployed retention evidence.
@@ -126,11 +126,11 @@ All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler
 runner and clock, composes its production core with the real runner and disposable PostgreSQL under
 fixed injected UTC time, and directly invokes the production interval handler for a repeated
 fixed-clock cycle and the lifecycle handler after an active runner call starts. These layers do not
-prove the later ADR 0063 evidence by themselves. Those post-startup, native-timer, and active-call
-OS-signal gates prove one local recurring callback and three local signal settlements, but the
-combined evidence still does not prove deployed signal routing or controller/orchestrator grace,
-production cadence/login/TLS, monitoring, cache or backup purge, tombstone/restore replay, capacity,
-or deployment.
+prove the later ADR 0063 evidence by themselves. Those restart/post-startup, native-timer, and
+active-call OS-signal gates prove one local recurring callback and three local emitted signal paths,
+but the combined evidence still does not prove deployed signal routing or controller/orchestrator
+grace, production cadence/login/TLS, monitoring, cache or backup purge, tombstone/restore replay,
+capacity, or deployment.
 
 ## References
 

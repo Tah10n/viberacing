@@ -401,21 +401,23 @@ no later scheduler job, exact graceful cleanup, and exit code 0, then invokes th
 separately for the shared state oracle. A fifth runs the built scheduler entry point from a
 link-free read-only production graph under pinned Linux Node with the real clock, reaches the
 terminal startup-catalog marker without process output, delivers a real `SIGTERM`, and proves silent
-code-0 exit, session release, runtime immutability, and exact stored state. A sixth runs the same
-unchanged entry point from the same bounded runtime shape, waits for startup, holds the scoring
-mutex, and observes a native minute-timer callback reach refresh in a later real five-minute slot.
-It then delivers a real `SIGTERM`, releases the mutex, and requires that refresh to commit before
-silent code-0 exit, database-session release, and runtime-fingerprint revalidation. A seventh uses
-the same bounded Linux runtime shape, holds the emitted first finalization call, delivers a real
-`SIGTERM`, and proves active-call settlement, no later job, silent code-0 exit, database-session
-release, and an unchanged runtime fingerprint. The injected timer result still does not prove
-host-timer delivery. The three emitted gates prove local post-startup, recurring-refresh, and
+code-0 exit and session release. It removes the stopped container, rearms only the two exact
+terminal rows, repeats startup and graceful signaling from the same runtime, and proves a second
+silent code-0 exit, second session release, runtime immutability, and exact stored state. A sixth
+runs the same unchanged entry point from the same bounded runtime shape, waits for startup, holds
+the scoring mutex, and observes a native minute-timer callback reach refresh in a later real
+five-minute slot. It then delivers a real `SIGTERM`, releases the mutex, and requires that refresh
+to commit before silent code-0 exit, database-session release, and runtime-fingerprint revalidation.
+A seventh uses the same bounded Linux runtime shape, holds the emitted first finalization call,
+delivers a real `SIGTERM`, and proves active-call settlement, no later job, silent code-0 exit,
+database-session release, and an unchanged runtime fingerprint. The injected timer result still does
+not prove host-timer delivery. The three emitted gates prove local restart, recurring-refresh, and
 active-finalization OS-signal settlement, including one wall-clock recurring refresh; they do not
-prove a deployed signal route or controller/orchestrator grace, restart, durable or hosted cadence,
-cross-replica coordination, production TLS/login, monitoring, capacity, or real-user retention.
-Revision 0011 gives only the Web database role a bounded active-profile score projection containing
-no raw values, private identifiers, or exact timestamps. The score response component and Web
-PostgreSQL adapter preserve only that public allowlist through the local score route. All three
+prove a deployed signal route, controller/orchestrator grace, managed restart, durable or hosted
+cadence, cross-replica coordination, production TLS/login, monitoring, capacity, or real-user
+retention. Revision 0011 gives only the Web database role a bounded active-profile score projection
+containing no raw values, private identifiers, or exact timestamps. The score response component and
+Web PostgreSQL adapter preserve only that public allowlist through the local score route. All three
 public score/race/status routes require one exact default-off module-load gate before query/header
 parsing, admission acquisition, or storage work. The visible race, leaderboard, and selectable
 participant summary consume the validated current-week response only when enabled, using a

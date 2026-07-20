@@ -1302,56 +1302,98 @@ WHERE operation = 'poll'
   );
 }
 
-async function runEmittedSchedulerProcess({ expectedSeasonStarts }) {
+function rearmEmittedSchedulerTerminalMarker() {
+  assert.equal(
+    psqlScalar(
+      `SET ROLE viberacing_owner;
+WITH updated AS (
+  UPDATE viberacing_private.pairing_request_windows
+  SET
+    window_started_at = pg_catalog.statement_timestamp() - INTERVAL '2 hours',
+    attempt_count = CASE bucket WHEN -1 THEN 21 ELSE 6 END
+  WHERE operation = 'poll'
+    AND bucket IN (-1, 5)
+  RETURNING 1
+)
+SELECT pg_catalog.count(*)::integer
+FROM updated;`,
+      "emitted scheduler restart terminal-marker rearm",
+    ),
+    "2",
+    "the restart fixture must rearm both exact terminal-marker rows",
+  );
+}
+
+async function runEmittedSchedulerStartupCycle({
+  cycleLabel,
+  expectedSeasonStarts,
+  runtimeDirectory,
+}) {
   assertSchedulerSeasonStarts(
     expectedSeasonStarts,
-    "the host clock must retain the reviewed scheduler season targets before process startup",
+    `the host clock must retain the reviewed scheduler season targets before ${cycleLabel} startup`,
   );
-  const runtime = createPortableSchedulerRuntime();
   let containerCreated = false;
+  let gracefulExitObserved = false;
   try {
-    createSchedulerProcessContainer(runtime.runtimeDirectory);
+    createSchedulerProcessContainer(runtimeDirectory);
     containerCreated = true;
     requireSuccess(
       docker(["start", schedulerProcessContainerName], { timeout: 15_000 }),
-      "scheduler startup container start",
+      `${cycleLabel} scheduler container start`,
     );
     const processState = createSchedulerProcessContainerState();
     await waitForEmittedSchedulerTerminalMarker(processState);
     assertSchedulerSeasonStarts(
       expectedSeasonStarts,
-      "the host clock must retain the reviewed scheduler season targets through process execution",
+      `the host clock must retain the reviewed scheduler season targets through ${cycleLabel} execution`,
     );
 
     requireSuccess(
       docker(["kill", "--signal", "SIGTERM", schedulerProcessContainerName], {
         timeout: 10_000,
       }),
-      "scheduler startup signal delivery",
+      `${cycleLabel} scheduler signal delivery`,
     );
     const state = await waitForSchedulerProcessContainerExit();
     assert.equal(state.Status, "exited");
     assert.equal(
       state.ExitCode,
       0,
-      "the post-startup OS-signalled scheduler must exit successfully",
+      `the ${cycleLabel} post-startup OS-signalled scheduler must exit successfully`,
     );
     assert.equal(state.OOMKilled, false);
     assert.equal(state.Error, "");
     assert.equal(
       readSchedulerProcessContainerOutput(),
       "",
-      "the post-startup OS-signalled scheduler must remain silent through graceful exit",
+      `the ${cycleLabel} post-startup OS-signalled scheduler must remain silent through graceful exit`,
     );
     await waitForEmittedSchedulerSessionRelease();
+    gracefulExitObserved = true;
   } finally {
-    try {
-      if (containerCreated || schedulerProcessContainerExists()) {
-        removeSchedulerProcessContainer(true);
-      }
-    } finally {
-      removePortableSchedulerRuntime(runtime);
+    if (containerCreated || schedulerProcessContainerExists()) {
+      removeSchedulerProcessContainer(!gracefulExitObserved);
     }
+  }
+}
+
+async function runEmittedSchedulerProcess({ expectedSeasonStarts }) {
+  const runtime = createPortableSchedulerRuntime();
+  try {
+    await runEmittedSchedulerStartupCycle({
+      cycleLabel: "initial",
+      expectedSeasonStarts,
+      runtimeDirectory: runtime.runtimeDirectory,
+    });
+    rearmEmittedSchedulerTerminalMarker();
+    await runEmittedSchedulerStartupCycle({
+      cycleLabel: "restarted",
+      expectedSeasonStarts,
+      runtimeDirectory: runtime.runtimeDirectory,
+    });
+  } finally {
+    removePortableSchedulerRuntime(runtime);
   }
 }
 
@@ -2537,7 +2579,7 @@ SELECT pg_catalog.jsonb_build_object(
           : integrationMode === "scheduler_lifecycle"
             ? "Jobs scheduler lifecycle PostgreSQL integration passed (active-call settlement, no later scheduler job, graceful close, and exact final state)."
             : integrationMode === "scheduler_process"
-              ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, OS SIGTERM, silent code-0 exit, released session, immutable runtime, and exact stored state)."
+              ? "Emitted Jobs scheduler PostgreSQL integration passed (two real-clock starts, rearmed terminal catalog marker, two OS SIGTERMs, silent code-0 exits, released sessions, immutable reused runtime, and exact stored state)."
               : integrationMode === "scheduler_wall_clock_process"
                 ? "Emitted Jobs scheduler wall-clock PostgreSQL integration passed (real host-timer recurring refresh, OS SIGTERM, active-refresh settlement, silent code-0 exit, released session, immutable runtime, and exact stored state)."
                 : integrationMode === "scheduler_signal_process"

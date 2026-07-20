@@ -72,9 +72,9 @@ workers from selecting overlapping batches.
 
 Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
 execution, no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer
-execution and lifecycle settlement, real-clock emitted-process post-startup signal settlement, and
-later native-timer plus active-call OS-signal paths. Those emitted paths prove one local recurring
-callback and three local signal settlements, not deployed OS-signal routing or
+execution and lifecycle settlement, real-clock emitted-process restart and post-startup signal
+settlement, and later native-timer plus active-call OS-signal paths. Those emitted paths prove one
+local recurring callback and three local emitted signal paths, not deployed OS-signal routing or
 controller/orchestrator grace, deployed cadence, durable missed-slot recovery, alert, capacity
 result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. ADR
 0032 now covers expired authentication challenges and restricted recovery authorities, while ADR
@@ -139,11 +139,11 @@ default-off scheduler against a fake runner and clock, composes its production c
 runner and disposable PostgreSQL under fixed injected UTC time, directly invokes the production
 interval handler for a repeated fixed-clock cycle and the lifecycle handler after an active
 real-runner call starts, and starts the built entry point under the real host clock through its
-terminal startup-catalog marker without process output. Later ADR 0063 post-startup, native-timer,
-and active-call OS-signal gates prove one local recurring callback and three local signal
-settlements, but these layers still do not prove deployed signal routing or controller/orchestrator
-grace, production retention cadence/login/TLS, capacity, monitoring, backup purge, anonymous route,
-or deployment.
+terminal startup-catalog marker without process output. Later ADR 0063 restart/post-startup,
+native-timer, and active-call OS-signal gates prove one local recurring callback and three local
+emitted signal paths, but these layers still do not prove deployed signal routing or
+controller/orchestrator grace, production retention cadence/login/TLS, capacity, monitoring, backup
+purge, anonymous route, or deployment.
 
 ## References
 

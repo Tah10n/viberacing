@@ -66,9 +66,11 @@ prove OS-signal delivery or emitted-process graceful shutdown. The separate opt-
 `pnpm run test:jobs-scheduler:process-postgres-integration` gate starts the built entry point with
 the real clock from a link-free read-only production graph under pinned Linux Node, requires
 host/database UTC-date agreement, waits for the terminal catalog marker without process output,
-delivers an OS `SIGTERM`, and requires silent code-0 exit, session release, runtime-fingerprint
-revalidation, and the same exact stored state. This is local post-startup signal settlement, not a
-deployed controller or orchestrator grace policy. The separate opt-in
+delivers an OS `SIGTERM`, and requires silent code-0 exit and session release. It removes the
+stopped container, rearms only the two exact terminal-marker rows, repeats startup and graceful
+signaling from the same runtime, and requires a second silent code-0 exit, second session release,
+runtime-fingerprint revalidation, and the same exact stored state. This is local restart and signal
+settlement, not a deployed-controller restart or orchestrator grace policy. The separate opt-in
 `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` gate starts the same built process
 from the same bounded runtime shape without replacing `Date.now()` or native `setInterval(60_000)`.
 After the startup catalog settles, an owner session holds the scoring mutex until the emitted
@@ -86,6 +88,6 @@ the emitted scheduler is observed in an exact database lock wait; the harness th
 settle without starting refresh or any later job. The process must exit silently with code 0,
 release its database session, leave the runtime fingerprint unchanged, and pass the shared exact
 state oracle after the seventeen omitted one-shot commands run separately. These are local synthetic
-Linux OS-signal results. Together the three emitted gates still prove no deployed signal route or
-controller/orchestrator grace policy, restart, production TLS/login, durable cadence, monitoring,
-capacity, deployment, or real-user retention.
+Linux OS-signal results. Together the three emitted gates still do not prove a deployed signal
+route, controller/orchestrator grace policy, managed restart, production TLS/login, durable cadence,
+monitoring, capacity, deployment, or real-user retention.

@@ -81,10 +81,10 @@ separate retention evidence. ADR 0048 separately deletes only aged unreferenced 
 and ADR 0050 separately bounds fixed pairing-rate-window reset. ADR 0063 supplies a default-off
 in-memory local catalog, sequential execution, no-overlap lifecycle, fixed-clock core composition,
 directly injected repeated-timer execution and lifecycle settlement, real-clock emitted-process
-post-startup signal settlement, one local native-timer callback, and three pinned-Linux OS-signal
-settlement paths. There is no deployed OS-signal routing or controller/orchestrator grace, deployed
-cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs login/TLS
-connection, backup purge, or deployed retention proof.
+restart and post-startup signal settlement, one local native-timer callback, and three pinned-Linux
+OS-signal settlement paths. There is no deployed OS-signal routing or controller/orchestrator grace,
+deployed cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs
+login/TLS connection, backup purge, or deployed retention proof.
 
 Affected invariants are VR-AUTH-001, VR-DEVICE-001, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -145,11 +145,11 @@ All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler
 runner and clock, proves this redaction precedes dependent session/passkey/device cleanup in a
 fixed-clock production-core/PostgreSQL cycle, and directly invokes the production interval handler
 for a repeated fixed-clock cycle and the lifecycle handler after an active runner call starts. These
-layers do not prove the later ADR 0063 evidence by themselves. Those post-startup, native-timer, and
-active-call OS-signal gates prove one local recurring callback and three local signal settlements,
-but the combined evidence still does not prove deployed signal routing or controller/orchestrator
-grace, production cadence/login/TLS, monitoring, cache or backup purge, restore replay, capacity,
-real-user retention, or deployment.
+layers do not prove the later ADR 0063 evidence by themselves. Those restart/post-startup,
+native-timer, and active-call OS-signal gates prove one local recurring callback and three local
+emitted signal paths, but the combined evidence still does not prove deployed signal routing or
+controller/orchestrator grace, production cadence/login/TLS, monitoring, cache or backup purge,
+restore replay, capacity, real-user retention, or deployment.
 
 ## References
 

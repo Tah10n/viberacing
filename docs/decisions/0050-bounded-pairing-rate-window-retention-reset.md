@@ -77,8 +77,8 @@ The self-asserted client ID remains cheap rate shaping, not authentication, a st
 identity, or a trusted network signal. The 130 rows themselves remain for the lifetime of the
 capability. ADR 0063 supplies a default-off in-memory local catalog, sequential execution,
 no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer execution and
-lifecycle settlement, real-clock emitted-process post-startup signal settlement, one local
-native-timer callback, and three pinned-Linux OS-signal settlement paths. Trusted edge limits,
+lifecycle settlement, real-clock emitted-process restart and post-startup signal settlement, one
+local native-timer callback, and three pinned-Linux OS-signal settlement paths. Trusted edge limits,
 capacity evidence, deployed OS-signal routing or controller/orchestrator grace, deployed cadence,
 durable missed-slot recovery, monitoring, production Jobs login/TLS, real-user evidence, and
 deployment remain absent. Keyed deletion tombstones, caches, backups, and restore replay still
@@ -139,9 +139,9 @@ Acceptance evidence recorded for this decision includes:
 All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
 runner and clock, exercises and rearms the reset across two fixed-clock production-core/PostgreSQL
 cycles, and directly invokes the production lifecycle handler after an active runner call starts.
-These layers do not prove the later ADR 0063 evidence by themselves. Those post-startup,
+These layers do not prove the later ADR 0063 evidence by themselves. Those restart/post-startup,
 native-timer, and active-call OS-signal gates prove one local recurring callback and three local
-signal settlements, but the combined evidence still does not prove a trusted anonymous identity,
+emitted signal paths, but the combined evidence still does not prove a trusted anonymous identity,
 edge limit, deployed signal routing or controller/orchestrator grace, production cadence/login/TLS,
 monitoring, capacity, backup or cache purge, restore replay, real-user retention, or deployment.
 

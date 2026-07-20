@@ -91,15 +91,17 @@ has exact-default-off, fixed-UTC-catalog, sequential/no-overlap, in-memory-slot,
 failure-containment, bounded-shutdown, fixed-clock production-core/PostgreSQL composition, and
 injected repeated-timer and process-lifecycle settlement evidence plus one pinned-Linux real-clock
 emitted startup path through its terminal catalog marker, OS `SIGTERM`, silent code-0 exit, session
-release, runtime immutability, and exact stored state. A separate pinned-Linux path leaves the
-native timer unchanged, holds the scoring mutex after startup, observes a refresh in a later real
-five-minute slot, delivers an OS `SIGTERM`, releases the mutex, and proves active-refresh
-settlement, a newer timestamp, silent code-0 exit, session release, and runtime immutability.
-Another pinned-Linux path holds the emitted first finalization call, delivers an OS `SIGTERM`, and
-proves graceful settlement, no later job, silent code-0 exit, and session release. The startup path
-proves local post-startup signal settlement, and the recurring path proves one local host-timer
-refresh plus active-call signal settlement. A deployed signal route or controller/orchestrator grace
-policy is not proven. The identity slice has exact-origin/body/cookie, state/PKCE, token
+release, stopped-container removal, exact marker rearm, repeated startup and graceful signaling from
+the same runtime, a second silent code-0 exit, a second released session, runtime immutability, and
+exact stored state. A separate pinned-Linux path leaves the native timer unchanged, holds the
+scoring mutex after startup, observes a refresh in a later real five-minute slot, delivers an OS
+`SIGTERM`, releases the mutex, and proves active-refresh settlement, a newer timestamp, silent
+code-0 exit, session release, and runtime immutability. Another pinned-Linux path holds the emitted
+first finalization call, delivers an OS `SIGTERM`, and proves graceful settlement, no later job,
+silent code-0 exit, and session release. The startup path proves one local restart plus two
+post-startup signal settlements, and the recurring path proves one local host-timer refresh plus
+active-call signal settlement. This does not prove a deployed signal route, controller/orchestrator
+grace policy, or managed restart. The identity slice has exact-origin/body/cookie, state/PKCE, token
 minimization, initial-registration, returning-login, session-derived passkey inventory,
 non-current-key revocation, backup-key addition, exact-handle profile-deletion request, source
 inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile PostgreSQL
@@ -388,32 +390,35 @@ and migration or rollback where applicable.
    the penultimate real-runner call before injecting its first handler, and proves that call settles
    without starting the later job. A fifth starts the built entry point under the real host clock
    from a link-free read-only graph under pinned Linux Node, reaches the terminal startup-catalog
-   marker without process output, delivers an OS `SIGTERM`, and proves silent code-0 exit, session
-   release, runtime immutability, and exact state. A sixth starts that unchanged emitted entry point
-   from the same bounded runtime shape, observes a native minute-timer refresh in a later real
-   five-minute slot, delivers an OS `SIGTERM`, releases its controlled scoring lock, and proves
-   active-refresh settlement before silent code-0 exit. A seventh uses the same bounded runtime
-   shape, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves graceful
-   settlement without starting any later job. The fifth proves local post-startup signal settlement,
-   and the sixth proves one local host-timer recurring refresh plus active-call signal settlement,
-   but none proves a deployed controller/orchestrator grace policy or signal route. Eligible expired
-   invites are removed without deleting redeemed provenance; eligible expired sessions are removed
-   only when no retained predecessor or pairing provenance requires the row; exact activated-pairing
-   approval references are redacted only after 180 days while the device binding remains; revoked
-   passkeys are removed only after 180 days and after every exact session/challenge/pairing
-   reference is absent; minimized activated pairings and their exact revoked device keys are removed
-   only after both are 180 days old and every approval, authorization-challenge, nonce, and
-   raw-snapshot reference is absent; terminal deletion jobs are removed only after 30 days; database
-   audit references are removed only after 180 days. A canonical abandoned `enrolling` profile and
-   its redeemed invite are removed only after every exact enrollment-session/registration-challenge
-   expiry is past and no other recovery, passkey, source, deletion, scoring, or recipe state exists;
-   a locked in-flight initial-passkey activation is skipped. Exact source/day values are removable
-   only 30 days after terminal finalization, after a smaller UTC-day/count projection exists and
-   repeated live/captured integrity checks pass; the public status result remains stable. Open,
-   recent, missing-projection, or drifted seasons are not cleanup-eligible. An external append-only
-   audit sink, production login/TLS and edge evidence, deployed signal routing and orchestrator
-   grace policy, durable or deployed scheduler evidence, audited correction authority, trusted-edge
-   rate policy, and capacity evidence are still required before publishing durable results.
+   marker without process output, delivers an OS `SIGTERM`, and proves silent code-0 exit plus
+   session release. It rearms only the two exact terminal-marker rows, repeats startup and graceful
+   signaling from the same runtime, and proves a second silent code-0 exit, second session release,
+   runtime immutability, and exact state. A sixth starts that unchanged emitted entry point from the
+   same bounded runtime shape, observes a native minute-timer refresh in a later real five-minute
+   slot, delivers an OS `SIGTERM`, releases its controlled scoring lock, and proves active-refresh
+   settlement before silent code-0 exit. A seventh uses the same bounded runtime shape, blocks the
+   emitted first finalization call, delivers an OS `SIGTERM`, and proves graceful settlement without
+   starting any later job. The fifth proves one local restart plus two post-startup signal
+   settlements, and the sixth proves one local host-timer recurring refresh plus active-call signal
+   settlement, but none proves a deployed controller/orchestrator grace policy, managed restart, or
+   signal route. Eligible expired invites are removed without deleting redeemed provenance; eligible
+   expired sessions are removed only when no retained predecessor or pairing provenance requires the
+   row; exact activated-pairing approval references are redacted only after 180 days while the
+   device binding remains; revoked passkeys are removed only after 180 days and after every exact
+   session/challenge/pairing reference is absent; minimized activated pairings and their exact
+   revoked device keys are removed only after both are 180 days old and every approval,
+   authorization-challenge, nonce, and raw-snapshot reference is absent; terminal deletion jobs are
+   removed only after 30 days; database audit references are removed only after 180 days. A
+   canonical abandoned `enrolling` profile and its redeemed invite are removed only after every
+   exact enrollment-session/registration-challenge expiry is past and no other recovery, passkey,
+   source, deletion, scoring, or recipe state exists; a locked in-flight initial-passkey activation
+   is skipped. Exact source/day values are removable only 30 days after terminal finalization, after
+   a smaller UTC-day/count projection exists and repeated live/captured integrity checks pass; the
+   public status result remains stable. Open, recent, missing-projection, or drifted seasons are not
+   cleanup-eligible. An external append-only audit sink, production login/TLS and edge evidence,
+   deployed signal routing and orchestrator grace policy, durable or deployed scheduler evidence,
+   audited correction authority, trusted-edge rate policy, and capacity evidence are still required
+   before publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes. The local current-snapshot drill

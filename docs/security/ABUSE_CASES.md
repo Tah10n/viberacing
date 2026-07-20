@@ -43,12 +43,13 @@ material availability cost.
   a default-off local hourly catalog, fixed-clock synthetic scheduler/PostgreSQL composition, an
   injected repeated-timer path with overlap and same-slot suppression, an injected lifecycle path
   that settles an active real-runner call without starting the later job, and one real-clock emitted
-  startup path through its terminal catalog marker. A separate pinned-Linux path leaves the native
-  timer unchanged, observes one refresh in a later real five-minute slot, delivers an OS `SIGTERM`
-  while that call is lock-waiting, and proves graceful settlement. Another pinned-Linux path
-  delivers an OS `SIGTERM` during the first finalization call. These prove local host-timer and
-  OS-signal settlement paths, not a deployed controller/orchestrator grace policy or deployed
-  cadence.
+  startup path through its terminal catalog marker. That path signals, rearms only the exact
+  terminal marker, and repeats startup plus graceful signaling from the same runtime. A separate
+  pinned-Linux path leaves the native timer unchanged, observes one refresh in a later real
+  five-minute slot, delivers an OS `SIGTERM` while that call is lock-waiting, and proves graceful
+  settlement. Another pinned-Linux path delivers an OS `SIGTERM` during the first finalization call.
+  These prove one local restart plus host-timer and OS-signal settlement paths, not a deployed
+  controller/orchestrator grace policy or deployed cadence.
 - **Residual risk:** Vibe Racing cannot prove one human per GitHub account.
 
 ### VR-ABUSE-SOURCE-DUPLICATION — Duplicate declared Codex sources
@@ -141,14 +142,16 @@ material availability cost.
   without starting the later job. A fifth starts the built entry point under real host time from a
   link-free production-only runtime mounted read-only under pinned Linux Node, reaches the terminal
   startup-catalog marker without process output, delivers an OS `SIGTERM`, and proves silent code-0
-  exit, session release, runtime immutability, and exact state. A sixth uses the same bounded
-  runtime shape, holds the scoring mutex after startup, observes refresh in a later real five-minute
-  slot, delivers an OS `SIGTERM`, releases the mutex, and proves active-refresh settlement before
-  silent code-0 exit. A seventh uses the same bounded runtime shape, blocks the emitted first
-  finalization call, delivers an OS `SIGTERM`, and proves graceful settlement without starting
-  refresh or a later job. The fifth proves local post-startup signal settlement, and the sixth
-  proves one local host-timer recurring refresh plus active-call signal settlement. A deployed
-  signal route or controller/orchestrator grace policy, correction authority, deployed scheduling,
+  exit plus session release. It rearms only the two exact terminal-marker rows, repeats startup and
+  graceful signaling from the same runtime, and proves a second silent code-0 exit, second session
+  release, runtime immutability, and exact state. A sixth uses the same bounded runtime shape, holds
+  the scoring mutex after startup, observes refresh in a later real five-minute slot, delivers an OS
+  `SIGTERM`, releases the mutex, and proves active-refresh settlement before silent code-0 exit. A
+  seventh uses the same bounded runtime shape, blocks the emitted first finalization call, delivers
+  an OS `SIGTERM`, and proves graceful settlement without starting refresh or a later job. The fifth
+  proves one local restart plus two post-startup signal settlements, and the sixth proves one local
+  host-timer recurring refresh plus active-call signal settlement. A deployed signal route,
+  controller/orchestrator grace policy, managed restart, correction authority, deployed scheduling,
   production database login/TLS, representative or deployed backlog recovery, and operational
   reconciliation remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
@@ -664,8 +667,9 @@ material availability cost.
   and full HTTP integration result. Jobs additionally has fixed-clock production scheduler-core
   composition and injected repeated-timer and process-lifecycle settlement with its disposable
   PostgreSQL boundary. One pinned-Linux real-clock emitted startup path reaches its terminal catalog
-  marker and settles through OS `SIGTERM`; a second holds an active finalization call and proves no
-  later job, and a third leaves the native timer unchanged and proves one refresh in a later real
+  marker, settles through OS `SIGTERM`, rearms only that marker, and repeats startup plus graceful
+  signaling from the same runtime; a second holds an active finalization call and proves no later
+  job, and a third leaves the native timer unchanged and proves one refresh in a later real
   five-minute slot settles through OS `SIGTERM` before silent code-0 exit. None proves a deployed
   signal route or controller/orchestrator grace policy, a deployment credential/certificate,
   external TLS/edge route, external audit sink, capacity, deployed scheduler operation, monitoring,
@@ -896,22 +900,24 @@ material availability cost.
   first handler, and proves graceful settlement without starting the later job. A fifth starts the
   built entry point under the real host clock from a link-free read-only graph under pinned Linux
   Node, reaches the terminal startup-catalog marker without process output, delivers an OS
-  `SIGTERM`, and proves silent code-0 exit, session release, runtime immutability, and exact state.
-  A sixth runs that unchanged entry point from the same bounded runtime shape, holds the scoring
-  mutex after startup, observes a native minute-timer refresh in a later real five-minute slot,
-  delivers an OS `SIGTERM`, releases the mutex, and proves active-refresh settlement before silent
-  code-0 exit. A seventh holds the emitted first finalization call inside the same bounded runtime
-  shape, delivers an OS `SIGTERM`, and proves silent graceful settlement with no later job. These
-  prove one local host-timer refresh and three local OS-signal paths, but not a deployed signal
-  route, controller/orchestrator grace, durable/deployed cadence, or production-load capacity. The
-  kernel itself has no socket/stream authority. The separate Ingest adapter adds a four-client
-  ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime recycling, exact
-  one-row origin consume, zero-or-one device lookup, and one-row submission results, with
-  destructive release on failure. The transport-free application generates request correlation
-  before verification, submits only after verification, waits for settlement, and contains
-  dependency failures without a retry loop. The local Fastify boundary caps the raw body at 8192
-  bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests per
-  socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
+  `SIGTERM`, and proves silent code-0 exit plus session release. It rearms only the two exact
+  terminal rows, repeats startup and graceful signaling from the same runtime, and proves a second
+  silent code-0 exit, second session release, runtime immutability, and exact state. A sixth runs
+  that unchanged entry point from the same bounded runtime shape, holds the scoring mutex after
+  startup, observes a native minute-timer refresh in a later real five-minute slot, delivers an OS
+  `SIGTERM`, releases the mutex, and proves active-refresh settlement before silent code-0 exit. A
+  seventh holds the emitted first finalization call inside the same bounded runtime shape, delivers
+  an OS `SIGTERM`, and proves silent graceful settlement with no later job. These prove one local
+  restart, one host-timer refresh, and three local OS-signal paths, but not a deployed signal route,
+  controller/orchestrator grace, managed restart, durable/deployed cadence, or production-load
+  capacity. The kernel itself has no socket/stream authority. The separate Ingest adapter adds a
+  four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime
+  recycling, exact one-row origin consume, zero-or-one device lookup, and one-row submission
+  results, with destructive release on failure. The transport-free application generates request
+  correlation before verification, submits only after verification, waits for settlement, and
+  contains dependency failures without a retry loop. The local Fastify boundary caps the raw body at
+  8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests
+  per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
   keep-alive, admits four unsettled application calls without a queue, holds each lease through
   settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and partial
   requests; injection tests cover overload and response policy. The separate host closes that
