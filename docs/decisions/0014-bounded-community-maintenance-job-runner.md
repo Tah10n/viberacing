@@ -209,12 +209,12 @@ The general SQL integration suite separately proves the seventeen procedure bodi
 behavior in portless ephemeral PostgreSQL. The Jobs integration proves one synthetic loopback
 Node-to-PostgreSQL application path. ADR 0063 proves the local scheduler against a fake runner and
 clock, separately composes its production core under fixed injected UTC time with this real runner
-and disposable PostgreSQL, directly injects the production lifecycle handler after an active runner
-call starts, and starts the built entry point under the real host clock through its terminal
-startup-catalog marker without process output. OS-signal delivery, emitted-child controller
-settlement before forced termination, recurring timer-callback behavior, production TLS/login,
-capacity, monitoring, real-user retention, and deployment evidence remain required before those
-behaviors may be claimed.
+and disposable PostgreSQL, directly invokes its repeated interval handler, directly injects the
+production lifecycle handler after an active runner call starts, and starts the built entry point
+under the real host clock through its terminal startup-catalog marker without process output.
+Host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
+termination, a wall-clock recurring process callback, production TLS/login, capacity, monitoring,
+real-user retention, and deployment evidence remain required before those behaviors may be claimed.
 
 ## References
 

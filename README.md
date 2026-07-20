@@ -341,14 +341,17 @@ memory, runs sequentially without overlap or same-slot retry, and stops under a 
 lifecycle. Its 94 tests and built-entrypoint check use fake time and a fake runner. A second opt-in
 integration composes the production scheduler core under a fixed injected UTC clock/timer with the
 real Jobs runner and disposable PostgreSQL, proving exact catalog order, full-state widened-login
-denial, and exact narrow-login state. A third opt-in integration starts the built scheduler entry
-process lifecycle under the fixed clock, injects its first handler during the penultimate database
-job, proves active-call settlement, no later scheduler job, exact graceful cleanup, and exit code 0,
-then invokes the omitted reset separately for the shared state oracle. A fourth starts the built
-scheduler entry point with the real host clock, reaches the terminal startup-catalog marker without
-process output, forcibly ends only its persistent test child, and then verifies exact stored state.
-The lifecycle result does not prove OS-signal delivery, and the emitted result does not prove
-controller settlement before forced termination. None proves a recurring timer callback, a durable
+denial, and exact narrow-login state. A third advances that fixed clock by one hour, invokes the
+production interval handler twice while the real-runner cycle is active, proves exact recurring
+catalog execution plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A
+fourth composes the process lifecycle under the fixed clock, injects its first handler during the
+penultimate database job, proves active-call settlement, no later scheduler job, exact graceful
+cleanup, and exit code 0, then invokes the omitted reset separately for the shared state oracle. A
+fifth starts the built scheduler entry point with the real host clock, reaches the terminal
+startup-catalog marker without process output, forcibly ends only its persistent test child, and
+then verifies exact stored state. The timer result does not prove host-timer delivery, the lifecycle
+result does not prove OS-signal delivery, and the emitted result does not prove controller
+settlement before forced termination. None proves a wall-clock recurring process callback, a durable
 or hosted cadence, cross-replica coordination, production TLS/login, monitoring, capacity, or
 real-user retention. Revision 0011 gives only the Web database role a bounded active-profile score
 projection containing no raw values, private identifiers, or exact timestamps. The score response
@@ -398,14 +401,15 @@ pnpm run test:connector:windows-portable
 pnpm run test:ingest:postgres-integration
 pnpm run test:jobs:postgres-integration
 pnpm run test:jobs-scheduler:postgres-integration
+pnpm run test:jobs-scheduler:timer-postgres-integration
 pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 pnpm run test:jobs-scheduler:process-postgres-integration
 ```
 
 The connector lifecycle command is Windows x86_64-only. It builds from the locked Cargo graph and
 tests only a temporary portable copy; it does not install, package, sign, publish, run a connector
-network command, or contact a Vibe Racing/Codex service. The final five commands are opt-in
-Docker-backed synthetic integrations; secretless CI declares all five, and they are intentionally
+network command, or contact a Vibe Racing/Codex service. The final six commands are opt-in
+Docker-backed synthetic integrations; secretless CI declares all six, and they are intentionally
 outside the deterministic offline `verify` command. The current tree has local results only; no
 hosted pass is claimed for any Jobs-scheduler integration.
 

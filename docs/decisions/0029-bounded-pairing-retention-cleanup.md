@@ -71,16 +71,17 @@ is preferable to racing a live security transition. The separate private mutex p
 workers from selecting overlapping batches.
 
 Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
-execution, no-overlap lifecycle, fixed-clock core composition, directly injected lifecycle
-settlement, and real-clock emitted-process terminal-marker evidence. There is no OS-signal delivery,
-emitted-child controller settlement before forced termination, recurring timer-callback result,
-deployed cadence, durable missed-slot recovery, alert, capacity result, production Jobs login/TLS
-connection, backup-expiry proof, or deployed retention policy. ADR 0032 now covers expired
-authentication challenges and restricted recovery authorities, while ADR 0042 now covers eligible
-expired sessions, while ADR 0045 covers terminal deletion jobs. Pairing-referenced session
-provenance, passkey provenance, and tombstones still need separate bounded cleanup or retention
-policy. Anonymous pairing start also still needs an HTTP contract, browser approval, connector
-client, distributed edge/service limits, monitoring, and real-key custody.
+execution, no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer
+execution and lifecycle settlement, and real-clock emitted-process terminal-marker evidence. There
+is no host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
+termination, wall-clock recurring process callback, deployed cadence, durable missed-slot recovery,
+alert, capacity result, production Jobs login/TLS connection, backup-expiry proof, or deployed
+retention policy. ADR 0032 now covers expired authentication challenges and restricted recovery
+authorities, while ADR 0042 now covers eligible expired sessions, while ADR 0045 covers terminal
+deletion jobs. Pairing-referenced session provenance, passkey provenance, and tombstones still need
+separate bounded cleanup or retention policy. Anonymous pairing start also still needs an HTTP
+contract, browser approval, connector client, distributed edge/service limits, monitoring, and
+real-key custody.
 
 Affected invariants are VR-DEVICE-001, VR-DATA-001, and VR-ABUSE-001. Primary attacker stories are
 VR-ABUSE-PAIRING-GUESS, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -135,11 +136,12 @@ tests use an injected pool; the shared opt-in Jobs integration additionally prov
 command through one disposable narrow login and exact stored state. ADR 0063 separately proves the
 default-off scheduler against a fake runner and clock, composes its production core with the real
 runner and disposable PostgreSQL under fixed injected UTC time, directly invokes the production
-lifecycle handler after an active real-runner call starts, and starts the built entry point under
-the real host clock through its terminal startup-catalog marker without process output. These layers
-do not prove OS-signal delivery, emitted-child controller settlement before forced termination, a
-recurring timer callback, production retention cadence/login/TLS, capacity, monitoring, backup
-purge, anonymous route, or deployment.
+interval handler for a repeated fixed-clock cycle and the lifecycle handler after an active
+real-runner call starts, and starts the built entry point under the real host clock through its
+terminal startup-catalog marker without process output. These layers do not prove host-timer
+delivery, OS-signal delivery, emitted-child controller settlement before forced termination, a
+wall-clock recurring process callback, production retention cadence/login/TLS, capacity, monitoring,
+backup purge, anonymous route, or deployment.
 
 ## References
 

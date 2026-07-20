@@ -59,12 +59,15 @@ trusted external TLS/edge path, supported connector adapter, or deployment. A bo
 Jobs process now wraps only cleanup/refresh/finalization. A separate default-off local scheduler
 invokes only that runner from fixed UTC process slots. An opt-in synthetic gate composes its
 production core under fixed injected UTC time with the real Jobs runner and disposable PostgreSQL. A
-second composes the production process lifecycle, injects its first handler during the penultimate
-real database job, and proves graceful active-call settlement plus no later scheduler job. A third
-starts the built entry point under the real host clock, reaches the terminal startup-catalog marker
-without process output, then forcibly ends only its persistent test child. There is no OS-signal
-delivery, emitted-child controller settlement before forced termination, recurring timer-callback
-result, production login, deployed cadence, monitor, or deployment. A bounded server-only Web
+second advances the fixed clock by one hour, invokes the production interval handler twice during
+the active real-runner cycle, proves the exact recurring catalog plus overlap and same-slot
+suppression, and verifies the rearmed terminal reset. A third composes the production process
+lifecycle, injects its first handler during the penultimate real database job, and proves graceful
+active-call settlement plus no later scheduler job. A fourth starts the built entry point under the
+real host clock, reaches the terminal startup-catalog marker without process output, then forcibly
+ends only its persistent test child. There is no host-timer delivery, OS-signal delivery,
+emitted-child controller settlement before forced termination, wall-clock recurring process
+callback, production login, deployed cadence, monitor, or deployment. A bounded server-only Web
 PostgreSQL adapter and local public-score GET are implemented and unit/build-tested, but this
 repository supplies no working deployment login or TLS certificate. A successful setup proves
 repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
@@ -340,6 +343,7 @@ pnpm run build:jobs
 pnpm run build:jobs-scheduler
 pnpm run check:jobs-scheduler-entrypoint
 pnpm run test:jobs-scheduler:postgres-integration
+pnpm run test:jobs-scheduler:timer-postgres-integration
 pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 pnpm run test:jobs-scheduler:process-postgres-integration
 ```
@@ -347,15 +351,19 @@ pnpm run test:jobs-scheduler:process-postgres-integration
 The first PostgreSQL command is a separate opt-in Docker gate. It builds the production scheduler
 core and Jobs runner, injects one fixed UTC clock/timer, runs the exact ordered seventeen-job
 catalog against one disposable PostgreSQL database, fingerprints every private table around a
-widened-login denial, and checks exact narrow-login stored state. The second injects the production
-first-signal handler during the penultimate real database job, proves active-call settlement and no
-later scheduler job, and requires exact graceful cleanup plus code 0 before invoking the omitted
-reset separately. The third starts the built scheduler entry point under the real host clock,
-requires host/database UTC-date agreement, waits for the terminal startup-catalog marker without
-process output, forcibly ends only its persistent test child, and then verifies the same exact
-state. It does not prove controller settlement before that forced termination. The lifecycle mode
-does not prove OS-signal delivery. None proves a recurring timer callback, durable/deployed cadence,
-production credentials/TLS, monitoring, capacity, or real-user retention.
+widened-login denial, and checks exact narrow-login stored state. The second advances the fixed
+clock by one hour, invokes the production interval handler twice during the active real-runner
+cycle, proves the exact recurring catalog plus overlap and same-slot suppression, and verifies the
+rearmed terminal reset. The third injects the production first-signal handler during the penultimate
+real database job, proves active-call settlement and no later scheduler job, and requires exact
+graceful cleanup plus code 0 before invoking the omitted reset separately. The fourth starts the
+built scheduler entry point under the real host clock, requires host/database UTC-date agreement,
+waits for the terminal startup-catalog marker without process output, forcibly ends only its
+persistent test child, and then verifies the same exact state. It does not prove controller
+settlement before that forced termination. The timer mode does not prove host-timer delivery, and
+the lifecycle mode does not prove OS-signal delivery. None proves a wall-clock recurring process
+callback, durable/deployed cadence, production credentials/TLS, monitoring, capacity, or real-user
+retention.
 
 The emitted process accepts no arguments and remains disabled unless the runtime supplies exact
 `VIBERACING_JOBS_SCHEDULER_ENABLED=true`. That latch is read before the Jobs runner or any database

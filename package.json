@@ -83,6 +83,7 @@
     "test:jobs-scheduler:lifecycle-postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler-lifecycle",
     "test:jobs-scheduler:process-postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler-process",
     "test:jobs-scheduler:postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler",
+    "test:jobs-scheduler:timer-postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler-timer",
     "test:publication-check": "node scripts/test-publication-check.mjs",
     "test:png-content-policy": "node scripts/test-png-content-policy.mjs",
     "test:public-check": "node scripts/test-public-file-check.mjs",

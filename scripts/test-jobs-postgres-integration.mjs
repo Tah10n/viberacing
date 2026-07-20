@@ -34,10 +34,12 @@ const defaultFinalizedSeasonStart = "2000-01-03";
 const schedulerArgument = "--scheduler";
 const schedulerLifecycleArgument = "--scheduler-lifecycle";
 const schedulerProcessArgument = "--scheduler-process";
+const schedulerTimerArgument = "--scheduler-timer";
 const schedulerCycleTimeoutMs = 120_000;
 const schedulerProcessCloseTimeoutMs = 10_000;
 const schedulerProcessPollIntervalMs = 250;
-const oneDayMs = 24 * 60 * 60 * 1_000;
+const oneHourMs = 60 * 60 * 1_000;
+const oneDayMs = 24 * oneHourMs;
 
 function readIntegrationMode() {
   if (process.argv.length === 2) {
@@ -51,6 +53,9 @@ function readIntegrationMode() {
   }
   if (process.argv.length === 3 && process.argv[2] === schedulerProcessArgument) {
     return "scheduler_process";
+  }
+  if (process.argv.length === 3 && process.argv[2] === schedulerTimerArgument) {
+    return "scheduler_timer";
   }
   throw new Error("Jobs PostgreSQL integration arguments failed closed.");
 }
@@ -513,6 +518,200 @@ async function waitWithDeadline(promise, milliseconds, message) {
   } finally {
     clearTimeout(timeoutToken);
   }
+}
+
+async function runSchedulerTimerCycle({ databasePort, expectedJobs, modules, nowEpochMs }) {
+  assert.equal(expectedJobs.length, 17, "the timer integration requires the closed catalog");
+  const recurringExpectedJobs = Object.freeze(expectedJobs.slice(1));
+  assert.equal(recurringExpectedJobs.length, 16, "the repeated hour must omit daily finalization");
+  const nextHourEpochMs = (Math.floor(nowEpochMs / oneHourMs) + 1) * oneHourMs;
+  assert.equal(
+    new Date(nextHourEpochMs).toISOString().slice(0, 10),
+    new Date(nowEpochMs).toISOString().slice(0, 10),
+    "the repeated timer callback must stay on the fixed UTC day",
+  );
+
+  const configuredRunner = modules.jobs.createConfiguredCommunityMaintenanceRunner(
+    jobsEnvironment(databasePort, jobsLogin, jobsPassword),
+  );
+  const attemptedJobs = [];
+  const outcomes = [];
+  const schedulerSignals = [];
+  const dueCalls = [];
+  const intervalHandlers = [];
+  const intervalToken = Object.freeze({ schedulerTimerIntegration: true });
+  let currentNowEpochMs = nowEpochMs;
+  let clearedIntervals = 0;
+  let runnerCloses = 0;
+  let resolveInitialCycle;
+  let resolveRecurringCycle;
+  let resolveSameSlotCycle;
+  const initialCycleSettled = new Promise((resolve) => {
+    resolveInitialCycle = resolve;
+  });
+  const recurringCycleSettled = new Promise((resolve) => {
+    resolveRecurringCycle = resolve;
+  });
+  const sameSlotCycleObserved = new Promise((resolve) => {
+    resolveSameSlotCycle = resolve;
+  });
+  const productionSchedule = modules.scheduler.createMaintenanceSchedule();
+  const schedule = Object.freeze({
+    due: (clock) => {
+      const jobs = productionSchedule.due(clock);
+      dueCalls.push(Object.freeze({ clock, jobs }));
+      if (dueCalls.length === 3) {
+        resolveSameSlotCycle();
+      }
+      return jobs;
+    },
+  });
+  const runner = Object.freeze({
+    close: async () => {
+      runnerCloses += 1;
+      await configuredRunner.close();
+    },
+    execute: async (job) => {
+      attemptedJobs.push(job);
+      try {
+        const result = await configuredRunner.execute(job);
+        outcomes.push("completed");
+        return result;
+      } catch (error) {
+        outcomes.push("rejected");
+        throw error;
+      } finally {
+        if (outcomes.length === expectedJobs.length) {
+          resolveInitialCycle();
+        }
+        if (outcomes.length === expectedJobs.length + recurringExpectedJobs.length) {
+          resolveRecurringCycle();
+        }
+      }
+    },
+  });
+  const controller = await modules.scheduler.startJobsScheduler(
+    Object.freeze({ enabled: true, pollIntervalMs: 60_000 }),
+    Object.freeze({
+      clearInterval: (token) => {
+        assert.equal(token, intervalToken, "the timer integration must clear its exact interval");
+        clearedIntervals += 1;
+      },
+      createRunner: () => runner,
+      createSchedule: () => schedule,
+      now: () => currentNowEpochMs,
+      setInterval: (handler, milliseconds) => {
+        assert.equal(
+          milliseconds,
+          60_000,
+          "the repeated scheduler must retain its fixed poll slot",
+        );
+        assert.equal(typeof handler, "function");
+        assert.equal(
+          intervalHandlers.length,
+          0,
+          "the scheduler must register one interval handler",
+        );
+        intervalHandlers.push(handler);
+        return intervalToken;
+      },
+      signalSink: (signal) => {
+        schedulerSignals.push(signal);
+      },
+    }),
+  );
+
+  try {
+    await waitWithDeadline(
+      initialCycleSettled,
+      schedulerCycleTimeoutMs,
+      "Jobs scheduler initial timer cycle exceeded its fixed deadline.",
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(attemptedJobs, expectedJobs);
+    assert.deepEqual(
+      outcomes,
+      expectedJobs.map(() => "completed"),
+      "the initial timer cycle must settle every reviewed job",
+    );
+    assert.deepEqual(dueCalls, [Object.freeze({ clock: nowEpochMs, jobs: expectedJobs })]);
+    assert.equal(intervalHandlers.length, 1);
+
+    assert.equal(
+      psqlScalar(
+        `SET ROLE viberacing_owner;
+WITH updated AS (
+  UPDATE viberacing_private.pairing_request_windows
+  SET
+    window_started_at = pg_catalog.statement_timestamp() - INTERVAL '2 hours',
+    attempt_count = CASE bucket WHEN -1 THEN 21 ELSE 6 END
+  WHERE operation = 'poll'
+    AND bucket IN (-1, 5)
+  RETURNING 1
+)
+SELECT pg_catalog.count(*)::integer
+FROM updated;`,
+        "recurring scheduler rate-window rearm",
+      ),
+      "2",
+      "the recurring cycle fixture must rearm both exact pairing windows",
+    );
+
+    currentNowEpochMs = nextHourEpochMs;
+    intervalHandlers[0]();
+    intervalHandlers[0]();
+    await waitWithDeadline(
+      recurringCycleSettled,
+      schedulerCycleTimeoutMs,
+      "Jobs scheduler recurring timer cycle exceeded its fixed deadline.",
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(dueCalls.length, 2, "an overlapping timer callback must be ignored");
+    assert.deepEqual(attemptedJobs, [...expectedJobs, ...recurringExpectedJobs]);
+    assert.deepEqual(
+      outcomes,
+      [...expectedJobs, ...recurringExpectedJobs].map(() => "completed"),
+      "both admitted timer cycles must settle every exact job",
+    );
+
+    intervalHandlers[0]();
+    await waitWithDeadline(
+      sameSlotCycleObserved,
+      schedulerCycleTimeoutMs,
+      "Jobs scheduler same-slot timer cycle was not observed.",
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(dueCalls, [
+      Object.freeze({ clock: nowEpochMs, jobs: expectedJobs }),
+      Object.freeze({ clock: nextHourEpochMs, jobs: recurringExpectedJobs }),
+      Object.freeze({ clock: nextHourEpochMs, jobs: Object.freeze([]) }),
+    ]);
+    assert.deepEqual(
+      attemptedJobs,
+      [...expectedJobs, ...recurringExpectedJobs],
+      "the repeated fixed slot must not retry any database job",
+    );
+    assert.equal(
+      psqlScalar(
+        `SET ROLE viberacing_owner;
+SELECT pg_catalog.count(*)::integer
+FROM viberacing_private.pairing_request_windows
+WHERE operation = 'poll'
+  AND bucket IN (-1, 5)
+  AND attempt_count = 0
+  AND window_started_at = TIMESTAMPTZ '1970-01-01 00:00:00+00';`,
+        "recurring scheduler reset marker",
+      ),
+      "2",
+      "the admitted recurring timer cycle must persist its terminal reset",
+    );
+    assert.deepEqual(schedulerSignals, [], "both timer cycles must emit no failure signal");
+  } finally {
+    await controller.close();
+  }
+
+  assert.equal(clearedIntervals, 1, "the repeated scheduler must clear one interval on close");
+  assert.equal(runnerCloses, 1, "the repeated scheduler must close the real runner exactly once");
 }
 
 async function runSchedulerLifecycle({ databasePort, expectedJobs, modules, nowEpochMs }) {
@@ -1346,7 +1545,9 @@ COMMIT;`,
     let schedulerNowEpochMs;
     let schedulerSeasonStarts;
     const usesFixedClockScheduler =
-      integrationMode === "scheduler" || integrationMode === "scheduler_lifecycle";
+      integrationMode === "scheduler" ||
+      integrationMode === "scheduler_lifecycle" ||
+      integrationMode === "scheduler_timer";
     if (usesFixedClockScheduler) {
       const databaseDate = psqlScalar(
         "SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text;",
@@ -1456,6 +1657,13 @@ SELECT (
         modules: schedulerModules,
         nowEpochMs: schedulerNowEpochMs,
         password: jobsPassword,
+      });
+    } else if (integrationMode === "scheduler_timer") {
+      await runSchedulerTimerCycle({
+        databasePort,
+        expectedJobs: schedulerExpectedJobs,
+        modules: schedulerModules,
+        nowEpochMs: schedulerNowEpochMs,
       });
     } else if (integrationMode === "scheduler_lifecycle") {
       await runSchedulerLifecycle({
@@ -1735,11 +1943,13 @@ SELECT pg_catalog.jsonb_build_object(
     const successMessage =
       integrationMode === "scheduler"
         ? "Jobs scheduler PostgreSQL integration passed (exact catalog, full-state least-privilege denial, and exact stored state)."
-        : integrationMode === "scheduler_lifecycle"
-          ? "Jobs scheduler lifecycle PostgreSQL integration passed (active-call settlement, no later scheduler job, graceful close, and exact final state)."
-          : integrationMode === "scheduler_process"
-            ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, forced test-child termination, and exact stored state)."
-            : "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).";
+        : integrationMode === "scheduler_timer"
+          ? "Jobs scheduler timer PostgreSQL integration passed (exact recurring catalog, overlap suppression, same-slot suppression, and exact final state)."
+          : integrationMode === "scheduler_lifecycle"
+            ? "Jobs scheduler lifecycle PostgreSQL integration passed (active-call settlement, no later scheduler job, graceful close, and exact final state)."
+            : integrationMode === "scheduler_process"
+              ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, forced test-child termination, and exact stored state)."
+              : "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).";
     console.log(successMessage);
   } catch (error) {
     primaryFailure = error;

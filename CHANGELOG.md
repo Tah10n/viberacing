@@ -20,10 +20,13 @@ Versioning where its guarantees are applicable.
   widened-login denial, and exact narrow-login effects. A third opt-in integration starts the built
   scheduler entry point with the real host clock, reaches the terminal startup-catalog marker
   without process output, forcibly ends only its persistent test child, and then verifies exact
-  stored state. A separate process-lifecycle integration injects its first signal during the
-  penultimate database job, proves active-call settlement, no later scheduler job, exact graceful
-  cleanup, and exit code 0, then invokes the omitted reset separately for the shared state oracle.
-  No OS-signal delivery, emitted-process graceful exit, recurring timer callback, deployed
+  stored state. A separate timer integration advances the fixed clock by one hour, invokes the
+  production interval handler twice during the active real-runner cycle, proves the exact recurring
+  catalog plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A
+  separate process-lifecycle integration injects its first signal during the penultimate database
+  job, proves active-call settlement, no later scheduler job, exact graceful cleanup, and exit code
+  0, then invokes the omitted reset separately for the shared state oracle. No host-timer delivery,
+  OS-signal delivery, emitted-process graceful exit, wall-clock recurring process callback, deployed
   replica/cadence, production credential/TLS, monitoring, capacity, or real-user retention is
   claimed.
 - Public-safe repository baseline, implementation plan, security invariants, and contribution

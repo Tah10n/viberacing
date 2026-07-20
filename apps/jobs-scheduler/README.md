@@ -53,7 +53,11 @@ scheduler core with a fixed injected UTC clock/timer, the real Jobs runner, and 
 PostgreSQL database. It proves the exact ordered catalog, full private-table non-mutation for a
 deliberately widened login, and exact stored state for the narrow login. It does not execute the
 emitted scheduler process. The separate opt-in
-`pnpm run test:jobs-scheduler:lifecycle-postgres-integration` gate injects the production
+`pnpm run test:jobs-scheduler:timer-postgres-integration` gate advances the injected clock by one
+UTC hour, invokes the production interval handler twice during the active real-runner cycle, proves
+the exact recurring catalog plus overlap and same-slot suppression, and verifies the rearmed
+terminal reset. It does not prove host-timer delivery or an emitted recurring callback. The separate
+opt-in `pnpm run test:jobs-scheduler:lifecycle-postgres-integration` gate injects the production
 first-signal handler during the penultimate database job, requires that active call to settle,
 proves the later scheduler reset does not start, and requires exact graceful lifecycle cleanup and
 exit code 0. It invokes the omitted reset only afterward before the shared state oracle; it does not
@@ -62,5 +66,5 @@ prove OS-signal delivery or emitted-process graceful shutdown. The separate opt-
 the real host clock, requires host/database UTC-date agreement, waits for the terminal catalog
 marker without process output, forcibly ends only its otherwise persistent test child, and then
 verifies the same exact stored state. It does not prove controller settlement before that forced
-termination. None proves a recurring timer callback, OS-signal lifecycle delivery, production
-TLS/login, durable cadence, monitoring, capacity, deployment, or real-user retention.
+termination. None proves a wall-clock recurring process callback, OS-signal lifecycle delivery,
+production TLS/login, durable cadence, monitoring, capacity, deployment, or real-user retention.

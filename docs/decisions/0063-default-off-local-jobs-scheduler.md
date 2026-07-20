@@ -176,6 +176,10 @@ Local evidence includes:
   one fixed UTC clock/timer, executes the exact ordered seventeen-job catalog against one disposable
   PostgreSQL database, fingerprints every private table before and after a widened-login denial, and
   verifies exact stored state through the narrow login;
+- a separate opt-in timer integration that advances the fixed clock by one hour, invokes the
+  production interval handler twice during the active real-runner cycle, proves the exact recurring
+  sixteen-job catalog plus overlap and same-slot suppression, and verifies the rearmed terminal
+  pairing-rate-window reset;
 - a separate opt-in lifecycle integration that composes the production process state machine with
   that fixed-clock core and real runner, starts the penultimate real-runner call before injecting
   its first handler, proves that active call settles and the later scheduler job does not start, and
@@ -185,17 +189,18 @@ Local evidence includes:
   and narrow-login configuration, requires real host/disposable-database UTC-date agreement, waits
   for the terminal reset marker, requires no process output, forcibly ends only its otherwise
   persistent test child, and then verifies the same exact stored state. Secretless CI declares all
-  three scheduler commands, but this tree claims only the observed local passes.
+  four scheduler commands, but this tree claims only the observed local passes.
 
-The fixed-clock and lifecycle integrations invoke production components in-process; the lifecycle
+The fixed-clock, timer, and lifecycle integrations invoke production components in-process. The
+timer handler is called directly and therefore does not exercise host-timer delivery; the lifecycle
 signal handler is called directly and therefore does not exercise OS-signal delivery. The
 emitted-process integration observes only the immediate startup catalog through its terminal
 database marker and deliberately uses `SIGKILL` because Windows cannot deliver this child a
 catchable POSIX shutdown signal. It does not prove controller settlement before forced termination.
-None exercises a recurring timer callback or an OS-delivered graceful process signal against
-PostgreSQL. None proves that a production clock remains stable, a deployment has one replica,
-durable cadence is maintained, missed historical seasons are recovered, production TLS/credentials
-work, or a real-user retention/deletion deadline is met.
+None exercises a wall-clock recurring process callback or an OS-delivered graceful process signal
+against PostgreSQL. None proves that a production clock remains stable, a deployment has one
+replica, durable cadence is maintained, missed historical seasons are recovered, production
+TLS/credentials work, or a real-user retention/deletion deadline is met.
 
 ## References
 

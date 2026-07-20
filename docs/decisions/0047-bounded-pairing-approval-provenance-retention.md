@@ -80,10 +80,11 @@ referenced passkeys and device keys, tombstones, caches, backups, and restore re
 separate retention evidence. ADR 0048 separately deletes only aged unreferenced revoked passkeys,
 and ADR 0050 separately bounds fixed pairing-rate-window reset. ADR 0063 supplies only a default-off
 in-memory local catalog, sequential execution, no-overlap lifecycle, fixed-clock core composition,
-directly injected lifecycle settlement, and real-clock emitted-process terminal-marker evidence.
-There is no OS-signal delivery, emitted-child controller settlement before forced termination,
-recurring timer-callback result, deployed cadence, durable missed-slot recovery, monitoring,
-capacity result, production Jobs login/TLS connection, backup purge, or deployed retention proof.
+directly injected repeated-timer execution and lifecycle settlement, and real-clock emitted-process
+terminal-marker evidence. There is no host-timer delivery, OS-signal delivery, emitted-child
+controller settlement before forced termination, wall-clock recurring process callback, deployed
+cadence, durable missed-slot recovery, monitoring, capacity result, production Jobs login/TLS
+connection, backup purge, or deployed retention proof.
 
 Affected invariants are VR-AUTH-001, VR-DEVICE-001, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -142,11 +143,11 @@ Acceptance evidence recorded for this decision includes:
 
 All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
 runner and clock, proves this redaction precedes dependent session/passkey/device cleanup in a
-fixed-clock production-core/PostgreSQL cycle, and directly invokes the production lifecycle handler
-after an active runner call starts. These layers do not prove OS-signal delivery, emitted-child
-controller settlement before forced termination, recurring timer-callback behavior, production
-cadence/login/TLS, monitoring, cache or backup purge, restore replay, capacity, real-user retention,
-or deployment.
+fixed-clock production-core/PostgreSQL cycle, and directly invokes the production interval handler
+for a repeated fixed-clock cycle and the lifecycle handler after an active runner call starts. These
+layers do not prove host-timer delivery, OS-signal delivery, emitted-child controller settlement
+before forced termination, wall-clock recurring process behavior, production cadence/login/TLS,
+monitoring, cache or backup purge, restore replay, capacity, real-user retention, or deployment.
 
 ## References
 

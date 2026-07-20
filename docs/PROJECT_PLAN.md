@@ -267,14 +267,17 @@ flowchart LR
   retry, and bounds signal shutdown. An opt-in synthetic integration now composes that production
   scheduler core under a fixed injected UTC clock/timer with the real Jobs runner and disposable
   PostgreSQL, proving exact catalog order, full-state widened-login denial, and exact narrow-login
-  effects. A separate lifecycle integration starts the penultimate real-runner call before injecting
-  its first handler, proves active-call settlement and no later scheduler job, and requires exact
-  graceful cleanup and exit code 0 before invoking the omitted reset separately. A third opt-in
-  integration starts the built entry point under the real host clock, reaches the terminal
-  startup-catalog marker without process output, forcibly ends only its persistent test child, and
-  then verifies exact stored state. OS-signal delivery, controller settlement in that emitted child
-  before forced termination, an external audit sink, recurring timer-callback results, durable or
-  deployed cadence, historical backlog, monitoring, production credentials/TLS, capacity,
+  effects. A separate timer integration advances the fixed clock by one hour, invokes the production
+  interval handler twice during the active real-runner cycle, proves the exact recurring catalog
+  plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A third lifecycle
+  integration starts the penultimate real-runner call before injecting its first handler, proves
+  active-call settlement and no later scheduler job, and requires exact graceful cleanup and exit
+  code 0 before invoking the omitted reset separately. A fourth integration starts the built entry
+  point under the real host clock, reaches the terminal startup-catalog marker without process
+  output, forcibly ends only its persistent test child, and then verifies exact stored state.
+  Host-timer delivery, OS-signal delivery, controller settlement in that emitted child before forced
+  termination, an external audit sink, a wall-clock recurring process callback, durable or deployed
+  cadence, historical backlog, monitoring, production credentials/TLS, capacity,
   cache/backup/tombstone purge, restore replay, and deployment remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
@@ -1161,12 +1164,15 @@ measurements exist.
   only after terminal finalization plus 30 days while preserving rounded freshness. A separate
   default-off local scheduler now invokes the fixed maintenance catalog sequentially from UTC
   process slots, and one opt-in synthetic integration composes its production core with the real
-  Jobs runner and disposable PostgreSQL under fixed injected time. A second composes the production
-  process lifecycle under fixed time, injects its first handler during an active real database job,
-  and proves graceful settlement plus no later scheduler job. A third starts the built entry point
-  under real host time, reaches the terminal startup-catalog marker without process output, and then
-  forcibly ends only the test child. OS-signal delivery, emitted-child controller settlement before
-  forced termination, recurring timer-callback behavior, durable/deployed cadence, historical
+  Jobs runner and disposable PostgreSQL under fixed injected time. A second advances the fixed clock
+  by one hour, invokes the production interval handler twice during the active real-runner cycle,
+  proves the exact recurring catalog plus overlap and same-slot suppression, and verifies the
+  rearmed terminal reset. A third composes the production process lifecycle under fixed time,
+  injects its first handler during an active real database job, and proves graceful settlement plus
+  no later scheduler job. A fourth starts the built entry point under real host time, reaches the
+  terminal startup-catalog marker without process output, and then forcibly ends only the test
+  child. Host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
+  termination, a wall-clock recurring process callback, durable/deployed cadence, historical
   backlog, capacity, notification, correction, backup purge, and deployed retention evidence remain
   open.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local

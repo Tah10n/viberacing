@@ -66,6 +66,9 @@ jobs:
       - name: Exercise the fixed-clock Jobs scheduler-to-PostgreSQL path
         run: pnpm run test:jobs-scheduler:postgres-integration
 
+      - name: Exercise the repeated Jobs scheduler timer-to-PostgreSQL path
+        run: pnpm run test:jobs-scheduler:timer-postgres-integration
+
       - name: Exercise the injected Jobs scheduler lifecycle-to-PostgreSQL path
         run: pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 

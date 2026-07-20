@@ -49,17 +49,20 @@ that closed runner sequentially without overlap or same-slot retry, retains slot
 memory, and bounds first-signal shutdown. An opt-in synthetic integration composes the production
 scheduler core under a fixed injected UTC clock/timer with the real Jobs runner and disposable
 PostgreSQL, proving exact catalog order, full private-table non-mutation for a widened login, and
-exact narrow-login stored state. A second opt-in integration composes the production process
-lifecycle under that fixed clock, injects its first handler during the penultimate database job,
-proves the active call settles and no later scheduler job starts, and requires exact graceful
-interval/deadline/handler/runner cleanup plus exit code 0; only afterward does the harness invoke
-the omitted reset for the shared exact-state oracle. A third starts the built scheduler entry point
-under the real host clock, requires host/database UTC-date agreement, reaches the terminal
-startup-catalog marker without process output, forcibly ends only its persistent test child, and
-then verifies the same exact state. The lifecycle result does not prove OS-signal delivery, and the
-emitted result does not prove controller settlement before forced termination. None proves a
-recurring timer callback or deployed cadence. A local Ingest kernel now bounds and authenticates the
-exact Community sync envelope, consumes an injected origin nonce, parses bounded JSON, validates the
+exact narrow-login stored state. A second advances that fixed clock by one hour, invokes the
+production interval handler twice during the active real-runner cycle, proves exact recurring
+catalog execution plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A
+third composes the production process lifecycle under that fixed clock, injects its first handler
+during the penultimate database job, proves the active call settles and no later scheduler job
+starts, and requires exact graceful interval/deadline/handler/runner cleanup plus exit code 0; only
+afterward does the harness invoke the omitted reset for the shared exact-state oracle. A fourth
+starts the built scheduler entry point under the real host clock, requires host/database UTC-date
+agreement, reaches the terminal startup-catalog marker without process output, forcibly ends only
+its persistent test child, and then verifies the same exact state. The timer result does not prove
+host-timer delivery, the lifecycle result does not prove OS-signal delivery, and the emitted result
+does not prove controller settlement before forced termination. None proves a wall-clock recurring
+process callback or deployed cadence. A local Ingest kernel now bounds and authenticates the exact
+Community sync envelope, consumes an injected origin nonce, parses bounded JSON, validates the
 generated contract, and strictly verifies the source-bound device request. A separate bounded Ingest
 PostgreSQL adapter revalidates that output and exposes only atomic origin-nonce consumption, device
 lookup, and submission through a probed least-privileged pool. A protected local reader supplies one
@@ -1029,17 +1032,20 @@ ranking, or deployed Jobs scheduler/cadence exists.
   the production scheduler core and Jobs runner, injects one fixed UTC clock/timer, executes the
   exact ordered seventeen-job catalog against disposable PostgreSQL, fingerprints every private
   table around a widened-login denial, and verifies exact narrow-login stored state. A separate
-  opt-in lifecycle integration injects its first handler during the penultimate real database job,
-  requires active-call settlement, proves no later scheduler job, and observes exact graceful
-  cleanup and exit code 0 before invoking the omitted reset separately for the shared state oracle.
-  A third opt-in integration starts the built entry point with exact configuration and the real host
-  clock, requires host/database UTC-date agreement, waits for the terminal reset marker, requires no
-  process output, forcibly ends only its persistent test child, and then verifies the same exact
-  state. These checks do not prove OS-signal delivery, emitted-child controller settlement before
-  forced termination, a recurring timer callback, historical backlog, a stable production clock, a
-  replica lease, durable/deployed cadence, production login/TLS, monitoring, capacity, or real-user
-  retention. Secretless CI declares all three scheduler commands, but no hosted pass is claimed from
-  this local tree.
+  timer integration advances the fixed clock by one hour, invokes the production interval handler
+  twice during the active real-runner cycle, proves the exact recurring catalog plus overlap and
+  same-slot suppression, and verifies the rearmed terminal reset. A third lifecycle integration
+  injects its first handler during the penultimate real database job, requires active-call
+  settlement, proves no later scheduler job, and observes exact graceful cleanup and exit code 0
+  before invoking the omitted reset separately for the shared state oracle. A fourth integration
+  starts the built entry point with exact configuration and the real host clock, requires
+  host/database UTC-date agreement, waits for the terminal reset marker, requires no process output,
+  forcibly ends only its persistent test child, and then verifies the same exact state. These checks
+  do not prove host-timer delivery, OS-signal delivery, emitted-child controller settlement before
+  forced termination, a wall-clock recurring process callback, historical backlog, a stable
+  production clock, a replica lease, durable/deployed cadence, production login/TLS, monitoring,
+  capacity, or real-user retention. Secretless CI declares all four scheduler commands, but no
+  hosted pass is claimed from this local tree.
 - Forty-four deterministic lock-wait races hold a relevant invite, challenge, session, source,
   device, pairing, or profile row, or a season advisory lock; tag every session; and observe every
   contender in the holder's transitive PostgreSQL blocker chain before releasing it. Protective
@@ -1197,16 +1203,19 @@ loopback-published container, network, and storage. A second run built the produ
 and Jobs runner, injected one fixed UTC clock/timer, attempted the exact ordered seventeen-job
 catalog through a deliberately widened login, proved every private-table fingerprint stayed
 unchanged, then ran the catalog through the narrow login and verified the same exact stored-state
-oracle. A third run composed the production process lifecycle under the fixed clock, started the
-penultimate real-runner call before injecting the first signal handler, proved active-call
-settlement and no later scheduler job, observed exact graceful cleanup plus exit code 0, then
-invoked only the omitted reset before the shared state oracle. A fourth run started the built
-scheduler entry point under the real host clock, required host/database UTC-date agreement, observed
-no process output, waited for the terminal catalog marker, forcibly ended only its otherwise
-persistent test child, and then verified the same exact state. This is local synthetic application
-evidence, not OS-signal delivery, emitted-child controller settlement before forced termination, a
-recurring timer-callback, production credential/TLS result, capacity result, real-user purge,
-monitoring backend, durable cadence, or deployment.
+oracle. A third run advanced the fixed clock by one hour, invoked the production interval handler
+twice during the active real-runner cycle, observed the exact recurring catalog once, proved the
+same slot produced no jobs, and verified the rearmed terminal reset. A fourth run composed the
+production process lifecycle under the fixed clock, started the penultimate real-runner call before
+injecting the first signal handler, proved active-call settlement and no later scheduler job,
+observed exact graceful cleanup plus exit code 0, then invoked only the omitted reset before the
+shared state oracle. A fifth run started the built scheduler entry point under the real host clock,
+required host/database UTC-date agreement, observed no process output, waited for the terminal
+catalog marker, forcibly ended only its otherwise persistent test child, and then verified the same
+exact state. This is local synthetic application evidence, not host-timer delivery, OS-signal
+delivery, emitted-child controller settlement before forced termination, a wall-clock recurring
+process callback, production credential/TLS result, capacity result, real-user purge, monitoring
+backend, durable cadence, or deployment.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and
@@ -1252,25 +1261,25 @@ gates, deployed execution and monitoring of retention cleanup for authentication
 abandoned-enrollment, audit-event, invitation, CarRecipe-proposal, ingest, finalized-source-day,
 pairing, session, terminal-deletion-job, aged revoked-passkey state, and aged minimized
 revoked-device state plus pairing approval-provenance redaction, pairing-rate-window reset, and
-primary deletion, cleanup for remaining expiring state, recurring timer-callback execution and
-OS-delivered graceful process-signal settlement against PostgreSQL, deployed operation of the local
-Jobs scheduler, a production login/TLS path, audited corrections, deployed public-score delivery,
-cache/backup/tombstone purge and restore replay, connector macOS/Linux executable admission,
-clean-machine live Codex/privacy evidence, supported operational account/usage integration, deployed
-signed-upload egress, credential rotation and automated server-revoke composition, hosted Windows
-portable-smoke evidence, installer and real install/upgrade/uninstall lifecycle, automated
-diagnostic export/support transport, packaging, release signing, deployment, and public beta
-operations remain proposed. The local Ingest key reader, kernel, adapter, application composer,
-Fastify server, and separate host now prove bounded protected configuration, raw-envelope/JSON/HTTP
-framing, origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query,
-orchestration, no-queue/deadline policy, exact listener modes, bounded startup/shutdown,
-result/problem serialization, and one full synthetic loopback persistence path, but not those
-deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database score and
-compatible active-recipe race projections, versioned response-only schemas, fail-closed server
-mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media parsing,
-admission/deadline policy, store translation, and final serialization. A third compatible local
-status projection/contract/route now supplies complete-UTC-day freshness and preference-gated streak
-without changing either older response. Cache/invalidation, deployed device-proposal ingress,
+primary deletion, cleanup for remaining expiring state, host-timer delivery and wall-clock recurring
+process execution, OS-delivered graceful process-signal settlement against PostgreSQL, deployed
+operation of the local Jobs scheduler, a production login/TLS path, audited corrections, deployed
+public-score delivery, cache/backup/tombstone purge and restore replay, connector macOS/Linux
+executable admission, clean-machine live Codex/privacy evidence, supported operational account/usage
+integration, deployed signed-upload egress, credential rotation and automated server-revoke
+composition, hosted Windows portable-smoke evidence, installer and real install/upgrade/uninstall
+lifecycle, automated diagnostic export/support transport, packaging, release signing, deployment,
+and public beta operations remain proposed. The local Ingest key reader, kernel, adapter,
+application composer, Fastify server, and separate host now prove bounded protected configuration,
+raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
+pool, fixed-query, orchestration, no-queue/deadline policy, exact listener modes, bounded
+startup/shutdown, result/problem serialization, and one full synthetic loopback persistence path,
+but not those deployed edge, secret, TLS, capacity, or operational boundaries. Bounded database
+score and compatible active-recipe race projections, versioned response-only schemas, fail-closed
+server mappers, bounded PostgreSQL adapters, and local HTTP routes now exist, including URL/media
+parsing, admission/deadline policy, store translation, and final serialization. A third compatible
+local status projection/contract/route now supplies complete-UTC-day freshness and preference-gated
+streak without changing either older response. Cache/invalidation, deployed device-proposal ingress,
 authenticated profile detail, client-rate and production-capacity controls, query-plan evidence,
 monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
 The visible web scoring and ranking experience now consumes a validated current-week status response
@@ -1300,6 +1309,7 @@ pnpm run build:jobs-scheduler
 pnpm run check:jobs-scheduler-entrypoint
 pnpm run test:jobs:postgres-integration
 pnpm run test:jobs-scheduler:postgres-integration
+pnpm run test:jobs-scheduler:timer-postgres-integration
 pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 pnpm run test:jobs-scheduler:process-postgres-integration
 cargo test --workspace --all-targets --all-features --locked
