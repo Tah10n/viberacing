@@ -601,29 +601,33 @@ material availability cost.
   deletions, and audit affected rows without exporting private data.
 - **Current evidence:** The integration runner proves all four runtime roles lack direct identity
   and usage/scoring-table reads or API-schema mutation, and proves 64 cross-capability denials.
-  Ingest has exactly three reviewed functions; Jobs has exactly seventeen reviewed functions:
-  bounded authentication-, abandoned-enrollment-, audit-event-, invite-, CarRecipe-proposal-,
-  ingest-, pairing-, session-, and finalized-source-day retention cleanup, terminal deletion-job
-  cleanup, aged revoked-passkey cleanup, aged minimized revoked-device cleanup, pairing
-  approval-provenance redaction, fixed pairing-rate-window reset, primary profile deletion,
-  open-season scoring refresh, and terminal season finalization. Web alone receives the bounded
-  public score and separate race functions; Ingest, Jobs, and Admin are explicitly denied. The Web
-  adapter uses one dedicated pool, fixed parameterized function calls, and checks effective role,
-  distinct non-privileged login, exact Web-only membership, database capability, search path, and
-  read-only state before every pooled read. Failed sessions are destroyed and raw driver errors are
-  not forwarded. The local Jobs adapter independently checks an exact Jobs-only login/membership,
-  CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the seventeen
-  prepared function calls. Its pool maximum is one, input/result shapes are closed, failed clients
-  are destroyed, and CLI output reflects no configuration, command, SQL, count, or error detail. The
-  separate default-off scheduler can construct only that runner, selects only a frozen maximum-17
-  fixed UTC catalog, and validates each object again through the runner; it adds no SQL or database
-  capability. The local Ingest adapter independently caps its pool at four, probes the exact Ingest
-  login/role and safe search path before each capability, exposes only fixed parameterized origin
-  replay, device lookup, and submission calls, reconstructs and revalidates inputs, copies mutable
-  values, accepts only closed rows, and destroys failed clients without forwarding
-  driver/configuration details. Its full synthetic gate additionally observes four lock-waiting
-  origin-consume queries and rejects a fifth HTTP request without a fifth database call before the
-  four settle successfully.
+  Before its restore and role matrices, the same disposable gate holds revision 0039's advisory
+  migration lock until two exact tagged processes are observed waiting, then requires one complete
+  application, one duplicate-object `42P07` rollback, one ledger row, and the canonical table. This
+  is local serialization and atomic rollback evidence, not a successful deployment migration
+  controller or staging orchestration result. Ingest has exactly three reviewed functions; Jobs has
+  exactly seventeen reviewed functions: bounded authentication-, abandoned-enrollment-,
+  audit-event-, invite-, CarRecipe-proposal-, ingest-, pairing-, session-, and finalized-source-day
+  retention cleanup, terminal deletion-job cleanup, aged revoked-passkey cleanup, aged minimized
+  revoked-device cleanup, pairing approval-provenance redaction, fixed pairing-rate-window reset,
+  primary profile deletion, open-season scoring refresh, and terminal season finalization. Web alone
+  receives the bounded public score and separate race functions; Ingest, Jobs, and Admin are
+  explicitly denied. The Web adapter uses one dedicated pool, fixed parameterized function calls,
+  and checks effective role, distinct non-privileged login, exact Web-only membership, database
+  capability, search path, and read-only state before every pooled read. Failed sessions are
+  destroyed and raw driver errors are not forwarded. The local Jobs adapter independently checks an
+  exact Jobs-only login/membership, CONNECT without CREATE/TEMPORARY, and safe search path before
+  exactly one of the seventeen prepared function calls. Its pool maximum is one, input/result shapes
+  are closed, failed clients are destroyed, and CLI output reflects no configuration, command, SQL,
+  count, or error detail. The separate default-off scheduler can construct only that runner, selects
+  only a frozen maximum-17 fixed UTC catalog, and validates each object again through the runner; it
+  adds no SQL or database capability. The local Ingest adapter independently caps its pool at four,
+  probes the exact Ingest login/role and safe search path before each capability, exposes only fixed
+  parameterized origin replay, device lookup, and submission calls, reconstructs and revalidates
+  inputs, copies mutable values, accepts only closed rows, and destroys failed clients without
+  forwarding driver/configuration details. Its full synthetic gate additionally observes four
+  lock-waiting origin-consume queries and rejects a fifth HTTP request without a fifth database call
+  before the four settle successfully.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Web now has a disposable synthetic narrow login plus widened-login denial
   through two emitted standalone Next production processes, certificate-verified TLS, and one

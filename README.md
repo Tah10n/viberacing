@@ -228,11 +228,15 @@ still no macOS/Linux admission or result, live protected key injection, edge sig
 denial, deployed host/TLS/database login, capacity evidence, credential rotation, automatic
 server-revoke composition, packaging, release, monitoring, supported connector, or deployment.
 
-The isolated PostgreSQL gate now twice restores its current synthetic state from bounded
-container-only archive generations. It requires matching canonical data digests/lengths, a
-byte-stable restored schema, all 28 forced-RLS tables, selected role grants, and then all 44
-post-restore lock-wait races plus the final runtime deny matrix. It is not an old-backup deletion
-replay, external backup, cluster-role recovery, production restore, scale, or RPO/RTO result.
+The isolated PostgreSQL gate now first holds revision 0039's advisory lock until two exact migration
+processes are observed waiting. After release, one applies the migration, one rolls back with the
+expected duplicate-object `42P07`, and the gate requires one exact ledger row plus the canonical
+table. It then twice restores its current synthetic state from bounded container-only archive
+generations and requires matching canonical data digests/lengths, a byte-stable restored schema, all
+28 forced-RLS tables, selected role grants, and all 44 post-restore lock-wait races plus the final
+runtime deny matrix. This is not a successful concurrent deployment controller, staging migration
+orchestration/rollback, old-backup deletion replay, external backup, cluster-role recovery,
+production restore, scale, or RPO/RTO result.
 
 Thirty-nine SQL migrations now add 28 private identity, passkey, restricted-recovery, source,
 device, pairing, audit, deletion, replay, usage, Community scoring, and CarRecipe tables with

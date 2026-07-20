@@ -368,16 +368,20 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   private reporting controls are configured.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability
   policy. `pnpm run test:database:integration` separately uses an isolated, portless, ephemeral
-  PostgreSQL Compose project to apply the reviewed manifest in order, create bounded container-only
-  current-snapshot archive generations, twice restore the database, require SHA-256/length-identical
-  canonical data plus a byte-stable second-generation schema, recheck all 28 forced-RLS tables and
-  selected role grants, and then exercise state constraints, session-bound identity, source/device
-  lifecycle, Community ingest,
+  PostgreSQL Compose project to apply the reviewed manifest in order. Before revision 0039 it holds
+  that migration's advisory lock until two exact migration processes are observed waiting, then
+  requires one successful application, one closed `42P07` rollback, one ledger row, and the
+  canonical table. It then creates bounded container-only current-snapshot archive generations,
+  twice restores the database, requires SHA-256/length-identical canonical data plus a byte-stable
+  second-generation schema, rechecks all 28 forced-RLS tables and selected role grants, and then
+  exercises state constraints, session-bound identity, source/device lifecycle, Community ingest,
   ingest/pairing/auth/abandoned-enrollment/CarRecipe-proposal/finalized-source-day retention, and
   scoring/finalization/public-score procedures, observed
   identity/pairing/lifecycle/ingest/cleanup/scoring/finalization lock-wait races, rollback, and
-  every current runtime deny matrix. It does not exercise an old backup, deletion-marker replay,
-  external backup storage or encryption, cluster-role recovery, production credentials, or RPO/RTO.
+  every current runtime deny matrix. It does not prove a successful concurrent deployment controller
+  or staging migration orchestration/rollback, and it does not exercise an old backup,
+  deletion-marker replay, external backup storage or encryption, cluster-role recovery, production
+  credentials, or RPO/RTO.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 

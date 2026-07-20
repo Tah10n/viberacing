@@ -103,10 +103,14 @@ cache/backup purge, tombstone/restore replay, or network deployment. Controls be
 [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
 security claims about the current tree.
 
-The isolated database gate now twice restores its current synthetic snapshot inside one disposable
-container, rechecks exact data digests, forced-RLS state, selected grants, and then all 44
-post-restore lock-wait races plus the final runtime deny matrix. It has no stale backup, deletion
-marker, external storage/encryption, cluster-role recovery, or production authority.
+The isolated database gate now first holds revision 0039's advisory lock until two exact tagged
+migration processes are observed waiting. One applies the reviewed transaction, one rolls back with
+the expected duplicate-object `42P07`, and one exact ledger row plus the canonical table remain. It
+then twice restores its current synthetic snapshot inside one disposable container, rechecks exact
+data digests, forced-RLS state, selected grants, and all 44 post-restore lock-wait races plus the
+final runtime deny matrix. This proves no successful concurrent deployment controller or staging
+migration orchestration/rollback, and it has no stale backup, deletion marker, external
+storage/encryption, cluster-role recovery, or production authority.
 
 ### Assets and security objectives
 

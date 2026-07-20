@@ -35,10 +35,12 @@ testWeekStartDate.setUTCDate(
   testWeekStartDate.getUTCDate() - ((testWeekStartDate.getUTCDay() + 6) % 7),
 );
 const testWeekStart = testWeekStartDate.toISOString().slice(0, 10);
-const expectedObservedLockWaitRaceCount = 44;
+const expectedObservedLockWaitRaceCount = 45;
+const expectedObservedMigrationOverlapCount = 1;
 const expectedObservedEarlyCompletionOverlapCount = 1;
 let raceSequence = 0;
 let observedLockWaitRaceCount = 0;
+let observedMigrationOverlapCount = 0;
 let observedEarlyCompletionOverlapCount = 0;
 
 function docker(args, options = {}) {
@@ -599,6 +601,48 @@ async function runObservedRace(
   }
 }
 
+async function exerciseMigrationOverlap(migrationSql) {
+  const diagnosticSql = `\\set VERBOSITY sqlstate
+${migrationSql}`;
+  const contenderResults = await runObservedRace(
+    "reviewed migration advisory-lock overlap",
+    `BEGIN;
+SELECT pg_catalog.pg_advisory_xact_lock(824_762_001);
+\\echo migration-overlap-lock-ready`,
+    "migration-overlap-lock-ready",
+    [diagnosticSql, diagnosticSql],
+  );
+  const winners = contenderResults.filter((result) => result.status === 0);
+  const losers = contenderResults.filter((result) => result.status !== 0);
+  const serializedDuplicate =
+    losers.length === 1 && /ERROR:\s+42P07\b/.test(`${losers[0].stdout}\n${losers[0].stderr}`);
+  if (winners.length !== 1 || !serializedDuplicate) {
+    throw new Error(
+      `reviewed migration overlap did not produce one winner and one serialized SQLSTATE 42P07 loser (statuses: ${contenderResults.map((result) => result.status).join(",")})`,
+    );
+  }
+
+  const state = psqlScalar(
+    `SELECT pg_catalog.concat_ws(
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.schema_migrations
+    WHERE revision = 39
+      AND name = 'finalized_source_day_retention_cleanup'
+  ),
+  pg_catalog.to_regclass(
+    'viberacing_private.finalized_season_profile_freshness'
+  ) IS NOT NULL
+) AS migration_overlap_state;`,
+    "reviewed migration overlap state",
+  );
+  if (state !== "1:t") {
+    throw new Error(`reviewed migration overlap left invalid canonical state (${state})`);
+  }
+  observedMigrationOverlapCount += 1;
+}
+
 async function expectSuccessBeforeHolderRelease(label, lockSql, readyMarker, contenderSql) {
   raceSequence += 1;
   observedEarlyCompletionOverlapCount += 1;
@@ -777,6 +821,7 @@ function loadReviewedMigrations() {
     const migrationInput = {
       label: `migration ${migration.revision}: ${migration.name}`,
       sql: filesByPath.get(migration.path),
+      exerciseOverlap: migration.revision === 39,
     };
     if (migration.revision !== 39) {
       return [migrationInput];
@@ -1066,8 +1111,12 @@ try {
       sql: readFileSync(resolve(root, "database/tests/recovery_concurrency_setup.sql"), "utf8"),
     },
   ];
-  for (const { sql, label } of databaseInputs) {
-    requireSuccess(psql(sql), label);
+  for (const { sql, label, exerciseOverlap = false } of databaseInputs) {
+    if (exerciseOverlap) {
+      await exerciseMigrationOverlap(sql);
+    } else {
+      requireSuccess(psql(sql), label);
+    }
   }
 
   const restoreEvidence = exerciseCurrentSnapshotRestore();
@@ -2892,15 +2941,17 @@ SELECT viberacing_api.complete_passkey_login(
 
   if (
     observedLockWaitRaceCount !== expectedObservedLockWaitRaceCount ||
+    observedMigrationOverlapCount !== expectedObservedMigrationOverlapCount ||
     observedEarlyCompletionOverlapCount !== expectedObservedEarlyCompletionOverlapCount
   ) {
     throw new Error(
-      `Database race inventory drifted: observed ${observedLockWaitRaceCount} lock-wait and ${observedEarlyCompletionOverlapCount} early-completion overlap scenarios.`,
+      `Database race inventory drifted: observed ${observedLockWaitRaceCount} lock-wait, ${observedMigrationOverlapCount} migration-overlap, and ${observedEarlyCompletionOverlapCount} early-completion overlap scenarios.`,
     );
   }
+  const postRestoreLockWaitRaceCount = observedLockWaitRaceCount - observedMigrationOverlapCount;
 
   console.log(
-    `Database integration passed (28 forced-RLS tables after two current-snapshot restores from archives no larger than ${restoreEvidence.archiveBytes} bytes, SHA-256/length-identical ${restoreEvidence.dataBytes}-byte data dumps, a byte-stable ${restoreEvidence.schemaBytes}-byte canonical restored schema, ${observedLockWaitRaceCount} post-restore lock-wait races, ${observedEarlyCompletionOverlapCount} post-restore early-completion overlap, 12 relation-denial and 64 cross-capability checks).`,
+    `Database integration passed (${observedMigrationOverlapCount} pre-restore serialized migration-overlap race, 28 forced-RLS tables after two current-snapshot restores from archives no larger than ${restoreEvidence.archiveBytes} bytes, SHA-256/length-identical ${restoreEvidence.dataBytes}-byte data dumps, a byte-stable ${restoreEvidence.schemaBytes}-byte canonical restored schema, ${postRestoreLockWaitRaceCount} post-restore lock-wait races, ${observedEarlyCompletionOverlapCount} post-restore early-completion overlap, 12 relation-denial and 64 cross-capability checks).`,
   );
 } finally {
   if (started) {

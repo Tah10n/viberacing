@@ -838,6 +838,11 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   overwrites canonical buffers, never emits archive or dump content, and removes the container-only
   archives with the ephemeral `tmpfs` service. It has no path to a shared or production database and
   proves no external backup retention, encryption, access policy, or stale-backup deletion replay.
+  Before those copies, its migration-overlap drill uses only the unchanged public migration SQL,
+  synthetic process application names, exit statuses, and expected duplicate-object SQLSTATE in
+  bounded harness memory. The expected loser's SQL output is not emitted or retained; successful
+  output contains only the aggregate evidence class. This adds no product field, log, fixture,
+  cache, archive, metric, or release artifact.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The

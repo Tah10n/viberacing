@@ -318,7 +318,10 @@ production login, monitoring, deployed cadence, or deployment exists.
 - `scripts/test-database-integration.mjs` owns an isolated Compose project, executes PostgreSQL
   assertions and lock-contention races, waits until every tagged contender is observed in the
   holder's transitive blocker chain, proves protective contender order before releasing the holder,
-  proves runtime denials, and removes the container, network, and ephemeral storage.
+  proves runtime denials, and removes the container, network, and ephemeral storage. Before first
+  applying revision 0039, it holds that migration's advisory lock until two exact copies are
+  observed waiting, then requires one successful application, one duplicate-object `42P07` rollback,
+  one ledger row, and the canonical table.
 - `scripts/test-ingest-postgres-integration.mjs` owns a separate one-off `postgres-test` container
   with only an ephemeral loopback-published port. It applies the same reviewed manifest, creates a
   synthetic login with only `viberacing_ingest`, sends signed HTTP through emitted Ingest host code,
@@ -1014,6 +1017,15 @@ the original PostgreSQL entrypoint, and requires verified TLS from two emitted s
 processes. Both suites remove their process/container/network/storage resources in `finally`; Web
 also removes the ephemeral host key directory.
 
+Before revision 0039 is first applied, the database suite opens a holder transaction on the exact
+advisory migration lock and starts two tagged processes with the unchanged reviewed SQL. It releases
+the holder only after PostgreSQL observes both contenders in that lock's blocker chain. One process
+must apply the complete transaction; the other must roll back with duplicate-object SQLSTATE
+`42P07`; and exactly one ledger row plus the canonical table must remain. This proves local
+serialization and atomic losing-process rollback. It does not provide a deployment controller that
+makes both workers succeed, coordinate replicas, orchestrate staging migrations, or prove a
+production rollback.
+
 Before its concurrency and deny matrices, the database suite creates custom current-snapshot archive
 generations only inside the disposable container and renders bounded canonical data/schema evidence
 from them into child-process memory. It drops only that run's database, restores it, then archives
@@ -1077,6 +1089,7 @@ something the script silently broadens or repairs.
   markers outside revisions 0008, 0012, 0013, 0023, 0026, 0030, 0031, 0032, 0033, 0034, 0035, 0036,
   0037, 0038, and 0039 are not cleanup, redaction, or reset evidence.
 - Replace every launch-decision retention item with public policy and purge evidence.
-- Exercise migration overlap, deployment backup restore, stale-backup deletion replay, role
-  rotation, and service rollback in isolated staging before real-user ingestion. The local
-  current-snapshot drill is prerequisite evidence, not this staging gate.
+- Exercise successful multi-controller migration orchestration and rollback, deployment backup
+  restore, stale-backup deletion replay, role rotation, and service rollback in isolated staging
+  before real-user ingestion. The local advisory-lock overlap and current-snapshot drills are
+  prerequisite evidence, not this staging gate.

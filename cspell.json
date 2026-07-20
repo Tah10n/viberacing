@@ -149,6 +149,7 @@
     "setconfig",
     "setdatabase",
     "setrole",
+    "SQLSTATE",
     "subprocessors",
     "strpos",
     "timestamptz",

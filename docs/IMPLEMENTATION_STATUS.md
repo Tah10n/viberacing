@@ -726,15 +726,24 @@ ranking, or deployed Jobs scheduler/cadence exists.
   `SECURITY DEFINER`, role options, passwords, and owner membership. The real PostgreSQL gate runs
   deterministic synthetic fixtures in rollbacks and proves four runtime roles cannot read identity
   or usage tables or create API objects.
+- A deterministic pre-restore migration-overlap drill in that isolated real PostgreSQL gate. It
+  holds revision 0039's own advisory lock, starts two tagged processes with the unchanged reviewed
+  migration, and releases the holder only after both contenders appear in its transitive blocker
+  chain. One process must apply the complete transaction; the other must roll back with the expected
+  duplicate-object SQLSTATE `42P07`; and exactly one ledger row plus the canonical table must
+  remain. This proves local advisory serialization and atomic losing-process rollback, not a
+  successful concurrent deployment controller, staging migration orchestration/rollback, replica
+  coordination, production credentials, or deployment.
 - A deterministic current-snapshot restore drill inside that isolated real PostgreSQL gate. It
   retains two bounded custom archives only in the disposable container, replaces only the run's
   database twice, requires the source and both restored canonical data dumps to have the same
   SHA-256 digest and byte length, requires the first and second restored schema generations to be
   byte-stable, and rechecks all 28 forced-RLS tables plus selected Web/Jobs/Admin grants and denials
-  after each restore. All 44 lock-wait races, the early-completion overlap, and the full runtime
-  deny matrix then execute on the twice-restored database. Dump buffers are bounded, hashed,
-  overwritten, and never emitted. This proves no old-backup deletion replay, external storage or
-  encryption, cluster-role recovery, production login/TLS, representative scale, or RPO/RTO.
+  after each restore. The 44 post-restore lock-wait races, the early-completion overlap, and the
+  full runtime deny matrix then execute on the twice-restored database. Dump buffers are bounded,
+  hashed, overwritten, and never emitted. This proves no old-backup deletion replay, external
+  storage or encryption, cluster-role recovery, production login/TLS, representative scale, or
+  RPO/RTO.
 - A closed procedure-only API boundary: Admin can issue bounded, reasoned invites; Web can
   atomically redeem an invite, create an enrolling profile/session, create and consume exact-session
   challenges, register the initial passkey, rotate/revoke a possessed session, and request immediate
@@ -1095,27 +1104,29 @@ ranking, or deployed Jobs scheduler/cadence exists.
   production clock, a replica lease, durable/deployed cadence, production login/TLS, monitoring,
   capacity, or real-user retention. Secretless CI declares all four scheduler commands, but no
   hosted pass is claimed from this local tree.
-- Forty-four deterministic lock-wait races hold a relevant invite, challenge, session, source,
-  device, pairing, or profile row, or a season advisory lock; tag every session; and observe every
-  contender in the holder's transitive PostgreSQL blocker chain before releasing it. Protective
-  races additionally prove the first contender is blocked before the competitor starts. One separate
-  early-completion overlap holds an in-flight initial-passkey activation and proves cleanup finishes
-  through `SKIP LOCKED` before that holder is released. PostgreSQL proves exactly one winner for a
-  shared invite, initial-passkey registration challenge, active-session rotation, pairing,
-  concurrent creation at the 32-source ceiling, concurrent approval at the 64-live-authority
-  ceiling, passkey-login challenge, and recovery code. Protective races prove profile deletion
-  dominates concurrent session rotation, source pause dominates concurrent pairing approval, source
-  unlink dominates concurrent device activation, passkey revoke dominates concurrent login,
-  recovery-code rotation dominates concurrent old-code start, and recovery completion dominates
-  concurrent old-passkey login. Ingest races prove concurrent exact retries create one snapshot, two
-  devices for one source/date converge on the monotonic maximum rather than sum, source pause
-  precedes a later submission, and device revoke precedes a later submission. Opposing-order
-  multi-season payloads both block first on the same lower season and complete without an
-  advisory-lock cycle. An ordered origin-replay race proves two contenders for one locked expired
-  tuple produce exactly one fresh consume and one replay rejection. A second origin race holds the
-  row past a two-second proof expiry, returns `false`, and removes the tuple written after that
-  wait. A cleanup race proves one Jobs call retains its transaction lock while a second call waits,
-  after which both bounded ingest batches complete without removing live state. A separate
+- Forty-five deterministic lock-wait races tag every session and observe every contender in the
+  holder's transitive PostgreSQL blocker chain before releasing it. The one pre-restore migration
+  overlap holds revision 0039's advisory lock around two exact migration processes, then requires
+  one complete application and one duplicate-object rollback. The 44 post-restore races hold a
+  relevant invite, challenge, session, source, device, pairing, or profile row, or a season advisory
+  lock. Protective races additionally prove the first contender is blocked before the competitor
+  starts. One separate early-completion overlap holds an in-flight initial-passkey activation and
+  proves cleanup finishes through `SKIP LOCKED` before that holder is released. PostgreSQL proves
+  exactly one winner for a shared invite, initial-passkey registration challenge, active-session
+  rotation, pairing, concurrent creation at the 32-source ceiling, concurrent approval at the
+  64-live-authority ceiling, passkey-login challenge, and recovery code. Protective races prove
+  profile deletion dominates concurrent session rotation, source pause dominates concurrent pairing
+  approval, source unlink dominates concurrent device activation, passkey revoke dominates
+  concurrent login, recovery-code rotation dominates concurrent old-code start, and recovery
+  completion dominates concurrent old-passkey login. Ingest races prove concurrent exact retries
+  create one snapshot, two devices for one source/date converge on the monotonic maximum rather than
+  sum, source pause precedes a later submission, and device revoke precedes a later submission.
+  Opposing-order multi-season payloads both block first on the same lower season and complete
+  without an advisory-lock cycle. An ordered origin-replay race proves two contenders for one locked
+  expired tuple produce exactly one fresh consume and one replay rejection. A second origin race
+  holds the row past a two-second proof expiry, returns `false`, and removes the tuple written after
+  that wait. A cleanup race proves one Jobs call retains its transaction lock while a second call
+  waits, after which both bounded ingest batches complete without removing live state. A separate
   pairing-cleanup race proves two Jobs callers serialize, delete each expired transaction/key pair
   once, and preserve live pending state. Authentication cleanup has a separate two-worker
   serialization race plus a cross-capability race proving cleanup waits on the same profile-first
@@ -1230,15 +1241,17 @@ The local Compose smoke test pulled the pinned index, reached `healthy`, exposed
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
 reached `healthy`, validated and applied revisions 0001 through 0039 from the checksum manifest,
-passed 28-table state/ownership/RLS assertions, forty-four observed lock-wait races, one observed
-early-completion activation overlap, twelve relation-denial checks, sixty-four cross-capability
-denials, and the identity, passkey, recovery, pairing, source/device lifecycle, Community ingest,
-origin replay, ingest-retention, pairing-retention, authentication-retention, invite-retention,
-session-retention, abandoned-enrollment retention, primary-profile deletion, terminal deletion-job
-retention, audit-event retention, pairing approval-provenance, revoked-passkey retention,
-revoked-device retention, pairing-rate-window reset, finalized-source-day retention, CarRecipe
-proposal/approval and retention, scoring, finalization, and public score/race/status scenarios, then
-removed its portless container, network, and ephemeral storage.
+passed one pre-restore serialized migration-overlap race with one successful application and one
+expected `42P07` rollback, 28-table state/ownership/RLS assertions, forty-four observed post-restore
+lock-wait races, one observed early-completion activation overlap, twelve relation-denial checks,
+sixty-four cross-capability denials, and the identity, passkey, recovery, pairing, source/device
+lifecycle, Community ingest, origin replay, ingest-retention, pairing-retention,
+authentication-retention, invite-retention, session-retention, abandoned-enrollment retention,
+primary-profile deletion, terminal deletion-job retention, audit-event retention, pairing
+approval-provenance, revoked-passkey retention, revoked-device retention, pairing-rate-window reset,
+finalized-source-day retention, CarRecipe proposal/approval and retention, scoring, finalization,
+and public score/race/status scenarios, then removed its portless container, network, and ephemeral
+storage.
 
 The separate Jobs integration also reached `healthy`, revalidated and applied revisions 0001 through
 0039, created only synthetic non-owner logins, rejected the one login with an extra group membership
@@ -1313,23 +1326,24 @@ revoked-device state plus pairing approval-provenance redaction, pairing-rate-wi
 primary deletion, cleanup for remaining expiring state, host-timer delivery and wall-clock recurring
 process execution, OS-delivered graceful process-signal settlement against PostgreSQL, deployed
 operation of the local Jobs scheduler, a production login/TLS path, audited corrections, deployed
-public-score delivery, cache/backup/tombstone purge and restore replay, connector macOS/Linux
-executable admission, clean-machine live Codex/privacy evidence, supported operational account/usage
-integration, deployed signed-upload egress, credential rotation and automated server-revoke
-composition, hosted Windows portable-smoke evidence, installer and real install/upgrade/uninstall
-lifecycle, automated diagnostic export/support transport, packaging, release signing, deployment,
-and public beta operations remain proposed. The local Ingest key reader, kernel, adapter,
-application composer, Fastify server, and separate host now prove bounded protected configuration,
-raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
-pool, fixed-query, orchestration, no-queue/deadline policy, exact listener modes, bounded
-startup/shutdown, result/problem serialization, and one full synthetic loopback persistence plus
-controlled no-queue-contention path plus one positive silent built-entry-point request, but not OS
-signal delivery, graceful emitted-child settlement, or those deployed edge, secret, TLS,
-representative load/capacity, or operational boundaries. Bounded database score and compatible
-active-recipe race projections, versioned response-only schemas, fail-closed server mappers, bounded
-PostgreSQL adapters, and local HTTP routes now exist, including URL/media parsing,
-admission/deadline policy, store translation, and final serialization. A third compatible local
-status projection/contract/route now supplies complete-UTC-day freshness and preference-gated streak
+public-score delivery, successful multi-controller migration orchestration/rollback,
+cache/backup/tombstone purge and restore replay, connector macOS/Linux executable admission,
+clean-machine live Codex/privacy evidence, supported operational account/usage integration, deployed
+signed-upload egress, credential rotation and automated server-revoke composition, hosted Windows
+portable-smoke evidence, installer and real install/upgrade/uninstall lifecycle, automated
+diagnostic export/support transport, packaging, release signing, deployment, and public beta
+operations remain proposed. The local Ingest key reader, kernel, adapter, application composer,
+Fastify server, and separate host now prove bounded protected configuration, raw-envelope/JSON/HTTP
+framing, origin-proof, contract, strict Ed25519 device, least-privileged pool, fixed-query,
+orchestration, no-queue/deadline policy, exact listener modes, bounded startup/shutdown,
+result/problem serialization, and one full synthetic loopback persistence plus controlled
+no-queue-contention path plus one positive silent built-entry-point request, but not OS signal
+delivery, graceful emitted-child settlement, or those deployed edge, secret, TLS, representative
+load/capacity, or operational boundaries. Bounded database score and compatible active-recipe race
+projections, versioned response-only schemas, fail-closed server mappers, bounded PostgreSQL
+adapters, and local HTTP routes now exist, including URL/media parsing, admission/deadline policy,
+store translation, and final serialization. A third compatible local status
+projection/contract/route now supplies complete-UTC-day freshness and preference-gated streak
 without changing either older response. Cache/invalidation, deployed device-proposal ingress,
 authenticated profile detail, client-rate and production-capacity controls, query-plan evidence,
 monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.
