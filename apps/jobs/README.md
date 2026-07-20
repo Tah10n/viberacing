@@ -113,24 +113,27 @@ not prove OS-signal delivery. The emitted-process mode starts the built schedule
 link-free read-only production graph under pinned Linux Node with the real clock. The harness
 temporarily denies only this runner's exact backlog function, then proves one generic cycle signal,
 no backlog mutation, and later terminal-job settlement before a code-0 `SIGTERM` exit. It restores
-and rechecks the grant, rearms the marker, and restarts from the same runtime; the retry finalizes
-the backlog before a silent code-0 signal exit. A second rearm/restart proves another silent
-repeated cycle, with no scheduler sessions left after any start, runtime immutability, and exact
-state. This is local failure containment and restart retry, not automatic privilege repair, a
-wall-clock recurring process callback, or a deployed-controller restart. A separate wall-clock
-process mode starts the same built entry point from the same bounded runtime shape without replacing
-its native clock or minute interval, waits for startup, holds the scoring mutex, and observes the
-production refresh in a later real five-minute slot. It delivers an OS `SIGTERM`, releases the
-mutex, and requires the active refresh to commit before silent code-0 exit, session release, and
-runtime fingerprint revalidation. It proves one local recurring host-timer refresh and graceful
-signal settlement, not durable cadence or a deployed controller/orchestrator policy. A separate
-signal-process mode constructs a link-free, production-only runtime from this built runner and its
-exact installed `pg` graph, mounts it read-only in the pinned Linux Node image, holds the emitted
-first finalization call, and delivers an OS `SIGTERM`. It proves that active call settles, no later
-job starts, the process exits silently with code 0, and the database session closes; the seventeen
-omitted one-shot commands run only afterward for the shared exact-state oracle. Together these modes
-still do not prove an external audit sink, deployed signal path, production TLS/credentials, durable
-cadence, monitoring, capacity, real-user retention, or deployment.
+and rechecks the grant, rearms the marker, holds the scoring mutex, and starts the same runtime
+again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus
+session release, and proves the backlog and marker remain unchanged. After releasing the holder, a
+restart finalizes the backlog before a silent code-0 signal exit. A final rearm/restart proves
+another silent repeated cycle, with no scheduler sessions left after any of the four starts, runtime
+immutability, and exact state. This is local failure/crash containment and restart retry, not
+partial-write recovery, automatic privilege repair, a wall-clock recurring process callback, or a
+deployed-controller restart. A separate wall-clock process mode starts the same built entry point
+from the same bounded runtime shape without replacing its native clock or minute interval, waits for
+startup, holds the scoring mutex, and observes the production refresh in a later real five-minute
+slot. It delivers an OS `SIGTERM`, releases the mutex, and requires the active refresh to commit
+before silent code-0 exit, session release, and runtime fingerprint revalidation. It proves one
+local recurring host-timer refresh and graceful signal settlement, not durable cadence or a deployed
+controller/orchestrator policy. A separate signal-process mode constructs a link-free,
+production-only runtime from this built runner and its exact installed `pg` graph, mounts it
+read-only in the pinned Linux Node image, holds the emitted first finalization call, and delivers an
+OS `SIGTERM`. It proves that active call settles, no later job starts, the process exits silently
+with code 0, and the database session closes; the seventeen omitted one-shot commands run only
+afterward for the shared exact-state oracle. Together these modes still do not prove partial-write
+recovery, an external audit sink, deployed signal path, production TLS/credentials, durable cadence,
+monitoring, capacity, real-user retention, or deployment.
 
 The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
 Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package

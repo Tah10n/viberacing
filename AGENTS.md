@@ -50,37 +50,40 @@ read-only runtime under a pinned Linux Node image. Before the first real-clock s
 revokes only the Jobs role's backlog-function execution grant in disposable PostgreSQL. The process
 emits one generic cycle-failure line while the terminal marker proves later jobs still settled, then
 accepts a real `SIGTERM`, exits with code 0, and releases its session without creating the backlog
-season. The harness restores and rechecks that exact grant, rearms only the two marker rows, and
-restarts from the same runtime; the retry finalizes the backlog before a silent code-0 signal exit.
-It rearms and repeats one more silent start/exit before requiring the unchanged runtime fingerprint
-and exact state. A sixth uses the same bounded runtime shape. Under the unchanged native clock and
-minute interval it waits for startup, holds the scoring mutex until a later real five-minute slot
-reaches the production refresh call, delivers a real `SIGTERM`, releases the holder, and requires
-that refresh to commit with a newer timestamp before silent code-0 exit, session release, and an
-unchanged runtime fingerprint. A seventh uses the same bounded Linux runtime shape, holds the first
-finalization call in PostgreSQL, delivers a real `SIGTERM`, then proves that call settles, no later
-job starts, the emitted process exits silently with code 0, its session closes, and the runtime
-fingerprint is unchanged. The injected-timer result still does not prove a host-timer callback. All
-three emitted gates are local synthetic failure/retry, restart, native-timer, and OS-signal
-settlement evidence only. None proves automatic privilege repair, a deployed replica or signal path,
-controller/orchestrator grace, managed restart, durable cadence, production login/TLS result,
-monitoring, or capacity evidence. A local default-off one-shot migration runner now loads only the
-exact repository manifest/file inventory, revalidates every source digest, probes one distinct
-owner-member login, holds the fixed session advisory lock, rereads an exact ledger prefix, and
-applies only remaining reviewed SQL bodies before requiring the complete ledger. A separate opt-in
-synthetic integration runs a widened-login emitted process and two narrow-login emitted processes
-against one disposable certificate-verified PostgreSQL database. It proves widened-login denial
-before schema creation, observes both narrow controllers behind one external holder, requires both
-to converge successfully after release, and verifies the exact 40-row ledger, all 28 forced-RLS
-private tables, identity invariants, TLS, and connection/lock cleanup. It has no production
-credential/TLS, deployed replica, staging orchestration/rollback, monitoring, deployment, or
-recovery result. A local Ingest kernel bounds the raw sync envelope and parser, verifies an injected
-replay-consumed origin proof, validates the sync contract, and strictly verifies the source-bound
-device request. A protected local reader supplies one mandatory and one optional rotation proof key
-from exact namespaced configuration without returning a reusable key container. A separate bounded
-Ingest PostgreSQL adapter wraps only reviewed origin replay, device lookup, and submission
-procedures through a probed least-privileged login contract. A forced-RLS origin replay tuple and
-separate Jobs
+season. The harness restores and rechecks that exact grant, rearms only the two marker rows, holds
+the scoring mutex, and starts the same runtime again. It observes the first finalization call
+waiting in PostgreSQL, delivers `SIGKILL`, requires exit code 137 plus session release, and proves
+the backlog and terminal marker remain unchanged. After releasing the holder, a restart finalizes
+the backlog before a silent code-0 signal exit. The harness rearms and repeats one more silent
+start/exit before requiring no scheduler sessions, the unchanged runtime fingerprint, and exact
+state across all four starts. A sixth uses the same bounded runtime shape. Under the unchanged
+native clock and minute interval it waits for startup, holds the scoring mutex until a later real
+five-minute slot reaches the production refresh call, delivers a real `SIGTERM`, releases the
+holder, and requires that refresh to commit with a newer timestamp before silent code-0 exit,
+session release, and an unchanged runtime fingerprint. A seventh uses the same bounded Linux runtime
+shape, holds the first finalization call in PostgreSQL, delivers a real `SIGTERM`, then proves that
+call settles, no later job starts, the emitted process exits silently with code 0, its session
+closes, and the runtime fingerprint is unchanged. The injected-timer result still does not prove a
+host-timer callback. All three emitted gates are local synthetic failure/crash/retry, restart,
+native-timer, and OS-signal evidence only. None proves partial-write recovery, automatic privilege
+repair, a deployed replica or signal path, controller/orchestrator grace, managed restart, durable
+cadence, production login/TLS result, monitoring, or capacity evidence. A local default-off one-shot
+migration runner now loads only the exact repository manifest/file inventory, revalidates every
+source digest, probes one distinct owner-member login, holds the fixed session advisory lock,
+rereads an exact ledger prefix, and applies only remaining reviewed SQL bodies before requiring the
+complete ledger. A separate opt-in synthetic integration runs a widened-login emitted process and
+two narrow-login emitted processes against one disposable certificate-verified PostgreSQL database.
+It proves widened-login denial before schema creation, observes both narrow controllers behind one
+external holder, requires both to converge successfully after release, and verifies the exact 40-row
+ledger, all 28 forced-RLS private tables, identity invariants, TLS, and connection/lock cleanup. It
+has no production credential/TLS, deployed replica, staging orchestration/rollback, monitoring,
+deployment, or recovery result. A local Ingest kernel bounds the raw sync envelope and parser,
+verifies an injected replay-consumed origin proof, validates the sync contract, and strictly
+verifies the source-bound device request. A protected local reader supplies one mandatory and one
+optional rotation proof key from exact namespaced configuration without returning a reusable key
+container. A separate bounded Ingest PostgreSQL adapter wraps only reviewed origin replay, device
+lookup, and submission procedures through a probed least-privileged login contract. A forced-RLS
+origin replay tuple and separate Jobs
 ingest/pairing/auth/invite/session/abandoned-enrollment/CarRecipe-proposal/finalized-source-day,
 terminal-deletion-job, audit-event, revoked-passkey, and revoked-device cleanup plus pairing
 approval-provenance redaction capabilities have isolated PostgreSQL evidence. A transport-free
@@ -401,13 +404,15 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   exact enable/configuration environment. The harness temporarily removes only the Jobs role's exact
   backlog-function execution grant. The first process emits one generic cycle-failure line, leaves
   that backlog unchanged, reaches the later terminal marker, and exits with code 0 after an OS
-  `SIGTERM`. The harness restores and verifies the grant, rearms the marker, and restarts from the
-  same runtime; the retry finalizes the backlog and exits silently. A second rearm/restart proves
-  one more silent repeated cycle. All three starts leave no scheduler sessions, and the runtime
-  fingerprint remains unchanged. This proves local failure containment and restart retry, not
-  automatic grant repair, a wall-clock recurring callback, deployed-controller restart or
-  orchestrator grace policy, durable/deployed cadence, production credentials/TLS, monitoring,
-  capacity, real-user retention, or deployment.
+  `SIGTERM`. The harness restores and verifies the grant, rearms the marker, holds the scoring
+  mutex, and starts the same runtime again. It observes the first finalization lock-wait, delivers
+  `SIGKILL`, requires exit 137 and session release, and proves the backlog plus terminal marker are
+  unchanged. After the holder is released, a restart finalizes the backlog and exits silently. A
+  final rearm/restart proves one more silent repeated cycle. All four starts leave no scheduler
+  sessions, and the runtime fingerprint remains unchanged. This proves local failure/crash
+  containment and restart retry, not partial-write recovery, automatic grant repair, a wall-clock
+  recurring callback, deployed-controller restart or orchestrator grace policy, durable/deployed
+  cadence, production credentials/TLS, monitoring, capacity, real-user retention, or deployment.
 - `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` starts the same built entry point
   from a link-free read-only production-only graph under pinned Linux Node. Under unchanged native
   `Date.now()` and `setInterval(60_000)` it waits for the startup catalog, holds the scoring mutex,

@@ -673,21 +673,24 @@ scheduler job, and exact graceful cleanup. A fifth starts the built scheduler en
 real host clock from a link-free production-only runtime mounted read-only under pinned Linux Node.
 The harness temporarily denies only the Jobs role's backlog function, then proves one generic cycle
 signal, no backlog mutation, and later terminal-job settlement before a code-0 `SIGTERM` exit. It
-restores and rechecks the exact grant, rearms the marker, and restarts from the same runtime; the
-retry finalizes the backlog before a silent code-0 signal exit. A second rearm/restart proves
-another silent repeated cycle, session cleanup after all three starts, runtime-fingerprint
+restores and rechecks the exact grant, rearms the marker, holds the scoring mutex, and starts the
+same runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit
+137 plus session release, and proves the backlog and marker remain unchanged. After releasing the
+holder, a restart finalizes the backlog before a silent code-0 signal exit. A final rearm/restart
+proves another silent repeated cycle, session cleanup after all four starts, runtime-fingerprint
 revalidation, and exact state. A sixth uses the same bounded runtime shape, leaves the native
 clock/timer unchanged, holds the scoring mutex after startup, and observes a refresh in a later real
 five-minute slot. It delivers an OS `SIGTERM`, releases the mutex, and requires active-refresh
 settlement, a newer timestamp, silent code-0 exit, session release, and runtime-fingerprint
 revalidation. A seventh uses the same bounded runtime shape, holds the first finalization call,
 delivers an OS `SIGTERM`, and proves graceful settlement without starting refresh or a later job.
-The fifth gate proves local failure containment, later-job continuation, successful restart retry, a
-second local restart, and three post-startup signal settlements; the sixth proves one local
-host-timer recurring refresh plus active-call signal settlement. No automatic privilege repair,
-deployed signal route or scheduler, controller/orchestrator grace, managed restart, representative
-backlog/capacity result, external audit sink, production login/certificate, audited correction,
-tombstone/restore replay, deployed route, or public cache exists.
+The fifth gate proves local failure/crash containment, later-job continuation, successful restart
+retry, a later repeated restart, three graceful post-startup `SIGTERM` settlements, and one abrupt
+active-call `SIGKILL` exit; the sixth proves one local host-timer recurring refresh plus active-call
+signal settlement. No partial-write recovery, automatic privilege repair, deployed signal route or
+scheduler, controller/orchestrator grace, managed restart, representative backlog/capacity result,
+external audit sink, production login/certificate, audited correction, tombstone/restore replay,
+deployed route, or public cache exists.
 
 ## CarRecipe proposal origins and browser approval
 

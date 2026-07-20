@@ -617,9 +617,14 @@ function schedulerProcessContainerExists() {
   if (result.status === 0) {
     return true;
   }
+  const outputLines = `${result.stdout}${result.stderr}`
+    .split(/\r?\n/u)
+    .map((line) => line.trim().toLowerCase())
+    .filter((line) => line !== "");
+  const missingObject = `no such object: ${schedulerProcessContainerName.toLowerCase()}`;
   if (
     result.status === 1 &&
-    `${result.stdout}${result.stderr}`.includes(`No such object: ${schedulerProcessContainerName}`)
+    outputLines.some((line) => line === missingObject || line === `error: ${missingObject}`)
   ) {
     return false;
   }
@@ -713,15 +718,19 @@ function createSchedulerProcessContainerState() {
   });
 }
 
-async function waitForSchedulerSignalDatabaseWait() {
+async function waitForEmittedSchedulerFinalizationDatabaseWait() {
   const deadline = performance.now() + schedulerCycleTimeoutMs;
   while (performance.now() < deadline) {
     const state = readSchedulerProcessContainerState();
     if (!state.Running) {
-      throw new Error("Scheduler signal container exited before the controlled database wait.");
+      throw new Error(
+        "Emitted Jobs scheduler process exited before the controlled finalization wait.",
+      );
     }
     if (readSchedulerProcessContainerOutput() !== "") {
-      throw new Error("Scheduler signal container produced output before shutdown.");
+      throw new Error(
+        "Emitted Jobs scheduler process produced output before the controlled finalization wait.",
+      );
     }
     const observed = psqlScalar(
       `SELECT pg_catalog.concat(
@@ -736,7 +745,7 @@ async function waitForSchedulerSignalDatabaseWait() {
 FROM pg_catalog.pg_stat_activity
 WHERE application_name = 'viberacing-jobs-community-maintenance'
   AND usename = '${jobsLogin}';`,
-      "emitted scheduler signal database-wait observation",
+      "emitted scheduler finalization database-wait observation",
     );
     if (observed === "1:1") {
       return;
@@ -744,7 +753,7 @@ WHERE application_name = 'viberacing-jobs-community-maintenance'
     assert.match(observed, /^(?:0:0|1:0)$/);
     await sleep(schedulerProcessPollIntervalMs);
   }
-  throw new Error("Scheduler signal container did not reach its controlled database wait.");
+  throw new Error("Emitted Jobs scheduler process did not reach its controlled finalization wait.");
 }
 
 async function waitForSchedulerProcessContainerExit() {
@@ -781,7 +790,7 @@ async function runEmittedSchedulerSignalProcess({ expectedSeasonStarts }) {
       docker(["start", schedulerProcessContainerName], { timeout: 15_000 }),
       "scheduler signal container start",
     );
-    await waitForSchedulerSignalDatabaseWait();
+    await waitForEmittedSchedulerFinalizationDatabaseWait();
     assertSchedulerSeasonStarts(
       expectedSeasonStarts,
       "the host clock must retain the reviewed scheduler season targets through signal delivery",
@@ -1442,6 +1451,104 @@ async function runEmittedSchedulerStartupCycle({
   }
 }
 
+function assertEmittedSchedulerTerminalMarkerArmed(label) {
+  assert.equal(
+    psqlScalar(
+      `SET ROLE viberacing_owner;
+SELECT pg_catalog.concat(
+  pg_catalog.count(*) FILTER (
+    WHERE window_started_at < pg_catalog.statement_timestamp() - INTERVAL '1 hour'
+      AND (
+        (bucket = -1 AND attempt_count = 21)
+        OR (bucket = 5 AND attempt_count = 6)
+      )
+  ),
+  ':',
+  pg_catalog.count(*) FILTER (
+    WHERE attempt_count = 0
+      AND window_started_at = TIMESTAMPTZ '1970-01-01 00:00:00+00'
+  ),
+  ':',
+  pg_catalog.count(*)
+)
+FROM viberacing_private.pairing_request_windows
+WHERE operation = 'poll'
+  AND bucket IN (-1, 5);`,
+      label,
+    ),
+    "2:0:2",
+    label,
+  );
+}
+
+async function runEmittedSchedulerCrashCycle({ expectedSeasonStarts, runtimeDirectory }) {
+  assertSchedulerSeasonStarts(
+    expectedSeasonStarts,
+    "the host clock must retain the reviewed scheduler season targets before crash startup",
+  );
+  let containerCreated = false;
+  let holder;
+  let holderReleased = false;
+  try {
+    holder = startSchedulerScoringLockHolder();
+    await waitWithDeadline(
+      holder.ready,
+      schedulerProcessCloseTimeoutMs,
+      "Scheduler scoring lock holder did not become ready.",
+    );
+    createSchedulerProcessContainer(runtimeDirectory);
+    containerCreated = true;
+    requireSuccess(
+      docker(["start", schedulerProcessContainerName], { timeout: 15_000 }),
+      "crash scheduler container start",
+    );
+    await waitForEmittedSchedulerFinalizationDatabaseWait();
+    assertSchedulerSeasonStarts(
+      expectedSeasonStarts,
+      "the host clock must retain the reviewed scheduler season targets through crash injection",
+    );
+
+    requireSuccess(
+      docker(["kill", "--signal", "SIGKILL", schedulerProcessContainerName], {
+        timeout: 10_000,
+      }),
+      "scheduler crash injection",
+    );
+    const state = await waitForSchedulerProcessContainerExit();
+    assert.equal(state.Status, "exited");
+    assert.equal(state.ExitCode, 137, "SIGKILL must terminate the active scheduler process");
+    assert.equal(state.OOMKilled, false);
+    assert.equal(state.Error, "");
+    assert.equal(
+      readSchedulerProcessContainerOutput(),
+      "",
+      "the abruptly terminated scheduler must not reflect its active call or crash state",
+    );
+    await waitForEmittedSchedulerSessionRelease();
+    await stopSchedulerScoringLockHolder(holder, false);
+    holderReleased = true;
+    assertSchedulerBacklogState(
+      "absent:0:0:1",
+      "the abruptly terminated call must leave the pending backlog unchanged",
+    );
+    assertEmittedSchedulerTerminalMarkerArmed(
+      "the abruptly terminated cycle must not reach the later terminal reset",
+    );
+    removeSchedulerProcessContainer(false);
+    containerCreated = false;
+  } finally {
+    try {
+      if (holder !== undefined && !holderReleased) {
+        await stopSchedulerScoringLockHolder(holder, false).catch(() => undefined);
+      }
+    } finally {
+      if (containerCreated || schedulerProcessContainerExists()) {
+        removeSchedulerProcessContainer(true);
+      }
+    }
+  }
+}
+
 async function runEmittedSchedulerProcess({ expectedSeasonStarts }) {
   const runtime = createPortableSchedulerRuntime();
   let backlogExecutionNeedsRestore = false;
@@ -1461,6 +1568,10 @@ async function runEmittedSchedulerProcess({ expectedSeasonStarts }) {
     setSchedulerBacklogExecutionAllowed(true);
     backlogExecutionNeedsRestore = false;
     rearmEmittedSchedulerTerminalMarker();
+    await runEmittedSchedulerCrashCycle({
+      expectedSeasonStarts,
+      runtimeDirectory: runtime.runtimeDirectory,
+    });
     await runEmittedSchedulerStartupCycle({
       cycleLabel: "recovery",
       expectedSeasonStarts,
@@ -1553,7 +1664,7 @@ WHERE application_name = 'viberacing-jobs-community-maintenance'
     assert.equal(sessionCount, "1");
     await sleep(schedulerProcessPollIntervalMs);
   }
-  throw new Error("Emitted Jobs scheduler session was not released after graceful exit.");
+  throw new Error("Emitted Jobs scheduler session was not released after process exit.");
 }
 
 async function runEmittedSchedulerWallClockProcess({ expectedSeasonStarts }) {
@@ -2669,7 +2780,7 @@ SELECT pg_catalog.jsonb_build_object(
           : integrationMode === "scheduler_lifecycle"
             ? "Jobs scheduler lifecycle PostgreSQL integration passed (active-call settlement, no later scheduler job, graceful close, and exact final state)."
             : integrationMode === "scheduler_process"
-              ? "Emitted Jobs scheduler PostgreSQL integration passed (controlled backlog denial, generic cycle signal, later terminal-job settlement, harness-restored authority, successful restart retry, three OS SIGTERMs, two silent post-failure cycles, released sessions, immutable reused runtime, and exact stored state)."
+              ? "Emitted Jobs scheduler PostgreSQL integration passed (controlled backlog denial, active-finalization SIGKILL cancellation, unchanged pre-retry state, later terminal-job settlement, harness-restored authority, successful restart retry, three OS SIGTERMs, one OS SIGKILL, two silent post-crash cycles, released sessions, immutable reused runtime, and exact stored state)."
               : integrationMode === "scheduler_wall_clock_process"
                 ? "Emitted Jobs scheduler wall-clock PostgreSQL integration passed (real host-timer recurring refresh, OS SIGTERM, active-refresh settlement, silent code-0 exit, released session, immutable runtime, and exact stored state)."
                 : integrationMode === "scheduler_signal_process"

@@ -60,11 +60,12 @@ Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, 
 execution, no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer
 execution and lifecycle settlement, real-clock emitted-process restart and post-startup signal
 settlement, and later native-timer plus active-call OS-signal paths. Those emitted paths prove one
-local recurring callback and three local emitted signal paths, not deployed OS-signal routing or
-controller/orchestrator grace, deployed cadence, durable missed-slot recovery, monitoring, capacity
-result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy.
-Active recipes remain until replacement or profile deletion. The separate public active-recipe
-projection, device proposal ingress, and local agent orchestration were later accepted in
+local recurring callback, three graceful local emitted signal paths, and one abrupt active-call
+crash path, not deployed OS-signal routing or controller/orchestrator grace, deployed cadence,
+durable missed-slot recovery, monitoring, capacity result, production Jobs login/TLS connection,
+backup-expiry proof, or deployed retention policy. Active recipes remain until replacement or
+profile deletion. The separate public active-recipe projection, device proposal ingress, and local
+agent orchestration were later accepted in
 [ADR 0037](0037-bounded-public-community-race-projection.md),
 [ADR 0038](0038-bounded-device-car-recipe-proposal-ingress.md), and
 [ADR 0039](0039-bounded-agent-car-proposal-orchestration.md); scheduling and deployed retention
@@ -124,9 +125,9 @@ interval handler for a repeated fixed-clock cycle and the lifecycle handler afte
 real-runner call starts, and starts the built entry point under the real host clock through one
 controlled backlog failure, later terminal-job settlement, and successful restart retry. Later ADR
 0063 failure/retry/restart, native-timer, and active-call OS-signal gates prove one local recurring
-callback and three local emitted signal paths, but these layers still do not prove deployed signal
-routing or controller/orchestrator grace, production cadence/login/TLS, monitoring, backup purge,
-capacity, or deployment.
+callback, three graceful local emitted signal paths, and one abrupt active-call crash path, but
+these layers still do not prove deployed signal routing or controller/orchestrator grace, production
+cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
 
 ## References
 

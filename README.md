@@ -403,19 +403,22 @@ link-free read-only production graph under pinned Linux Node with the real clock
 revokes only the Jobs role's backlog-function execution grant. The process emits one generic cycle
 signal while the later terminal marker proves continued catalog execution, leaves the backlog
 unchanged, and exits with code 0 after a real `SIGTERM`. The harness restores and verifies the exact
-grant, rearms the marker, and restarts from the same runtime; that retry finalizes the backlog
-before a silent code-0 signal exit. A second rearm/restart proves another silent repeated cycle,
-with no scheduler sessions left after any start, runtime immutability, and exact stored state. A
-sixth runs the same unchanged entry point from the same bounded runtime shape, waits for startup,
-holds the scoring mutex, and observes a native minute-timer callback reach refresh in a later real
-five-minute slot. It then delivers a real `SIGTERM`, releases the mutex, and requires that refresh
-to commit before silent code-0 exit, database-session release, and runtime-fingerprint revalidation.
-A seventh uses the same bounded Linux runtime shape, holds the emitted first finalization call,
-delivers a real `SIGTERM`, and proves active-call settlement, no later job, silent code-0 exit,
-database-session release, and an unchanged runtime fingerprint. The injected timer result still does
-not prove host-timer delivery. The three emitted gates prove local failure containment, restart
-retry, recurring-refresh, and active-finalization OS-signal settlement, including one wall-clock
-recurring refresh; they do not prove automatic privilege repair, a deployed signal route,
+grant, rearms the marker, holds the scoring mutex, and starts the same runtime again. It observes
+the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 and session release, and
+proves the backlog plus terminal marker remain unchanged. After releasing the holder, a restart
+finalizes the backlog before a silent code-0 signal exit. A final rearm/restart proves another
+silent repeated cycle, with no scheduler sessions left after any of the four starts, runtime
+immutability, and exact stored state. A sixth runs the same unchanged entry point from the same
+bounded runtime shape, waits for startup, holds the scoring mutex, and observes a native
+minute-timer callback reach refresh in a later real five-minute slot. It then delivers a real
+`SIGTERM`, releases the mutex, and requires that refresh to commit before silent code-0 exit,
+database-session release, and runtime-fingerprint revalidation. A seventh uses the same bounded
+Linux runtime shape, holds the emitted first finalization call, delivers a real `SIGTERM`, and
+proves active-call settlement, no later job, silent code-0 exit, database-session release, and an
+unchanged runtime fingerprint. The injected timer result still does not prove host-timer delivery.
+The three emitted gates prove local failure/crash containment, restart retry, recurring-refresh, and
+active-finalization OS-signal behavior, including one wall-clock recurring refresh; they do not
+prove partial-write recovery, automatic privilege repair, a deployed signal route,
 controller/orchestrator grace, managed restart, durable or hosted cadence, cross-replica
 coordination, production TLS/login, monitoring, capacity, or real-user retention. Revision 0011
 gives only the Web database role a bounded active-profile score projection containing no raw values,

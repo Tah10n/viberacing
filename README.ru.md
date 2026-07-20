@@ -139,13 +139,16 @@ point с реальными часами из link-free production-only runtime 
 временно снимает только право Jobs-роли на выполнение backlog-функции. Первый process выдаёт ровно
 одну generic cycle-failure строку, оставляет backlog неизменённым, но доходит до более позднего
 terminal marker, после чего принимает настоящий `SIGTERM`, выходит с кодом 0 и закрывает DB session.
-Harness восстанавливает и проверяет точный grant, заново вооружает marker и перезапускает тот же
-runtime; retry финализирует backlog перед тихим code-0 signal exit. Ещё один rearm/restart
-доказывает тихий повторный цикл; после каждого из трёх запусков scheduler DB sessions закрыты,
-runtime fingerprint и итоговое состояние точны. Это локальное failure-containment/restart-retry
-evidence, а не automatic privilege repair, deployed-controller restart или orchestrator grace.
-Команда `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` запускает тот же неизменённый
-entry point из того же bounded runtime shape. После startup она удерживает scoring mutex, наблюдает
+Harness восстанавливает и проверяет точный grant, заново вооружает marker, удерживает scoring mutex
+и снова запускает тот же runtime. После наблюдения первого finalization lock-wait harness доставляет
+`SIGKILL`, требует exit 137 и закрытие DB session, затем доказывает неизменность backlog и terminal
+marker. После освобождения holder следующий restart финализирует backlog перед тихим code-0 signal
+exit. Финальный rearm/restart доказывает ещё один тихий повторный цикл; после каждого из четырёх
+запусков scheduler DB sessions закрыты, runtime fingerprint и итоговое состояние точны. Это
+локальное failure/crash-containment и restart-retry evidence, а не partial-write recovery, automatic
+privilege repair, deployed-controller restart или orchestrator grace. Команда
+`pnpm run test:jobs-scheduler:wall-clock-postgres-integration` запускает тот же неизменённый entry
+point из того же bounded runtime shape. После startup она удерживает scoring mutex, наблюдает
 production refresh от нативного минутного timer в следующем реальном пятиминутном slot, доставляет
 настоящий `SIGTERM`, отпускает mutex и требует commit активного refresh, тихий выход с кодом 0,
 закрытие DB session и неизменность runtime fingerprint. Это локальное доказательство одного

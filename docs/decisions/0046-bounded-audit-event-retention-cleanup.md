@@ -133,9 +133,10 @@ fixed injected UTC time, and directly invokes the production interval handler fo
 fixed-clock cycle and the lifecycle handler after an active runner call starts. These layers do not
 prove an external append-only sink or the later ADR 0063 evidence by themselves. Those
 restart/post-startup, native-timer, and active-call OS-signal gates prove one local recurring
-callback and three local emitted signal paths, but the combined evidence still does not prove
-deployed signal routing or controller/orchestrator grace, production cadence/login/TLS, monitoring,
-cache or backup purge, restore replay, capacity, or deployment.
+callback, three graceful local emitted signal paths, and one abrupt active-call crash path, but the
+combined evidence still does not prove deployed signal routing or controller/orchestrator grace,
+production cadence/login/TLS, monitoring, cache or backup purge, restore replay, capacity, or
+deployment.
 
 ## References
 

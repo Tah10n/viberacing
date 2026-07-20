@@ -666,17 +666,19 @@ job, and proves graceful settlement plus no later scheduler job. A fifth starts 
 point from a link-free read-only graph under pinned Linux Node with the real clock after temporarily
 revoking only the Jobs role's backlog-function grant. It proves one generic cycle signal, an
 unchanged backlog, and later terminal reset before a code-0 `SIGTERM` exit. The harness restores and
-rechecks the exact grant, rearms the marker, and restarts from the same runtime; the retry finalizes
-the backlog before a silent code-0 signal exit. A second rearm/restart proves another silent
-repeated cycle, session cleanup after all three starts, runtime immutability, and exact state. A
-sixth runs that unchanged entry point from the same bounded runtime shape, holds the scoring mutex
-after startup, observes a native minute-timer refresh in a later real five-minute slot, delivers an
-OS `SIGTERM`, releases the mutex, and proves active-refresh settlement before silent code-0 exit. A
-seventh pinned-Linux gate delivers an OS `SIGTERM` while finalization is active and proves graceful
-settlement without a later job. These supply local failure-containment/restart-retry, host-timer,
-and OS-signal settlement evidence, not automatic privilege repair, a deployed
-controller/orchestrator grace policy, production login/TLS, durable/deployed cadence, monitoring,
-capacity, or real-user purge evidence.
+rechecks the exact grant, rearms the marker, holds the scoring mutex, and starts the same runtime
+again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus
+session release, and proves the backlog and marker remain unchanged. After releasing the holder, a
+restart finalizes the backlog before a silent code-0 signal exit. A final rearm/restart proves
+another silent repeated cycle, session cleanup after all four starts, runtime immutability, and
+exact state. A sixth runs that unchanged entry point from the same bounded runtime shape, holds the
+scoring mutex after startup, observes a native minute-timer refresh in a later real five-minute
+slot, delivers an OS `SIGTERM`, releases the mutex, and proves active-refresh settlement before
+silent code-0 exit. A seventh pinned-Linux gate delivers an OS `SIGTERM` while finalization is
+active and proves graceful settlement without a later job. These supply local
+failure/crash-containment, restart-retry, host-timer, and OS-signal evidence, not partial-write
+recovery, automatic privilege repair, a deployed controller/orchestrator grace policy, production
+login/TLS, durable/deployed cadence, monitoring, capacity, or real-user purge evidence.
 
 Revision 0009 materializes only an open Community season. It binds each ISO Monday-through-Sunday
 season to immutable `community_v1` parameters, sums current eligible source/day values with numeric
@@ -1117,10 +1119,11 @@ something the script silently broadens or repairs.
   plus audited corrections. The pinned-Linux emitted signal gate proves one local OS `SIGTERM` while
   the first finalization call is lock-waiting, the separate native-timer gate proves one local
   recurring refresh settles through OS `SIGTERM`, and the startup gate proves local failure
-  containment, later-job continuation, a successful restart retry, a second local restart, and three
-  post-catalog signal settlements. The evidence still does not provide automatic privilege repair, a
-  deployed signal route, controller/orchestrator grace policy, managed restart, durable cadence,
-  production configuration, or deployed evidence.
+  containment, later-job continuation, one injected active-call process loss, a successful restart
+  retry, a later repeated restart, three graceful post-catalog `SIGTERM` settlements, and one abrupt
+  `SIGKILL` exit. The evidence still does not provide partial-write recovery, automatic privilege
+  repair, a deployed signal route, controller/orchestrator grace policy, managed restart, durable
+  cadence, production configuration, or deployed evidence.
 - Integrate the bounded database adapter and local score/race/status routes with a
   deployment-provisioned Web-only login and verified TLS, then add cache/invalidation, edge request
   shaping, representative/deployed query-plan and load/capacity evidence, monitoring, and deployment

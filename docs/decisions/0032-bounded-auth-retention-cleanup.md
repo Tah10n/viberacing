@@ -76,14 +76,15 @@ Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, 
 execution, no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer
 execution and lifecycle settlement, real-clock emitted-process restart and post-startup signal
 settlement, and later native-timer plus active-call OS-signal paths. Those emitted paths prove one
-local recurring callback and three local emitted signal paths, not deployed OS-signal routing or
-controller/orchestrator grace, deployed cadence, durable missed-slot recovery, monitoring, capacity
-result, production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. ADR
-0042 now covers eligible expired sessions, ADR 0045 covers terminal deletion jobs, and ADR 0048
-covers aged unreferenced revoked passkeys; pairing-referenced session provenance, tombstones,
-referenced passkey provenance, and any future expiring class still require separate reviewed rules.
-ADR 0050 now separately covers fixed pairing-rate-window reset. Recovery also still needs
-distributed attempt controls and deployment-owned pepper/timing evidence.
+local recurring callback, three graceful local emitted signal paths, and one abrupt active-call
+crash path, not deployed OS-signal routing or controller/orchestrator grace, deployed cadence,
+durable missed-slot recovery, monitoring, capacity result, production Jobs login/TLS connection,
+backup-expiry proof, or deployed retention policy. ADR 0042 now covers eligible expired sessions,
+ADR 0045 covers terminal deletion jobs, and ADR 0048 covers aged unreferenced revoked passkeys;
+pairing-referenced session provenance, tombstones, referenced passkey provenance, and any future
+expiring class still require separate reviewed rules. ADR 0050 now separately covers fixed
+pairing-rate-window reset. Recovery also still needs distributed attempt controls and
+deployment-owned pepper/timing evidence.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-AUTH-003, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-RECOVERY-ORACLE,
@@ -142,9 +143,10 @@ proves the default-off scheduler against a fake runner and clock, composes its p
 the real runner and disposable PostgreSQL under fixed injected UTC time, and directly invokes the
 production interval handler for a repeated fixed-clock cycle and the lifecycle handler after an
 active runner call starts. Later ADR 0063 restart/post-startup, native-timer, and active-call
-OS-signal gates prove one local recurring callback and three local emitted signal paths, but these
-layers still do not prove deployed signal routing or controller/orchestrator grace, production
-cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
+OS-signal gates prove one local recurring callback, three graceful local emitted signal paths, and
+one abrupt active-call crash path, but these layers still do not prove deployed signal routing or
+controller/orchestrator grace, production cadence/login/TLS, monitoring, backup purge, capacity, or
+deployment.
 
 ## References
 

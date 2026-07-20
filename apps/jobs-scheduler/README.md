@@ -68,19 +68,22 @@ the real clock from a link-free read-only production graph under pinned Linux No
 host/database UTC-date agreement. The harness temporarily revokes only the Jobs role's exact
 backlog-function execution grant. The first process emits one generic cycle-failure line, leaves the
 backlog unchanged, reaches the later terminal marker, and exits with code 0 after an OS `SIGTERM`.
-The harness restores and verifies the grant, rearms the marker, and restarts from the same runtime;
-the retry finalizes the backlog before a silent code-0 signal exit. One more rearm/restart proves a
-silent repeated cycle. All three starts leave no scheduler sessions, the runtime fingerprint is
-unchanged, and the exact stored-state oracle passes. This is local failure containment and restart
-retry, not automatic privilege repair, a deployed-controller restart, or orchestrator grace policy.
-The separate opt-in `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` gate starts the
-same built process from the same bounded runtime shape without replacing `Date.now()` or native
-`setInterval(60_000)`. After the startup catalog settles, an owner session holds the scoring mutex
-until the emitted production refresh is observed in a later real five-minute slot; the harness
-delivers a real `SIGTERM`, releases the mutex before the database deadline, and requires the active
-refresh to commit before silent code-0 exit, session release, and runtime-fingerprint revalidation.
-This proves one local recurring host-timer refresh and graceful signal settlement but not a deployed
-controller, orchestrator grace, or durable cadence. The separate opt-in
+The harness restores and verifies the grant, rearms the marker, holds the scoring mutex, and starts
+the same runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires
+exit 137 plus session release, and proves the backlog and marker remain unchanged. After releasing
+the holder, a restart finalizes the backlog before a silent code-0 signal exit. One more
+rearm/restart proves a silent repeated cycle. All four starts leave no scheduler sessions, the
+runtime fingerprint is unchanged, and the exact stored-state oracle passes. This is local
+failure/crash containment and restart retry, not partial-write recovery, automatic privilege repair,
+a deployed-controller restart, or orchestrator grace policy. The separate opt-in
+`pnpm run test:jobs-scheduler:wall-clock-postgres-integration` gate starts the same built process
+from the same bounded runtime shape without replacing `Date.now()` or native `setInterval(60_000)`.
+After the startup catalog settles, an owner session holds the scoring mutex until the emitted
+production refresh is observed in a later real five-minute slot; the harness delivers a real
+`SIGTERM`, releases the mutex before the database deadline, and requires the active refresh to
+commit before silent code-0 exit, session release, and runtime-fingerprint revalidation. This proves
+one local recurring host-timer refresh and graceful signal settlement but not a deployed controller,
+orchestrator grace, or durable cadence. The separate opt-in
 `pnpm run test:jobs-scheduler:signal-postgres-integration` gate copies only the built scheduler,
 built Jobs runner, and exact 14-package installed production graph into a link-free temporary
 runtime, mounts it read-only under the pinned Linux Node 24.18 image, and joins only the disposable
@@ -90,6 +93,6 @@ the emitted scheduler is observed in an exact database lock wait; the harness th
 settle without starting refresh or any later job. The process must exit silently with code 0,
 release its database session, leave the runtime fingerprint unchanged, and pass the shared exact
 state oracle after the seventeen omitted one-shot commands run separately. These are local synthetic
-Linux OS-signal results. Together the three emitted gates still do not prove a deployed signal
-route, controller/orchestrator grace policy, managed restart, production TLS/login, durable cadence,
-monitoring, capacity, deployment, or real-user retention.
+Linux OS-signal results. Together the three emitted gates still do not prove partial-write recovery,
+a deployed signal route, controller/orchestrator grace policy, managed restart, production
+TLS/login, durable cadence, monitoring, capacity, deployment, or real-user retention.

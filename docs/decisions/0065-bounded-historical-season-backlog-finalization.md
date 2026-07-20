@@ -108,13 +108,14 @@ Repository evidence includes:
   tests;
 - the emitted eighteen-command least-privileged PostgreSQL integration; and
 - fixed-clock startup/timer/lifecycle plus pinned-Linux controlled backlog denial, later-job
-  continuation, restart retry, a second local restart, native-timer active-refresh, and
-  active-finalization OS-signal scheduler integrations with an exact historical terminal-state
-  oracle.
+  continuation, active-finalization `SIGKILL`, restart retry, a later repeated restart, native-timer
+  active-refresh, and active-finalization OS-signal scheduler integrations with an exact historical
+  terminal-state oracle.
 
-These are local synthetic results. They prove controlled failure containment, later-job
-continuation, successful restart retry, a second local restart, post-startup signal settlement, one
-native host-timer recurring callback, and active-call signal settlement. They do not prove automatic
+These are local synthetic results. They prove controlled failure/crash containment, later-job
+continuation, successful restart retry, a later repeated restart, three graceful post-startup
+`SIGTERM` settlements, one abrupt active-call `SIGKILL` exit, one native host-timer recurring
+callback, and active-call signal settlement. They do not prove partial-write recovery, automatic
 privilege repair, deployed cadence, production Jobs login/TLS, single-replica policy, representative
 backlog size, capacity, monitoring, alert ownership, real-user recovery, or deployment.
 
