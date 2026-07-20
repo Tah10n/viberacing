@@ -654,13 +654,14 @@ only its weekly score, rank, active-day/source counts, rounded freshness, option
 visual-marker car; the UI explicitly keeps daily detail, device counts, exact usage/receipt time,
 proposal state, and identifiers out of that surface. The exact public handle can be shared as
 `/?profile=handle#profile`; invalid or duplicate values are ignored, and a missing top-32 row is
-never substituted with another profile. A separate opt-in synthetic gate now carries all three real
-Next development GETs through a disposable narrow Web login and reviewed PostgreSQL migrations,
-proves an extra-membership login fails without private-table mutation, validates the exact public
-contracts, proves successful reads remain non-mutating, and exercises the exact four-request
-no-queue boundary with four observed database waits plus a rejected fifth request. Authenticated
-daily/profile detail, cache, deployment login/TLS, query-plan/load/capacity evidence, monitoring,
-real-user data, and deployment remain separate gates.
+never substituted with another profile. A separate opt-in synthetic gate now carries all three GETs
+through two emitted standalone Next production processes and a TLS-enabled disposable narrow Web
+login after applying the reviewed PostgreSQL migrations. It proves an extra-membership login fails
+without private-table mutation, validates the exact public contracts plus TLS 1.2/1.3, proves
+successful reads remain non-mutating, and exercises the exact four-request no-queue boundary with
+four observed database waits plus a rejected fifth request. Authenticated daily/profile detail,
+cache, deployment certificate/login, external TLS/edge route, query-plan/load/capacity evidence,
+monitoring, real-user data, and deployment remain separate gates.
 
 ### ConnectorSyncV1
 
@@ -1166,9 +1167,10 @@ measurements exist.
 - Gate: one real user can pair and sync without any prompt, email, credential, or repository data
   leaving the machine.
 
-The public-read side now has a synthetic real-HTTP/disposable-PostgreSQL path for score, race, and
-status plus widened-login denial. It does not satisfy the one-real-user, pairing/sync, deployment
-credential/TLS, cache, capacity, or operational gate above.
+The public-read side now has a synthetic emitted-production-HTTP/TLS-enabled-disposable-PostgreSQL
+path for score, race, and status plus widened-login denial. Its self-signed ephemeral certificate
+and synthetic login do not satisfy the one-real-user, pairing/sync, deployment certificate/login,
+external TLS/edge, cache, capacity, or operational gate above.
 
 ### Phase 3 — Multi-source and lifecycle hardening
 

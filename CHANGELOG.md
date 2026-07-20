@@ -8,18 +8,21 @@ Versioning where its guarantees are applicable.
 
 ### Added
 
-- An opt-in synthetic Web HTTP-to-PostgreSQL integration. It builds the contract runtime, applies
-  every reviewed migration to one disposable PostgreSQL container, and starts two sequential real
-  Next development processes on loopback. All three public score/race/status GETs return the exact
+- An opt-in synthetic Web HTTP-to-PostgreSQL integration. It builds the contract runtime and Web
+  standalone output, explicitly bundles the reviewed `pg` driver instead of leaving Next's default
+  external package link, generates one ephemeral self-signed DNS certificate, applies every reviewed
+  migration to one TLS-enabled disposable PostgreSQL container, and starts two sequential emitted
+  Next production processes on loopback. All three public score/race/status GETs return the exact
   generic 503 through a deliberately widened Web login without changing any private table, then
   return their exact contract-validated active-only pages through a narrow `viberacing_web` login
-  while the full private-state fingerprint remains unchanged. A controlled owner-held database lock
-  then proves the four-request application admission boundary: four observed score queries remain in
-  flight, a fifth request returns the closed generic 503 without adding a fifth public-score query,
-  and the first four return their exact 200 contracts after rollback. Server and blocker output is
-  bounded, checked for private fixture/credential reflection, discarded, and every
-  process/container/network/storage resource is removed. Secretless CI requires the command, but no
-  production Next process, deployment login/TLS, cache, edge policy, load/capacity, monitoring,
+  while `pg_stat_ssl` proves TLS 1.2 or 1.3 and the full private-state fingerprint remains
+  unchanged. A controlled owner-held database lock then proves the four-request application
+  admission boundary: four observed score queries remain in flight, a fifth request returns the
+  closed generic 503 without adding a fifth public-score query, and the first four return their
+  exact 200 contracts after rollback. Server and blocker output is bounded, checked for private
+  fixture/credential/path reflection, discarded, and every ephemeral key, process, container,
+  network, and storage resource is removed. Secretless CI requires the command, but no deployment
+  certificate/login, external TLS/edge route, cache, edge policy, load/capacity, monitoring,
   real-user data, hosted pass, or deployment is claimed.
 - A separate default-off local Jobs scheduler around the existing seventeen-command runner. It
   accepts no arguments or schedule configuration, derives the current and latest grace-eligible

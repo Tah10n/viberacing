@@ -38,6 +38,11 @@ describe("static security headers", () => {
     expect(nextConfig.images?.dangerouslyAllowSVG).toBe(false);
   });
 
+  it("bundles the reviewed PostgreSQL driver into the standalone server", () => {
+    expect(nextConfig.transpilePackages).toEqual(["pg"]);
+    expect(nextConfig.serverExternalPackages).toBeUndefined();
+  });
+
   it("keeps OAuth callback codes out of development request logs", () => {
     const logging = nextConfig.logging;
     if (logging === undefined || logging === false) {

@@ -52,6 +52,7 @@ export const nextConfig: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
   reactStrictMode: true,
+  transpilePackages: ["pg"],
   turbopack: {
     root: workspaceRoot,
   },

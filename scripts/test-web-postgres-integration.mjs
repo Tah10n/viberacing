@@ -1,22 +1,24 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { createHash, generateKeyPairSync, randomBytes, sign, X509Certificate } from "node:crypto";
+import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createConnection, createServer } from "node:net";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 import { validateManifest } from "./check-database.mjs";
 
-// cspell:ignore usename WINDIR
+// cspell:ignore localdomain usename WINDIR
 
 const root = resolve(import.meta.dirname, "..");
 const webRoot = resolve(root, "apps", "web");
 const nextEnvironmentPath = resolve(webRoot, "next-env.d.ts");
 const webRequire = createRequire(resolve(webRoot, "package.json"));
 const nextBin = webRequire.resolve("next/dist/bin/next");
+const standaloneServerPath = resolve(webRoot, ".next", "standalone", "apps", "web", "server.js");
 const projectName = `vr-web-it-${process.pid}`;
 const containerName = `${projectName}-postgres`;
 const composePrefix = [
@@ -30,6 +32,9 @@ const composePrefix = [
 ];
 const databaseName = "viberacing_local";
 const bootstrapUser = "viberacing_local";
+const databaseTlsHost = "localhost.localdomain";
+const databaseTlsCertificatePath = "/tmp/viberacing-web-it-server.crt";
+const databaseTlsKeyPath = "/tmp/viberacing-web-it-server.key";
 const webLogin = "viberacing_web_login";
 const webPassword = "synthetic-web-integration-password";
 const wideWebLogin = "viberacing_web_wide_login";
@@ -47,7 +52,6 @@ const blockedQueryObservationTimeoutMs = 2_000;
 const admissionRejectionTimeoutMs = 1_500;
 const databaseBlockerReadyMarker = "viberacing_web_admission_blocker_ready";
 const productionNextEnvironmentReference = 'import "./.next/types/routes.d.ts";';
-const developmentNextEnvironmentReference = 'import "./.next/dev/types/routes.d.ts";';
 
 const fixture = Object.freeze({
   alphaProfileId: "00000000-0000-4000-8000-000000032101",
@@ -72,6 +76,175 @@ const privateValueMarkers = Object.freeze([
   `dev_${"W".repeat(22)}`,
   `dev_${"X".repeat(22)}`,
 ]);
+
+function derLength(length) {
+  assert.equal(Number.isSafeInteger(length), true);
+  assert.ok(length >= 0);
+  if (length < 0x80) {
+    return Buffer.from([length]);
+  }
+  const bytes = [];
+  let remaining = length;
+  while (remaining > 0) {
+    bytes.unshift(remaining & 0xff);
+    remaining = Math.floor(remaining / 256);
+  }
+  return Buffer.from([0x80 | bytes.length, ...bytes]);
+}
+
+function der(tag, ...parts) {
+  const content = Buffer.concat(parts);
+  return Buffer.concat([Buffer.from([tag]), derLength(content.byteLength), content]);
+}
+
+function derSequence(...parts) {
+  return der(0x30, ...parts);
+}
+
+function derObjectIdentifier(components) {
+  assert.equal(Array.isArray(components), true);
+  assert.equal(Object.getPrototypeOf(components), Array.prototype);
+  assert.ok(components.length >= 2);
+  assert.ok(components[0] >= 0 && components[0] <= 2);
+  assert.ok(components[1] >= 0 && (components[0] === 2 || components[1] <= 39));
+  const encoded = [components[0] * 40 + components[1]];
+  for (const component of components.slice(2)) {
+    assert.equal(Number.isSafeInteger(component), true);
+    assert.ok(component >= 0);
+    const base128 = [component & 0x7f];
+    let remaining = Math.floor(component / 128);
+    while (remaining > 0) {
+      base128.unshift(0x80 | (remaining & 0x7f));
+      remaining = Math.floor(remaining / 128);
+    }
+    encoded.push(...base128);
+  }
+  return der(0x06, Buffer.from(encoded));
+}
+
+function derInteger(bytes) {
+  let value = bytes;
+  while (value.byteLength > 1 && value[0] === 0) {
+    value = value.subarray(1);
+  }
+  if ((value[0] & 0x80) !== 0) {
+    value = Buffer.concat([Buffer.from([0]), value]);
+  }
+  return der(0x02, value);
+}
+
+function derBoolean(value) {
+  return der(0x01, Buffer.from([value ? 0xff : 0]));
+}
+
+function derBitString(value, unusedBits = 0) {
+  return der(0x03, Buffer.from([unusedBits]), value);
+}
+
+function derUtcTime(date) {
+  const iso = date.toISOString();
+  const value = `${iso.slice(2, 4)}${iso.slice(5, 7)}${iso.slice(8, 10)}${iso.slice(11, 13)}${iso.slice(14, 16)}${iso.slice(17, 19)}Z`;
+  return der(0x17, Buffer.from(value, "ascii"));
+}
+
+function certificateExtension(objectIdentifier, value, critical = false) {
+  return derSequence(
+    derObjectIdentifier(objectIdentifier),
+    ...(critical ? [derBoolean(true)] : []),
+    der(0x04, value),
+  );
+}
+
+function pem(label, value) {
+  const lines = value.toString("base64").match(/.{1,64}/g);
+  assert.notEqual(lines, null);
+  return Buffer.from(`-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`);
+}
+
+function createSyntheticTlsMaterial() {
+  const directory = mkdtempSync(join(tmpdir(), "viberacing-web-it-"));
+  const certificatePath = join(directory, "server.crt");
+  const keyPath = join(directory, "server.key");
+  const launcherPath = join(directory, "start-postgres.sh");
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const publicKeyDer = publicKey.export({ format: "der", type: "spki" });
+  const privateKeyDer = privateKey.export({ format: "der", type: "pkcs8" });
+  const serial = randomBytes(16);
+  serial[0] &= 0x7f;
+  serial[0] ||= 1;
+  const signatureAlgorithm = derSequence(
+    derObjectIdentifier([1, 2, 840, 113549, 1, 1, 11]),
+    der(0x05),
+  );
+  const name = derSequence(
+    der(
+      0x31,
+      derSequence(derObjectIdentifier([2, 5, 4, 3]), der(0x0c, Buffer.from(databaseTlsHost))),
+    ),
+  );
+  const now = Date.now();
+  const extensions = derSequence(
+    certificateExtension([2, 5, 29, 19], derSequence(derBoolean(true)), true),
+    certificateExtension([2, 5, 29, 15], derBitString(Buffer.from([0xa6]), 1), true),
+    certificateExtension(
+      [2, 5, 29, 17],
+      derSequence(der(0x82, Buffer.from(databaseTlsHost, "ascii"))),
+    ),
+    certificateExtension(
+      [2, 5, 29, 37],
+      derSequence(derObjectIdentifier([1, 3, 6, 1, 5, 5, 7, 3, 1])),
+    ),
+  );
+  const certificateBody = derSequence(
+    der(0xa0, derInteger(Buffer.from([2]))),
+    derInteger(serial),
+    signatureAlgorithm,
+    name,
+    derSequence(derUtcTime(new Date(now - 300_000)), derUtcTime(new Date(now + 3_600_000))),
+    name,
+    publicKeyDer,
+    der(0xa3, extensions),
+  );
+  const certificateDer = derSequence(
+    certificateBody,
+    signatureAlgorithm,
+    derBitString(sign("sha256", certificateBody, privateKey)),
+  );
+  const certificatePem = pem("CERTIFICATE", certificateDer);
+  const keyPem = pem("PRIVATE KEY", privateKeyDer);
+  try {
+    const certificate = new X509Certificate(certificatePem);
+    assert.equal(certificate.ca, true);
+    assert.equal(certificate.checkHost(databaseTlsHost), databaseTlsHost);
+    assert.equal(certificate.verify(certificate.publicKey), true);
+    writeFileSync(certificatePath, certificatePem, { mode: 0o600 });
+    writeFileSync(keyPath, keyPem, { mode: 0o600 });
+    writeFileSync(
+      launcherPath,
+      `#!/bin/sh
+set -eu
+cp /viberacing-tls/server.crt ${databaseTlsCertificatePath}
+cp /viberacing-tls/server.key ${databaseTlsKeyPath}
+chown postgres:postgres ${databaseTlsCertificatePath} ${databaseTlsKeyPath}
+chmod 0644 ${databaseTlsCertificatePath}
+chmod 0600 ${databaseTlsKeyPath}
+exec /usr/local/bin/docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=${databaseTlsCertificatePath} -c ssl_key_file=${databaseTlsKeyPath}
+`,
+      { mode: 0o700 },
+    );
+    return Object.freeze({ certificatePath, directory, keyPath, launcherPath });
+  } catch (error) {
+    rmSync(directory, { force: true, recursive: true });
+    throw error;
+  } finally {
+    certificatePem.fill(0);
+    certificateDer.fill(0);
+    certificateBody.fill(0);
+    keyPem.fill(0);
+    privateKeyDer.fill(0);
+    serial.fill(0);
+  }
+}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -272,6 +445,34 @@ WHERE activity.datname = '${databaseName}'
   return Number(value);
 }
 
+function assertWebTlsConnection(label) {
+  const observation = JSON.parse(
+    psqlScalar(
+      `SELECT pg_catalog.jsonb_build_object(
+  'connectionCount', pg_catalog.count(*),
+  'allTls', COALESCE(
+    pg_catalog.bool_and(
+      tls.ssl
+      AND tls.version IN ('TLSv1.2', 'TLSv1.3')
+      AND tls.cipher IS NOT NULL
+    ),
+    false
+  )
+)::text
+FROM pg_catalog.pg_stat_activity AS activity
+JOIN pg_catalog.pg_stat_ssl AS tls
+  ON tls.pid = activity.pid
+WHERE activity.datname = '${databaseName}'
+  AND activity.usename = '${webLogin}'
+  AND activity.application_name = 'viberacing-web-public-score';`,
+      label,
+    ),
+  );
+  assert.equal(Number.isSafeInteger(observation.connectionCount), true);
+  assert.ok(observation.connectionCount >= 1 && observation.connectionCount <= 12);
+  assert.equal(observation.allTls, true);
+}
+
 async function waitForBlockedScoreQueries() {
   const deadline = Date.now() + blockedQueryObservationTimeoutMs;
   let lastCount = 0;
@@ -293,6 +494,47 @@ function buildWorkspace(relativePath, label) {
     cwd: workspaceRoot,
   });
   requireSuccess(result, label);
+}
+
+function nextProcessEnvironment() {
+  const environment = {
+    CI: "1",
+    NEXT_TELEMETRY_DISABLED: "1",
+    NODE_ENV: "production",
+    VIBERACING_PUBLIC_RANKING_ENABLED: "true",
+  };
+  for (const key of ["SystemRoot", "TEMP", "TMP", "WINDIR"]) {
+    const value = process.env[key];
+    if (value !== undefined) {
+      environment[key] = value;
+    }
+  }
+  return environment;
+}
+
+function buildWebApplication() {
+  const localEnvironmentFiles = readdirSync(webRoot).filter((name) => /^\.env(?:\.|$)/.test(name));
+  assert.deepEqual(
+    localEnvironmentFiles,
+    [],
+    "the production Web integration must not load a local environment file",
+  );
+  const result = run(process.execPath, [nextBin, "build"], {
+    cwd: webRoot,
+    env: nextProcessEnvironment(),
+  });
+  requireSuccess(result, "Web production build");
+  const serverStats = lstatSync(standaloneServerPath);
+  assert.equal(
+    serverStats.isFile(),
+    true,
+    "the standalone Next entry point must be a regular file",
+  );
+  assert.equal(
+    serverStats.isSymbolicLink(),
+    false,
+    "the standalone Next entry point must not be a symbolic link",
+  );
 }
 
 function loadReviewedMigrations() {
@@ -357,6 +599,14 @@ async function waitForHealthyContainer() {
     await sleep(250);
   }
   throw new Error(`isolated PostgreSQL did not become healthy (${lastStatus})`);
+}
+
+function assertSyntheticDatabaseTls() {
+  assert.equal(psqlScalar("SHOW ssl;", "synthetic PostgreSQL TLS state"), "on");
+  assert.equal(
+    psqlScalar("SHOW ssl_cert_file;", "synthetic PostgreSQL TLS certificate state"),
+    databaseTlsCertificatePath,
+  );
 }
 
 function readPublishedPostgresPort() {
@@ -437,25 +687,19 @@ FROM web_integration_fingerprints;`,
   return createHash("sha256").update(canonicalState, "utf8").digest("hex");
 }
 
-function webEnvironment(databasePort, login, password) {
+function webEnvironment(databasePort, login, password, port, tlsCertificatePath) {
   const environment = {
-    CI: "1",
-    NEXT_TELEMETRY_DISABLED: "1",
-    NODE_ENV: "development",
-    VIBERACING_PUBLIC_RANKING_ENABLED: "true",
-    VIBERACING_WEB_DATABASE_HOST: "127.0.0.1",
+    ...nextProcessEnvironment(),
+    HOSTNAME: "127.0.0.1",
+    NODE_EXTRA_CA_CERTS: tlsCertificatePath,
+    PORT: String(port),
+    VIBERACING_WEB_DATABASE_HOST: databaseTlsHost,
     VIBERACING_WEB_DATABASE_NAME: databaseName,
     VIBERACING_WEB_DATABASE_PASSWORD: password,
     VIBERACING_WEB_DATABASE_PORT: String(databasePort),
-    VIBERACING_WEB_DATABASE_TLS_MODE: "disable",
+    VIBERACING_WEB_DATABASE_TLS_MODE: "verify-full",
     VIBERACING_WEB_DATABASE_USER: login,
   };
-  for (const key of ["SystemRoot", "TEMP", "TMP", "WINDIR"]) {
-    const value = process.env[key];
-    if (value !== undefined) {
-      environment[key] = value;
-    }
-  }
   return Object.freeze(environment);
 }
 
@@ -478,30 +722,27 @@ function canConnect(port) {
   });
 }
 
-function startNextServer({ databasePort, login, password, port }) {
+function startProductionNextServer({ databasePort, login, password, port, tlsCertificatePath }) {
   let exited = false;
   let outputBytes = 0;
   let outputOverflow = false;
   let privateOutput = false;
   let outputTail = "";
+  const protectedOutputMarkers = [...privateValueMarkers, tlsCertificatePath];
   const maximumPrivateMarkerLength = Math.max(
-    ...privateValueMarkers.map((marker) => marker.length),
+    ...protectedOutputMarkers.map((marker) => marker.length),
   );
-  const child = spawn(
-    process.execPath,
-    [nextBin, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
-    {
-      cwd: webRoot,
-      env: webEnvironment(databasePort, login, password),
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    },
-  );
+  const child = spawn(process.execPath, [standaloneServerPath], {
+    cwd: webRoot,
+    env: webEnvironment(databasePort, login, password, port, tlsCertificatePath),
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
   const observeOutput = (chunk) => {
     outputBytes += chunk.byteLength;
     const text = `${outputTail}${chunk.toString("utf8")}`;
     outputTail = text.slice(-(maximumPrivateMarkerLength - 1));
-    if (privateValueMarkers.some((marker) => text.includes(marker))) {
+    if (protectedOutputMarkers.some((marker) => text.includes(marker))) {
       privateOutput = true;
       child.kill("SIGKILL");
     } else if (outputBytes > maximumServerOutputBytes) {
@@ -517,7 +758,7 @@ function startNextServer({ databasePort, login, password, port }) {
   const closed = new Promise((resolveClose, rejectClose) => {
     child.once("error", () => {
       exited = true;
-      rejectClose(new Error("Next development server could not start."));
+      rejectClose(new Error("Next production server could not start."));
     });
     child.once("close", (code, signal) => {
       exited = true;
@@ -535,27 +776,27 @@ function startNextServer({ databasePort, login, password, port }) {
   });
 }
 
-async function waitForNextServer(server) {
+async function waitForProductionNextServer(server) {
   const deadline = Date.now() + serverStartupTimeoutMs;
   while (Date.now() < deadline) {
     if (server.hasPrivateOutput()) {
-      throw new Error("Next development server output exposed a private integration value.");
+      throw new Error("Next production server output exposed a private integration value.");
     }
     if (server.hasOutputOverflow()) {
-      throw new Error("Next development server exceeded its bounded output budget.");
+      throw new Error("Next production server exceeded its bounded output budget.");
     }
     if (server.hasExited()) {
-      throw new Error("Next development server exited before binding its loopback listener.");
+      throw new Error("Next production server exited before binding its loopback listener.");
     }
     if (await canConnect(server.port)) {
       return;
     }
     await sleep(250);
   }
-  throw new Error("Next development server did not bind its loopback listener in time.");
+  throw new Error("Next production server did not bind its loopback listener in time.");
 }
 
-async function stopNextServer(server) {
+async function stopProductionNextServer(server) {
   if (!server.hasExited()) {
     server.child.kill();
   }
@@ -563,7 +804,7 @@ async function stopNextServer(server) {
     await waitWithDeadline(
       server.closed,
       serverCloseTimeoutMs,
-      "Next development server did not stop within its fixed deadline.",
+      "Next production server did not stop within its fixed deadline.",
     );
   } catch (error) {
     if (!server.hasExited()) {
@@ -571,17 +812,17 @@ async function stopNextServer(server) {
       await waitWithDeadline(
         server.closed,
         serverCloseTimeoutMs,
-        "Next development server did not close after forced termination.",
+        "Next production server did not close after forced termination.",
       );
     } else {
       throw error;
     }
   }
   if (server.hasPrivateOutput()) {
-    throw new Error("Next development server output exposed a private integration value.");
+    throw new Error("Next production server output exposed a private integration value.");
   }
   if (server.hasOutputOverflow()) {
-    throw new Error("Next development server exceeded its bounded output budget.");
+    throw new Error("Next production server exceeded its bounded output budget.");
   }
   const deadline = Date.now() + serverCloseTimeoutMs;
   while (Date.now() < deadline) {
@@ -590,17 +831,28 @@ async function stopNextServer(server) {
     }
     await sleep(250);
   }
-  throw new Error("Next development server retained its loopback listener after shutdown.");
+  throw new Error("Next production server retained its loopback listener after shutdown.");
 }
 
-async function startConfiguredNextServer(databasePort, login, password) {
+async function startConfiguredProductionNextServer(
+  databasePort,
+  login,
+  password,
+  tlsCertificatePath,
+) {
   const port = await findAvailableListenerPort();
-  const server = startNextServer({ databasePort, login, password, port });
+  const server = startProductionNextServer({
+    databasePort,
+    login,
+    password,
+    port,
+    tlsCertificatePath,
+  });
   try {
-    await waitForNextServer(server);
+    await waitForProductionNextServer(server);
     return server;
   } catch (error) {
-    await stopNextServer(server).catch(() => undefined);
+    await stopProductionNextServer(server).catch(() => undefined);
     throw error;
   }
 }
@@ -1037,8 +1289,18 @@ WHERE source_value.source_id IN ('${fixture.alphaSourceId}', '${fixture.betaSour
   return acceptedDate;
 }
 
-async function exerciseUnavailableRoutes(databasePort, seasonStart, validateProblemDetailsV1) {
-  const server = await startConfiguredNextServer(databasePort, wideWebLogin, wideWebPassword);
+async function exerciseUnavailableRoutes(
+  databasePort,
+  seasonStart,
+  validateProblemDetailsV1,
+  tlsCertificatePath,
+) {
+  const server = await startConfiguredProductionNextServer(
+    databasePort,
+    wideWebLogin,
+    wideWebPassword,
+    tlsCertificatePath,
+  );
   const baseUrl = `http://127.0.0.1:${server.port}`;
   try {
     for (const path of [
@@ -1049,7 +1311,7 @@ async function exerciseUnavailableRoutes(databasePort, seasonStart, validateProb
       assertUnavailable(await getJson(baseUrl, path, seasonStart), validateProblemDetailsV1);
     }
   } finally {
-    await stopNextServer(server);
+    await stopProductionNextServer(server);
   }
 }
 
@@ -1089,8 +1351,19 @@ async function exerciseNoQueueAdmission(baseUrl, seasonStart, expectedScore, con
   }
 }
 
-async function exerciseSuccessfulRoutes(databasePort, seasonStart, acceptedDate, contracts) {
-  const server = await startConfiguredNextServer(databasePort, webLogin, webPassword);
+async function exerciseSuccessfulRoutes(
+  databasePort,
+  seasonStart,
+  acceptedDate,
+  contracts,
+  tlsCertificatePath,
+) {
+  const server = await startConfiguredProductionNextServer(
+    databasePort,
+    webLogin,
+    webPassword,
+    tlsCertificatePath,
+  );
   const baseUrl = `http://127.0.0.1:${server.port}`;
   try {
     const stableExpected = expectedPages(seasonStart, acceptedDate, acceptedDate);
@@ -1099,6 +1372,7 @@ async function exerciseSuccessfulRoutes(databasePort, seasonStart, acceptedDate,
       stableExpected.score,
       contracts.validateCommunityScorePageV1,
     );
+    assertWebTlsConnection("production Web TLS connection observation");
     assertSuccess(
       await getJson(baseUrl, "/v1/community/race", seasonStart),
       stableExpected.race,
@@ -1124,7 +1398,7 @@ async function exerciseSuccessfulRoutes(databasePort, seasonStart, acceptedDate,
     }
     await exerciseNoQueueAdmission(baseUrl, seasonStart, stableExpected.score, contracts);
   } finally {
-    await stopNextServer(server);
+    await stopProductionNextServer(server);
   }
 }
 
@@ -1143,23 +1417,19 @@ async function main() {
     1,
     "next-env.d.ts must contain the one canonical production route-type reference",
   );
-  const expectedDevelopmentNextEnvironment = Buffer.from(
-    originalNextEnvironmentText.replace(
-      productionNextEnvironmentReference,
-      developmentNextEnvironmentReference,
-    ),
-    "utf8",
-  );
   buildWorkspace("packages/contracts", "contract production build");
+  buildWebApplication();
   const contracts = await import(
     pathToFileURL(resolve(root, "packages", "contracts", "dist", "index.js")).href
   );
 
   let containerStarted = false;
+  let tlsMaterial;
   let primaryFailure;
   let cleanupFailure;
 
   try {
+    tlsMaterial = createSyntheticTlsMaterial();
     const start = docker(
       [
         ...composePrefix,
@@ -1170,14 +1440,22 @@ async function main() {
         containerName,
         "--publish",
         "127.0.0.1::5432",
+        "--volume",
+        `${tlsMaterial.directory}:/viberacing-tls:ro`,
+        "--entrypoint",
+        "/bin/sh",
         "postgres-test",
+        "/viberacing-tls/start-postgres.sh",
       ],
       { timeout: 120_000 },
     );
-    requireSuccess(start, "isolated PostgreSQL start");
+    if (start.status !== 0) {
+      throw new Error("isolated PostgreSQL start failed");
+    }
     containerStarted = true;
     await waitForHealthyContainer();
     const databasePort = readPublishedPostgresPort();
+    assertSyntheticDatabaseTls();
 
     psql(
       readFileSync(resolve(root, "database", "roles", "bootstrap.sql"), "utf8"),
@@ -1237,6 +1515,7 @@ COMMIT;`,
       databasePort,
       calendar.seasonStart,
       contracts.validateProblemDetailsV1,
+      tlsMaterial.certificatePath,
     );
     assert.equal(
       readPrivateStateFingerprint("post-rejection Web private-state fingerprint"),
@@ -1244,7 +1523,13 @@ COMMIT;`,
       "the widened login must fail closed before mutating any private table",
     );
 
-    await exerciseSuccessfulRoutes(databasePort, calendar.seasonStart, acceptedDate, contracts);
+    await exerciseSuccessfulRoutes(
+      databasePort,
+      calendar.seasonStart,
+      acceptedDate,
+      contracts,
+      tlsMaterial.certificatePath,
+    );
     assert.equal(
       readPrivateStateFingerprint("post-success Web private-state fingerprint"),
       initialState,
@@ -1252,7 +1537,7 @@ COMMIT;`,
     );
 
     console.log(
-      "Web PostgreSQL integration passed (three real HTTP routes, four-slot no-queue admission, least-privilege denial, exact contracts, and read-only stored state).",
+      "Web PostgreSQL integration passed (two built production Next processes over synthetic verified TLS, three real HTTP routes, four-slot no-queue admission, least-privilege denial, exact contracts, and read-only stored state).",
     );
   } catch (error) {
     primaryFailure = error;
@@ -1271,23 +1556,28 @@ COMMIT;`,
     if (down.status !== 0) {
       cleanupFailure ??= new Error("isolated PostgreSQL network cleanup failed");
     }
+    if (tlsMaterial !== undefined) {
+      try {
+        rmSync(tlsMaterial.directory, { force: true, recursive: true });
+      } catch {
+        cleanupFailure ??= new Error("synthetic PostgreSQL TLS material cleanup failed");
+      }
+    }
     try {
       const currentNextEnvironment = readFileSync(nextEnvironmentPath);
       if (!currentNextEnvironment.equals(originalNextEnvironment)) {
-        assert.equal(
-          currentNextEnvironment.equals(expectedDevelopmentNextEnvironment),
-          true,
-          "next-env.d.ts changed outside the expected Next development rewrite",
-        );
         writeFileSync(nextEnvironmentPath, originalNextEnvironment);
+        cleanupFailure ??= new Error(
+          "Next production build changed the canonical next-env.d.ts file",
+        );
       }
       assert.equal(
         readFileSync(nextEnvironmentPath).equals(originalNextEnvironment),
         true,
-        "Next development type reference restoration failed",
+        "Next production type reference restoration failed",
       );
     } catch {
-      cleanupFailure ??= new Error("Next development type reference cleanup failed");
+      cleanupFailure ??= new Error("Next production type reference cleanup failed");
     }
   }
 

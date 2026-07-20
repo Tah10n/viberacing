@@ -18,32 +18,33 @@ their server-only projection-to-contract mappers; Phase 3 database-only source/d
 same-source deduplication, and bounded pairing-retention cleanup have also started. A server-only
 public problem-response factory, closed query/OpenAPI operations, and locally implemented public
 score/race/status GETs now exist behind one exact default-off module-load gate. A separate opt-in
-synthetic integration applies the reviewed migrations to disposable PostgreSQL, starts those three
-real Next development GETs on loopback, rejects a deliberately widened Web login without changing
-any private table, validates exact contracts through a narrow login, and proves the successful reads
-are also non-mutating. It additionally proves the four-request no-queue boundary through four
-observed blocked score queries, a rejected fifth request with no fifth public-score query, and four
-successful responses after release. The visible home race requests the current server-selected
-Community week from the separate same-origin status route, replaces only its race/leaderboard after
-closed browser-side validation, uses an exact current approved recipe or repository-owned absence
-fallback, shows only complete-UTC-day freshness and an optional preference-gated streak, lets a
-handle select a same-page summary from those public fields, exposes that selection through a
-canonical public-handle URL and public-account link, and retains a labeled synthetic fallback on
-failure. The same public page now exposes a local-only EN/RU score simulator that validates one
-hypothetical daily token total, applies the production daily and weekly scoring functions for one to
-seven active days, and never requests, logs, stores, preloads, or submits that value or changes a
-standing. Local identity slices now implement exact same-origin bounded forms, GitHub OAuth state
-and S256 PKCE with no extra scope, purpose-separated encrypted HttpOnly continuations, atomic
-profile/session creation, required initial WebAuthn registration, returning discoverable-credential
-login, a session-scoped minimal passkey inventory, an active account page, immediate public-profile
-hide/show, source inventory and pause, fresh-passkey paused-source reactivation and terminal unlink,
-fresh backup-passkey addition, revocation of an owned non-current passkey, a bounded active-device
-inventory with immediate owned-device revoke, fresh-passkey recovery-code rotation with one-time
-display, an exact-handle fresh-passkey profile-deletion request, one-time recovery-code
-replacement-passkey sign-in, and database-backed logout. Login options retain the profile-free
-challenge only in a separate encrypted cookie; valid proof alone reaches one atomic
-create-consume-session call. Its GitHub, passkey-verifier, database, and browser evidence is
-injected or synthetic; no working invite issuer, OAuth registration, secret, live
+synthetic integration applies the reviewed migrations to TLS-enabled disposable PostgreSQL, builds
+the standalone Web artifact with the reviewed `pg` driver bundled, and starts two emitted Next
+production processes on loopback. It rejects a deliberately widened Web login without changing any
+private table, validates exact contracts plus TLS 1.2/1.3 through a narrow login, and proves the
+successful reads are also non-mutating. It additionally proves the four-request no-queue boundary
+through four observed blocked score queries, a rejected fifth request with no fifth public-score
+query, and four successful responses after release. The visible home race requests the current
+server-selected Community week from the separate same-origin status route, replaces only its
+race/leaderboard after closed browser-side validation, uses an exact current approved recipe or
+repository-owned absence fallback, shows only complete-UTC-day freshness and an optional
+preference-gated streak, lets a handle select a same-page summary from those public fields, exposes
+that selection through a canonical public-handle URL and public-account link, and retains a labeled
+synthetic fallback on failure. The same public page now exposes a local-only EN/RU score simulator
+that validates one hypothetical daily token total, applies the production daily and weekly scoring
+functions for one to seven active days, and never requests, logs, stores, preloads, or submits that
+value or changes a standing. Local identity slices now implement exact same-origin bounded forms,
+GitHub OAuth state and S256 PKCE with no extra scope, purpose-separated encrypted HttpOnly
+continuations, atomic profile/session creation, required initial WebAuthn registration, returning
+discoverable-credential login, a session-scoped minimal passkey inventory, an active account page,
+immediate public-profile hide/show, source inventory and pause, fresh-passkey paused-source
+reactivation and terminal unlink, fresh backup-passkey addition, revocation of an owned non-current
+passkey, a bounded active-device inventory with immediate owned-device revoke, fresh-passkey
+recovery-code rotation with one-time display, an exact-handle fresh-passkey profile-deletion
+request, one-time recovery-code replacement-passkey sign-in, and database-backed logout. Login
+options retain the profile-free challenge only in a separate encrypted cookie; valid proof alone
+reaches one atomic create-consume-session call. Its GitHub, passkey-verifier, database, and browser
+evidence is injected or synthetic; no working invite issuer, OAuth registration, secret, live
 authenticator/database login, distributed edge abuse control, deployed recovery/deletion cleanup
 cadence, cache/backup/tombstone purge, restore replay, notification, or deployment is supplied. A
 local one-shot Jobs runner invokes only the seventeen existing maintenance procedures through a
@@ -625,21 +626,24 @@ ranking, or deployed Jobs scheduler/cadence exists.
   returning early from an outer promise race. The reserved 429 does not claim a client-rate limiter.
   The module-load gate proves no deployed route/cache denial, simultaneous worker reload,
   old-instance drain, operator audit, monitoring, or dynamic switch.
-- An opt-in full local Web HTTP-to-PostgreSQL gate. It builds the emitted contract runtime, starts
-  one disposable `postgres-test` container with an ephemeral loopback-only port, applies all 39
-  reviewed migrations, seeds only synthetic public/private state, and starts two sequential real
-  Next development processes. The deliberately widened login receives exact generic 503 contracts
-  from all three public-ranking GETs while a SHA-256 fingerprint over every private table remains
-  unchanged. The narrow login then returns the exact score, race, and status pages, including
-  active-only visibility, current recipe, rounded freshness, and preference-gated streak omission.
-  Contract validators plus private-marker checks prove a public-only response, while the same
-  full-state fingerprint proves non-mutating behavior. A bounded owner-held table lock then leaves
-  exactly four narrow-login score queries observable in PostgreSQL. A fifth HTTP request must return
-  the exact generic 503 under a narrower harness deadline without adding a fifth public-score query;
-  rollback releases the original four, which must all return exact 200 contracts. Next and blocker
-  output is bounded, checked for private fixture/credential reflection, and discarded; all three
-  processes, the container, network, and storage are removed. Secretless CI declares the command. It
-  proves no production Next process, deployment login/TLS/certificate, cache, edge rate policy,
+- An opt-in full local Web HTTP-to-PostgreSQL gate. It builds the emitted contract runtime and Web
+  standalone artifact, explicitly bundles Next's otherwise externalized reviewed `pg` driver,
+  generates one ephemeral self-signed DNS certificate, starts one TLS-enabled disposable
+  `postgres-test` container with an ephemeral loopback-only port, applies all 39 reviewed
+  migrations, seeds only synthetic public/private state, and starts two sequential emitted Next
+  production processes. The deliberately widened login receives exact generic 503 contracts from all
+  three public-ranking GETs while a SHA-256 fingerprint over every private table remains unchanged.
+  The narrow login then returns the exact score, race, and status pages, including active-only
+  visibility, current recipe, rounded freshness, and preference-gated streak omission, while
+  `pg_stat_ssl` proves TLS 1.2 or 1.3. Contract validators plus private-marker checks prove a
+  public-only response, while the same full-state fingerprint proves non-mutating behavior. A
+  bounded owner-held table lock then leaves exactly four narrow-login score queries observable in
+  PostgreSQL. A fifth HTTP request must return the exact generic 503 under a narrower harness
+  deadline without adding a fifth public-score query; rollback releases the original four, which
+  must all return exact 200 contracts. Next and blocker output is bounded, checked for private
+  fixture/credential/path reflection, and discarded; all ephemeral key material, three processes,
+  the container, network, and storage are removed. Secretless CI declares the command. It proves no
+  deployment certificate/login, external TLS/edge path, cache, edge rate policy,
   query-plan/load/capacity result, monitoring, real-user data, hosted pass, or deployment.
 - A visible public-race consumer. The dynamic server page derives the current ISO Monday and passes
   only that public label to the client. After hydration, the browser lazily loads its compact
@@ -828,8 +832,9 @@ ranking, or deployed Jobs scheduler/cadence exists.
   read-only state before every query; destroys a failed client; releases a healthy client before
   mapping; and returns only stable non-reflective error/signal codes. Config, pool, and store tests
   cover positive and negative boundaries without a live deployment credential. The local routes are
-  wired to this adapter, but no cache, live login/certificate, audited correction flow, or deployed
-  scheduler/cadence exists.
+  wired to this adapter and the synthetic standalone integration proves an ephemeral self-signed
+  certificate plus disposable login, but no cache, deployment certificate/login, external TLS/edge
+  route, audited correction flow, or deployed scheduler/cadence exists.
 - A local server-only enrollment application now parses one exact 1 KiB invite form, immediately
   reduces the canonical 256-bit secret to SHA-256, and seals the digest/preferences with independent
   32-byte OAuth state and S256 PKCE material in a ten-minute callback-path AES-256-GCM cookie.

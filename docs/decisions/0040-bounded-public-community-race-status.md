@@ -118,10 +118,13 @@ Repository evidence covers:
 - exact route parsing, response revalidation, no-store delivery, no-queue admission, and closed
   method handling; and
 - EN/RU browser rendering plus full-page synthetic fallback for invalid, oversized, failed, or
-  unavailable responses.
+  unavailable responses; and
+- one opt-in emitted standalone integration that validates the status contract through a disposable
+  narrow login over TLS 1.2/1.3, rejects a widened login, and preserves every private table.
 
 There is still no cache/invalidation, edge scrape or client-rate policy, query-plan/load result,
-monitoring backend, live Web database credential/certificate, real-user result, or deployment.
+monitoring backend, deployment Web database certificate/login, external TLS/edge route, real-user
+result, or deployment.
 
 ## References
 

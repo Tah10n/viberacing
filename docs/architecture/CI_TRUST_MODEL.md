@@ -65,13 +65,15 @@ does not make the pull request trusted; review and protected-branch policy remai
   separate synthetic PostgreSQL integrations: Web HTTP, Ingest HTTP, Jobs CLI, and four distinct
   Jobs-scheduler modes. Each owns a unique Compose project/container, uses only synthetic
   credentials/data, exposes at most an ephemeral loopback port, retains no volume or artifact, and
-  cleans up in `finally`. The Web harness additionally bounds and discards its Next development
-  process output, bounds a separate PostgreSQL blocker child used for its no-queue check, and
-  removes all three children. The Ingest harness independently bounds, scans, and discards its own
-  PostgreSQL blocker output before removing that child. It then starts the built Ingest entry point
-  with only synthetic protected configuration, treats any output byte as failure without retaining
-  it, and forcibly removes only that silent test child after one accepted request. These are
-  untrusted pull-request checks, not graceful child settlement, hosted-service, production
+  cleans up in `finally`. The Web harness additionally generates one ephemeral self-signed
+  certificate/key pair, mounts it read-only for a TLS-enabled disposable database start, builds and
+  runs two emitted standalone Next production processes with `pg` bundled, bounds and discards their
+  output, bounds a separate PostgreSQL blocker child used for its no-queue check, and removes all
+  key/process/container resources. The Ingest harness independently bounds, scans, and discards its
+  own PostgreSQL blocker output before removing that child. It then starts the built Ingest entry
+  point with only synthetic protected configuration, treats any output byte as failure without
+  retaining it, and forcibly removes only that silent test child after one accepted request. These
+  are untrusted pull-request checks, not graceful child settlement, hosted-service, production
   credential, deployment, representative load/capacity, or release evidence.
 
 The repository tests these rules with positive and negative fixtures. The tests are defense in

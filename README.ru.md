@@ -112,21 +112,24 @@ pnpm run dev:web
 
 Полные синтетические loopback Web, Ingest и Jobs paths отдельно проверяются командами
 `pnpm run test:web:postgres-integration`, `pnpm run test:ingest:postgres-integration` и
-`pnpm run test:jobs:postgres-integration`. Web-команда запускает три реальные Next development route
-против одноразовой PostgreSQL, отклоняет login с лишней role membership до проекционного чтения и
-подтверждает отсутствие мутаций, проверяет точные public contracts через узкий login и подтверждает
-неизменность всех private tables. Затем она удерживает четыре score query на контролируемом DB lock,
-отклоняет пятый request без пятого public-score query и после rollback проверяет четыре исходных
-exact 200 response. Это локальная no-queue проверка, а не load/capacity evidence. Отдельная команда
-Ingest удерживает четыре независимо подписанных request на первом replay-store call, требует generic
-503 для пятого без пятого DB call, затем отпускает lock и проверяет четыре accepted response и
-точное состояние. Это также контролируемая no-queue проверка, а не representative load/capacity
-evidence. Отдельная команда `pnpm run test:jobs-scheduler:postgres-integration` связывает production
-scheduler core под фиксированным UTC-временем с реальным Jobs runner и одноразовым PostgreSQL.
-Команда `pnpm run test:jobs-scheduler:timer-postgres-integration` сдвигает injected clock на
-следующий час, вызывает production interval handler дважды во время активного цикла, проверяет
-точный повторный каталог, подавление overlap и того же slot, а также повторный terminal reset. Это
-не доказательство доставки callback реальным host timer. Команда
+`pnpm run test:jobs:postgres-integration`. Web-команда собирает standalone artifact, включает
+проверенный `pg` driver в server bundle, генерирует одноразовый self-signed DNS certificate и
+запускает два emitted Next production process против TLS-enabled одноразовой PostgreSQL. Она
+отклоняет login с лишней role membership до проекционного чтения и подтверждает отсутствие мутаций,
+проверяет точные public contracts через узкий login, наблюдает TLS 1.2 или 1.3 в `pg_stat_ssl` и
+подтверждает неизменность всех private tables. Затем она удерживает четыре score query на
+контролируемом DB lock, отклоняет пятый request без пятого public-score query и после rollback
+проверяет четыре исходных exact 200 response. Это локальная no-queue и synthetic-certificate
+проверка, а не deployment или load/capacity evidence. Отдельная команда Ingest удерживает четыре
+независимо подписанных request на первом replay-store call, требует generic 503 для пятого без
+пятого DB call, затем отпускает lock и проверяет четыре accepted response и точное состояние. Это
+также контролируемая no-queue проверка, а не representative load/capacity evidence. Отдельная
+команда `pnpm run test:jobs-scheduler:postgres-integration` связывает production scheduler core под
+фиксированным UTC-временем с реальным Jobs runner и одноразовым PostgreSQL. Команда
+`pnpm run test:jobs-scheduler:timer-postgres-integration` сдвигает injected clock на следующий час,
+вызывает production interval handler дважды во время активного цикла, проверяет точный повторный
+каталог, подавление overlap и того же slot, а также повторный terminal reset. Это не доказательство
+доставки callback реальным host timer. Команда
 `pnpm run test:jobs-scheduler:lifecycle-postgres-integration` отдельно проверяет injected
 first-signal shutdown production lifecycle: активная DB-задача завершается, следующая
 scheduler-задача не стартует, runner/timers/handlers закрываются и выставляется код 0. Это не
@@ -152,42 +155,42 @@ deadlines и один parameterized top-32 procedure call. Server-only HTTP prob
 opaque 128-bit request IDs и закрытые contract-validated no-store error responses. Thin server-only
 route проверяет точный query, GET-only method/`Accept`, no-queue admission на четыре запроса,
 adapter deadlines, store-error translation и финальный response contract. Это локальная реализация,
-а не deployment: cache, deployment login/TLS integration, edge rate policy, operational connector и
-приём реальной статистики ещё отсутствуют. Отдельное чистое Ingest kernel теперь копирует и
-ограничивает точные raw body/headers Community sync, до JSON и device lookup проверяет body-bound
-origin HMAC с одноразовым nonce, отклоняет дубликаты headers/decoded JSON keys и превышение parser
-budgets, валидирует sync contract и строго проверяет source-bound Ed25519 request. Оно возвращает
-только frozen database-ready allowlist. Отдельный bounded Ingest PostgreSQL adapter повторно
-проверяет этот allowlist, копирует binary/array parameters, при каждом checkout проверяет точный
-least-privileged Ingest login/role и вызывает только fixed origin-replay consume, device lookup или
-submission через four-client pool с deadlines. Без TLS разрешён только loopback development/test, в
-остальных случаях обязательна certificate verification. Focused tests используют mock pools.
-Локальная protected factory теперь требует точную primary origin-HMAC пару и допускает только одну
-полную distinct rotation-пару из namespaced configuration; наружу она возвращает только verifier, а
-реальных key и secret-manager binding в репозитории нет. Forced-RLS PostgreSQL table хранит только
-origin key ID, domain-separated nonce digest и millisecond expiry; Ingest-only function атомарно
-consume-ит tuple, а observed race доказывает одного победителя. Transport-free application boundary
-теперь генерирует server-owned request ID, связывает этот replay/device/submission adapter с точным
-verifier, дожидается settlement базы и возвращает только валидированный acknowledgement либо generic
-problem decision. Отдельная локальная Fastify server factory сохраняет точные raw body/header
-evidence для `POST /v1/community/sync`, не доверяет proxy headers и входящему request ID, без
-очереди допускает четыре application call, ограничивает parser/headers/connections и задаёт
-5/33/34-second request/handler/connection deadlines, после чего сериализует только повторно
-проверенные `no-store` success/problem contracts. Отдельный локальный host теперь запускает именно
-эту factory только в loopback development/test либо с явным Railway-edge production contract,
-закрывает частично созданные boundary и ограниченно обрабатывает SIGINT/SIGTERM. Его 130 tests и
-built-entrypoint check не доказывают Railway, внешний TLS, edge route, live credentials или
-deployment. Отдельный opt-in integration test собирает emitted host, создаёт синтетический
-выделенный Ingest login в одноразовом PostgreSQL, отправляет независимо подписанные loopback HTTP
-requests и проверяет accepted, duplicate, persistent replay, revoked device, response headers и
-точные сохранённые строки. Она также удерживает четыре request на первом replay-store call,
-отклоняет пятый generic 503 без пятого DB call, затем проверяет четыре accepted response до полного
-settlement. После закрытия imported host тот же gate запускает built entry point отдельным тихим
-process, наблюдает его loopback listener без application work, доказывает ещё один exact accepted
-request и принудительно завершает только test child перед cleanup. Это не доказывает OS-signal
-delivery, graceful emitted-child settlement, deployment credential/certificate, protected secret
-delivery, distributed control, внешний edge route, representative load, real-user data или capacity.
-Live protected key injection, edge signer, direct-origin denial, distributed rate policy и
+а не deployment: cache, deployment certificate/login, external TLS/edge route, edge rate policy,
+operational connector и приём реальной статистики ещё отсутствуют. Отдельное чистое Ingest kernel
+теперь копирует и ограничивает точные raw body/headers Community sync, до JSON и device lookup
+проверяет body-bound origin HMAC с одноразовым nonce, отклоняет дубликаты headers/decoded JSON keys
+и превышение parser budgets, валидирует sync contract и строго проверяет source-bound Ed25519
+request. Оно возвращает только frozen database-ready allowlist. Отдельный bounded Ingest PostgreSQL
+adapter повторно проверяет этот allowlist, копирует binary/array parameters, при каждом checkout
+проверяет точный least-privileged Ingest login/role и вызывает только fixed origin-replay consume,
+device lookup или submission через four-client pool с deadlines. Без TLS разрешён только loopback
+development/test, в остальных случаях обязательна certificate verification. Focused tests используют
+mock pools. Локальная protected factory теперь требует точную primary origin-HMAC пару и допускает
+только одну полную distinct rotation-пару из namespaced configuration; наружу она возвращает только
+verifier, а реальных key и secret-manager binding в репозитории нет. Forced-RLS PostgreSQL table
+хранит только origin key ID, domain-separated nonce digest и millisecond expiry; Ingest-only
+function атомарно consume-ит tuple, а observed race доказывает одного победителя. Transport-free
+application boundary теперь генерирует server-owned request ID, связывает этот
+replay/device/submission adapter с точным verifier, дожидается settlement базы и возвращает только
+валидированный acknowledgement либо generic problem decision. Отдельная локальная Fastify server
+factory сохраняет точные raw body/header evidence для `POST /v1/community/sync`, не доверяет proxy
+headers и входящему request ID, без очереди допускает четыре application call, ограничивает
+parser/headers/connections и задаёт 5/33/34-second request/handler/connection deadlines, после чего
+сериализует только повторно проверенные `no-store` success/problem contracts. Отдельный локальный
+host теперь запускает именно эту factory только в loopback development/test либо с явным
+Railway-edge production contract, закрывает частично созданные boundary и ограниченно обрабатывает
+SIGINT/SIGTERM. Его 130 tests и built-entrypoint check не доказывают Railway, внешний TLS, edge
+route, live credentials или deployment. Отдельный opt-in integration test собирает emitted host,
+создаёт синтетический выделенный Ingest login в одноразовом PostgreSQL, отправляет независимо
+подписанные loopback HTTP requests и проверяет accepted, duplicate, persistent replay, revoked
+device, response headers и точные сохранённые строки. Она также удерживает четыре request на первом
+replay-store call, отклоняет пятый generic 503 без пятого DB call, затем проверяет четыре accepted
+response до полного settlement. После закрытия imported host тот же gate запускает built entry point
+отдельным тихим process, наблюдает его loopback listener без application work, доказывает ещё один
+exact accepted request и принудительно завершает только test child перед cleanup. Это не доказывает
+OS-signal delivery, graceful emitted-child settlement, deployment credential/certificate, protected
+secret delivery, distributed control, внешний edge route, representative load, real-user data или
+capacity. Live protected key injection, edge signer, direct-origin denial, distributed rate policy и
 monitoring всё ещё отсутствуют. Library-only Rust foundation теперь выполняет фиксированный stable
 handshake и только после него — candidate `0.144.5` account/usage sequence. Он подтверждает ChatGPT
 mode, отбрасывает email/plan/summary и возвращает не более 31 отсортированной строгой date/token
@@ -269,9 +272,10 @@ database role и contract до сериализации. Status route добав
 optional preference-gated streak без exact timestamps или daily rows. Видимая гонка и таблица
 запрашивают у него текущую server-selected неделю без credentials, проверяют только public поля и
 честно сохраняют synthetic fallback при недоступности. Отдельная synthetic Web integration проводит
-все три реальные Next development GET через disposable least-privileged PostgreSQL login, проверяет
-widened-login denial, точные contracts, четырёхслотовый no-queue admission и полную неизменность
-private tables; production login/TLS, cache, load/capacity, monitoring и deployment она не
+все три GET через два emitted standalone Next production process и TLS-enabled disposable
+least-privileged PostgreSQL login, проверяет widened-login denial, точные contracts, TLS 1.2/1.3,
+четырёхслотовый no-queue admission и полную неизменность private tables; deployment
+certificate/login, external TLS/edge route, cache, load/capacity, monitoring и deployment она не
 доказывает. Локальные invite/OAuth/ initial-passkey/returning-login routes теперь существуют; login
 options хранят profile-free challenge только в encrypted cookie, а валидный assertion атомарно
 создаёт и тут же поглощает database challenge при выдаче сессии. Страница аккаунта по той же

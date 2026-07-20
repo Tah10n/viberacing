@@ -1,6 +1,6 @@
 # ADR 0011: Bounded Web PostgreSQL score adapter
 
-- Status: Accepted (adapter and local route implemented; cache/deployment pending)
+- Status: Accepted
 - Date: 2026-07-15
 - Decision owners: Web, Database, Security, Privacy, and Operations
 - Supersedes: None
@@ -25,7 +25,10 @@ Use the exact pinned `pg` 8.22.0 client and its bounded pool in the server-only 
 package, its transitive graph, declared licenses, integrity metadata, maintenance state, optional
 native peer, and absence of install scripts were reviewed. Exact versions, the installed graph,
 licenses, and integrity metadata are recorded by the existing deterministic dependency gates; the
-remaining observations are review-time evidence. No ORM or general query builder is added because
+remaining observations are review-time evidence. Because Next automatically treats `pg` as a
+server-external package, the Web production configuration explicitly lists only `pg` in
+`transpilePackages`; this keeps the reviewed driver inside the emitted standalone server rather than
+depending on a development-workspace package link. No ORM or general query builder is added because
 this slice has one fixed procedure call and must not grow application-selected table access.
 
 The adapter consumes only six namespaced settings:
@@ -115,15 +118,17 @@ VR-ABUSE-PUBLIC-SCRAPE, VR-ABUSE-DELETE-RESURRECTION, and VR-ABUSE-DEPENDENCY-PR
 - **Add an ORM or generic repository:** rejected because it adds dependency and query surface
   without a second approved use case.
 - **Permit opportunistic or certificate-disabled TLS:** rejected because production database
-  identity must fail closed. Custom private CA support can be designed when deployment requirements
-  and secret delivery exist.
+  identity must fail closed. The local integration uses only a runtime-generated, self-signed test
+  trust anchor through Node's process-level CA mechanism; deployment-specific CA configuration and
+  protected delivery still require a separate reviewed design.
 
 ## Migration and rollback
 
 There is no database migration, route, or persisted-state change. Rollback removes the adapter,
-driver declarations and reviewed dependency metadata, namespaced example settings, tests, and this
-ADR together. A caller can disable the capability by not constructing the configured store; no
-fallback may use the compose owner, direct tables, synthetic response, or weaker TLS.
+driver declarations and reviewed dependency metadata, the standalone bundling rule, namespaced
+example settings, tests, and this ADR together. A caller can disable the capability by not
+constructing the configured store; no fallback may use the compose owner, direct tables, synthetic
+response, or weaker TLS.
 
 After an HTTP consumer exists, rollback must disable that route with bounded public failure behavior
 and purge any separately reviewed cache. It must not keep serving stale score rows or widen the
@@ -146,13 +151,19 @@ Current repository evidence covers:
 - malformed, extra, missing, inherited, accessor-backed, and false boundary results; connection,
   query, release, and projection failures; client destruction versus healthy release; and no
   reflected private failure value; and
+- one opt-in emitted standalone integration that generates and removes an ephemeral self-signed DNS
+  certificate/key, starts TLS-enabled disposable PostgreSQL, proves the reviewed driver is usable
+  from the standalone artifact, observes TLS 1.2 or 1.3 for the narrow login, rejects a widened
+  login, validates all three public contracts, and preserves every private table; and
 - exact dependency versions, lock integrity, license inventory/notices, registry metadata, and a
   zero-known-vulnerability audit at review time.
 
-There is no integration test through a real deployment-style login, certificate, network, or
-PostgreSQL connection because the repository intentionally supplies none. The existing PostgreSQL
-integration separately proves the function, output, deadlines, grants, and negative role matrix.
-HTTP, cache, load, deployment, and end-to-end hide/purge evidence remain open.
+There is no integration test through a reusable deployment login, deployment certificate chain,
+external network, secret-delivery boundary, or deployed PostgreSQL connection because the repository
+intentionally supplies none. The local synthetic integration proves only an ephemeral self-signed
+exact-DNS trust anchor and disposable login. The existing general PostgreSQL integration separately
+proves the function, output, deadlines, grants, and negative role matrix. External edge, cache,
+load, deployment, and end-to-end hide/purge evidence remain open.
 
 ## References
 

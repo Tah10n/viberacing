@@ -91,96 +91,98 @@ default-off decision now closes the invite/OAuth/initial-passkey enrollment page
 service methods while returning login and recovery remain available. None of these local gates is a
 deployed dynamic kill switch. The public home also has a local-only EN/RU score simulator that
 persists or transmits no hypothetical input; the stable score and legacy race response contracts
-remain unchanged. These local boundaries include one opt-in synthetic path through all three real
-Next development GETs and a disposable narrow Web login, with widened-login denial, exact public
-contracts, and full private-table non-mutation. The same path holds four score reads behind a
-controlled database lock, rejects a fifth request without adding a fifth public-score query, and
-settles the original four after release. They still have no deployment proof key or secret-manager
-binding, externally verified TLS/edge route, deployment database credential, capacity evidence,
-deployment, or real-data result. A separate local enrollment slice now implements exact invite
-parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted cookies,
-atomic profile enrollment, required initial WebAuthn registration plus pending-session rotation,
-returning discoverable-credential passkey login, a session-scoped minimal passkey inventory, an
-account page, same-origin public-profile hide/show, a session-derived active-device inventory,
-immediate source pause, passkey-protected paused-source reactivation, immediate owned-device revoke,
-passkey-protected terminal source unlink, backup-passkey addition, revocation of an owned
-non-current passkey, fresh-passkey recovery-code rotation with one-time plaintext display, an
-exact-handle fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey
-sign-in, and logout through the same probed read-write Web/Auth pool. Login options retain their
-profile-free challenge only in a purpose-separated cookie; valid proof atomically creates and
-consumes its database challenge while minting the session. Recovery performs bounded Argon2id
-verification under a protected pepper, creates only a five-minute restricted authority, verifies the
-replacement WebAuthn ceremony, and returns a normal session only after atomic completion. It has an
-exact-session CarRecipe editor that validates one closed version 1 object, stores at most one
-24-hour private proposal, previews active/pending recipes in all three themes, and activates or
-rejects only through an encrypted session-bound control. A separate bounded device-authenticated
-route and fixed connector command can only create or replace that pending exact recipe for an active
-source-bound device; they cannot read, approve, reject, or activate it. A separate compatible race
-projection exposes only an active profile's current approved recipe; proposal state stays private. A
-separate bounded Jobs-only capability physically removes expired proposals locally, and the
-default-off scheduler plus the combined synthetic PostgreSQL integration exercise it, but no
-deployed cadence, production login, monitoring, or deployment is proven. The enrollment slice has
-only injected/synthetic evidence and no invite issuer UI, working OAuth or database credential,
-distributed recovery attempt controls, deployed cleanup/deletion cadence or notification,
-cache/backup/tombstone purge, restore replay, edge abuse controls, or deployment. Bounded expired
-authentication/invite/CarRecipe-proposal/session, finalized source/day, aged revoked-passkey, and
-aged minimized revoked-device/pairing cleanup plus primary profile deletion exist locally. Finalized
-source/day cleanup retains a smaller UTC-day/count projection and waits 30 days after terminal
-finalization. Activated pairing approval references can be redacted locally after 180 days, and an
-unreferenced revoked-device binding can be removed only after both its activation and revocation
-have crossed the 180-day boundary. These capabilities are catalogued in the default-off local
-scheduler and exercised together in the combined synthetic PostgreSQL integration, but have no
-deployed retention evidence. A library-only Rust connector foundation now implements a bounded
-stable App Server JSONL handshake and a candidate-only `0.144.5` account/usage parser with checked
-schema/fixture evidence. A one-shot supervisor composes that sequence with fixed local pipes,
-arguments, deadlines, output budgets, ambient-environment clearing, and reap-before-success
-behavior, but its reviewed-launch capability has no public constructor. An exact-body composer now
-consumes that minimized usage behind a second inaccessible reviewed context and fixes the versioned
-JSON/digest/LF message. An isolated one-use signer consumes that otherwise inaccessible material
-with a device-bound key capability that also has no public constructor, returning only the same body
-and five exact signed header values. A separate inaccessible pending-key/challenge signer and pure
-server-only Web verifier now agree on one exact synthetic pairing-possession proof. A transport-free
-Web/Auth start application creates nine-minute pending transactions from closed device metadata with
-fresh server IDs, poll tokens, challenges, 60-bit human codes, and separate protected poll/code
-verifiers through the fixed read-write Web pool. A second activation application performs protected
-poll lookup, runs the strict proof, and alone invokes exact activation with server-owned IDs behind
-fixed admission and timing. A local signed-in `/connect` flow now counts pending-code attempts on
-the exact session, renders bounded device metadata plus a full public-key fingerprint, offers a new
-source or an active owned source through an encrypted session-bound control, and requires a separate
-fresh passkey assertion before atomic new/existing-source approval. A closed local start/poll HTTP
-boundary now shares four-call admission, applies a fixed-storage global-and-64-bucket PostgreSQL
-rate policy, and serializes only the versioned contracts; it and both signed-in approval routes
-remain unavailable unless their modules resolve exact `VIBERACING_PAIRING_ENABLED=true`. A bounded
-Rust `connect` command generates one Ed25519 key through the OS CSPRNG, stores its versioned state
-only in the native credential store, resumes polling, and persists the activated binding without
-printing bearer or key material. A separate exact `forget-local` command deletes only the canonical
-origin/label native entry without loading it or contacting the service, and states that it did not
-revoke server device authority. A separate explicit `check-codex` command reuses only the bounded
-exact Windows candidate admission without an origin, credential-store access, Codex process, account
-read, persistence, or network, and reports that no version is supported. Its opt-in diagnostic
-preview emits only a closed local v1 summary of compile-time version, fixed platform contract,
-admission class, and empty support state; it retains failure status, omits local values, and neither
-saves nor sends output. A separate Windows x86_64 development `sync` command can construct the
-private launch/context/key capabilities only after active-record review and either bounded
-fixed-name `PATH` discovery or explicit-path admission of the exact `0.144.5` artifact. It then
-sends one fixed signed request and validates one closed acknowledgement without retry or edge-origin
-headers. A separate fixed `propose-car` command starts no Codex process, accepts only exact enum
-flags and a bounded seed, signs one fresh proposal-domain request with the same active native key,
-sends once without retry, and validates only a generic acknowledgement. A checked local Agent Skill
-now reduces a styling request to those exact fields, requires explicit shell-safe origin/label
-values, invokes only that command once, and receives no read, approval, or activation authority. A
-separate Windows release-profile smoke copies the repository-built `0.0.0` connector into a bounded
-temporary directory, checks only exact help and missing-candidate behavior with a cleared
-environment, verifies digest/inventory stability, and removes the copy. Secretless no-upload CI
-declares the same `windows-2025` job, but no hosted pass is claimed from the local tree. There is
-still no supported version, macOS/Linux admission, clean-machine real-account result, real package
-install/upgrade/uninstall lifecycle, credential rotation or automatic server-revoke composition,
-packaging, release, live pairing result, deployment Ingest credential/TLS result, edge deployment,
-or capacity evidence. Do not claim that deployed browser/session HTTP authentication,
-production-ready recovery or remaining unimplemented critical-action verification, real-user
-ingestion, an operational connector, a deployed Jobs scheduler or deployed public-race read, season
-correction, deployed cleanup cadence or broader cleanup, deployment, or a hosted security control
-exists until its implementation and verification are present in the working tree.
+remain unchanged. These local boundaries include one opt-in synthetic path through two emitted
+standalone Next production processes and a disposable narrow Web login over ephemeral self-signed
+certificate-verified PostgreSQL transport, with widened-login denial, exact public contracts,
+`pg_stat_ssl` evidence, and full private-table non-mutation. The same path holds four score reads
+behind a controlled database lock, rejects a fifth request without adding a fifth public-score
+query, and settles the original four after release. They still have no deployment proof key or
+secret-manager binding, deployment certificate/login, externally verified TLS/edge route, capacity
+evidence, deployment, or real-data result. A separate local enrollment slice now implements exact
+invite parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted
+cookies, atomic profile enrollment, required initial WebAuthn registration plus pending-session
+rotation, returning discoverable-credential passkey login, a session-scoped minimal passkey
+inventory, an account page, same-origin public-profile hide/show, a session-derived active-device
+inventory, immediate source pause, passkey-protected paused-source reactivation, immediate
+owned-device revoke, passkey-protected terminal source unlink, backup-passkey addition, revocation
+of an owned non-current passkey, fresh-passkey recovery-code rotation with one-time plaintext
+display, an exact-handle fresh-passkey profile-deletion request, one-time recovery-code
+replacement-passkey sign-in, and logout through the same probed read-write Web/Auth pool. Login
+options retain their profile-free challenge only in a purpose-separated cookie; valid proof
+atomically creates and consumes its database challenge while minting the session. Recovery performs
+bounded Argon2id verification under a protected pepper, creates only a five-minute restricted
+authority, verifies the replacement WebAuthn ceremony, and returns a normal session only after
+atomic completion. It has an exact-session CarRecipe editor that validates one closed version 1
+object, stores at most one 24-hour private proposal, previews active/pending recipes in all three
+themes, and activates or rejects only through an encrypted session-bound control. A separate bounded
+device-authenticated route and fixed connector command can only create or replace that pending exact
+recipe for an active source-bound device; they cannot read, approve, reject, or activate it. A
+separate compatible race projection exposes only an active profile's current approved recipe;
+proposal state stays private. A separate bounded Jobs-only capability physically removes expired
+proposals locally, and the default-off scheduler plus the combined synthetic PostgreSQL integration
+exercise it, but no deployed cadence, production login, monitoring, or deployment is proven. The
+enrollment slice has only injected/synthetic evidence and no invite issuer UI, working OAuth or
+database credential, distributed recovery attempt controls, deployed cleanup/deletion cadence or
+notification, cache/backup/tombstone purge, restore replay, edge abuse controls, or deployment.
+Bounded expired authentication/invite/CarRecipe-proposal/session, finalized source/day, aged
+revoked-passkey, and aged minimized revoked-device/pairing cleanup plus primary profile deletion
+exist locally. Finalized source/day cleanup retains a smaller UTC-day/count projection and waits 30
+days after terminal finalization. Activated pairing approval references can be redacted locally
+after 180 days, and an unreferenced revoked-device binding can be removed only after both its
+activation and revocation have crossed the 180-day boundary. These capabilities are catalogued in
+the default-off local scheduler and exercised together in the combined synthetic PostgreSQL
+integration, but have no deployed retention evidence. A library-only Rust connector foundation now
+implements a bounded stable App Server JSONL handshake and a candidate-only `0.144.5` account/usage
+parser with checked schema/fixture evidence. A one-shot supervisor composes that sequence with fixed
+local pipes, arguments, deadlines, output budgets, ambient-environment clearing, and
+reap-before-success behavior, but its reviewed-launch capability has no public constructor. An
+exact-body composer now consumes that minimized usage behind a second inaccessible reviewed context
+and fixes the versioned JSON/digest/LF message. An isolated one-use signer consumes that otherwise
+inaccessible material with a device-bound key capability that also has no public constructor,
+returning only the same body and five exact signed header values. A separate inaccessible
+pending-key/challenge signer and pure server-only Web verifier now agree on one exact synthetic
+pairing-possession proof. A transport-free Web/Auth start application creates nine-minute pending
+transactions from closed device metadata with fresh server IDs, poll tokens, challenges, 60-bit
+human codes, and separate protected poll/code verifiers through the fixed read-write Web pool. A
+second activation application performs protected poll lookup, runs the strict proof, and alone
+invokes exact activation with server-owned IDs behind fixed admission and timing. A local signed-in
+`/connect` flow now counts pending-code attempts on the exact session, renders bounded device
+metadata plus a full public-key fingerprint, offers a new source or an active owned source through
+an encrypted session-bound control, and requires a separate fresh passkey assertion before atomic
+new/existing-source approval. A closed local start/poll HTTP boundary now shares four-call
+admission, applies a fixed-storage global-and-64-bucket PostgreSQL rate policy, and serializes only
+the versioned contracts; it and both signed-in approval routes remain unavailable unless their
+modules resolve exact `VIBERACING_PAIRING_ENABLED=true`. A bounded Rust `connect` command generates
+one Ed25519 key through the OS CSPRNG, stores its versioned state only in the native credential
+store, resumes polling, and persists the activated binding without printing bearer or key material.
+A separate exact `forget-local` command deletes only the canonical origin/label native entry without
+loading it or contacting the service, and states that it did not revoke server device authority. A
+separate explicit `check-codex` command reuses only the bounded exact Windows candidate admission
+without an origin, credential-store access, Codex process, account read, persistence, or network,
+and reports that no version is supported. Its opt-in diagnostic preview emits only a closed local v1
+summary of compile-time version, fixed platform contract, admission class, and empty support state;
+it retains failure status, omits local values, and neither saves nor sends output. A separate
+Windows x86_64 development `sync` command can construct the private launch/context/key capabilities
+only after active-record review and either bounded fixed-name `PATH` discovery or explicit-path
+admission of the exact `0.144.5` artifact. It then sends one fixed signed request and validates one
+closed acknowledgement without retry or edge-origin headers. A separate fixed `propose-car` command
+starts no Codex process, accepts only exact enum flags and a bounded seed, signs one fresh
+proposal-domain request with the same active native key, sends once without retry, and validates
+only a generic acknowledgement. A checked local Agent Skill now reduces a styling request to those
+exact fields, requires explicit shell-safe origin/label values, invokes only that command once, and
+receives no read, approval, or activation authority. A separate Windows release-profile smoke copies
+the repository-built `0.0.0` connector into a bounded temporary directory, checks only exact help
+and missing-candidate behavior with a cleared environment, verifies digest/inventory stability, and
+removes the copy. Secretless no-upload CI declares the same `windows-2025` job, but no hosted pass
+is claimed from the local tree. There is still no supported version, macOS/Linux admission,
+clean-machine real-account result, real package install/upgrade/uninstall lifecycle, credential
+rotation or automatic server-revoke composition, packaging, release, live pairing result, deployment
+Ingest credential/TLS result, edge deployment, or capacity evidence. Do not claim that deployed
+browser/session HTTP authentication, production-ready recovery or remaining unimplemented
+critical-action verification, real-user ingestion, an operational connector, a deployed Jobs
+scheduler or deployed public-race read, season correction, deployed cleanup cadence or broader
+cleanup, deployment, or a hosted security control exists until its implementation and verification
+are present in the working tree.
 
 A second checked local Agent Skill now selects only repository-owned read-only verification from the
 real Git scope, distinguishes focused, root, staged, history, synthetic, and live evidence, and has
@@ -276,14 +278,17 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   `pnpm run typecheck:web`, `pnpm run test:web:coverage`, and `pnpm run build:web` are focused web
   gates. `pnpm run check:web-build` enforces the production asset/privacy budget after a build;
   focused gates do not replace root verification.
-- `pnpm run test:web:postgres-integration` starts one disposable PostgreSQL container and two
-  sequential real Next development processes on loopback. It proves all three public-ranking GETs
-  fail generically through an extra-membership login without private-table mutation, then validates
-  their exact score/race/status contracts through a narrow `viberacing_web` login and confirms the
-  successful reads remain non-mutating. It then observes four lock-waiting score queries, requires a
-  fifth request to fail generically without adding a fifth public-score query, releases the
-  controlled lock, and validates all four original responses. It proves no production Next runtime,
-  deployment login/TLS, cache, edge policy, monitoring, load/capacity, real-user data, or
+- `pnpm run test:web:postgres-integration` builds the Web standalone output, creates ephemeral
+  self-signed test-only TLS material, and starts one TLS-enabled disposable PostgreSQL container
+  plus two sequential emitted Next production processes on loopback. The reviewed `pg` driver is
+  bundled into the standalone server instead of depending on an external package link. The gate
+  proves all three public-ranking GETs fail generically through an extra-membership login without
+  private-table mutation, then validates their exact score/race/status contracts through a narrow
+  `viberacing_web` login, observes TLS 1.2 or 1.3 in `pg_stat_ssl`, and confirms the successful
+  reads remain non-mutating. It then observes four lock-waiting score queries, requires a fifth
+  request to fail generically without adding a fifth public-score query, releases the controlled
+  lock, and validates all four original responses. It proves no deployment certificate/login,
+  external TLS/edge path, cache, edge policy, monitoring, load/capacity, real-user data, or
   deployment.
 - `pnpm run check:phase1-visual-baselines` verifies the exact 18-image synthetic viewport matrix,
   dimensions, digests, byte limits, and public PNG policy without launching a browser.

@@ -117,11 +117,14 @@ Current PostgreSQL evidence proves:
   Ingest/Jobs/Admin denial.
 
 ADR 0010 adds a response-only schema, validators, and a server-only projection mapper; ADR 0011 adds
-a bounded least-privileged PostgreSQL adapter around them. The repository still lacks an HTTP route,
-CarRecipe storage, streak/freshness derivation, authenticated profile detail, public cache and
-invalidation, rate limits, query-plan/load evidence, monitoring backend, deployment login/TLS
-integration, and real-user data. These database and server-only components are not a public API or
-launch evidence.
+a bounded least-privileged PostgreSQL adapter around them; ADR 0013 adds the local HTTP route; and
+ADRs 0037 and 0040 add compatible recipe and rounded-status routes. An opt-in synthetic gate now
+runs all three routes through two emitted standalone Next production processes and a disposable
+TLS-enabled narrow login while rejecting a widened login and preserving private-table state. The
+repository still lacks authenticated profile detail beyond the separately documented private view,
+public cache and invalidation, rate limits, query-plan/load evidence, monitoring backend, deployment
+certificate/login, external TLS/edge routing, and real-user data. This synthetic local evidence is
+not launch evidence.
 
 ## References
 

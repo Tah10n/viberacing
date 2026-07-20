@@ -138,11 +138,16 @@ Current repository evidence covers:
 - exact success/problem serialization with no-store, `Vary: Accept`, request ID, and no CORS;
 - four-request no-queue admission held through success and failure settlement; and
 - lazy store construction, exact transient/invariant error translation, direct entrypoint tests, and
-  a production build that exposes the dynamic local route.
+  a production build that exposes the dynamic local route; and
+- one opt-in integration through two emitted standalone Next production processes and a TLS-enabled
+  disposable PostgreSQL endpoint, with widened-login denial, exact public contracts, direct TLS
+  1.2/1.3 observation, full private-table non-mutation, and a rejected fifth request before a fifth
+  database query.
 
-No safe operational log event, live database login/certificate, cache, client-rate limiter, edge
-policy, load evidence, deployment, or live end-to-end response evidence exists yet. The visible
-synthetic page does not consume the route.
+No safe operational log event, deployment database certificate/login, external TLS/edge path, cache,
+client-rate limiter, load evidence, deployment, or real-user end-to-end response evidence exists
+yet. The visible page consumes the separate compatible status route and retains a synthetic
+fallback; it does not turn this score route into deployment evidence.
 
 ## References
 

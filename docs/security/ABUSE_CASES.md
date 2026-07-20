@@ -467,18 +467,20 @@ material availability cost.
   exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` was resolved at module load; every alternate state
   returns generic 503 before query/header parsing, admission acquisition, or store work. It does not
   prove deployed route/cache denial, worker reload, or scraping protection after enablement. A
-  separate opt-in synthetic gate exercises all three real Next development GETs against disposable
-  PostgreSQL. The extra-membership login receives only generic 503 responses and cannot change any
-  private table; the narrow login returns exact contract-validated active-only rows while another
-  full private-state fingerprint remains unchanged. The narrow path also holds four observed score
-  queries behind a controlled owner lock, requires a fifth request to return generic 503 without a
-  fifth public-score query, and validates the four original responses after rollback. This is not
-  deployment login/TLS, cache, edge, representative load/capacity, monitoring, real-user, or
-  production-process evidence. Revision 0015 lets only the exact possessed session read and set the
-  closed `public`/`hidden` state; the same-origin form carries no profile ID and repeated state is a
-  no-op. Because the public read already filters current state, a committed hide removes the profile
-  from the next no-store response while source sync may continue. Deployment, enumeration controls,
-  cache purge, edge rate policy, query-plan/load evidence, and monitoring are still unimplemented.
+  separate opt-in synthetic gate exercises all three GETs through two emitted standalone Next
+  production processes and TLS-enabled disposable PostgreSQL. The extra-membership login receives
+  only generic 503 responses and cannot change any private table; the narrow login returns exact
+  contract-validated active-only rows, observes TLS 1.2 or 1.3, and leaves another full
+  private-state fingerprint unchanged. The narrow path also holds four observed score queries behind
+  a controlled owner lock, requires a fifth request to return generic 503 without a fifth
+  public-score query, and validates the four original responses after rollback. Its ephemeral
+  self-signed certificate and synthetic login are not deployment certificate/login, external
+  TLS/edge, cache, representative load/capacity, monitoring, or real-user evidence. Revision 0015
+  lets only the exact possessed session read and set the closed `public`/`hidden` state; the
+  same-origin form carries no profile ID and repeated state is a no-op. Because the public read
+  already filters current state, a committed hide removes the profile from the next no-store
+  response while source sync may continue. Deployment, enumeration controls, cache purge, edge rate
+  policy, query-plan/load evidence, and monitoring are still unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 
@@ -624,17 +626,18 @@ material availability cost.
   four settle successfully.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Web now has a disposable synthetic narrow login plus widened-login denial
-  through all three real Next development GETs plus one controlled four-slot admission scenario, but
-  deployment login/TLS and representative load/capacity have not been exercised. Jobs now has a
-  disposable synthetic least-privileged login, all seventeen emitted commands, a widened-login
-  denial, and exact-state evidence; Ingest similarly has a disposable synthetic least-privileged
-  loopback login and full HTTP integration result. Jobs additionally has fixed-clock production
-  scheduler-core composition, injected repeated-timer and process-lifecycle settlement with its
-  disposable PostgreSQL boundary, and one real-clock emitted startup path through its terminal
-  catalog marker. None proves host-timer delivery, OS-signal delivery, emitted-child controller
-  settlement before forced termination, a deployment credential/certificate, external TLS/edge
-  route, external audit sink, capacity, a wall-clock recurring process callback, deployed scheduler
-  operation, monitoring, or real-user behavior.
+  through two emitted standalone Next production processes, certificate-verified TLS, and one
+  controlled four-slot admission scenario, but a deployment certificate/login, external TLS/edge
+  path, and representative load/capacity have not been exercised. Jobs now has a disposable
+  synthetic least-privileged login, all seventeen emitted commands, a widened-login denial, and
+  exact-state evidence; Ingest similarly has a disposable synthetic least-privileged loopback login
+  and full HTTP integration result. Jobs additionally has fixed-clock production scheduler-core
+  composition, injected repeated-timer and process-lifecycle settlement with its disposable
+  PostgreSQL boundary, and one real-clock emitted startup path through its terminal catalog marker.
+  None proves host-timer delivery, OS-signal delivery, emitted-child controller settlement before
+  forced termination, a deployment credential/certificate, external TLS/edge route, external audit
+  sink, capacity, a wall-clock recurring process callback, deployed scheduler operation, monitoring,
+  or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 

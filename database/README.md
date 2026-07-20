@@ -20,22 +20,23 @@ Ingest kernel verifies a bounded exact-body origin/device request, and a separat
 adapter maps origin replay plus its output to three capabilities through a probed least-privileged
 pool. Focused tests use mock pools. A separate opt-in integration creates a synthetic dedicated
 Ingest login, passes independently signed loopback HTTP through the emitted host, and verifies the
-exact database result. A separate opt-in Web integration starts all three real Next development
-score/race/status GETs against a disposable narrow `viberacing_web` login, rejects a deliberately
-widened login, validates exact public contracts, and fingerprints every private table before and
-after both paths. It also holds exactly four score queries behind an owner lock, rejects a fifth
-without a fifth public-score query, and validates all four after rollback. The local one-shot Jobs
-runner has its own synthetic disposable-login integration. No reusable or deployment login is
-supplied. The database-only ingest and Jobs-only ingest-retention, pairing-retention,
-authentication-retention, invite-retention, session-retention, abandoned-enrollment,
-CarRecipe-proposal, finalized-source-day, terminal-deletion-job, audit-event, revoked-passkey, and
-revoked-device retention, pairing approval-provenance redaction, primary profile deletion,
-open-season scoring, and terminal finalization procedures plus Web-only public score/race/status and
-exact-session private score projections are implemented; deployed HTTP ingest, host-timer delivery,
-a wall-clock recurring scheduler process callback, OS-delivered process-signal/PostgreSQL behavior,
-deployed cadence, audited corrections, cache/backup/tombstone purge, and restore replay are not.
-Fixed-clock startup, injected repeated timer, injected lifecycle, and real-clock emitted-process
-terminal-marker evidence are proven synthetically.
+exact database result. A separate opt-in Web integration builds and starts two emitted standalone
+Next production processes against a TLS-enabled disposable narrow `viberacing_web` login, rejects a
+deliberately widened login, validates exact public score/race/status contracts plus TLS 1.2/1.3, and
+fingerprints every private table before and after both paths. It also holds exactly four score
+queries behind an owner lock, rejects a fifth without a fifth public-score query, and validates all
+four after rollback. The local one-shot Jobs runner has its own synthetic disposable-login
+integration. No reusable or deployment certificate/login is supplied. The database-only ingest and
+Jobs-only ingest-retention, pairing-retention, authentication-retention, invite-retention,
+session-retention, abandoned-enrollment, CarRecipe-proposal, finalized-source-day,
+terminal-deletion-job, audit-event, revoked-passkey, and revoked-device retention, pairing
+approval-provenance redaction, primary profile deletion, open-season scoring, and terminal
+finalization procedures plus Web-only public score/race/status and exact-session private score
+projections are implemented; deployed HTTP ingest, host-timer delivery, a wall-clock recurring
+scheduler process callback, OS-delivered process-signal/PostgreSQL behavior, deployed cadence,
+audited corrections, cache/backup/tombstone purge, and restore replay are not. Fixed-clock startup,
+injected repeated timer, injected lifecycle, and real-clock emitted-process terminal-marker evidence
+are proven synthetically.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -1007,8 +1008,11 @@ The first two commands are offline and part of `pnpm run verify`. All three inte
 require Docker and never connect to the normal `postgres` volume. The database suite starts only the
 portless `postgres-test` service in a uniquely named Compose project with ephemeral `tmpfs` storage.
 The Web and Ingest suites each start a separate one-off `postgres-test` container with only an
-ephemeral loopback-published port, then remove their process/container/network/storage resources in
-`finally`.
+ephemeral loopback-published port. The Web suite additionally mounts one generated read-only
+test-only certificate/key directory, copies the material under closed container permissions before
+the original PostgreSQL entrypoint, and requires verified TLS from two emitted standalone Next
+processes. Both suites remove their process/container/network/storage resources in `finally`; Web
+also removes the ephemeral host key directory.
 
 ## Rollback and deployment boundary
 

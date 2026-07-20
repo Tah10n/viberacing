@@ -59,11 +59,12 @@ deployment; it is public configuration, not a secret. Focused checks are availab
 `pnpm run lint:web`, `pnpm run typecheck:web`, `pnpm run test:web:coverage`, and
 `pnpm run build:web`; `pnpm run check:web-build` validates the built artifact, and the root
 `pnpm run verify` runs all of them. `pnpm run test:web:postgres-integration` is the separate
-Docker-backed synthetic boundary: it launches the real Next development routes on loopback against a
-disposable PostgreSQL database, verifies widened-login denial and exact narrow-login contracts, and
-confirms that neither path mutates private tables. It also proves the four-request no-queue
-admission boundary with four observed blocked score queries and a rejected fifth request. It is
-intentionally outside root `verify`.
+Docker-backed synthetic boundary: it builds the emitted standalone artifact, bundles the reviewed
+`pg` driver, and launches two Next production processes on loopback against a TLS-enabled disposable
+PostgreSQL database with one ephemeral self-signed DNS certificate. It verifies widened-login
+denial, exact narrow-login contracts, TLS 1.2/1.3, and that neither path mutates private tables. It
+also proves the four-request no-queue admission boundary with four observed blocked score queries
+and a rejected fifth request. It is intentionally outside root `verify`.
 
 The separate stored viewport evidence covers every combination of three reviewed breakpoints, both
 locales, and all three themes with motion disabled. `pnpm run check:phase1-visual-baselines`
@@ -187,22 +188,25 @@ The generated contract marks all three routes `implemented-local` with one bound
 200/400/406/429/500/503 responses. The legacy race response preserves the ten score fields and may
 add one exact current `CarRecipeV1`. The status response separately requires privacy-rounded
 `freshnessDays` and may add preference-gated `streakDays`; proposal state, exact receipt time, and
-daily score history enter no route. There is no deployment, live login/certificate evidence, shared
-cache, edge rate policy, or query-plan/load result. The local home page loads the status client only
-after hydration and keeps its synthetic fallback on every failure.
+daily score history enter no route. There is no deployment certificate/login, external TLS/edge
+route, shared cache, edge rate policy, or query-plan/load result. The local home page loads the
+status client only after hydration and keeps its synthetic fallback on every failure.
 
-The opt-in `test:web:postgres-integration` gate applies the reviewed migration ledger to a one-off
-PostgreSQL container, seeds only obviously synthetic profiles, and invokes all three real Next
-development GETs. A login with one extra role membership must receive only the closed generic 503 on
-every route while a full private-table fingerprint remains unchanged. A narrow login with only
-`viberacing_web` must return the exact score, race, and status contracts, omit hidden/private state,
-and leave the same fingerprint unchanged. The harness then uses a bounded owner-held table lock to
-hold exactly four observed score queries, requires a fifth request to return the same closed generic
-503 without adding a fifth public-score query, rolls back the lock, and validates the first four
-exact 200 responses. It bounds and discards both Next and blocker output, then removes all three
-processes, the container, network, and storage. This proves no production Next process, deployment
-credential/TLS, cache, edge rate policy, monitoring, query-plan/load/capacity result, real-user
-data, or deployment.
+The opt-in `test:web:postgres-integration` gate builds the emitted standalone artifact, explicitly
+bundles Next's otherwise externalized reviewed `pg` driver, and applies the reviewed migration
+ledger to a one-off PostgreSQL container. It generates one ephemeral self-signed certificate for an
+exact local DNS name, enables PostgreSQL TLS, seeds only obviously synthetic profiles, and invokes
+all three GETs through two emitted Next production processes. A login with one extra role membership
+must receive only the closed generic 503 on every route while a full private-table fingerprint
+remains unchanged. A narrow login with only `viberacing_web` must return the exact score, race, and
+status contracts, omit hidden/private state, observe TLS 1.2 or 1.3 in `pg_stat_ssl`, and leave the
+same fingerprint unchanged. The harness then uses a bounded owner-held table lock to hold exactly
+four observed score queries, requires a fifth request to return the same closed generic 503 without
+adding a fifth public-score query, rolls back the lock, and validates the first four exact 200
+responses. It bounds and discards both Next and blocker output, then removes all ephemeral key
+material, three processes, the container, network, and storage. This proves no deployment
+certificate/login, external TLS/edge path, cache, edge rate policy, monitoring,
+query-plan/load/capacity result, real-user data, or deployment.
 
 ## Score database adapter configuration
 

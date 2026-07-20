@@ -113,16 +113,18 @@ Current repository evidence covers:
   and the separate parameterized query;
 - exact score/race path parsing, response revalidation, no-store delivery, no-queue admission, and
   closed method handling;
-- 683 Web tests including the visible browser request and synthetic fallback behavior, plus a
-  production build whose initial application chunk remains within budget at 8,750 gzip bytes; and
+- 858 Web tests including the visible browser request and synthetic fallback behavior, plus a
+  production build whose initial application chunk remains within budget at 9,862 gzip bytes; and
 - isolated PostgreSQL application of revisions 0001 through 0028, active/absent/hidden recipe
   projection, unchanged score allowlist, five-second deadline, Web-only execution, and 40
-  cross-capability denials.
+  cross-capability denials; and
+- one opt-in emitted standalone integration that validates the race contract through a disposable
+  narrow login over TLS 1.2/1.3, rejects a widened login, and preserves every private table.
 
-There is still no live Web database credential, edge policy, cache, rate/load result, monitoring,
-real-user result, or deployment. ADR 0038 now supplies a separate local proposal-only device ingress
-and ADR 0039 adds bounded local agent orchestration; cleanup scheduling, released packaging, and
-deployment remain Phase 4 gates.
+There is still no deployment Web database certificate/login, external TLS/edge policy, cache,
+rate/load result, monitoring, real-user result, or deployment. ADR 0038 now supplies a separate
+local proposal-only device ingress and ADR 0039 adds bounded local agent orchestration; cleanup
+scheduling, released packaging, and deployment remain Phase 4 gates.
 
 ## References
 

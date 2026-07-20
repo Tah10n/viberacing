@@ -430,15 +430,18 @@ The separate full public-read path is opt-in and requires Docker:
 pnpm run test:web:postgres-integration
 ```
 
-It applies the reviewed migrations to a one-off `postgres-test` container, starts all three real
-Next development GETs on loopback, proves a login with extra membership fails generically without
-private-table mutation, validates exact score/race/status contracts through the narrow synthetic
-login, and repeats the full private-state fingerprint after successful reads. It then holds exactly
-four observed score queries behind a controlled owner lock, rejects a fifth request without a fifth
-public-score query, rolls back, and validates the four original responses. It restores the exact
-pre-run `next-env.d.ts`, bounds and discards all child output, and removes both Next processes plus
-the blocker, container, network, and storage. It is not a production Next process, deployment
-credential/TLS, cache, edge, monitoring, load/capacity, real-user, or deployment test.
+It builds the emitted standalone Web artifact with the reviewed `pg` driver bundled, generates one
+ephemeral self-signed exact-DNS certificate, and applies the reviewed migrations to a TLS-enabled
+one-off `postgres-test` container. It starts two emitted Next production processes on loopback,
+proves a login with extra membership fails generically without private-table mutation, validates
+exact score/race/status contracts plus TLS 1.2/1.3 through the narrow synthetic login, and repeats
+the full private-state fingerprint after successful reads. It then holds exactly four observed score
+queries behind a controlled owner lock, rejects a fifth request without a fifth public-score query,
+rolls back, and validates the four original responses. It restores the exact pre-run
+`next-env.d.ts`, bounds and discards all child output, and removes the ephemeral key directory, both
+Next processes, the blocker, container, network, and storage. It is not a deployment
+certificate/login, external TLS/edge, cache, monitoring, load/capacity, real-user, or deployment
+test.
 
 Connector pairing start/poll and signed-in approval options/verification remain generically
 unavailable unless an ignored local environment sets exact `VIBERACING_PAIRING_ENABLED=true` before

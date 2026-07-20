@@ -76,29 +76,30 @@ request before forced test-child termination. It proves no OS-signal delivery, g
 emitted-child settlement, live HTTP edge, trusted external TLS route, distributed control,
 deployment credential/TLS connection, representative load, real-user result, or capacity. The public
 score/race/status routes have a shared exact default-off module gate plus request/response,
-admission, production-build, visible browser-consumer/fallback, and full synthetic
-Next-development-HTTP-to-disposable-PostgreSQL evidence with widened-login denial and private-table
-non-mutation. The same path now observes four lock-waiting score queries, rejects a fifth HTTP
-request without a fifth public-score query, and validates the four original responses after
-rollback. It proves no reusable/deployment login, TLS, cache, representative load/capacity,
-monitoring, or production process. The Jobs runner has strict command/config/pool/role/result
-evidence plus a synthetic CLI-to-PostgreSQL path with a widened-login denial and exact-state checks.
-The scheduler separately has exact-default-off, fixed-UTC-catalog, sequential/no-overlap,
-in-memory-slot, failure-containment, bounded-shutdown, fixed-clock production-core/PostgreSQL
-composition, and injected repeated-timer and process-lifecycle settlement evidence plus one
-real-clock emitted startup path through its terminal catalog marker, exact stored state, and forced
-test-child termination. Host-timer delivery, OS-signal delivery, a wall-clock recurring process
-callback, and emitted-child controller settlement before forced termination are not proven. The
-identity slice has exact-origin/body/cookie, state/PKCE, token minimization, initial-registration,
-returning-login, session-derived passkey inventory, non-current-key revocation, backup-key addition,
-exact-handle profile-deletion request, source inventory/pause/reactivation/unlink, and active-device
-revoke including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only
-OAuth `form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay
-server-only; source controls receive only a 15-minute encrypted token bound to the active session.
-Pairing start/poll and approval options/verification have a second exact Web module gate with
-factory-level negative evidence. None has a production database login, OAuth app, authenticator,
-edge, deployed scheduler/cadence, cache/backup purge, tombstone/restore replay, or network
-deployment. Controls below are marked **implemented** only when executable evidence exists in
+admission, production-build, visible browser-consumer/fallback, and full synthetic emitted-Next-
+production-HTTP-to-disposable-PostgreSQL evidence with ephemeral certificate-verified TLS,
+widened-login denial, and private-table non-mutation. The same path now observes four lock-waiting
+score queries, rejects a fifth HTTP request without a fifth public-score query, and validates the
+four original responses after rollback. It proves no reusable/deployment certificate/login, external
+TLS/edge path, cache, representative load/capacity, monitoring, or deployment. The Jobs runner has
+strict command/config/pool/role/result evidence plus a synthetic CLI-to-PostgreSQL path with a
+widened-login denial and exact-state checks. The scheduler separately has exact-default-off,
+fixed-UTC-catalog, sequential/no-overlap, in-memory-slot, failure-containment, bounded-shutdown,
+fixed-clock production-core/PostgreSQL composition, and injected repeated-timer and
+process-lifecycle settlement evidence plus one real-clock emitted startup path through its terminal
+catalog marker, exact stored state, and forced test-child termination. Host-timer delivery,
+OS-signal delivery, a wall-clock recurring process callback, and emitted-child controller settlement
+before forced termination are not proven. The identity slice has exact-origin/body/cookie,
+state/PKCE, token minimization, initial-registration, returning-login, session-derived passkey
+inventory, non-current-key revocation, backup-key addition, exact-handle profile-deletion request,
+source inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile
+PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI
+evidence with injected dependencies. Raw source IDs stay server-only; source controls receive only a
+15-minute encrypted token bound to the active session. Pairing start/poll and approval
+options/verification have a second exact Web module gate with factory-level negative evidence. None
+has a production database login, OAuth app, authenticator, edge, deployed scheduler/cadence,
+cache/backup purge, tombstone/restore replay, or network deployment. Controls below are marked
+**implemented** only when executable evidence exists in
 [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
 security claims about the current tree.
 
@@ -216,7 +217,7 @@ and migration or rollback where applicable.
 
 | Surface                             | Realistic attacker story                                                                                                        | Required mitigations                                                                                                                                                   | Current status                                                                                                                                                                                                           |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Public race and profiles            | A visitor injects markup through a handle/car, enumerates profiles, or infers exact work hours                                  | Default-off route gate, plain-text bounded names, enum-only recipe, CSP, public-field allowlist, immediate hide, rounded freshness, optional streak, rate/cache policy | Route gate, three real local HTTP/PostgreSQL reads, four-slot no-queue admission, fallback, recipe/status rejection, and hide/publish tested; cache, rate, representative load, deployment planned                       |
+| Public race and profiles            | A visitor injects markup through a handle/car, enumerates profiles, or infers exact work hours                                  | Default-off route gate, plain-text bounded names, enum-only recipe, CSP, public-field allowlist, immediate hide, rounded freshness, optional streak, rate/cache policy | Route gate, three emitted-production HTTP/TLS/PostgreSQL reads, four-slot no-queue admission, fallback, recipe/status rejection, and hide/publish tested; cache, rate, representative load, deployment planned           |
 | OAuth, sessions, passkeys, recovery | An attacker binds a victim callback, enumerates or replays recovery, fixes a session, or skips step-up                          | Default-off enrollment, OAuth binding, secure cookies, Argon2id, generic bounded lookup, restricted authority, origin/RP checks, exact provenance/revoke               | Enrollment gate, login/passkey controls, recovery, cleanup, and local scheduler tested; edge, deployed cadence, notification, live planned                                                                               |
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration                                | Default-off pairing gate, short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, pause, unlink, revoke, and rotate                    | Route gate, DB, approval, lifecycle, exact HTTP/native client, proof/activation tested; live/cross-platform/edge evidence planned                                                                                        |
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command                           | Bounded fixed-name selection, exact artifact admission, retained handle, bounded child/output/time, sanitized environment, no shell, strict adapter                    | Protocol, supervisor, synthetic Windows discovery/admission and redacted process-free preview tested; other platforms, support planned                                                                                   |
@@ -322,14 +323,15 @@ and migration or rollback where applicable.
    no-store/same-origin posture, four-request no-queue admission, adapter deadline policy, generic
    error translation, and bounded response matrix. The visible home race requests the
    server-selected current week without credentials, accepts only closed public fields, and keeps a
-   labeled synthetic fallback on error. A separate opt-in gate starts the three real Next
-   development GETs against disposable PostgreSQL, proves a deliberately widened login returns only
-   generic problems without changing any private table, validates exact non-mutating public
-   responses through the narrow Web login, and proves the four-slot application admission rejects a
-   fifth request without a fifth public-score query. ADR 0056 now keeps all three public GET
-   compositions default-off before query/header parsing, admission acquisition, or storage work
-   unless their module-load value is exact true; it proves no deployed or dynamic route/cache
-   denial. A local one-shot Jobs runner now validates one of seventeen fixed
+   labeled synthetic fallback on error. A separate opt-in gate starts two emitted standalone Next
+   production processes against TLS-enabled disposable PostgreSQL, proves a deliberately widened
+   login returns only generic problems without changing any private table, validates exact
+   non-mutating public responses plus TLS 1.2/1.3 through the narrow Web login, and proves the
+   four-slot application admission rejects a fifth request without a fifth public-score query. ADR
+   0056 now keeps all three public GET compositions default-off before query/header parsing,
+   admission acquisition, or storage work unless their module-load value is exact true; it proves no
+   deployed or dynamic route/cache denial. A local one-shot Jobs runner now validates one of
+   seventeen fixed
    authentication/abandoned-enrollment/audit-event/invite/CarRecipe-proposal/ingest/finalized-source-day/pairing/session/
    terminal-deletion-job/aged-revoked-passkey/aged-revoked-device cleanup, pairing
    approval-provenance redaction, fixed pairing-rate-window reset, primary-profile purge, or

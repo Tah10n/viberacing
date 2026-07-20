@@ -128,9 +128,12 @@ Current repository evidence covers:
   gaps.
 
 ADR 0013 now supplies a local route, request schema/parser, response headers, admission, and generic
-error translation. There is still no cache, CarRecipe/streak/freshness contract, load evidence,
-deployment login/TLS integration, edge policy, or real-user data. A generated response component,
-mapper, adapter, and local endpoint are not deployment or launch evidence.
+error translation; ADRs 0037 and 0040 separately add compatible recipe and rounded-status contracts.
+An opt-in synthetic gate now validates the score component through an emitted standalone Next
+production process and certificate-verified disposable PostgreSQL login. There is still no cache,
+load evidence, deployment certificate/login, external TLS/edge policy, or real-user data. A
+generated response component, mapper, adapter, local endpoint, and ephemeral self-signed test trust
+anchor are not deployment or launch evidence.
 
 ## References
 
