@@ -59,17 +59,19 @@ Versioning where its guarantees are applicable.
   injects its first signal during the penultimate database job, proves active-call settlement, no
   later scheduler job, exact graceful cleanup, and exit code 0, then invokes the omitted reset
   separately for the shared state oracle. Another integration starts the unchanged emitted process,
-  waits for startup completion, holds the scoring mutex, observes the native minute timer reach the
-  production refresh in a later real five-minute slot, releases it, requires the refresh timestamp
-  to advance, and only then forcibly ends its persistent test child. A seventh integration assembles
-  a link-free production-only runtime from the installed graph, mounts it read-only under a pinned
-  Linux Node image, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves
-  that call settles without starting refresh or any later job. The process exits silently with code
-  0, releases its database session, and leaves the runtime fingerprint unchanged before the omitted
-  seventeen one-shot commands complete the shared exact-state oracle. The recurring gate is local
-  synthetic host-timer evidence only; no deployed signal route or orchestrator grace policy,
-  deployed replica/durable cadence, production credential/TLS, monitoring, capacity, or real-user
-  retention is claimed.
+  assembles a link-free production-only runtime from the installed graph, mounts it read-only under
+  a pinned Linux Node image, waits for startup completion, holds the scoring mutex, and observes the
+  native minute timer reach the production refresh in a later real five-minute slot. It delivers an
+  OS `SIGTERM`, releases the mutex, and proves the active refresh commits with a newer timestamp
+  before silent code-0 exit, session release, and runtime-fingerprint revalidation. A seventh
+  integration uses the same bounded runtime shape, blocks the emitted first finalization call,
+  delivers an OS `SIGTERM`, and proves that call settles without starting refresh or any later job.
+  The process exits silently with code 0, releases its database session, and leaves the runtime
+  fingerprint unchanged before the omitted seventeen one-shot commands complete the shared
+  exact-state oracle. The recurring gate is local synthetic host-timer and OS-signal settlement
+  evidence only; no deployed signal route or controller/orchestrator grace policy, deployed
+  replica/durable cadence, production credential/TLS, monitoring, capacity, or real-user retention
+  is claimed.
 - A deterministic pre-restore migration-overlap drill in the isolated PostgreSQL integration. It
   holds revision 0039's own advisory lock, observes two tagged processes running the exact reviewed
   migration in the holder's blocker chain, and then requires one successful application plus one

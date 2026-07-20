@@ -65,20 +65,21 @@ suppression, and verifies the rearmed terminal reset. A third composes the produ
 lifecycle, injects its first handler during the penultimate real database job, and proves graceful
 active-call settlement plus no later scheduler job. A fourth starts the built entry point under the
 real host clock, reaches the terminal startup-catalog marker without process output, then forcibly
-ends only its persistent test child. A fifth starts the unchanged emitted process, holds the scoring
-mutex after startup, observes a native minute-timer refresh in a later real five-minute slot,
-releases it, and requires a newer refresh timestamp before forcing the persistent child to end. A
-sixth runs a link-free production-only copy in the pinned Linux Node image, blocks the emitted first
-finalization call, delivers an OS `SIGTERM`, and proves graceful settlement without starting a later
-job. The fifth gate proves one local host-timer recurring refresh; there is still no controller
-settlement in the forcibly ended children, deployed signal route, production login, durable/deployed
-cadence, monitor, or deployment. A bounded server-only Web PostgreSQL adapter and local public-score
-GET are implemented and unit/build-tested, but this repository supplies no working deployment login
-or TLS certificate. A successful setup proves repository gates, synthetic frontend behavior,
-route/adapter boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring
-concurrency, and database role isolation; it does not prove a live adapter, deployed API, or
-production flow. The Ingest server tests bind only ephemeral loopback sockets and use synthetic
-requests; no development command exposes it to the LAN or Internet.
+ends only its persistent test child. A fifth runs the unchanged entry point from a link-free
+read-only production graph under pinned Linux Node, holds the scoring mutex after startup, observes
+a native minute-timer refresh in a later real five-minute slot, delivers an OS `SIGTERM`, releases
+the mutex, and proves active-refresh settlement before silent code-0 exit. A sixth uses the same
+bounded runtime shape, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and
+proves graceful settlement without starting a later job. The fifth gate proves one local host-timer
+recurring refresh and graceful signal settlement; there is still no controller settlement in the
+separately forcibly ended startup child, deployed signal route or orchestrator grace, production
+login, durable/deployed cadence, monitor, or deployment. A bounded server-only Web PostgreSQL
+adapter and local public-score GET are implemented and unit/build-tested, but this repository
+supplies no working deployment login or TLS certificate. A successful setup proves repository gates,
+synthetic frontend behavior, route/adapter boundaries, SQL constraints, session-bound procedure
+behavior, lifecycle/scoring concurrency, and database role isolation; it does not prove a live
+adapter, deployed API, or production flow. The Ingest server tests bind only ephemeral loopback
+sockets and use synthetic requests; no development command exposes it to the LAN or Internet.
 
 ## Prerequisites
 
@@ -367,18 +368,18 @@ point under the real host clock, requires host/database UTC-date agreement, wait
 startup-catalog marker without process output, forcibly ends only its persistent test child, and
 then verifies the same exact state. It does not prove controller settlement before that forced
 termination. The timer mode does not prove host-timer delivery, and the lifecycle mode by itself
-does not prove OS-signal delivery. The fifth starts the same unchanged emitted process, waits for
-startup, holds the scoring mutex until refresh reaches it in a later real five-minute slot, releases
-it, and requires the refresh timestamp to advance before forcibly ending the persistent child. It
-proves one local recurring host-timer refresh, not controller settlement or durable cadence. The
-sixth copies only the built scheduler, built runner, and exact installed production graph into a
-link-free temporary runtime, mounts it read-only under the pinned Linux Node image, holds the
-emitted first finalization call, and delivers a real `SIGTERM`. It requires graceful active-call
-settlement, no refresh or later job, silent exit code 0, session release, and an unchanged runtime
-fingerprint before the seventeen omitted commands complete the shared final-state oracle. This
-proves one local Docker-delivered Linux signal path, not a deployed controller or orchestrator grace
-policy. None proves durable/deployed cadence, production credentials/TLS, monitoring, capacity, or
-real-user retention.
+does not prove OS-signal delivery. The fifth copies only the built scheduler, built runner, and
+exact installed production graph into a link-free temporary runtime under pinned Linux Node, leaves
+the native clock/timer unchanged, waits for startup, and holds the scoring mutex until refresh
+reaches it in a later real five-minute slot. It delivers a real `SIGTERM`, releases the mutex, and
+requires active-refresh settlement, a newer timestamp, silent exit code 0, session release, and
+runtime fingerprint revalidation. The sixth uses the same bounded runtime shape, holds the emitted
+first finalization call, and delivers a real `SIGTERM`. It requires graceful active-call settlement,
+no refresh or later job, silent exit code 0, session release, and an unchanged runtime fingerprint
+before the seventeen omitted commands complete the shared final-state oracle. These prove two local
+Docker-delivered Linux signal paths, including one native host-timer callback, not a deployed
+controller or orchestrator grace policy. None proves durable/deployed cadence, production
+credentials/TLS, monitoring, capacity, or real-user retention.
 
 The emitted process accepts no arguments and remains disabled unless the runtime supplies exact
 `VIBERACING_JOBS_SCHEDULER_ENABLED=true`. That latch is read before the Jobs runner or any database

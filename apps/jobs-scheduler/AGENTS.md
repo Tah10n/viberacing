@@ -56,14 +56,15 @@ handler, proves that call settles without starting the later job, and requires g
 code 0. The fourth starts the built entry point with the real host clock, waits for the terminal
 startup-catalog marker without process output, and forcibly ends only its persistent test child. The
 timer result is not host-timer delivery, the lifecycle result is not OS-signal delivery, and the
-forced emitted child still has no observed controller settlement before termination. The fifth
-starts the same emitted process with unchanged native clock/timer dependencies, holds the scoring
-mutex only after startup, observes refresh in a later real five-minute slot, releases it, and
-requires the database refresh timestamp to advance before forcibly ending the child. The sixth
-packages a link-free production-only runtime under a pinned Linux Node image, blocks the emitted
-first finalization call, delivers a real `SIGTERM`, and proves graceful settlement without starting
-refresh or any later job. The fifth is local synthetic host-timer evidence and the sixth is local
-synthetic OS-signal evidence. Neither proves controller/orchestrator settlement, a deployed signal
+forced emitted startup child still has no observed controller settlement before termination. The
+fifth packages the same emitted production graph into a link-free read-only runtime under pinned
+Linux Node, leaves the native clock/timer unchanged, holds the scoring mutex only after startup,
+observes refresh in a later real five-minute slot, delivers a real `SIGTERM`, releases the mutex,
+and proves active-refresh settlement, silent code-0 exit, session release, and runtime immutability.
+The sixth uses the same bounded runtime shape, blocks the emitted first finalization call, delivers
+a real `SIGTERM`, and proves graceful settlement without starting refresh or any later job. The
+fifth is local synthetic host-timer plus OS-signal evidence and the sixth is a second local
+OS-signal path. Neither proves a deployed controller or orchestrator grace policy, a deployed signal
 route, durable/deployed cadence, production credential/TLS, monitoring, capacity, or real-user
 behavior.
 

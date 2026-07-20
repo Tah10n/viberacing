@@ -61,9 +61,9 @@ does not make the pull request trusted; review and protected-branch policy remai
 - The database job uses the same digest-pinned PostgreSQL artifact as local development, no host
   port or persistent volume, a uniquely named Compose project, synthetic credentials/data, and
   cleanup in `finally`. It remains untrusted-code execution on a disposable, secretless runner.
-- After deterministic Node verification, the same secretless disposable Node runner executes ten
+- After deterministic Node verification, the same secretless disposable Node runner executes eleven
   separate synthetic PostgreSQL integrations: Migration controllers, Web HTTP, Ingest HTTP, Ingest
-  OS-signal, Jobs CLI, and five distinct Jobs-scheduler modes. Each owns a unique Compose
+  OS-signal, Jobs CLI, and six distinct Jobs-scheduler modes. Each owns a unique Compose
   project/container, uses only synthetic credentials/data, exposes at most an ephemeral loopback
   port, retains no volume or artifact, and cleans up in `finally`. The Web harness additionally
   generates one ephemeral self-signed certificate/key pair, mounts it read-only for a TLS-enabled

@@ -114,10 +114,12 @@ the real host clock, reaches the terminal startup-catalog marker without process
 ends only its persistent test child, and then verifies exact state. It does not prove controller
 settlement before that forced termination, a wall-clock recurring process callback, or graceful
 OS-signal settlement against PostgreSQL. A separate wall-clock process mode starts the same built
-entry point without replacing its native clock or minute interval, waits for startup, holds the
-scoring mutex, observes the production refresh in a later real five-minute slot, releases it, and
-requires the refresh timestamp to advance before forcibly ending the persistent child. It proves one
-local recurring host-timer refresh, not durable cadence or controller settlement. A separate
+entry point from a link-free read-only production graph under pinned Linux Node without replacing
+its native clock or minute interval, waits for startup, holds the scoring mutex, and observes the
+production refresh in a later real five-minute slot. It delivers an OS `SIGTERM`, releases the
+mutex, and requires the active refresh to commit before silent code-0 exit, session release, and
+runtime fingerprint revalidation. It proves one local recurring host-timer refresh and graceful
+signal settlement, not durable cadence or a deployed controller/orchestrator policy. A separate
 signal-process mode constructs a link-free, production-only runtime from this built runner and its
 exact installed `pg` graph, mounts it read-only in the pinned Linux Node image, holds the emitted
 first finalization call, and delivers an OS `SIGTERM`. It proves that active call settles, no later

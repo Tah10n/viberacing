@@ -74,15 +74,16 @@ without granting Jobs any direct table access.
 
 Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
 execution, no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer
-execution and lifecycle settlement, and real-clock emitted-process terminal-marker evidence. There
-is no host-timer delivery, deployed OS-signal routing, emitted-child controller settlement before
-forced termination, wall-clock recurring process callback, deployed cadence, durable missed-slot
-recovery, monitoring, capacity result, production Jobs login/TLS connection, backup-expiry proof, or
-deployed retention policy. ADR 0042 now covers eligible expired sessions, ADR 0045 covers terminal
-deletion jobs, and ADR 0048 covers aged unreferenced revoked passkeys; pairing-referenced session
-provenance, tombstones, referenced passkey provenance, and any future expiring class still require
-separate reviewed rules. ADR 0050 now separately covers fixed pairing-rate-window reset. Recovery
-also still needs distributed attempt controls and deployment-owned pepper/timing evidence.
+execution and lifecycle settlement, real-clock emitted-process terminal-marker evidence, and later
+native-timer plus OS-signal settlement paths. Those later paths prove one local recurring callback,
+not controller settlement in the separately forcibly ended startup child, deployed OS-signal routing
+or orchestrator grace, deployed cadence, durable missed-slot recovery, monitoring, capacity result,
+production Jobs login/TLS connection, backup-expiry proof, or deployed retention policy. ADR 0042
+now covers eligible expired sessions, ADR 0045 covers terminal deletion jobs, and ADR 0048 covers
+aged unreferenced revoked passkeys; pairing-referenced session provenance, tombstones, referenced
+passkey provenance, and any future expiring class still require separate reviewed rules. ADR 0050
+now separately covers fixed pairing-rate-window reset. Recovery also still needs distributed attempt
+controls and deployment-owned pepper/timing evidence.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-002, VR-AUTH-003, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-RECOVERY-ORACLE,
@@ -140,9 +141,10 @@ through one disposable narrow login, generic output, and exact stored state. ADR
 proves the default-off scheduler against a fake runner and clock, composes its production core with
 the real runner and disposable PostgreSQL under fixed injected UTC time, and directly invokes the
 production interval handler for a repeated fixed-clock cycle and the lifecycle handler after an
-active runner call starts. These layers do not prove host-timer delivery, deployed OS-signal
-routing, emitted-child controller settlement before forced termination, wall-clock recurring process
-behavior, production cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
+active runner call starts. Later ADR 0063 native-timer and OS-signal gates prove one local recurring
+callback and graceful settlement, but these layers still do not prove controller settlement in the
+separately forcibly ended startup child, deployed signal routing or orchestrator grace, production
+cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
 
 ## References
 

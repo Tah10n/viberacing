@@ -43,10 +43,12 @@ material availability cost.
   a default-off local hourly catalog, fixed-clock synthetic scheduler/PostgreSQL composition, an
   injected repeated-timer path with overlap and same-slot suppression, an injected lifecycle path
   that settles an active real-runner call without starting the later job, and one real-clock emitted
-  startup path through its terminal catalog marker. A separate unchanged emitted path observes one
-  native minute-timer refresh in a later real five-minute slot, and a pinned-Linux path delivers one
-  OS `SIGTERM` during an active database call. These prove local host-timer and OS-signal paths, not
-  emitted-child controller/orchestrator settlement or deployed cadence.
+  startup path through its terminal catalog marker. A separate pinned-Linux path leaves the native
+  timer unchanged, observes one refresh in a later real five-minute slot, delivers an OS `SIGTERM`
+  while that call is lock-waiting, and proves graceful settlement. Another pinned-Linux path
+  delivers an OS `SIGTERM` during the first finalization call. These prove local host-timer and
+  OS-signal settlement paths, not a deployed controller/orchestrator grace policy or deployed
+  cadence.
 - **Residual risk:** Vibe Racing cannot prove one human per GitHub account.
 
 ### VR-ABUSE-SOURCE-DUPLICATION — Duplicate declared Codex sources
@@ -138,15 +140,15 @@ material availability cost.
   the penultimate real-runner call before injecting its first handler, and proves that call settles
   without starting the later job. A fifth starts the built entry point under real host time, reaches
   the terminal startup-catalog marker without process output, then forcibly ends only its persistent
-  test child. A sixth starts that unchanged emitted process, holds the scoring mutex after startup,
-  observes refresh in a later real five-minute slot, releases it, and requires a newer refresh
-  timestamp before ending the test child. A seventh mounts a link-free production-only runtime
-  read-only under the pinned Linux Node image, blocks the emitted first finalization call, delivers
-  an OS `SIGTERM`, and proves graceful settlement without starting refresh or a later job. The sixth
-  proves one local host-timer recurring refresh. Controller settlement in the forcibly ended
-  children, a deployed signal route, correction authority, deployed scheduling, production database
-  login/TLS, representative or deployed backlog recovery, and operational reconciliation remain
-  unimplemented.
+  test child. A sixth mounts a link-free production-only runtime read-only under pinned Linux Node,
+  holds the scoring mutex after startup, observes refresh in a later real five-minute slot, delivers
+  an OS `SIGTERM`, releases the mutex, and proves active-refresh settlement before silent code-0
+  exit. A seventh uses the same bounded runtime shape, blocks the emitted first finalization call,
+  delivers an OS `SIGTERM`, and proves graceful settlement without starting refresh or a later job.
+  The sixth proves one local host-timer recurring refresh and graceful signal settlement. Controller
+  settlement in the separately forcibly ended startup child, a deployed signal route or orchestrator
+  grace policy, correction authority, deployed scheduling, production database login/TLS,
+  representative or deployed backlog recovery, and operational reconciliation remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -661,11 +663,11 @@ material availability cost.
   composition, injected repeated-timer and process-lifecycle settlement with its disposable
   PostgreSQL boundary, one real-clock emitted startup path through its terminal catalog marker, and
   one pinned-Linux emitted OS-`SIGTERM` path with active-call settlement and no later job. A
-  separate unchanged emitted path also proves one native host-timer refresh in a later real
-  five-minute slot. None proves emitted-child controller settlement before forced termination, a
-  deployed signal route or orchestrator grace policy, a deployment credential/certificate, external
-  TLS/edge route, external audit sink, capacity, deployed scheduler operation, monitoring, or
-  real-user behavior.
+  separate pinned-Linux path leaves the native timer unchanged and proves one refresh in a later
+  real five-minute slot settles through OS `SIGTERM` before silent code-0 exit. None proves
+  controller settlement in the separately forcibly ended startup child, a deployed signal route or
+  orchestrator grace policy, a deployment credential/certificate, external TLS/edge route, external
+  audit sink, capacity, deployed scheduler operation, monitoring, or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 
@@ -892,12 +894,13 @@ material availability cost.
   first handler, and proves graceful settlement without starting the later job. A fifth starts the
   built entry point under the real host clock, reaches the terminal startup-catalog marker without
   process output, forcibly ends only its persistent test child, and then verifies exact state. A
-  sixth starts that unchanged emitted process, holds the scoring mutex after startup, observes a
-  native minute-timer refresh in a later real five-minute slot, releases it, and requires a newer
-  refresh timestamp before ending the test child. A seventh holds the emitted first finalization
-  call inside the pinned Linux runtime, delivers an OS `SIGTERM`, and proves silent graceful
-  settlement with no later job. These prove one local host-timer refresh and one local OS-signal
-  path, but not controller settlement in the forcibly ended children, a deployed signal route,
+  sixth runs that unchanged entry point from a link-free read-only graph under pinned Linux Node,
+  holds the scoring mutex after startup, observes a native minute-timer refresh in a later real
+  five-minute slot, delivers an OS `SIGTERM`, releases the mutex, and proves active-refresh
+  settlement before silent code-0 exit. A seventh holds the emitted first finalization call inside
+  the same bounded runtime shape, delivers an OS `SIGTERM`, and proves silent graceful settlement
+  with no later job. These prove one local host-timer refresh and two local OS-signal paths, but not
+  controller settlement in the separately forcibly ended startup child, a deployed signal route,
   durable/deployed cadence, or production-load capacity. The kernel itself has no socket/stream
   authority. The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
   checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row origin consume,

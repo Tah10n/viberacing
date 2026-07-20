@@ -193,11 +193,13 @@ Local evidence includes:
   and narrow-login configuration, requires real host/disposable-database UTC-date agreement, waits
   for the terminal reset marker, requires no process output, forcibly ends only its otherwise
   persistent test child, and then verifies the same exact stored state;
-- a separate opt-in wall-clock integration that starts that unchanged emitted process, waits for the
-  startup catalog, records its open-season refresh timestamp, and then holds the scoring mutex until
-  a native minute-timer callback reaches refresh in a later real five-minute slot. It releases the
-  holder, requires the timestamp to advance, verifies silence and session release, and only then
-  forcibly ends its otherwise persistent test child;
+- a separate opt-in wall-clock integration that creates the same bounded link-free production-only
+  runtime under pinned Linux Node, starts the unchanged emitted entry point, waits for the startup
+  catalog, records its open-season refresh timestamp, and then holds the scoring mutex until a
+  native minute-timer callback reaches refresh in a later real five-minute slot. It delivers
+  `SIGTERM`, releases the holder before the database deadline, and requires active-refresh
+  settlement, a newer timestamp, silent code-0 exit, session release, and runtime-fingerprint
+  revalidation;
 - a separate opt-in OS-signal integration that creates a link-free runtime from only the built
   scheduler, built Jobs runner, and exact installed 14-package production graph, mounts it read-only
   under a pinned Linux Node 24.18 image, and joins only the disposable PostgreSQL network namespace.
@@ -216,14 +218,14 @@ emitted-process integration observes only the immediate startup catalog through 
 database marker and deliberately uses `SIGKILL` because Windows cannot deliver this child a
 catchable POSIX shutdown signal. It does not prove controller settlement before forced termination.
 The separate wall-clock emitted integration leaves `Date.now()` and native `setInterval(60_000)`
-unchanged, observes a later-slot production refresh blocked on PostgreSQL, and requires that refresh
-to settle before the same test-only forced termination. It therefore proves one local host-timer
-recurring call, but still not controller settlement or durable cadence. The separate pinned-Linux
-integration does exercise one OS-delivered graceful `SIGTERM` while the emitted process owns an
-active PostgreSQL call, but it does not exercise a deployment controller, orchestrator stop grace,
-or restart. None proves that a production clock remains stable, a deployment has one replica,
-durable cadence is maintained, a representative or real-user historical backlog is recovered,
-production TLS/credentials work, or a real-user retention/deletion deadline is met.
+unchanged, observes a later-slot production refresh blocked on PostgreSQL, delivers an OS `SIGTERM`,
+and requires that refresh to settle before silent code-0 exit. It therefore proves one local
+host-timer recurring call and graceful signal settlement. The other pinned-Linux integration
+exercises the same OS-delivered graceful `SIGTERM` boundary while the first finalization call is
+active and proves that no later job starts. Neither exercises a deployment controller, orchestrator
+stop grace, or restart. None proves that a production clock remains stable, a deployment has one
+replica, durable cadence is maintained, a representative or real-user historical backlog is
+recovered, production TLS/credentials work, or a real-user retention/deletion deadline is met.
 
 ## References
 

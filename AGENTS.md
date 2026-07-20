@@ -47,34 +47,35 @@ scheduler job does not start, and exits through the graceful cleanup path; the h
 omitted reset only afterward before the shared exact-state oracle. A fifth starts the built
 scheduler entry point under the real host clock, waits for the terminal catalog marker, forcibly
 ends only its otherwise persistent test child, and then verifies the same exact state. A sixth
-starts that emitted entry point under the unchanged native clock and minute interval, waits for the
-startup catalog to settle, then holds the scoring mutex until a later real five-minute slot reaches
-the production refresh call. It releases the holder, requires a newer database refresh timestamp,
-and forcibly ends only the still-persistent test child after that call settles. A seventh packages
-only the built scheduler, built Jobs runner, and exact installed production dependency graph into a
-link-free read-only runtime under a pinned Linux Node image, holds the first finalization call in
-PostgreSQL, delivers a real `SIGTERM`, then proves that call settles, no later job starts, the
-emitted process exits silently with code 0, its session closes, and the runtime fingerprint is
-unchanged. The injected-timer result still does not prove a host-timer callback, and the
-forced-child results still do not prove their own controller settlement. The sixth gate is local
-synthetic host-timer and wall-clock recurring-refresh evidence only. None proves a deployed replica
-or signal path, durable cadence, production login/TLS result, monitoring, or capacity evidence. A
-local default-off one-shot migration runner now loads only the exact repository manifest/file
-inventory, revalidates every source digest, probes one distinct owner-member login, holds the fixed
-session advisory lock, rereads an exact ledger prefix, and applies only remaining reviewed SQL
-bodies before requiring the complete ledger. A separate opt-in synthetic integration runs a
-widened-login emitted process and two narrow-login emitted processes against one disposable
-certificate-verified PostgreSQL database. It proves widened-login denial before schema creation,
-observes both narrow controllers behind one external holder, requires both to converge successfully
-after release, and verifies the exact 40-row ledger, all 28 forced-RLS private tables, identity
-invariants, TLS, and connection/lock cleanup. It has no production credential/TLS, deployed replica,
-staging orchestration/rollback, monitoring, deployment, or recovery result. A local Ingest kernel
-bounds the raw sync envelope and parser, verifies an injected replay-consumed origin proof,
-validates the sync contract, and strictly verifies the source-bound device request. A protected
-local reader supplies one mandatory and one optional rotation proof key from exact namespaced
-configuration without returning a reusable key container. A separate bounded Ingest PostgreSQL
-adapter wraps only reviewed origin replay, device lookup, and submission procedures through a probed
-least-privileged login contract. A forced-RLS origin replay tuple and separate Jobs
+packages only the built scheduler, built Jobs runner, and exact installed production dependency
+graph into a link-free read-only runtime under a pinned Linux Node image. Under the unchanged native
+clock and minute interval it waits for startup, holds the scoring mutex until a later real
+five-minute slot reaches the production refresh call, delivers a real `SIGTERM`, releases the
+holder, and requires that refresh to commit with a newer timestamp before silent code-0 exit,
+session release, and an unchanged runtime fingerprint. A seventh uses the same bounded Linux runtime
+shape, holds the first finalization call in PostgreSQL, delivers a real `SIGTERM`, then proves that
+call settles, no later job starts, the emitted process exits silently with code 0, its session
+closes, and the runtime fingerprint is unchanged. The injected-timer result still does not prove a
+host-timer callback, and the forcibly ended startup child still does not prove its own controller
+settlement. The sixth and seventh gates are local synthetic native-timer and OS-signal evidence
+only. None proves a deployed replica or signal path, orchestrator grace, durable cadence, production
+login/TLS result, monitoring, or capacity evidence. A local default-off one-shot migration runner
+now loads only the exact repository manifest/file inventory, revalidates every source digest, probes
+one distinct owner-member login, holds the fixed session advisory lock, rereads an exact ledger
+prefix, and applies only remaining reviewed SQL bodies before requiring the complete ledger. A
+separate opt-in synthetic integration runs a widened-login emitted process and two narrow-login
+emitted processes against one disposable certificate-verified PostgreSQL database. It proves
+widened-login denial before schema creation, observes both narrow controllers behind one external
+holder, requires both to converge successfully after release, and verifies the exact 40-row ledger,
+all 28 forced-RLS private tables, identity invariants, TLS, and connection/lock cleanup. It has no
+production credential/TLS, deployed replica, staging orchestration/rollback, monitoring, deployment,
+or recovery result. A local Ingest kernel bounds the raw sync envelope and parser, verifies an
+injected replay-consumed origin proof, validates the sync contract, and strictly verifies the
+source-bound device request. A protected local reader supplies one mandatory and one optional
+rotation proof key from exact namespaced configuration without returning a reusable key container. A
+separate bounded Ingest PostgreSQL adapter wraps only reviewed origin replay, device lookup, and
+submission procedures through a probed least-privileged login contract. A forced-RLS origin replay
+tuple and separate Jobs
 ingest/pairing/auth/invite/session/abandoned-enrollment/CarRecipe-proposal/finalized-source-day,
 terminal-deletion-job, audit-event, revoked-passkey, and revoked-device cleanup plus pairing
 approval-provenance redaction capabilities have isolated PostgreSQL evidence. A transport-free
@@ -398,10 +399,12 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   process-signal settlement against PostgreSQL, durable/deployed cadence, production
   credentials/TLS, monitoring, capacity, real-user retention, or deployment.
 - `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` starts the same built entry point
-  under unchanged native `Date.now()` and `setInterval(60_000)`, waits for the startup catalog,
-  holds the scoring mutex, observes the production refresh call in a later real five-minute slot,
-  releases it, and requires a newer refresh timestamp before forcibly ending only the persistent
-  test child. It proves one local recurring host-timer call, not controller settlement, durable or
+  from a link-free read-only production-only graph under pinned Linux Node. Under unchanged native
+  `Date.now()` and `setInterval(60_000)` it waits for the startup catalog, holds the scoring mutex,
+  observes the production refresh call in a later real five-minute slot, delivers an OS `SIGTERM`,
+  releases the mutex, and requires the active refresh to commit before silent code-0 exit, session
+  release, and runtime-fingerprint revalidation. It proves one local recurring host-timer call and
+  graceful signal settlement, not a deployed controller or orchestrator grace policy, durable or
   deployed cadence, production clock stability, replica coordination, monitoring, capacity,
   real-user retention, or deployment.
 - `pnpm run test:jobs-scheduler:signal-postgres-integration` packages only the built scheduler,

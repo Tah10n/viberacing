@@ -77,12 +77,12 @@ The self-asserted client ID remains cheap rate shaping, not authentication, a st
 identity, or a trusted network signal. The 130 rows themselves remain for the lifetime of the
 capability. ADR 0063 supplies a default-off in-memory local catalog, sequential execution,
 no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer execution and
-lifecycle settlement, and real-clock emitted-process terminal-marker evidence. Trusted edge limits,
-capacity evidence, host-timer delivery, deployed OS-signal routing, emitted-child controller
-settlement before forced termination, wall-clock recurring process behavior, deployed cadence,
-durable missed-slot recovery, monitoring, production Jobs login/TLS, real-user evidence, and
-deployment remain absent. Keyed deletion tombstones, caches, backups, and restore replay still
-require separate policies and proof.
+lifecycle settlement, real-clock emitted-process terminal-marker evidence, one local native-timer
+callback, and two pinned-Linux OS-signal settlement paths. Trusted edge limits, capacity evidence,
+controller settlement in the separately forcibly ended startup child, deployed OS-signal routing or
+orchestrator grace, deployed cadence, durable missed-slot recovery, monitoring, production Jobs
+login/TLS, real-user evidence, and deployment remain absent. Keyed deletion tombstones, caches,
+backups, and restore replay still require separate policies and proof.
 
 Affected invariants are VR-DATA-001 and VR-ABUSE-001. Primary attacker stories are
 VR-ABUSE-PAIRING-HIJACK, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -139,10 +139,12 @@ Acceptance evidence recorded for this decision includes:
 All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler against a fake
 runner and clock, exercises and rearms the reset across two fixed-clock production-core/PostgreSQL
 cycles, and directly invokes the production lifecycle handler after an active runner call starts.
-These layers do not prove a trusted anonymous identity, edge limit, host-timer delivery, OS-signal
-delivery, emitted-child controller settlement before forced termination, wall-clock recurring
-process behavior, production cadence/login/TLS, monitoring, capacity, backup or cache purge, restore
-replay, real-user retention, or deployment.
+These layers do not prove the later ADR 0063 evidence by themselves. Those native-timer and
+OS-signal gates prove one local recurring callback and graceful settlement, but the combined
+evidence still does not prove a trusted anonymous identity, edge limit, controller settlement in the
+separately forcibly ended startup child, deployed signal routing or orchestrator grace, production
+cadence/login/TLS, monitoring, capacity, backup or cache purge, restore replay, real-user retention,
+or deployment.
 
 ## References
 

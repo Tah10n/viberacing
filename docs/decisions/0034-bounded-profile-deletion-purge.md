@@ -75,12 +75,12 @@ cross-capability deadlock paths.
 This decision does not create a security tombstone. The queued `profile_ref_digest` is random and
 cannot safely stand in for a keyed identity digest; the repository has no reviewed tombstone key,
 expiry, restore consumer, or backup policy. Cache invalidation, disclosed tombstone retention,
-restore replay, backup expiry, host-timer delivery, a wall-clock recurring process callback,
-deployed signal routing and orchestrator grace policy, deployed cadence, monitoring, alerting,
-production Jobs login/TLS, capacity, and deployment remain launch-blocking gates. ADR 0063 provides
-fixed-clock core composition, directly injected repeated-timer execution and lifecycle settlement,
-real-clock emitted-process terminal-marker evidence, and one pinned-Linux OS-signal/PostgreSQL path;
-emitted-child controller settlement before forced termination remains unproven.
+restore replay, backup expiry, deployed signal routing and orchestrator grace policy, deployed
+cadence, monitoring, alerting, production Jobs login/TLS, capacity, and deployment remain
+launch-blocking gates. ADR 0063 provides fixed-clock core composition, directly injected
+repeated-timer execution and lifecycle settlement, real-clock emitted-process terminal-marker
+evidence, one local native-timer callback, and two pinned-Linux OS-signal/PostgreSQL settlement
+paths; controller settlement in the separately forcibly ended startup child remains unproven.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-003, VR-INGEST-001, VR-INGEST-002, VR-DATA-001, and
 VR-DELETE-001. Primary attacker stories are VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION,
@@ -140,9 +140,10 @@ integration proves only local terminal-job cleanup after the fixed retention bou
 separately proves the default-off scheduler against a fake runner and clock, composes its production
 core with the real runner and disposable PostgreSQL under fixed injected UTC time, and directly
 invokes the production interval handler for a repeated fixed-clock cycle and the lifecycle handler
-after an active runner call starts. These layers do not prove host-timer delivery, OS-signal
-delivery, emitted-child controller settlement before forced termination, wall-clock recurring
-process behavior, a published deletion window, production login/TLS, monitoring, backup expiry,
+after an active runner call starts. Later ADR 0063 native-timer and OS-signal gates prove one local
+recurring callback and graceful settlement, but these layers still do not prove controller
+settlement in the separately forcibly ended startup child, deployed signal routing or orchestrator
+grace, a published deletion window, production login/TLS, monitoring, backup expiry,
 tombstone/restore replay, cache invalidation, capacity, or deployment.
 
 ## References
