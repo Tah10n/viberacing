@@ -76,24 +76,28 @@ ledger prefix, applies only the missing reviewed SQL bodies sequentially, requir
 ledger, resets the role, and releases the lock. Missing or malformed enablement fails before
 catalog, protected configuration, or pool work; every failure destroys the client and process output
 is generic. Its evidence is 97 injected unit/policy tests at 99.34% statements, 98.59% branches,
-100% functions, and 99.34% lines plus strict build and built disabled-startup checks. It has not
-executed PostgreSQL and proves no emitted concurrent-controller success, production credential/TLS,
-staging orchestration/rollback, replica coordination, deployment, or recovery. A local Ingest kernel
-now bounds and authenticates the exact Community sync envelope, consumes an injected origin nonce,
-parses bounded JSON, validates the generated contract, and strictly verifies the source-bound device
-request. A separate bounded Ingest PostgreSQL adapter revalidates that output and exposes only
-atomic origin-nonce consumption, device lookup, and submission through a probed least-privileged
-pool. A protected local reader supplies one mandatory and one optional rotation origin key directly
-to the verifier without returning raw configuration. A forced-RLS replay tuple, Ingest-only atomic
-consume, separate Jobs cleanup paths for ingest, pairing, authentication, invites, sessions,
-abandoned enrollments, CarRecipe proposals, finalized source/day values, terminal deletion jobs,
-audit events, aged revoked passkeys, and aged minimized revoked devices plus pairing
-approval-provenance redaction and primary profile deletion now have real isolated PostgreSQL
-evidence. A transport-free Ingest application now composes those exact verifier and database
-capabilities, generates a server-owned request ID, waits for submission, and returns only a
-validated acknowledgement or generic problem decision. A bounded local Fastify server factory now
-preserves exact raw HTTP evidence, admits four application calls without a queue, applies fixed
-parser/header/connection/deadline policies, and serializes only revalidated sync
+100% functions, and 99.34% lines plus strict build and built disabled-startup checks. A separate
+opt-in synthetic integration runs one widened and two narrow emitted processes against one
+disposable hostname-verified TLS PostgreSQL database. It denies the widened login before schema
+creation, observes both narrow controllers behind one external holder, requires both to converge
+successfully after release, and verifies the exact 39-row ledger, all 28 owner-owned forced-RLS
+private tables, identity invariants, and connection/lock cleanup. It proves no production
+credential/TLS, staging orchestration/rollback, deployed-replica behavior, monitoring, deployment,
+or recovery. A local Ingest kernel now bounds and authenticates the exact Community sync envelope,
+consumes an injected origin nonce, parses bounded JSON, validates the generated contract, and
+strictly verifies the source-bound device request. A separate bounded Ingest PostgreSQL adapter
+revalidates that output and exposes only atomic origin-nonce consumption, device lookup, and
+submission through a probed least-privileged pool. A protected local reader supplies one mandatory
+and one optional rotation origin key directly to the verifier without returning raw configuration. A
+forced-RLS replay tuple, Ingest-only atomic consume, separate Jobs cleanup paths for ingest,
+pairing, authentication, invites, sessions, abandoned enrollments, CarRecipe proposals, finalized
+source/day values, terminal deletion jobs, audit events, aged revoked passkeys, and aged minimized
+revoked devices plus pairing approval-provenance redaction and primary profile deletion now have
+real isolated PostgreSQL evidence. A transport-free Ingest application now composes those exact
+verifier and database capabilities, generates a server-owned request ID, waits for submission, and
+returns only a validated acknowledgement or generic problem decision. A bounded local Fastify server
+factory now preserves exact raw HTTP evidence, admits four application calls without a queue,
+applies fixed parser/header/connection/deadline policies, and serializes only revalidated sync
 acknowledgement/problem contracts. A separate exact-default-off local host composes that factory
 under closed listener and process-lifecycle policy. Its required synthetic PostgreSQL gate now
 closes the imported emitted host after the full request/no-queue matrix, starts the built entry
@@ -752,9 +756,15 @@ ranking, or deployed Jobs scheduler/cadence exists.
   search path, read-write state, and configured TLS state before taking the session migration lock.
   The runner then rereads an exact ledger prefix under the owner role, applies only the reviewed
   missing suffix, requires the complete ledger, resets role, and unlocks. Unit and built-entrypoint
-  evidence covers closed result shapes and failure cleanup, but no test yet connects this process to
-  PostgreSQL; it therefore proves no actual DDL, two-controller convergence, production TLS/login,
-  staging rollout, rollback, replica coordination, deployment, or recovery.
+  evidence covers closed result shapes and failure cleanup. A separate opt-in gate builds and runs
+  the emitted entry point with a widened negative login and two narrow logins against one disposable
+  hostname-verified TLS PostgreSQL database. It proves the widened process fails generically before
+  schema creation, observes both narrow processes behind one external holder of the fixed session
+  key, then requires both to succeed and converge on the exact 39-row ledger. The same oracle checks
+  all 28 private tables remain owner-owned with forced RLS, runs the identity invariants, and proves
+  the controller sessions and lock are gone before deleting every resource. This is actual local
+  DDL/driver/TLS/convergence evidence, but not production TLS/login, staging rollout/rollback,
+  deployed replica coordination, monitoring, deployment, or recovery.
 - A deterministic current-snapshot restore drill inside that isolated real PostgreSQL gate. It
   retains two bounded custom archives only in the disposable container, replaces only the run's
   database twice, requires the source and both restored canonical data dumps to have the same
@@ -1347,7 +1357,7 @@ revoked-device state plus pairing approval-provenance redaction, pairing-rate-wi
 primary deletion, cleanup for remaining expiring state, host-timer delivery and wall-clock recurring
 process execution, OS-delivered graceful process-signal settlement against PostgreSQL, deployed
 operation of the local Jobs scheduler, a production login/TLS path, audited corrections, deployed
-public-score delivery, successful multi-controller migration orchestration/rollback,
+public-score delivery, successful isolated staging migration orchestration/rollback,
 cache/backup/tombstone purge and restore replay, connector macOS/Linux executable admission,
 clean-machine live Codex/privacy evidence, supported operational account/usage integration, deployed
 signed-upload egress, credential rotation and automated server-revoke composition, hosted Windows
@@ -1386,6 +1396,7 @@ pnpm run test:agent-skills-check
 pnpm run check:contracts
 pnpm run check:database
 pnpm run test:database:integration
+pnpm run test:migrate:postgres-integration
 pnpm run test:web:postgres-integration
 pnpm run test:ingest:coverage
 pnpm run build:ingest

@@ -26,17 +26,20 @@ deliberately widened login, validates exact public score/race/status contracts p
 fingerprints every private table before and after both paths. It also holds exactly four score
 queries behind an owner lock, rejects a fifth without a fifth public-score query, and validates all
 four after rollback. The local one-shot Jobs runner has its own synthetic disposable-login
-integration. No reusable or deployment certificate/login is supplied. The database-only ingest and
-Jobs-only ingest-retention, pairing-retention, authentication-retention, invite-retention,
-session-retention, abandoned-enrollment, CarRecipe-proposal, finalized-source-day,
-terminal-deletion-job, audit-event, revoked-passkey, and revoked-device retention, pairing
-approval-provenance redaction, primary profile deletion, open-season scoring, and terminal
-finalization procedures plus Web-only public score/race/status and exact-session private score
-projections are implemented; deployed HTTP ingest, host-timer delivery, a wall-clock recurring
-scheduler process callback, OS-delivered process-signal/PostgreSQL behavior, deployed cadence,
-audited corrections, cache/backup/tombstone purge, and restore replay are not. Fixed-clock startup,
-injected repeated timer, injected lifecycle, and real-clock emitted-process terminal-marker evidence
-are proven synthetically.
+integration. The separate default-off migration controller now has an opt-in disposable PostgreSQL
+integration that denies one widened emitted process before schema creation, observes two narrow
+emitted processes behind one external advisory-lock holder over hostname-verified TLS, and requires
+both to converge on the exact catalog/schema before checking cleanup. No reusable or deployment
+certificate/login is supplied. The database-only ingest and Jobs-only ingest-retention,
+pairing-retention, authentication-retention, invite-retention, session-retention,
+abandoned-enrollment, CarRecipe-proposal, finalized-source-day, terminal-deletion-job, audit-event,
+revoked-passkey, and revoked-device retention, pairing approval-provenance redaction, primary
+profile deletion, open-season scoring, and terminal finalization procedures plus Web-only public
+score/race/status and exact-session private score projections are implemented; deployed HTTP ingest,
+host-timer delivery, a wall-clock recurring scheduler process callback, OS-delivered
+process-signal/PostgreSQL behavior, deployed cadence, audited corrections, cache/backup/tombstone
+purge, and restore replay are not. Fixed-clock startup, injected repeated timer, injected lifecycle,
+and real-clock emitted-process terminal-marker evidence are proven synthetically.
 
 The `viberacing_api` schema is a closed procedure boundary. Runtime roles receive no direct private
 table access. Profile-scoped procedures derive identity from an exact active session ID and keyed
@@ -1003,19 +1006,28 @@ Focused commands:
 pnpm run test:database-check
 pnpm run check:database
 pnpm run test:database:integration
+pnpm run test:migrate:postgres-integration
 pnpm run test:web:postgres-integration
 pnpm run test:ingest:postgres-integration
 ```
 
-The first two commands are offline and part of `pnpm run verify`. All three integration commands
+The first two commands are offline and part of `pnpm run verify`. All four integration commands
 require Docker and never connect to the normal `postgres` volume. The database suite starts only the
 portless `postgres-test` service in a uniquely named Compose project with ephemeral `tmpfs` storage.
-The Web and Ingest suites each start a separate one-off `postgres-test` container with only an
-ephemeral loopback-published port. The Web suite additionally mounts one generated read-only
-test-only certificate/key directory, copies the material under closed container permissions before
-the original PostgreSQL entrypoint, and requires verified TLS from two emitted standalone Next
-processes. Both suites remove their process/container/network/storage resources in `finally`; Web
-also removes the ephemeral host key directory.
+The Migration, Web, and Ingest suites each start a separate one-off `postgres-test` container with
+only an ephemeral loopback-published port. The Migration and Web suites additionally mount one
+generated read-only test-only certificate/key directory, copy the material under closed container
+permissions before the original PostgreSQL entrypoint, and require hostname-verified TLS from their
+emitted processes. All suites remove their process/container/network/storage resources in `finally`;
+Migration and Web also remove their ephemeral host key directories.
+
+The Migration suite runs one widened emitted controller and requires generic denial before either
+application schema exists. It then holds the fixed session advisory key externally, observes two
+narrow emitted controllers waiting behind that holder over TLS 1.2/1.3, releases it, and requires
+both controllers to succeed. The final oracle checks the exact 39-row manifest ledger, all 28
+owner-owned forced-RLS private tables, identity invariants, zero controller connections, and a free
+session lock. This is local disposable controller convergence, not staging orchestration, a
+production login/certificate, deployed replica behavior, monitoring, rollback, or recovery.
 
 Before revision 0039 is first applied, the database suite opens a holder transaction on the exact
 advisory migration lock and starts two tagged processes with the unchanged reviewed SQL. It releases
@@ -1089,7 +1101,8 @@ something the script silently broadens or repairs.
   markers outside revisions 0008, 0012, 0013, 0023, 0026, 0030, 0031, 0032, 0033, 0034, 0035, 0036,
   0037, 0038, and 0039 are not cleanup, redaction, or reset evidence.
 - Replace every launch-decision retention item with public policy and purge evidence.
-- Exercise successful multi-controller migration orchestration and rollback, deployment backup
-  restore, stale-backup deletion replay, role rotation, and service rollback in isolated staging
-  before real-user ingestion. The local advisory-lock overlap and current-snapshot drills are
+- Exercise the successful local multi-controller runner through protected deployment orchestration,
+  service compatibility and forward rollback, deployment backup restore, stale-backup deletion
+  replay, role rotation, and service rollback in isolated staging before real-user ingestion. The
+  local emitted-controller convergence, raw advisory-lock overlap, and current-snapshot drills are
   prerequisite evidence, not this staging gate.

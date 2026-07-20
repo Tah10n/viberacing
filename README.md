@@ -243,10 +243,14 @@ A separate default-off one-shot migration runner now verifies the exact reposito
 canonical paths, bounded UTF-8 source, and every SHA-256 digest before constructing one migration
 pool. It rejects a widened login through a closed owner-member/TLS/search-path probe, serializes the
 whole catalog with the fixed session advisory key, rereads the ledger after locking, applies only an
-exact missing suffix, and requires the complete ledger before success. Current evidence is 97
-injected unit/policy tests plus strict build and built disabled-startup checks. It has not yet run
-against PostgreSQL and proves no concurrent emitted-controller success, production credential/TLS,
-staging migration/rollback, replica coordination, deployment, or recovery.
+exact missing suffix, and requires the complete ledger before success. In addition to 97 injected
+unit/policy tests plus strict build and built disabled-startup checks, an opt-in synthetic gate runs
+one widened and two narrow emitted processes against a disposable certificate-verified PostgreSQL
+database. The widened process fails before schema creation; both narrow controllers are observed
+behind one external lock holder and then converge successfully on the exact 39-row ledger, all 28
+forced-RLS private tables, and the identity invariant oracle. This proves local driver/TLS/lock
+behavior only, not production credentials, staging migration/rollback, deployed replicas,
+monitoring, deployment, or recovery.
 
 Thirty-nine SQL migrations now add 28 private identity, passkey, restricted-recovery, source,
 device, pairing, audit, deletion, replay, usage, Community scoring, and CarRecipe tables with
@@ -434,6 +438,7 @@ pnpm install --frozen-lockfile --ignore-scripts
 pnpm run dev:web
 pnpm run verify
 pnpm run test:connector:windows-portable
+pnpm run test:migrate:postgres-integration
 pnpm run test:web:postgres-integration
 pnpm run test:ingest:postgres-integration
 pnpm run test:jobs:postgres-integration
@@ -445,8 +450,8 @@ pnpm run test:jobs-scheduler:process-postgres-integration
 
 The connector lifecycle command is Windows x86_64-only. It builds from the locked Cargo graph and
 tests only a temporary portable copy; it does not install, package, sign, publish, run a connector
-network command, or contact a Vibe Racing/Codex service. The final seven commands are opt-in
-Docker-backed synthetic integrations; secretless CI declares all seven, and they are intentionally
+network command, or contact a Vibe Racing/Codex service. The final eight commands are opt-in
+Docker-backed synthetic integrations; secretless CI declares all eight, and they are intentionally
 outside the deterministic offline `verify` command. The current tree has local results only; no
 hosted pass is claimed for any Docker-backed integration.
 

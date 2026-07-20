@@ -57,9 +57,13 @@ Versioning where its guarantees are applicable.
   set authority, and uses one fixed session lock to reread the ledger and apply only an exact
   missing suffix. Argument, alternate-enable, path/SQL injection, widened-login/result-shape,
   ledger-drift, cleanup-failure, and reflective-output paths fail closed in 97 injected tests plus a
-  built entrypoint check. No PostgreSQL execution, concurrent emitted controller, production
-  TLS/login, staging migration/rollback, replica coordination, deployment, or recovery result is
-  claimed.
+  built entrypoint check. A separate opt-in synthetic gate now uses verified TLS to run a widened
+  emitted process and two narrow emitted processes against one disposable PostgreSQL database. It
+  denies the widened login before schema creation, observes both narrow controllers behind one
+  external advisory-lock holder, requires both to converge successfully after release, and verifies
+  the exact 39-row ledger, 28 forced-RLS tables, identity invariants, and resource cleanup. No
+  production TLS/login, deployed replica, staging migration/rollback, monitoring, deployment, or
+  recovery result is claimed.
 - A deterministic current-snapshot restore drill in the isolated PostgreSQL integration. It keeps
   two bounded custom archives only inside the disposable `tmpfs` container, replaces only that run's
   database twice, and requires the source plus both restored canonical data dumps to retain their

@@ -848,8 +848,12 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   digest, count, row, or driver error reaches its fixed process sentences. Its fixed application
   name and in-memory control state are Operational, disappear at process exit, and are not retained
   by this repository. A deployment log, metric, operator identity, timestamp, or migration detail
-  requires a separate mapped purpose, access policy, and retention decision before collection.
-  Current tests use only synthetic values and no PostgreSQL connection.
+  requires a separate mapped purpose, access policy, and retention decision before collection. The
+  opt-in PostgreSQL gate uses only obvious synthetic logins/passwords, an in-memory bounded closed
+  observation, and one generated one-hour certificate/key directory. Child output is bounded to the
+  fixed generic sentences; the harness persists or emits no SQL, row, database error, credential, or
+  dump content and removes every process/container/network/storage/TLS resource. It touches no
+  shared or persistent database and adds no product-data collection.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The

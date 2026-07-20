@@ -52,9 +52,19 @@ tracked file or shell transcript intended for publication.
 
 Unit tests use injected pools and catalogs; they do not connect to PostgreSQL. The built-entrypoint
 gate proves disabled startup stops before protected configuration and that enabled-but-incomplete or
-argument-bearing startup fails generically. A separate future integration must run two emitted
-processes against one disposable TLS PostgreSQL instance, observe both behind the same advisory
-holder, prove both controllers succeed, deny a widened login before schema mutation, and verify the
-exact ledger/schema. Until that gate exists, this workspace is local implementation evidence only:
-it proves no database execution, production credential, migration result, staging orchestration,
-rollback, replica coordination, deployment, monitoring, or recovery.
+argument-bearing startup fails generically.
+
+The separate opt-in `pnpm run test:migrate:postgres-integration` gate builds the emitted entry point
+and creates one disposable TLS-enabled PostgreSQL container with an ephemeral loopback port and
+synthetic narrow and deliberately widened logins. It requires the widened emitted process to fail
+generically before application-schema creation, then observes two narrow emitted processes waiting
+behind one external holder of the fixed advisory key. After release, both processes must emit the
+exact generic success, the ledger must equal all 39 reviewed revisions, all 28 private tables must
+remain owner-owned with forced RLS, the identity invariant oracle must pass, and every controller
+connection and lock must be gone. The gate removes its generated certificate/key, container,
+network, and storage and never touches the normal local database volume.
+
+This is synthetic local PostgreSQL, driver, hostname-verified TLS, and concurrent-controller
+evidence only. It does not provide a production credential or certificate, deployed replica, staging
+migration/rollback, service-compatibility result, monitoring, capacity, deployment, or recovery
+evidence.

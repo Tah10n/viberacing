@@ -1,6 +1,6 @@
 # ADR 0064: Default-off reviewed migration runner
 
-- Status: Accepted (local one-shot core; PostgreSQL and deployment evidence pending)
+- Status: Accepted (local PostgreSQL/TLS integration; deployment evidence pending)
 - Date: 2026-07-20
 - Decision owners: Database, Security, Privacy, Operations, and Release
 - Supersedes: None
@@ -48,9 +48,10 @@ database statements are not generated or repaired.
 
 Configuration creates one maximum-one pool with one-use clients, fixed application name, UTF-8, safe
 search path, connection/lock/query/statement/idle-transaction deadlines, and bounded password.
-Production accepts only certificate-verifying TLS to a DNS name (including `localhost` for the
-future synthetic gate). Cleartext is allowed only on explicit development/test loopback. Protected
-password material is non-enumerable and JSON-redacted; process output never reflects it.
+Production accepts only certificate-verifying TLS to a DNS name; the synthetic gate uses a generated
+certificate for its fixed local DNS hostname. Cleartext is allowed only on explicit development/test
+loopback. Protected password material is non-enumerable and JSON-redacted; process output never
+reflects it.
 
 Before taking the lock, the session must prove all of the following in one closed row:
 
@@ -81,8 +82,8 @@ health route, listener, or monitoring backend.
 The process has intentionally powerful but short-lived schema authority. Its fixed catalog and
 exact-digest boundary prevent configuration or caller input from becoming SQL. The login probe keeps
 migration authority distinct from runtime roles and rejects a widened principal before owner role
-selection. One session lock plus a post-lock ledger read allows a future concurrent controller to
-converge without making immutable migrations idempotent or weakening their transactions.
+selection. One session lock plus a post-lock ledger read lets concurrent controllers converge
+without making immutable migrations idempotent or weakening their transactions.
 
 This does not protect a host that can replace both code and manifest, compromise the protected
 migration credential, alter the trusted CA store, or administer PostgreSQL. Artifact provenance,
@@ -98,11 +99,14 @@ run history and emits only one aggregate sentence. A deployment log, metric, ope
 timestamp, migration name/count, database error, or audit record would be a new Operational/Security
 collection and requires a privacy-map decision before collection.
 
-The current evidence is injected unit/policy/build evidence only. It does not prove that PostgreSQL
-accepts the driver-submitted multi-statement bodies, the login probe matches a real narrow role,
-session and transaction advisory locks compose as intended, two emitted controllers both succeed,
-TLS works, or exact schema state results. It is not successful staging migration orchestration,
-rollback, production credential, deployment, recovery, monitoring, or capacity evidence.
+The opt-in synthetic integration now proves that PostgreSQL accepts the driver-submitted
+multi-statement bodies, the closed probe admits one real narrow role and rejects a deliberately
+widened role before schema creation, and the session lock composes with every migration's
+transaction lock. It observes two emitted narrow controllers behind one external holder, then
+requires both to succeed and converge on the exact 39-row ledger, 28 owner-owned forced-RLS tables,
+and the identity invariant oracle over hostname-verified TLS. This remains local disposable
+evidence, not successful staging migration orchestration/rollback, a production credential,
+deployed-replica behavior, monitoring, capacity, deployment, or recovery.
 
 ## Alternatives considered
 
@@ -120,8 +124,9 @@ rollback, production credential, deployment, recovery, monitoring, or capacity e
 - **Add automatic retries or down migrations:** rejected because an unknown DDL failure needs
   operator review and forward repair; repeated owner-authorized SQL or destructive generic rollback
   would widen impact.
-- **Claim deployment readiness from unit tests:** rejected because driver protocol, PostgreSQL role,
-  TLS, overlap, stored state, and operational rollout remain unobserved.
+- **Claim deployment readiness from local tests:** rejected because the synthetic gate observes
+  driver protocol, PostgreSQL role/TLS behavior, overlap, and stored state, but not protected
+  production configuration or an operational rollout.
 
 ## Migration and rollback
 
@@ -146,17 +151,18 @@ Current local evidence includes:
 - 99.34% statements, 98.59% branches, 100% functions, and 99.34% lines under the checked thresholds;
 - strict TypeScript, production compilation, and a built-entrypoint check for disabled,
   enabled-without-protected-configuration, and argument-bearing startup;
+- one opt-in disposable PostgreSQL integration that builds the emitted entry point, proves a
+  widened-login denial before schema creation, observes two narrow controllers behind an external
+  lock holder over hostname-verified TLS, requires both generic-success exits, verifies the exact
+  39-row ledger, all 28 owner-owned forced-RLS tables, the identity invariant oracle, and complete
+  connection/lock cleanup;
 - root verifier wiring, frozen lockfile supply-chain policy, and the existing immutable migration
   checker.
 
-The next independent gate must build this entry point, create a disposable TLS-enabled PostgreSQL
-database, bootstrap roles through the container owner, create one narrow migration login plus one
-widened negative login, and run emitted processes rather than mocks. It must prove widened-login
-denial before schema mutation, observe two narrow controllers waiting behind one external holder,
-release them, require both generic-success exits, verify TLS and exact 39-row ledger/schema state,
-then remove the process/container/network/storage resources. That will still not prove production
-credentials, multiple deployed replicas, staging rollback, service compatibility, monitoring,
-capacity, or deployment.
+The next independent operational gate must run the reviewed controller through protected
+environment-owned credentials and trust material in isolated staging, coordinate the intended
+replica topology, prove service compatibility and forward rollback, and exercise monitoring plus
+recovery. The local disposable result does not prove any of those properties.
 
 ## References
 

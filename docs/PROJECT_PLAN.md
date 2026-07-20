@@ -872,11 +872,15 @@ implemented cleanup, redaction, or reset has a deployed cadence.
 A separate local one-shot migration runner is now exact-default-off before catalog, protected
 configuration, or resource work. It verifies only the canonical manifest/file inventory and source
 digests, probes one distinct owner-member login, takes the fixed session advisory lock, rereads the
-ledger, and applies only an exact reviewed suffix before requiring the complete catalog. Its current
-evidence is injected unit/policy/build evidence and it has not connected to PostgreSQL. The next
-independent prerequisite is two emitted narrow-login controllers plus widened-login denial over one
-disposable certificate-verified database; even that will not satisfy staging rollout/rollback,
-production credential, replica, monitoring, deployment, or recovery gates.
+ledger, and applies only an exact reviewed suffix before requiring the complete catalog. A separate
+opt-in synthetic gate now runs one widened and two narrow emitted processes over hostname-verified
+TLS to one disposable PostgreSQL database. It proves widened-login denial before schema creation,
+observes both narrow controllers behind one external lock holder, requires both to converge on the
+exact 39-row ledger after release, and verifies all 28 forced-RLS private tables, identity
+invariants, and resource cleanup. The next independent prerequisite is protected staging
+orchestration with environment-owned credentials/trust, intended replica topology, service
+compatibility, forward rollback, monitoring, and recovery; the disposable result satisfies none of
+those deployment gates.
 
 ## Administration and operations
 
@@ -1253,10 +1257,10 @@ external TLS/edge, cache, capacity, or operational gate above.
 
 - Deploy isolated staging and production infrastructure.
 - Verify origin protection, migrations, backup restore, deletion replay, monitoring, incident
-  runbooks, connector signing, SBOM, provenance, and rollback. The local advisory-lock overlap and
-  current-snapshot database drills plus the default-off migration-runner core are prerequisite
-  implementation evidence; they do not satisfy emitted PostgreSQL controller convergence, successful
-  staging migration orchestration/rollback, stale-backup deletion replay, or any deployment gate.
+  runbooks, connector signing, SBOM, provenance, and rollback. The local advisory-lock overlap,
+  current-snapshot database drills, and emitted migration-controller convergence are prerequisite
+  implementation evidence; they do not satisfy successful staging migration orchestration/rollback,
+  stale-backup deletion replay, or any deployment gate.
 - Complete accessibility, privacy, legal, licensing, name/trademark, external security, and
   documentation review.
 - Start with a small invite cohort and expand only after reviewing reliability, cost, abuse,

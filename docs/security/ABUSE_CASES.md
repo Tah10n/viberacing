@@ -609,44 +609,48 @@ material availability cost.
   admits only the exact repo-owned manifest/digests, one narrow owner-member login, one fixed
   session lock, an exact post-lock ledger prefix, and the reviewed missing suffix. It rejects
   arguments, alternate enable values, caller paths/SQL, widened roles, open query rows, ledger
-  drift, and reflective output in injected tests; no current test connects it to PostgreSQL. Ingest
-  has exactly three reviewed functions; Jobs has exactly seventeen reviewed functions: bounded
-  authentication-, abandoned-enrollment-, audit-event-, invite-, CarRecipe-proposal-, ingest-,
-  pairing-, session-, and finalized-source-day retention cleanup, terminal deletion-job cleanup,
-  aged revoked-passkey cleanup, aged minimized revoked-device cleanup, pairing approval-provenance
-  redaction, fixed pairing-rate-window reset, primary profile deletion, open-season scoring refresh,
-  and terminal season finalization. Web alone receives the bounded public score and separate race
-  functions; Ingest, Jobs, and Admin are explicitly denied. The Web adapter uses one dedicated pool,
-  fixed parameterized function calls, and checks effective role, distinct non-privileged login,
-  exact Web-only membership, database capability, search path, and read-only state before every
-  pooled read. Failed sessions are destroyed and raw driver errors are not forwarded. The local Jobs
-  adapter independently checks an exact Jobs-only login/membership, CONNECT without
-  CREATE/TEMPORARY, and safe search path before exactly one of the seventeen prepared function
-  calls. Its pool maximum is one, input/result shapes are closed, failed clients are destroyed, and
-  CLI output reflects no configuration, command, SQL, count, or error detail. The separate
-  default-off scheduler can construct only that runner, selects only a frozen maximum-17 fixed UTC
-  catalog, and validates each object again through the runner; it adds no SQL or database
-  capability. The local Ingest adapter independently caps its pool at four, probes the exact Ingest
-  login/role and safe search path before each capability, exposes only fixed parameterized origin
-  replay, device lookup, and submission calls, reconstructs and revalidates inputs, copies mutable
-  values, accepts only closed rows, and destroys failed clients without forwarding
-  driver/configuration details. Its full synthetic gate additionally observes four lock-waiting
-  origin-consume queries and rejects a fifth HTTP request without a fifth database call before the
-  four settle successfully.
+  drift, and reflective output in injected tests. Its separate opt-in synthetic gate runs a widened
+  emitted process and two narrow emitted processes over hostname-verified TLS to one disposable
+  database, proves the widened process cannot create the application schema, observes both narrow
+  controllers behind one external holder, and requires exact two-controller ledger/schema
+  convergence plus cleanup. Ingest has exactly three reviewed functions; Jobs has exactly seventeen
+  reviewed functions: bounded authentication-, abandoned-enrollment-, audit-event-, invite-,
+  CarRecipe-proposal-, ingest-, pairing-, session-, and finalized-source-day retention cleanup,
+  terminal deletion-job cleanup, aged revoked-passkey cleanup, aged minimized revoked-device
+  cleanup, pairing approval-provenance redaction, fixed pairing-rate-window reset, primary profile
+  deletion, open-season scoring refresh, and terminal season finalization. Web alone receives the
+  bounded public score and separate race functions; Ingest, Jobs, and Admin are explicitly denied.
+  The Web adapter uses one dedicated pool, fixed parameterized function calls, and checks effective
+  role, distinct non-privileged login, exact Web-only membership, database capability, search path,
+  and read-only state before every pooled read. Failed sessions are destroyed and raw driver errors
+  are not forwarded. The local Jobs adapter independently checks an exact Jobs-only
+  login/membership, CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the
+  seventeen prepared function calls. Its pool maximum is one, input/result shapes are closed, failed
+  clients are destroyed, and CLI output reflects no configuration, command, SQL, count, or error
+  detail. The separate default-off scheduler can construct only that runner, selects only a frozen
+  maximum-17 fixed UTC catalog, and validates each object again through the runner; it adds no SQL
+  or database capability. The local Ingest adapter independently caps its pool at four, probes the
+  exact Ingest login/role and safe search path before each capability, exposes only fixed
+  parameterized origin replay, device lookup, and submission calls, reconstructs and revalidates
+  inputs, copies mutable values, accepts only closed rows, and destroys failed clients without
+  forwarding driver/configuration details. Its full synthetic gate additionally observes four
+  lock-waiting origin-consume queries and rejects a fifth HTTP request without a fifth database call
+  before the four settle successfully.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
-  migration workflow. Web now has a disposable synthetic narrow login plus widened-login denial
-  through two emitted standalone Next production processes, certificate-verified TLS, and one
-  controlled four-slot admission scenario, but a deployment certificate/login, external TLS/edge
-  path, and representative load/capacity have not been exercised. Jobs now has a disposable
-  synthetic least-privileged login, all seventeen emitted commands, a widened-login denial, and
-  exact-state evidence; Ingest similarly has a disposable synthetic least-privileged loopback login
-  and full HTTP integration result. Jobs additionally has fixed-clock production scheduler-core
-  composition, injected repeated-timer and process-lifecycle settlement with its disposable
-  PostgreSQL boundary, and one real-clock emitted startup path through its terminal catalog marker.
-  None proves host-timer delivery, OS-signal delivery, emitted-child controller settlement before
-  forced termination, a deployment credential/certificate, external TLS/edge route, external audit
-  sink, capacity, a wall-clock recurring process callback, deployed scheduler operation, monitoring,
-  or real-user behavior.
+  migration workflow. Its local emitted-controller gate has no production credential/trust, staging
+  service-compatibility/rollback, deployed replica, monitoring, or recovery result. Web now has a
+  disposable synthetic narrow login plus widened-login denial through two emitted standalone Next
+  production processes, certificate-verified TLS, and one controlled four-slot admission scenario,
+  but a deployment certificate/login, external TLS/edge path, and representative load/capacity have
+  not been exercised. Jobs now has a disposable synthetic least-privileged login, all seventeen
+  emitted commands, a widened-login denial, and exact-state evidence; Ingest similarly has a
+  disposable synthetic least-privileged loopback login and full HTTP integration result. Jobs
+  additionally has fixed-clock production scheduler-core composition, injected repeated-timer and
+  process-lifecycle settlement with its disposable PostgreSQL boundary, and one real-clock emitted
+  startup path through its terminal catalog marker. None proves host-timer delivery, OS-signal
+  delivery, emitted-child controller settlement before forced termination, a deployment
+  credential/certificate, external TLS/edge route, external audit sink, capacity, a wall-clock
+  recurring process callback, deployed scheduler operation, monitoring, or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 

@@ -83,8 +83,8 @@ const runtimeBoundaryQuery = `SELECT
       AND ssl_state.ssl = $2::boolean
   ) AS transport_ok,
   pg_catalog.current_setting('transaction_read_only') = 'off' AS read_write_ok`;
-const acquireCatalogLockQuery = `SELECT
-  pg_catalog.pg_advisory_lock($1::bigint) IS NULL AS locked`;
+const acquireCatalogLockQuery = `SELECT true AS locked
+FROM pg_catalog.pg_advisory_lock($1::bigint)`;
 const releaseCatalogLockQuery = `SELECT
   pg_catalog.pg_advisory_unlock($1::bigint) AS unlocked`;
 const ledgerPresenceQuery = `SELECT

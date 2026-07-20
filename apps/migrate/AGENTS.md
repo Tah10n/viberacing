@@ -27,9 +27,10 @@ this workspace. The root public-data, dependency, documentation, and staged-revi
   fixed catalog, or subprocess execution.
 - Do not log configuration, SQL, revisions, names, paths, counts, database errors, stack traces, or
   stored rows. Process output remains one stable disabled, success, or failure sentence.
-- Do not claim PostgreSQL execution, concurrent-controller success, production credentials/TLS,
-  replica coordination, staging migration/rollback, deployment, or recovery evidence until the
-  separate integration and operational gates exist.
+- Local PostgreSQL execution, hostname-verified synthetic TLS, widened-login denial, and
+  two-controller convergence may be claimed only from the opt-in disposable integration gate. Do not
+  convert that result into a production credential/TLS, deployed replica, staging
+  migration/rollback, monitoring, deployment, or recovery claim until those operational gates exist.
 
 ## Commands
 
@@ -41,6 +42,7 @@ pnpm run typecheck:migrate
 pnpm run test:migrate:coverage
 pnpm run build:migrate
 pnpm run check:migrate-entrypoint
+pnpm run test:migrate:postgres-integration
 pnpm run verify
 ```
 

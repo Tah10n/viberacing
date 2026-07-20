@@ -66,6 +66,9 @@ describe("migration PostgreSQL pool", () => {
     expect(boundaryQueryText).toContain("NOT owner_role.rolinherit");
     expect(boundaryQueryText).toContain("owner_membership.member = owner_role.oid");
     expect(query.mock.calls[1]?.[0]).toMatchObject({ values: [824_762_001] });
+    expect(readQueryText(query.mock.calls[1]?.[0])).toBe(
+      "SELECT true AS locked\nFROM pg_catalog.pg_advisory_lock($1::bigint)",
+    );
     expect(query.mock.calls[2]?.[0]).toMatchObject({
       text: "SET ROLE viberacing_owner",
       values: [],

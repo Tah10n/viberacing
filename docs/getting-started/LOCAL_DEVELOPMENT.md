@@ -101,14 +101,14 @@ untrusted registry redirects, and exotic transitive sources.
 
 `pnpm run verify` is deterministic and offline after installation. It includes a complete reachable
 Git-history scan, external-host policy, English spelling, dependency-license inventory, contract,
-Ingest, Ingest-host, Jobs, and Jobs-scheduler lint/types/coverage, their required production
-compilation, the built Ingest-host and Jobs-scheduler entrypoint checks, contract generation/drift
-checks and coverage, web component coverage, and a production web build. It also runs the offline
-migration manifest/capability checker plus Rust formatting, all-target checking, tests, and Clippy;
-the real PostgreSQL integration is a separate Docker command and a secretless CI job. The optional
-`pnpm run check:external-links:online` performs bounded network validation and may fail closed
-behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
-workstation.
+Ingest, Ingest-host, Jobs, Jobs-scheduler, and Migration lint/types/coverage, their required
+production compilation, the built Ingest-host, Jobs-scheduler, and Migration entrypoint checks,
+contract generation/drift checks and coverage, web component coverage, and a production web build.
+It also runs the offline migration manifest/capability checker plus Rust formatting, all-target
+checking, tests, and Clippy. Docker-backed PostgreSQL integrations remain separate opt-in commands
+declared by secretless CI. The optional `pnpm run check:external-links:online` performs bounded
+network validation and may fail closed behind a private DNS/proxy; do not weaken its address or
+redirect rules to accommodate a workstation.
 
 After an intentionally reviewed dependency change, regenerate the machine inventory with
 `node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
@@ -378,6 +378,27 @@ entrypoints are covered by the production build. See
 [`apps/web/README.md`](../../apps/web/README.md) for the frontend trust boundaries and data
 contract.
 
+Migration-runner focused commands use injected pools except for the final opt-in Docker gate:
+
+```text
+pnpm run lint:migrate
+pnpm run typecheck:migrate
+pnpm run test:migrate:coverage
+pnpm run build:migrate
+pnpm run check:migrate-entrypoint
+pnpm run test:migrate:postgres-integration
+```
+
+The integration builds the emitted entry point and starts one TLS-enabled disposable `postgres-test`
+container on an ephemeral loopback port. It proves one deliberately widened login fails before
+schema creation, holds the fixed session lock externally until two narrow emitted controllers are
+observed waiting over hostname-verified TLS, and then requires both to converge on the exact 39-row
+ledger. It also checks all 28 owner-owned forced-RLS private tables, identity invariants, and
+complete connection/lock cleanup before removing the generated certificate/key, container, network,
+and storage. It never uses the normal local database volume and proves no production credential/TLS,
+staging rollout/rollback, deployed replica, monitoring, deployment, or recovery. See
+[`apps/migrate/README.md`](../../apps/migrate/README.md) for the exact boundary.
+
 Database-focused commands use deterministic synthetic fixtures:
 
 ```text
@@ -585,7 +606,7 @@ docker compose ps
 The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
 index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
 stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
-this persistent service automatically; revisions 0001 through 0029 are currently exercised by the
+this persistent service automatically; revisions 0001 through 0039 are currently exercised by the
 isolated integration runner only.
 
 Stop the service without deleting its volume:

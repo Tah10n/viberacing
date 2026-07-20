@@ -52,15 +52,19 @@ replica, durable cadence, production login/TLS result, monitoring, or capacity e
 default-off one-shot migration runner now loads only the exact repository manifest/file inventory,
 revalidates every source digest, probes one distinct owner-member login, holds the fixed session
 advisory lock, rereads an exact ledger prefix, and applies only remaining reviewed SQL bodies before
-requiring the complete ledger. Its current evidence is injected unit/policy/build evidence only; it
-has no PostgreSQL execution, concurrent emitted-process, production credential/TLS, staging
-orchestration/rollback, deployment, or recovery result. A local Ingest kernel bounds the raw sync
-envelope and parser, verifies an injected replay-consumed origin proof, validates the sync contract,
-and strictly verifies the source-bound device request. A protected local reader supplies one
-mandatory and one optional rotation proof key from exact namespaced configuration without returning
-a reusable key container. A separate bounded Ingest PostgreSQL adapter wraps only reviewed origin
-replay, device lookup, and submission procedures through a probed least-privileged login contract. A
-forced-RLS origin replay tuple and separate Jobs
+requiring the complete ledger. A separate opt-in synthetic integration runs a widened-login emitted
+process and two narrow-login emitted processes against one disposable certificate-verified
+PostgreSQL database. It proves widened-login denial before schema creation, observes both narrow
+controllers behind one external holder, requires both to converge successfully after release, and
+verifies the exact 39-row ledger, all 28 forced-RLS private tables, identity invariants, TLS, and
+connection/lock cleanup. It has no production credential/TLS, deployed replica, staging
+orchestration/rollback, monitoring, deployment, or recovery result. A local Ingest kernel bounds the
+raw sync envelope and parser, verifies an injected replay-consumed origin proof, validates the sync
+contract, and strictly verifies the source-bound device request. A protected local reader supplies
+one mandatory and one optional rotation proof key from exact namespaced configuration without
+returning a reusable key container. A separate bounded Ingest PostgreSQL adapter wraps only reviewed
+origin replay, device lookup, and submission procedures through a probed least-privileged login
+contract. A forced-RLS origin replay tuple and separate Jobs
 ingest/pairing/auth/invite/session/abandoned-enrollment/CarRecipe-proposal/finalized-source-day,
 terminal-deletion-job, audit-event, revoked-passkey, and revoked-device cleanup plus pairing
 approval-provenance redaction capabilities have isolated PostgreSQL evidence. A transport-free
@@ -331,6 +335,13 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   and built disabled startup. They use injected pools and do not establish PostgreSQL execution,
   concurrent-controller behavior, production login/TLS, staging orchestration/rollback, replica
   coordination, deployment, or recovery.
+- `pnpm run test:migrate:postgres-integration` builds the emitted migration entry point, creates one
+  disposable certificate-verified PostgreSQL database plus synthetic narrow and widened logins,
+  proves widened-login denial before schema mutation, observes two narrow controllers behind one
+  external advisory-lock holder, and requires both to converge on the exact 39-row ledger and 28
+  forced-RLS private tables before checking identity invariants and resource cleanup. It proves no
+  production credential/TLS, deployed replica, staging rollout/rollback, monitoring, deployment, or
+  recovery.
 - `pnpm run test:jobs:postgres-integration` uses one disposable PostgreSQL container with a
   synthetic narrow Jobs login. It runs all seventeen emitted CLI commands, proves an
   extra-membership login fails before mutation, validates generic process output and exact stored

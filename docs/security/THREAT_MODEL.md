@@ -117,9 +117,11 @@ manifest, file inventory, source bounds, UTF-8, and SHA-256 digests before datab
 owner authority. One fixed session lock protects the post-lock ledger decision; a closed probe
 rejects owner/widened/privileged logins, direct CREATE/TEMPORARY, unsafe search path, read-only
 state, and configured TLS mismatch. Failure destroys the client and emits no SQL, path, revision,
-count, configuration, or driver detail. This is injected/build evidence only: PostgreSQL protocol,
-real role/TLS behavior, two emitted controllers, staging rollback, deployment, and recovery are
-unproven.
+count, configuration, or driver detail. A separate opt-in synthetic gate now proves PostgreSQL
+protocol, real narrow/widened-role behavior, hostname-verified TLS, two emitted-controller
+convergence behind one external holder, exact schema/ledger state, and cleanup in one disposable
+database. Staging rollback, production credentials/TLS, deployed replicas, monitoring, deployment,
+and recovery remain unproven.
 
 ### Assets and security objectives
 
