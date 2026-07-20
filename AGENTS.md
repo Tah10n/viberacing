@@ -49,12 +49,18 @@ verifies the same exact state. The timer result does not prove host-timer delive
 result does not prove OS-signal delivery, and the emitted result does not prove controller
 settlement before forced termination. None proves a wall-clock recurring process callback, deployed
 replica, durable cadence, production login/TLS result, monitoring, or capacity evidence. A local
-Ingest kernel bounds the raw sync envelope and parser, verifies an injected replay-consumed origin
-proof, validates the sync contract, and strictly verifies the source-bound device request. A
-protected local reader supplies one mandatory and one optional rotation proof key from exact
-namespaced configuration without returning a reusable key container. A separate bounded Ingest
-PostgreSQL adapter wraps only reviewed origin replay, device lookup, and submission procedures
-through a probed least-privileged login contract. A forced-RLS origin replay tuple and separate Jobs
+default-off one-shot migration runner now loads only the exact repository manifest/file inventory,
+revalidates every source digest, probes one distinct owner-member login, holds the fixed session
+advisory lock, rereads an exact ledger prefix, and applies only remaining reviewed SQL bodies before
+requiring the complete ledger. Its current evidence is injected unit/policy/build evidence only; it
+has no PostgreSQL execution, concurrent emitted-process, production credential/TLS, staging
+orchestration/rollback, deployment, or recovery result. A local Ingest kernel bounds the raw sync
+envelope and parser, verifies an injected replay-consumed origin proof, validates the sync contract,
+and strictly verifies the source-bound device request. A protected local reader supplies one
+mandatory and one optional rotation proof key from exact namespaced configuration without returning
+a reusable key container. A separate bounded Ingest PostgreSQL adapter wraps only reviewed origin
+replay, device lookup, and submission procedures through a probed least-privileged login contract. A
+forced-RLS origin replay tuple and separate Jobs
 ingest/pairing/auth/invite/session/abandoned-enrollment/CarRecipe-proposal/finalized-source-day,
 terminal-deletion-job, audit-event, revoked-passkey, and revoked-device cleanup plus pairing
 approval-provenance redaction capabilities have isolated PostgreSQL evidence. A transport-free
@@ -212,6 +218,9 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   guidance. Read `apps/jobs/AGENTS.md` before editing it.
 - `apps/jobs-scheduler/` contains the separate default-off fixed UTC catalog, sequential invocation,
   and bounded process lifecycle. Read `apps/jobs-scheduler/AGENTS.md` before editing it.
+- `apps/migrate/` contains the separate default-off one-shot reviewed migration controller, exact
+  catalog loader, narrow owner-member login probe, and fixed session-lock/ledger state machine. Read
+  `apps/migrate/AGENTS.md` before editing it.
 - `apps/ingest/` contains the bounded Community sync request-verification kernel, fixed PostgreSQL
   adapter, transport-free application composition, confined HTTP server factory, and nested security
   guidance. Read `apps/ingest/AGENTS.md` before editing it.
@@ -242,8 +251,8 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
 
 - `pnpm run verify` runs public-data/history, checker regression, documentation/link, spelling,
   license inventory, formatting, Markdown, configuration, workflow-policy,
-  contract/Ingest/Jobs/Jobs-scheduler/frontend lint/type/coverage/production-build, and Rust
-  formatting/check/test/Clippy gates.
+  contract/Ingest/Jobs/Jobs-scheduler/migration-runner/frontend lint/type/coverage/production-build,
+  and Rust formatting/check/test/Clippy gates.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
 - `pnpm run check:agent-skills` derives the proposal skill's enum inventory, CLI flags, generic
   output, and both skills' metadata from canonical sources, then binds the verification skill to the
@@ -315,6 +324,13 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   closed UTC catalog, no-overlap cycle, failure containment, and bounded signal lifecycle. They use
   a fake runner/clock/timer and by themselves establish no database execution, deployed replica or
   cadence, production login/TLS, monitoring, capacity, or real-user retention.
+- `pnpm run lint:migrate`, `pnpm run typecheck:migrate`, `pnpm run test:migrate:coverage`,
+  `pnpm run build:migrate`, and `pnpm run check:migrate-entrypoint` verify the separate
+  exact-default-off one-shot controller, canonical manifest/digest loader, narrow owner-member
+  login/result probe, fixed session lock, exact ledger convergence, failure cleanup, generic output,
+  and built disabled startup. They use injected pools and do not establish PostgreSQL execution,
+  concurrent-controller behavior, production login/TLS, staging orchestration/rollback, replica
+  coordination, deployment, or recovery.
 - `pnpm run test:jobs:postgres-integration` uses one disposable PostgreSQL container with a
   synthetic narrow Jobs login. It runs all seventeen emitted CLI commands, proves an
   extra-membership login fails before mutation, validates generic process output and exact stored
@@ -386,14 +402,15 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
 - `docker compose config --quiet` validates local database configuration without starting it.
 
 These commands cover only evidence described in `docs/IMPLEMENTATION_STATUS.md`. The Web, Ingest,
-Jobs, and Jobs-scheduler tests use synthetic/injected data and do not prove authentication,
-real-user ingestion, connector, live edge, deployed scheduler cadence, or production behavior. The
-general database integration proves only its isolated SQL/current-snapshot boundary; the separate
-Web and Ingest integrations prove synthetic loopback HTTP-to-PostgreSQL paths, the Jobs CLI
-integration proves one synthetic CLI-to-PostgreSQL path, and the scheduler integrations separately
-prove fixed-clock startup, injected repeated-timer, injected-lifecycle, and emitted terminal-marker
-paths. Rust process tests execute only a target-built synthetic child, not a discovered or installed
-Codex binary. Install dependencies with `pnpm install --frozen-lockfile --ignore-scripts`.
+Jobs, Jobs-scheduler, and migration-runner tests use synthetic/injected data and do not prove
+authentication, real-user ingestion, connector, live edge, deployed scheduler cadence, or production
+behavior. The general database integration proves only its isolated SQL/current-snapshot boundary;
+the separate Web and Ingest integrations prove synthetic loopback HTTP-to-PostgreSQL paths, the Jobs
+CLI integration proves one synthetic CLI-to-PostgreSQL path, and the scheduler integrations
+separately prove fixed-clock startup, injected repeated-timer, injected-lifecycle, and emitted
+terminal-marker paths. Rust process tests execute only a target-built synthetic child, not a
+discovered or installed Codex binary. Install dependencies with
+`pnpm install --frozen-lockfile --ignore-scripts`.
 
 ## Public repository boundary
 

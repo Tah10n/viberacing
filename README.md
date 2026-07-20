@@ -69,6 +69,7 @@ keys, or arbitrary user-uploaded files.
 - [Compatibility policy](docs/architecture/COMPATIBILITY_POLICY.md)
 - [Versioned public contracts](contracts/README.md)
 - [Database foundation](database/README.md)
+- [Default-off migration runner](apps/migrate/README.md)
 - [Architecture decisions](docs/decisions/README.md)
 - [Local development](docs/getting-started/LOCAL_DEVELOPMENT.md)
 - [Web prototype](apps/web/README.md)
@@ -237,6 +238,15 @@ generations and requires matching canonical data digests/lengths, a byte-stable 
 runtime deny matrix. This is not a successful concurrent deployment controller, staging migration
 orchestration/rollback, old-backup deletion replay, external backup, cluster-role recovery,
 production restore, scale, or RPO/RTO result.
+
+A separate default-off one-shot migration runner now verifies the exact repository manifest,
+canonical paths, bounded UTF-8 source, and every SHA-256 digest before constructing one migration
+pool. It rejects a widened login through a closed owner-member/TLS/search-path probe, serializes the
+whole catalog with the fixed session advisory key, rereads the ledger after locking, applies only an
+exact missing suffix, and requires the complete ledger before success. Current evidence is 97
+injected unit/policy tests plus strict build and built disabled-startup checks. It has not yet run
+against PostgreSQL and proves no concurrent emitted-controller success, production credential/TLS,
+staging migration/rollback, replica coordination, deployment, or recovery.
 
 Thirty-nine SQL migrations now add 28 private identity, passkey, restricted-recovery, source,
 device, pairing, audit, deletion, replay, usage, Community scoring, and CarRecipe tables with

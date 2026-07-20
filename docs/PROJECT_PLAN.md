@@ -869,6 +869,15 @@ Other remaining expiry classes, keyed tombstone policy, cache/backup purge, and 
 deletion replay still require their own reviewed implementation and public policy, and no
 implemented cleanup, redaction, or reset has a deployed cadence.
 
+A separate local one-shot migration runner is now exact-default-off before catalog, protected
+configuration, or resource work. It verifies only the canonical manifest/file inventory and source
+digests, probes one distinct owner-member login, takes the fixed session advisory lock, rereads the
+ledger, and applies only an exact reviewed suffix before requiring the complete catalog. Its current
+evidence is injected unit/policy/build evidence and it has not connected to PostgreSQL. The next
+independent prerequisite is two emitted narrow-login controllers plus widened-login denial over one
+disposable certificate-verified database; even that will not satisfy staging rollout/rollback,
+production credential, replica, monitoring, deployment, or recovery gates.
+
 ## Administration and operations
 
 - Admin uses a separate hostname behind Cloudflare Access plus application passkey step-up.
@@ -1245,9 +1254,9 @@ external TLS/edge, cache, capacity, or operational gate above.
 - Deploy isolated staging and production infrastructure.
 - Verify origin protection, migrations, backup restore, deletion replay, monitoring, incident
   runbooks, connector signing, SBOM, provenance, and rollback. The local advisory-lock overlap and
-  current-snapshot database drills are prerequisite implementation evidence; they do not satisfy
-  successful multi-controller migration orchestration/rollback, stale-backup deletion replay, or any
-  deployment gate.
+  current-snapshot database drills plus the default-off migration-runner core are prerequisite
+  implementation evidence; they do not satisfy emitted PostgreSQL controller convergence, successful
+  staging migration orchestration/rollback, stale-backup deletion replay, or any deployment gate.
 - Complete accessibility, privacy, legal, licensing, name/trademark, external security, and
   documentation review.
 - Start with a small invite cohort and expand only after reviewing reliability, cost, abuse,

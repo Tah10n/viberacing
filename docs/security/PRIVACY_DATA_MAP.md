@@ -842,7 +842,14 @@ The canonical flow diagrams are in [data flow](../architecture/DATA_FLOW.md). Th
   synthetic process application names, exit statuses, and expected duplicate-object SQLSTATE in
   bounded harness memory. The expected loser's SQL output is not emitted or retained; successful
   output contains only the aggregate evidence class. This adds no product field, log, fixture,
-  cache, archive, metric, or release artifact.
+  cache, archive, metric, or release artifact. The separate migration-runner core reads only those
+  public catalog bytes plus transient protected host/port/database/login/password/TLS configuration.
+  The password is bounded, non-enumerable, and JSON-redacted; no configuration, SQL, path, revision,
+  digest, count, row, or driver error reaches its fixed process sentences. Its fixed application
+  name and in-memory control state are Operational, disappear at process exit, and are not retained
+  by this repository. A deployment log, metric, operator identity, timestamp, or migration detail
+  requires a separate mapped purpose, access policy, and retention decision before collection.
+  Current tests use only synthetic values and no PostgreSQL connection.
 - The database public score model, response-only contract, mapper, and bounded server-only adapter
   contain only fields explicitly classified Public. A deployment login is Security configuration,
   not response data, and the adapter verifies that it has only Web membership before reading. The

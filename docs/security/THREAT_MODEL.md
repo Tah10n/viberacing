@@ -112,6 +112,15 @@ final runtime deny matrix. This proves no successful concurrent deployment contr
 migration orchestration/rollback, and it has no stale backup, deletion marker, external
 storage/encryption, cluster-role recovery, or production authority.
 
+The separate default-off migration-runner core accepts no argument or path and verifies the exact
+manifest, file inventory, source bounds, UTF-8, and SHA-256 digests before database configuration or
+owner authority. One fixed session lock protects the post-lock ledger decision; a closed probe
+rejects owner/widened/privileged logins, direct CREATE/TEMPORARY, unsafe search path, read-only
+state, and configured TLS mismatch. Failure destroys the client and emits no SQL, path, revision,
+count, configuration, or driver detail. This is injected/build evidence only: PostgreSQL protocol,
+real role/TLS behavior, two emitted controllers, staging rollback, deployment, and recovery are
+unproven.
+
 ### Assets and security objectives
 
 | Asset or objective                                | Why it matters                                                               | Required protection                                                                                            |

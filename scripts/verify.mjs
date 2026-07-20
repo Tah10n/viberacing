@@ -15,6 +15,8 @@ const jobsRoot = resolve(root, "apps", "jobs");
 const jobsRequire = createRequire(resolve(jobsRoot, "package.json"));
 const jobsSchedulerRoot = resolve(root, "apps", "jobs-scheduler");
 const jobsSchedulerRequire = createRequire(resolve(jobsSchedulerRoot, "package.json"));
+const migrateRoot = resolve(root, "apps", "migrate");
+const migrateRequire = createRequire(resolve(migrateRoot, "package.json"));
 const webRoot = resolve(root, "apps", "web");
 const webRequire = createRequire(resolve(webRoot, "package.json"));
 const contractsEslintBin = resolve(
@@ -50,6 +52,14 @@ const jobsSchedulerVitestBin = resolve(
   dirname(jobsSchedulerRequire.resolve("vitest")),
   "vitest.mjs",
 );
+const migrateEslintBin = resolve(
+  dirname(migrateRequire.resolve("eslint")),
+  "..",
+  "bin",
+  "eslint.js",
+);
+const migrateTscBin = migrateRequire.resolve("typescript/bin/tsc");
+const migrateVitestBin = resolve(dirname(migrateRequire.resolve("vitest")), "vitest.mjs");
 const eslintBin = resolve(dirname(webRequire.resolve("eslint")), "..", "bin", "eslint.js");
 const nextBin = webRequire.resolve("next/dist/bin/next");
 const tscBin = webRequire.resolve("typescript/bin/tsc");
@@ -253,6 +263,25 @@ const checks = [
     "Jobs scheduler built entry point",
     process.execPath,
     [resolve(import.meta.dirname, "check-jobs-scheduler-entrypoint.mjs")],
+  ],
+  ["migration runner lint", process.execPath, [migrateEslintBin, "."], migrateRoot],
+  ["migration runner types", process.execPath, [migrateTscBin, "--noEmit"], migrateRoot],
+  [
+    "migration runner tests and coverage",
+    process.execPath,
+    [migrateVitestBin, "run", "--coverage"],
+    migrateRoot,
+  ],
+  [
+    "migration runner production build",
+    process.execPath,
+    [migrateTscBin, "--project", "tsconfig.build.json"],
+    migrateRoot,
+  ],
+  [
+    "migration runner built entry point",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-migrate-entrypoint.mjs")],
   ],
   ["web lint", process.execPath, [eslintBin, "."], webRoot],
   ["web types", process.execPath, [tscBin, "--noEmit"], webRoot],

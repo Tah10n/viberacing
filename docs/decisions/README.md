@@ -72,6 +72,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0061](0061-bounded-abandoned-enrollment-retention-cleanup.md)  | Bounded abandoned-enrollment retention cleanup                      | Accepted; local catalog; deployment pending            |
 | [0062](0062-finalized-source-day-retention-cleanup.md)          | Finalized source-day retention cleanup                              | Accepted; local catalog; deployment pending            |
 | [0063](0063-default-off-local-jobs-scheduler.md)                | Default-off local Jobs scheduler                                    | Accepted; local scheduler; deployment pending          |
+| [0064](0064-default-off-reviewed-migration-runner.md)           | Default-off reviewed migration runner                               | Accepted; local core; PostgreSQL evidence pending      |
 
 ## Lifecycle
 

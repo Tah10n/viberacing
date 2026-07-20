@@ -52,6 +52,14 @@ Versioning where its guarantees are applicable.
   must remain before restore and capability checks continue. This proves local transaction and
   advisory-lock serialization, not a successful concurrent deployment controller, staging migration
   orchestration or rollback, production credentials, or deployment.
+- A separate default-off one-shot migration runner core. It verifies only the canonical repository
+  manifest/file inventory and original SHA-256 digests, probes a distinct login with only owner-role
+  set authority, and uses one fixed session lock to reread the ledger and apply only an exact
+  missing suffix. Argument, alternate-enable, path/SQL injection, widened-login/result-shape,
+  ledger-drift, cleanup-failure, and reflective-output paths fail closed in 97 injected tests plus a
+  built entrypoint check. No PostgreSQL execution, concurrent emitted controller, production
+  TLS/login, staging migration/rollback, replica coordination, deployment, or recovery result is
+  claimed.
 - A deterministic current-snapshot restore drill in the isolated PostgreSQL integration. It keeps
   two bounded custom archives only inside the disposable `tmpfs` container, replaces only that run's
   database twice, and requires the source plus both restored canonical data dumps to retain their
