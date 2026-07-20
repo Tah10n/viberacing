@@ -793,10 +793,13 @@ complete page if any score, status, or nested recipe field is malformed. Recipe 
 repository-owned presentation fallback; an omitted streak remains absent. Proposal state, exact
 timestamps, underlying daily scores, and private preferences remain absent. Invalid, oversized, or
 unavailable responses retain the labeled synthetic race. There is still no deployment database
-certificate/login, external TLS/edge route, cache, edge rate policy, query-plan/load evidence, retry
-loop, monitoring, or deployment evidence. A separate synthetic gate now proves the local adapter
-through emitted production HTTP and certificate-verified disposable PostgreSQL using an ephemeral
-self-signed trust anchor only; it is not a reusable or deployment certificate/login result.
+certificate/login, external TLS/edge route, cache, edge rate policy, representative/deployed
+query-plan or load/capacity evidence, retry loop, monitoring, or deployment evidence. A separate
+synthetic gate now proves the local adapter through emitted production HTTP and certificate-verified
+disposable PostgreSQL using an ephemeral self-signed trust anchor only. Its parameter-payload-free
+bounded nested plans require the reviewed score, recipe, freshness, and streak indexes without
+mutation or temporary I/O; the tiny synthetic fixture is not a reusable certificate/login,
+production-statistics, or capacity result.
 
 ADR 0056 adds one server-only public-ranking decision shared by all three GET compositions. Only
 exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` permits query/header parsing, admission acquisition,

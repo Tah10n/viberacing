@@ -69,16 +69,20 @@ does not make the pull request trusted; review and protected-branch policy remai
   generates one ephemeral self-signed certificate/key pair, mounts it read-only for a TLS-enabled
   disposable database start, builds and runs two emitted standalone Next production processes with
   `pg` bundled, bounds and discards their output, bounds a separate PostgreSQL blocker child used
-  for its no-queue check, and removes all key/process/container resources. The Ingest harness
-  independently bounds, scans, and discards its own PostgreSQL blocker output before removing that
-  child. It then starts the built Ingest entry point with only synthetic protected configuration,
-  treats any output byte as failure without retaining it, and forcibly removes only that silent test
-  child after one accepted request. The separate Ingest signal gate mounts only an exact link-free
-  production graph read-only in the pinned Linux Node image, passes one synthetic signed request to
-  a capability-free client over stdin, and proves one OS-delivered active-call settlement before
-  deleting both containers and the runtime. These are untrusted pull-request checks, not
-  Railway/orchestrator drain, hosted-service, production credential, deployment, representative
-  load/capacity, or release evidence.
+  for its no-queue check, and removes all key/process/container resources. That disposable database
+  preloads its already bundled `auto_explain` module; only the narrow synthetic login receives
+  database-scoped capture settings, parameter logging is disabled, and the harness bounds,
+  private-marker scans, parses, and discards the server log before requiring six closed adapter and
+  nested-projection plan classes. Plan bytes exist transiently in runner process memory, but no plan
+  artifact leaves the runner. The Ingest harness independently bounds, scans, and discards its own
+  PostgreSQL blocker output before removing that child. It then starts the built Ingest entry point
+  with only synthetic protected configuration, treats any output byte as failure without retaining
+  it, and forcibly removes only that silent test child after one accepted request. The separate
+  Ingest signal gate mounts only an exact link-free production graph read-only in the pinned Linux
+  Node image, passes one synthetic signed request to a capability-free client over stdin, and proves
+  one OS-delivered active-call settlement before deleting both containers and the runtime. These are
+  untrusted pull-request checks, not Railway/orchestrator drain, hosted-service, production
+  credential, deployment, representative load/capacity, or release evidence.
 
 The repository tests these rules with positive and negative fixtures. The tests are defense in
 depth; a malicious pull request can edit its own tests, so protected review of workflow changes is

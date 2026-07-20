@@ -120,11 +120,13 @@ Repository evidence covers:
 - EN/RU browser rendering plus full-page synthetic fallback for invalid, oversized, failed, or
   unavailable responses; and
 - one opt-in emitted standalone integration that validates the status contract through a disposable
-  narrow login over TLS 1.2/1.3, rejects a widened login, and preserves every private table.
+  narrow login over TLS 1.2/1.3, rejects a widened login, preserves every private table, and
+  requires one parameter-payload-free bounded nested status plan with the reviewed freshness/streak
+  indexes and no mutation, temporary I/O, or bounded-index sequential scan.
 
-There is still no cache/invalidation, edge scrape or client-rate policy, query-plan/load result,
-monitoring backend, deployment Web database certificate/login, external TLS/edge route, real-user
-result, or deployment.
+There is still no cache/invalidation, edge scrape or client-rate policy, representative/deployed
+query-plan or load/capacity result, monitoring backend, deployment Web database certificate/login,
+external TLS/edge route, real-user result, or deployment.
 
 ## References
 

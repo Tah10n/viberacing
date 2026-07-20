@@ -44,9 +44,16 @@ each run. Bounded Next and database-blocker output is checked for fixture, crede
 certificate-path reflection and discarded, HTTP bodies are checked against the closed public
 allowlists, and the no-queue scenario inspects only a synthetic login's aggregate count of
 lock-waiting score queries. The TLS observation retains only a bounded connection count and
-all-connections-secure boolean in harness memory. No result is cached or written as an artifact.
-Deployment Web credentials and certificate delivery remain protected environment/secret-manager data
-under the table below.
+all-connections-secure boolean in harness memory. The same disposable database preloads
+`auto_explain`; owner-provisioned database-scoped settings enable it only for the narrow synthetic
+login, disable parameter payloads, and emit only SQL already present in the public repository plus
+planner/runtime counters, relation/index names, and plan structure. The harness accepts at most two
+mebibytes and 128 plan objects, scans the complete log for every synthetic private marker, retains
+the bounded parsed plans only while evaluating six pass/fail decisions in process memory, and
+neither prints nor writes the plan bytes. The Docker log and its database-scoped role settings
+disappear with the container. No result is cached or written as an artifact. Deployment Web
+credentials and certificate delivery remain protected environment/secret-manager data under the
+table below.
 
 ## Classification
 
@@ -705,7 +712,10 @@ non-working placeholders, the password is non-enumerable and JSON-redacted in th
 neither it nor the host, login, SQL, driver error, season input, or row value is included in adapter
 errors or monitoring signals. The adapter adds no log, cache, analytics, browser, export, or
 retention sink. The local route passes only the validated public season label and retains no request
-metadata.
+metadata. The opt-in integration's test-only `auto_explain` sink contains no parameter payload or
+real product data, is bounded and private-marker scanned before six closed plan classes are
+evaluated, and is deleted with the disposable container. It is not a production logging or
+monitoring design.
 
 ADR 0013 adds no store or retained field. `CommunityScoreQueryV1` carries only the public Monday
 season label already accepted by the adapter, while the manifest-generated operation fixes

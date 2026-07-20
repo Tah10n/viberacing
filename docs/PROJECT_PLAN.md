@@ -667,9 +667,14 @@ through two emitted standalone Next production processes and a TLS-enabled dispo
 login after applying the reviewed PostgreSQL migrations. It proves an extra-membership login fails
 without private-table mutation, validates the exact public contracts plus TLS 1.2/1.3, proves
 successful reads remain non-mutating, and exercises the exact four-request no-queue boundary with
-four observed database waits plus a rejected fifth request. Authenticated daily/profile detail,
-cache, deployment certificate/login, external TLS/edge route, query-plan/load/capacity evidence,
-monitoring, real-user data, and deployment remain separate gates.
+four observed database waits plus a rejected fifth request. Its disposable PostgreSQL preloads
+`auto_explain`; superuser-provisioned database-scoped settings apply only to the narrow synthetic
+login and disable parameter logging. A bounded fail-closed oracle now requires the three adapter
+plans and three nested projections, their reviewed indexes, bounded rows/plan shape, and no
+mutation, sequential scan of bounded-index relations, dirty/written block, temporary I/O, private
+marker, or printed/written plan artifact; container cleanup removes the ephemeral log. Authenticated
+daily/profile detail, cache, deployment certificate/login, external TLS/edge route, representative
+plan/load/capacity evidence, monitoring, real-user data, and deployment remain separate gates.
 
 ### ConnectorSyncV1
 

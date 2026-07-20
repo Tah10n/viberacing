@@ -19,11 +19,17 @@ Versioning where its guarantees are applicable.
   unchanged. A controlled owner-held database lock then proves the four-request application
   admission boundary: four observed score queries remain in flight, a fifth request returns the
   closed generic 503 without adding a fifth public-score query, and the first four return their
-  exact 200 contracts after rollback. Server and blocker output is bounded, checked for private
-  fixture/credential/path reflection, discarded, and every ephemeral key, process, container,
-  network, and storage resource is removed. Secretless CI requires the command, but no deployment
-  certificate/login, external TLS/edge route, cache, edge policy, load/capacity, monitoring,
-  real-user data, hosted pass, or deployment is claimed.
+  exact 200 contracts after rollback. The disposable database also preloads `auto_explain` and a
+  superuser enables parameter-payload-free nested plan capture only for the narrow synthetic login.
+  Six exact adapter/projection oracles require bounded rows and plan shape, the reviewed score/race/
+  status indexes, no mutation/locking node, no sequential scan over bounded-index relations, and no
+  dirty/written or temporary blocks. A deterministic parser suite rejects missing, malformed,
+  leaking, mutating, unindexed, or over-budget variants without Docker. Server, blocker, and plan
+  output is bounded, checked for private fixture/credential/path reflection, discarded, and every
+  ephemeral key, process, container, network, and storage resource is removed. Secretless CI
+  requires the command, but no deployment certificate/login, external TLS/edge route, cache, edge
+  policy, representative plan/load/capacity, monitoring, real-user data, hosted pass, or deployment
+  is claimed.
 - A separate default-off local Jobs scheduler around the existing seventeen-command runner. It
   accepts no arguments or schedule configuration, derives the current and latest grace-eligible
   Community Mondays in UTC, invokes a fixed five-minute/hour/day catalog sequentially through one

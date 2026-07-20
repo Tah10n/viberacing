@@ -10,6 +10,10 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 import { validateManifest } from "./check-database.mjs";
+import {
+  assertPublicCommunityPlanEvidence,
+  parseAutoExplainPlans,
+} from "./web-query-plan-evidence.mjs";
 
 // cspell:ignore localdomain usename WINDIR
 
@@ -44,6 +48,7 @@ const requestIdPattern = /^req_[A-Za-z0-9_-]{22}$/;
 const maximumResponseBytes = 16 * 1024;
 const maximumServerOutputBytes = 512 * 1024;
 const maximumBlockerOutputBytes = 64 * 1024;
+const maximumDatabaseLogBytes = 2 * 1024 * 1024;
 const serverStartupTimeoutMs = 60_000;
 const serverRequestTimeoutMs = 30_000;
 const serverCloseTimeoutMs = 15_000;
@@ -228,7 +233,7 @@ cp /viberacing-tls/server.key ${databaseTlsKeyPath}
 chown postgres:postgres ${databaseTlsCertificatePath} ${databaseTlsKeyPath}
 chmod 0644 ${databaseTlsCertificatePath}
 chmod 0600 ${databaseTlsKeyPath}
-exec /usr/local/bin/docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=${databaseTlsCertificatePath} -c ssl_key_file=${databaseTlsKeyPath}
+exec /usr/local/bin/docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=${databaseTlsCertificatePath} -c ssl_key_file=${databaseTlsKeyPath} -c shared_preload_libraries=auto_explain
 `,
       { mode: 0o700 },
     );
@@ -303,6 +308,20 @@ function psqlScalar(sql, label) {
   });
   requireSuccess(result, label);
   return result.stdout.trim();
+}
+
+function assertAutoExplainEvidence() {
+  const result = docker(["logs", containerName], {
+    maxBuffer: maximumDatabaseLogBytes,
+    timeout: 10_000,
+  });
+  requireSuccess(result, "synthetic PostgreSQL plan-log read");
+  const output = `${result.stdout}${result.stderr}`;
+  const plans = parseAutoExplainPlans(output, {
+    maximumBytes: maximumDatabaseLogBytes,
+    privateMarkers: privateValueMarkers,
+  });
+  assert.deepEqual(assertPublicCommunityPlanEvidence(plans), { evidencedPlanCount: 6 });
 }
 
 async function stopDatabaseReadBlocker(blocker) {
@@ -1475,6 +1494,20 @@ GRANT viberacing_web TO ${webLogin} WITH INHERIT FALSE, SET TRUE;
 GRANT CONNECT ON DATABASE ${databaseName} TO ${webLogin};
 ALTER ROLE ${webLogin} IN DATABASE ${databaseName}
   SET search_path TO pg_catalog, pg_temp;
+ALTER ROLE ${webLogin} IN DATABASE ${databaseName}
+  SET auto_explain.log_min_duration TO '0';
+ALTER ROLE ${webLogin} IN DATABASE ${databaseName}
+  SET auto_explain.log_analyze TO 'on';
+ALTER ROLE ${webLogin} IN DATABASE ${databaseName}
+  SET auto_explain.log_timing TO 'off';
+ALTER ROLE ${webLogin} IN DATABASE ${databaseName}
+  SET auto_explain.log_buffers TO 'on';
+ALTER ROLE ${webLogin} IN DATABASE ${databaseName}
+  SET auto_explain.log_nested_statements TO 'on';
+ALTER ROLE ${webLogin} IN DATABASE ${databaseName}
+  SET auto_explain.log_format TO 'json';
+ALTER ROLE ${webLogin} IN DATABASE ${databaseName}
+  SET auto_explain.log_parameter_max_length TO '0';
 
 CREATE ROLE ${wideWebLogin}
   WITH LOGIN PASSWORD '${wideWebPassword}'
@@ -1535,9 +1568,10 @@ COMMIT;`,
       initialState,
       "the successful public reads must not mutate any private table",
     );
+    assertAutoExplainEvidence();
 
     console.log(
-      "Web PostgreSQL integration passed (two built production Next processes over synthetic verified TLS, three real HTTP routes, four-slot no-queue admission, least-privilege denial, exact contracts, and read-only stored state).",
+      "Web PostgreSQL integration passed (two built production Next processes over synthetic verified TLS, three real HTTP routes, six bounded query-plan oracles, four-slot no-queue admission, least-privilege denial, exact contracts, and read-only stored state).",
     );
   } catch (error) {
     primaryFailure = error;

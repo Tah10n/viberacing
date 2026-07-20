@@ -57,6 +57,7 @@
     "test:web": "pnpm --filter @viberacing/web run test",
     "test:web:coverage": "pnpm --filter @viberacing/web run test:coverage",
     "test:web:postgres-integration": "node scripts/test-web-postgres-integration.mjs",
+    "test:web-query-plan-evidence": "node scripts/test-web-query-plan-evidence.mjs",
     "test:agent-skills-check": "node scripts/test-agent-skills-check.mjs",
     "test:architecture-check": "node scripts/test-architecture-check.mjs",
     "test:config-check": "node scripts/test-config-check.mjs",

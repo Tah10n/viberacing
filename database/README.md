@@ -825,8 +825,11 @@ current-day/yesterday grace anchor, can continue across prior materialized seaso
 `NULL` when the active profile disables public streak visibility. The exact timestamps, daily rows,
 preference, and profile identifier are not returned. A partial positive-score index bounds the
 streak lookup; the function retains the five-second statement deadline and 100-row ceiling. Ingest,
-Jobs, Admin, and `PUBLIC` are denied. This local evidence proves no query-plan/load result, live Web
-login, cache, edge policy, monitoring, or deployment.
+Jobs, Admin, and `PUBLIC` are denied. The opt-in emitted Web integration now captures one bounded
+parameter-payload-free nested plan and requires the finalized-freshness, source-day, source-state,
+and positive-score indexes without mutation, temporary I/O, or bounded-index sequential scans. This
+small synthetic fixture proves no representative planner distribution, latency/load/capacity, live
+Web login, cache, edge policy, monitoring, or deployment.
 
 Revision 0030 physically removes expired active, revoked, or rotated session rows only after no
 retained session names them as its replacement and no pairing transaction retains them as immutable
@@ -1092,7 +1095,8 @@ something the script silently broadens or repairs.
   production configuration, or deployed evidence.
 - Integrate the bounded database adapter and local score/race/status routes with a
   deployment-provisioned Web-only login and verified TLS, then add cache/invalidation, edge request
-  shaping, query-plan/load evidence, monitoring, and deployment verification.
+  shaping, representative/deployed query-plan and load/capacity evidence, monitoring, and deployment
+  verification.
 - Extend the separate profile surface only after authenticated profile detail has real persistence,
   privacy, compatibility, and lifecycle evidence; do not widen either closed legacy race response.
 - Schedule and monitor the implemented retention-cleanup procedures for expired authentication,

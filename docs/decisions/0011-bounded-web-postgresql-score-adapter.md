@@ -85,6 +85,15 @@ request metadata, session behavior, rate limit, edge proof, route-wide deadline,
 monitoring backend, deployment login, TLS certificate, or live database configuration. The visible
 Phase 1 page continues to use synthetic fixtures.
 
+The later opt-in emitted-process integration preloads PostgreSQL's already bundled `auto_explain`
+module only in its disposable database. The synthetic owner provisions database-scoped settings only
+for the narrow test login: zero-duration nested JSON plans with analysis and buffer counters, timing
+disabled, and parameter payloads disabled. This does not grant that login a setting or extension
+capability and changes no application query, role membership, migration, or deployment
+configuration. The harness reads at most two mebibytes from the ephemeral server log, scans every
+byte for its synthetic private markers, requires six closed adapter/projection plan classes, and
+then drops the parsed references before process exit and container removal.
+
 ## Security and privacy consequences
 
 The fixed query and parameters remove SQL-text selection from the request boundary. The per-checkout
@@ -98,6 +107,11 @@ browser state, or retained copy. A password exists only in server process config
 state; tracked examples remain placeholders. Public handles and scores remain observable and
 archivable once a route is intentionally enabled, and hide/delete still requires immediate cache
 invalidation in that future layer.
+
+The integration plan log is test-only Operational data: it contains repository-owned SQL text,
+planner structure, reviewed relation/index names, and numeric plan/buffer counters, but no parameter
+payload. It is bounded, private-marker scanned, neither printed nor written as an artifact, and
+removed with the disposable container. This is not approval for production query logging.
 
 Affected invariants are VR-PUBLIC-001, VR-TRUST-001, VR-ABUSE-001, VR-DATA-001, and VR-DELETE-001.
 Primary attacker stories are VR-ABUSE-DATABASE-ROLE, VR-ABUSE-RESOURCE-EXHAUSTION,
@@ -154,16 +168,22 @@ Current repository evidence covers:
 - one opt-in emitted standalone integration that generates and removes an ephemeral self-signed DNS
   certificate/key, starts TLS-enabled disposable PostgreSQL, proves the reviewed driver is usable
   from the standalone artifact, observes TLS 1.2 or 1.3 for the narrow login, rejects a widened
-  login, validates all three public contracts, and preserves every private table; and
+  login, validates all three public contracts, and preserves every private table;
+- three fixed adapter plus three nested security-definer projection plans with a 32-row root cap,
+  one execution, reviewed score/race/status indexes, no mutation or row-lock node, no sequential
+  scan over bounded-index relations, no dirty/written or temporary block, no parameter/private
+  payload, and fixed log/plan/depth/node budgets;
+- deterministic fail-closed parser/oracle cases that require no Docker; and
 - exact dependency versions, lock integrity, license inventory/notices, registry metadata, and a
   zero-known-vulnerability audit at review time.
 
 There is no integration test through a reusable deployment login, deployment certificate chain,
 external network, secret-delivery boundary, or deployed PostgreSQL connection because the repository
 intentionally supplies none. The local synthetic integration proves only an ephemeral self-signed
-exact-DNS trust anchor and disposable login. The existing general PostgreSQL integration separately
-proves the function, output, deadlines, grants, and negative role matrix. External edge, cache,
-load, deployment, and end-to-end hide/purge evidence remain open.
+exact-DNS trust anchor, disposable login, and small fixed-cardinality planner result. The existing
+general PostgreSQL integration separately proves the function, output, deadlines, grants, and
+negative role matrix. Representative data distribution, latency/load/capacity, planner statistics
+drift, external edge, cache, deployment, and end-to-end hide/purge evidence remain open.
 
 ## References
 

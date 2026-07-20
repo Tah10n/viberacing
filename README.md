@@ -132,61 +132,65 @@ bundles the reviewed `pg` driver, and starts two emitted Next production process
 TLS-enabled disposable PostgreSQL database. It proves a deliberately widened login returns only
 generic problems without mutating any private table, validates exact successful contracts through a
 narrow `viberacing_web` login, observes TLS 1.2 or 1.3 in `pg_stat_ssl`, and confirms the successful
-reads are also non-mutating. It also holds four real score reads behind a controlled database lock,
-proves a fifth request receives the generic unavailable response without adding a fifth public-score
-query, and validates the four original responses after release. It is local no-queue and synthetic
-certificate evidence, not deployment: there is still no cache, deployment certificate/login,
-external TLS/edge route, edge rate policy, query-plan/load/capacity evidence, or live API, and this
-is not evidence that real Codex data can be submitted. A separate pure local Ingest kernel now
-copies and bounds the exact Community sync body and raw headers, verifies a replay-consumed
-body-bound origin HMAC before JSON or device work, rejects duplicate headers/decoded keys and
-excessive parser structure, validates the generated sync contract, and strictly verifies the
-source-bound Ed25519 request. It returns only a frozen database-ready allowlist. A separate bounded
-Ingest PostgreSQL adapter now revalidates that allowlist, copies all binary/array parameters,
-verifies the exact least-privileged Ingest login/role boundary on every checkout, and exposes only
-fixed origin-replay, device-lookup, and submission calls through a four-client deadline-bound pool.
-Its transport config is loopback-only without TLS and otherwise certificate-verified; focused tests
-use mock pools. A protected local factory now requires one exact primary origin HMAC pair and
-permits one complete distinct rotation pair through namespaced configuration; it returns only the
-verifier and the repository contains no real key or secret-manager binding. A forced-RLS PostgreSQL
-replay table now stores only the origin key ID, domain-separated nonce digest, and millisecond
-expiry; one Ingest procedure atomically consumes it, and an observed race proves one winner for an
-expired tuple. A transport-free application boundary now generates one server request ID, composes
-that replay/device/submission adapter with the exact verifier, waits for database settlement, and
-returns only a validated acknowledgement or generic problem decision. A separate local Fastify
-server factory now preserves the exact raw body/header evidence for `POST /v1/community/sync`,
-rejects proxy and inbound request ID trust, admits four application calls without a queue, applies
-bounded parser/header/connection and 5/33/34-second request/handler/connection deadlines, and
-serializes only revalidated `no-store` success/problem contracts. A separate local host now binds
-that exact factory under loopback-only development/test or explicit Railway-edge production
-configuration only after exact `VIBERACING_INGEST_ENABLED=true`. Missing or alternate state fails
-before any protected application configuration, pool, server, or listener; the tracked example is
-explicitly disabled. The host closes partial startup and handles SIGINT/SIGTERM under a fixed
-deadline. Its 130 tests and built entrypoint check are synthetic/local evidence, not proof of a
-deployed restart/route denial, Railway, external TLS, edge routing, live credentials, or deployment.
-A separate opt-in integration builds the emitted host, creates a synthetic dedicated Ingest login in
-disposable PostgreSQL, sends independently signed loopback HTTP requests, and proves accepted,
-duplicate, persistent origin-replay, revoked-device, response-header, and exact persistence
-behavior. It also holds four valid requests at the first replay-store call, requires a fifth to
-return generic 503 without a fifth replay call, then releases and proves the four accepted
-responses. After closing the imported host, the gate starts the built entry point as a separate
-silent process, observes its loopback listener without application work, proves one more exact
-accepted request, and forcibly ends only that test child before cleanup. This is controlled local
-process and no-queue evidence. A separate opt-in gate builds a link-free exact production runtime,
-mounts it read-only under the pinned Linux Node image, blocks one independently signed request at
-the first origin-replay call, delivers a real `SIGTERM`, releases the lock, and proves the exact
-acknowledgement and stored state, silent code-0 host exit, database-session release, and unchanged
-runtime contents. Neither gate proves Railway or orchestrator drain, a representative load result,
-or a deployment credential, certificate, protected secret delivery, distributed control, external
-edge route, real-user data, or capacity result. A library-only Rust foundation now emits the fixed
-stable App Server handshake and, only after it succeeds, a candidate `0.144.5` account/usage
-sequence. It confirms ChatGPT mode while discarding email/plan/summary values and returns at most 31
-sorted strict date/token entries. Exact release metadata, schema digests, minimal extracts,
-fixtures, and a drift/matrix checker are committed. The Windows x86_64 development command admits
-only the exact official artifact size and SHA-256; repository tests still do not execute a user's
-Codex account and the compatibility matrix remains empty. A one-shot supervisor proves the exact
-sequence against a target-built synthetic child with a fixed `app-server` argument, local pipes,
-cleared ambient environment, bounded stdout/stderr/time, late-output rejection, and
+reads are also non-mutating. The same narrow path enables parameter-redacted `auto_explain` only in
+that disposable database and requires six bounded plan classes: the three fixed adapter calls plus
+their three nested score/race/status projections. It rejects missing reviewed indexes, sequential
+scans over the bounded-index relations, parameter payloads, mutation/locking nodes, dirty/written
+blocks, temporary I/O, excess rows, or plan/log budget overflow. It also holds four real score reads
+behind a controlled database lock, proves a fifth request receives the generic unavailable response
+without adding a fifth public-score query, and validates the four original responses after release.
+It is local no-queue, synthetic query-plan, and synthetic certificate evidence, not deployment:
+there is still no cache, deployment certificate/login, external TLS/edge route, edge rate policy,
+representative plan/load/capacity evidence, or live API, and this is not evidence that real Codex
+data can be submitted. A separate pure local Ingest kernel now copies and bounds the exact Community
+sync body and raw headers, verifies a replay-consumed body-bound origin HMAC before JSON or device
+work, rejects duplicate headers/decoded keys and excessive parser structure, validates the generated
+sync contract, and strictly verifies the source-bound Ed25519 request. It returns only a frozen
+database-ready allowlist. A separate bounded Ingest PostgreSQL adapter now revalidates that
+allowlist, copies all binary/array parameters, verifies the exact least-privileged Ingest login/role
+boundary on every checkout, and exposes only fixed origin-replay, device-lookup, and submission
+calls through a four-client deadline-bound pool. Its transport config is loopback-only without TLS
+and otherwise certificate-verified; focused tests use mock pools. A protected local factory now
+requires one exact primary origin HMAC pair and permits one complete distinct rotation pair through
+namespaced configuration; it returns only the verifier and the repository contains no real key or
+secret-manager binding. A forced-RLS PostgreSQL replay table now stores only the origin key ID,
+domain-separated nonce digest, and millisecond expiry; one Ingest procedure atomically consumes it,
+and an observed race proves one winner for an expired tuple. A transport-free application boundary
+now generates one server request ID, composes that replay/device/submission adapter with the exact
+verifier, waits for database settlement, and returns only a validated acknowledgement or generic
+problem decision. A separate local Fastify server factory now preserves the exact raw body/header
+evidence for `POST /v1/community/sync`, rejects proxy and inbound request ID trust, admits four
+application calls without a queue, applies bounded parser/header/connection and 5/33/34-second
+request/handler/connection deadlines, and serializes only revalidated `no-store` success/problem
+contracts. A separate local host now binds that exact factory under loopback-only development/test
+or explicit Railway-edge production configuration only after exact `VIBERACING_INGEST_ENABLED=true`.
+Missing or alternate state fails before any protected application configuration, pool, server, or
+listener; the tracked example is explicitly disabled. The host closes partial startup and handles
+SIGINT/SIGTERM under a fixed deadline. Its 130 tests and built entrypoint check are synthetic/local
+evidence, not proof of a deployed restart/route denial, Railway, external TLS, edge routing, live
+credentials, or deployment. A separate opt-in integration builds the emitted host, creates a
+synthetic dedicated Ingest login in disposable PostgreSQL, sends independently signed loopback HTTP
+requests, and proves accepted, duplicate, persistent origin-replay, revoked-device, response-header,
+and exact persistence behavior. It also holds four valid requests at the first replay-store call,
+requires a fifth to return generic 503 without a fifth replay call, then releases and proves the
+four accepted responses. After closing the imported host, the gate starts the built entry point as a
+separate silent process, observes its loopback listener without application work, proves one more
+exact accepted request, and forcibly ends only that test child before cleanup. This is controlled
+local process and no-queue evidence. A separate opt-in gate builds a link-free exact production
+runtime, mounts it read-only under the pinned Linux Node image, blocks one independently signed
+request at the first origin-replay call, delivers a real `SIGTERM`, releases the lock, and proves
+the exact acknowledgement and stored state, silent code-0 host exit, database-session release, and
+unchanged runtime contents. Neither gate proves Railway or orchestrator drain, a representative load
+result, or a deployment credential, certificate, protected secret delivery, distributed control,
+external edge route, real-user data, or capacity result. A library-only Rust foundation now emits
+the fixed stable App Server handshake and, only after it succeeds, a candidate `0.144.5`
+account/usage sequence. It confirms ChatGPT mode while discarding email/plan/summary values and
+returns at most 31 sorted strict date/token entries. Exact release metadata, schema digests, minimal
+extracts, fixtures, and a drift/matrix checker are committed. The Windows x86_64 development command
+admits only the exact official artifact size and SHA-256; repository tests still do not execute a
+user's Codex account and the compatibility matrix remains empty. A one-shot supervisor proves the
+exact sequence against a target-built synthetic child with a fixed `app-server` argument, local
+pipes, cleared ambient environment, bounded stdout/stderr/time, late-output rejection, and
 reap-before-success cleanup. Its reviewed-launch capability remains private to exact admission. A
 second inaccessible reviewed context now lets a candidate composer consume the minimized entries
 into the exact `ConnectorSyncV1` JSON, SHA-256 digest, unpadded base64url nonce, and LF-separated
@@ -446,6 +450,7 @@ pnpm run dev:web
 pnpm run verify
 pnpm run test:connector:windows-portable
 pnpm run test:migrate:postgres-integration
+pnpm run test:web-query-plan-evidence
 pnpm run test:web:postgres-integration
 pnpm run test:ingest:postgres-integration
 pnpm run test:ingest:signal-postgres-integration

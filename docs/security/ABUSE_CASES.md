@@ -476,13 +476,18 @@ material availability cost.
   private-state fingerprint unchanged. The narrow path also holds four observed score queries behind
   a controlled owner lock, requires a fifth request to return generic 503 without a fifth
   public-score query, and validates the four original responses after rollback. Its ephemeral
-  self-signed certificate and synthetic login are not deployment certificate/login, external
-  TLS/edge, cache, representative load/capacity, monitoring, or real-user evidence. Revision 0015
-  lets only the exact possessed session read and set the closed `public`/`hidden` state; the
-  same-origin form carries no profile ID and repeated state is a no-op. Because the public read
-  already filters current state, a committed hide removes the profile from the next no-store
-  response while source sync may continue. Deployment, enumeration controls, cache purge, edge rate
-  policy, query-plan/load evidence, and monitoring are still unimplemented.
+  narrow-login path also emits parameter-payload-free nested `auto_explain` only inside that
+  disposable database. Six bounded adapter/projection oracles require the reviewed indexes and
+  reject mutation/locking nodes, temporary or written blocks, bounded-index sequential scans,
+  private markers, and excess log/plan shape; the log is discarded and removed with the container.
+  Its ephemeral self-signed certificate, synthetic login, and tiny planner fixture are not
+  deployment certificate/login, external TLS/edge, cache, representative plan/load/capacity,
+  monitoring, or real-user evidence. Revision 0015 lets only the exact possessed session read and
+  set the closed `public`/`hidden` state; the same-origin form carries no profile ID and repeated
+  state is a no-op. Because the public read already filters current state, a committed hide removes
+  the profile from the next no-store response while source sync may continue. Deployment,
+  enumeration controls, cache purge, edge rate policy, representative/deployed query-plan and load
+  evidence, and monitoring are still unimplemented.
 - **Residual risk:** Any intentionally public score and active-day history can be observed and
   archived by others.
 
@@ -643,16 +648,17 @@ material availability cost.
   service-compatibility/rollback, deployed replica, monitoring, or recovery result. Web now has a
   disposable synthetic narrow login plus widened-login denial through two emitted standalone Next
   production processes, certificate-verified TLS, and one controlled four-slot admission scenario,
-  but a deployment certificate/login, external TLS/edge path, and representative load/capacity have
-  not been exercised. Jobs now has a disposable synthetic least-privileged login, all seventeen
-  emitted commands, a widened-login denial, and exact-state evidence; Ingest similarly has a
-  disposable synthetic least-privileged loopback login and full HTTP integration result. Jobs
-  additionally has fixed-clock production scheduler-core composition, injected repeated-timer and
-  process-lifecycle settlement with its disposable PostgreSQL boundary, and one real-clock emitted
-  startup path through its terminal catalog marker. None proves host-timer delivery, OS-signal
-  delivery, emitted-child controller settlement before forced termination, a deployment
-  credential/certificate, external TLS/edge route, external audit sink, capacity, a wall-clock
-  recurring process callback, deployed scheduler operation, monitoring, or real-user behavior.
+  plus bounded synthetic nested-plan evidence, but a deployment certificate/login, external TLS/edge
+  path, and representative plan/load/capacity have not been exercised. Jobs now has a disposable
+  synthetic least-privileged login, all seventeen emitted commands, a widened-login denial, and
+  exact-state evidence; Ingest similarly has a disposable synthetic least-privileged loopback login
+  and full HTTP integration result. Jobs additionally has fixed-clock production scheduler-core
+  composition, injected repeated-timer and process-lifecycle settlement with its disposable
+  PostgreSQL boundary, and one real-clock emitted startup path through its terminal catalog marker.
+  None proves host-timer delivery, OS-signal delivery, emitted-child controller settlement before
+  forced termination, a deployment credential/certificate, external TLS/edge route, external audit
+  sink, capacity, a wall-clock recurring process callback, deployed scheduler operation, monitoring,
+  or real-user behavior.
 
 ### VR-ABUSE-ADMIN-MISUSE — Privileged action without independent authority
 

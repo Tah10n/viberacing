@@ -143,6 +143,11 @@ const checks = [
     [resolve(import.meta.dirname, "test-database-check.mjs")],
   ],
   [
+    "Web query-plan evidence behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-web-query-plan-evidence.mjs")],
+  ],
+  [
     "publication-readiness checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-publication-check.mjs")],

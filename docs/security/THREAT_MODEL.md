@@ -351,11 +351,16 @@ and migration or rollback where applicable.
    production processes against TLS-enabled disposable PostgreSQL, proves a deliberately widened
    login returns only generic problems without changing any private table, validates exact
    non-mutating public responses plus TLS 1.2/1.3 through the narrow Web login, and proves the
-   four-slot application admission rejects a fifth request without a fifth public-score query. ADR
-   0056 now keeps all three public GET compositions default-off before query/header parsing,
-   admission acquisition, or storage work unless their module-load value is exact true; it proves no
-   deployed or dynamic route/cache denial. A local one-shot Jobs runner now validates one of
-   seventeen fixed
+   four-slot application admission rejects a fifth request without a fifth public-score query. The
+   same disposable narrow-login path now captures parameter-payload-free nested `auto_explain`
+   output under a fixed byte/plan/node budget and fails unless all three adapter calls plus all
+   three projections use their reviewed bounded plans without mutation/locking nodes, temporary or
+   written blocks, or sequential scans over bounded-index relations. It scans the complete ephemeral
+   log for private markers and retains no artifact. This is synthetic planner evidence, not
+   representative cardinality, latency, capacity, monitoring, or deployment evidence. ADR 0056 now
+   keeps all three public GET compositions default-off before query/header parsing, admission
+   acquisition, or storage work unless their module-load value is exact true; it proves no deployed
+   or dynamic route/cache denial. A local one-shot Jobs runner now validates one of seventeen fixed
    authentication/abandoned-enrollment/audit-event/invite/CarRecipe-proposal/ingest/finalized-source-day/pairing/session/
    terminal-deletion-job/aged-revoked-passkey/aged-revoked-device cleanup, pairing
    approval-provenance redaction, fixed pairing-rate-window reset, primary-profile purge, or

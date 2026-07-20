@@ -113,26 +113,28 @@ persists or transmits no hypothetical input; the stable score and legacy race re
 remain unchanged. These local boundaries include one opt-in synthetic path through two emitted
 standalone Next production processes and a disposable narrow Web login over ephemeral self-signed
 certificate-verified PostgreSQL transport, with widened-login denial, exact public contracts,
-`pg_stat_ssl` evidence, and full private-table non-mutation. The same path holds four score reads
-behind a controlled database lock, rejects a fifth request without adding a fifth public-score
-query, and settles the original four after release. They still have no deployment proof key or
-secret-manager binding, deployment certificate/login, externally verified TLS/edge route, capacity
-evidence, deployment, or real-data result. A separate local enrollment slice now implements exact
-invite parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted
-cookies, atomic profile enrollment, required initial WebAuthn registration plus pending-session
-rotation, returning discoverable-credential passkey login, a session-scoped minimal passkey
-inventory, an account page, same-origin public-profile hide/show, a session-derived active-device
-inventory, immediate source pause, passkey-protected paused-source reactivation, immediate
-owned-device revoke, passkey-protected terminal source unlink, backup-passkey addition, revocation
-of an owned non-current passkey, fresh-passkey recovery-code rotation with one-time plaintext
-display, an exact-handle fresh-passkey profile-deletion request, one-time recovery-code
-replacement-passkey sign-in, and logout through the same probed read-write Web/Auth pool. Login
-options retain their profile-free challenge only in a purpose-separated cookie; valid proof
-atomically creates and consumes its database challenge while minting the session. Recovery performs
-bounded Argon2id verification under a protected pepper, creates only a five-minute restricted
-authority, verifies the replacement WebAuthn ceremony, and returns a normal session only after
-atomic completion. It has an exact-session CarRecipe editor that validates one closed version 1
-object, stores at most one 24-hour private proposal, previews active/pending recipes in all three
+`pg_stat_ssl` evidence, full private-table non-mutation, and six parameter-redacted bounded
+`auto_explain` plan oracles covering the three adapter calls and three nested projections through
+their reviewed indexes without mutation, temporary I/O, or retained logs. The same path holds four
+score reads behind a controlled database lock, rejects a fifth request without adding a fifth
+public-score query, and settles the original four after release. They still have no deployment proof
+key or secret-manager binding, deployment certificate/login, externally verified TLS/edge route,
+representative plan/load/capacity evidence, deployment, or real-data result. A separate local
+enrollment slice now implements exact invite parsing, GitHub OAuth state plus PKCE with no extra
+scope, purpose-separated encrypted cookies, atomic profile enrollment, required initial WebAuthn
+registration plus pending-session rotation, returning discoverable-credential passkey login, a
+session-scoped minimal passkey inventory, an account page, same-origin public-profile hide/show, a
+session-derived active-device inventory, immediate source pause, passkey-protected paused-source
+reactivation, immediate owned-device revoke, passkey-protected terminal source unlink,
+backup-passkey addition, revocation of an owned non-current passkey, fresh-passkey recovery-code
+rotation with one-time plaintext display, an exact-handle fresh-passkey profile-deletion request,
+one-time recovery-code replacement-passkey sign-in, and logout through the same probed read-write
+Web/Auth pool. Login options retain their profile-free challenge only in a purpose-separated cookie;
+valid proof atomically creates and consumes its database challenge while minting the session.
+Recovery performs bounded Argon2id verification under a protected pepper, creates only a five-minute
+restricted authority, verifies the replacement WebAuthn ceremony, and returns a normal session only
+after atomic completion. It has an exact-session CarRecipe editor that validates one closed version
+1 object, stores at most one 24-hour private proposal, previews active/pending recipes in all three
 themes, and activates or rejects only through an encrypted session-bound control. A separate bounded
 device-authenticated route and fixed connector command can only create or replace that pending exact
 recipe for an active source-bound device; they cannot read, approve, reject, or activate it. A
@@ -300,6 +302,9 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   `pnpm run typecheck:web`, `pnpm run test:web:coverage`, and `pnpm run build:web` are focused web
   gates. `pnpm run check:web-build` enforces the production asset/privacy budget after a build;
   focused gates do not replace root verification.
+- `pnpm run test:web-query-plan-evidence` runs the deterministic parser/oracle fixtures without
+  Docker. It proves missing, malformed, leaking, mutating, sequential, unindexed, or over-budget
+  variants fail closed; root `verify` includes it.
 - `pnpm run test:web:postgres-integration` builds the Web standalone output, creates ephemeral
   self-signed test-only TLS material, and starts one TLS-enabled disposable PostgreSQL container
   plus two sequential emitted Next production processes on loopback. The reviewed `pg` driver is
@@ -307,11 +312,16 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   proves all three public-ranking GETs fail generically through an extra-membership login without
   private-table mutation, then validates their exact score/race/status contracts through a narrow
   `viberacing_web` login, observes TLS 1.2 or 1.3 in `pg_stat_ssl`, and confirms the successful
-  reads remain non-mutating. It then observes four lock-waiting score queries, requires a fifth
+  reads remain non-mutating. The same test-only narrow login receives database-scoped,
+  superuser-provisioned `auto_explain` settings with parameter logging disabled. A bounded parser
+  requires the three adapter and three nested projection plans, their reviewed indexes, at most 32
+  output rows, one execution, no mutation/locking node, no dirty/written or temporary block, and no
+  sequential scan of the bounded-index relations; plan logs are private-marker scanned, discarded,
+  and removed with the container. It then observes four lock-waiting score queries, requires a fifth
   request to fail generically without adding a fifth public-score query, releases the controlled
   lock, and validates all four original responses. It proves no deployment certificate/login,
-  external TLS/edge path, cache, edge policy, monitoring, load/capacity, real-user data, or
-  deployment.
+  external TLS/edge path, cache, edge policy, monitoring, representative plan/load/capacity,
+  real-user data, or deployment.
 - `pnpm run check:phase1-visual-baselines` verifies the exact 18-image synthetic viewport matrix,
   dimensions, digests, byte limits, and public PNG policy without launching a browser.
   `pnpm run verify:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium>`

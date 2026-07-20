@@ -53,6 +53,13 @@ apply.
   Web-role/login-capability probe before every query. Do not bypass the store with generic SQL or
   wire it outside the three exact `/v1/community/scores`, `/v1/community/race`, and
   `/v1/community/race/status` boundaries.
+- Keep `auto_explain` and plan-log access confined to the opt-in disposable Web PostgreSQL harness.
+  Only its synthetic owner may provision database-scoped, parameter-disabled capture for the narrow
+  synthetic login; product Web code must not load it, alter settings, consume plans, or create a
+  query log. Preserve the byte/plan/depth/node budgets, complete private-marker scan, six exact
+  adapter/projection oracle classes, and container-bound deletion. Do not claim the small fixed
+  fixture is representative load, latency, capacity, production statistics, monitoring, or
+  deployment.
 - Keep all three public ranking GETs behind exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` resolved
   once per route-module evaluation. Every alternate or unreadable state must return the existing
   generic 503 before URL/query/header parsing, admission acquisition, or store construction; keep
@@ -177,6 +184,7 @@ pnpm run typecheck:web
 pnpm run test:web:coverage
 pnpm run build:web
 pnpm run check:web-build
+pnpm run test:web-query-plan-evidence
 pnpm run test:web:postgres-integration
 pnpm run check:phase1-visual-baselines
 pnpm run verify:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium>
