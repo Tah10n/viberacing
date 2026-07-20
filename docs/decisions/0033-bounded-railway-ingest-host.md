@@ -139,12 +139,14 @@ Current local evidence includes:
   dedicated Ingest login and two devices in disposable PostgreSQL, sends independently signed
   loopback HTTP, proves accepted/duplicate/replay/revoke response plus exact persistence, and holds
   four admitted calls at the first replay query while rejecting a fifth without another query before
-  teardown.
+  closing the imported host; the same gate then starts the built entry point as a separate silent
+  process, observes its listener without application work, proves another accepted write, and
+  forcibly ends only that test child before teardown.
 
 No current test proves Railway or Cloudflare configuration, external TLS, a public hostname,
 direct-origin denial, protected secret delivery, a deployment Ingest login/certificate, a health
-check, continuous monitoring, deployment drain behavior, distributed limits, load/capacity,
-connector egress, or real-user synchronization.
+check, continuous monitoring, OS-signal delivery, graceful emitted-child settlement, deployment
+drain behavior, distributed limits, load/capacity, connector egress, or real-user synchronization.
 
 ## References
 

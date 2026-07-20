@@ -878,8 +878,10 @@ material availability cost.
   is no live identity or deployment database integration, distributed rate/backpressure policy,
   monitoring, or combined capacity evidence. The full synthetic Ingest gate proves controlled
   four-plus-one no-queue correctness at the first replay-store call and exact settlement after
-  release, not representative load or capacity. Deployed scheduling, cache, scoring/read capacity
-  evidence, quotas, edge shaping, and production load evidence remain unimplemented.
+  release, then one separate silent built-entry-point request before forced test-child termination.
+  It does not prove OS-signal delivery, graceful emitted-child settlement, representative load, or
+  capacity. Deployed scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and
+  production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

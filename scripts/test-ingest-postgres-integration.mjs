@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash, createHmac, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
-import { createServer } from "node:net";
+import { createConnection, createServer } from "node:net";
 import { resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -41,6 +41,7 @@ const admissionSyncIds = Object.freeze(
   Array.from({ length: 4 }, (_, index) => `syn_${String(index + 1).repeat(22)}`),
 );
 const rejectedAdmissionSyncId = `syn_${"5".repeat(22)}`;
+const emittedProcessSyncId = `syn_${"P".repeat(22)}`;
 const originKeyId = "edge_integration";
 const originSecret = Buffer.alloc(32, 0x33);
 const requestIdPattern = /^req_[A-Za-z0-9_-]{22}$/;
@@ -49,6 +50,9 @@ const maximumBlockerOutputBytes = 64 * 1024;
 const databaseBlockerTimeoutMs = 10_000;
 const blockedOriginObservationTimeoutMs = 2_000;
 const admissionRejectionTimeoutMs = 1_500;
+const emittedProcessStartTimeoutMs = 10_000;
+const emittedProcessCloseTimeoutMs = 5_000;
+const emittedProcessProbeTimeoutMs = 250;
 const databaseBlockerReadyMarker = "viberacing_ingest_admission_blocker_ready";
 const privateValueMarkers = Object.freeze([
   profileId,
@@ -62,6 +66,7 @@ const privateValueMarkers = Object.freeze([
   revokedSyncId,
   ...admissionSyncIds,
   rejectedAdmissionSyncId,
+  emittedProcessSyncId,
   originKeyId,
   originSecret.toString("base64url"),
   ingestLogin,
@@ -686,24 +691,188 @@ async function exerciseNoQueueAdmission(baseUrl, policy, keyPair) {
   }
 }
 
+async function exerciseEmittedIngestProcess(databasePort, policy, keyPair) {
+  const listenerPort = await findAvailableListenerPort();
+  const processState = startEmittedIngestProcess(databasePort, listenerPort);
+  let processStopped = false;
+  try {
+    await waitForEmittedIngestListener(processState, listenerPort);
+    const observedAt = new Date().toISOString();
+    const request = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x36),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x46),
+      originTimestamp: observedAt,
+      payload: createPayload(emittedProcessSyncId, observedAt, 300, {
+        payloadSourceId: admissionSourceId,
+      }),
+      policy,
+      requestDeviceId: admissionDeviceId,
+    });
+    const result = await postSignedRequest(`http://127.0.0.1:${listenerPort}`, policy, request);
+    assertSuccess(result, {
+      acceptedEntries: 1,
+      outcome: "accepted",
+      syncId: emittedProcessSyncId,
+    });
+    assert.equal(
+      processState.hasExited(),
+      false,
+      "the emitted Ingest host must remain active through its accepted request",
+    );
+    assert.equal(
+      processState.outputObserved(),
+      false,
+      "the emitted Ingest host must remain silent through its accepted request",
+    );
+
+    const stopResult = await stopEmittedIngestProcess(processState);
+    processStopped = true;
+    assert.equal(
+      stopResult.terminationRequested,
+      true,
+      "the synthetic harness must terminate only its emitted Ingest child",
+    );
+    assert.equal(
+      processState.outputObserved(),
+      false,
+      "the emitted Ingest host must remain silent through stdio close",
+    );
+    assert.deepEqual(
+      stopResult.closeResult,
+      { code: null, signal: "SIGKILL" },
+      "the synthetic harness must end the persistent child after the accepted request",
+    );
+    return result;
+  } finally {
+    if (!processStopped) {
+      await stopEmittedIngestProcess(processState).catch(() => undefined);
+    }
+  }
+}
+
+function ingestEnvironment(databasePort, listenerPort) {
+  return Object.freeze({
+    NODE_ENV: "test",
+    VIBERACING_INGEST_ENABLED: "true",
+    VIBERACING_INGEST_DATABASE_HOST: "127.0.0.1",
+    VIBERACING_INGEST_DATABASE_NAME: databaseName,
+    VIBERACING_INGEST_DATABASE_PASSWORD: ingestPassword,
+    VIBERACING_INGEST_DATABASE_PORT: String(databasePort),
+    VIBERACING_INGEST_DATABASE_TLS_MODE: "disable",
+    VIBERACING_INGEST_DATABASE_USER: ingestLogin,
+    VIBERACING_INGEST_LISTENER_HOST: "127.0.0.1",
+    VIBERACING_INGEST_LISTENER_PORT: String(listenerPort),
+    VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL: originSecret.toString("base64url"),
+    VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID: originKeyId,
+    VIBERACING_INGEST_TLS_TERMINATION: "loopback-cleartext",
+  });
+}
+
+function startEmittedIngestProcess(databasePort, listenerPort) {
+  let exitObserved = false;
+  let stdoutObserved = false;
+  let stderrObserved = false;
+  const child = spawn(process.execPath, [resolve(root, "apps", "ingest-host", "dist", "main.js")], {
+    cwd: root,
+    env: ingestEnvironment(databasePort, listenerPort),
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  const terminateOnOutput = (stream) => {
+    if (stream === "stdout") {
+      stdoutObserved = true;
+    } else {
+      stderrObserved = true;
+    }
+    child.kill("SIGKILL");
+  };
+  child.stdout.on("data", () => {
+    terminateOnOutput("stdout");
+  });
+  child.stderr.on("data", () => {
+    terminateOnOutput("stderr");
+  });
+  child.once("exit", () => {
+    exitObserved = true;
+  });
+  const closed = new Promise((resolveClose, rejectClose) => {
+    child.once("error", () => {
+      exitObserved = true;
+      rejectClose(new Error("Emitted Ingest host process could not start."));
+    });
+    child.once("close", (code, signal) => {
+      exitObserved = true;
+      resolveClose(Object.freeze({ code, signal }));
+    });
+  });
+  void closed.catch(() => undefined);
+  return Object.freeze({
+    child,
+    closed,
+    hasExited: () => exitObserved,
+    outputObserved: () => stdoutObserved || stderrObserved,
+  });
+}
+
+async function probeLoopbackListener(listenerPort) {
+  return new Promise((resolveProbe) => {
+    const socket = createConnection({ host: "127.0.0.1", port: listenerPort });
+    let settled = false;
+    const finish = (connected) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      socket.destroy();
+      resolveProbe(connected);
+    };
+    socket.once("connect", () => {
+      finish(true);
+    });
+    socket.once("error", () => {
+      finish(false);
+    });
+    socket.setTimeout(emittedProcessProbeTimeoutMs, () => {
+      finish(false);
+    });
+  });
+}
+
+async function waitForEmittedIngestListener(processState, listenerPort) {
+  const deadline = Date.now() + emittedProcessStartTimeoutMs;
+  while (Date.now() < deadline) {
+    if (processState.outputObserved()) {
+      throw new Error("Emitted Ingest host process produced unexpected output.");
+    }
+    if (processState.hasExited()) {
+      throw new Error("Emitted Ingest host process exited before opening its listener.");
+    }
+    if (await probeLoopbackListener(listenerPort)) {
+      return;
+    }
+    await sleep(25);
+  }
+  throw new Error("Emitted Ingest host process did not open its listener in time.");
+}
+
+async function stopEmittedIngestProcess(processState) {
+  let terminationRequested = false;
+  if (!processState.hasExited()) {
+    terminationRequested = processState.child.kill("SIGKILL");
+  }
+  const closeResult = await waitWithDeadline(
+    processState.closed,
+    emittedProcessCloseTimeoutMs,
+    "Emitted Ingest host process did not close within its fixed test deadline.",
+  );
+  return Object.freeze({ closeResult, terminationRequested });
+}
+
 async function startHost(startConfiguredIngestHost, databasePort) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const listenerPort = await findAvailableListenerPort();
-    const environment = Object.freeze({
-      NODE_ENV: "test",
-      VIBERACING_INGEST_ENABLED: "true",
-      VIBERACING_INGEST_DATABASE_HOST: "127.0.0.1",
-      VIBERACING_INGEST_DATABASE_NAME: databaseName,
-      VIBERACING_INGEST_DATABASE_PASSWORD: ingestPassword,
-      VIBERACING_INGEST_DATABASE_PORT: String(databasePort),
-      VIBERACING_INGEST_DATABASE_TLS_MODE: "disable",
-      VIBERACING_INGEST_DATABASE_USER: ingestLogin,
-      VIBERACING_INGEST_LISTENER_HOST: "127.0.0.1",
-      VIBERACING_INGEST_LISTENER_PORT: String(listenerPort),
-      VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL: originSecret.toString("base64url"),
-      VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID: originKeyId,
-      VIBERACING_INGEST_TLS_TERMINATION: "loopback-cleartext",
-    });
+    const environment = ingestEnvironment(databasePort, listenerPort);
     try {
       const controller = await startConfiguredIngestHost(environment);
       return { baseUrl: `http://127.0.0.1:${listenerPort}`, controller };
@@ -903,17 +1072,24 @@ COMMIT;`,
 
     const admissionResults = await exerciseNoQueueAdmission(host.baseUrl, policy, admissionKeyPair);
 
+    await controller.close();
+    controller = undefined;
+
+    const emittedProcessResult = await exerciseEmittedIngestProcess(
+      databasePort,
+      policy,
+      admissionKeyPair,
+    );
+
     const requestIds = new Set([
       acceptedResult.body.requestId,
       duplicateResult.body.requestId,
       replayResult.body.requestId,
       revokedResult.body.requestId,
       ...admissionResults.map((result) => result.body.requestId),
+      emittedProcessResult.body.requestId,
     ]);
-    assert.equal(requestIds.size, 9);
-
-    await controller.close();
-    controller = undefined;
+    assert.equal(requestIds.size, 10);
 
     const storedState = JSON.parse(
       psqlScalar(
@@ -1002,21 +1178,27 @@ SELECT pg_catalog.jsonb_build_object(
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.usage_snapshots
     WHERE sync_id = '${rejectedAdmissionSyncId}'
+  ),
+  'emittedProcessSyncCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_snapshots
+    WHERE sync_id = '${emittedProcessSyncId}'
   )
 )::text;`,
         "Ingest stored-state verification",
       ),
     );
     assert.deepEqual(storedState, {
-      admissionDeviceNonceCount: 4,
+      admissionDeviceNonceCount: 5,
       admissionDeviceState: "active",
-      admissionSnapshotCount: 4,
-      admissionSnapshotEntryCount: 4,
-      admissionSourceDayCount: 4,
-      admissionSourceTokens: [200, 201, 202, 203],
+      admissionSnapshotCount: 5,
+      admissionSnapshotEntryCount: 5,
+      admissionSourceDayCount: 5,
+      admissionSourceTokens: [200, 201, 202, 203, 300],
       deviceNonceCount: 1,
       deviceState: "revoked",
-      originCount: 7,
+      emittedProcessSyncCount: 1,
+      originCount: 8,
       rejectedAdmissionSyncCount: 0,
       snapshotCount: 1,
       snapshotEntryCount: 1,
@@ -1027,7 +1209,7 @@ SELECT pg_catalog.jsonb_build_object(
     });
 
     console.log(
-      "Ingest PostgreSQL integration passed (accepted, duplicate, replay denial, revocation denial, four-slot no-queue admission, and exact stored state).",
+      "Ingest PostgreSQL integration passed (factory and emitted-process acceptance, duplicate, replay denial, revocation denial, four-slot no-queue admission, and exact stored state).",
     );
   } catch (error) {
     primaryFailure = error;

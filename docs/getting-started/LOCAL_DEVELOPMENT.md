@@ -403,9 +403,12 @@ creates an obviously synthetic login with only `viberacing_ingest`. It sends ind
 signed HTTP requests through the real loopback host and checks accepted, duplicate, persistent
 origin-replay, revoked-device, response-header, request-ID, and exact persistence behavior. It also
 holds four valid requests at the first replay-store call, requires a fifth generic 503 without a
-fifth replay call, and proves the four accepted responses after release. The blocker, container,
-network, and storage are removed in `finally`; the normal local database volume is never used. This
-is synthetic local evidence, not a deployment credential, external TLS/edge route, secret-manager
+fifth replay call, and proves the four accepted responses after release. After closing the imported
+host, it starts the built entry point as a separate silent process, observes listener readiness with
+a connection-only probe, proves another accepted request, and forcibly ends only that child. The
+blocker, emitted child, container, network, and storage are removed in `finally`; the normal local
+database volume is never used. This is synthetic local evidence, not OS-signal delivery, graceful
+emitted-child settlement, a deployment credential, external TLS/edge route, secret-manager
 integration, real-user result, or capacity test.
 
 ## Local configuration

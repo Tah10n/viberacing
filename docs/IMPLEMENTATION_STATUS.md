@@ -82,41 +82,45 @@ exact verifier and database capabilities, generates a server-owned request ID, w
 and returns only a validated acknowledgement or generic problem decision. A bounded local Fastify
 server factory now preserves exact raw HTTP evidence, admits four application calls without a queue,
 applies fixed parser/header/connection/deadline policies, and serializes only revalidated sync
-acknowledgement/problem contracts. A library-only Rust connector foundation now bounds the stable
-App Server handshake and a candidate `0.144.5` account/usage parser, discarding account/summary
-fields and returning only bounded normalized daily usage in caller memory. An inaccessible one-shot
-supervisor composes those exact states through fixed local pipes, a fixed child argument, no ambient
-environment, bounded stdout/stderr/time, terminal-event draining, and reap-before-success cleanup.
-An inaccessible reviewed sync context now lets a candidate-only composer consume those minimized
-entries into the exact bounded JSON body, SHA-256 digest, nonce encoding, and device-signature
-message shared with the production Ingest verifier. An isolated one-use signer removes public
-unsigned access, consumes that value only with an inaccessible device-bound key capability, and
-returns the same body plus five exact signed header values. The shared synthetic vector is strictly
-verified across Rust and Ingest. A second inaccessible signer and pure Web verifier now agree on an
-exact synthetic pairing-possession proof. A transport-free Web/Auth start application now generates
-fresh server identifiers, 32-byte poll/challenge material, a 60-bit human code, separate protected
-poll/code verifiers, and a nine-minute pending transaction from closed device metadata through one
-fixed call on the probed read-write Web pool. A second activation application derives two
-fixed-shape HMAC poll-verifier candidates, selects at most one approved row, runs that strict proof,
-and alone invokes exact atomic activation with server-owned identifiers behind four-call admission
-and a 250-millisecond settlement floor. The authenticated `/connect` flow supplies browser approval.
-Two closed local POST routes now compose both applications behind one shared four-call admission
-boundary, versioned request/response validation, generic problems, and revision 0022's fixed
-global-and-64-bucket distributed rate windows. Those two connector routes and the two signed-in
-approval routes now each require exact `VIBERACING_PAIRING_ENABLED=true` at module evaluation; the
-tracked default is false and disabled POST reaches no parser, runtime/service, admission
-acquisition, protected configuration, or database work after body cancellation. Independently, the
-`/connect` page and both browser approval modules now resolve exact
-`VIBERACING_SOURCE_CREATION_ENABLED=true`; the tracked default is false. A disabled decision omits
-new-source UI in EN/RU, retains active existing-source choices, and blocks both initiation and
-completion of a new-source approval in the service. The encrypted five-minute challenge and v2
-context digest bind exact source choice so a restarted disabled verification module also rejects an
-in-flight new-source challenge before passkey/database completion. Independently, the account page,
-browser proposal create/approve modules, and source-bound device proposal module resolve exact
-`VIBERACING_CAR_PROPOSALS_ENABLED=true`; the tracked default is false. Disabled mutation stops
-before request/runtime/admission/proof/database work, the browser service repeats literal-true
-checks, and EN/RU UI preserves active/private previews plus exact rejection while omitting
-editor/approve. The two enrollment pages and four GitHub/initial-passkey route modules now
+acknowledgement/problem contracts. A separate exact-default-off local host composes that factory
+under closed listener and process-lifecycle policy. Its required synthetic PostgreSQL gate now
+closes the imported emitted host after the full request/no-queue matrix, starts the built entry
+point as a separate silent child, proves another accepted request, and forcibly ends only that
+child; it does not prove OS-signal delivery or graceful emitted-child settlement. A library-only
+Rust connector foundation now bounds the stable App Server handshake and a candidate `0.144.5`
+account/usage parser, discarding account/summary fields and returning only bounded normalized daily
+usage in caller memory. An inaccessible one-shot supervisor composes those exact states through
+fixed local pipes, a fixed child argument, no ambient environment, bounded stdout/stderr/time,
+terminal-event draining, and reap-before-success cleanup. An inaccessible reviewed sync context now
+lets a candidate-only composer consume those minimized entries into the exact bounded JSON body,
+SHA-256 digest, nonce encoding, and device-signature message shared with the production Ingest
+verifier. An isolated one-use signer removes public unsigned access, consumes that value only with
+an inaccessible device-bound key capability, and returns the same body plus five exact signed header
+values. The shared synthetic vector is strictly verified across Rust and Ingest. A second
+inaccessible signer and pure Web verifier now agree on an exact synthetic pairing-possession proof.
+A transport-free Web/Auth start application now generates fresh server identifiers, 32-byte
+poll/challenge material, a 60-bit human code, separate protected poll/code verifiers, and a
+nine-minute pending transaction from closed device metadata through one fixed call on the probed
+read-write Web pool. A second activation application derives two fixed-shape HMAC poll-verifier
+candidates, selects at most one approved row, runs that strict proof, and alone invokes exact atomic
+activation with server-owned identifiers behind four-call admission and a 250-millisecond settlement
+floor. The authenticated `/connect` flow supplies browser approval. Two closed local POST routes now
+compose both applications behind one shared four-call admission boundary, versioned request/response
+validation, generic problems, and revision 0022's fixed global-and-64-bucket distributed rate
+windows. Those two connector routes and the two signed-in approval routes now each require exact
+`VIBERACING_PAIRING_ENABLED=true` at module evaluation; the tracked default is false and disabled
+POST reaches no parser, runtime/service, admission acquisition, protected configuration, or database
+work after body cancellation. Independently, the `/connect` page and both browser approval modules
+now resolve exact `VIBERACING_SOURCE_CREATION_ENABLED=true`; the tracked default is false. A
+disabled decision omits new-source UI in EN/RU, retains active existing-source choices, and blocks
+both initiation and completion of a new-source approval in the service. The encrypted five-minute
+challenge and v2 context digest bind exact source choice so a restarted disabled verification module
+also rejects an in-flight new-source challenge before passkey/database completion. Independently,
+the account page, browser proposal create/approve modules, and source-bound device proposal module
+resolve exact `VIBERACING_CAR_PROPOSALS_ENABLED=true`; the tracked default is false. Disabled
+mutation stops before request/runtime/admission/proof/database work, the browser service repeats
+literal-true checks, and EN/RU UI preserves active/private previews plus exact rejection while
+omitting editor/approve. The two enrollment pages and four GitHub/initial-passkey route modules now
 independently require exact `VIBERACING_ENROLLMENT_ENABLED=true`; the tracked default is false.
 Disabled EN/RU pages omit both forms, HTTP stops before request/runtime/admission/private work, and
 all four service methods repeat literal-true enforcement before OAuth/WebAuthn/database work while
@@ -583,13 +587,18 @@ ranking, or deployed Jobs scheduler/cadence exists.
   revoked-device denial, and the closed success/problem headers. A controlled owner lock then holds
   four valid requests at `consume_origin_nonce`; `pg_stat_activity` observes exactly four
   lock-waiting Ingest calls, a fifth valid request returns generic 503 without a fifth replay call,
-  and all four original requests return exact accepted acknowledgements after release. Nine server
-  request IDs are unique. Owner-only state verification proves seven consumed origin nonces, five
-  device nonces, five exact accepted snapshots/entries/current values, terminal first-device
-  revocation, no revoked-device snapshot, and no state for the rejected fifth request. The command
-  removes its blocker, host, container, network, and storage and is required by CI. It proves no
-  external TLS/edge route, protected secret delivery, production credential, real-user input,
-  monitoring, distributed load control, representative load/capacity, or deployment.
+  and all four original requests return exact accepted acknowledgements after release. The imported
+  host then closes, the built `dist/main.js` entry point starts as a separate silent process, a
+  connection-only probe observes its loopback listener without application work, and a separate
+  signed request returns exact accepted before the harness forcibly ends only that test child. Ten
+  server request IDs are unique. Owner-only state verification proves eight consumed origin nonces,
+  six device nonces, six exact accepted snapshots/entries/current values, terminal first-device
+  revocation, no revoked-device snapshot, no state for the rejected fifth request, and exactly one
+  emitted-process snapshot. The command removes its blocker, imported host, emitted child,
+  container, network, and storage and is required by CI. It proves no OS-signal delivery, graceful
+  emitted-child settlement, deployment drain, external TLS/edge route, protected secret delivery,
+  production credential, real-user input, monitoring, distributed load control, representative
+  load/capacity, or deployment.
 - A server-only public HTTP problem boundary that requests exactly 16 cryptographic random bytes,
   returns a frozen opaque request token, owns all eleven status/title/retry mappings including
   explicit 405/406 semantics, validates the complete `ProblemDetailsV1`, and emits only
@@ -1300,12 +1309,13 @@ application composer, Fastify server, and separate host now prove bounded protec
 raw-envelope/JSON/HTTP framing, origin-proof, contract, strict Ed25519 device, least-privileged
 pool, fixed-query, orchestration, no-queue/deadline policy, exact listener modes, bounded
 startup/shutdown, result/problem serialization, and one full synthetic loopback persistence plus
-controlled no-queue-contention path, but not those deployed edge, secret, TLS, representative
-load/capacity, or operational boundaries. Bounded database score and compatible active-recipe race
-projections, versioned response-only schemas, fail-closed server mappers, bounded PostgreSQL
-adapters, and local HTTP routes now exist, including URL/media parsing, admission/deadline policy,
-store translation, and final serialization. A third compatible local status
-projection/contract/route now supplies complete-UTC-day freshness and preference-gated streak
+controlled no-queue-contention path plus one positive silent built-entry-point request, but not OS
+signal delivery, graceful emitted-child settlement, or those deployed edge, secret, TLS,
+representative load/capacity, or operational boundaries. Bounded database score and compatible
+active-recipe race projections, versioned response-only schemas, fail-closed server mappers, bounded
+PostgreSQL adapters, and local HTTP routes now exist, including URL/media parsing,
+admission/deadline policy, store translation, and final serialization. A third compatible local
+status projection/contract/route now supplies complete-UTC-day freshness and preference-gated streak
 without changing either older response. Cache/invalidation, deployed device-proposal ingress,
 authenticated profile detail, client-rate and production-capacity controls, query-plan evidence,
 monitoring backend, deployment login, certificate, edge policy, and live adapter integration do not.

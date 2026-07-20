@@ -511,8 +511,11 @@ HTTP, and checks accepted, duplicate, persistent origin-replay, revoked-device, 
 and exact persistence results. It then holds four independent valid requests at the first
 origin-replay call, observes exactly four lock-waiting least-privileged queries, rejects a fifth
 without a fifth replay call, and proves the four accepted responses after releasing the owner lock.
-It supplies no external TLS, protected secret delivery, Cloudflare/Railway route, distributed
-control, production credential, representative load, real-user result, or capacity evidence.
+After closing the imported host, it starts the built entry point as a separate silent process,
+observes only listener readiness, proves one more accepted request and exact persisted snapshot, and
+forcibly ends only that child. It supplies no OS-signal delivery, graceful emitted-child settlement,
+external TLS, protected secret delivery, Cloudflare/Railway route, distributed control, production
+credential, representative load, real-user result, or capacity evidence.
 
 ADR 0021 implements the first local App Server protocol step: a fixed capability-free `initialize`,
 one 16 KiB LF-only closed response, discarded initialization strings, and fixed `initialized`. ADR

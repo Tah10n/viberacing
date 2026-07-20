@@ -323,7 +323,10 @@ production login, monitoring, deployed cadence, or deployment exists.
   synthetic login with only `viberacing_ingest`, sends signed HTTP through emitted Ingest host code,
   validates accepted/duplicate/replay/revoke responses and exact stored state, then holds four valid
   requests at the first replay-store call, rejects a fifth without a fifth replay call, releases the
-  four to exact accepted results, and removes the blocker, container, network, and storage.
+  four to exact accepted results, closes the imported host, and starts the built host entry point as
+  a separate silent child for one more exact accepted write. It forcibly ends only that child and
+  removes the blocker, container, network, and storage; this is not graceful process-shutdown
+  evidence.
 - `scripts/test-web-postgres-integration.mjs` owns another one-off `postgres-test` container with an
   ephemeral loopback-published port, applies the same reviewed manifest, starts the three real Next
   development GETs, proves an extra-membership Web login fails generically without mutation,

@@ -212,9 +212,12 @@ Versioning where its guarantees are applicable.
   revoked-device denial, closed response headers, unique server request IDs, and exact stored state.
   A controlled owner lock then holds four valid requests at the first replay-store call, observes
   exactly four lock-waiting Ingest queries, rejects a fifth with generic 503 without a fifth query,
-  and proves the four exact accepted responses after release before cleanup. CI requires the gate,
-  but it supplies no external TLS, protected secret, edge route, distributed control, production
-  credential, representative load, real-user input, or capacity evidence.
+  and proves the four exact accepted responses after release. After the imported host closes, the
+  same gate starts the built entry point as a separate silent process, observes its loopback
+  listener without application work, proves another exact accepted write, and forcibly ends only
+  that test child before cleanup. CI requires the gate, but it supplies no OS-signal delivery,
+  graceful emitted-child settlement, external TLS, protected secret, edge route, distributed
+  control, production credential, representative load, real-user input, or capacity evidence.
 - A library-only Rust connector protocol foundation with one fixed stable App Server initialization
   exchange, 16 KiB LF-only framing, manual duplicate/unknown-field rejection, bounded discarded
   response values, terminal hostile-input state, and non-reflective errors. Seven public-API tests

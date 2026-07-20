@@ -111,12 +111,14 @@ Repository evidence covers:
 - disabled-by-default public example and configuration-checker mutation coverage;
 - a built entry point exiting silently with status 1 under explicit disabled state; and
 - the existing enabled synthetic loopback/PostgreSQL path, including its controlled four-slot
-  no-queue contention result, listener, shutdown, lint, type, coverage, build, documentation,
-  architecture, and public-data gates.
+  no-queue contention result plus one separate silent built-entry-point request before forced
+  test-child termination, listener, imported-host shutdown, lint, type, coverage, build,
+  documentation, architecture, and public-data gates.
 
 The tests do not prove a deployed restart, route denial, old-instance drain, health policy, operator
-authentication, audit trail, monitoring alert, Cloudflare/Railway control, live secret or database
-credential, production capacity, or any other capability switch.
+authentication, audit trail, monitoring alert, OS-signal delivery, graceful emitted-child
+settlement, deployment drain, Cloudflare/Railway control, live secret or database credential,
+production capacity, or any other capability switch.
 
 ## References
 

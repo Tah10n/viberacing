@@ -71,55 +71,58 @@ ephemeral PostgreSQL container, sends independently signed HTTP requests, and pr
 duplicate, persistent origin-replay, revoked-device, response-contract, and exact persistence
 behavior. It also holds four independently signed requests at the first replay-store call, rejects a
 fifth with generic 503 without a fifth replay call, then releases and proves all four accepted
-before removing the container. The three public score/race/status routes now share a second exact
-default-off module-load gate before query/header parsing, admission acquisition, or storage work.
-Their visible current-week browser consumer retains rounded freshness, optional preference-gated
-streak, and an explicit validated synthetic fallback while the tracked gate is false. Connector
-pairing start/poll and signed-in approval options/verification now use a third exact default-off
-capability gate, independently resolved at module load before request parsing, runtime/service
-construction, admission acquisition, protected configuration, or database work. A fourth exact
-default-off decision now independently prevents new-source approval initiation and completion unless
-the `/connect` page and both browser approval modules resolved exact enablement; active
-existing-source pairing remains available, and the source choice is sealed and digest-bound to the
-passkey challenge. A fifth exact default-off decision now closes browser proposal creation, browser
-approval, and device proposal ingress before request or state work; account UI preserves
-active/private previews and exact rejection. A sixth exact default-off decision now closes the
-invite/OAuth/initial-passkey enrollment pages, HTTP routes, and service methods while returning
-login and recovery remain available. None of these local gates is a deployed dynamic kill switch.
-The public home also has a local-only EN/RU score simulator that persists or transmits no
-hypothetical input; the stable score and legacy race response contracts remain unchanged. These
-local boundaries include one opt-in synthetic path through all three real Next development GETs and
-a disposable narrow Web login, with widened-login denial, exact public contracts, and full private-
-table non-mutation. The same path holds four score reads behind a controlled database lock, rejects
-a fifth request without adding a fifth public-score query, and settles the original four after
-release. They still have no deployment proof key or secret-manager binding, externally verified
-TLS/edge route, deployment database credential, capacity evidence, deployment, or real-data result.
-A separate local enrollment slice now implements exact invite parsing, GitHub OAuth state plus PKCE
-with no extra scope, purpose-separated encrypted cookies, atomic profile enrollment, required
-initial WebAuthn registration plus pending-session rotation, returning discoverable-credential
-passkey login, a session-scoped minimal passkey inventory, an account page, same-origin
-public-profile hide/show, a session-derived active-device inventory, immediate source pause,
-passkey-protected paused-source reactivation, immediate owned-device revoke, passkey-protected
-terminal source unlink, backup-passkey addition, revocation of an owned non-current passkey,
-fresh-passkey recovery-code rotation with one-time plaintext display, an exact-handle fresh-passkey
-profile-deletion request, one-time recovery-code replacement-passkey sign-in, and logout through the
-same probed read-write Web/Auth pool. Login options retain their profile-free challenge only in a
-purpose-separated cookie; valid proof atomically creates and consumes its database challenge while
-minting the session. Recovery performs bounded Argon2id verification under a protected pepper,
-creates only a five-minute restricted authority, verifies the replacement WebAuthn ceremony, and
-returns a normal session only after atomic completion. It has an exact-session CarRecipe editor that
-validates one closed version 1 object, stores at most one 24-hour private proposal, previews
-active/pending recipes in all three themes, and activates or rejects only through an encrypted
-session-bound control. A separate bounded device-authenticated route and fixed connector command can
-only create or replace that pending exact recipe for an active source-bound device; they cannot
-read, approve, reject, or activate it. A separate compatible race projection exposes only an active
-profile's current approved recipe; proposal state stays private. A separate bounded Jobs-only
-capability physically removes expired proposals locally, and the default-off scheduler plus the
-combined synthetic PostgreSQL integration exercise it, but no deployed cadence, production login,
-monitoring, or deployment is proven. The enrollment slice has only injected/synthetic evidence and
-no invite issuer UI, working OAuth or database credential, distributed recovery attempt controls,
-deployed cleanup/deletion cadence or notification, cache/backup/tombstone purge, restore replay,
-edge abuse controls, or deployment. Bounded expired
+before closing the imported host. The same gate then starts the built entry point as a separate
+silent process, observes its loopback listener without application work, proves one more exact
+accepted request, and forcibly ends only that test child before removing the container. This does
+not prove OS-signal delivery or graceful emitted-child settlement. The three public
+score/race/status routes now share a second exact default-off module-load gate before query/header
+parsing, admission acquisition, or storage work. Their visible current-week browser consumer retains
+rounded freshness, optional preference-gated streak, and an explicit validated synthetic fallback
+while the tracked gate is false. Connector pairing start/poll and signed-in approval
+options/verification now use a third exact default-off capability gate, independently resolved at
+module load before request parsing, runtime/service construction, admission acquisition, protected
+configuration, or database work. A fourth exact default-off decision now independently prevents
+new-source approval initiation and completion unless the `/connect` page and both browser approval
+modules resolved exact enablement; active existing-source pairing remains available, and the source
+choice is sealed and digest-bound to the passkey challenge. A fifth exact default-off decision now
+closes browser proposal creation, browser approval, and device proposal ingress before request or
+state work; account UI preserves active/private previews and exact rejection. A sixth exact
+default-off decision now closes the invite/OAuth/initial-passkey enrollment pages, HTTP routes, and
+service methods while returning login and recovery remain available. None of these local gates is a
+deployed dynamic kill switch. The public home also has a local-only EN/RU score simulator that
+persists or transmits no hypothetical input; the stable score and legacy race response contracts
+remain unchanged. These local boundaries include one opt-in synthetic path through all three real
+Next development GETs and a disposable narrow Web login, with widened-login denial, exact public
+contracts, and full private-table non-mutation. The same path holds four score reads behind a
+controlled database lock, rejects a fifth request without adding a fifth public-score query, and
+settles the original four after release. They still have no deployment proof key or secret-manager
+binding, externally verified TLS/edge route, deployment database credential, capacity evidence,
+deployment, or real-data result. A separate local enrollment slice now implements exact invite
+parsing, GitHub OAuth state plus PKCE with no extra scope, purpose-separated encrypted cookies,
+atomic profile enrollment, required initial WebAuthn registration plus pending-session rotation,
+returning discoverable-credential passkey login, a session-scoped minimal passkey inventory, an
+account page, same-origin public-profile hide/show, a session-derived active-device inventory,
+immediate source pause, passkey-protected paused-source reactivation, immediate owned-device revoke,
+passkey-protected terminal source unlink, backup-passkey addition, revocation of an owned
+non-current passkey, fresh-passkey recovery-code rotation with one-time plaintext display, an
+exact-handle fresh-passkey profile-deletion request, one-time recovery-code replacement-passkey
+sign-in, and logout through the same probed read-write Web/Auth pool. Login options retain their
+profile-free challenge only in a purpose-separated cookie; valid proof atomically creates and
+consumes its database challenge while minting the session. Recovery performs bounded Argon2id
+verification under a protected pepper, creates only a five-minute restricted authority, verifies the
+replacement WebAuthn ceremony, and returns a normal session only after atomic completion. It has an
+exact-session CarRecipe editor that validates one closed version 1 object, stores at most one
+24-hour private proposal, previews active/pending recipes in all three themes, and activates or
+rejects only through an encrypted session-bound control. A separate bounded device-authenticated
+route and fixed connector command can only create or replace that pending exact recipe for an active
+source-bound device; they cannot read, approve, reject, or activate it. A separate compatible race
+projection exposes only an active profile's current approved recipe; proposal state stays private. A
+separate bounded Jobs-only capability physically removes expired proposals locally, and the
+default-off scheduler plus the combined synthetic PostgreSQL integration exercise it, but no
+deployed cadence, production login, monitoring, or deployment is proven. The enrollment slice has
+only injected/synthetic evidence and no invite issuer UI, working OAuth or database credential,
+distributed recovery attempt controls, deployed cleanup/deletion cadence or notification,
+cache/backup/tombstone purge, restore replay, edge abuse controls, or deployment. Bounded expired
 authentication/invite/CarRecipe-proposal/session, finalized source/day, aged revoked-passkey, and
 aged minimized revoked-device/pairing cleanup plus primary profile deletion exist locally. Finalized
 source/day cleanup retains a smaller UTC-day/count projection and waits 30 days after terminal
@@ -351,9 +354,11 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   sends independently signed HTTP requests, verifies accepted/duplicate/replay/revocation results
   plus exact persistence, and holds four valid requests at the first replay-store call so a fifth
   returns generic 503 without a fifth database call; the four settle successfully after release. It
-  then removes its container, network, and storage. It proves no external TLS, protected secret
-  delivery, edge route, distributed control, production credential, real-user data, representative
-  load, or capacity.
+  then closes the imported host, starts the built entry point as a silent child, observes its
+  loopback listener, proves one more exact accepted request, forcibly ends only that child, and
+  removes its container, network, and storage. It proves no OS-signal delivery, graceful
+  emitted-child settlement, external TLS, protected secret delivery, edge route, distributed
+  control, production credential, real-user data, representative load, or capacity.
 - `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS, and
   private reporting controls are configured.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability

@@ -166,17 +166,20 @@ synthetic dedicated Ingest login in disposable PostgreSQL, sends independently s
 requests, and proves accepted, duplicate, persistent origin-replay, revoked-device, response-header,
 and exact persistence behavior. It also holds four valid requests at the first replay-store call,
 requires a fifth to return generic 503 without a fifth replay call, then releases and proves the
-four accepted responses and exact state before cleanup. This is controlled no-queue evidence, not a
-representative load result; it supplies no deployment credential, certificate, protected secret
-delivery, distributed control, external edge route, real-user data, or capacity result. A
-library-only Rust foundation now emits the fixed stable App Server handshake and, only after it
-succeeds, a candidate `0.144.5` account/usage sequence. It confirms ChatGPT mode while discarding
-email/plan/summary values and returns at most 31 sorted strict date/token entries. Exact release
-metadata, schema digests, minimal extracts, fixtures, and a drift/matrix checker are committed. The
-Windows x86_64 development command admits only the exact official artifact size and SHA-256;
-repository tests still do not execute a user's Codex account and the compatibility matrix remains
-empty. A one-shot supervisor proves the exact sequence against a target-built synthetic child with a
-fixed `app-server` argument, local pipes, cleared ambient environment, bounded stdout/stderr/time,
+four accepted responses. After closing the imported host, the gate starts the built entry point as a
+separate silent process, observes its loopback listener without application work, proves one more
+exact accepted request, and forcibly ends only that test child before cleanup. This is controlled
+local process and no-queue evidence, not OS-signal delivery, graceful emitted-child settlement, a
+representative load result, or a deployment credential, certificate, protected secret delivery,
+distributed control, external edge route, real-user data, or capacity result. A library-only Rust
+foundation now emits the fixed stable App Server handshake and, only after it succeeds, a candidate
+`0.144.5` account/usage sequence. It confirms ChatGPT mode while discarding email/plan/summary
+values and returns at most 31 sorted strict date/token entries. Exact release metadata, schema
+digests, minimal extracts, fixtures, and a drift/matrix checker are committed. The Windows x86_64
+development command admits only the exact official artifact size and SHA-256; repository tests still
+do not execute a user's Codex account and the compatibility matrix remains empty. A one-shot
+supervisor proves the exact sequence against a target-built synthetic child with a fixed
+`app-server` argument, local pipes, cleared ambient environment, bounded stdout/stderr/time,
 late-output rejection, and reap-before-success cleanup. Its reviewed-launch capability remains
 private to exact admission. A second inaccessible reviewed context now lets a candidate composer
 consume the minimized entries into the exact `ConnectorSyncV1` JSON, SHA-256 digest, unpadded

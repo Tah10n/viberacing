@@ -252,10 +252,13 @@ flowchart LR
   Ingest login, sends independently signed loopback requests, and proves
   accepted/duplicate/replay/revoke plus exact PostgreSQL state. It also holds four valid requests at
   the first replay-store call, rejects a fifth without a fifth replay call, and proves the four
-  accepted results after release. Trusted external TLS and edge routing, secret-manager/edge key
-  injection, direct-origin denial, distributed rate/backpressure controls, deployment
-  login/certificate, representative load/capacity evidence, real-user end-to-end integration, and
-  deployment remain separate gates.
+  accepted results after release. After closing that imported host, the same gate starts the built
+  entry point as a separate silent process, observes its loopback listener without application work,
+  proves one more exact accepted write, and forcibly ends only that test child. OS-signal delivery,
+  graceful emitted-child settlement, deployment drain, trusted external TLS and edge routing,
+  secret-manager/edge key injection, direct-origin denial, distributed rate/backpressure controls,
+  deployment login/certificate, representative load/capacity evidence, real-user end-to-end
+  integration, and deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
   The local runner now wraps only the twelve reviewed authentication/abandoned-enrollment/
   audit-event/invite/CarRecipe-proposal/ingest/finalized-source-day/pairing/session/
@@ -697,7 +700,10 @@ login/TLS connection, direct-origin denial, a connector, capacity evidence, or d
 separate opt-in gate carries independently signed requests through the emitted loopback host and a
 synthetic dedicated login in disposable PostgreSQL, checking accepted, duplicate, replay, revoke,
 response, exact persistence, and controlled four-slot no-queue behavior at the first replay-store
-call. This local evidence does not satisfy any deployment or representative-load gate above.
+call. After the imported host closes, that same gate also starts the silent built entry point for
+one separate accepted request before forcibly ending only its test child. This local evidence does
+not prove OS-signal delivery, graceful emitted-child settlement, or satisfy any deployment or
+representative-load gate above.
 
 ### Storage
 

@@ -71,11 +71,13 @@ synthetic dedicated Ingest login in disposable PostgreSQL, sends independently c
 loopback requests, and proves accepted, duplicate, persistent replay denial, revoked-device denial,
 closed response headers, and exact stored state. A controlled owner lock additionally holds four
 valid requests at `consume_origin_nonce`, proves a fifth receives generic 503 without a fifth replay
-call, and then proves the first four accept after release. There is still no deployment
-protected-key injection, edge signer, direct-origin denial, trusted external TLS route, monitoring
-backend, distributed control, deployment database login/certificate, connector, representative
-load/capacity evidence, or deployment. These boundaries therefore do not prove real-user
-synchronization or production capacity.
+call, and then proves the first four accept after release. After the imported host closes, the gate
+starts the built host entry point as a silent child, proves a separate accepted request through its
+listener, and forcibly ends only that test child. There is still no OS-signal delivery, graceful
+emitted-child settlement, deployment protected-key injection, edge signer, direct-origin denial,
+trusted external TLS route, monitoring backend, distributed control, deployment database
+login/certificate, connector, representative load/capacity evidence, or deployment. These boundaries
+therefore do not prove real-user synchronization or production capacity.
 
 Run from the repository root:
 

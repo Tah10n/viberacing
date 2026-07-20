@@ -173,12 +173,15 @@ external-TLS declaration is deployment evidence. The opt-in full-path gate compo
 boundaries with a synthetic dedicated login in disposable PostgreSQL and verifies signed
 accepted/duplicate/replay/revoke HTTP behavior plus exact stored state. It also proves the local
 four-slot no-queue decision under a controlled first-replay-call lock, without allowing a fifth
-replay call. It remains local synthetic evidence, not external TLS, edge, secret-delivery,
-distributed control, production-credential, representative load/capacity, or real-user evidence. The
-library-only ADR 0021 Rust foundation adds one bounded stable App Server JSONL initialization state
-machine and discards all server values. ADR 0022 adds the exact-version candidate account/usage
-adapter, and ADR 0023 composes both through a fixed, deadline/output-bounded, reap-before-success
-synthetic child supervisor. ADR 0024 adds a second inaccessible reviewed context and exact
+replay call. After closing the imported host, it starts the built entry point as a separate silent
+process, observes its listener without application work, proves another accepted request, and
+forcibly ends only that test child. It remains local synthetic evidence, not OS-signal delivery,
+graceful emitted-child settlement, external TLS, edge, secret-delivery, distributed control,
+production-credential, representative load/capacity, or real-user evidence. The library-only ADR
+0021 Rust foundation adds one bounded stable App Server JSONL initialization state machine and
+discards all server values. ADR 0022 adds the exact-version candidate account/usage adapter, and ADR
+0023 composes both through a fixed, deadline/output-bounded, reap-before-success synthetic child
+supervisor. ADR 0024 adds a second inaccessible reviewed context and exact
 sync-body/digest/device-message composition shared with the Ingest verifier. ADR 0025 adds an
 isolated one-use signer behind a third inaccessible device-bound key capability and returns only the
 same body plus five signed header values. ADR 0026 adds an inaccessible pending-key/challenge signer

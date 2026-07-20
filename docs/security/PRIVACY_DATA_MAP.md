@@ -213,13 +213,14 @@ payload, and identifiers, creates one opaque snapshot UUID, reads the existing m
 and sends only those values to fixed procedures. Mock pools retain nothing. The opt-in integration
 uses only an obviously synthetic password in a disposable process/container and removes its blocker,
 container, network, and storage; owner-only stored state plus the aggregate count of four
-lock-waiting Ingest queries are asserted in process and not logged, retained, or exported. The
-Ingest deployment login and password remain a separate Security configuration class: protected
-environment and driver memory only, never a tracked value, log field, metric, response, or error
-cause. The config makes the password non-enumerable and JSON-redacted, and monitoring receives only
-`idle_client_error`. Real secret delivery, rotation, access review, and deployment TLS/login
-evidence remain deployment work. Existing 15-minute device-nonce and 30-day raw-snapshot retention
-are unchanged.
+lock-waiting Ingest queries are asserted in process and not logged, retained, or exported. It also
+passes only the same synthetic protected fields to one built-entry-point child, retains no child
+output, and forcibly ends only that child after one accepted request. The Ingest deployment login
+and password remain a separate Security configuration class: protected environment and driver memory
+only, never a tracked value, log field, metric, response, or error cause. The config makes the
+password non-enumerable and JSON-redacted, and monitoring receives only `idle_client_error`. Real
+secret delivery, rotation, access review, and deployment TLS/login evidence remain deployment work.
+Existing 15-minute device-nonce and 30-day raw-snapshot retention are unchanged.
 
 ADR 0019 adds no user field or retention sink. The application transiently passes the already mapped
 Security and Usage allowlist from verifier to adapter and creates one Operational 128-bit request ID
@@ -902,11 +903,12 @@ and composer have no request-ID or log sink. The local Ingest HTTP boundary retu
 ID or a newly generated generic transport-problem ID in the bounded body/header, disables Fastify
 logging, rejects inbound correlation values, and retains no copy. The full synthetic integration
 asserts only the returned IDs, closed decisions, exact stored state, and transient aggregate blocked
-query count and keeps no diagnostic sink. Future operational logs may use stable event names, those
-request IDs, coarse outcomes, and bounded numeric metrics only after a retention review. They omit
-raw URLs, request bodies, raw token values, handles when not needed, OAuth/passkey material, device
-public keys/signatures/nonces, origin keys/proofs/nonces, idempotency keys, recovery
-selectors/secrets/PHCs/authority verifiers, local paths, and prohibited data.
+query count; its separate built-entry-point child must emit no byte and keeps no diagnostic sink.
+Future operational logs may use stable event names, those request IDs, coarse outcomes, and bounded
+numeric metrics only after a retention review. They omit raw URLs, request bodies, raw token values,
+handles when not needed, OAuth/passkey material, device public keys/signatures/nonces, origin
+keys/proofs/nonces, idempotency keys, recovery selectors/secrets/PHCs/authority verifiers, local
+paths, and prohibited data.
 
 Connector telemetry is off by default. The implemented candidate diagnostic preview is local,
 explicit, stdout-only, redacted, reviewed before sharing, and generated from a fixed allowlist; the
