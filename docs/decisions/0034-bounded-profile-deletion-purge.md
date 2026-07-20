@@ -141,10 +141,11 @@ separately proves the default-off scheduler against a fake runner and clock, com
 core with the real runner and disposable PostgreSQL under fixed injected UTC time, and directly
 invokes the production interval handler for a repeated fixed-clock cycle and the lifecycle handler
 after an active runner call starts. Later ADR 0063 restart/post-startup, native-timer, and
-active-call OS-signal gates prove one local recurring callback, three graceful local emitted signal
-paths, and one abrupt active-call crash path, but these layers still do not prove deployed signal
-routing or controller/orchestrator grace, a published deletion window, production login/TLS,
-monitoring, backup expiry, tombstone/restore replay, cache invalidation, capacity, or deployment.
+active-call OS-signal gates prove one local recurring callback, four graceful local emitted signal
+paths, two abrupt active-call crash paths, and one controlled uncommitted post-insert transaction
+rollback, but these layers still do not prove deployed signal routing or controller/orchestrator
+grace, a published deletion window, production login/TLS, monitoring, backup expiry,
+tombstone/restore replay, cache invalidation, capacity, or deployment.
 
 ## References
 

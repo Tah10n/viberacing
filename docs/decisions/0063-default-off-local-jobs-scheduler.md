@@ -197,9 +197,15 @@ Local evidence includes:
   harness restores and rechecks the grant, rearms the marker, holds the scoring mutex, and starts
   the same runtime again. It must observe the first finalization lock-wait, deliver `SIGKILL`,
   require exit 137 plus session release, and prove the backlog and marker remain unchanged. After
-  the holder is released, a restart must finalize the backlog before a silent code-0 signal exit. A
-  final rearm/restart must prove another silent repeated cycle, session cleanup after all four
-  starts, runtime-fingerprint revalidation, and the same exact stored state;
+  the holder is released, a restart must finalize the backlog before a silent code-0 signal exit.
+  The harness then rearms the marker, installs one disposable `AFTER INSERT` barrier for a second
+  backlog, and starts the same runtime again. It must observe that call waiting on the barrier only
+  after the first daily projection insert, deliver a second `SIGKILL`, require exit 137 plus session
+  release, and prove the season/entry/daily rows rolled back while the source/day input and marker
+  remain. The test-only trigger/function must be removed and absent before a clean-schema restart
+  finalizes that backlog exactly once. A final rearm/restart must prove another silent repeated
+  cycle, session cleanup after all six starts, runtime-fingerprint revalidation, and the same exact
+  stored state;
 - a separate opt-in wall-clock integration that uses the same bounded link-free production-only
   runtime shape under pinned Linux Node, starts the unchanged emitted entry point, waits for the
   startup catalog, records its open-season refresh timestamp, and then holds the scoring mutex until
@@ -227,19 +233,23 @@ a code-0 `SIGTERM` exit. The harness restores and rechecks the exact grant, rear
 the scoring mutex, and starts the pinned-Linux container from the same runtime. It observes the
 first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus session release, and proves
 the backlog and marker remain unchanged. After releasing the holder, a restart finalizes the backlog
-before a silent signal exit. A final rearm/restart proves another silent repeated cycle before the
-runtime fingerprint is revalidated. It therefore proves local failure/crash containment, later-job
-continuation, successful restart retry, a later repeated restart, three graceful post-startup
-`SIGTERM` settlements, and one abrupt active-call `SIGKILL` exit. The separate wall-clock emitted
-integration leaves `Date.now()` and native `setInterval(60_000)` unchanged, observes a later-slot
-production refresh blocked on PostgreSQL, delivers an OS `SIGTERM`, and requires that refresh to
-settle before silent code-0 exit. It therefore proves one local host-timer recurring call and
-graceful signal settlement. The other pinned-Linux integration exercises the same OS-delivered
-graceful `SIGTERM` boundary while the first finalization call is active and proves that no later job
-starts. None proves partial-write recovery, automatic privilege repair or exercises a
-deployment-controller restart or orchestrator stop grace. None proves that a production clock
-remains stable, a deployment has one replica, durable cadence is maintained, a representative or
-real-user historical backlog is recovered, production TLS/credentials work, or a real-user
+before a silent signal exit. A disposable post-insert barrier then holds a second backlog after its
+first daily projection insert; a second abrupt process loss must roll back that whole transaction.
+The barrier is removed before a clean-schema retry finalizes that backlog exactly once. A final
+rearm/restart proves another silent repeated cycle before the runtime fingerprint is revalidated. It
+therefore proves local failure/crash containment, later-job continuation, successful clean-schema
+retries, a later repeated restart, four graceful post-startup `SIGTERM` settlements, two abrupt
+active-call `SIGKILL` exits, and one controlled uncommitted post-insert transaction rollback. The
+separate wall-clock emitted integration leaves `Date.now()` and native `setInterval(60_000)`
+unchanged, observes a later-slot production refresh blocked on PostgreSQL, delivers an OS `SIGTERM`,
+and requires that refresh to settle before silent code-0 exit. It therefore proves one local
+host-timer recurring call and graceful signal settlement. The other pinned-Linux integration
+exercises the same OS-delivered graceful `SIGTERM` boundary while the first finalization call is
+active and proves that no later job starts. The process result does not prove recovery from
+committed/external effects or every Jobs capability or automatic privilege repair, and it does not
+exercise a deployment-controller restart or orchestrator stop grace. None proves that a production
+clock remains stable, a deployment has one replica, durable cadence is maintained, a representative
+or real-user historical backlog is recovered, production TLS/credentials work, or a real-user
 retention/deletion deadline is met.
 
 ## References

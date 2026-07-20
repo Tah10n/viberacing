@@ -143,10 +143,16 @@ Harness восстанавливает и проверяет точный grant,
 и снова запускает тот же runtime. После наблюдения первого finalization lock-wait harness доставляет
 `SIGKILL`, требует exit 137 и закрытие DB session, затем доказывает неизменность backlog и terminal
 marker. После освобождения holder следующий restart финализирует backlog перед тихим code-0 signal
-exit. Финальный rearm/restart доказывает ещё один тихий повторный цикл; после каждого из четырёх
-запусков scheduler DB sessions закрыты, runtime fingerprint и итоговое состояние точны. Это
-локальное failure/crash-containment и restart-retry evidence, а не partial-write recovery, automatic
-privilege repair, deployed-controller restart или orchestrator grace. Команда
+exit. Затем harness заново вооружает marker, ставит одноразовый post-insert barrier для второго
+backlog и снова запускает тот же runtime. Второй `SIGKILL` после первой daily projection insert
+должен полностью откатить незавершённую PostgreSQL-транзакцию, сохранив только исходный source/day.
+Harness удаляет test-only trigger/function и проверяет отсутствие schema residue; clean-schema
+restart финализирует этот backlog ровно один раз. Финальный rearm/restart доказывает ещё один тихий
+повторный цикл; после каждого из шести запусков scheduler DB sessions закрыты, runtime fingerprint и
+итоговое состояние точны. Это локальное failure/crash-containment, restart-retry и один
+контролируемый rollback незавершённой post-insert транзакции, но не доказательство recovery для
+committed/external effects или всех Jobs capabilities, automatic privilege repair,
+deployed-controller restart либо orchestrator grace. Команда
 `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` запускает тот же неизменённый entry
 point из того же bounded runtime shape. После startup она удерживает scoring mutex, наблюдает
 production refresh от нативного минутного timer в следующем реальном пятиминутном slot, доставляет

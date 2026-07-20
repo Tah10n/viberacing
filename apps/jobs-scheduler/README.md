@@ -71,11 +71,16 @@ backlog unchanged, reaches the later terminal marker, and exits with code 0 afte
 The harness restores and verifies the grant, rearms the marker, holds the scoring mutex, and starts
 the same runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires
 exit 137 plus session release, and proves the backlog and marker remain unchanged. After releasing
-the holder, a restart finalizes the backlog before a silent code-0 signal exit. One more
-rearm/restart proves a silent repeated cycle. All four starts leave no scheduler sessions, the
+the holder, a restart finalizes the backlog before a silent code-0 signal exit. A disposable
+post-insert barrier then stops a second backlog only after its first daily projection insert. A
+second `SIGKILL` must release the session and roll back the season plus all projection rows while
+retaining the source/day input and marker. The harness removes the test trigger/function, verifies
+no schema residue, and a clean-schema restart finalizes that backlog exactly once. One more
+rearm/restart proves a silent repeated cycle. All six starts leave no scheduler sessions, the
 runtime fingerprint is unchanged, and the exact stored-state oracle passes. This is local
-failure/crash containment and restart retry, not partial-write recovery, automatic privilege repair,
-a deployed-controller restart, or orchestrator grace policy. The separate opt-in
+failure/crash containment, restart retry, and one controlled uncommitted PostgreSQL transaction
+rollback, not committed/external-effect or every-capability recovery, automatic privilege repair, a
+deployed-controller restart, or orchestrator grace policy. The separate opt-in
 `pnpm run test:jobs-scheduler:wall-clock-postgres-integration` gate starts the same built process
 from the same bounded runtime shape without replacing `Date.now()` or native `setInterval(60_000)`.
 After the startup catalog settles, an owner session holds the scoring mutex until the emitted
@@ -93,6 +98,7 @@ the emitted scheduler is observed in an exact database lock wait; the harness th
 settle without starting refresh or any later job. The process must exit silently with code 0,
 release its database session, leave the runtime fingerprint unchanged, and pass the shared exact
 state oracle after the seventeen omitted one-shot commands run separately. These are local synthetic
-Linux OS-signal results. Together the three emitted gates still do not prove partial-write recovery,
-a deployed signal route, controller/orchestrator grace policy, managed restart, production
-TLS/login, durable cadence, monitoring, capacity, deployment, or real-user retention.
+Linux OS-signal results. Together the three emitted gates prove only one controlled post-insert
+transaction rollback; they do not prove recovery from committed/external effects or every Jobs
+capability, a deployed signal route, controller/orchestrator grace policy, managed restart,
+production TLS/login, durable cadence, monitoring, capacity, deployment, or real-user retention.

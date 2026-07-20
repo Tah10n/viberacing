@@ -12,7 +12,7 @@ import { parse } from "yaml";
 import { validateManifest } from "./check-database.mjs";
 import { createPortableNodeRuntime, removePortableNodeRuntime } from "./portable-node-runtime.mjs";
 
-// cspell:ignore usename
+// cspell:ignore classid locktype objid tgfoid tgisinternal tgname tgqual tgrelid tgtype usename
 
 const root = resolve(import.meta.dirname, "..");
 const projectName = `vr-jobs-it-${process.pid}`;
@@ -57,6 +57,11 @@ const schedulerProcessContainerImage = (() => {
 })();
 const schedulerProcessContainerName = `${projectName}-scheduler-process`;
 const schedulerScoringLockReadyMarker = "scheduler-scoring-lock-ready";
+const schedulerPartialWriteLockReadyMarker = "scheduler-partial-write-lock-ready";
+const schedulerPartialWriteSeasonStart = "2001-02-12";
+const schedulerPartialWriteSourceId = `src_${"T".repeat(22)}`;
+const schedulerPartialWriteLockClassId = 824_762_099;
+const schedulerPartialWriteLockObjectId = 1;
 const schedulerProcessRuntimeInventory = Object.freeze([
   "pg-cloudflare@1.4.0",
   "pg-connection-string@2.14.0",
@@ -513,7 +518,7 @@ function removePortableSchedulerRuntime(runtime) {
   removePortableNodeRuntime(runtime);
 }
 
-function startSchedulerScoringLockHolder() {
+function startSchedulerLockHolder({ applicationName, label, lockStatement, readyMarker }) {
   let exited = false;
   let output = "";
   let readySettled = false;
@@ -534,11 +539,11 @@ function startSchedulerScoringLockHolder() {
       child.kill("SIGKILL");
       if (!readySettled) {
         readySettled = true;
-        rejectReady(new Error("Scheduler scoring lock holder exceeded its output budget."));
+        rejectReady(new Error(`${label} exceeded its output budget.`));
       }
       return;
     }
-    if (!readySettled && output.includes(schedulerScoringLockReadyMarker)) {
+    if (!readySettled && output.includes(readyMarker)) {
       readySettled = true;
       resolveReady();
     }
@@ -550,15 +555,15 @@ function startSchedulerScoringLockHolder() {
       exited = true;
       if (!readySettled) {
         readySettled = true;
-        rejectReady(new Error("Scheduler scoring lock holder could not start."));
+        rejectReady(new Error(`${label} could not start.`));
       }
-      rejectClose(new Error("Scheduler scoring lock holder could not start."));
+      rejectClose(new Error(`${label} could not start.`));
     });
     child.once("close", (code, signal) => {
       exited = true;
       if (!readySettled) {
         readySettled = true;
-        rejectReady(new Error("Scheduler scoring lock holder exited before readiness."));
+        rejectReady(new Error(`${label} exited before readiness.`));
       }
       resolveClose(Object.freeze({ code, signal }));
     });
@@ -566,13 +571,10 @@ function startSchedulerScoringLockHolder() {
   void ready.catch(() => undefined);
   void closed.catch(() => undefined);
   child.stdin.write(`BEGIN;
-SET LOCAL application_name = 'viberacing-jobs-scheduler-scoring-holder';
+SET LOCAL application_name = '${applicationName}';
 SET LOCAL ROLE viberacing_owner;
-SELECT lock_record.capability
-FROM viberacing_private.maintenance_locks AS lock_record
-WHERE lock_record.capability = 'community_scoring_refresh'
-FOR UPDATE;
-\\echo ${schedulerScoringLockReadyMarker}
+${lockStatement}
+\\echo ${readyMarker}
 `);
   return Object.freeze({
     child,
@@ -585,7 +587,31 @@ FOR UPDATE;
   });
 }
 
-async function stopSchedulerScoringLockHolder(holder, commit) {
+function startSchedulerScoringLockHolder() {
+  return startSchedulerLockHolder({
+    applicationName: "viberacing-jobs-scheduler-scoring-holder",
+    label: "Scheduler scoring lock holder",
+    lockStatement: `SELECT lock_record.capability
+FROM viberacing_private.maintenance_locks AS lock_record
+WHERE lock_record.capability = 'community_scoring_refresh'
+FOR UPDATE;`,
+    readyMarker: schedulerScoringLockReadyMarker,
+  });
+}
+
+function startSchedulerPartialWriteLockHolder() {
+  return startSchedulerLockHolder({
+    applicationName: "viberacing-jobs-scheduler-partial-write-holder",
+    label: "Scheduler partial-write lock holder",
+    lockStatement: `SELECT pg_catalog.pg_advisory_xact_lock(
+  ${schedulerPartialWriteLockClassId},
+  ${schedulerPartialWriteLockObjectId}
+);`,
+    readyMarker: schedulerPartialWriteLockReadyMarker,
+  });
+}
+
+async function stopSchedulerLockHolder(holder, commit, label) {
   if (!holder.hasExited()) {
     holder.release(commit);
   }
@@ -594,7 +620,7 @@ async function stopSchedulerScoringLockHolder(holder, commit) {
     result = await waitWithDeadline(
       holder.closed,
       schedulerProcessCloseTimeoutMs,
-      "Scheduler scoring lock holder did not close within its fixed deadline.",
+      `${label} did not close within its fixed deadline.`,
     );
   } catch (error) {
     if (!holder.hasExited()) {
@@ -602,14 +628,20 @@ async function stopSchedulerScoringLockHolder(holder, commit) {
       await waitWithDeadline(
         holder.closed,
         schedulerProcessCloseTimeoutMs,
-        "Scheduler scoring lock holder did not close after forced test cleanup.",
+        `${label} did not close after forced test cleanup.`,
       ).catch(() => undefined);
     }
     throw error;
   }
-  if (commit) {
-    assert.deepEqual(result, { code: 0, signal: null });
-  }
+  assert.deepEqual(result, { code: 0, signal: null });
+}
+
+async function stopSchedulerScoringLockHolder(holder, commit) {
+  await stopSchedulerLockHolder(holder, commit, "Scheduler scoring lock holder");
+}
+
+async function stopSchedulerPartialWriteLockHolder(holder, commit) {
+  await stopSchedulerLockHolder(holder, commit, "Scheduler partial-write lock holder");
 }
 
 function schedulerProcessContainerExists() {
@@ -754,6 +786,66 @@ WHERE application_name = 'viberacing-jobs-community-maintenance'
     await sleep(schedulerProcessPollIntervalMs);
   }
   throw new Error("Emitted Jobs scheduler process did not reach its controlled finalization wait.");
+}
+
+async function waitForEmittedSchedulerPartialWriteDatabaseWait() {
+  const deadline = performance.now() + schedulerCycleTimeoutMs;
+  while (performance.now() < deadline) {
+    const state = readSchedulerProcessContainerState();
+    if (!state.Running) {
+      throw new Error(
+        "Emitted Jobs scheduler process exited before the controlled partial-write wait.",
+      );
+    }
+    if (readSchedulerProcessContainerOutput() !== "") {
+      throw new Error(
+        "Emitted Jobs scheduler process produced output before the controlled partial-write wait.",
+      );
+    }
+    const observed = psqlScalar(
+      `SELECT pg_catalog.concat(
+  (
+    SELECT pg_catalog.count(*)
+    FROM pg_catalog.pg_stat_activity
+    WHERE application_name = 'viberacing-jobs-community-maintenance'
+      AND usename = '${jobsLogin}'
+  ),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM pg_catalog.pg_stat_activity
+    WHERE application_name = 'viberacing-jobs-community-maintenance'
+      AND usename = '${jobsLogin}'
+      AND state = 'active'
+      AND wait_event_type = 'Lock'
+      AND wait_event = 'advisory'
+      AND query LIKE '%viberacing_api.finalize_community_season_backlog%'
+  ),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM pg_catalog.pg_locks AS lock_record
+    JOIN pg_catalog.pg_stat_activity AS activity_record
+      ON activity_record.pid = lock_record.pid
+    WHERE activity_record.application_name = 'viberacing-jobs-community-maintenance'
+      AND activity_record.usename = '${jobsLogin}'
+      AND lock_record.locktype = 'advisory'
+      AND NOT lock_record.granted
+      AND lock_record.classid = ${schedulerPartialWriteLockClassId}
+      AND lock_record.objid = ${schedulerPartialWriteLockObjectId}
+  )
+);`,
+      "emitted scheduler partial-write database-wait observation",
+    );
+    if (observed === "1:1:1") {
+      return;
+    }
+    assert.match(observed, /^(?:0:0:0|1:0:[01])$/);
+    await sleep(schedulerProcessPollIntervalMs);
+  }
+  throw new Error(
+    "Emitted Jobs scheduler process did not reach its controlled partial-write wait.",
+  );
 }
 
 async function waitForSchedulerProcessContainerExit() {
@@ -1396,6 +1488,159 @@ SELECT pg_catalog.concat(
   );
 }
 
+function installSchedulerPartialWriteFixture() {
+  psql(
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+
+INSERT INTO viberacing_private.codex_sources (source_id, profile_id)
+VALUES ('${schedulerPartialWriteSourceId}', '${fixture.scoringProfileId}');
+
+INSERT INTO viberacing_private.source_day_values (
+  source_id,
+  codex_reported_date,
+  tokens,
+  accepted_sync_id,
+  accepted_device_id,
+  first_accepted_at,
+  last_accepted_at
+)
+VALUES (
+  '${schedulerPartialWriteSourceId}',
+  DATE '${schedulerPartialWriteSeasonStart}',
+  34567,
+  'syn_' || pg_catalog.repeat('T', 22),
+  'dev_' || pg_catalog.repeat('T', 22),
+  TIMESTAMPTZ '2001-02-13 08:00:00+00',
+  TIMESTAMPTZ '2001-02-13 09:00:00+00'
+);
+
+CREATE FUNCTION viberacing_private.hold_scheduler_partial_write_fixture()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $function$
+BEGIN
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    ${schedulerPartialWriteLockClassId},
+    ${schedulerPartialWriteLockObjectId}
+  );
+  RETURN NEW;
+END
+$function$;
+
+CREATE TRIGGER scheduler_partial_write_fixture
+AFTER INSERT ON viberacing_private.season_daily_scores
+FOR EACH ROW
+WHEN (NEW.season_start = DATE '${schedulerPartialWriteSeasonStart}')
+EXECUTE FUNCTION viberacing_private.hold_scheduler_partial_write_fixture();
+COMMIT;`,
+    "scheduler partial-write fixture installation",
+  );
+  assert.equal(
+    psqlScalar(
+      `SELECT pg_catalog.concat(
+  (
+    SELECT pg_catalog.count(*)
+    FROM pg_catalog.pg_trigger
+    WHERE tgname = 'scheduler_partial_write_fixture'
+      AND NOT tgisinternal
+      AND tgrelid = 'viberacing_private.season_daily_scores'::pg_catalog.regclass
+      AND tgfoid =
+        'viberacing_private.hold_scheduler_partial_write_fixture()'::pg_catalog.regprocedure
+      AND tgtype = 5
+      AND tgqual IS NOT NULL
+  ),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM pg_catalog.pg_proc AS procedure_record
+    JOIN pg_catalog.pg_namespace AS namespace_record
+      ON namespace_record.oid = procedure_record.pronamespace
+    WHERE namespace_record.nspname = 'viberacing_private'
+      AND procedure_record.proname = 'hold_scheduler_partial_write_fixture'
+  )
+);`,
+      "scheduler partial-write fixture catalog verification",
+    ),
+    "1:1",
+    "the disposable post-insert barrier must be installed exactly once",
+  );
+}
+
+function removeSchedulerPartialWriteFixture() {
+  psql(
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+DROP TRIGGER scheduler_partial_write_fixture
+  ON viberacing_private.season_daily_scores;
+DROP FUNCTION viberacing_private.hold_scheduler_partial_write_fixture();
+COMMIT;`,
+    "scheduler partial-write fixture removal",
+  );
+  assert.equal(
+    psqlScalar(
+      `SELECT pg_catalog.concat(
+  (
+    SELECT pg_catalog.count(*)
+    FROM pg_catalog.pg_trigger
+    WHERE tgname = 'scheduler_partial_write_fixture'
+      AND NOT tgisinternal
+  ),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM pg_catalog.pg_proc AS procedure_record
+    JOIN pg_catalog.pg_namespace AS namespace_record
+      ON namespace_record.oid = procedure_record.pronamespace
+    WHERE namespace_record.nspname = 'viberacing_private'
+      AND procedure_record.proname = 'hold_scheduler_partial_write_fixture'
+  )
+);`,
+      "scheduler partial-write fixture removal verification",
+    ),
+    "0:0",
+    "the disposable post-insert barrier must leave no schema residue before retry",
+  );
+}
+
+function assertSchedulerPartialWriteBacklogState(expected, label) {
+  assert.equal(
+    psqlScalar(
+      `SET ROLE viberacing_owner;
+SELECT pg_catalog.concat(
+  COALESCE((
+    SELECT state::text
+    FROM viberacing_private.seasons
+    WHERE season_start = DATE '${schedulerPartialWriteSeasonStart}'
+  ), 'absent'),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.season_entries
+    WHERE season_start = DATE '${schedulerPartialWriteSeasonStart}'
+  ),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.season_daily_scores
+    WHERE season_start = DATE '${schedulerPartialWriteSeasonStart}'
+  ),
+  ':',
+  COALESCE((
+    SELECT tokens::text
+    FROM viberacing_private.source_day_values
+    WHERE source_id = '${schedulerPartialWriteSourceId}'
+      AND codex_reported_date = DATE '${schedulerPartialWriteSeasonStart}'
+  ), 'absent')
+);`,
+      label,
+    ),
+    expected,
+    label,
+  );
+}
+
 async function runEmittedSchedulerStartupCycle({
   cycleLabel,
   expectedSeasonStarts,
@@ -1549,6 +1794,95 @@ async function runEmittedSchedulerCrashCycle({ expectedSeasonStarts, runtimeDire
   }
 }
 
+async function runEmittedSchedulerPartialWriteCrashCycle({
+  expectedSeasonStarts,
+  runtimeDirectory,
+}) {
+  assertSchedulerSeasonStarts(
+    expectedSeasonStarts,
+    "the host clock must retain the reviewed scheduler season targets before partial-write startup",
+  );
+  let containerCreated = false;
+  let fixtureInstalled = false;
+  let holder;
+  let holderReleased = false;
+  try {
+    installSchedulerPartialWriteFixture();
+    fixtureInstalled = true;
+    assertSchedulerPartialWriteBacklogState(
+      "absent:0:0:34567",
+      "the partial-write backlog must begin with only its retained source/day input",
+    );
+    holder = startSchedulerPartialWriteLockHolder();
+    await waitWithDeadline(
+      holder.ready,
+      schedulerProcessCloseTimeoutMs,
+      "Scheduler partial-write lock holder did not become ready.",
+    );
+    createSchedulerProcessContainer(runtimeDirectory);
+    containerCreated = true;
+    requireSuccess(
+      docker(["start", schedulerProcessContainerName], { timeout: 15_000 }),
+      "partial-write scheduler container start",
+    );
+    await waitForEmittedSchedulerPartialWriteDatabaseWait();
+    assertSchedulerSeasonStarts(
+      expectedSeasonStarts,
+      "the host clock must retain the reviewed scheduler season targets through partial-write crash injection",
+    );
+
+    requireSuccess(
+      docker(["kill", "--signal", "SIGKILL", schedulerProcessContainerName], {
+        timeout: 10_000,
+      }),
+      "scheduler partial-write crash injection",
+    );
+    const state = await waitForSchedulerProcessContainerExit();
+    assert.equal(state.Status, "exited");
+    assert.equal(
+      state.ExitCode,
+      137,
+      "SIGKILL must terminate the scheduler after its controlled post-insert wait",
+    );
+    assert.equal(state.OOMKilled, false);
+    assert.equal(state.Error, "");
+    assert.equal(
+      readSchedulerProcessContainerOutput(),
+      "",
+      "the post-write crash must not reflect its transaction or process state",
+    );
+    await waitForEmittedSchedulerSessionRelease();
+    await stopSchedulerPartialWriteLockHolder(holder, false);
+    holderReleased = true;
+    assertSchedulerPartialWriteBacklogState(
+      "absent:0:0:34567",
+      "the post-write process loss must roll back the season and every materialized projection row",
+    );
+    assertEmittedSchedulerTerminalMarkerArmed(
+      "the post-write terminated cycle must not reach the later terminal reset",
+    );
+    removeSchedulerProcessContainer(false);
+    containerCreated = false;
+  } finally {
+    try {
+      if (holder !== undefined && !holderReleased) {
+        await stopSchedulerPartialWriteLockHolder(holder, false).catch(() => undefined);
+      }
+    } finally {
+      try {
+        if (containerCreated || schedulerProcessContainerExists()) {
+          removeSchedulerProcessContainer(true);
+          await waitForEmittedSchedulerSessionRelease().catch(() => undefined);
+        }
+      } finally {
+        if (fixtureInstalled) {
+          removeSchedulerPartialWriteFixture();
+        }
+      }
+    }
+  }
+}
+
 async function runEmittedSchedulerProcess({ expectedSeasonStarts }) {
   const runtime = createPortableSchedulerRuntime();
   let backlogExecutionNeedsRestore = false;
@@ -1580,6 +1914,20 @@ async function runEmittedSchedulerProcess({ expectedSeasonStarts }) {
     assertSchedulerBacklogState(
       "finalized:1:7:1",
       "the restarted scheduler must retry and finalize the previously denied backlog job",
+    );
+    rearmEmittedSchedulerTerminalMarker();
+    await runEmittedSchedulerPartialWriteCrashCycle({
+      expectedSeasonStarts,
+      runtimeDirectory: runtime.runtimeDirectory,
+    });
+    await runEmittedSchedulerStartupCycle({
+      cycleLabel: "transaction-recovery",
+      expectedSeasonStarts,
+      runtimeDirectory: runtime.runtimeDirectory,
+    });
+    assertSchedulerPartialWriteBacklogState(
+      "finalized:1:7:34567",
+      "the clean-schema retry must finalize the transactionally rolled-back backlog exactly once",
     );
     rearmEmittedSchedulerTerminalMarker();
     await runEmittedSchedulerStartupCycle({
@@ -2539,6 +2887,27 @@ SELECT pg_catalog.jsonb_build_object(
     WHERE source_id = 'src_' || pg_catalog.repeat('Q', 22)
       AND codex_reported_date = DATE '2001-02-05'
   ),
+  'partialWriteBacklogDailyCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.season_daily_scores
+    WHERE season_start = DATE '${schedulerPartialWriteSeasonStart}'
+  ),
+  'partialWriteBacklogEntryCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.season_entries
+    WHERE season_start = DATE '${schedulerPartialWriteSeasonStart}'
+  ),
+  'partialWriteBacklogSeasonState', (
+    SELECT state
+    FROM viberacing_private.seasons
+    WHERE season_start = DATE '${schedulerPartialWriteSeasonStart}'
+  ),
+  'partialWriteBacklogSourceDayTokens', (
+    SELECT tokens
+    FROM viberacing_private.source_day_values
+    WHERE source_id = '${schedulerPartialWriteSourceId}'
+      AND codex_reported_date = DATE '${schedulerPartialWriteSeasonStart}'
+  ),
   'abandonedInviteCount', (
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.invites
@@ -2736,6 +3105,10 @@ SELECT pg_catalog.jsonb_build_object(
       backlogEntryCount: 1,
       backlogSeasonState: "finalized",
       backlogSourceDayTokens: 23456,
+      partialWriteBacklogDailyCount: integrationMode === "scheduler_process" ? 7 : 0,
+      partialWriteBacklogEntryCount: integrationMode === "scheduler_process" ? 1 : 0,
+      partialWriteBacklogSeasonState: integrationMode === "scheduler_process" ? "finalized" : null,
+      partialWriteBacklogSourceDayTokens: integrationMode === "scheduler_process" ? 34567 : null,
       abandonedInviteCount: 0,
       abandonedProfileCount: 0,
       abandonedSessionCount: 0,
@@ -2780,7 +3153,7 @@ SELECT pg_catalog.jsonb_build_object(
           : integrationMode === "scheduler_lifecycle"
             ? "Jobs scheduler lifecycle PostgreSQL integration passed (active-call settlement, no later scheduler job, graceful close, and exact final state)."
             : integrationMode === "scheduler_process"
-              ? "Emitted Jobs scheduler PostgreSQL integration passed (controlled backlog denial, active-finalization SIGKILL cancellation, unchanged pre-retry state, later terminal-job settlement, harness-restored authority, successful restart retry, three OS SIGTERMs, one OS SIGKILL, two silent post-crash cycles, released sessions, immutable reused runtime, and exact stored state)."
+              ? "Emitted Jobs scheduler PostgreSQL integration passed (controlled backlog denial, pre-write and post-write SIGKILL cancellation, transactional rollback, later terminal-job settlement, harness-restored authority, successful clean-schema retries, four OS SIGTERMs, two OS SIGKILLs, three silent post-crash cycles, released sessions, immutable reused runtime, and exact stored state)."
               : integrationMode === "scheduler_wall_clock_process"
                 ? "Emitted Jobs scheduler wall-clock PostgreSQL integration passed (real host-timer recurring refresh, OS SIGTERM, active-refresh settlement, silent code-0 exit, released session, immutable runtime, and exact stored state)."
                 : integrationMode === "scheduler_signal_process"

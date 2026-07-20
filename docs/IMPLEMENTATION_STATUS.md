@@ -74,20 +74,26 @@ leaves the backlog unchanged, reaches the later terminal marker, and exits with 
 `SIGTERM`. The harness restores and verifies the grant, rearms the marker, holds the scoring mutex,
 and starts the same runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`,
 requires exit 137 plus session release, and proves the backlog and marker remain unchanged. After
-releasing the holder, a restart finalizes the backlog before a silent code-0 signal exit. A final
-rearm/restart proves another silent repeated cycle, with session cleanup after all four starts, an
-unchanged runtime fingerprint, and the same exact state. A fifth uses the same bounded runtime shape
-and leaves the native clock and minute timer unchanged. After startup it holds the scoring mutex
-until refresh is active in a later real five-minute slot, delivers an OS `SIGTERM`, releases the
-mutex, and proves refresh settlement with a newer timestamp, silent code-0 exit, session release,
-and an unchanged runtime fingerprint. A sixth holds the emitted first finalization call, delivers an
-OS `SIGTERM`, and proves graceful settlement, no later job, silent code-0 exit, session release, and
-an unchanged runtime fingerprint. The injected-timer result still does not prove host-timer
-delivery. The fourth gate proves local failure/crash containment, later-job continuation, successful
-restart retry, a later repeated restart, three graceful post-startup `SIGTERM` settlements, and one
-abrupt active-call `SIGKILL` exit; the fifth proves one local wall-clock recurring refresh plus
-active-call signal settlement. None proves partial-write recovery, automatic privilege repair, a
-deployed signal route, controller/orchestrator grace policy, managed restart, or durable/deployed
+releasing the holder, a restart finalizes the backlog before a silent code-0 signal exit. It then
+rearms the marker and installs a disposable post-insert barrier for a second backlog. The same
+runtime reaches that barrier after its first daily projection insert; a second `SIGKILL` must
+release the session and roll back the season plus all projection rows while retaining the source/day
+input and marker. The harness removes the test trigger/function, verifies no schema residue, and a
+clean-schema restart finalizes that backlog exactly once. A final rearm/restart proves another
+silent repeated cycle, with session cleanup after all six starts, an unchanged runtime fingerprint,
+and the same exact state. A fifth uses the same bounded runtime shape and leaves the native clock
+and minute timer unchanged. After startup it holds the scoring mutex until refresh is active in a
+later real five-minute slot, delivers an OS `SIGTERM`, releases the mutex, and proves refresh
+settlement with a newer timestamp, silent code-0 exit, session release, and an unchanged runtime
+fingerprint. A sixth holds the emitted first finalization call, delivers an OS `SIGTERM`, and proves
+graceful settlement, no later job, silent code-0 exit, session release, and an unchanged runtime
+fingerprint. The injected-timer result still does not prove host-timer delivery. The fourth gate
+proves local failure/crash containment, later-job continuation, successful clean-schema retries, a
+later repeated restart, four graceful post-startup `SIGTERM` settlements, two abrupt active-call
+`SIGKILL` exits, and one controlled uncommitted post-insert PostgreSQL transaction rollback; the
+fifth proves one local wall-clock recurring refresh plus active-call signal settlement. None proves
+recovery from committed/external side effects or every Jobs capability, automatic privilege repair,
+a deployed signal route, controller/orchestrator grace policy, managed restart, or durable/deployed
 cadence. A separate exact-default-off one-shot migration runner now loads only the canonical
 repository catalog, verifies closed manifest/file inventory plus every SHA-256 digest, creates one
 maximum-one pool, and probes a distinct login that can set only the NOLOGIN owner group. Under one
@@ -1188,27 +1194,31 @@ ranking, or deployed Jobs scheduler/cadence exists.
   rearms the marker, holds the scoring mutex, and starts the same runtime again. It observes the
   first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus session release, and
   proves the backlog and marker remain unchanged. After releasing the holder, a restart finalizes
-  the backlog before a silent code-0 signal exit. A final rearm/restart requires another silent
-  repeated cycle, no scheduler sessions after any of the four starts, unchanged runtime contents,
-  and the same exact state. A fifth starts the same emitted process with its unchanged native clock
-  and timer from the same bounded runtime shape, holds the scoring mutex after startup, observes
-  refresh in a later real five-minute slot, delivers a real `SIGTERM`, releases the holder, and
-  requires active-refresh settlement, a newer timestamp, silent code-0 exit, session release, and
-  unchanged runtime contents. A sixth constructs the same bounded runtime shape from only the built
-  scheduler, built Jobs runner, and exact 14-package installed production graph and joins only the
-  disposable database network namespace. It holds the emitted first finalization call, observes the
-  exact lock wait, delivers a real `SIGTERM`, releases the holder before the database deadline, and
-  proves active-call settlement without refresh or a later job, silent code-0 exit, session release,
-  unchanged runtime contents, and the shared final state after the seventeen omitted commands run
-  separately. The fourth check proves local failure/crash containment, later-job continuation,
-  successful restart retry, a later repeated restart, three graceful post-startup `SIGTERM`
-  settlements, and one abrupt active-call `SIGKILL` exit; the fifth proves one local host-timer
-  recurring refresh plus active-call OS-signal settlement. These checks do not prove partial-write
-  recovery, automatic privilege repair, a deployed signal route, controller/orchestrator grace
-  policy, managed restart, representative or deployed backlog recovery, a stable production clock, a
-  replica lease, durable/deployed cadence, production login/TLS, monitoring, capacity, or real-user
-  retention. Secretless CI declares all six scheduler commands, but no hosted pass is claimed from
-  this local tree.
+  the backlog before a silent code-0 signal exit. A disposable post-insert barrier then holds a
+  second backlog after its first daily projection insert; another `SIGKILL` must release the session
+  and roll back every new season/projection row. The barrier is removed and its absence verified
+  before a clean-schema restart finalizes that backlog exactly once. A final rearm/restart requires
+  another silent repeated cycle, no scheduler sessions after any of the six starts, unchanged
+  runtime contents, and the same exact state. A fifth starts the same emitted process with its
+  unchanged native clock and timer from the same bounded runtime shape, holds the scoring mutex
+  after startup, observes refresh in a later real five-minute slot, delivers a real `SIGTERM`,
+  releases the holder, and requires active-refresh settlement, a newer timestamp, silent code-0
+  exit, session release, and unchanged runtime contents. A sixth constructs the same bounded runtime
+  shape from only the built scheduler, built Jobs runner, and exact 14-package installed production
+  graph and joins only the disposable database network namespace. It holds the emitted first
+  finalization call, observes the exact lock wait, delivers a real `SIGTERM`, releases the holder
+  before the database deadline, and proves active-call settlement without refresh or a later job,
+  silent code-0 exit, session release, unchanged runtime contents, and the shared final state after
+  the seventeen omitted commands run separately. The fourth check proves local failure/crash
+  containment, later-job continuation, successful clean-schema retries, a later repeated restart,
+  four graceful post-startup `SIGTERM` settlements, two abrupt active-call `SIGKILL` exits, and one
+  controlled uncommitted post-insert transaction rollback; the fifth proves one local host-timer
+  recurring refresh plus active-call OS-signal settlement. These checks do not prove
+  committed/external-effect or every-capability recovery, automatic privilege repair, a deployed
+  signal route, controller/orchestrator grace policy, managed restart, representative or deployed
+  backlog recovery, a stable production clock, a replica lease, durable/deployed cadence, production
+  login/TLS, monitoring, capacity, or real-user retention. Secretless CI declares all six scheduler
+  commands, but no hosted pass is claimed from this local tree.
 - Forty-six deterministic lock-wait races tag every session and observe every contender in the
   holder's transitive PostgreSQL blocker chain before releasing it. The one pre-restore migration
   overlap holds revision 0039's advisory lock around two exact migration processes, then requires
@@ -1384,22 +1394,27 @@ generic cycle signal, an unchanged backlog, and later terminal-job settlement be
 marker, held the scoring mutex, and started the same runtime again. It observed the first
 finalization lock-wait, received `SIGKILL`, exited 137, released its session, and left the backlog
 plus marker unchanged. After the holder was released, a restart finalized the backlog before a
-silent code-0 signal exit. A final rearm/restart proved another silent repeated cycle, session
-cleanup after all four starts, unchanged runtime contents, and the same exact state. A sixth run
-started the unchanged emitted process from the same bounded runtime shape, observed the startup
-refresh, held the scoring mutex until a native minute-timer callback reached refresh in a later real
-five-minute slot, delivered a real OS `SIGTERM`, released the mutex, and proved active-refresh
-settlement, a newer refresh timestamp, silent code-0 exit, session release, and unchanged runtime
-contents. A seventh run used the same bounded runtime shape, held the emitted first finalization
-call, delivered a real OS `SIGTERM`, and proved graceful active-call settlement, no refresh or later
-job, silent code-0 exit, session release, and unchanged runtime contents before the seventeen
-omitted commands completed the shared exact-state oracle. This is local synthetic application
-evidence including failure/crash containment, later-job continuation, restart retry, a later
-repeated restart, one host-timer recurring refresh, three graceful OS-signal integration paths, and
-one abrupt active-call `SIGKILL` path. It is not partial-write recovery, automatic privilege repair,
-a deployed signal route, controller/orchestrator grace policy, managed restart, production
-credential/TLS result, capacity result, real-user purge, monitoring backend, durable cadence, or
-deployment.
+silent code-0 signal exit. The harness then held a second backlog with a disposable post-insert
+barrier, observed its advisory wait after the first daily projection insert, delivered another
+`SIGKILL`, and proved the uncommitted season, entry, and daily rows rolled back after session
+release. It removed the trigger/function and verified no schema residue before a clean-schema
+restart finalized that backlog exactly once. A final rearm/restart proved another silent repeated
+cycle, session cleanup after all six starts, unchanged runtime contents, and the same exact state. A
+sixth run started the unchanged emitted process from the same bounded runtime shape, observed the
+startup refresh, held the scoring mutex until a native minute-timer callback reached refresh in a
+later real five-minute slot, delivered a real OS `SIGTERM`, released the mutex, and proved
+active-refresh settlement, a newer refresh timestamp, silent code-0 exit, session release, and
+unchanged runtime contents. A seventh run used the same bounded runtime shape, held the emitted
+first finalization call, delivered a real OS `SIGTERM`, and proved graceful active-call settlement,
+no refresh or later job, silent code-0 exit, session release, and unchanged runtime contents before
+the seventeen omitted commands completed the shared exact-state oracle. This is local synthetic
+application evidence including failure/crash containment, later-job continuation, clean-schema
+retry, a later repeated restart, one host-timer recurring refresh, four graceful OS-signal
+integration paths, two abrupt active-call `SIGKILL` paths, and one controlled uncommitted
+post-insert transaction rollback. It is not recovery from committed/external effects or every Jobs
+capability, automatic privilege repair, a deployed signal route, controller/orchestrator grace
+policy, managed restart, production credential/TLS result, capacity result, real-user purge,
+monitoring backend, durable cadence, or deployment.
 
 These checks are defense in depth. They do not prove that a file is safe, fully decode every binary
 format, fully parse/render Mermaid, perform legal analysis, or replace manual staged-diff review and

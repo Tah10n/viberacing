@@ -70,19 +70,23 @@ backlog mutation, and later terminal-job settlement before a code-0 `SIGTERM` ex
 rechecks the exact grant, rearms the marker, holds the scoring mutex, and starts the same runtime
 again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus
 session release, and proves the backlog and marker remain unchanged. After releasing the holder, a
-restart finalizes the backlog before a silent signal exit. A final rearm/restart proves another
-silent repeated cycle, session cleanup after all four starts, runtime immutability, and exact state.
-A fifth runs the unchanged entry point from the same bounded runtime shape, holds the scoring mutex
-after startup, observes a native minute-timer refresh in a later real five-minute slot, delivers an
-OS `SIGTERM`, releases the mutex, and proves active-refresh settlement before silent code-0 exit. A
+restart finalizes the backlog before a silent signal exit. A disposable post-insert barrier then
+holds a second backlog after its first daily projection insert; another `SIGKILL` must release the
+session and roll back that complete transaction. The barrier is removed and verified absent before a
+clean-schema restart finalizes the backlog exactly once. A final rearm/restart proves another silent
+repeated cycle, session cleanup after all six starts, runtime immutability, and exact state. A fifth
+runs the unchanged entry point from the same bounded runtime shape, holds the scoring mutex after
+startup, observes a native minute-timer refresh in a later real five-minute slot, delivers an OS
+`SIGTERM`, releases the mutex, and proves active-refresh settlement before silent code-0 exit. A
 sixth uses the same bounded runtime shape, blocks the emitted first finalization call, delivers an
 OS `SIGTERM`, and proves graceful settlement without starting a later job. The fourth gate proves
-local failure/crash containment, later-job continuation, successful restart retry, a later repeated
-restart, three graceful post-startup `SIGTERM` settlements, and one abrupt active-call `SIGKILL`
-exit; the fifth proves one local host-timer recurring refresh plus active-call signal settlement.
-There is still no partial-write recovery, automatic privilege repair, deployed signal route,
-controller/orchestrator grace, managed restart, production login, durable/deployed cadence, monitor,
-or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
+local failure/crash containment, later-job continuation, successful clean-schema retries, a later
+repeated restart, four graceful post-startup `SIGTERM` settlements, two abrupt active-call `SIGKILL`
+exits, and one controlled uncommitted post-insert transaction rollback; the fifth proves one local
+host-timer recurring refresh plus active-call signal settlement. There is still no
+committed/external-effect or every-capability recovery, automatic privilege repair, deployed signal
+route, controller/orchestrator grace, managed restart, production login, durable/deployed cadence,
+monitor, or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
 implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
 certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
 boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
@@ -380,22 +384,26 @@ cycle signal, no backlog mutation, and later terminal-job settlement before a co
 The harness restores and rechecks the exact grant, rearms the marker, holds the scoring mutex, and
 starts the same runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`,
 requires exit 137 plus session release, and proves the backlog and marker remain unchanged. After
-releasing the holder, a restart finalizes the backlog before a silent signal exit. A final
-rearm/restart requires another silent repeated cycle, session cleanup after all four starts, runtime
-fingerprint revalidation, and the same exact state. The timer mode does not prove host-timer
-delivery, and the lifecycle mode by itself does not prove OS-signal delivery. The fifth uses the
-same bounded runtime shape, leaves the native clock/timer unchanged, waits for startup, and holds
-the scoring mutex until refresh reaches it in a later real five-minute slot. It delivers a real
-`SIGTERM`, releases the mutex, and requires active-refresh settlement, a newer timestamp, silent
-exit code 0, session release, and runtime fingerprint revalidation. The sixth uses the same bounded
-runtime shape, holds the emitted first finalization call, and delivers a real `SIGTERM`. It requires
-graceful active-call settlement, no refresh or later job, silent exit code 0, session release, and
-an unchanged runtime fingerprint before the seventeen omitted commands complete the shared
-final-state oracle. These prove local failure/crash containment and restart retry plus three
-graceful Docker-delivered Linux signal paths, one abrupt active-call `SIGKILL` path, and one native
-host-timer callback. They do not prove partial-write recovery, automatic privilege repair, a
-deployed-controller restart, orchestrator grace policy, durable/deployed cadence, production
-credentials/TLS, monitoring, capacity, or real-user retention.
+releasing the holder, a restart finalizes the backlog before a silent signal exit. A disposable
+post-insert barrier then holds a second backlog after its first projection insert; another `SIGKILL`
+must roll back the complete transaction. The barrier is removed and verified absent before a
+clean-schema restart finalizes that backlog exactly once. A final rearm/restart requires another
+silent repeated cycle, session cleanup after all six starts, runtime fingerprint revalidation, and
+the same exact state. The timer mode does not prove host-timer delivery, and the lifecycle mode by
+itself does not prove OS-signal delivery. The fifth uses the same bounded runtime shape, leaves the
+native clock/timer unchanged, waits for startup, and holds the scoring mutex until refresh reaches
+it in a later real five-minute slot. It delivers a real `SIGTERM`, releases the mutex, and requires
+active-refresh settlement, a newer timestamp, silent exit code 0, session release, and runtime
+fingerprint revalidation. The sixth uses the same bounded runtime shape, holds the emitted first
+finalization call, and delivers a real `SIGTERM`. It requires graceful active-call settlement, no
+refresh or later job, silent exit code 0, session release, and an unchanged runtime fingerprint
+before the seventeen omitted commands complete the shared final-state oracle. These prove local
+failure/crash containment and clean-schema retry plus four graceful Docker-delivered Linux signal
+paths, two abrupt active-call `SIGKILL` paths, one controlled uncommitted post-insert transaction
+rollback, and one native host-timer callback. They do not prove committed/external-effect or
+every-capability recovery, automatic privilege repair, a deployed-controller restart, orchestrator
+grace policy, durable/deployed cadence, production credentials/TLS, monitoring, capacity, or
+real-user retention.
 
 The emitted process accepts no arguments and remains disabled unless the runtime supplies exact
 `VIBERACING_JOBS_SCHEDULER_ENABLED=true`. That latch is read before the Jobs runner or any database

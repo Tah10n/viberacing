@@ -669,16 +669,20 @@ unchanged backlog, and later terminal reset before a code-0 `SIGTERM` exit. The 
 rechecks the exact grant, rearms the marker, holds the scoring mutex, and starts the same runtime
 again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus
 session release, and proves the backlog and marker remain unchanged. After releasing the holder, a
-restart finalizes the backlog before a silent code-0 signal exit. A final rearm/restart proves
-another silent repeated cycle, session cleanup after all four starts, runtime immutability, and
-exact state. A sixth runs that unchanged entry point from the same bounded runtime shape, holds the
-scoring mutex after startup, observes a native minute-timer refresh in a later real five-minute
-slot, delivers an OS `SIGTERM`, releases the mutex, and proves active-refresh settlement before
-silent code-0 exit. A seventh pinned-Linux gate delivers an OS `SIGTERM` while finalization is
-active and proves graceful settlement without a later job. These supply local
-failure/crash-containment, restart-retry, host-timer, and OS-signal evidence, not partial-write
-recovery, automatic privilege repair, a deployed controller/orchestrator grace policy, production
-login/TLS, durable/deployed cadence, monitoring, capacity, or real-user purge evidence.
+restart finalizes the backlog before a silent code-0 signal exit. A disposable post-insert barrier
+then holds a second backlog; another `SIGKILL` must roll back its whole projection transaction. The
+barrier is removed and verified absent before a clean-schema restart finalizes that backlog exactly
+once. A final rearm/restart proves another silent repeated cycle, session cleanup after all six
+starts, runtime immutability, and exact state. A sixth runs that unchanged entry point from the same
+bounded runtime shape, holds the scoring mutex after startup, observes a native minute-timer refresh
+in a later real five-minute slot, delivers an OS `SIGTERM`, releases the mutex, and proves
+active-refresh settlement before silent code-0 exit. A seventh pinned-Linux gate delivers an OS
+`SIGTERM` while finalization is active and proves graceful settlement without a later job. These
+supply local failure/crash-containment, clean-schema retry, one controlled uncommitted post-insert
+transaction rollback, host-timer, and OS-signal evidence, not committed/external-effect or
+every-capability recovery, automatic privilege repair, a deployed controller/orchestrator grace
+policy, production login/TLS, durable/deployed cadence, monitoring, capacity, or real-user purge
+evidence.
 
 Revision 0009 materializes only an open Community season. It binds each ISO Monday-through-Sunday
 season to immutable `community_v1` parameters, sums current eligible source/day values with numeric
@@ -1119,9 +1123,10 @@ something the script silently broadens or repairs.
   plus audited corrections. The pinned-Linux emitted signal gate proves one local OS `SIGTERM` while
   the first finalization call is lock-waiting, the separate native-timer gate proves one local
   recurring refresh settles through OS `SIGTERM`, and the startup gate proves local failure
-  containment, later-job continuation, one injected active-call process loss, a successful restart
-  retry, a later repeated restart, three graceful post-catalog `SIGTERM` settlements, and one abrupt
-  `SIGKILL` exit. The evidence still does not provide partial-write recovery, automatic privilege
+  containment, later-job continuation, two injected active-call process losses, clean-schema
+  retries, a later repeated restart, four graceful post-catalog `SIGTERM` settlements, two abrupt
+  `SIGKILL` exits, and one controlled uncommitted post-insert transaction rollback. The evidence
+  still does not provide committed/external-effect or every-capability recovery, automatic privilege
   repair, a deployed signal route, controller/orchestrator grace policy, managed restart, durable
   cadence, production configuration, or deployed evidence.
 - Integrate the bounded database adapter and local score/race/status routes with a

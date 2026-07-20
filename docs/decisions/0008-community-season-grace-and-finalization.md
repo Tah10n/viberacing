@@ -75,10 +75,11 @@ private usage evidence until the existing 30-day cleanup boundary runs. ADR 0063
 default-off in-memory local catalog plus fixed-clock core composition, directly injected
 repeated-timer execution and lifecycle settlement, real-clock emitted-process restart and
 post-startup signal settlement, and later native-timer plus active-call OS-signal paths. Those
-emitted paths prove one local recurring callback, three graceful local emitted signal paths, and one
-abrupt active-call crash path, not deployed OS-signal routing or controller/orchestrator grace, a
-deployed cleanup cadence, monitoring, deletion-worker operation, backup policy, or production
-retention evidence. Those remain required before real-user ingestion.
+emitted paths prove one local recurring callback, four graceful local emitted signal paths, two
+abrupt active-call crash paths, and one controlled uncommitted post-insert transaction rollback, not
+deployed OS-signal routing or controller/orchestrator grace, a deployed cleanup cadence, monitoring,
+deletion-worker operation, backup policy, or production retention evidence. Those remain required
+before real-user ingestion.
 
 The 48-hour window deliberately favors ordinary delayed sync over immediate leaderboard closure. It
 does not verify Community input, make a score authoritative OpenAI data, or justify prizes, money,

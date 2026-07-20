@@ -676,21 +676,25 @@ signal, no backlog mutation, and later terminal-job settlement before a code-0 `
 restores and rechecks the exact grant, rearms the marker, holds the scoring mutex, and starts the
 same runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit
 137 plus session release, and proves the backlog and marker remain unchanged. After releasing the
-holder, a restart finalizes the backlog before a silent code-0 signal exit. A final rearm/restart
-proves another silent repeated cycle, session cleanup after all four starts, runtime-fingerprint
+holder, a restart finalizes the backlog before a silent code-0 signal exit. A disposable post-insert
+barrier then holds a second backlog after its first daily projection insert; another `SIGKILL` must
+release the session and roll back every new projection row. The barrier is removed and verified
+absent before a clean-schema restart finalizes the backlog exactly once. A final rearm/restart
+proves another silent repeated cycle, session cleanup after all six starts, runtime-fingerprint
 revalidation, and exact state. A sixth uses the same bounded runtime shape, leaves the native
 clock/timer unchanged, holds the scoring mutex after startup, and observes a refresh in a later real
 five-minute slot. It delivers an OS `SIGTERM`, releases the mutex, and requires active-refresh
 settlement, a newer timestamp, silent code-0 exit, session release, and runtime-fingerprint
 revalidation. A seventh uses the same bounded runtime shape, holds the first finalization call,
 delivers an OS `SIGTERM`, and proves graceful settlement without starting refresh or a later job.
-The fifth gate proves local failure/crash containment, later-job continuation, successful restart
-retry, a later repeated restart, three graceful post-startup `SIGTERM` settlements, and one abrupt
-active-call `SIGKILL` exit; the sixth proves one local host-timer recurring refresh plus active-call
-signal settlement. No partial-write recovery, automatic privilege repair, deployed signal route or
-scheduler, controller/orchestrator grace, managed restart, representative backlog/capacity result,
-external audit sink, production login/certificate, audited correction, tombstone/restore replay,
-deployed route, or public cache exists.
+The fifth gate proves local failure/crash containment, later-job continuation, successful
+clean-schema retries, a later repeated restart, four graceful post-startup `SIGTERM` settlements,
+two abrupt active-call `SIGKILL` exits, and one controlled uncommitted post-insert transaction
+rollback; the sixth proves one local host-timer recurring refresh plus active-call signal
+settlement. No committed/external-effect or every-capability recovery, automatic privilege repair,
+deployed signal route or scheduler, controller/orchestrator grace, managed restart, representative
+backlog/capacity result, external audit sink, production login/certificate, audited correction,
+tombstone/restore replay, deployed route, or public cache exists.
 
 ## CarRecipe proposal origins and browser approval
 

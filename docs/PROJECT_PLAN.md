@@ -290,23 +290,28 @@ flowchart LR
   mutex, and starts the same runtime again. It observes the first finalization lock-wait, delivers
   `SIGKILL`, requires exit 137 plus session release, and proves the backlog and marker remain
   unchanged. After releasing the holder, a restart finalizes the backlog before a silent code-0
-  signal exit. A final rearm/restart proves another silent repeated cycle, session cleanup after all
-  four starts, immutable runtime contents, and exact stored state. A fifth integration uses the same
-  bounded runtime shape. It leaves the native clock and minute timer unchanged, waits for startup,
-  holds the scoring mutex until refresh is active in a later real five-minute slot, delivers an OS
-  `SIGTERM`, releases the mutex, and proves refresh settlement, a newer timestamp, silent code-0
-  exit, session release, and immutable runtime contents. A sixth integration uses the same bounded
-  runtime shape, holds the emitted first finalization call, delivers an OS `SIGTERM`, and proves
-  graceful settlement without refresh or any later job. It requires silent code-0 exit, session
-  release, immutable runtime contents, and the same final state after the seventeen omitted commands
-  run separately. The fourth gate proves local failure/crash containment, later-job continuation,
-  successful restart retry, a later repeated restart, three graceful post-startup `SIGTERM`
-  settlements, and one abrupt active-call `SIGKILL` exit; the fifth proves one local host-timer
-  recurring refresh plus active-call signal settlement. Partial-write recovery, automatic privilege
-  repair, a deployed signal route, controller/orchestrator grace policy, managed restart, an
-  external audit sink, durable or deployed cadence, representative or deployed backlog recovery,
-  monitoring, production credentials/TLS, capacity, cache/backup/tombstone purge, restore replay,
-  and deployment remain separate gates.
+  signal exit. A disposable post-insert barrier then holds a second backlog after its first daily
+  projection insert; a second `SIGKILL` must release the session and roll back the new season plus
+  all projection rows while retaining the source/day input and terminal marker. The harness removes
+  the trigger/function, verifies no schema residue, and a clean-schema restart finalizes that
+  backlog exactly once. A final rearm/restart proves another silent repeated cycle, session cleanup
+  after all six starts, immutable runtime contents, and exact stored state. A fifth integration uses
+  the same bounded runtime shape. It leaves the native clock and minute timer unchanged, waits for
+  startup, holds the scoring mutex until refresh is active in a later real five-minute slot,
+  delivers an OS `SIGTERM`, releases the mutex, and proves refresh settlement, a newer timestamp,
+  silent code-0 exit, session release, and immutable runtime contents. A sixth integration uses the
+  same bounded runtime shape, holds the emitted first finalization call, delivers an OS `SIGTERM`,
+  and proves graceful settlement without refresh or any later job. It requires silent code-0 exit,
+  session release, immutable runtime contents, and the same final state after the seventeen omitted
+  commands run separately. The fourth gate proves local failure/crash containment, later-job
+  continuation, successful clean-schema retries, a later repeated restart, four graceful
+  post-startup `SIGTERM` settlements, two abrupt active-call `SIGKILL` exits, and one controlled
+  uncommitted post-insert PostgreSQL transaction rollback; the fifth proves one local host-timer
+  recurring refresh plus active-call signal settlement. Recovery from committed/external effects or
+  every Jobs capability, automatic privilege repair, a deployed signal route,
+  controller/orchestrator grace policy, managed restart, an external audit sink, durable or deployed
+  cadence, representative or deployed backlog recovery, monitoring, production credentials/TLS,
+  capacity, cache/backup/tombstone purge, restore replay, and deployment remain separate gates.
 - Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
 - Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
 - Connector: Rust CLI for Windows, macOS, and Linux.
@@ -1255,15 +1260,19 @@ external TLS/edge, cache, capacity, or operational gate above.
   grant, rearms the marker, holds the scoring mutex, and starts the same runtime again. It observes
   the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus session release, and
   proves the backlog and marker remain unchanged. After releasing the holder, a restart finalizes
-  the backlog before a silent signal exit, and a final restart proves another silent repeated cycle.
-  A fifth uses the same bounded runtime shape, leaves the native clock/timer unchanged, and proves
-  one host-timer refresh in a later real five-minute slot settles through OS `SIGTERM` before silent
-  code-0 exit. A sixth uses the same bounded runtime shape, blocks the emitted first finalization
-  call, delivers an OS `SIGTERM`, and proves graceful active-call settlement plus suppression of
-  every later job. Partial-write recovery, automatic privilege repair, a deployed signal route,
-  controller/orchestrator grace, managed restart, durable/deployed cadence, representative or
-  deployed backlog recovery, capacity, notification, correction, backup purge, and deployed
-  retention evidence remain open.
+  the backlog before a silent signal exit. The same runtime is then killed at a disposable
+  post-insert barrier in a second backlog; session release must roll back the complete projection
+  transaction. The test removes and verifies absence of that barrier before a clean-schema restart
+  finalizes the second backlog exactly once, and a final restart proves another silent repeated
+  cycle. A fifth uses the same bounded runtime shape, leaves the native clock/timer unchanged, and
+  proves one host-timer refresh in a later real five-minute slot settles through OS `SIGTERM` before
+  silent code-0 exit. A sixth uses the same bounded runtime shape, blocks the emitted first
+  finalization call, delivers an OS `SIGTERM`, and proves graceful active-call settlement plus
+  suppression of every later job. The fourth gate proves only one controlled uncommitted post-insert
+  transaction rollback; recovery from committed/external effects or every Jobs capability, automatic
+  privilege repair, a deployed signal route, controller/orchestrator grace, managed restart,
+  durable/deployed cadence, representative or deployed backlog recovery, capacity, notification,
+  correction, backup purge, and deployed retention evidence remain open.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
   gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
   new-source creation while preserving active existing-source pairing, plus CarRecipe proposal

@@ -124,10 +124,10 @@ fixed injected UTC time, directly invokes the production interval handler for a 
 cycle and the lifecycle handler after an active runner call starts, and starts the built entry point
 under the real host clock through one controlled backlog failure, later terminal-job settlement, and
 successful restart retry. Later ADR 0063 failure/retry/restart, native-timer, and active-call
-OS-signal gates prove one local recurring callback, three graceful local emitted signal paths, and
-one abrupt active-call crash path, but these layers still do not prove deployed signal routing or
-controller/orchestrator grace, production cadence/login/TLS, monitoring, backup purge, capacity,
-invite issuance UI, or deployment.
+OS-signal gates prove one local recurring callback, four graceful local emitted signal paths, two
+abrupt active-call crash paths, and one controlled uncommitted post-insert transaction rollback, but
+these layers still do not prove deployed signal routing or controller/orchestrator grace, production
+cadence/login/TLS, monitoring, backup purge, capacity, invite issuance UI, or deployment.
 
 ## References
 

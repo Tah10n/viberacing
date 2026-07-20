@@ -60,8 +60,11 @@ later terminal-job settlement before a code-0 `SIGTERM` exit and session release
 restores and rechecks the grant, rearms the marker, holds the scoring mutex, and starts the same
 runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137
 plus session release, and proves the backlog and marker remain unchanged. After the holder is
-released, a restart finalizes the backlog before a silent code-0 signal exit. It rearms and restarts
-once more to prove a silent repeated cycle, session cleanup after all four starts, runtime
+released, a restart finalizes the backlog before a silent code-0 signal exit. A disposable
+post-insert barrier then holds a second backlog after its first daily projection insert; another
+`SIGKILL` must release the session and roll back that transaction. The barrier is removed and
+verified absent before a clean-schema restart finalizes the backlog exactly once. It rearms and
+restarts once more to prove a silent repeated cycle, session cleanup after all six starts, runtime
 immutability, and exact state. The timer result is not host-timer delivery and the lifecycle result
 is not OS-signal delivery. The fifth uses the same bounded runtime shape, leaves the native
 clock/timer unchanged, holds the scoring mutex only after startup, observes refresh in a later real
@@ -69,9 +72,10 @@ five-minute slot, delivers a real `SIGTERM`, releases the mutex, and proves acti
 settlement, silent code-0 exit, session release, and runtime immutability. The sixth uses the same
 bounded runtime shape, blocks the emitted first finalization call, delivers a real `SIGTERM`, and
 proves graceful settlement without starting refresh or any later job. The fourth is local
-failure/crash-containment, restart-retry, and OS-signal evidence, the fifth is local host-timer plus
-OS-signal evidence, and the sixth is a third graceful local OS-signal path. None proves
-partial-write recovery, automatic privilege repair, a deployed controller or orchestrator grace
+failure/crash-containment, restart-retry, one controlled uncommitted post-insert transaction
+rollback, and OS-signal evidence, the fifth is local host-timer plus OS-signal evidence, and the
+sixth is another graceful local OS-signal path. None proves committed/external-effect or
+every-capability recovery, automatic privilege repair, a deployed controller or orchestrator grace
 policy, a deployed signal route, managed restart, durable/deployed cadence, production
 credential/TLS, monitoring, capacity, or real-user behavior.
 

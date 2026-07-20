@@ -218,13 +218,17 @@ production lifecycle handler after an active runner call starts, and starts the 
 under the real host clock. That emitted gate temporarily denies only this runner's backlog function,
 proves generic failure containment plus later terminal-job execution, restores the exact grant, then
 injects `SIGKILL` during this runner's first finalization lock-wait. It requires exit 137, session
-release, and unchanged pre-retry state before restarting from the same runtime to retry successfully
-and perform one more local restart. A separate unchanged emitted-process gate now observes one
-native minute-timer refresh through this runner in a later real five-minute slot, and a pinned-Linux
-gate delivers one OS `SIGTERM` while a runner call is active. These prove local failure/crash
-containment, restart retry, recurring-refresh, and signal paths, not partial-write recovery,
-automatic privilege repair, deployment-controller restart or orchestrator settlement, durable
-cadence, production TLS/login, capacity, monitoring, real-user retention, or deployment evidence.
+release, and unchanged pre-retry state before restarting from the same runtime to retry
+successfully. It then injects a second `SIGKILL` after a disposable post-insert barrier is reached,
+proves the whole uncommitted projection transaction rolled back, removes the barrier, retries
+through the clean schema, and performs one more local restart. A separate unchanged emitted-process
+gate now observes one native minute-timer refresh through this runner in a later real five-minute
+slot, and a pinned-Linux gate delivers one OS `SIGTERM` while a runner call is active. These prove
+local failure/crash containment, clean-schema retry, one controlled uncommitted post-insert
+transaction rollback, recurring-refresh, and signal paths, not committed/external-effect or
+every-capability recovery, automatic privilege repair, deployment-controller restart or orchestrator
+settlement, durable cadence, production TLS/login, capacity, monitoring, real-user retention, or
+deployment evidence.
 
 ## References
 
