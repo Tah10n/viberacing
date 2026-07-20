@@ -197,8 +197,11 @@ Container references use a human-readable version tag plus a SHA-256 index diges
 verified against the publisher's canonical registry before update. Mutable tags such as `latest` are
 prohibited.
 
-The current PostgreSQL container is local development infrastructure only. Production images will
-have separate build, scanning, SBOM, provenance, and deployment policies.
+The current PostgreSQL container is local development infrastructure only. The separate Node
+container is a test-profile-only Linux runtime for one emitted scheduler signal integration; it
+mounts only a generated production graph read-only, is not a product image, and is not
+redistributed. Production images will have separate build, scanning, SBOM, provenance, and
+deployment policies.
 
 ## Review checklist
 

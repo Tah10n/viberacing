@@ -663,11 +663,12 @@ overlap and same-slot suppression, and verifies the rearmed terminal reset. A fo
 process lifecycle, injects its first handler during the penultimate real database job, and proves
 active-call settlement, no later scheduler job, and exact graceful cleanup. A fifth starts the built
 scheduler entry point under the real host clock, reaches the terminal startup-catalog marker without
-process output, forcibly ends only its persistent test child, and then verifies exact state. No
-host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
-termination, wall-clock recurring process callback, deployed scheduler, external audit sink,
-production login/certificate, audited correction, tombstone/restore replay, deployed route, or
-public cache exists.
+process output, forcibly ends only its persistent test child, and then verifies exact state. A sixth
+mounts a link-free production-only runtime read-only under the pinned Linux Node image, holds the
+first finalization call, delivers an OS `SIGTERM`, and proves graceful settlement without starting
+refresh or a later job. No host-timer recurring callback, controller settlement in the forcibly
+ended child, deployed signal route or scheduler, external audit sink, production login/certificate,
+audited correction, tombstone/restore replay, deployed route, or public cache exists.
 
 ## CarRecipe proposal origins and browser approval
 

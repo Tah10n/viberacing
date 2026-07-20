@@ -51,8 +51,9 @@ system entropy, keyring with the selected Windows/macOS/Linux native-store backe
 Rustls plus the platform certificate verifier. Its active `x86_64-pc-windows-msvc` graph contains 58
 non-workspace packages; the full cross-target Cargo lock graph contains 209 registry packages,
 including mutually exclusive native-store branches. The exact machine inventory remains
-authoritative. `compose.yaml` references an official PostgreSQL image for disposable local
-development; the image is pulled separately and is not redistributed in this source tree.
+authoritative. `compose.yaml` references official PostgreSQL and Node images for disposable local
+database and Linux signal-lifecycle verification; both images are pulled separately and are not
+redistributed in this source tree.
 
 The machine-readable [dependency inventory](docs/reference/dependency-inventory.json) records every
 locked npm package, every future non-workspace Cargo package, and reviewed external CI/container

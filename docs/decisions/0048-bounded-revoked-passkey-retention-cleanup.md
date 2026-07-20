@@ -78,13 +78,13 @@ credential material or select the affected profile.
 
 Residual risk remains: retained pairing/device transaction history, revoked device keys, tombstones,
 caches, backups, and restore replay still need separate policies and evidence. ADR 0050 separately
-bounds fixed pairing-rate-window reset. ADR 0063 supplies only a default-off in-memory local
-catalog, sequential execution, no-overlap lifecycle, fixed-clock core composition, directly injected
+bounds fixed pairing-rate-window reset. ADR 0063 supplies a default-off in-memory local catalog,
+sequential execution, no-overlap lifecycle, fixed-clock core composition, directly injected
 repeated-timer execution and lifecycle settlement, and real-clock emitted-process terminal-marker
-evidence. There is no host-timer delivery, OS-signal delivery, emitted-child controller settlement
-before forced termination, wall-clock recurring process callback, deployed cadence, durable
-missed-slot recovery, monitoring, capacity result, production Jobs login/TLS connection, backup
-purge, or deployed retention proof.
+evidence. There is no host-timer delivery, deployed OS-signal routing, emitted-child controller
+settlement before forced termination, wall-clock recurring process callback, deployed cadence,
+durable missed-slot recovery, monitoring, capacity result, production Jobs login/TLS connection,
+backup purge, or deployed retention proof.
 
 Affected invariants are VR-AUTH-002, VR-AUTH-003, VR-DATA-001, and VR-DELETE-001. Primary attacker
 stories are VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and
@@ -146,9 +146,10 @@ All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler
 runner and clock, exercises this cleanup after provenance/session cleanup in a fixed-clock
 production-core/PostgreSQL cycle, and directly invokes the production interval handler for a
 repeated fixed-clock cycle and the lifecycle handler after an active runner call starts. These
-layers do not prove host-timer delivery, OS-signal delivery, emitted-child controller settlement
-before forced termination, wall-clock recurring process behavior, production cadence/login/TLS,
-monitoring, cache or backup purge, restore replay, capacity, real-user retention, or deployment.
+layers do not prove host-timer delivery, deployed OS-signal routing, emitted-child controller
+settlement before forced termination, wall-clock recurring process behavior, production
+cadence/login/TLS, monitoring, cache or backup purge, restore replay, capacity, real-user retention,
+or deployment.
 
 ## References
 

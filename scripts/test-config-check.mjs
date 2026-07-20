@@ -224,6 +224,7 @@ const requiredNodeSteps = [
   { run: "pnpm run test:migrate:postgres-integration" },
   { run: "pnpm run test:web:postgres-integration" },
   { run: "pnpm run test:ingest:postgres-integration" },
+  { run: "pnpm run test:jobs-scheduler:signal-postgres-integration" },
 ];
 const windowsPortableSteps = [
   {
@@ -271,6 +272,21 @@ assert.match(
     },
   }).join("\n"),
   /Migration, Web, and Ingest PostgreSQL integrations/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      node: {
+        ...goodCiWorkflow.jobs.node,
+        steps: requiredNodeSteps.filter(
+          (step) => step.run !== "pnpm run test:jobs-scheduler:signal-postgres-integration",
+        ),
+      },
+    },
+  }).join("\n"),
+  /OS-signal scheduler integration/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -521,6 +537,20 @@ assert.match(
   /container must be pinned/,
 );
 
+const goodSchedulerSignalService = {
+  image: `node:24.18.0-bookworm-slim@sha256:${"c".repeat(64)}`,
+  profiles: ["test"],
+  restart: "no",
+  command: ["node", "--version"],
+  network_mode: "none",
+  read_only: true,
+  user: "node",
+  cap_drop: ["ALL"],
+  security_opt: ["no-new-privileges:true"],
+  pids_limit: 64,
+  mem_limit: "256m",
+};
+
 assert.deepEqual(
   validateCompose({
     services: {
@@ -537,6 +567,7 @@ assert.deepEqual(
         environment: { POSTGRES_PASSWORD: "local-development-only" },
         tmpfs: ["/var/lib/postgresql:rw,noexec,nosuid,nodev"],
       },
+      "jobs-scheduler-signal-test": goodSchedulerSignalService,
     },
   }),
   [],
@@ -562,9 +593,59 @@ assert.match(
         environment: { POSTGRES_PASSWORD: "local-development-only" },
         tmpfs: ["/var/lib/postgresql:rw"],
       },
+      "jobs-scheduler-signal-test": goodSchedulerSignalService,
     },
   }).join("\n"),
   /must not publish/,
+);
+assert.match(
+  validateCompose({
+    services: {
+      postgres: {
+        image: `postgres:example@sha256:${"b".repeat(64)}`,
+        ports: ["127.0.0.1:54329:5432"],
+        security_opt: ["no-new-privileges:true"],
+        environment: { POSTGRES_PASSWORD: "local-development-only" },
+      },
+      "postgres-test": {
+        image: `postgres:example@sha256:${"b".repeat(64)}`,
+        profiles: ["test"],
+        security_opt: ["no-new-privileges:true"],
+        environment: { POSTGRES_PASSWORD: "local-development-only" },
+        tmpfs: ["/var/lib/postgresql:rw,noexec,nosuid,nodev"],
+      },
+      "jobs-scheduler-signal-test": {
+        ...goodSchedulerSignalService,
+        image: "node:latest",
+        network_mode: "host",
+      },
+    },
+  }).join("\n"),
+  /pin the official Node image[\s\S]*disable networking/,
+);
+assert.match(
+  validateCompose({
+    services: {
+      postgres: {
+        image: `postgres:example@sha256:${"b".repeat(64)}`,
+        ports: ["127.0.0.1:54329:5432"],
+        security_opt: ["no-new-privileges:true"],
+        environment: { POSTGRES_PASSWORD: "local-development-only" },
+      },
+      "postgres-test": {
+        image: `postgres:example@sha256:${"b".repeat(64)}`,
+        profiles: ["test"],
+        security_opt: ["no-new-privileges:true"],
+        environment: { POSTGRES_PASSWORD: "local-development-only" },
+        tmpfs: ["/var/lib/postgresql:rw,noexec,nosuid,nodev"],
+      },
+      "jobs-scheduler-signal-test": {
+        ...goodSchedulerSignalService,
+        entrypoint: ["sh", "-c"],
+      },
+    },
+  }).join("\n"),
+  /exact inert service shape/,
 );
 
 const goodWorkspace = {
@@ -745,4 +826,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (47 cases).");
+console.log("Configuration checker tests passed (50 cases).");

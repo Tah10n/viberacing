@@ -212,7 +212,7 @@ clock, separately composes its production core under fixed injected UTC time wit
 and disposable PostgreSQL, directly invokes its repeated interval handler, directly injects the
 production lifecycle handler after an active runner call starts, and starts the built entry point
 under the real host clock through its terminal startup-catalog marker without process output.
-Host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
+Host-timer delivery, deployed OS-signal routing, emitted-child controller settlement before forced
 termination, a wall-clock recurring process callback, production TLS/login, capacity, monitoring,
 real-user retention, and deployment evidence remain required before those behaviors may be claimed.
 

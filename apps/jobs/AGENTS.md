@@ -47,6 +47,7 @@ pnpm run test:jobs-scheduler:postgres-integration
 pnpm run test:jobs-scheduler:timer-postgres-integration
 pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 pnpm run test:jobs-scheduler:process-postgres-integration
+pnpm run test:jobs-scheduler:signal-postgres-integration
 pnpm run verify
 ```
 

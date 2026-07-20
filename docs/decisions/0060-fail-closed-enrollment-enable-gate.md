@@ -24,8 +24,8 @@ disabling returning passkey login, restricted recovery, logout, or authenticated
 The database currently has bounded retention for expired authentication challenges and sessions, and
 the exact abandoned-enrollment command is in a separate default-off local scheduler catalog. There
 is fixed-clock composition, directly injected repeated-timer execution and lifecycle settlement, and
-real-clock emitted-process terminal-marker evidence, but no host-timer delivery, OS-signal delivery,
-emitted-child controller settlement before forced termination, wall-clock recurring process
+real-clock emitted-process terminal-marker evidence, but no host-timer delivery, deployed OS-signal
+routing, emitted-child controller settlement before forced termination, wall-clock recurring process
 callback, or deployed cadence. A disabled switch therefore must not claim to delete a pending OAuth
 continuation, passkey challenge, redeemed invite, or `enrolling` profile.
 

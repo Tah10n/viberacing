@@ -87,6 +87,7 @@
     "test:jobs-scheduler:lifecycle-postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler-lifecycle",
     "test:jobs-scheduler:process-postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler-process",
     "test:jobs-scheduler:postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler",
+    "test:jobs-scheduler:signal-postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler-signal-process",
     "test:jobs-scheduler:timer-postgres-integration": "node scripts/test-jobs-postgres-integration.mjs --scheduler-timer",
     "test:migrate": "pnpm --filter @viberacing/migrate run test",
     "test:migrate:coverage": "pnpm --filter @viberacing/migrate run test:coverage",

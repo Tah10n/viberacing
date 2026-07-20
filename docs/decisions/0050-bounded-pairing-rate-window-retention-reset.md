@@ -75,14 +75,14 @@ that failure on a later row restores every earlier row in the same invocation.
 
 The self-asserted client ID remains cheap rate shaping, not authentication, a stable person/device
 identity, or a trusted network signal. The 130 rows themselves remain for the lifetime of the
-capability. ADR 0063 supplies only a default-off in-memory local catalog, sequential execution,
+capability. ADR 0063 supplies a default-off in-memory local catalog, sequential execution,
 no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer execution and
 lifecycle settlement, and real-clock emitted-process terminal-marker evidence. Trusted edge limits,
-capacity evidence, host-timer delivery, OS-signal delivery, emitted-child controller settlement
-before forced termination, wall-clock recurring process behavior, deployed cadence, durable
-missed-slot recovery, monitoring, production Jobs login/TLS, real-user evidence, and deployment
-remain absent. Keyed deletion tombstones, caches, backups, and restore replay still require separate
-policies and proof.
+capacity evidence, host-timer delivery, deployed OS-signal routing, emitted-child controller
+settlement before forced termination, wall-clock recurring process behavior, deployed cadence,
+durable missed-slot recovery, monitoring, production Jobs login/TLS, real-user evidence, and
+deployment remain absent. Keyed deletion tombstones, caches, backups, and restore replay still
+require separate policies and proof.
 
 Affected invariants are VR-DATA-001 and VR-ABUSE-001. Primary attacker stories are
 VR-ABUSE-PAIRING-HIJACK, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.

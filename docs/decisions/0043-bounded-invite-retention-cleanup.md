@@ -61,15 +61,15 @@ invite underneath an already-running redemption, while the repeated predicates f
 candidate changes before deletion.
 
 Residual risk remains: there is no invite issuance UI, host-timer delivery, wall-clock recurring
-process callback, OS-delivered process-signal/PostgreSQL result, deployed cadence, durable
+process callback, deployed signal route or orchestrator grace policy, deployed cadence, durable
 missed-slot recovery, monitoring, capacity result, production Jobs login/TLS connection,
 backup-expiry proof, or deployed retention policy. ADR 0063 supplies a default-off in-memory local
 catalog, sequential execution, no-overlap lifecycle, fixed-clock core composition, directly injected
-repeated-timer execution and lifecycle settlement, and real-clock emitted-process terminal-marker
-evidence. Emitted-child controller settlement before forced termination remains unproven.
-Tombstones, pairing-referenced sessions, historical passkey/device provenance, and any future
-expiring class still require separate reviewed rules; ADR 0045 separately bounds terminal
-deletion-job retention.
+repeated-timer execution and lifecycle settlement, real-clock emitted-process terminal-marker
+evidence, and one pinned-Linux OS-signal/PostgreSQL path. Emitted-child controller settlement before
+forced termination remains unproven. Tombstones, pairing-referenced sessions, historical
+passkey/device provenance, and any future expiring class still require separate reviewed rules; ADR
+0045 separately bounds terminal deletion-job retention.
 
 Affected invariants are VR-AUTH-001 and VR-DATA-001. Primary attacker stories are
 VR-ABUSE-AUTH-TAKEOVER, VR-ABUSE-DATABASE-ROLE, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -124,9 +124,9 @@ runner and clock, composes its production core with the real runner and disposab
 fixed injected UTC time, directly invokes the production interval handler for a repeated fixed-clock
 cycle and the lifecycle handler after an active runner call starts, and starts the built entry point
 under the real host clock through its terminal startup-catalog marker without process output. These
-layers do not prove host-timer delivery, OS-signal delivery, emitted-child controller settlement
-before forced termination, wall-clock recurring process behavior, production cadence/login/TLS,
-monitoring, backup purge, capacity, invite issuance UI, or deployment.
+layers do not prove host-timer delivery, deployed OS-signal routing, emitted-child controller
+settlement before forced termination, wall-clock recurring process behavior, production
+cadence/login/TLS, monitoring, backup purge, capacity, invite issuance UI, or deployment.
 
 ## References
 

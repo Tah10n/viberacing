@@ -136,10 +136,12 @@ material availability cost.
   real-runner call before injecting its first handler, and proves that call settles without starting
   the later job. A fifth starts the built entry point under real host time, reaches the terminal
   startup-catalog marker without process output, then forcibly ends only its persistent test child.
-  Host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
-  termination, correction authority, a wall-clock recurring process callback, deployed scheduling,
-  production database login/TLS, historical backlog recovery, and operational reconciliation remain
-  unimplemented.
+  A sixth mounts a link-free production-only runtime read-only under the pinned Linux Node image,
+  blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves graceful
+  settlement without starting refresh or a later job. Host-timer delivery, controller settlement in
+  the forcibly ended child, a deployed signal route, correction authority, a wall-clock recurring
+  process callback, deployed scheduling, production database login/TLS, historical backlog recovery,
+  and operational reconciliation remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -876,32 +878,34 @@ material availability cost.
   composes the production process lifecycle, starts an active real-runner call before injecting its
   first handler, and proves graceful settlement without starting the later job. A fifth starts the
   built entry point under the real host clock, reaches the terminal startup-catalog marker without
-  process output, forcibly ends only its persistent test child, and then verifies exact state. These
-  do not prove host-timer delivery, OS-signal delivery, emitted-child controller settlement before
-  forced termination, wall-clock recurring process behavior, deployed cadence, or production-load
-  capacity. The kernel itself has no socket/stream authority. The separate Ingest adapter adds a
-  four-client ceiling, 2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime
-  recycling, exact one-row origin consume, zero-or-one device lookup, and one-row submission
-  results, with destructive release on failure. The transport-free application generates request
-  correlation before verification, submits only after verification, waits for settlement, and
-  contains dependency failures without a retry loop. The local Fastify boundary caps the raw body at
-  8192 bytes, parsed headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests
-  per socket at 16; it sets 5/33/34-second request/handler/connection deadlines and a five-second
-  keep-alive, admits four unsettled application calls without a queue, holds each lease through
-  settlement, and returns generic 503 on exhaustion. Real loopback tests close malformed and partial
-  requests; injection tests cover overload and response policy. The separate host closes that
-  composition under a 36-second first-signal deadline, forces failure on a second
-  signal/deadline/close error, and requires the Railway drain declaration to leave at least four
-  seconds beyond its local close bound. It also stays default-off unless exact
-  `VIBERACING_INGEST_ENABLED=true` is read before every other host/protected-application field or
-  resource; the tracked example remains false. This is no deployed/dynamic kill-switch result. There
-  is no live identity or deployment database integration, distributed rate/backpressure policy,
-  monitoring, or combined capacity evidence. The full synthetic Ingest gate proves controlled
-  four-plus-one no-queue correctness at the first replay-store call and exact settlement after
-  release, then one separate silent built-entry-point request before forced test-child termination.
-  It does not prove OS-signal delivery, graceful emitted-child settlement, representative load, or
-  capacity. Deployed scheduling, cache, scoring/read capacity evidence, quotas, edge shaping, and
-  production load evidence remain unimplemented.
+  process output, forcibly ends only its persistent test child, and then verifies exact state. A
+  sixth holds the emitted first finalization call inside the pinned Linux runtime, delivers an OS
+  `SIGTERM`, and proves silent graceful settlement with no later job. These do not prove host-timer
+  delivery, controller settlement in the forcibly ended child, a deployed signal route, wall-clock
+  recurring process behavior, deployed cadence, or production-load capacity. The kernel itself has
+  no socket/stream authority. The separate Ingest adapter adds a four-client ceiling,
+  2/6/31/32-second checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row
+  origin consume, zero-or-one device lookup, and one-row submission results, with destructive
+  release on failure. The transport-free application generates request correlation before
+  verification, submits only after verification, waits for settlement, and contains dependency
+  failures without a retry loop. The local Fastify boundary caps the raw body at 8192 bytes, parsed
+  headers at 16384 bytes, raw header pairs at 64, connections at 32, and requests per socket at 16;
+  it sets 5/33/34-second request/handler/connection deadlines and a five-second keep-alive, admits
+  four unsettled application calls without a queue, holds each lease through settlement, and returns
+  generic 503 on exhaustion. Real loopback tests close malformed and partial requests; injection
+  tests cover overload and response policy. The separate host closes that composition under a
+  36-second first-signal deadline, forces failure on a second signal/deadline/close error, and
+  requires the Railway drain declaration to leave at least four seconds beyond its local close
+  bound. It also stays default-off unless exact `VIBERACING_INGEST_ENABLED=true` is read before
+  every other host/protected-application field or resource; the tracked example remains false. This
+  is no deployed/dynamic kill-switch result. There is no live identity or deployment database
+  integration, distributed rate/backpressure policy, monitoring, or combined capacity evidence. The
+  full synthetic Ingest gate proves controlled four-plus-one no-queue correctness at the first
+  replay-store call and exact settlement after release, then one separate silent built-entry-point
+  request before forced test-child termination. It does not prove OS-signal delivery, graceful
+  emitted-child settlement, representative load, or capacity. Deployed scheduling, cache,
+  scoring/read capacity evidence, quotas, edge shaping, and production load evidence remain
+  unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
 

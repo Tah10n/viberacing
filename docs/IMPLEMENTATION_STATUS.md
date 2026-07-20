@@ -65,78 +65,82 @@ starts, and requires exact graceful interval/deadline/handler/runner cleanup plu
 afterward does the harness invoke the omitted reset for the shared exact-state oracle. A fourth
 starts the built scheduler entry point under the real host clock, requires host/database UTC-date
 agreement, reaches the terminal startup-catalog marker without process output, forcibly ends only
-its persistent test child, and then verifies the same exact state. The timer result does not prove
-host-timer delivery, the lifecycle result does not prove OS-signal delivery, and the emitted result
-does not prove controller settlement before forced termination. None proves a wall-clock recurring
-process callback or deployed cadence. A separate exact-default-off one-shot migration runner now
-loads only the canonical repository catalog, verifies closed manifest/file inventory plus every
-SHA-256 digest, creates one maximum-one pool, and probes a distinct login that can set only the
-NOLOGIN owner group. Under one fixed session advisory lock it sets the owner role, rereads an exact
-ledger prefix, applies only the missing reviewed SQL bodies sequentially, requires the complete
-ledger, resets the role, and releases the lock. Missing or malformed enablement fails before
-catalog, protected configuration, or pool work; every failure destroys the client and process output
-is generic. Its evidence is 97 injected unit/policy tests at 99.34% statements, 98.59% branches,
-100% functions, and 99.34% lines plus strict build and built disabled-startup checks. A separate
-opt-in synthetic integration runs one widened and two narrow emitted processes against one
-disposable hostname-verified TLS PostgreSQL database. It denies the widened login before schema
-creation, observes both narrow controllers behind one external holder, requires both to converge
-successfully after release, and verifies the exact 39-row ledger, all 28 owner-owned forced-RLS
-private tables, identity invariants, and connection/lock cleanup. It proves no production
-credential/TLS, staging orchestration/rollback, deployed-replica behavior, monitoring, deployment,
-or recovery. A local Ingest kernel now bounds and authenticates the exact Community sync envelope,
-consumes an injected origin nonce, parses bounded JSON, validates the generated contract, and
-strictly verifies the source-bound device request. A separate bounded Ingest PostgreSQL adapter
-revalidates that output and exposes only atomic origin-nonce consumption, device lookup, and
-submission through a probed least-privileged pool. A protected local reader supplies one mandatory
-and one optional rotation origin key directly to the verifier without returning raw configuration. A
-forced-RLS replay tuple, Ingest-only atomic consume, separate Jobs cleanup paths for ingest,
-pairing, authentication, invites, sessions, abandoned enrollments, CarRecipe proposals, finalized
-source/day values, terminal deletion jobs, audit events, aged revoked passkeys, and aged minimized
-revoked devices plus pairing approval-provenance redaction and primary profile deletion now have
-real isolated PostgreSQL evidence. A transport-free Ingest application now composes those exact
-verifier and database capabilities, generates a server-owned request ID, waits for submission, and
-returns only a validated acknowledgement or generic problem decision. A bounded local Fastify server
-factory now preserves exact raw HTTP evidence, admits four application calls without a queue,
-applies fixed parser/header/connection/deadline policies, and serializes only revalidated sync
-acknowledgement/problem contracts. A separate exact-default-off local host composes that factory
-under closed listener and process-lifecycle policy. Its required synthetic PostgreSQL gate now
-closes the imported emitted host after the full request/no-queue matrix, starts the built entry
-point as a separate silent child, proves another accepted request, and forcibly ends only that
-child; it does not prove OS-signal delivery or graceful emitted-child settlement. A library-only
-Rust connector foundation now bounds the stable App Server handshake and a candidate `0.144.5`
-account/usage parser, discarding account/summary fields and returning only bounded normalized daily
-usage in caller memory. An inaccessible one-shot supervisor composes those exact states through
-fixed local pipes, a fixed child argument, no ambient environment, bounded stdout/stderr/time,
-terminal-event draining, and reap-before-success cleanup. An inaccessible reviewed sync context now
-lets a candidate-only composer consume those minimized entries into the exact bounded JSON body,
-SHA-256 digest, nonce encoding, and device-signature message shared with the production Ingest
-verifier. An isolated one-use signer removes public unsigned access, consumes that value only with
-an inaccessible device-bound key capability, and returns the same body plus five exact signed header
-values. The shared synthetic vector is strictly verified across Rust and Ingest. A second
-inaccessible signer and pure Web verifier now agree on an exact synthetic pairing-possession proof.
-A transport-free Web/Auth start application now generates fresh server identifiers, 32-byte
-poll/challenge material, a 60-bit human code, separate protected poll/code verifiers, and a
-nine-minute pending transaction from closed device metadata through one fixed call on the probed
-read-write Web pool. A second activation application derives two fixed-shape HMAC poll-verifier
-candidates, selects at most one approved row, runs that strict proof, and alone invokes exact atomic
-activation with server-owned identifiers behind four-call admission and a 250-millisecond settlement
-floor. The authenticated `/connect` flow supplies browser approval. Two closed local POST routes now
-compose both applications behind one shared four-call admission boundary, versioned request/response
-validation, generic problems, and revision 0022's fixed global-and-64-bucket distributed rate
-windows. Those two connector routes and the two signed-in approval routes now each require exact
-`VIBERACING_PAIRING_ENABLED=true` at module evaluation; the tracked default is false and disabled
-POST reaches no parser, runtime/service, admission acquisition, protected configuration, or database
-work after body cancellation. Independently, the `/connect` page and both browser approval modules
-now resolve exact `VIBERACING_SOURCE_CREATION_ENABLED=true`; the tracked default is false. A
-disabled decision omits new-source UI in EN/RU, retains active existing-source choices, and blocks
-both initiation and completion of a new-source approval in the service. The encrypted five-minute
-challenge and v2 context digest bind exact source choice so a restarted disabled verification module
-also rejects an in-flight new-source challenge before passkey/database completion. Independently,
-the account page, browser proposal create/approve modules, and source-bound device proposal module
-resolve exact `VIBERACING_CAR_PROPOSALS_ENABLED=true`; the tracked default is false. Disabled
-mutation stops before request/runtime/admission/proof/database work, the browser service repeats
-literal-true checks, and EN/RU UI preserves active/private previews plus exact rejection while
-omitting editor/approve. The two enrollment pages and four GitHub/initial-passkey route modules now
+its persistent test child, and then verifies the same exact state. A fifth constructs a link-free
+production-only runtime from the built scheduler, built runner, and exact installed dependency
+graph, mounts it read-only under a pinned Linux Node image, holds the emitted first finalization
+call, delivers an OS `SIGTERM`, and proves graceful settlement, no later job, silent code-0 exit,
+session release, and an unchanged runtime fingerprint. The timer result still does not prove
+host-timer delivery, and the forcibly ended emitted result still does not prove its own controller
+settlement. None proves a wall-clock recurring process callback, deployed signal route, or deployed
+cadence. A separate exact-default-off one-shot migration runner now loads only the canonical
+repository catalog, verifies closed manifest/file inventory plus every SHA-256 digest, creates one
+maximum-one pool, and probes a distinct login that can set only the NOLOGIN owner group. Under one
+fixed session advisory lock it sets the owner role, rereads an exact ledger prefix, applies only the
+missing reviewed SQL bodies sequentially, requires the complete ledger, resets the role, and
+releases the lock. Missing or malformed enablement fails before catalog, protected configuration, or
+pool work; every failure destroys the client and process output is generic. Its evidence is 97
+injected unit/policy tests at 99.34% statements, 98.59% branches, 100% functions, and 99.34% lines
+plus strict build and built disabled-startup checks. A separate opt-in synthetic integration runs
+one widened and two narrow emitted processes against one disposable hostname-verified TLS PostgreSQL
+database. It denies the widened login before schema creation, observes both narrow controllers
+behind one external holder, requires both to converge successfully after release, and verifies the
+exact 39-row ledger, all 28 owner-owned forced-RLS private tables, identity invariants, and
+connection/lock cleanup. It proves no production credential/TLS, staging orchestration/rollback,
+deployed-replica behavior, monitoring, deployment, or recovery. A local Ingest kernel now bounds and
+authenticates the exact Community sync envelope, consumes an injected origin nonce, parses bounded
+JSON, validates the generated contract, and strictly verifies the source-bound device request. A
+separate bounded Ingest PostgreSQL adapter revalidates that output and exposes only atomic
+origin-nonce consumption, device lookup, and submission through a probed least-privileged pool. A
+protected local reader supplies one mandatory and one optional rotation origin key directly to the
+verifier without returning raw configuration. A forced-RLS replay tuple, Ingest-only atomic consume,
+separate Jobs cleanup paths for ingest, pairing, authentication, invites, sessions, abandoned
+enrollments, CarRecipe proposals, finalized source/day values, terminal deletion jobs, audit events,
+aged revoked passkeys, and aged minimized revoked devices plus pairing approval-provenance redaction
+and primary profile deletion now have real isolated PostgreSQL evidence. A transport-free Ingest
+application now composes those exact verifier and database capabilities, generates a server-owned
+request ID, waits for submission, and returns only a validated acknowledgement or generic problem
+decision. A bounded local Fastify server factory now preserves exact raw HTTP evidence, admits four
+application calls without a queue, applies fixed parser/header/connection/deadline policies, and
+serializes only revalidated sync acknowledgement/problem contracts. A separate exact-default-off
+local host composes that factory under closed listener and process-lifecycle policy. Its required
+synthetic PostgreSQL gate now closes the imported emitted host after the full request/no-queue
+matrix, starts the built entry point as a separate silent child, proves another accepted request,
+and forcibly ends only that child; it does not prove OS-signal delivery or graceful emitted-child
+settlement. A library-only Rust connector foundation now bounds the stable App Server handshake and
+a candidate `0.144.5` account/usage parser, discarding account/summary fields and returning only
+bounded normalized daily usage in caller memory. An inaccessible one-shot supervisor composes those
+exact states through fixed local pipes, a fixed child argument, no ambient environment, bounded
+stdout/stderr/time, terminal-event draining, and reap-before-success cleanup. An inaccessible
+reviewed sync context now lets a candidate-only composer consume those minimized entries into the
+exact bounded JSON body, SHA-256 digest, nonce encoding, and device-signature message shared with
+the production Ingest verifier. An isolated one-use signer removes public unsigned access, consumes
+that value only with an inaccessible device-bound key capability, and returns the same body plus
+five exact signed header values. The shared synthetic vector is strictly verified across Rust and
+Ingest. A second inaccessible signer and pure Web verifier now agree on an exact synthetic
+pairing-possession proof. A transport-free Web/Auth start application now generates fresh server
+identifiers, 32-byte poll/challenge material, a 60-bit human code, separate protected poll/code
+verifiers, and a nine-minute pending transaction from closed device metadata through one fixed call
+on the probed read-write Web pool. A second activation application derives two fixed-shape HMAC
+poll-verifier candidates, selects at most one approved row, runs that strict proof, and alone
+invokes exact atomic activation with server-owned identifiers behind four-call admission and a
+250-millisecond settlement floor. The authenticated `/connect` flow supplies browser approval. Two
+closed local POST routes now compose both applications behind one shared four-call admission
+boundary, versioned request/response validation, generic problems, and revision 0022's fixed
+global-and-64-bucket distributed rate windows. Those two connector routes and the two signed-in
+approval routes now each require exact `VIBERACING_PAIRING_ENABLED=true` at module evaluation; the
+tracked default is false and disabled POST reaches no parser, runtime/service, admission
+acquisition, protected configuration, or database work after body cancellation. Independently, the
+`/connect` page and both browser approval modules now resolve exact
+`VIBERACING_SOURCE_CREATION_ENABLED=true`; the tracked default is false. A disabled decision omits
+new-source UI in EN/RU, retains active existing-source choices, and blocks both initiation and
+completion of a new-source approval in the service. The encrypted five-minute challenge and v2
+context digest bind exact source choice so a restarted disabled verification module also rejects an
+in-flight new-source challenge before passkey/database completion. Independently, the account page,
+browser proposal create/approve modules, and source-bound device proposal module resolve exact
+`VIBERACING_CAR_PROPOSALS_ENABLED=true`; the tracked default is false. Disabled mutation stops
+before request/runtime/admission/proof/database work, the browser service repeats literal-true
+checks, and EN/RU UI preserves active/private previews plus exact rejection while omitting
+editor/approve. The two enrollment pages and four GitHub/initial-passkey route modules now
 independently require exact `VIBERACING_ENROLLMENT_ENABLED=true`; the tracked default is false.
 Disabled EN/RU pages omit both forms, HTTP stops before request/runtime/admission/private work, and
 all four service methods repeat literal-true enforcement before OAuth/WebAuthn/database work while
@@ -1129,12 +1133,19 @@ ranking, or deployed Jobs scheduler/cadence exists.
   before invoking the omitted reset separately for the shared state oracle. A fourth integration
   starts the built entry point with exact configuration and the real host clock, requires
   host/database UTC-date agreement, waits for the terminal reset marker, requires no process output,
-  forcibly ends only its persistent test child, and then verifies the same exact state. These checks
-  do not prove host-timer delivery, OS-signal delivery, emitted-child controller settlement before
-  forced termination, a wall-clock recurring process callback, historical backlog, a stable
-  production clock, a replica lease, durable/deployed cadence, production login/TLS, monitoring,
-  capacity, or real-user retention. Secretless CI declares all four scheduler commands, but no
-  hosted pass is claimed from this local tree.
+  forcibly ends only its persistent test child, and then verifies the same exact state. A fifth
+  constructs a link-free runtime from only the built scheduler, built Jobs runner, and exact
+  14-package installed production graph, mounts it read-only under the pinned Linux Node 24.18
+  image, and joins only the disposable database network namespace. It holds the emitted first
+  finalization call, observes the exact lock wait, delivers a real `SIGTERM`, releases the holder
+  before the database deadline, and proves active-call settlement without refresh or a later job,
+  silent code-0 exit, session release, unchanged runtime contents, and the shared final state after
+  the sixteen omitted commands run separately. These checks do not prove host-timer delivery,
+  controller settlement in the forcibly ended child, a deployed signal route or orchestrator grace
+  policy, a wall-clock recurring process callback, historical backlog, a stable production clock, a
+  replica lease, durable/deployed cadence, production login/TLS, monitoring, capacity, or real-user
+  retention. Secretless CI declares all five scheduler commands, but no hosted pass is claimed from
+  this local tree.
 - Forty-five deterministic lock-wait races tag every session and observe every contender in the
   holder's transitive PostgreSQL blocker chain before releasing it. The one pre-restore migration
   overlap holds revision 0039's advisory lock around two exact migration processes, then requires
@@ -1355,7 +1366,7 @@ abandoned-enrollment, audit-event, invitation, CarRecipe-proposal, ingest, final
 pairing, session, terminal-deletion-job, aged revoked-passkey state, and aged minimized
 revoked-device state plus pairing approval-provenance redaction, pairing-rate-window reset, and
 primary deletion, cleanup for remaining expiring state, host-timer delivery and wall-clock recurring
-process execution, OS-delivered graceful process-signal settlement against PostgreSQL, deployed
+process execution, deployed scheduler signal routing and orchestrator grace policy, deployed
 operation of the local Jobs scheduler, a production login/TLS path, audited corrections, deployed
 public-score delivery, successful isolated staging migration orchestration/rollback,
 cache/backup/tombstone purge and restore replay, connector macOS/Linux executable admission,
@@ -1411,6 +1422,7 @@ pnpm run test:jobs-scheduler:postgres-integration
 pnpm run test:jobs-scheduler:timer-postgres-integration
 pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 pnpm run test:jobs-scheduler:process-postgres-integration
+pnpm run test:jobs-scheduler:signal-postgres-integration
 cargo test --workspace --all-targets --all-features --locked
 pnpm run check:web-build
 pnpm run check:public:staged

@@ -77,10 +77,10 @@ implemented or the profile is purged.
 Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
 execution, no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer
 execution and lifecycle settlement, and real-clock emitted-process terminal-marker evidence. There
-is no host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
-termination, wall-clock recurring process callback, deployed cadence, durable missed-slot recovery,
-monitoring, capacity result, production Jobs login/TLS connection, backup-expiry proof, or deployed
-retention policy. Recent activated pairing-referenced sessions, tombstones, and historical
+is no host-timer delivery, deployed OS-signal routing, emitted-child controller settlement before
+forced termination, wall-clock recurring process callback, deployed cadence, durable missed-slot
+recovery, monitoring, capacity result, production Jobs login/TLS connection, backup-expiry proof, or
+deployed retention policy. Recent activated pairing-referenced sessions, tombstones, and historical
 pairing/device rows still need separate reviewed retention evidence. ADR 0045 separately bounds
 terminal deletion-job retention; ADR 0047 bounds the exact approval references after 180 days
 without deleting device history; ADR 0048 deletes only aged unreferenced revoked passkeys; ADR 0050
@@ -143,9 +143,9 @@ command through one disposable narrow login and exact stored state. ADR 0063 sep
 default-off scheduler against a fake runner and clock, proves provenance redaction precedes this
 cleanup in a fixed-clock production-core/PostgreSQL cycle, and directly invokes the production
 interval handler for a repeated fixed-clock cycle and the lifecycle handler after an active runner
-call starts. These layers do not prove host-timer delivery, OS-signal delivery, emitted-child
-controller settlement before forced termination, wall-clock recurring process behavior, production
-cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
+call starts. These layers do not prove host-timer delivery, deployed OS-signal routing,
+emitted-child controller settlement before forced termination, wall-clock recurring process
+behavior, production cadence/login/TLS, monitoring, backup purge, capacity, or deployment.
 
 ## References
 

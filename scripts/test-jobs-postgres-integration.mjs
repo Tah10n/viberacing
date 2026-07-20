@@ -1,13 +1,26 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
 import { createRequire } from "node:module";
-import { resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
+import { parse } from "yaml";
 
 import { validateManifest } from "./check-database.mjs";
+
+// cspell:ignore usename
 
 const root = resolve(import.meta.dirname, "..");
 const projectName = `vr-jobs-it-${process.pid}`;
@@ -34,10 +47,36 @@ const defaultFinalizedSeasonStart = "2000-01-03";
 const schedulerArgument = "--scheduler";
 const schedulerLifecycleArgument = "--scheduler-lifecycle";
 const schedulerProcessArgument = "--scheduler-process";
+const schedulerSignalProcessArgument = "--scheduler-signal-process";
 const schedulerTimerArgument = "--scheduler-timer";
 const schedulerCycleTimeoutMs = 120_000;
 const schedulerProcessCloseTimeoutMs = 10_000;
 const schedulerProcessPollIntervalMs = 250;
+const schedulerSignalContainerImage = (() => {
+  const compose = parse(readFileSync(resolve(root, "compose.yaml"), "utf8"));
+  const image = compose?.services?.["jobs-scheduler-signal-test"]?.image;
+  assert.equal(typeof image, "string");
+  assert.match(image, /^node:24\.18\.0-bookworm-slim@sha256:[a-f0-9]{64}$/);
+  return image;
+})();
+const schedulerSignalContainerName = `${projectName}-scheduler-signal`;
+const schedulerSignalLockReadyMarker = "scheduler-signal-lock-ready";
+const schedulerSignalRuntimeInventory = Object.freeze([
+  "pg-cloudflare@1.4.0",
+  "pg-connection-string@2.14.0",
+  "pg-int8@1.0.1",
+  "pg-pool@3.14.0",
+  "pg-protocol@1.15.0",
+  "pg-types@2.2.0",
+  "pg@8.22.0",
+  "pgpass@1.0.5",
+  "postgres-array@2.0.0",
+  "postgres-bytea@1.0.1",
+  "postgres-date@1.0.7",
+  "postgres-interval@1.2.0",
+  "split2@4.2.0",
+  "xtend@4.0.2",
+]);
 const oneHourMs = 60 * 60 * 1_000;
 const oneDayMs = 24 * oneHourMs;
 
@@ -53,6 +92,9 @@ function readIntegrationMode() {
   }
   if (process.argv.length === 3 && process.argv[2] === schedulerProcessArgument) {
     return "scheduler_process";
+  }
+  if (process.argv.length === 3 && process.argv[2] === schedulerSignalProcessArgument) {
+    return "scheduler_signal_process";
   }
   if (process.argv.length === 3 && process.argv[2] === schedulerTimerArgument) {
     return "scheduler_timer";
@@ -504,6 +546,536 @@ function startEmittedSchedulerProcess(databasePort) {
     hasExited: () => exitObserved,
     outputObserved: () => stdoutObserved || stderrObserved,
   });
+}
+
+function readPackageManifest(packageDirectory, label) {
+  const manifest = JSON.parse(readFileSync(join(packageDirectory, "package.json"), "utf8"));
+  assert.equal(
+    manifest !== null && typeof manifest === "object" && !Array.isArray(manifest),
+    true,
+    `${label} manifest must be one object`,
+  );
+  assert.match(manifest.name, /^(?:@[a-z0-9._-]+\/[a-z0-9._-]+|[a-z0-9._-]+)$/i);
+  assert.match(manifest.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
+  return manifest;
+}
+
+function findInstalledPackageDirectory(resolver, packageName) {
+  let packageEntry;
+  try {
+    packageEntry = resolver.resolve(`${packageName}/package.json`);
+  } catch {
+    packageEntry = resolver.resolve(packageName);
+  }
+
+  let candidate = dirname(packageEntry);
+  while (true) {
+    const manifestPath = join(candidate, "package.json");
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      if (manifest?.name === packageName) {
+        return realpathSync(candidate);
+      }
+    }
+    const parent = dirname(candidate);
+    if (parent === candidate) {
+      throw new Error(`Installed package ${packageName} has no bounded package root.`);
+    }
+    candidate = parent;
+  }
+}
+
+function copyInstalledPackageGraph(
+  sourceDirectory,
+  destinationDirectory,
+  ancestorSources,
+  inventory,
+) {
+  const canonicalSource = realpathSync(sourceDirectory);
+  const manifest = readPackageManifest(canonicalSource, "portable runtime dependency");
+  const packageKey = `${manifest.name}@${manifest.version}`;
+  inventory.add(packageKey);
+
+  cpSync(canonicalSource, destinationDirectory, {
+    dereference: true,
+    filter: (source) => {
+      const nestedPath = relative(canonicalSource, source);
+      return nestedPath !== "node_modules" && !nestedPath.startsWith(`node_modules${sep}`);
+    },
+    recursive: true,
+  });
+
+  const resolver = createRequire(join(canonicalSource, "package.json"));
+  const requiredDependencies = Object.keys(manifest.dependencies ?? {});
+  const optionalDependencies = Object.keys(manifest.optionalDependencies ?? {});
+  const dependencyNames = [...new Set([...requiredDependencies, ...optionalDependencies])].sort();
+  const nextAncestors = new Set(ancestorSources);
+  nextAncestors.add(canonicalSource);
+
+  for (const dependencyName of dependencyNames) {
+    let dependencySource;
+    try {
+      dependencySource = findInstalledPackageDirectory(resolver, dependencyName);
+    } catch (error) {
+      if (optionalDependencies.includes(dependencyName)) {
+        continue;
+      }
+      throw error;
+    }
+    if (nextAncestors.has(dependencySource)) {
+      continue;
+    }
+    copyInstalledPackageGraph(
+      dependencySource,
+      join(destinationDirectory, "node_modules", ...dependencyName.split("/")),
+      nextAncestors,
+      inventory,
+    );
+  }
+}
+
+function fingerprintPortableRuntime(runtimeDirectory) {
+  const fingerprint = createHash("sha256");
+  let fileCount = 0;
+
+  const visit = (directory) => {
+    for (const name of readdirSync(directory).sort()) {
+      const path = join(directory, name);
+      const stat = lstatSync(path);
+      assert.equal(stat.isSymbolicLink(), false, "portable runtime must contain no links");
+      if (stat.isDirectory()) {
+        visit(path);
+        continue;
+      }
+      assert.equal(stat.isFile(), true, "portable runtime accepts only directories and files");
+      const relativePath = relative(runtimeDirectory, path).split(sep).join("/");
+      fingerprint.update(relativePath);
+      fingerprint.update("\0");
+      fingerprint.update(readFileSync(path));
+      fingerprint.update("\0");
+      fileCount += 1;
+    }
+  };
+
+  visit(runtimeDirectory);
+  assert.equal(
+    fileCount > 20 && fileCount < 500,
+    true,
+    "portable runtime file count must be bounded",
+  );
+  return Object.freeze({ digest: fingerprint.digest("hex"), fileCount });
+}
+
+function createPortableSchedulerRuntime() {
+  const targetDirectory = resolve(root, "target");
+  mkdirSync(targetDirectory, { recursive: true });
+  const runtimeDirectory = mkdtempSync(join(targetDirectory, "jobs-scheduler-signal-runtime-"));
+  try {
+    const schedulerDirectory = resolve(root, "apps", "jobs-scheduler");
+    const jobsDirectory = resolve(root, "apps", "jobs");
+    const schedulerManifest = readPackageManifest(schedulerDirectory, "scheduler workspace");
+    const jobsManifest = readPackageManifest(jobsDirectory, "Jobs workspace");
+    assert.deepEqual(schedulerManifest.dependencies, { "@viberacing/jobs": "workspace:*" });
+    assert.deepEqual(jobsManifest.dependencies, { pg: "8.22.0" });
+
+    cpSync(join(schedulerDirectory, "package.json"), join(runtimeDirectory, "package.json"));
+    cpSync(join(schedulerDirectory, "dist"), join(runtimeDirectory, "dist"), {
+      dereference: true,
+      recursive: true,
+    });
+
+    const portableJobsDirectory = join(runtimeDirectory, "node_modules", "@viberacing", "jobs");
+    mkdirSync(portableJobsDirectory, { recursive: true });
+    cpSync(join(jobsDirectory, "package.json"), join(portableJobsDirectory, "package.json"));
+    cpSync(join(jobsDirectory, "dist"), join(portableJobsDirectory, "dist"), {
+      dereference: true,
+      recursive: true,
+    });
+
+    const inventory = new Set();
+    copyInstalledPackageGraph(
+      realpathSync(join(jobsDirectory, "node_modules", "pg")),
+      join(portableJobsDirectory, "node_modules", "pg"),
+      new Set([realpathSync(jobsDirectory)]),
+      inventory,
+    );
+    assert.deepEqual(
+      [...inventory].sort(),
+      schedulerSignalRuntimeInventory,
+      "portable runtime must contain the exact installed production package graph",
+    );
+
+    return Object.freeze({
+      fingerprint: fingerprintPortableRuntime(runtimeDirectory),
+      runtimeDirectory,
+    });
+  } catch (error) {
+    rmSync(runtimeDirectory, { force: true, recursive: true });
+    throw error;
+  }
+}
+
+function removePortableSchedulerRuntime(runtime) {
+  const targetDirectory = `${resolve(root, "target")}${sep}`;
+  assert.equal(
+    runtime.runtimeDirectory.startsWith(targetDirectory),
+    true,
+    "portable runtime cleanup must remain below the repository target directory",
+  );
+  assert.match(
+    runtime.runtimeDirectory.slice(targetDirectory.length),
+    /^jobs-scheduler-signal-runtime-[^\\/]+$/,
+  );
+  assert.deepEqual(
+    fingerprintPortableRuntime(runtime.runtimeDirectory),
+    runtime.fingerprint,
+    "the read-only container must not mutate its portable runtime",
+  );
+  rmSync(runtime.runtimeDirectory, { force: true, recursive: true });
+}
+
+function startSchedulerSignalLockHolder() {
+  let exited = false;
+  let output = "";
+  let readySettled = false;
+  let resolveReady;
+  let rejectReady;
+  const ready = new Promise((resolvePromise, rejectPromise) => {
+    resolveReady = resolvePromise;
+    rejectReady = rejectPromise;
+  });
+  const child = spawn("docker", psqlArguments(), {
+    cwd: root,
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  const observe = (chunk) => {
+    output += chunk.toString("utf8");
+    if (output.length > 8 * 1024) {
+      child.kill("SIGKILL");
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error("Scheduler signal lock holder exceeded its output budget."));
+      }
+      return;
+    }
+    if (!readySettled && output.includes(schedulerSignalLockReadyMarker)) {
+      readySettled = true;
+      resolveReady();
+    }
+  };
+  child.stdout.on("data", observe);
+  child.stderr.on("data", observe);
+  const closed = new Promise((resolveClose, rejectClose) => {
+    child.once("error", () => {
+      exited = true;
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error("Scheduler signal lock holder could not start."));
+      }
+      rejectClose(new Error("Scheduler signal lock holder could not start."));
+    });
+    child.once("close", (code, signal) => {
+      exited = true;
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error("Scheduler signal lock holder exited before readiness."));
+      }
+      resolveClose(Object.freeze({ code, signal }));
+    });
+  });
+  void ready.catch(() => undefined);
+  void closed.catch(() => undefined);
+  child.stdin.write(`BEGIN;
+SET LOCAL application_name = 'viberacing-jobs-scheduler-signal-holder';
+SET LOCAL ROLE viberacing_owner;
+SELECT lock_record.capability
+FROM viberacing_private.maintenance_locks AS lock_record
+WHERE lock_record.capability = 'community_scoring_refresh'
+FOR UPDATE;
+\\echo ${schedulerSignalLockReadyMarker}
+`);
+  return Object.freeze({
+    child,
+    closed,
+    hasExited: () => exited,
+    ready,
+    release: (commit) => {
+      child.stdin.end(commit ? "\nCOMMIT;\n" : "\nROLLBACK;\n");
+    },
+  });
+}
+
+async function stopSchedulerSignalLockHolder(holder, commit) {
+  if (!holder.hasExited()) {
+    holder.release(commit);
+  }
+  let result;
+  try {
+    result = await waitWithDeadline(
+      holder.closed,
+      schedulerProcessCloseTimeoutMs,
+      "Scheduler signal lock holder did not close within its fixed deadline.",
+    );
+  } catch (error) {
+    if (!holder.hasExited()) {
+      holder.child.kill("SIGKILL");
+      await waitWithDeadline(
+        holder.closed,
+        schedulerProcessCloseTimeoutMs,
+        "Scheduler signal lock holder did not close after forced test cleanup.",
+      ).catch(() => undefined);
+    }
+    throw error;
+  }
+  if (commit) {
+    assert.deepEqual(result, { code: 0, signal: null });
+  }
+}
+
+function schedulerSignalContainerExists() {
+  const result = docker(["inspect", schedulerSignalContainerName], { timeout: 10_000 });
+  if (result.status === 0) {
+    return true;
+  }
+  if (
+    result.status === 1 &&
+    `${result.stdout}${result.stderr}`.includes(`No such object: ${schedulerSignalContainerName}`)
+  ) {
+    return false;
+  }
+  throw new Error("Scheduler signal container existence check failed.");
+}
+
+function removeSchedulerSignalContainer(force) {
+  if (!schedulerSignalContainerExists()) {
+    return;
+  }
+  const args = force
+    ? ["rm", "--force", schedulerSignalContainerName]
+    : ["rm", schedulerSignalContainerName];
+  requireSuccess(docker(args, { timeout: 15_000 }), "scheduler signal container removal");
+}
+
+function createSchedulerSignalContainer(runtimeDirectory) {
+  const environment = Object.freeze({
+    ...jobsEnvironment(5432, jobsLogin, jobsPassword),
+    VIBERACING_JOBS_SCHEDULER_ENABLED: "true",
+  });
+  const environmentArguments = Object.entries(environment)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .flatMap(([key, value]) => ["--env", `${key}=${value}`]);
+  const bindSource = runtimeDirectory.split(sep).join("/");
+  const result = docker(
+    [
+      "create",
+      "--name",
+      schedulerSignalContainerName,
+      "--network",
+      `container:${containerName}`,
+      "--read-only",
+      "--cap-drop",
+      "ALL",
+      "--security-opt",
+      "no-new-privileges:true",
+      "--pids-limit",
+      "64",
+      "--memory",
+      "256m",
+      "--cpus",
+      "1",
+      "--user",
+      "node",
+      "--workdir",
+      "/runtime",
+      "--mount",
+      `type=bind,source=${bindSource},target=/runtime,readonly`,
+      ...environmentArguments,
+      schedulerSignalContainerImage,
+      "node",
+      "/runtime/dist/main.js",
+    ],
+    { timeout: 30_000 },
+  );
+  requireSuccess(result, "scheduler signal container creation");
+  assert.match(result.stdout.trim(), /^[a-f0-9]{64}$/);
+  const imageInspection = docker(
+    ["image", "inspect", "--format", "{{json .Config.Env}}", schedulerSignalContainerImage],
+    { timeout: 10_000 },
+  );
+  requireSuccess(imageInspection, "scheduler signal runtime image inspection");
+  const imageEnvironment = JSON.parse(imageInspection.stdout.trim());
+  assert.equal(Array.isArray(imageEnvironment), true);
+  assert.equal(
+    imageEnvironment.includes("NODE_VERSION=24.18.0"),
+    true,
+    "the pinned Linux signal runtime must match the repository Node version",
+  );
+}
+
+function readSchedulerSignalContainerState() {
+  const result = docker(["inspect", "--format", "{{json .State}}", schedulerSignalContainerName], {
+    timeout: 10_000,
+  });
+  requireSuccess(result, "scheduler signal container state read");
+  return JSON.parse(result.stdout.trim());
+}
+
+function readSchedulerSignalContainerOutput() {
+  const result = docker(["logs", schedulerSignalContainerName], { timeout: 10_000 });
+  requireSuccess(result, "scheduler signal container output read");
+  return `${result.stdout}${result.stderr}`;
+}
+
+async function waitForSchedulerSignalDatabaseWait() {
+  const deadline = Date.now() + schedulerCycleTimeoutMs;
+  while (Date.now() < deadline) {
+    const state = readSchedulerSignalContainerState();
+    if (!state.Running) {
+      throw new Error("Scheduler signal container exited before the controlled database wait.");
+    }
+    if (readSchedulerSignalContainerOutput() !== "") {
+      throw new Error("Scheduler signal container produced output before shutdown.");
+    }
+    const observed = psqlScalar(
+      `SELECT pg_catalog.concat(
+  pg_catalog.count(*),
+  ':',
+  pg_catalog.count(*) FILTER (
+    WHERE state = 'active'
+      AND wait_event_type = 'Lock'
+      AND query LIKE '%viberacing_api.finalize_community_season%'
+  )
+)
+FROM pg_catalog.pg_stat_activity
+WHERE application_name = 'viberacing-jobs-community-maintenance'
+  AND usename = '${jobsLogin}';`,
+      "emitted scheduler signal database-wait observation",
+    );
+    if (observed === "1:1") {
+      return;
+    }
+    assert.match(observed, /^(?:0:0|1:0)$/);
+    await sleep(schedulerProcessPollIntervalMs);
+  }
+  throw new Error("Scheduler signal container did not reach its controlled database wait.");
+}
+
+async function waitForSchedulerSignalContainerExit() {
+  const deadline = Date.now() + schedulerProcessCloseTimeoutMs;
+  while (Date.now() < deadline) {
+    const state = readSchedulerSignalContainerState();
+    if (!state.Running) {
+      return state;
+    }
+    await sleep(schedulerProcessPollIntervalMs);
+  }
+  throw new Error("Scheduler signal container did not exit within its fixed deadline.");
+}
+
+async function runEmittedSchedulerSignalProcess({ expectedSeasonStarts }) {
+  assertSchedulerSeasonStarts(
+    expectedSeasonStarts,
+    "the host clock must retain the reviewed scheduler season targets before signal startup",
+  );
+  const runtime = createPortableSchedulerRuntime();
+  let containerCreated = false;
+  let holder;
+  let holderReleased = false;
+  try {
+    holder = startSchedulerSignalLockHolder();
+    await waitWithDeadline(
+      holder.ready,
+      schedulerProcessCloseTimeoutMs,
+      "Scheduler signal lock holder did not become ready.",
+    );
+    createSchedulerSignalContainer(runtime.runtimeDirectory);
+    containerCreated = true;
+    requireSuccess(
+      docker(["start", schedulerSignalContainerName], { timeout: 15_000 }),
+      "scheduler signal container start",
+    );
+    await waitForSchedulerSignalDatabaseWait();
+    assertSchedulerSeasonStarts(
+      expectedSeasonStarts,
+      "the host clock must retain the reviewed scheduler season targets through signal delivery",
+    );
+
+    requireSuccess(
+      docker(["kill", "--signal", "SIGTERM", schedulerSignalContainerName], {
+        timeout: 10_000,
+      }),
+      "scheduler signal delivery",
+    );
+    await stopSchedulerSignalLockHolder(holder, true);
+    holderReleased = true;
+
+    const state = await waitForSchedulerSignalContainerExit();
+    assert.equal(state.Status, "exited");
+    assert.equal(state.ExitCode, 0, "the OS-signalled scheduler must exit successfully");
+    assert.equal(state.OOMKilled, false);
+    assert.equal(state.Error, "");
+    assert.equal(
+      readSchedulerSignalContainerOutput(),
+      "",
+      "the OS-signalled scheduler must remain silent through graceful exit",
+    );
+    assert.equal(
+      psqlScalar(
+        `SELECT pg_catalog.count(*)::integer
+FROM pg_catalog.pg_stat_activity
+WHERE application_name = 'viberacing-jobs-community-maintenance'
+  AND usename = '${jobsLogin}';`,
+        "emitted scheduler signal released-session verification",
+      ),
+      "0",
+      "graceful exit must release the exact Jobs database session",
+    );
+    assert.equal(
+      psqlScalar(
+        `SET ROLE viberacing_owner;
+SELECT pg_catalog.concat(
+  (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.season_entries
+    WHERE season_start = DATE '${expectedSeasonStarts.current}'
+  ),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.season_daily_scores
+    WHERE season_start = DATE '${expectedSeasonStarts.current}'
+  ),
+  ':',
+  (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.pairing_request_windows
+    WHERE operation = 'poll'
+      AND bucket IN (-1, 5)
+      AND attempt_count > 0
+      AND window_started_at < pg_catalog.statement_timestamp() - INTERVAL '1 hour'
+  )
+);`,
+        "emitted scheduler signal omitted-job marker",
+      ),
+      "0:0:2",
+      "SIGTERM must settle the active finalization without starting refresh or later jobs",
+    );
+  } finally {
+    try {
+      if (holder !== undefined && !holderReleased) {
+        await stopSchedulerSignalLockHolder(holder, false).catch(() => undefined);
+      }
+    } finally {
+      try {
+        if (containerCreated || schedulerSignalContainerExists()) {
+          removeSchedulerSignalContainer(true);
+        }
+      } finally {
+        removePortableSchedulerRuntime(runtime);
+      }
+    }
+  }
 }
 
 async function waitWithDeadline(promise, milliseconds, message) {
@@ -1569,7 +2141,10 @@ COMMIT;`,
         schedulerExpectedJobs,
         "the combined catalog must match all 17 independently reviewed jobs in order",
       );
-    } else if (integrationMode === "scheduler_process") {
+    } else if (
+      integrationMode === "scheduler_process" ||
+      integrationMode === "scheduler_signal_process"
+    ) {
       const databaseDate = psqlScalar(
         "SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text;",
         "emitted scheduler database-date discovery",
@@ -1681,6 +2256,30 @@ SELECT (
         databasePort,
         expectedSeasonStarts: schedulerSeasonStarts,
       });
+    } else if (integrationMode === "scheduler_signal_process") {
+      await runEmittedSchedulerSignalProcess({ expectedSeasonStarts: schedulerSeasonStarts });
+      const omittedCommands = [
+        ["refresh-community-season", currentSeasonStart],
+        ["purge-profile-deletions"],
+        ["cleanup-expired-auth-state"],
+        ["cleanup-expired-ingest-state"],
+        ["cleanup-expired-pairing-state"],
+        ["cleanup-expired-car-recipe-proposals"],
+        ["redact-aged-pairing-approval-provenance"],
+        ["cleanup-expired-sessions"],
+        ["cleanup-expired-invites"],
+        ["cleanup-abandoned-enrollments"],
+        ["cleanup-finalized-source-day-values"],
+        ["cleanup-terminal-deletion-jobs"],
+        ["cleanup-expired-audit-events"],
+        ["cleanup-aged-revoked-passkeys"],
+        ["cleanup-aged-revoked-devices"],
+        ["reset-expired-pairing-request-windows"],
+      ];
+      for (const args of omittedCommands) {
+        const result = runJobsCommand(databasePort, jobsLogin, jobsPassword, args);
+        assertSuccessfulCommand(result, `post-signal omitted Jobs command ${args[0]}`);
+      }
     } else {
       const commands = [
         ["cleanup-expired-auth-state"],
@@ -1949,7 +2548,9 @@ SELECT pg_catalog.jsonb_build_object(
             ? "Jobs scheduler lifecycle PostgreSQL integration passed (active-call settlement, no later scheduler job, graceful close, and exact final state)."
             : integrationMode === "scheduler_process"
               ? "Emitted Jobs scheduler PostgreSQL integration passed (real startup clock, silent terminal catalog marker, forced test-child termination, and exact stored state)."
-              : "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).";
+              : integrationMode === "scheduler_signal_process"
+                ? "Emitted Jobs scheduler signal PostgreSQL integration passed (OS SIGTERM, active finalization settlement, no later scheduler job, silent graceful exit, and exact final state)."
+                : "Jobs PostgreSQL integration passed (seventeen commands, least-privilege denial, generic output, and exact stored state).";
     console.log(successMessage);
   } catch (error) {
     primaryFailure = error;

@@ -65,16 +65,17 @@ suppression, and verifies the rearmed terminal reset. A third composes the produ
 lifecycle, injects its first handler during the penultimate real database job, and proves graceful
 active-call settlement plus no later scheduler job. A fourth starts the built entry point under the
 real host clock, reaches the terminal startup-catalog marker without process output, then forcibly
-ends only its persistent test child. There is no host-timer delivery, OS-signal delivery,
-emitted-child controller settlement before forced termination, wall-clock recurring process
-callback, production login, deployed cadence, monitor, or deployment. A bounded server-only Web
-PostgreSQL adapter and local public-score GET are implemented and unit/build-tested, but this
-repository supplies no working deployment login or TLS certificate. A successful setup proves
-repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
-session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
-does not prove a live adapter, deployed API, or production flow. The Ingest server tests bind only
-ephemeral loopback sockets and use synthetic requests; no development command exposes it to the LAN
-or Internet.
+ends only its persistent test child. A fifth runs a link-free production-only copy in the pinned
+Linux Node image, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves
+graceful settlement without starting a later job. There is no host-timer recurring callback,
+controller settlement in the forcibly ended child, deployed signal route, production login, deployed
+cadence, monitor, or deployment. A bounded server-only Web PostgreSQL adapter and local public-score
+GET are implemented and unit/build-tested, but this repository supplies no working deployment login
+or TLS certificate. A successful setup proves repository gates, synthetic frontend behavior,
+route/adapter boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring
+concurrency, and database role isolation; it does not prove a live adapter, deployed API, or
+production flow. The Ingest server tests bind only ephemeral loopback sockets and use synthetic
+requests; no development command exposes it to the LAN or Internet.
 
 ## Prerequisites
 
@@ -346,6 +347,7 @@ pnpm run test:jobs-scheduler:postgres-integration
 pnpm run test:jobs-scheduler:timer-postgres-integration
 pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 pnpm run test:jobs-scheduler:process-postgres-integration
+pnpm run test:jobs-scheduler:signal-postgres-integration
 ```
 
 The first PostgreSQL command is a separate opt-in Docker gate. It builds the production scheduler
@@ -361,9 +363,15 @@ built scheduler entry point under the real host clock, requires host/database UT
 waits for the terminal startup-catalog marker without process output, forcibly ends only its
 persistent test child, and then verifies the same exact state. It does not prove controller
 settlement before that forced termination. The timer mode does not prove host-timer delivery, and
-the lifecycle mode does not prove OS-signal delivery. None proves a wall-clock recurring process
-callback, durable/deployed cadence, production credentials/TLS, monitoring, capacity, or real-user
-retention.
+the lifecycle mode by itself does not prove OS-signal delivery. The fifth copies only the built
+scheduler, built runner, and exact installed production graph into a link-free temporary runtime,
+mounts it read-only under the pinned Linux Node image, holds the emitted first finalization call,
+and delivers a real `SIGTERM`. It requires graceful active-call settlement, no refresh or later job,
+silent exit code 0, session release, and an unchanged runtime fingerprint before the sixteen omitted
+commands complete the shared final-state oracle. This proves one local Docker-delivered Linux signal
+path, not a deployed controller or orchestrator grace policy. None proves a wall-clock recurring
+process callback, durable/deployed cadence, production credentials/TLS, monitoring, capacity, or
+real-user retention.
 
 The emitted process accepts no arguments and remains disabled unless the runtime supplies exact
 `VIBERACING_JOBS_SCHEDULER_ENABLED=true`. That latch is read before the Jobs runner or any database

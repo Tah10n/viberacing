@@ -64,11 +64,11 @@ database predicates prevent cleanup from widening into pending deletion authorit
 Residual risk remains: ADR 0063 supplies a default-off in-memory local catalog, sequential
 execution, no-overlap lifecycle, fixed-clock core composition, directly injected repeated-timer
 execution and lifecycle settlement, and real-clock emitted-process terminal-marker evidence. There
-is no host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
-termination, wall-clock recurring process callback, deployed cadence, durable missed-slot recovery,
-monitoring, capacity result, production Jobs login/TLS connection, external audit sink, public cache
-purge, backup-expiry proof, disclosed tombstone policy, restore replay, or deployed retention
-evidence.
+is no host-timer delivery, deployed OS-signal routing, emitted-child controller settlement before
+forced termination, wall-clock recurring process callback, deployed cadence, durable missed-slot
+recovery, monitoring, capacity result, production Jobs login/TLS connection, external audit sink,
+public cache purge, backup-expiry proof, disclosed tombstone policy, restore replay, or deployed
+retention evidence.
 
 Affected invariants are VR-DATA-001 and VR-DELETE-001. Primary attacker stories are
 VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION, and VR-ABUSE-RESOURCE-EXHAUSTION.
@@ -126,9 +126,9 @@ All fixtures are synthetic. ADR 0063 separately proves the default-off scheduler
 runner and clock, composes its production core with the real runner and disposable PostgreSQL under
 fixed injected UTC time, and directly invokes the production interval handler for a repeated
 fixed-clock cycle and the lifecycle handler after an active runner call starts. These layers do not
-prove host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
-termination, wall-clock recurring process behavior, production cadence/login/TLS, monitoring, cache
-or backup purge, tombstone/restore replay, capacity, or deployment.
+prove host-timer delivery, deployed OS-signal routing, emitted-child controller settlement before
+forced termination, wall-clock recurring process behavior, production cadence/login/TLS, monitoring,
+cache or backup purge, tombstone/restore replay, capacity, or deployment.
 
 ## References
 

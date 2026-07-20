@@ -137,7 +137,14 @@ scheduler-задача не стартует, runner/timers/handlers закры�
 `pnpm run test:jobs-scheduler:process-postgres-integration` отдельно запускает built scheduler entry
 point с реальными часами, дожидается terminal marker стартового каталога без process output и
 принудительно завершает только тестовый child. Settlement контроллера до принудительного завершения
-не доказан. Все семь требуют Docker и не являются deployment evidence.
+не доказан. Команда `pnpm run test:jobs-scheduler:signal-postgres-integration` создаёт link-free
+production-only runtime из built scheduler, Jobs runner и точного установленного dependency graph,
+монтирует его read-only в pinned Linux Node image, удерживает первый finalization call и доставляет
+реальный `SIGTERM`. Она доказывает settlement активного call, отсутствие refresh и всех следующих
+jobs, тихий выход с кодом 0, закрытие DB session и неизменность runtime fingerprint; шестнадцать
+пропущенных one-shot commands выполняются только после этого для общего exact-state oracle. Это
+локальное synthetic Linux OS-signal evidence, но не deployed signal route или orchestrator policy.
+Все восемь требуют Docker и не являются deployment evidence.
 
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.

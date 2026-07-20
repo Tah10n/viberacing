@@ -66,5 +66,15 @@ prove OS-signal delivery or emitted-process graceful shutdown. The separate opt-
 the real host clock, requires host/database UTC-date agreement, waits for the terminal catalog
 marker without process output, forcibly ends only its otherwise persistent test child, and then
 verifies the same exact stored state. It does not prove controller settlement before that forced
-termination. None proves a wall-clock recurring process callback, OS-signal lifecycle delivery,
-production TLS/login, durable cadence, monitoring, capacity, deployment, or real-user retention.
+termination. The separate opt-in `pnpm run test:jobs-scheduler:signal-postgres-integration` gate
+copies only the built scheduler, built Jobs runner, and exact 14-package installed production graph
+into a link-free temporary runtime, mounts it read-only under the pinned Linux Node 24.18 image, and
+joins only the disposable PostgreSQL container's network namespace. An owner session holds the first
+finalization mutex until the emitted scheduler is observed in an exact database lock wait; the
+harness then delivers a real `SIGTERM`, releases the mutex before the database deadline, and
+requires the finalization call to settle without starting refresh or any later job. The process must
+exit silently with code 0, release its database session, leave the runtime fingerprint unchanged,
+and pass the shared exact state oracle after the sixteen omitted one-shot commands run separately.
+This is local synthetic Linux OS-signal evidence. None proves a deployed signal route or
+orchestrator grace policy, a wall-clock recurring callback, production TLS/login, durable cadence,
+monitoring, capacity, deployment, or real-user retention.

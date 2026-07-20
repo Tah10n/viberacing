@@ -75,12 +75,12 @@ cross-capability deadlock paths.
 This decision does not create a security tombstone. The queued `profile_ref_digest` is random and
 cannot safely stand in for a keyed identity digest; the repository has no reviewed tombstone key,
 expiry, restore consumer, or backup policy. Cache invalidation, disclosed tombstone retention,
-restore replay, backup expiry, host-timer delivery, a wall-clock recurring process callback, and
-OS-delivered process-signal/PostgreSQL behavior, deployed cadence, monitoring, alerting, production
-Jobs login/TLS, capacity, and deployment remain launch-blocking gates. ADR 0063 provides only
+restore replay, backup expiry, host-timer delivery, a wall-clock recurring process callback,
+deployed signal routing and orchestrator grace policy, deployed cadence, monitoring, alerting,
+production Jobs login/TLS, capacity, and deployment remain launch-blocking gates. ADR 0063 provides
 fixed-clock core composition, directly injected repeated-timer execution and lifecycle settlement,
-and real-clock emitted-process terminal-marker evidence; emitted-child controller settlement before
-forced termination remains unproven.
+real-clock emitted-process terminal-marker evidence, and one pinned-Linux OS-signal/PostgreSQL path;
+emitted-child controller settlement before forced termination remains unproven.
 
 Affected invariants are VR-AUTH-001, VR-AUTH-003, VR-INGEST-001, VR-INGEST-002, VR-DATA-001, and
 VR-DELETE-001. Primary attacker stories are VR-ABUSE-DATABASE-ROLE, VR-ABUSE-DELETE-RESURRECTION,

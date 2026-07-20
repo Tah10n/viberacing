@@ -110,9 +110,14 @@ not prove OS-signal delivery. The emitted-process mode starts the built schedule
 the real host clock, reaches the terminal startup-catalog marker without process output, forcibly
 ends only its persistent test child, and then verifies exact state. It does not prove controller
 settlement before that forced termination, a wall-clock recurring process callback, or graceful
-OS-signal settlement against PostgreSQL. Together these modes still do not prove an external audit
-sink, production TLS/credentials, durable cadence, monitoring, capacity, real-user retention, or
-deployment.
+OS-signal settlement against PostgreSQL. A separate signal-process mode constructs a link-free,
+production-only runtime from this built runner and its exact installed `pg` graph, mounts it
+read-only in the pinned Linux Node image, holds the emitted first finalization call, and delivers an
+OS `SIGTERM`. It proves that active call settles, no later job starts, the process exits silently
+with code 0, and the database session closes; the sixteen omitted one-shot commands run only
+afterward for the shared exact-state oracle. Together these modes still do not prove an external
+audit sink, deployed signal path, production TLS/credentials, durable cadence, monitoring, capacity,
+real-user retention, or deployment.
 
 The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
 Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package

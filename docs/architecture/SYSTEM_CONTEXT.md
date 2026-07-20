@@ -31,12 +31,14 @@ fourth composes the production process lifecycle, injects its first handler duri
 real database job, and proves graceful settlement plus no later scheduler job. A fifth starts the
 built scheduler entry point under the real host clock, reaches the terminal startup-catalog marker
 without process output, forcibly ends only its persistent test child, and then verifies exact state.
-It still has no host-timer delivery, OS-signal delivery, emitted-child controller settlement before
-forced termination, wall-clock recurring process callback, deployed application service, durable
-Jobs cadence, operational sync connector, supported Codex version, distributed recovery perimeter,
-Cloudflare/Railway deployment, live OAuth, a reusable/production database login, or production
-database. Component status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md);
-diagrams describe required runtime boundaries, not deployed evidence.
+A sixth runs a link-free production-only copy in the pinned Linux Node image, blocks its first
+finalization call, delivers an OS `SIGTERM`, and proves graceful settlement without starting any
+later job. It still has no host-timer recurring callback, controller settlement in the forcibly
+ended child, deployed signal route, deployed application service, durable Jobs cadence, operational
+sync connector, supported Codex version, distributed recovery perimeter, Cloudflare/Railway
+deployment, live OAuth, a reusable/production database login, or production database. Component
+status is tracked in [implementation status](../IMPLEMENTATION_STATUS.md); diagrams describe
+required runtime boundaries, not deployed evidence.
 
 ## System context
 

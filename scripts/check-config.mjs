@@ -213,19 +213,20 @@ export function validateWorkflow(path, workflow) {
       "pnpm run test:migrate:postgres-integration",
       "pnpm run test:web:postgres-integration",
       "pnpm run test:ingest:postgres-integration",
+      "pnpm run test:jobs-scheduler:signal-postgres-integration",
     ];
     const positions = requiredRuns.map((command) =>
       nodeSteps.findIndex((step) => isObject(step) && step.run === command),
     );
     if (positions.some((position) => position === -1)) {
       findings.push(
-        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run verify:node, and run the Migration, Web, and Ingest PostgreSQL integrations using exact commands",
+        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run verify:node, and run the Migration, Web, and Ingest PostgreSQL integrations plus the OS-signal scheduler integration using exact commands",
       );
     } else if (
       !positions.every((position, index) => index === 0 || position > positions[index - 1])
     ) {
       findings.push(
-        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, and the Migration, Web, and Ingest PostgreSQL integrations",
+        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, the Migration, Web, and Ingest PostgreSQL integrations, and the OS-signal scheduler integration",
       );
     }
 
@@ -342,6 +343,66 @@ export function validateCompose(compose) {
   }
   if (postgresTest.environment?.POSTGRES_PASSWORD !== "local-development-only") {
     findings.push("postgres-test must use only the documented synthetic local password");
+  }
+
+  const schedulerSignalTest = compose?.services?.["jobs-scheduler-signal-test"];
+  if (!isObject(schedulerSignalTest)) {
+    findings.push("compose.yaml must define the isolated jobs-scheduler-signal-test runtime");
+    return findings;
+  }
+  if (
+    Object.keys(schedulerSignalTest).sort().join(",") !==
+    "cap_drop,command,image,mem_limit,network_mode,pids_limit,profiles,read_only,restart,security_opt,user"
+  ) {
+    findings.push("jobs-scheduler-signal-test must retain its exact inert service shape");
+  }
+  if (!/^node:24\.18\.0-bookworm-slim@sha256:[a-f0-9]{64}$/.test(schedulerSignalTest.image ?? "")) {
+    findings.push("jobs-scheduler-signal-test must pin the official Node image by sha256 digest");
+  }
+  if (
+    !Array.isArray(schedulerSignalTest.profiles) ||
+    schedulerSignalTest.profiles.length !== 1 ||
+    schedulerSignalTest.profiles[0] !== "test"
+  ) {
+    findings.push("jobs-scheduler-signal-test must be opt-in through only the test profile");
+  }
+  if (
+    schedulerSignalTest.restart !== "no" ||
+    schedulerSignalTest.network_mode !== "none" ||
+    schedulerSignalTest.read_only !== true ||
+    schedulerSignalTest.user !== "node" ||
+    schedulerSignalTest.pids_limit !== 64 ||
+    schedulerSignalTest.mem_limit !== "256m"
+  ) {
+    findings.push(
+      "jobs-scheduler-signal-test must retain its non-restarting, read-only, unprivileged resource boundary and disable networking",
+    );
+  }
+  if (
+    !Array.isArray(schedulerSignalTest.command) ||
+    JSON.stringify(schedulerSignalTest.command) !== JSON.stringify(["node", "--version"])
+  ) {
+    findings.push("jobs-scheduler-signal-test must expose only the inert Node version command");
+  }
+  if (
+    schedulerSignalTest.privileged === true ||
+    !Array.isArray(schedulerSignalTest.cap_drop) ||
+    JSON.stringify(schedulerSignalTest.cap_drop) !== JSON.stringify(["ALL"]) ||
+    !Array.isArray(schedulerSignalTest.security_opt) ||
+    !schedulerSignalTest.security_opt.includes("no-new-privileges:true")
+  ) {
+    findings.push(
+      "jobs-scheduler-signal-test must drop all capabilities and enable no-new-privileges",
+    );
+  }
+  if (
+    (Array.isArray(schedulerSignalTest.ports) && schedulerSignalTest.ports.length > 0) ||
+    (Array.isArray(schedulerSignalTest.volumes) && schedulerSignalTest.volumes.length > 0) ||
+    isObject(schedulerSignalTest.environment)
+  ) {
+    findings.push(
+      "jobs-scheduler-signal-test must declare no ports, volumes, or environment authority",
+    );
   }
   return findings;
 }

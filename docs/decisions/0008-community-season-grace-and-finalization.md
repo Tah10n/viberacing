@@ -71,13 +71,13 @@ order makes finalization and submission serializable at the affected season boun
 granting Ingest any scoring-table access.
 
 Retaining a late raw snapshot helps diagnose compatibility and deadline disputes, but it retains
-private usage evidence until the existing 30-day cleanup boundary runs. ADR 0063 supplies only a
+private usage evidence until the existing 30-day cleanup boundary runs. ADR 0063 supplies a
 default-off in-memory local catalog plus fixed-clock core composition, directly injected
 repeated-timer execution and lifecycle settlement, and real-clock emitted-process terminal-marker
-evidence. Host-timer delivery, OS-signal delivery, emitted-child controller settlement before forced
-termination, a wall-clock recurring process callback, a deployed cleanup cadence, monitoring,
-deletion-worker operation, backup policy, and production retention evidence are still required
-before real-user ingestion.
+evidence. Host-timer delivery, deployed OS-signal routing, emitted-child controller settlement
+before forced termination, a wall-clock recurring process callback, a deployed cleanup cadence,
+monitoring, deletion-worker operation, backup policy, and production retention evidence are still
+required before real-user ingestion.
 
 The 48-hour window deliberately favors ordinary delayed sync over immediate leaderboard closure. It
 does not verify Community input, make a score authoritative OpenAI data, or justify prizes, money,

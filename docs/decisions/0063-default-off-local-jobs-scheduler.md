@@ -141,7 +141,9 @@ correctness, but load and cadence must be reviewed before deployment.
 
 There is no database or public protocol migration. `@viberacing/jobs` gains only a package export
 for its existing runner and types. The workspace graph and lockfile gain one internal consumer and
-no new external package version.
+no new external package version. The later OS-signal evidence adds one digest-pinned, test-profile
+Linux Node image that is pulled separately and never redistributed; the production package graph
+remains unchanged.
 
 Rollback is to set the exact enable latch to any value other than `true`, stop the process, and then
 remove the scheduler workspace, root scripts, verifier entries, documentation, and lockfile importer
@@ -188,8 +190,17 @@ Local evidence includes:
 - a separate opt-in emitted-process integration that starts the built entry point with exact enable
   and narrow-login configuration, requires real host/disposable-database UTC-date agreement, waits
   for the terminal reset marker, requires no process output, forcibly ends only its otherwise
-  persistent test child, and then verifies the same exact stored state. Secretless CI declares all
-  four scheduler commands, but this tree claims only the observed local passes.
+  persistent test child, and then verifies the same exact stored state;
+- a separate opt-in OS-signal integration that creates a link-free runtime from only the built
+  scheduler, built Jobs runner, and exact installed 14-package production graph, mounts it read-only
+  under a pinned Linux Node 24.18 image, and joins only the disposable PostgreSQL network namespace.
+  An owner holder blocks the emitted first finalization call until the exact database wait is
+  observed; the harness delivers `SIGTERM`, releases the holder before the database deadline, and
+  requires that active call to settle without refresh or any later job. The process must exit
+  silently with code 0, release its database session, leave its runtime fingerprint unchanged, and
+  pass the shared final-state oracle only after the sixteen omitted one-shot commands run
+  separately. Secretless CI declares all five scheduler commands, but this tree claims only the
+  observed local passes.
 
 The fixed-clock, timer, and lifecycle integrations invoke production components in-process. The
 timer handler is called directly and therefore does not exercise host-timer delivery; the lifecycle
@@ -197,10 +208,12 @@ signal handler is called directly and therefore does not exercise OS-signal deli
 emitted-process integration observes only the immediate startup catalog through its terminal
 database marker and deliberately uses `SIGKILL` because Windows cannot deliver this child a
 catchable POSIX shutdown signal. It does not prove controller settlement before forced termination.
-None exercises a wall-clock recurring process callback or an OS-delivered graceful process signal
-against PostgreSQL. None proves that a production clock remains stable, a deployment has one
-replica, durable cadence is maintained, missed historical seasons are recovered, production
-TLS/credentials work, or a real-user retention/deletion deadline is met.
+The separate pinned-Linux integration does exercise one OS-delivered graceful `SIGTERM` while the
+emitted process owns an active PostgreSQL call, but it does not exercise a deployment controller,
+orchestrator stop grace, or restart. None exercises a wall-clock recurring process callback. None
+proves that a production clock remains stable, a deployment has one replica, durable cadence is
+maintained, missed historical seasons are recovered, production TLS/credentials work, or a real-user
+retention/deletion deadline is met.
 
 ## References
 

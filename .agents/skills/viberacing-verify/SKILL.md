@@ -52,9 +52,11 @@ lockfile or license inventory without review, or change fixtures only to obtain 
 
 Treat Docker-backed Database/Migration/Web/Ingest/Jobs integrations and browser capture as separate
 local synthetic evidence. Within Jobs scheduler evidence, keep the fixed-clock startup core,
-injected repeated-timer, injected process-lifecycle, and emitted-process results distinct. Run a
-named opt-in gate only when the user explicitly requests it or the active implementation task
-requires that exact acceptance gate.
+injected repeated-timer, injected process-lifecycle, forcibly ended real-clock emitted process, and
+Linux OS-signalled emitted-process results distinct. The last proves only one local synthetic
+`SIGTERM` path while the first finalization call is active; it is not deployed signal routing or
+orchestrator evidence. Run a named opt-in gate only when the user explicitly requests it or the
+active implementation task requires that exact acceptance gate.
 
 Do not run the online external-link check, live OAuth, real-account connector, production database,
 external edge/TLS, publication, release, push, or deployment from this skill. Those operations

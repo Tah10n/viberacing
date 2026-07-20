@@ -41,10 +41,14 @@ Versioning where its guarantees are applicable.
   catalog plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A
   separate process-lifecycle integration injects its first signal during the penultimate database
   job, proves active-call settlement, no later scheduler job, exact graceful cleanup, and exit code
-  0, then invokes the omitted reset separately for the shared state oracle. No host-timer delivery,
-  OS-signal delivery, emitted-process graceful exit, wall-clock recurring process callback, deployed
-  replica/cadence, production credential/TLS, monitoring, capacity, or real-user retention is
-  claimed.
+  0, then invokes the omitted reset separately for the shared state oracle. A sixth integration
+  assembles a link-free production-only runtime from the installed graph, mounts it read-only under
+  a pinned Linux Node image, blocks the emitted first finalization call, delivers an OS `SIGTERM`,
+  and proves that call settles without starting refresh or any later job. The process exits silently
+  with code 0, releases its database session, and leaves the runtime fingerprint unchanged before
+  the omitted sixteen one-shot commands complete the shared exact-state oracle. No host-timer
+  recurring callback, deployed signal route or orchestrator grace policy, deployed replica/cadence,
+  production credential/TLS, monitoring, capacity, or real-user retention is claimed.
 - A deterministic pre-restore migration-overlap drill in the isolated PostgreSQL integration. It
   holds revision 0039's own advisory lock, observes two tagged processes running the exact reviewed
   migration in the holder's blocker chain, and then requires one successful application plus one
