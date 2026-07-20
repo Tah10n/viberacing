@@ -18,7 +18,7 @@ flowchart LR
   CO --> PS["Public-file and reachable-history scan"]
   PS --> DI["Frozen dependency install; lifecycle scripts disabled"]
   DI --> VG["Format, docs, config, policy, and unit gates"]
-  VG --> PG["Seven synthetic disposable PostgreSQL integrations"]
+  VG --> PG["Ten synthetic disposable PostgreSQL integrations"]
   PG --> AU["Registry advisory audit"]
   PR --> RT["Pinned Rust toolchain and workspace gate"]
   PR --> WP["Secretless Windows build; portable copy/remove smoke"]
@@ -61,20 +61,24 @@ does not make the pull request trusted; review and protected-branch policy remai
 - The database job uses the same digest-pinned PostgreSQL artifact as local development, no host
   port or persistent volume, a uniquely named Compose project, synthetic credentials/data, and
   cleanup in `finally`. It remains untrusted-code execution on a disposable, secretless runner.
-- After deterministic Node verification, the same secretless disposable Node runner executes seven
-  separate synthetic PostgreSQL integrations: Web HTTP, Ingest HTTP, Jobs CLI, and four distinct
-  Jobs-scheduler modes. Each owns a unique Compose project/container, uses only synthetic
-  credentials/data, exposes at most an ephemeral loopback port, retains no volume or artifact, and
-  cleans up in `finally`. The Web harness additionally generates one ephemeral self-signed
-  certificate/key pair, mounts it read-only for a TLS-enabled disposable database start, builds and
-  runs two emitted standalone Next production processes with `pg` bundled, bounds and discards their
-  output, bounds a separate PostgreSQL blocker child used for its no-queue check, and removes all
-  key/process/container resources. The Ingest harness independently bounds, scans, and discards its
-  own PostgreSQL blocker output before removing that child. It then starts the built Ingest entry
-  point with only synthetic protected configuration, treats any output byte as failure without
-  retaining it, and forcibly removes only that silent test child after one accepted request. These
-  are untrusted pull-request checks, not graceful child settlement, hosted-service, production
-  credential, deployment, representative load/capacity, or release evidence.
+- After deterministic Node verification, the same secretless disposable Node runner executes ten
+  separate synthetic PostgreSQL integrations: Migration controllers, Web HTTP, Ingest HTTP, Ingest
+  OS-signal, Jobs CLI, and five distinct Jobs-scheduler modes. Each owns a unique Compose
+  project/container, uses only synthetic credentials/data, exposes at most an ephemeral loopback
+  port, retains no volume or artifact, and cleans up in `finally`. The Web harness additionally
+  generates one ephemeral self-signed certificate/key pair, mounts it read-only for a TLS-enabled
+  disposable database start, builds and runs two emitted standalone Next production processes with
+  `pg` bundled, bounds and discards their output, bounds a separate PostgreSQL blocker child used
+  for its no-queue check, and removes all key/process/container resources. The Ingest harness
+  independently bounds, scans, and discards its own PostgreSQL blocker output before removing that
+  child. It then starts the built Ingest entry point with only synthetic protected configuration,
+  treats any output byte as failure without retaining it, and forcibly removes only that silent test
+  child after one accepted request. The separate Ingest signal gate mounts only an exact link-free
+  production graph read-only in the pinned Linux Node image, passes one synthetic signed request to
+  a capability-free client over stdin, and proves one OS-delivered active-call settlement before
+  deleting both containers and the runtime. These are untrusted pull-request checks, not
+  Railway/orchestrator drain, hosted-service, production credential, deployment, representative
+  load/capacity, or release evidence.
 
 The repository tests these rules with positive and negative fixtures. The tests are defense in
 depth; a malicious pull request can edit its own tests, so protected review of workflow changes is

@@ -7,10 +7,12 @@ import { createConnection, createServer } from "node:net";
 import { resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
+import { parse } from "yaml";
 
 import { validateManifest } from "./check-database.mjs";
+import { createPortableNodeRuntime, removePortableNodeRuntime } from "./portable-node-runtime.mjs";
 
-// cspell:ignore usename
+// cspell:ignore pinojs usename
 
 const root = resolve(import.meta.dirname, "..");
 const projectName = `vr-ingest-it-${process.pid}`;
@@ -42,17 +44,99 @@ const admissionSyncIds = Object.freeze(
 );
 const rejectedAdmissionSyncId = `syn_${"5".repeat(22)}`;
 const emittedProcessSyncId = `syn_${"P".repeat(22)}`;
+const signalProcessSyncId = `syn_${"Q".repeat(22)}`;
 const originKeyId = "edge_integration";
 const originSecret = Buffer.alloc(32, 0x33);
+const signalProcessArgument = "--signal-process";
+const signalProcessContainerName = `${projectName}-ingest-signal`;
+const signalProcessClientContainerName = `${projectName}-ingest-signal-client`;
+const signalProcessListenerPort = 8788;
+const signalProcessContainerImage = (() => {
+  const compose = parse(readFileSync(resolve(root, "compose.yaml"), "utf8"));
+  const image = compose?.services?.["node-process-signal-test"]?.image;
+  assert.equal(typeof image, "string");
+  assert.match(image, /^node:24\.18\.0-bookworm-slim@sha256:[a-f0-9]{64}$/);
+  return image;
+})();
+const signalProcessRuntimeInventory = Object.freeze([
+  "@fastify/ajv-compiler@4.0.5",
+  "@fastify/error@4.2.0",
+  "@fastify/fast-json-stringify-compiler@5.1.0",
+  "@fastify/forwarded@3.0.1",
+  "@fastify/merge-json-schemas@0.2.1",
+  "@fastify/proxy-addr@5.1.0",
+  "@noble/ed25519@3.1.0",
+  "@pinojs/redact@0.4.0",
+  "abstract-logging@2.0.1",
+  "ajv-formats@3.0.1",
+  "ajv@8.20.0",
+  "atomic-sleep@1.0.0",
+  "avvio@9.2.0",
+  "cookie@1.1.1",
+  "dequal@2.0.3",
+  "fast-decode-uri-component@1.0.1",
+  "fast-deep-equal@3.1.3",
+  "fast-json-stringify@7.0.1",
+  "fast-querystring@1.1.2",
+  "fast-uri@3.1.3",
+  "fast-uri@4.1.0",
+  "fastify@5.10.0",
+  "fastq@1.20.1",
+  "find-my-way@9.6.0",
+  "ipaddr.js@2.4.0",
+  "json-schema-ref-resolver@3.0.0",
+  "json-schema-traverse@1.0.0",
+  "light-my-request@6.6.0",
+  "on-exit-leak-free@2.1.2",
+  "pg-cloudflare@1.4.0",
+  "pg-connection-string@2.14.0",
+  "pg-int8@1.0.1",
+  "pg-pool@3.14.0",
+  "pg-protocol@1.15.0",
+  "pg-types@2.2.0",
+  "pg@8.22.0",
+  "pgpass@1.0.5",
+  "pino-abstract-transport@3.0.0",
+  "pino-std-serializers@7.1.0",
+  "pino@10.3.1",
+  "postgres-array@2.0.0",
+  "postgres-bytea@1.0.1",
+  "postgres-date@1.0.7",
+  "postgres-interval@1.2.0",
+  "process-warning@4.0.1",
+  "process-warning@5.0.0",
+  "quick-format-unescaped@4.0.4",
+  "real-require@0.2.0",
+  "real-require@1.0.0",
+  "require-from-string@2.0.2",
+  "ret@0.5.0",
+  "reusify@1.1.0",
+  "rfdc@1.4.1",
+  "safe-regex2@5.1.1",
+  "safe-stable-stringify@2.5.0",
+  "secure-json-parse@4.1.0",
+  "semver@7.8.5",
+  "set-cookie-parser@2.7.2",
+  "sonic-boom@4.2.1",
+  "split2@4.2.0",
+  "thread-stream@4.2.0",
+  "toad-cache@3.7.4",
+  "xtend@4.0.2",
+]);
 const requestIdPattern = /^req_[A-Za-z0-9_-]{22}$/;
 const maximumResponseBytes = 2_048;
 const maximumBlockerOutputBytes = 64 * 1024;
+const maximumSignalClientOutputBytes = 8 * 1024;
 const databaseBlockerTimeoutMs = 10_000;
 const blockedOriginObservationTimeoutMs = 2_000;
+const signalBlockedOriginObservationTimeoutMs = 10_000;
 const admissionRejectionTimeoutMs = 1_500;
 const emittedProcessStartTimeoutMs = 10_000;
 const emittedProcessCloseTimeoutMs = 5_000;
 const emittedProcessProbeTimeoutMs = 250;
+const signalProcessCloseTimeoutMs = 10_000;
+const signalProcessPollIntervalMs = 100;
+const signalProcessStartTimeoutMs = 30_000;
 const databaseBlockerReadyMarker = "viberacing_ingest_admission_blocker_ready";
 const privateValueMarkers = Object.freeze([
   profileId,
@@ -67,12 +151,25 @@ const privateValueMarkers = Object.freeze([
   ...admissionSyncIds,
   rejectedAdmissionSyncId,
   emittedProcessSyncId,
+  signalProcessSyncId,
   originKeyId,
   originSecret.toString("base64url"),
   ingestLogin,
   ingestPassword,
   "ingest-local-e2e",
 ]);
+
+function readIntegrationMode() {
+  if (process.argv.length === 2) {
+    return "full";
+  }
+  if (process.argv.length === 3 && process.argv[2] === signalProcessArgument) {
+    return "signal_process";
+  }
+  throw new Error("Ingest PostgreSQL integration arguments failed closed.");
+}
+
+const integrationMode = readIntegrationMode();
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -286,6 +383,30 @@ async function waitForBlockedOriginConsumes() {
     await sleep(25);
   }
   throw new Error(`expected four blocked Ingest origin-consume queries, observed ${lastCount}`);
+}
+
+async function waitForOneBlockedOriginConsume(client) {
+  const deadline = Date.now() + signalBlockedOriginObservationTimeoutMs;
+  let lastCount = 0;
+  while (Date.now() < deadline) {
+    if (client.hasExited()) {
+      const result = await readSignalProcessClientResult(client);
+      throw new Error(
+        `Ingest signal client exited with HTTP ${result.status} before the controlled database wait.`,
+      );
+    }
+    const state = readSignalProcessContainerState();
+    if (!state.Running || readSignalProcessContainerOutput() !== "") {
+      throw new Error("Ingest signal host failed before the controlled database wait.");
+    }
+    lastCount = readBlockedOriginConsumeCount("signal-blocked Ingest origin-consume observation");
+    if (lastCount === 1) {
+      return;
+    }
+    assert.equal(lastCount, 0, "the signal integration must admit only one database call");
+    await sleep(signalProcessPollIntervalMs);
+  }
+  throw new Error(`expected one blocked Ingest origin-consume query, observed ${lastCount}`);
 }
 
 function buildWorkspace(relativePath, label) {
@@ -869,6 +990,543 @@ async function stopEmittedIngestProcess(processState) {
   return Object.freeze({ closeResult, terminationRequested });
 }
 
+const signalProcessProbeSource = `
+import { createConnection } from "node:net";
+const socket = createConnection({ host: "127.0.0.1", port: ${signalProcessListenerPort} });
+let settled = false;
+const finish = (code) => {
+  if (settled) return;
+  settled = true;
+  socket.destroy();
+  process.exitCode = code;
+};
+socket.once("connect", () => finish(0));
+socket.once("error", () => finish(1));
+socket.setTimeout(${emittedProcessProbeTimeoutMs}, () => finish(1));
+`.trim();
+
+const signalProcessClientSource = `
+const fail = (clientError) => {
+  const error = new Error("signal client failed");
+  error.clientError = clientError;
+  throw error;
+};
+try {
+  const chunks = [];
+  let inputBytes = 0;
+  for await (const chunk of process.stdin) {
+    inputBytes += chunk.byteLength;
+    if (inputBytes > 16 * 1024) fail("input_invalid");
+    chunks.push(chunk);
+  }
+  const request = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  const body = Buffer.from(request.bodyBase64Url, "base64url");
+  if (
+    body.length < 1 ||
+    body.length > 8_192 ||
+    body.toString("base64url") !== request.bodyBase64Url
+  ) {
+    fail("input_invalid");
+  }
+  let response;
+  try {
+    response = await fetch(request.url, {
+      body,
+      headers: request.headers,
+      method: request.method,
+      redirect: "error",
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (error) {
+    const causeCode = error?.cause?.code;
+    if (causeCode === "UND_ERR_SOCKET" || causeCode === "ECONNRESET") {
+      fail("fetch_socket_closed");
+    }
+    if (causeCode === "ECONNREFUSED") {
+      fail("fetch_refused");
+    }
+    fail("fetch_failed");
+  }
+  const responseText = await response.text();
+  let responseBody;
+  try {
+    responseBody = JSON.parse(responseText);
+  } catch {
+    fail("response_invalid");
+  }
+  process.stdout.write(JSON.stringify({
+    body: responseBody,
+    headers: Object.fromEntries(response.headers.entries()),
+    status: response.status,
+  }));
+} catch (error) {
+  const admitted = new Set([
+    "fetch_failed",
+    "fetch_refused",
+    "fetch_socket_closed",
+    "input_invalid",
+    "response_invalid",
+  ]);
+  const clientError = admitted.has(error?.clientError) ? error.clientError : "client_failed";
+  process.stdout.write(JSON.stringify({ clientError }));
+  process.exitCode = 1;
+}
+`.trim();
+
+function createPortableIngestSignalRuntime() {
+  return createPortableNodeRuntime({
+    entryWorkspaceDirectory: resolve(root, "apps", "ingest-host"),
+    expectedExternalInventory: signalProcessRuntimeInventory,
+    expectedWorkspaceInventory: [
+      "@viberacing/contracts@0.0.0",
+      "@viberacing/ingest-host@0.0.0",
+      "@viberacing/ingest@0.0.0",
+    ],
+    maximumFileCount: 2_300,
+    minimumFileCount: 2_100,
+    root,
+    runtimePrefix: "ingest-signal-runtime-",
+    workspaceDirectories: [
+      resolve(root, "apps", "ingest-host"),
+      resolve(root, "apps", "ingest"),
+      resolve(root, "packages", "contracts"),
+    ],
+  });
+}
+
+function signalProcessContainerExists(name) {
+  const result = docker(["inspect", name], { timeout: 10_000 });
+  if (result.status === 0) {
+    return true;
+  }
+  if (
+    result.status === 1 &&
+    result.stdout.trim() === "[]" &&
+    result.stderr.trim().toLowerCase() === `error: no such object: ${name}`
+  ) {
+    return false;
+  }
+  throw new Error("Ingest signal container existence check failed.");
+}
+
+function removeSignalProcessContainer(name) {
+  if (!signalProcessContainerExists(name)) {
+    return;
+  }
+  requireSuccess(
+    docker(["rm", "--force", name], { timeout: 15_000 }),
+    "Ingest signal container removal",
+  );
+}
+
+function createSignalProcessContainer(runtimeDirectory) {
+  const environmentArguments = Object.entries(ingestEnvironment(5432, signalProcessListenerPort))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .flatMap(([key, value]) => ["--env", `${key}=${value}`]);
+  const bindSource = runtimeDirectory.replaceAll("\\", "/");
+  const result = docker(
+    [
+      "create",
+      "--name",
+      signalProcessContainerName,
+      "--network",
+      `container:${containerName}`,
+      "--read-only",
+      "--cap-drop",
+      "ALL",
+      "--security-opt",
+      "no-new-privileges:true",
+      "--pids-limit",
+      "64",
+      "--memory",
+      "256m",
+      "--cpus",
+      "1",
+      "--user",
+      "node",
+      "--workdir",
+      "/runtime",
+      "--mount",
+      `type=bind,source=${bindSource},target=/runtime,readonly`,
+      ...environmentArguments,
+      signalProcessContainerImage,
+      "node",
+      "/runtime/dist/main.js",
+    ],
+    { timeout: 30_000 },
+  );
+  requireSuccess(result, "Ingest signal container creation");
+  assert.match(result.stdout.trim(), /^[a-f0-9]{64}$/);
+
+  const imageInspection = docker(
+    ["image", "inspect", "--format", "{{json .Config.Env}}", signalProcessContainerImage],
+    { timeout: 10_000 },
+  );
+  requireSuccess(imageInspection, "Ingest signal runtime image inspection");
+  const imageEnvironment = JSON.parse(imageInspection.stdout.trim());
+  assert.equal(Array.isArray(imageEnvironment), true);
+  assert.equal(
+    imageEnvironment.includes("NODE_VERSION=24.18.0"),
+    true,
+    "the pinned Linux signal runtime must match the repository Node version",
+  );
+}
+
+function readSignalProcessContainerState() {
+  const result = docker(["inspect", "--format", "{{json .State}}", signalProcessContainerName], {
+    timeout: 10_000,
+  });
+  requireSuccess(result, "Ingest signal container state read");
+  return JSON.parse(result.stdout.trim());
+}
+
+function readSignalProcessContainerOutput() {
+  const result = docker(["logs", signalProcessContainerName], { timeout: 10_000 });
+  requireSuccess(result, "Ingest signal container output read");
+  return `${result.stdout}${result.stderr}`;
+}
+
+function probeSignalProcessListener() {
+  const result = docker(
+    [
+      "exec",
+      signalProcessContainerName,
+      "node",
+      "--input-type=module",
+      "--eval",
+      signalProcessProbeSource,
+    ],
+    { timeout: 2_000 },
+  );
+  if (result.status === 0) {
+    assert.equal(`${result.stdout}${result.stderr}`, "");
+    return true;
+  }
+  if (result.status === 1 && `${result.stdout}${result.stderr}` === "") {
+    return false;
+  }
+  throw new Error("Ingest signal listener probe failed closed.");
+}
+
+async function waitForSignalProcessListener() {
+  const deadline = Date.now() + signalProcessStartTimeoutMs;
+  while (Date.now() < deadline) {
+    const state = readSignalProcessContainerState();
+    if (!state.Running) {
+      throw new Error("Ingest signal container exited before opening its listener.");
+    }
+    if (readSignalProcessContainerOutput() !== "") {
+      throw new Error("Ingest signal container produced output before its listener was ready.");
+    }
+    if (probeSignalProcessListener()) {
+      return;
+    }
+    await sleep(signalProcessPollIntervalMs);
+  }
+  throw new Error("Ingest signal container did not open its listener in time.");
+}
+
+function startSignalProcessClient(policy, request) {
+  let exited = false;
+  let outputBytes = 0;
+  let outputOverflow = false;
+  let stdout = "";
+  let stderr = "";
+  const child = spawn(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "--name",
+      signalProcessClientContainerName,
+      "--network",
+      `container:${containerName}`,
+      "--read-only",
+      "--cap-drop",
+      "ALL",
+      "--security-opt",
+      "no-new-privileges:true",
+      "--pids-limit",
+      "32",
+      "--memory",
+      "128m",
+      "--cpus",
+      "1",
+      "--user",
+      "node",
+      "--interactive",
+      signalProcessContainerImage,
+      "node",
+      "--input-type=module",
+      "--eval",
+      signalProcessClientSource,
+    ],
+    {
+      cwd: root,
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  );
+  const observe = (stream, chunk) => {
+    outputBytes += chunk.byteLength;
+    if (stream === "stdout") {
+      stdout += chunk.toString("utf8");
+    } else {
+      stderr += chunk.toString("utf8");
+    }
+    if (outputBytes > maximumSignalClientOutputBytes) {
+      outputOverflow = true;
+      child.kill("SIGKILL");
+    }
+  };
+  child.stdout.on("data", (chunk) => observe("stdout", chunk));
+  child.stderr.on("data", (chunk) => observe("stderr", chunk));
+  child.stdin.on("error", () => undefined);
+  const closed = new Promise((resolveClose, rejectClose) => {
+    child.once("error", () => {
+      exited = true;
+      rejectClose(new Error("Ingest signal client container could not start."));
+    });
+    child.once("close", (code, signal) => {
+      exited = true;
+      resolveClose(Object.freeze({ code, signal }));
+    });
+  });
+  void closed.catch(() => undefined);
+  child.stdin.end(
+    JSON.stringify({
+      bodyBase64Url: request.body.toString("base64url"),
+      headers: Object.fromEntries(request.headers.entries()),
+      method: policy.method,
+      url: `http://127.0.0.1:${signalProcessListenerPort}${policy.requestTarget}`,
+    }),
+  );
+  return Object.freeze({
+    closed,
+    hasExited: () => exited,
+    outputOverflow: () => outputOverflow,
+    stderr: () => stderr,
+    stdout: () => stdout,
+  });
+}
+
+async function readSignalProcessClientResult(client) {
+  const closeResult = await waitWithDeadline(
+    client.closed,
+    signalProcessCloseTimeoutMs,
+    "Ingest signal client did not close within its fixed deadline.",
+  );
+  assert.equal(client.outputOverflow(), false, "Ingest signal client output must stay bounded");
+  assert.equal(client.stderr(), "", "Ingest signal client must emit no diagnostic output");
+  assert.ok(Buffer.byteLength(client.stdout(), "utf8") <= maximumSignalClientOutputBytes);
+
+  const serialized = JSON.parse(client.stdout());
+  if (closeResult.code === 1 && closeResult.signal === null) {
+    assert.deepEqual(Object.keys(serialized), ["clientError"]);
+    assert.match(
+      serialized.clientError,
+      /^(?:client_failed|fetch_failed|fetch_refused|fetch_socket_closed|input_invalid|response_invalid)$/,
+    );
+    throw new Error(`Ingest signal client failed closed (${serialized.clientError}).`);
+  }
+  assert.deepEqual(closeResult, { code: 0, signal: null });
+  assert.deepEqual(Object.keys(serialized).sort(), ["body", "headers", "status"]);
+  assert.equal(
+    serialized.headers !== null &&
+      typeof serialized.headers === "object" &&
+      !Array.isArray(serialized.headers),
+    true,
+  );
+  const response = Object.freeze({ headers: new Headers(serialized.headers) });
+  assertResponseHeaders(response, serialized.body, serialized.status !== 200);
+  return Object.freeze({ body: serialized.body, status: serialized.status });
+}
+
+async function waitForSignalProcessContainerExit() {
+  const deadline = Date.now() + signalProcessCloseTimeoutMs;
+  while (Date.now() < deadline) {
+    const state = readSignalProcessContainerState();
+    if (!state.Running) {
+      return state;
+    }
+    await sleep(signalProcessPollIntervalMs);
+  }
+  throw new Error("Ingest signal container did not exit within its fixed deadline.");
+}
+
+async function exerciseEmittedIngestSignalProcess(policy, keyPair) {
+  const runtime = createPortableIngestSignalRuntime();
+  let blocker;
+  let blockerStopped = false;
+  let client;
+  try {
+    blocker = await startDatabaseOriginReplayBlocker();
+    createSignalProcessContainer(runtime.runtimeDirectory);
+    requireSuccess(
+      docker(["start", signalProcessContainerName], { timeout: 15_000 }),
+      "Ingest signal container start",
+    );
+    await waitForSignalProcessListener();
+
+    const observedAt = new Date().toISOString();
+    const request = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x37),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x47),
+      originTimestamp: observedAt,
+      payload: createPayload(signalProcessSyncId, observedAt, 401, {
+        payloadSourceId: admissionSourceId,
+      }),
+      policy,
+      requestDeviceId: admissionDeviceId,
+    });
+    client = startSignalProcessClient(policy, request);
+    await waitForOneBlockedOriginConsume(client);
+
+    requireSuccess(
+      docker(["kill", "--signal", "SIGTERM", signalProcessContainerName], {
+        timeout: 10_000,
+      }),
+      "Ingest signal delivery",
+    );
+    const signalledState = readSignalProcessContainerState();
+    assert.equal(
+      signalledState.Running,
+      true,
+      "the OS-signalled Ingest host must wait for its active request",
+    );
+    assert.equal(
+      readSignalProcessContainerOutput(),
+      "",
+      "the OS-signalled Ingest host must remain silent while draining",
+    );
+
+    await stopDatabaseOriginReplayBlocker(blocker);
+    blockerStopped = true;
+    let clientResult;
+    try {
+      clientResult = await readSignalProcessClientResult(client);
+    } catch (error) {
+      const failedState = await waitForSignalProcessContainerExit();
+      const persistedCount = psqlScalar(
+        `SET ROLE viberacing_owner;
+SELECT pg_catalog.count(*)::integer
+FROM viberacing_private.usage_snapshots
+WHERE device_key_id = '${admissionDeviceKeyId}'
+  AND sync_id = '${signalProcessSyncId}';`,
+        "failed emitted Ingest signal persistence classification",
+      );
+      throw new Error(
+        `${error.message} Host exit ${String(failedState.ExitCode)}; persisted snapshots ${persistedCount}.`,
+      );
+    }
+    assertSuccess(clientResult, {
+      acceptedEntries: 1,
+      outcome: "accepted",
+      syncId: signalProcessSyncId,
+    });
+
+    const state = await waitForSignalProcessContainerExit();
+    assert.equal(state.Status, "exited");
+    assert.equal(state.ExitCode, 0, "the OS-signalled Ingest host must exit successfully");
+    assert.equal(state.OOMKilled, false);
+    assert.equal(state.Error, "");
+    assert.equal(
+      readSignalProcessContainerOutput(),
+      "",
+      "the OS-signalled Ingest host must remain silent through graceful exit",
+    );
+    assert.equal(
+      psqlScalar(
+        `SELECT pg_catalog.count(*)::integer
+FROM pg_catalog.pg_stat_activity
+WHERE application_name = 'viberacing-ingest-community-sync'
+  AND usename = '${ingestLogin}';`,
+        "emitted Ingest signal released-session verification",
+      ),
+      "0",
+      "graceful exit must release every exact Ingest database session",
+    );
+
+    const storedState = JSON.parse(
+      psqlScalar(
+        `SET ROLE viberacing_owner;
+SELECT pg_catalog.jsonb_build_object(
+  'deviceNonceCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.device_nonces
+    WHERE device_key_id = '${admissionDeviceKeyId}'
+  ),
+  'originCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.origin_nonces
+    WHERE origin_key_id = '${originKeyId}'
+  ),
+  'snapshotCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_snapshots
+    WHERE device_key_id = '${admissionDeviceKeyId}'
+      AND sync_id = '${signalProcessSyncId}'
+  ),
+  'snapshotEntryCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_snapshot_entries AS entry_record
+    JOIN viberacing_private.usage_snapshots AS snapshot_record
+      ON snapshot_record.usage_snapshot_id = entry_record.usage_snapshot_id
+    WHERE snapshot_record.device_key_id = '${admissionDeviceKeyId}'
+      AND snapshot_record.sync_id = '${signalProcessSyncId}'
+  ),
+  'sourceDayCount', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.source_day_values
+    WHERE source_id = '${admissionSourceId}'
+  ),
+  'sourceTokens', (
+    SELECT tokens
+    FROM viberacing_private.source_day_values
+    WHERE source_id = '${admissionSourceId}'
+  )
+)::text;`,
+        "emitted Ingest signal stored-state verification",
+      ),
+    );
+    assert.deepEqual(storedState, {
+      deviceNonceCount: 1,
+      originCount: 1,
+      snapshotCount: 1,
+      snapshotEntryCount: 1,
+      sourceDayCount: 1,
+      sourceTokens: 401,
+    });
+  } finally {
+    try {
+      if (blocker !== undefined && !blockerStopped) {
+        await stopDatabaseOriginReplayBlocker(blocker).catch(() => undefined);
+      }
+    } finally {
+      try {
+        removeSignalProcessContainer(signalProcessClientContainerName);
+      } finally {
+        try {
+          removeSignalProcessContainer(signalProcessContainerName);
+        } finally {
+          try {
+            if (client !== undefined) {
+              await waitWithDeadline(
+                client.closed,
+                signalProcessCloseTimeoutMs,
+                "Ingest signal client did not settle during cleanup.",
+              ).catch(() => undefined);
+            }
+          } finally {
+            removePortableNodeRuntime(runtime);
+          }
+        }
+      }
+    }
+  }
+}
+
 async function startHost(startConfiguredIngestHost, databasePort) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const listenerPort = await findAvailableListenerPort();
@@ -998,55 +1656,61 @@ COMMIT;`,
       "least-privileged Ingest login and synthetic device setup",
     );
 
-    const hostModuleUrl = pathToFileURL(
-      resolve(root, "apps", "ingest-host", "dist", "host.js"),
-    ).href;
-    const { startConfiguredIngestHost } = await import(hostModuleUrl);
-    const host = await startHost(startConfiguredIngestHost, databasePort);
-    controller = host.controller;
+    if (integrationMode === "signal_process") {
+      await exerciseEmittedIngestSignalProcess(policy, admissionKeyPair);
+      console.log(
+        "Emitted Ingest signal PostgreSQL integration passed (OS SIGTERM, active signed-request settlement, silent graceful exit, released session, and exact stored state).",
+      );
+    } else {
+      const hostModuleUrl = pathToFileURL(
+        resolve(root, "apps", "ingest-host", "dist", "host.js"),
+      ).href;
+      const { startConfiguredIngestHost } = await import(hostModuleUrl);
+      const host = await startHost(startConfiguredIngestHost, databasePort);
+      controller = host.controller;
 
-    const acceptedObservedAt = new Date().toISOString();
-    const acceptedPayload = createPayload(acceptedSyncId, acceptedObservedAt, 123);
-    const acceptedRequest = buildSignedRequest({
-      deviceNonceBytes: Buffer.alloc(16, 0x11),
-      keyPair,
-      originNonceBytes: Buffer.alloc(16, 0x21),
-      originTimestamp: acceptedObservedAt,
-      payload: acceptedPayload,
-      policy,
-    });
-    const acceptedResult = await postSignedRequest(host.baseUrl, policy, acceptedRequest);
-    assertSuccess(acceptedResult, {
-      acceptedEntries: 1,
-      outcome: "accepted",
-      syncId: acceptedSyncId,
-    });
+      const acceptedObservedAt = new Date().toISOString();
+      const acceptedPayload = createPayload(acceptedSyncId, acceptedObservedAt, 123);
+      const acceptedRequest = buildSignedRequest({
+        deviceNonceBytes: Buffer.alloc(16, 0x11),
+        keyPair,
+        originNonceBytes: Buffer.alloc(16, 0x21),
+        originTimestamp: acceptedObservedAt,
+        payload: acceptedPayload,
+        policy,
+      });
+      const acceptedResult = await postSignedRequest(host.baseUrl, policy, acceptedRequest);
+      assertSuccess(acceptedResult, {
+        acceptedEntries: 1,
+        outcome: "accepted",
+        syncId: acceptedSyncId,
+      });
 
-    const duplicateRequest = buildSignedRequest({
-      deviceNonceBytes: Buffer.alloc(16, 0x11),
-      keyPair,
-      originNonceBytes: Buffer.alloc(16, 0x22),
-      originTimestamp: acceptedObservedAt,
-      payload: acceptedPayload,
-      policy,
-    });
-    assert.deepEqual(duplicateRequest.body, acceptedRequest.body);
-    assert.equal(
-      duplicateRequest.headers.get(policy.deviceSignature.headers.signature),
-      acceptedRequest.headers.get(policy.deviceSignature.headers.signature),
-    );
-    const duplicateResult = await postSignedRequest(host.baseUrl, policy, duplicateRequest);
-    assertSuccess(duplicateResult, {
-      acceptedEntries: 0,
-      outcome: "duplicate",
-      syncId: acceptedSyncId,
-    });
+      const duplicateRequest = buildSignedRequest({
+        deviceNonceBytes: Buffer.alloc(16, 0x11),
+        keyPair,
+        originNonceBytes: Buffer.alloc(16, 0x22),
+        originTimestamp: acceptedObservedAt,
+        payload: acceptedPayload,
+        policy,
+      });
+      assert.deepEqual(duplicateRequest.body, acceptedRequest.body);
+      assert.equal(
+        duplicateRequest.headers.get(policy.deviceSignature.headers.signature),
+        acceptedRequest.headers.get(policy.deviceSignature.headers.signature),
+      );
+      const duplicateResult = await postSignedRequest(host.baseUrl, policy, duplicateRequest);
+      assertSuccess(duplicateResult, {
+        acceptedEntries: 0,
+        outcome: "duplicate",
+        syncId: acceptedSyncId,
+      });
 
-    const replayResult = await postSignedRequest(host.baseUrl, policy, duplicateRequest);
-    assertUnauthorized(replayResult);
+      const replayResult = await postSignedRequest(host.baseUrl, policy, duplicateRequest);
+      assertUnauthorized(replayResult);
 
-    psql(
-      `BEGIN;
+      psql(
+        `BEGIN;
 SET LOCAL ROLE viberacing_owner;
 UPDATE viberacing_private.device_keys
 SET
@@ -1055,45 +1719,49 @@ SET
 WHERE device_key_id = '${deviceKeyId}'
   AND state = 'active';
 COMMIT;`,
-      "synthetic device revocation",
-    );
+        "synthetic device revocation",
+      );
 
-    const revokedObservedAt = new Date().toISOString();
-    const revokedRequest = buildSignedRequest({
-      deviceNonceBytes: Buffer.alloc(16, 0x12),
-      keyPair,
-      originNonceBytes: Buffer.alloc(16, 0x23),
-      originTimestamp: revokedObservedAt,
-      payload: createPayload(revokedSyncId, revokedObservedAt, 456),
-      policy,
-    });
-    const revokedResult = await postSignedRequest(host.baseUrl, policy, revokedRequest);
-    assertUnauthorized(revokedResult);
+      const revokedObservedAt = new Date().toISOString();
+      const revokedRequest = buildSignedRequest({
+        deviceNonceBytes: Buffer.alloc(16, 0x12),
+        keyPair,
+        originNonceBytes: Buffer.alloc(16, 0x23),
+        originTimestamp: revokedObservedAt,
+        payload: createPayload(revokedSyncId, revokedObservedAt, 456),
+        policy,
+      });
+      const revokedResult = await postSignedRequest(host.baseUrl, policy, revokedRequest);
+      assertUnauthorized(revokedResult);
 
-    const admissionResults = await exerciseNoQueueAdmission(host.baseUrl, policy, admissionKeyPair);
+      const admissionResults = await exerciseNoQueueAdmission(
+        host.baseUrl,
+        policy,
+        admissionKeyPair,
+      );
 
-    await controller.close();
-    controller = undefined;
+      await controller.close();
+      controller = undefined;
 
-    const emittedProcessResult = await exerciseEmittedIngestProcess(
-      databasePort,
-      policy,
-      admissionKeyPair,
-    );
+      const emittedProcessResult = await exerciseEmittedIngestProcess(
+        databasePort,
+        policy,
+        admissionKeyPair,
+      );
 
-    const requestIds = new Set([
-      acceptedResult.body.requestId,
-      duplicateResult.body.requestId,
-      replayResult.body.requestId,
-      revokedResult.body.requestId,
-      ...admissionResults.map((result) => result.body.requestId),
-      emittedProcessResult.body.requestId,
-    ]);
-    assert.equal(requestIds.size, 10);
+      const requestIds = new Set([
+        acceptedResult.body.requestId,
+        duplicateResult.body.requestId,
+        replayResult.body.requestId,
+        revokedResult.body.requestId,
+        ...admissionResults.map((result) => result.body.requestId),
+        emittedProcessResult.body.requestId,
+      ]);
+      assert.equal(requestIds.size, 10);
 
-    const storedState = JSON.parse(
-      psqlScalar(
-        `SET ROLE viberacing_owner;
+      const storedState = JSON.parse(
+        psqlScalar(
+          `SET ROLE viberacing_owner;
 SELECT pg_catalog.jsonb_build_object(
   'deviceNonceCount', (
     SELECT pg_catalog.count(*)::integer
@@ -1185,32 +1853,33 @@ SELECT pg_catalog.jsonb_build_object(
     WHERE sync_id = '${emittedProcessSyncId}'
   )
 )::text;`,
-        "Ingest stored-state verification",
-      ),
-    );
-    assert.deepEqual(storedState, {
-      admissionDeviceNonceCount: 5,
-      admissionDeviceState: "active",
-      admissionSnapshotCount: 5,
-      admissionSnapshotEntryCount: 5,
-      admissionSourceDayCount: 5,
-      admissionSourceTokens: [200, 201, 202, 203, 300],
-      deviceNonceCount: 1,
-      deviceState: "revoked",
-      emittedProcessSyncCount: 1,
-      originCount: 8,
-      rejectedAdmissionSyncCount: 0,
-      snapshotCount: 1,
-      snapshotEntryCount: 1,
-      snapshotOutcome: "accepted",
-      sourceDayCount: 1,
-      sourceTokens: 123,
-      unexpectedSyncCount: 0,
-    });
+          "Ingest stored-state verification",
+        ),
+      );
+      assert.deepEqual(storedState, {
+        admissionDeviceNonceCount: 5,
+        admissionDeviceState: "active",
+        admissionSnapshotCount: 5,
+        admissionSnapshotEntryCount: 5,
+        admissionSourceDayCount: 5,
+        admissionSourceTokens: [200, 201, 202, 203, 300],
+        deviceNonceCount: 1,
+        deviceState: "revoked",
+        emittedProcessSyncCount: 1,
+        originCount: 8,
+        rejectedAdmissionSyncCount: 0,
+        snapshotCount: 1,
+        snapshotEntryCount: 1,
+        snapshotOutcome: "accepted",
+        sourceDayCount: 1,
+        sourceTokens: 123,
+        unexpectedSyncCount: 0,
+      });
 
-    console.log(
-      "Ingest PostgreSQL integration passed (factory and emitted-process acceptance, duplicate, replay denial, revocation denial, four-slot no-queue admission, and exact stored state).",
-    );
+      console.log(
+        "Ingest PostgreSQL integration passed (factory and emitted-process acceptance, duplicate, replay denial, revocation denial, four-slot no-queue admission, and exact stored state).",
+      );
+    }
   } catch (error) {
     primaryFailure = error;
   } finally {

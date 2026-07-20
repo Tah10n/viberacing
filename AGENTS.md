@@ -88,7 +88,12 @@ fifth with generic 503 without a fifth replay call, then releases and proves all
 before closing the imported host. The same gate then starts the built entry point as a separate
 silent process, observes its loopback listener without application work, proves one more exact
 accepted request, and forcibly ends only that test child before removing the container. This does
-not prove OS-signal delivery or graceful emitted-child settlement. The three public
+not prove its own graceful emitted-child settlement. A separate gate constructs a link-free exact
+production runtime under the pinned Linux Node image, blocks one independently signed request at the
+origin-replay call, delivers a real `SIGTERM`, releases the lock before the database deadline, and
+proves the exact acknowledgement and stored state, silent code-0 host exit, session release, and
+immutable runtime contents. It does not prove deployed signal routing, Railway/orchestrator drain,
+external TLS, protected secret delivery, representative capacity, or deployment. The three public
 score/race/status routes now share a second exact default-off module-load gate before query/header
 parsing, admission acquisition, or storage work. Their visible current-week browser consumer retains
 rounded freshness, optional preference-gated streak, and an explicit validated synthetic fallback
@@ -400,9 +405,18 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   returns generic 503 without a fifth database call; the four settle successfully after release. It
   then closes the imported host, starts the built entry point as a silent child, observes its
   loopback listener, proves one more exact accepted request, forcibly ends only that child, and
-  removes its container, network, and storage. It proves no OS-signal delivery, graceful
-  emitted-child settlement, external TLS, protected secret delivery, edge route, distributed
-  control, production credential, real-user data, representative load, or capacity.
+  removes its container, network, and storage. It proves no graceful settlement for that forcibly
+  ended child, external TLS, protected secret delivery, edge route, distributed control, production
+  credential, real-user data, representative load, or capacity.
+- `pnpm run test:ingest:signal-postgres-integration` builds a link-free runtime containing only the
+  emitted Ingest-host/Ingest/contracts workspaces and their exact installed production graph, mounts
+  it read-only in the pinned Linux Node image, and joins only the disposable database network
+  namespace. A separate capability-free client container receives one independently signed synthetic
+  request through stdin. The gate holds that call at persistent origin replay, delivers a real
+  `SIGTERM`, releases it, and proves exact HTTP/persistence settlement, silent code-0 exit,
+  database-session release, immutable runtime contents, and complete cleanup. It does not prove a
+  deployed signal route, Railway/orchestrator drain, external TLS, protected secret delivery,
+  production credentials, representative load/capacity, real-user input, or deployment.
 - `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS, and
   private reporting controls are configured.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability

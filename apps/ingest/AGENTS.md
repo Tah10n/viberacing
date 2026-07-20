@@ -32,8 +32,10 @@ changing this workspace.
   request ID, expose an anomaly reason, or acknowledge a failed submission.
 - Only `community-sync-http-server.ts` may import Fastify or own HTTP server behavior. Preserve the
   exact copied body bytes and raw-header sequence, keep proxy trust and inbound request IDs
-  disabled, hold the four-call no-queue lease until application settlement, and serialize only
-  revalidated contract decisions with the versioned timeout/header/cache/CORS policy.
+  disabled, hold the four-call no-queue lease until application settlement, retain
+  `forceCloseConnections: false` so a fully read request is not misclassified as idle during
+  database work, and serialize only revalidated contract decisions with the versioned
+  timeout/header/cache/CORS policy.
 - This workspace owns no OAuth, passkey, admin, edge signing, port/host/TLS deployment entry point,
   logging, analytics, monitoring backend, or scheduler. It contains no real origin key,
   secret-manager integration, working database credential, or public ingress configuration.
@@ -43,6 +45,7 @@ changing this workspace.
 ## Required checks
 
 Run `pnpm run lint:ingest`, `pnpm run typecheck:ingest`, `pnpm run test:ingest:coverage`,
-`pnpm run build:ingest`, `pnpm run test:ingest:postgres-integration`, and the root
-`pnpm run verify`. Before committing, review the exact staged diff and run
-`pnpm run check:public:staged` plus `git diff --cached --check`.
+`pnpm run build:ingest`, `pnpm run test:ingest:postgres-integration`,
+`pnpm run test:ingest:signal-postgres-integration`, and the root `pnpm run verify`. Before
+committing, review the exact staged diff and run `pnpm run check:public:staged` plus
+`git diff --cached --check`.

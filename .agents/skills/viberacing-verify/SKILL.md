@@ -51,7 +51,9 @@ report the mismatch as a blocker. Never bypass a hook or checker, weaken an allo
 lockfile or license inventory without review, or change fixtures only to obtain a pass.
 
 Treat Docker-backed Database/Migration/Web/Ingest/Jobs integrations and browser capture as separate
-local synthetic evidence. Within Jobs scheduler evidence, keep the fixed-clock startup core,
+local synthetic evidence. Keep the forcibly ended Ingest emitted-child result distinct from its
+Linux OS-signalled active-request result; the latter proves only one local signed request and not
+Railway/orchestrator drain. Within Jobs scheduler evidence, keep the fixed-clock startup core,
 injected repeated-timer, injected process-lifecycle, forcibly ended real-clock emitted process, and
 Linux OS-signalled emitted-process results distinct. The last proves only one local synthetic
 `SIGTERM` path while the first finalization call is active; it is not deployed signal routing or

@@ -62,22 +62,32 @@ policy, and `connector-sync-authentication.json`; documentation does not imply d
 The focused tests use synthetic keys and mock pools; one signed request exercises the actual
 verifier and database adapter together, while the isolated PostgreSQL suite separately proves
 persistent atomic consume and cleanup races. Loopback socket tests prove malformed framing,
-duplicate-header evidence, and partial-request closure; injection tests prove the remaining route,
-overload, timeout policy, and serialization behavior. The current 426-test Ingest suite has 100%
-statement, branch, function, and line coverage. This workspace still owns no listener or process
-lifecycle; the separate host's 130 local tests prove only its closed configuration, composition,
-bind, and shutdown behavior. A separate opt-in root integration builds the emitted host, creates a
-synthetic dedicated Ingest login in disposable PostgreSQL, sends independently composed signed
-loopback requests, and proves accepted, duplicate, persistent replay denial, revoked-device denial,
-closed response headers, and exact stored state. A controlled owner lock additionally holds four
-valid requests at `consume_origin_nonce`, proves a fifth receives generic 503 without a fifth replay
-call, and then proves the first four accept after release. After the imported host closes, the gate
-starts the built host entry point as a silent child, proves a separate accepted request through its
-listener, and forcibly ends only that test child. There is still no OS-signal delivery, graceful
-emitted-child settlement, deployment protected-key injection, edge signer, direct-origin denial,
-trusted external TLS route, monitoring backend, distributed control, deployment database
-login/certificate, connector, representative load/capacity evidence, or deployment. These boundaries
-therefore do not prove real-user synchronization or production capacity.
+duplicate-header evidence, partial-request closure, and active-listener drain; injection tests prove
+the remaining route, overload, timeout policy, and serialization behavior. The current 427-test
+Ingest suite has 100% statement, branch, function, and line coverage. This workspace still owns no
+listener or process lifecycle; the separate host's 130 local tests prove only its closed
+configuration, composition, bind, and shutdown behavior. A separate opt-in root integration builds
+the emitted host, creates a synthetic dedicated Ingest login in disposable PostgreSQL, sends
+independently composed signed loopback requests, and proves accepted, duplicate, persistent replay
+denial, revoked-device denial, closed response headers, and exact stored state. A controlled owner
+lock additionally holds four valid requests at `consume_origin_nonce`, proves a fifth receives
+generic 503 without a fifth replay call, and then proves the first four accept after release. After
+the imported host closes, the gate starts the built host entry point as a silent child, proves a
+separate accepted request through its listener, and forcibly ends only that test child. That gate
+supplies no OS-signal delivery, graceful emitted-child settlement, deployment protected-key
+injection, edge signer, direct-origin denial, trusted external TLS route, monitoring backend,
+distributed control, deployment database login/certificate, connector, representative load/capacity
+evidence, or deployment. These boundaries therefore do not prove real-user synchronization or
+production capacity.
+
+A second opt-in gate builds a link-free runtime containing only the emitted host, Ingest, contracts,
+and exact installed production dependencies; mounts it read-only under the pinned Linux Node image;
+and sends one independently signed synthetic request from a separate capability-free container over
+stdin. It holds that call at origin replay, delivers a real `SIGTERM`, releases the lock, and proves
+the exact acknowledgement and stored state, silent code-0 host exit, database-session release,
+unchanged runtime fingerprint, and complete cleanup. This is one local Linux signal path, not a
+Railway/orchestrator drain, external TLS/edge route, protected secret or production login result,
+representative capacity result, real-user synchronization, or deployment.
 
 Run from the repository root:
 
@@ -87,6 +97,7 @@ pnpm run typecheck:ingest
 pnpm run test:ingest:coverage
 pnpm run build:ingest
 pnpm run test:ingest:postgres-integration
+pnpm run test:ingest:signal-postgres-integration
 ```
 
 See [`apps/ingest-host/README.md`](../ingest-host/README.md) for the separate listener and process

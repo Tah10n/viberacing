@@ -213,6 +213,12 @@ export function validateWorkflow(path, workflow) {
       "pnpm run test:migrate:postgres-integration",
       "pnpm run test:web:postgres-integration",
       "pnpm run test:ingest:postgres-integration",
+      "pnpm run test:ingest:signal-postgres-integration",
+      "pnpm run test:jobs:postgres-integration",
+      "pnpm run test:jobs-scheduler:postgres-integration",
+      "pnpm run test:jobs-scheduler:timer-postgres-integration",
+      "pnpm run test:jobs-scheduler:lifecycle-postgres-integration",
+      "pnpm run test:jobs-scheduler:process-postgres-integration",
       "pnpm run test:jobs-scheduler:signal-postgres-integration",
     ];
     const positions = requiredRuns.map((command) =>
@@ -220,13 +226,13 @@ export function validateWorkflow(path, workflow) {
     );
     if (positions.some((position) => position === -1)) {
       findings.push(
-        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run verify:node, and run the Migration, Web, and Ingest PostgreSQL integrations plus the OS-signal scheduler integration using exact commands",
+        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run verify:node, and run all ten synthetic PostgreSQL integrations using exact commands",
       );
     } else if (
       !positions.every((position, index) => index === 0 || position > positions[index - 1])
     ) {
       findings.push(
-        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, the Migration, Web, and Ingest PostgreSQL integrations, and the OS-signal scheduler integration",
+        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, and all ten synthetic PostgreSQL integrations",
       );
     }
 
@@ -345,63 +351,65 @@ export function validateCompose(compose) {
     findings.push("postgres-test must use only the documented synthetic local password");
   }
 
-  const schedulerSignalTest = compose?.services?.["jobs-scheduler-signal-test"];
-  if (!isObject(schedulerSignalTest)) {
-    findings.push("compose.yaml must define the isolated jobs-scheduler-signal-test runtime");
+  const nodeProcessSignalTest = compose?.services?.["node-process-signal-test"];
+  if (!isObject(nodeProcessSignalTest)) {
+    findings.push("compose.yaml must define the isolated node-process-signal-test runtime");
     return findings;
   }
   if (
-    Object.keys(schedulerSignalTest).sort().join(",") !==
+    Object.keys(nodeProcessSignalTest).sort().join(",") !==
     "cap_drop,command,image,mem_limit,network_mode,pids_limit,profiles,read_only,restart,security_opt,user"
   ) {
-    findings.push("jobs-scheduler-signal-test must retain its exact inert service shape");
-  }
-  if (!/^node:24\.18\.0-bookworm-slim@sha256:[a-f0-9]{64}$/.test(schedulerSignalTest.image ?? "")) {
-    findings.push("jobs-scheduler-signal-test must pin the official Node image by sha256 digest");
+    findings.push("node-process-signal-test must retain its exact inert service shape");
   }
   if (
-    !Array.isArray(schedulerSignalTest.profiles) ||
-    schedulerSignalTest.profiles.length !== 1 ||
-    schedulerSignalTest.profiles[0] !== "test"
+    !/^node:24\.18\.0-bookworm-slim@sha256:[a-f0-9]{64}$/.test(nodeProcessSignalTest.image ?? "")
   ) {
-    findings.push("jobs-scheduler-signal-test must be opt-in through only the test profile");
+    findings.push("node-process-signal-test must pin the official Node image by sha256 digest");
   }
   if (
-    schedulerSignalTest.restart !== "no" ||
-    schedulerSignalTest.network_mode !== "none" ||
-    schedulerSignalTest.read_only !== true ||
-    schedulerSignalTest.user !== "node" ||
-    schedulerSignalTest.pids_limit !== 64 ||
-    schedulerSignalTest.mem_limit !== "256m"
+    !Array.isArray(nodeProcessSignalTest.profiles) ||
+    nodeProcessSignalTest.profiles.length !== 1 ||
+    nodeProcessSignalTest.profiles[0] !== "test"
+  ) {
+    findings.push("node-process-signal-test must be opt-in through only the test profile");
+  }
+  if (
+    nodeProcessSignalTest.restart !== "no" ||
+    nodeProcessSignalTest.network_mode !== "none" ||
+    nodeProcessSignalTest.read_only !== true ||
+    nodeProcessSignalTest.user !== "node" ||
+    nodeProcessSignalTest.pids_limit !== 64 ||
+    nodeProcessSignalTest.mem_limit !== "256m"
   ) {
     findings.push(
-      "jobs-scheduler-signal-test must retain its non-restarting, read-only, unprivileged resource boundary and disable networking",
+      "node-process-signal-test must retain its non-restarting, read-only, unprivileged resource boundary and disable networking",
     );
   }
   if (
-    !Array.isArray(schedulerSignalTest.command) ||
-    JSON.stringify(schedulerSignalTest.command) !== JSON.stringify(["node", "--version"])
+    !Array.isArray(nodeProcessSignalTest.command) ||
+    JSON.stringify(nodeProcessSignalTest.command) !== JSON.stringify(["node", "--version"])
   ) {
-    findings.push("jobs-scheduler-signal-test must expose only the inert Node version command");
+    findings.push("node-process-signal-test must expose only the inert Node version command");
   }
   if (
-    schedulerSignalTest.privileged === true ||
-    !Array.isArray(schedulerSignalTest.cap_drop) ||
-    JSON.stringify(schedulerSignalTest.cap_drop) !== JSON.stringify(["ALL"]) ||
-    !Array.isArray(schedulerSignalTest.security_opt) ||
-    !schedulerSignalTest.security_opt.includes("no-new-privileges:true")
+    nodeProcessSignalTest.privileged === true ||
+    !Array.isArray(nodeProcessSignalTest.cap_drop) ||
+    JSON.stringify(nodeProcessSignalTest.cap_drop) !== JSON.stringify(["ALL"]) ||
+    !Array.isArray(nodeProcessSignalTest.security_opt) ||
+    !nodeProcessSignalTest.security_opt.includes("no-new-privileges:true")
   ) {
     findings.push(
-      "jobs-scheduler-signal-test must drop all capabilities and enable no-new-privileges",
+      "node-process-signal-test must drop all capabilities and enable no-new-privileges",
     );
   }
   if (
-    (Array.isArray(schedulerSignalTest.ports) && schedulerSignalTest.ports.length > 0) ||
-    (Array.isArray(schedulerSignalTest.volumes) && schedulerSignalTest.volumes.length > 0) ||
-    isObject(schedulerSignalTest.environment)
+    (Array.isArray(nodeProcessSignalTest.ports) && nodeProcessSignalTest.ports.length > 0) ||
+    (Array.isArray(nodeProcessSignalTest.volumes) && nodeProcessSignalTest.volumes.length > 0) ||
+    isObject(nodeProcessSignalTest.environment)
   ) {
     findings.push(
-      "jobs-scheduler-signal-test must declare no ports, volumes, or environment authority",
+      "node-process-signal-test must declare no ports, volumes, or environment authority",
     );
   }
   return findings;

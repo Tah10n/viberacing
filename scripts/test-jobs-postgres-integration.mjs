@@ -1,24 +1,15 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  cpSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  rmSync,
-} from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { parse } from "yaml";
 
 import { validateManifest } from "./check-database.mjs";
+import { createPortableNodeRuntime, removePortableNodeRuntime } from "./portable-node-runtime.mjs";
 
 // cspell:ignore usename
 
@@ -54,7 +45,7 @@ const schedulerProcessCloseTimeoutMs = 10_000;
 const schedulerProcessPollIntervalMs = 250;
 const schedulerSignalContainerImage = (() => {
   const compose = parse(readFileSync(resolve(root, "compose.yaml"), "utf8"));
-  const image = compose?.services?.["jobs-scheduler-signal-test"]?.image;
+  const image = compose?.services?.["node-process-signal-test"]?.image;
   assert.equal(typeof image, "string");
   assert.match(image, /^node:24\.18\.0-bookworm-slim@sha256:[a-f0-9]{64}$/);
   return image;
@@ -548,190 +539,21 @@ function startEmittedSchedulerProcess(databasePort) {
   });
 }
 
-function readPackageManifest(packageDirectory, label) {
-  const manifest = JSON.parse(readFileSync(join(packageDirectory, "package.json"), "utf8"));
-  assert.equal(
-    manifest !== null && typeof manifest === "object" && !Array.isArray(manifest),
-    true,
-    `${label} manifest must be one object`,
-  );
-  assert.match(manifest.name, /^(?:@[a-z0-9._-]+\/[a-z0-9._-]+|[a-z0-9._-]+)$/i);
-  assert.match(manifest.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
-  return manifest;
-}
-
-function findInstalledPackageDirectory(resolver, packageName) {
-  let packageEntry;
-  try {
-    packageEntry = resolver.resolve(`${packageName}/package.json`);
-  } catch {
-    packageEntry = resolver.resolve(packageName);
-  }
-
-  let candidate = dirname(packageEntry);
-  while (true) {
-    const manifestPath = join(candidate, "package.json");
-    if (existsSync(manifestPath)) {
-      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-      if (manifest?.name === packageName) {
-        return realpathSync(candidate);
-      }
-    }
-    const parent = dirname(candidate);
-    if (parent === candidate) {
-      throw new Error(`Installed package ${packageName} has no bounded package root.`);
-    }
-    candidate = parent;
-  }
-}
-
-function copyInstalledPackageGraph(
-  sourceDirectory,
-  destinationDirectory,
-  ancestorSources,
-  inventory,
-) {
-  const canonicalSource = realpathSync(sourceDirectory);
-  const manifest = readPackageManifest(canonicalSource, "portable runtime dependency");
-  const packageKey = `${manifest.name}@${manifest.version}`;
-  inventory.add(packageKey);
-
-  cpSync(canonicalSource, destinationDirectory, {
-    dereference: true,
-    filter: (source) => {
-      const nestedPath = relative(canonicalSource, source);
-      return nestedPath !== "node_modules" && !nestedPath.startsWith(`node_modules${sep}`);
-    },
-    recursive: true,
-  });
-
-  const resolver = createRequire(join(canonicalSource, "package.json"));
-  const requiredDependencies = Object.keys(manifest.dependencies ?? {});
-  const optionalDependencies = Object.keys(manifest.optionalDependencies ?? {});
-  const dependencyNames = [...new Set([...requiredDependencies, ...optionalDependencies])].sort();
-  const nextAncestors = new Set(ancestorSources);
-  nextAncestors.add(canonicalSource);
-
-  for (const dependencyName of dependencyNames) {
-    let dependencySource;
-    try {
-      dependencySource = findInstalledPackageDirectory(resolver, dependencyName);
-    } catch (error) {
-      if (optionalDependencies.includes(dependencyName)) {
-        continue;
-      }
-      throw error;
-    }
-    if (nextAncestors.has(dependencySource)) {
-      continue;
-    }
-    copyInstalledPackageGraph(
-      dependencySource,
-      join(destinationDirectory, "node_modules", ...dependencyName.split("/")),
-      nextAncestors,
-      inventory,
-    );
-  }
-}
-
-function fingerprintPortableRuntime(runtimeDirectory) {
-  const fingerprint = createHash("sha256");
-  let fileCount = 0;
-
-  const visit = (directory) => {
-    for (const name of readdirSync(directory).sort()) {
-      const path = join(directory, name);
-      const stat = lstatSync(path);
-      assert.equal(stat.isSymbolicLink(), false, "portable runtime must contain no links");
-      if (stat.isDirectory()) {
-        visit(path);
-        continue;
-      }
-      assert.equal(stat.isFile(), true, "portable runtime accepts only directories and files");
-      const relativePath = relative(runtimeDirectory, path).split(sep).join("/");
-      fingerprint.update(relativePath);
-      fingerprint.update("\0");
-      fingerprint.update(readFileSync(path));
-      fingerprint.update("\0");
-      fileCount += 1;
-    }
-  };
-
-  visit(runtimeDirectory);
-  assert.equal(
-    fileCount > 20 && fileCount < 500,
-    true,
-    "portable runtime file count must be bounded",
-  );
-  return Object.freeze({ digest: fingerprint.digest("hex"), fileCount });
-}
-
 function createPortableSchedulerRuntime() {
-  const targetDirectory = resolve(root, "target");
-  mkdirSync(targetDirectory, { recursive: true });
-  const runtimeDirectory = mkdtempSync(join(targetDirectory, "jobs-scheduler-signal-runtime-"));
-  try {
-    const schedulerDirectory = resolve(root, "apps", "jobs-scheduler");
-    const jobsDirectory = resolve(root, "apps", "jobs");
-    const schedulerManifest = readPackageManifest(schedulerDirectory, "scheduler workspace");
-    const jobsManifest = readPackageManifest(jobsDirectory, "Jobs workspace");
-    assert.deepEqual(schedulerManifest.dependencies, { "@viberacing/jobs": "workspace:*" });
-    assert.deepEqual(jobsManifest.dependencies, { pg: "8.22.0" });
-
-    cpSync(join(schedulerDirectory, "package.json"), join(runtimeDirectory, "package.json"));
-    cpSync(join(schedulerDirectory, "dist"), join(runtimeDirectory, "dist"), {
-      dereference: true,
-      recursive: true,
-    });
-
-    const portableJobsDirectory = join(runtimeDirectory, "node_modules", "@viberacing", "jobs");
-    mkdirSync(portableJobsDirectory, { recursive: true });
-    cpSync(join(jobsDirectory, "package.json"), join(portableJobsDirectory, "package.json"));
-    cpSync(join(jobsDirectory, "dist"), join(portableJobsDirectory, "dist"), {
-      dereference: true,
-      recursive: true,
-    });
-
-    const inventory = new Set();
-    copyInstalledPackageGraph(
-      realpathSync(join(jobsDirectory, "node_modules", "pg")),
-      join(portableJobsDirectory, "node_modules", "pg"),
-      new Set([realpathSync(jobsDirectory)]),
-      inventory,
-    );
-    assert.deepEqual(
-      [...inventory].sort(),
-      schedulerSignalRuntimeInventory,
-      "portable runtime must contain the exact installed production package graph",
-    );
-
-    return Object.freeze({
-      fingerprint: fingerprintPortableRuntime(runtimeDirectory),
-      runtimeDirectory,
-    });
-  } catch (error) {
-    rmSync(runtimeDirectory, { force: true, recursive: true });
-    throw error;
-  }
+  return createPortableNodeRuntime({
+    entryWorkspaceDirectory: resolve(root, "apps", "jobs-scheduler"),
+    expectedExternalInventory: schedulerSignalRuntimeInventory,
+    expectedWorkspaceInventory: ["@viberacing/jobs-scheduler@0.0.0", "@viberacing/jobs@0.0.0"],
+    maximumFileCount: 499,
+    minimumFileCount: 21,
+    root,
+    runtimePrefix: "jobs-scheduler-signal-runtime-",
+    workspaceDirectories: [resolve(root, "apps", "jobs-scheduler"), resolve(root, "apps", "jobs")],
+  });
 }
 
 function removePortableSchedulerRuntime(runtime) {
-  const targetDirectory = `${resolve(root, "target")}${sep}`;
-  assert.equal(
-    runtime.runtimeDirectory.startsWith(targetDirectory),
-    true,
-    "portable runtime cleanup must remain below the repository target directory",
-  );
-  assert.match(
-    runtime.runtimeDirectory.slice(targetDirectory.length),
-    /^jobs-scheduler-signal-runtime-[^\\/]+$/,
-  );
-  assert.deepEqual(
-    fingerprintPortableRuntime(runtime.runtimeDirectory),
-    runtime.fingerprint,
-    "the read-only container must not mutate its portable runtime",
-  );
-  rmSync(runtime.runtimeDirectory, { force: true, recursive: true });
+  removePortableNodeRuntime(runtime);
 }
 
 function startSchedulerSignalLockHolder() {
@@ -865,7 +687,7 @@ function createSchedulerSignalContainer(runtimeDirectory) {
   const environmentArguments = Object.entries(environment)
     .sort(([left], [right]) => left.localeCompare(right))
     .flatMap(([key, value]) => ["--env", `${key}=${value}`]);
-  const bindSource = runtimeDirectory.split(sep).join("/");
+  const bindSource = runtimeDirectory.replaceAll("\\", "/");
   const result = docker(
     [
       "create",

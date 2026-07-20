@@ -228,10 +228,13 @@ Versioning where its guarantees are applicable.
   sheds load after four unsettled application calls without a queue, applies explicit body/header/
   connection/socket-reuse and 5/33/34-second request/handler/connection limits, and emits only
   revalidated `no-store`, no-CORS acknowledgement/problem contracts. Real loopback framing plus
-  adversarial injection cases bring the Ingest suite to 426 tests at 100% coverage. The manifest now
-  generates both public GET and POST OpenAPI operations and binds the sync authentication policy
-  into its digest. This does not add a host/port/TLS entry point, edge signer, direct-origin denial,
-  live database credential, monitoring, load evidence, connector, or deployment.
+  adversarial injection cases bring the Ingest suite to 427 tests at 100% coverage. The server keeps
+  Fastify's force-close behavior disabled so an active socket cannot be reclassified as idle after
+  its request body is read; a real-listener regression requires the accepted response to settle
+  before application shutdown completes. The manifest now generates both public GET and POST OpenAPI
+  operations and binds the sync authentication policy into its digest. This does not add a
+  host/port/TLS entry point, edge signer, direct-origin denial, live database credential,
+  monitoring, load evidence, connector, or deployment.
 - A separate bounded Ingest host workspace that admits only exact loopback cleartext in local/test
   mode or `0.0.0.0:$PORT` behind an explicit Railway-edge TLS contract in production. It composes
   only after exact `VIBERACING_INGEST_ENABLED=true`; every other value fails before inspecting
@@ -254,6 +257,17 @@ Versioning where its guarantees are applicable.
   that test child before cleanup. CI requires the gate, but it supplies no OS-signal delivery,
   graceful emitted-child settlement, external TLS, protected secret, edge route, distributed
   control, production credential, representative load, real-user input, or capacity evidence.
+- A separate opt-in emitted Ingest OS-signal integration. It assembles a link-free runtime from the
+  emitted host, Ingest, contracts, and exact installed production graph, fingerprints it, and mounts
+  it read-only under the pinned Linux Node image in only the disposable PostgreSQL network
+  namespace. A separate capability-free client receives one independently signed synthetic request
+  over stdin; the harness holds that request at the first origin-replay database call, delivers a
+  real `SIGTERM`, releases the lock before the database deadline, and requires the exact accepted
+  response and stored state. It also proves silent code-0 host exit, complete database-session
+  release, unchanged runtime contents, and bounded cleanup. CI requires the gate. This is one local
+  Linux active-request signal path, not Railway/orchestrator drain, external TLS/edge routing,
+  protected secret or production-login delivery, representative load/capacity, real-user input, or
+  deployment evidence.
 - A library-only Rust connector protocol foundation with one fixed stable App Server initialization
   exchange, 16 KiB LF-only framing, manual duplicate/unknown-field rejection, bounded discarded
   response values, terminal hostile-input state, and non-reflective errors. Seven public-API tests

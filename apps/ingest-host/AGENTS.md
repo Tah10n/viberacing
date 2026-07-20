@@ -34,6 +34,6 @@ host.
 Run `pnpm run lint:ingest-host`, `pnpm run typecheck:ingest-host`,
 `pnpm run test:ingest-host:coverage`, `pnpm run build:contracts`, `pnpm run build:ingest`,
 `pnpm run build:ingest-host`, `pnpm run check:ingest-host-entrypoint`,
-`pnpm run test:ingest:postgres-integration`, and the root `pnpm run verify`. Before committing,
-inspect the exact staged diff and run `pnpm run check:public:staged` plus
-`git diff --cached --check`.
+`pnpm run test:ingest:postgres-integration`, `pnpm run test:ingest:signal-postgres-integration`, and
+the root `pnpm run verify`. Before committing, inspect the exact staged diff and run
+`pnpm run check:public:staged` plus `git diff --cached --check`.

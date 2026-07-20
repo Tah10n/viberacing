@@ -254,11 +254,14 @@ flowchart LR
   the first replay-store call, rejects a fifth without a fifth replay call, and proves the four
   accepted results after release. After closing that imported host, the same gate starts the built
   entry point as a separate silent process, observes its loopback listener without application work,
-  proves one more exact accepted write, and forcibly ends only that test child. OS-signal delivery,
-  graceful emitted-child settlement, deployment drain, trusted external TLS and edge routing,
-  secret-manager/edge key injection, direct-origin denial, distributed rate/backpressure controls,
-  deployment login/certificate, representative load/capacity evidence, real-user end-to-end
-  integration, and deployment remain separate gates.
+  proves one more exact accepted write, and forcibly ends only that test child. A second opt-in gate
+  mounts the exact link-free emitted production graph read-only under the pinned Linux Node image,
+  blocks one independently signed request at origin replay, delivers a real `SIGTERM`, releases the
+  lock, and proves exact acknowledgement/persistence settlement, silent code-0 exit, session
+  release, immutable runtime contents, and cleanup. Railway/orchestrator drain, trusted external TLS
+  and edge routing, secret-manager/edge key injection, direct-origin denial, distributed
+  rate/backpressure controls, deployment login/certificate, representative load/capacity evidence,
+  real-user end-to-end integration, and deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
   The local runner now wraps only the twelve reviewed authentication/abandoned-enrollment/
   audit-event/invite/CarRecipe-proposal/ingest/finalized-source-day/pairing/session/
@@ -707,9 +710,11 @@ separate opt-in gate carries independently signed requests through the emitted l
 synthetic dedicated login in disposable PostgreSQL, checking accepted, duplicate, replay, revoke,
 response, exact persistence, and controlled four-slot no-queue behavior at the first replay-store
 call. After the imported host closes, that same gate also starts the silent built entry point for
-one separate accepted request before forcibly ending only its test child. This local evidence does
-not prove OS-signal delivery, graceful emitted-child settlement, or satisfy any deployment or
-representative-load gate above.
+one separate accepted request before forcibly ending only its test child. A separate exact-runtime
+gate delivers a real Linux `SIGTERM` while one independently signed request is blocked at origin
+replay, then proves its acknowledgement and stored-state settlement, silent host exit, session
+release, immutable runtime contents, and cleanup. This local evidence does not satisfy any
+Railway/orchestrator drain, deployment, or representative-load gate above.
 
 ### Storage
 

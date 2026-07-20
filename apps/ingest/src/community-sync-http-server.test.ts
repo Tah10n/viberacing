@@ -279,6 +279,53 @@ describe("Community sync Fastify construction", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it("drains an active listener response before closing the application", async () => {
+    let resolveExecution!: (decision: unknown) => void;
+    let resolveStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      resolveStarted = resolve;
+    });
+    const close = vi.fn(() => Promise.resolve());
+    const server = buildServer(
+      application(
+        () =>
+          new Promise<unknown>((resolve) => {
+            resolveExecution = resolve;
+            resolveStarted();
+          }),
+        close,
+      ),
+    );
+    const port = await listenOnLoopback(server);
+    const responsePromise = fetch(`http://127.0.0.1:${String(port)}${communitySyncRequestTarget}`, {
+      body: requestPayload,
+      headers: {
+        accept: "application/json",
+        connection: "close",
+        "content-type": "application/json",
+      },
+      method: "POST",
+      redirect: "error",
+    });
+
+    await started;
+    const closing = server.close();
+    expect(close).not.toHaveBeenCalled();
+    resolveExecution(successDecision());
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      acceptedEntries: 1,
+      outcome: "accepted",
+      requestId,
+      schemaVersion: 1,
+      syncId,
+    });
+    await closing;
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
   it("propagates a configured application close failure", async () => {
     const closeError = new Error("synthetic close failure");
     const server = buildServer(

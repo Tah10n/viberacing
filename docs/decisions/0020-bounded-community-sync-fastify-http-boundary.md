@@ -1,6 +1,6 @@
 # ADR 0020: Bounded Community sync Fastify HTTP boundary
 
-- Status: Accepted (local server/host and synthetic PostgreSQL integration; deployment pending)
+- Status: Accepted
 - Date: 2026-07-15
 - Decision owners: Ingest, API, Security, Privacy, Contracts, Dependencies, and Operations
 - Supersedes: None
@@ -61,7 +61,11 @@ settles, including after a framework timeout response. The 33-second handler pol
 adapter's 32-second client deadline, and the connection policy exceeds the handler deadline. The
 server also rejects insecure HTTP parsing, duplicate-slash and trailing-slash normalization,
 constructor/prototype poisoning, non-standard body writes, and missing HTTP/1.1 Host; it closes idle
-connections during shutdown.
+connections naturally within the five-second keep-alive bound during shutdown. It deliberately sets
+`forceCloseConnections: false`: Node may otherwise classify a socket as idle after reading the
+request body while its asynchronous application handler is still waiting on PostgreSQL, destroying
+the exact response before database settlement. Fastify still stops new admission on close, and the
+host's independent 36-second deadline remains the terminal bound.
 
 `Accept` uses a bounded closed grammar. Missing `Accept`, JSON, or a compatible wildcard with
 positive selected quality is accepted; the most specific matching range takes precedence, so an
@@ -161,7 +165,8 @@ proof/replay checks, or return unvalidated framework output.
 Current local evidence includes:
 
 - construction rejection for mutable, open, accessor-backed, non-function, and hostile application
-  objects, plus close-hook settlement;
+  objects, plus close-hook settlement and a real-listener regression proving an active asynchronous
+  response completes before application close;
 - exact raw-body and raw-header preservation, duplicated security-header evidence, strict route,
   method, content type, `Accept`, proxy, inbound-ID, and response-header behavior;
 - malformed framing and duplicate `Content-Length` over a real loopback socket, body/header budgets,
@@ -171,13 +176,16 @@ Current local evidence includes:
 - every application success/problem mapping, thrown/rejected work, framework-style 503, malformed or
   accessor-backed decisions, generated-validator rejection, entropy failure, write failure, and
   non-reflection assertions;
-- 108 additional cases, bringing the Ingest suite to 426 tests at 100% statement, branch, function,
+- 109 additional cases, bringing the Ingest suite to 427 tests at 100% statement, branch, function,
   and line coverage, plus strict lint, type checking, and production build;
 - two generated OpenAPI operations and 40 checker regression cases, including missing evidence,
   method-specific contract drift, referenced authentication-policy digest drift, and stale output;
 - one opt-in emitted-host integration proving accepted/duplicate/replay/revoke response status,
   headers, unique request IDs, exact PostgreSQL state, and four admitted calls held through the
-  first replay query while a fifth returns generic 503 without a fifth query; and
+  first replay query while a fifth returns generic 503 without a fifth query;
+- one separate opt-in pinned-Linux integration holding an independently signed emitted-host request
+  at that replay query, delivering `SIGTERM`, then proving exact HTTP and stored-state settlement,
+  silent code-0 exit, database-session release, and unchanged link-free runtime contents; and
 - exact lockfile, registry metadata, direct notice, inventory, license, script, and online advisory
   review for Fastify 5.10.0.
 

@@ -66,6 +66,9 @@ jobs:
       - name: Exercise the local Ingest HTTP-to-PostgreSQL path
         run: pnpm run test:ingest:postgres-integration
 
+      - name: Exercise the OS-signalled Ingest process-to-PostgreSQL path
+        run: pnpm run test:ingest:signal-postgres-integration
+
       - name: Exercise the local Jobs CLI-to-PostgreSQL path
         run: pnpm run test:jobs:postgres-integration
 

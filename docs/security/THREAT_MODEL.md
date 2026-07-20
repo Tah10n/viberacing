@@ -72,36 +72,38 @@ and a disposable least-privileged PostgreSQL login with exact stored-state verif
 controlled owner lock also holds four valid requests at the first replay query, rejects a fifth
 without a fifth replay call, and proves the four settle after release. After the imported host
 closes, the built entry point starts as a separate silent child and persists one more accepted
-request before forced test-child termination. It proves no OS-signal delivery, graceful
-emitted-child settlement, live HTTP edge, trusted external TLS route, distributed control,
-deployment credential/TLS connection, representative load, real-user result, or capacity. The public
-score/race/status routes have a shared exact default-off module gate plus request/response,
-admission, production-build, visible browser-consumer/fallback, and full synthetic emitted-Next-
-production-HTTP-to-disposable-PostgreSQL evidence with ephemeral certificate-verified TLS,
-widened-login denial, and private-table non-mutation. The same path now observes four lock-waiting
-score queries, rejects a fifth HTTP request without a fifth public-score query, and validates the
-four original responses after rollback. It proves no reusable/deployment certificate/login, external
-TLS/edge path, cache, representative load/capacity, monitoring, or deployment. The Jobs runner has
-strict command/config/pool/role/result evidence plus a synthetic CLI-to-PostgreSQL path with a
-widened-login denial and exact-state checks. The scheduler separately has exact-default-off,
-fixed-UTC-catalog, sequential/no-overlap, in-memory-slot, failure-containment, bounded-shutdown,
-fixed-clock production-core/PostgreSQL composition, and injected repeated-timer and
-process-lifecycle settlement evidence plus one real-clock emitted startup path through its terminal
-catalog marker, exact stored state, and forced test-child termination. A separate pinned-Linux path
-holds the emitted first finalization call, delivers an OS `SIGTERM`, and proves graceful settlement,
-no later job, silent code-0 exit, and session release. Host-timer delivery, a wall-clock recurring
-process callback, controller settlement in the forcibly ended child, and a deployed signal route are
-not proven. The identity slice has exact-origin/body/cookie, state/PKCE, token minimization,
-initial-registration, returning-login, session-derived passkey inventory, non-current-key
-revocation, backup-key addition, exact-handle profile-deletion request, source
-inventory/pause/reactivation/unlink, and active-device revoke including hidden-profile PostgreSQL
-evidence, fixed queries, admission, exact GitHub-only OAuth `form-action`, and EN/RU UI evidence
-with injected dependencies. Raw source IDs stay server-only; source controls receive only a
-15-minute encrypted token bound to the active session. Pairing start/poll and approval
-options/verification have a second exact Web module gate with factory-level negative evidence. None
-has a production database login, OAuth app, authenticator, edge, deployed scheduler/cadence,
-cache/backup purge, tombstone/restore replay, or network deployment. Controls below are marked
-**implemented** only when executable evidence exists in
+request before forced test-child termination. A separate pinned-Linux gate blocks one independently
+signed request at origin replay, delivers a real `SIGTERM`, and proves exact HTTP/database
+settlement, silent code-0 exit, session release, runtime immutability, and cleanup. Neither result
+proves Railway/orchestrator drain, a live HTTP edge, trusted external TLS route, distributed
+control, deployment credential/TLS connection, representative load, real-user result, or capacity.
+The public score/race/status routes have a shared exact default-off module gate plus
+request/response, admission, production-build, visible browser-consumer/fallback, and full synthetic
+emitted Next production HTTP-to-disposable-PostgreSQL evidence with ephemeral certificate-verified
+TLS, widened-login denial, and private-table non-mutation. The same path now observes four
+lock-waiting score queries, rejects a fifth HTTP request without a fifth public-score query, and
+validates the four original responses after rollback. It proves no reusable/deployment
+certificate/login, external TLS/edge path, cache, representative load/capacity, monitoring, or
+deployment. The Jobs runner has strict command/config/pool/role/result evidence plus a synthetic
+CLI-to-PostgreSQL path with a widened-login denial and exact-state checks. The scheduler separately
+has exact-default-off, fixed-UTC-catalog, sequential/no-overlap, in-memory-slot,
+failure-containment, bounded-shutdown, fixed-clock production-core/PostgreSQL composition, and
+injected repeated-timer and process-lifecycle settlement evidence plus one real-clock emitted
+startup path through its terminal catalog marker, exact stored state, and forced test-child
+termination. A separate pinned-Linux path holds the emitted first finalization call, delivers an OS
+`SIGTERM`, and proves graceful settlement, no later job, silent code-0 exit, and session release.
+Host-timer delivery, a wall-clock recurring process callback, controller settlement in the forcibly
+ended child, and a deployed signal route are not proven. The identity slice has
+exact-origin/body/cookie, state/PKCE, token minimization, initial-registration, returning-login,
+session-derived passkey inventory, non-current-key revocation, backup-key addition, exact-handle
+profile-deletion request, source inventory/pause/reactivation/unlink, and active-device revoke
+including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth
+`form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay server-only;
+source controls receive only a 15-minute encrypted token bound to the active session. Pairing
+start/poll and approval options/verification have a second exact Web module gate with factory-level
+negative evidence. None has a production database login, OAuth app, authenticator, edge, deployed
+scheduler/cadence, cache/backup purge, tombstone/restore replay, or network deployment. Controls
+below are marked **implemented** only when executable evidence exists in
 [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
 security claims about the current tree.
 

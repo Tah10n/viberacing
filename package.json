@@ -74,6 +74,7 @@
     "test:ingest": "pnpm --filter @viberacing/ingest run test",
     "test:ingest:coverage": "pnpm --filter @viberacing/ingest run test:coverage",
     "test:ingest:postgres-integration": "node scripts/test-ingest-postgres-integration.mjs",
+    "test:ingest:signal-postgres-integration": "node scripts/test-ingest-postgres-integration.mjs --signal-process",
     "test:ingest-host": "pnpm --filter @viberacing/ingest-host run test",
     "test:ingest-host:coverage": "pnpm --filter @viberacing/ingest-host run test:coverage",
     "test:license-check": "node scripts/test-license-check.mjs",

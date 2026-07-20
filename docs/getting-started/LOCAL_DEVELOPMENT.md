@@ -440,6 +440,24 @@ database volume is never used. This is synthetic local evidence, not OS-signal d
 emitted-child settlement, a deployment credential, external TLS/edge route, secret-manager
 integration, real-user result, or capacity test.
 
+The separate emitted-process signal path is also opt-in and requires Docker:
+
+```text
+pnpm run test:ingest:signal-postgres-integration
+```
+
+This command assembles a link-free runtime containing only the emitted host, Ingest, contracts, and
+their exact installed production graph. It fingerprints that runtime, mounts it read-only under the
+pinned Linux Node image in only the disposable PostgreSQL network namespace, and sends one
+independently signed synthetic request from a separate capability-free client over stdin. The
+harness holds the request at the first origin-replay database call, delivers a real `SIGTERM` to the
+host container, releases the lock before the database deadline, and requires the exact accepted
+response and stored state. It also requires a silent code-0 host exit, complete database-session
+release, unchanged runtime contents, and bounded cleanup of the client, host, runtime, container,
+network, and storage. This proves one local Linux active-request signal path, not
+Railway/orchestrator drain, external TLS/edge routing, protected secret or production-login
+delivery, representative load/capacity, real-user input, or deployment.
+
 ## Local configuration
 
 `.env.example` is a public schema containing placeholders and a known local-only compose bootstrap

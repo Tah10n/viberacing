@@ -224,6 +224,12 @@ const requiredNodeSteps = [
   { run: "pnpm run test:migrate:postgres-integration" },
   { run: "pnpm run test:web:postgres-integration" },
   { run: "pnpm run test:ingest:postgres-integration" },
+  { run: "pnpm run test:ingest:signal-postgres-integration" },
+  { run: "pnpm run test:jobs:postgres-integration" },
+  { run: "pnpm run test:jobs-scheduler:postgres-integration" },
+  { run: "pnpm run test:jobs-scheduler:timer-postgres-integration" },
+  { run: "pnpm run test:jobs-scheduler:lifecycle-postgres-integration" },
+  { run: "pnpm run test:jobs-scheduler:process-postgres-integration" },
   { run: "pnpm run test:jobs-scheduler:signal-postgres-integration" },
 ];
 const windowsPortableSteps = [
@@ -271,7 +277,22 @@ assert.match(
       },
     },
   }).join("\n"),
-  /Migration, Web, and Ingest PostgreSQL integrations/,
+  /all ten synthetic PostgreSQL integrations/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      node: {
+        ...goodCiWorkflow.jobs.node,
+        steps: requiredNodeSteps.filter(
+          (step) => step.run !== "pnpm run test:ingest:signal-postgres-integration",
+        ),
+      },
+    },
+  }).join("\n"),
+  /all ten synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -286,7 +307,7 @@ assert.match(
       },
     },
   }).join("\n"),
-  /OS-signal scheduler integration/,
+  /all ten synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -301,7 +322,37 @@ assert.match(
       },
     },
   }).join("\n"),
-  /Migration, Web, and Ingest PostgreSQL integrations/,
+  /all ten synthetic PostgreSQL integrations/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      node: {
+        ...goodCiWorkflow.jobs.node,
+        steps: requiredNodeSteps.filter(
+          (step) => step.run !== "pnpm run test:jobs:postgres-integration",
+        ),
+      },
+    },
+  }).join("\n"),
+  /all ten synthetic PostgreSQL integrations/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      node: {
+        ...goodCiWorkflow.jobs.node,
+        steps: requiredNodeSteps.filter(
+          (step) => step.run !== "pnpm run test:jobs-scheduler:timer-postgres-integration",
+        ),
+      },
+    },
+  }).join("\n"),
+  /all ten synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -423,7 +474,7 @@ assert.match(
       },
     },
   }).join("\n"),
-  /Migration, Web, and Ingest PostgreSQL integrations/,
+  /all ten synthetic PostgreSQL integrations/,
 );
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
@@ -537,7 +588,7 @@ assert.match(
   /container must be pinned/,
 );
 
-const goodSchedulerSignalService = {
+const goodNodeProcessSignalService = {
   image: `node:24.18.0-bookworm-slim@sha256:${"c".repeat(64)}`,
   profiles: ["test"],
   restart: "no",
@@ -567,7 +618,7 @@ assert.deepEqual(
         environment: { POSTGRES_PASSWORD: "local-development-only" },
         tmpfs: ["/var/lib/postgresql:rw,noexec,nosuid,nodev"],
       },
-      "jobs-scheduler-signal-test": goodSchedulerSignalService,
+      "node-process-signal-test": goodNodeProcessSignalService,
     },
   }),
   [],
@@ -593,7 +644,7 @@ assert.match(
         environment: { POSTGRES_PASSWORD: "local-development-only" },
         tmpfs: ["/var/lib/postgresql:rw"],
       },
-      "jobs-scheduler-signal-test": goodSchedulerSignalService,
+      "node-process-signal-test": goodNodeProcessSignalService,
     },
   }).join("\n"),
   /must not publish/,
@@ -614,8 +665,8 @@ assert.match(
         environment: { POSTGRES_PASSWORD: "local-development-only" },
         tmpfs: ["/var/lib/postgresql:rw,noexec,nosuid,nodev"],
       },
-      "jobs-scheduler-signal-test": {
-        ...goodSchedulerSignalService,
+      "node-process-signal-test": {
+        ...goodNodeProcessSignalService,
         image: "node:latest",
         network_mode: "host",
       },
@@ -639,8 +690,8 @@ assert.match(
         environment: { POSTGRES_PASSWORD: "local-development-only" },
         tmpfs: ["/var/lib/postgresql:rw,noexec,nosuid,nodev"],
       },
-      "jobs-scheduler-signal-test": {
-        ...goodSchedulerSignalService,
+      "node-process-signal-test": {
+        ...goodNodeProcessSignalService,
         entrypoint: ["sh", "-c"],
       },
     },
@@ -826,4 +877,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (50 cases).");
+console.log("Configuration checker tests passed (53 cases).");

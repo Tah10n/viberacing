@@ -112,13 +112,16 @@ Repository evidence covers:
 - a built entry point exiting silently with status 1 under explicit disabled state; and
 - the existing enabled synthetic loopback/PostgreSQL path, including its controlled four-slot
   no-queue contention result plus one separate silent built-entry-point request before forced
-  test-child termination, listener, imported-host shutdown, lint, type, coverage, build,
-  documentation, architecture, and public-data gates.
+  test-child termination;
+- a separate exact-enabled pinned-Linux path that delivers a real `SIGTERM` while one signed request
+  is blocked, then proves settlement, silent exit, and cleanup; and
+- listener, imported-host shutdown, lint, type, coverage, build, documentation, architecture, and
+  public-data gates.
 
 The tests do not prove a deployed restart, route denial, old-instance drain, health policy, operator
-authentication, audit trail, monitoring alert, OS-signal delivery, graceful emitted-child
-settlement, deployment drain, Cloudflare/Railway control, live secret or database credential,
-production capacity, or any other capability switch.
+authentication, audit trail, monitoring alert, deployed signal routing or orchestrator drain,
+Cloudflare/Railway control, live secret or database credential, production capacity, or any other
+capability switch.
 
 ## References
 

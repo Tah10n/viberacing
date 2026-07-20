@@ -84,10 +84,13 @@ dynamic imports, and CommonJS access elsewhere. The server registers only the ex
 POST and its closed method/not-found handling, disables framework logging and inbound request IDs,
 does not trust proxy headers, preserves the raw body and raw header sequence, and applies bounded
 parser, request, handler, keep-alive, socket-reuse, connection, header, and no-queue admission
-policies. Its exact official-registry integrity, MIT license, supported Node runtime, release
-recency and maintenance state as reviewed on 2026-07-15, security guidance, complete 42-package
-added graph, absence of lifecycle/native build scripts, and online advisory result were reviewed
-under ADR 0020. The added declarations are MIT or BSD-3-Clause. An update requires renewed
+policies. Shutdown disables forced idle-socket closure so a fully read request cannot be destroyed
+while its application handler still waits on PostgreSQL; the existing five-second keep-alive and
+36-second host bounds remain, and a real-listener plus OS-signal regression proves settlement. Its
+exact official-registry integrity, MIT license, supported Node runtime, release recency and
+maintenance state as reviewed on 2026-07-15, security guidance, complete 42-package added graph,
+absence of lifecycle/native build scripts, and online advisory result were reviewed under ADR 0020.
+The added declarations are MIT or BSD-3-Clause. An update requires renewed
 source/release/security/license/script/transitive review plus the raw-framing, proxy, timeout,
 overload, generic-error, response-contract, and production-build regressions.
 
@@ -174,9 +177,9 @@ runs `cargo fetch --locked` before deterministic repository verification. Fetch 
 committed checksums and does not execute crate build scripts. The license checker then runs Cargo
 metadata offline. The separate Rust job compiles and tests the same lock graph; neither job receives
 secrets or release authority. After deterministic Node verification, the secretless Node job runs
-seven separate synthetic disposable-PostgreSQL integrations, including the real local Web and Ingest
-HTTP boundaries; they use no production credential or artifact upload and are not release or
-deployment evidence.
+ten separate synthetic disposable-PostgreSQL integrations, including the real local Web and Ingest
+HTTP boundaries plus separate OS-signal checks for emitted Ingest and Jobs-scheduler processes; they
+use no production credential or artifact upload and are not release or deployment evidence.
 
 New crates require the same necessity, maintenance, license, provenance, and advisory review as npm
 packages. Native code, build scripts, proc macros, network clients, cryptography, parsers, and
@@ -198,8 +201,9 @@ verified against the publisher's canonical registry before update. Mutable tags 
 prohibited.
 
 The current PostgreSQL container is local development infrastructure only. The separate Node
-container is a test-profile-only Linux runtime for one emitted scheduler signal integration; it
-mounts only a generated production graph read-only, is not a product image, and is not
+container is a test-profile-only Linux runtime for emitted Ingest and scheduler signal integrations;
+each host mounts only its exact generated production graph read-only, while the Ingest client
+receives only one synthetic signed request over stdin. It is not a product image and is not
 redistributed. Production images will have separate build, scanning, SBOM, provenance, and
 deployment policies.
 

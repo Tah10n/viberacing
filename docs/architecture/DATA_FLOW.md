@@ -514,9 +514,14 @@ origin-replay call, observes exactly four lock-waiting least-privileged queries,
 without a fifth replay call, and proves the four accepted responses after releasing the owner lock.
 After closing the imported host, it starts the built entry point as a separate silent process,
 observes only listener readiness, proves one more accepted request and exact persisted snapshot, and
-forcibly ends only that child. It supplies no OS-signal delivery, graceful emitted-child settlement,
-external TLS, protected secret delivery, Cloudflare/Railway route, distributed control, production
-credential, representative load, real-user result, or capacity evidence.
+forcibly ends only that child. That gate supplies no graceful settlement for its forcibly ended
+child. The separate `test:ingest:signal-postgres-integration` gate mounts only the exact link-free
+emitted production graph read-only under the pinned Linux Node image, sends one independently signed
+request from a separate capability-free client over stdin, holds it at origin replay, delivers a
+real `SIGTERM`, then proves exact HTTP/persistence settlement, silent code-0 exit, session release,
+runtime immutability, and cleanup. Neither gate proves Railway/orchestrator drain, external TLS,
+protected secret delivery, a Cloudflare/Railway route, distributed control, production credentials,
+representative load, a real-user result, or capacity.
 
 ADR 0021 implements the first local App Server protocol step: a fixed capability-free `initialize`,
 one 16 KiB LF-only closed response, discarded initialization strings, and fixed `initialized`. ADR

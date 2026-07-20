@@ -546,7 +546,7 @@ export function createCommunitySyncHttpServer(application: unknown): FastifyInst
     },
     connectionTimeout: communitySyncHttpPolicy.connectionTimeoutMs,
     exposeHeadRoutes: false,
-    forceCloseConnections: "idle",
+    forceCloseConnections: false,
     handlerTimeout: communitySyncHttpPolicy.handlerTimeoutMs,
     http: {
       insecureHTTPParser: false,

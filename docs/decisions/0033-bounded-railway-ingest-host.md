@@ -142,11 +142,16 @@ Current local evidence includes:
   closing the imported host; the same gate then starts the built entry point as a separate silent
   process, observes its listener without application work, proves another accepted write, and
   forcibly ends only that test child before teardown.
+- one separate opt-in pinned-Linux integration that mounts only the exact link-free emitted
+  production graph read-only, passes one independently signed synthetic request to a separate
+  capability-free client through stdin, holds the request at origin replay, delivers a real
+  `SIGTERM`, and proves exact acknowledgement/persistence settlement, silent code-0 exit,
+  database-session release, runtime immutability, and cleanup.
 
 No current test proves Railway or Cloudflare configuration, external TLS, a public hostname,
 direct-origin denial, protected secret delivery, a deployment Ingest login/certificate, a health
-check, continuous monitoring, OS-signal delivery, graceful emitted-child settlement, deployment
-drain behavior, distributed limits, load/capacity, connector egress, or real-user synchronization.
+check, continuous monitoring, deployed signal routing or orchestrator drain behavior, distributed
+limits, load/capacity, connector egress, or real-user synchronization.
 
 ## References
 
