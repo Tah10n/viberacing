@@ -50,6 +50,21 @@ password, host, port, database, TLS mode, reviewed trust material, role bootstra
 workflow must come from protected configuration and operations review. Do not place real values in a
 tracked file or shell transcript intended for publication.
 
+## Staging operator contract
+
+The checked
+[staging migration and forward-recovery runbook](../../docs/operations/MIGRATION_RUNBOOK.md) binds
+the runner to eighteen ordered operator controls and seven exact repository commands. It requires a
+pinned artifact, named private owners, isolated restore evidence, service compatibility, the narrow
+verified-TLS login, one-shot enablement, exact post-apply oracles, containment, and forward-only
+repair. `pnpm run check:migration-runbook` validates the document against this package's exact start
+command, enablement decision, generic success output, and root script inventory;
+`pnpm run test:migration-runbook-check` proves thirteen unsafe or drifted variants fail closed.
+
+This public document contains no target, identity, credential, certificate, private threshold, or
+incident detail. It is a staging prerequisite, not a successful staging run, production approval,
+monitoring, rollback, stale-backup deletion replay, recovery, or deployment evidence.
+
 Unit tests use injected pools and catalogs; they do not connect to PostgreSQL. The built-entrypoint
 gate proves disabled startup stops before protected configuration and that enabled-but-incomplete or
 argument-bearing startup fails generically.

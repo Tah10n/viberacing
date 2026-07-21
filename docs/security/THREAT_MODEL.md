@@ -144,6 +144,13 @@ convergence behind one external holder, exact schema/ledger state, and cleanup i
 database. Staging rollback, production credentials/TLS, deployed replicas, monitoring, deployment,
 and recovery remain unproven.
 
+The checked staging migration and forward-recovery runbook now binds eighteen ordered controls and
+seven exact commands to that runner, with thirteen negative drift fixtures. It requires protected
+owners, restore and service-compatibility evidence, narrow authority, exact verification,
+containment, and forward-only repair without placing a target or secret in the repository. This is a
+static operator prerequisite; no protected change system, staging execution, monitoring,
+stale-backup deletion replay, production authorization, recovery, or deployment is proven.
+
 ### Assets and security objectives
 
 | Asset or objective                                | Why it matters                                                               | Required protection                                                                                            |

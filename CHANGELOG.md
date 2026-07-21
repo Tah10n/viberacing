@@ -8,6 +8,15 @@ Versioning where its guarantees are applicable.
 
 ### Added
 
+- A checked staging migration and forward-recovery runbook for the existing default-off one-shot
+  controller. Eighteen ordered controls bind private owner assignment, backup/restore and
+  service-compatibility prerequisites, exact enablement, one argument-free apply, ledger/role/TLS/
+  resource verification, containment, forward-only repair, and protected incident handoff. Seven
+  documented commands are drift-checked against the root and migration package manifests plus the
+  exact runtime enablement and generic success result; thirteen unsafe or drifted variants fail
+  closed. This is a public operator prerequisite, not protected staging credentials, a successful
+  rollout/rollback, monitoring, stale-backup deletion replay, production approval, or deployment
+  evidence.
 - An opt-in synthetic Web HTTP-to-PostgreSQL integration. It builds the contract runtime and Web
   standalone output, explicitly bundles the reviewed `pg` driver instead of leaving Next's default
   external package link, generates one ephemeral self-signed DNS certificate, applies every reviewed

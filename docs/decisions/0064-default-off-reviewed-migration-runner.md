@@ -157,7 +157,10 @@ Current local evidence includes:
   40-row ledger, all 28 owner-owned forced-RLS tables, the identity invariant oracle, and complete
   connection/lock cleanup;
 - root verifier wiring, frozen lockfile supply-chain policy, and the existing immutable migration
-  checker.
+  checker; and
+- a checked staging migration and forward-recovery runbook whose eighteen ordered controls and seven
+  commands are bound to the runner's package scripts, exact enablement, generic success output, and
+  forward-only policy, with thirteen unsafe or drifted regression variants.
 
 The next independent operational gate must run the reviewed controller through protected
 environment-owned credentials and trust material in isolated staging, coordinate the intended
@@ -167,6 +170,7 @@ recovery. The local disposable result does not prove any of those properties.
 ## References
 
 - [Database migration workflow](../../database/README.md#migration-workflow)
+- [Staging migration and forward-recovery runbook](../operations/MIGRATION_RUNBOOK.md)
 - [Cloudflare and database capability isolation](0004-edge-service-and-database-isolation.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
 - [Threat model](../security/THREAT_MODEL.md)

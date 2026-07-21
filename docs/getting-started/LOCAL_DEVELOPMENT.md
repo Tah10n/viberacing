@@ -427,6 +427,8 @@ pnpm run typecheck:migrate
 pnpm run test:migrate:coverage
 pnpm run build:migrate
 pnpm run check:migrate-entrypoint
+pnpm run check:migration-runbook
+pnpm run test:migration-runbook-check
 pnpm run test:migrate:postgres-integration
 ```
 
@@ -438,7 +440,9 @@ ledger. It also checks all 28 owner-owned forced-RLS private tables, identity in
 complete connection/lock cleanup before removing the generated certificate/key, container, network,
 and storage. It never uses the normal local database volume and proves no production credential/TLS,
 staging rollout/rollback, deployed replica, monitoring, deployment, or recovery. See
-[`apps/migrate/README.md`](../../apps/migrate/README.md) for the exact boundary.
+[`apps/migrate/README.md`](../../apps/migrate/README.md) for the exact runtime boundary and the
+[staging migration and forward-recovery runbook](../operations/MIGRATION_RUNBOOK.md) for the checked
+operator prerequisite. The runbook is not evidence that staging or production was executed.
 
 Database-focused commands use deterministic synthetic fixtures:
 

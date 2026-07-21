@@ -925,6 +925,15 @@ orchestration with environment-owned credentials/trust, intended replica topolog
 compatibility, forward rollback, monitoring, and recovery; the disposable result satisfies none of
 those deployment gates.
 
+A checked staging migration and forward-recovery runbook now turns that prerequisite into eighteen
+ordered operator controls. It binds seven exact repository commands to the current package scripts,
+runner enablement decision, and generic success output; thirteen missing, unsafe, or drifted
+variants fail closed. The runbook separates migration authoring from site startup, requires private
+owner and target assignment, restore and service-compatibility evidence, one-shot apply, exact
+post-apply oracles, containment, and forward-only repair. It contains no protected values and does
+not prove a staging run, production authorization, monitoring, stale-backup deletion replay,
+recovery, or deployment.
+
 ## Administration and operations
 
 - Admin uses a separate hostname behind Cloudflare Access plus application passkey step-up.

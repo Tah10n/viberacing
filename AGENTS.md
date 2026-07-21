@@ -17,6 +17,7 @@ Read these files before changing the project:
 9. `SECURITY.md` and `CONTRIBUTING.md` before handling reports or public contributions.
 10. `GOVERNANCE.md` and `MAINTAINERS.md` before changing roles, ownership, release, or publication
     state.
+11. `docs/operations/MIGRATION_RUNBOOK.md` before preparing or executing a staging migration.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync,
 Community score query/response, compatible race and race-status responses, and CarRecipe contracts,
@@ -84,13 +85,16 @@ widened-login denial before schema creation, observes both narrow controllers be
 holder, requires both to converge successfully after release, and verifies the exact 40-row ledger,
 all 28 forced-RLS private tables, identity invariants, TLS, and connection/lock cleanup. It has no
 production credential/TLS, deployed replica, staging orchestration/rollback, monitoring, deployment,
-or recovery result. A local Ingest kernel bounds the raw sync envelope and parser, verifies an
-injected replay-consumed origin proof, validates the sync contract, and strictly verifies the
-source-bound device request. A protected local reader supplies one mandatory and one optional
-rotation proof key from exact namespaced configuration without returning a reusable key container. A
-separate bounded Ingest PostgreSQL adapter wraps only reviewed origin replay, device lookup, and
-submission procedures through a probed least-privileged login contract. A forced-RLS origin replay
-tuple and separate Jobs
+or recovery result. A checked staging migration and forward-recovery runbook now binds eighteen
+ordered operator controls and seven exact commands to that runner; thirteen unsafe or drifted
+variants fail closed. It contains no protected values and proves no staging execution, production
+authorization, monitoring, stale-backup deletion replay, recovery, or deployment. A local Ingest
+kernel bounds the raw sync envelope and parser, verifies an injected replay-consumed origin proof,
+validates the sync contract, and strictly verifies the source-bound device request. A protected
+local reader supplies one mandatory and one optional rotation proof key from exact namespaced
+configuration without returning a reusable key container. A separate bounded Ingest PostgreSQL
+adapter wraps only reviewed origin replay, device lookup, and submission procedures through a probed
+least-privileged login contract. A forced-RLS origin replay tuple and separate Jobs
 ingest/pairing/auth/invite/session/abandoned-enrollment/CarRecipe-proposal/finalized-source-day,
 terminal-deletion-job, audit-event, revoked-passkey, and revoked-device cleanup plus pairing
 approval-provenance redaction capabilities have isolated PostgreSQL evidence. A transport-free
@@ -376,6 +380,11 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   and built disabled startup. They use injected pools and do not establish PostgreSQL execution,
   concurrent-controller behavior, production login/TLS, staging orchestration/rollback, replica
   coordination, deployment, or recovery.
+- `pnpm run check:migration-runbook` binds the checked staging operator document to eighteen ordered
+  controls, seven exact root/package commands, the runner's exact enablement decision, generic
+  success output, and forward-only policy. `pnpm run test:migration-runbook-check` proves thirteen
+  missing, unsafe, or drifted variants fail closed. These are static public-document checks, not
+  protected staging execution, production authorization, monitoring, recovery, or deployment.
 - `pnpm run test:migrate:postgres-integration` builds the emitted migration entry point, creates one
   disposable certificate-verified PostgreSQL database plus synthetic narrow and widened logins,
   proves widened-login denial before schema mutation, observes two narrow controllers behind one

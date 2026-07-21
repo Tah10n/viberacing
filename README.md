@@ -260,6 +260,15 @@ forced-RLS private tables, and the identity invariant oracle. This proves local 
 behavior only, not production credentials, staging migration/rollback, deployed replicas,
 monitoring, deployment, or recovery.
 
+A separate checked
+[staging migration and forward-recovery runbook](docs/operations/MIGRATION_RUNBOOK.md) now binds
+eighteen ordered controls and seven exact commands to that runner. It requires protected owner
+assignment, a recent isolated restore, service compatibility, narrow verified-TLS authority,
+one-shot enablement, exact ledger/role/resource verification, containment, and forward-only repair;
+thirteen unsafe or drifted checker fixtures fail closed. The document is prerequisite guidance only,
+not staging execution, production authorization, monitoring, stale-backup deletion replay, or
+deployment evidence.
+
 Forty SQL migrations now add 28 private identity, passkey, restricted-recovery, source, device,
 pairing, audit, deletion, replay, usage, Community scoring, and CarRecipe tables with
 deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift detection, and

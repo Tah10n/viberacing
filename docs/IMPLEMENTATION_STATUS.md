@@ -823,6 +823,14 @@ ranking, or deployed Jobs scheduler/cadence exists.
   the controller sessions and lock are gone before deleting every resource. This is actual local
   DDL/driver/TLS/convergence evidence, but not production TLS/login, staging rollout/rollback,
   deployed replica coordination, monitoring, deployment, or recovery.
+- A checked staging migration and forward-recovery runbook for that controller. Eighteen ordered
+  controls require a pinned artifact, protected owner/target assignment, current isolated restore
+  evidence, deployed/candidate service compatibility, narrow verified-TLS authority, one-shot
+  enablement, exact ledger/role/resource oracles, containment, and forward-only repair. Seven
+  documented commands are bound to the root and migration package scripts plus the exact enablement
+  and generic success source; thirteen unsafe or drifted regression variants fail closed. This is a
+  static public operator contract, not a successful staging run, production authorization,
+  monitoring, stale-backup deletion replay, recovery, or deployment evidence.
 - A deterministic current-snapshot restore drill inside that isolated real PostgreSQL gate. It
   retains two bounded custom archives only in the disposable container, replaces only the run's
   database twice, requires the source and both restored canonical data dumps to have the same
@@ -1502,6 +1510,8 @@ pnpm run check:agent-skills
 pnpm run test:agent-skills-check
 pnpm run check:contracts
 pnpm run check:database
+pnpm run check:migration-runbook
+pnpm run test:migration-runbook-check
 pnpm run test:database:integration
 pnpm run test:migrate:postgres-integration
 pnpm run test:web-query-plan-evidence

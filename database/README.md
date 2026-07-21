@@ -1036,6 +1036,12 @@ belong to private deployment configuration and require application-level tests b
 6. Run the static and real PostgreSQL gates, then the complete repository gate.
 7. Review the exact staged SQL and checksum before commit.
 
+Repository authoring and application are separate actions: adding a migration file does not run the
+site or touch a database. Before any protected staging application, follow the checked
+[staging migration and forward-recovery runbook](../docs/operations/MIGRATION_RUNBOOK.md). Its
+static contract is prerequisite guidance only and does not replace staging credentials, service
+compatibility, monitoring, or recovery evidence.
+
 Focused commands:
 
 ```text

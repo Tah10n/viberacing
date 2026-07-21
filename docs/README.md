@@ -65,6 +65,9 @@ remain safe to publish verbatim.
   boundaries.
 - [Support](../SUPPORT.md), [roadmap](../ROADMAP.md), and [release policy](../RELEASE.md) — current
   service limits, delivery order, artifact evidence, and rollback expectations.
+- [Staging migration and forward-recovery runbook](operations/MIGRATION_RUNBOOK.md) — checked
+  default-off migration prerequisites, apply/verification controls, containment, and protected
+  handoff boundaries; it is not staging or production evidence.
 - [Third-party notices](../THIRD_PARTY_NOTICES.md) and [trademark policy](../TRADEMARKS.md) —
   current dependency and branding obligations.
 
@@ -74,13 +77,14 @@ remain safe to publish verbatim.
 - `architecture/` — implementation-level database model and protocol boundaries as code lands.
 - `security/` — incident-response and launch privacy/legal artifacts as operations become real.
 - `reference/` — public API, connector CLI, configuration, scoring, and CarRecipe reference.
-- `operations/` — Railway/Cloudflare deployment, migrations, backups, restore, alerts, SLOs,
-  incident and deletion runbooks.
+- `operations/` — the migration runbook exists; Railway/Cloudflare deployment, broader backups,
+  restore, alerts, SLOs, incident, and deletion runbooks remain pending.
 - `decisions/` — new records whenever durable decisions change; initial ADRs exist now.
 - `releasing/` — versioning, changelog, signing, provenance, rollback, and supported-version policy.
 
-Root community-health files establish policy now; the directories above will contain component
-runbooks and reference once the corresponding implementation exists.
+Root community-health files establish policy now. Existing documents remain explicit about local
+evidence, and the remaining directories will gain component runbooks and reference only after the
+corresponding implementation exists.
 
 ## Documentation principles
 

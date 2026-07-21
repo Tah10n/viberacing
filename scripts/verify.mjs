@@ -118,6 +118,11 @@ const checks = [
     [resolve(import.meta.dirname, "test-docs-check.mjs")],
   ],
   [
+    "migration runbook checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-migration-runbook-check.mjs")],
+  ],
+  [
     "community-health checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-community-check.mjs")],
@@ -158,6 +163,11 @@ const checks = [
     [resolve(import.meta.dirname, "test-config-check.mjs")],
   ],
   ["documentation", process.execPath, [resolve(import.meta.dirname, "check-docs.mjs")]],
+  [
+    "migration runbook",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-migration-runbook.mjs")],
+  ],
   [
     "external-link checker behavior",
     process.execPath,

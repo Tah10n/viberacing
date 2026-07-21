@@ -2,7 +2,8 @@
 
 Read the root `AGENTS.md`, this directory's `README.md`, `database/AGENTS.md`, the database
 migration workflow, ADR 0064, security invariants, abuse cases, and privacy data map before editing
-this workspace. The root public-data, dependency, documentation, and staged-review rules all apply.
+this workspace. Read `docs/operations/MIGRATION_RUNBOOK.md` before changing staging operator steps
+or claims. The root public-data, dependency, documentation, and staged-review rules all apply.
 
 ## Non-negotiable boundaries
 
@@ -42,6 +43,8 @@ pnpm run typecheck:migrate
 pnpm run test:migrate:coverage
 pnpm run build:migrate
 pnpm run check:migrate-entrypoint
+pnpm run check:migration-runbook
+pnpm run test:migration-runbook-check
 pnpm run test:migrate:postgres-integration
 pnpm run verify
 ```
