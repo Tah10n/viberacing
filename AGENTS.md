@@ -18,6 +18,8 @@ Read these files before changing the project:
 10. `GOVERNANCE.md` and `MAINTAINERS.md` before changing roles, ownership, release, or publication
     state.
 11. `docs/operations/MIGRATION_RUNBOOK.md` before preparing or executing a staging migration.
+12. `docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md` before changing or rehearsing backup and
+    restore behavior.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync,
 Community score query/response, compatible race and race-status responses, and CarRecipe contracts,
@@ -385,6 +387,12 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   success output, and forward-only policy. `pnpm run test:migration-runbook-check` proves thirteen
   missing, unsafe, or drifted variants fail closed. These are static public-document checks, not
   protected staging execution, production authorization, monitoring, recovery, or deployment.
+- `pnpm run check:restore-runbook` binds the isolated current-snapshot rehearsal document to twenty
+  ordered controls, four exact root commands, the disposable `postgres-test`/`tmpfs` boundary, and
+  the existing two-restore archive/digest/RLS/ACL/race oracle. `pnpm run test:restore-runbook-check`
+  proves sixteen missing, unsafe, or drifted variants fail closed. These are public
+  local-prerequisite checks, not external backup, stale-backup deletion replay, real-user restore,
+  RPO/RTO, staging, production, recovery, or deployment evidence.
 - `pnpm run test:migrate:postgres-integration` builds the emitted migration entry point, creates one
   disposable certificate-verified PostgreSQL database plus synthetic narrow and widened logins,
   proves widened-login denial before schema mutation, observes two narrow controllers behind one
@@ -497,6 +505,9 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   or staging migration orchestration/rollback, and it does not exercise an old backup,
   deletion-marker replay, external backup storage or encryption, cluster-role recovery, production
   credentials, or RPO/RTO.
+- Read `docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md` before changing or invoking the restore
+  drill. It permits only the repository-owned disposable synthetic gate and explicitly stops before
+  any shared, real-user, stale-backup, staging, or production restore.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 

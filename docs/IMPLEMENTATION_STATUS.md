@@ -841,6 +841,15 @@ ranking, or deployed Jobs scheduler/cadence exists.
   hashed, overwritten, and never emitted. This proves no old-backup deletion replay, external
   storage or encryption, cluster-role recovery, production login/TLS, representative scale, or
   RPO/RTO.
+- A checked isolated current-snapshot restore rehearsal runbook for that drill. Twenty ordered
+  controls require a pinned synthetic source, isolated target and routing, container-only archives,
+  exact ledger/data/schema/RLS/grant oracles, protected redacted evidence, cleanup, and incident
+  handoff. Four documented commands are bound to the root scripts, integration limits, two restore
+  calls, two post-restore security checks, and portless `tmpfs` Compose service; sixteen unsafe or
+  drifted regression variants fail closed. The runbook stops before any pre-deletion or real-user
+  archive. This is a static public rehearsal contract, not a staging restore, stale-backup deletion
+  replay, external backup system, cluster recovery, production authorization, RPO/RTO, or deployment
+  result.
 - A closed procedure-only API boundary: Admin can issue bounded, reasoned invites; Web can
   atomically redeem an invite, create an enrolling profile/session, create and consume exact-session
   challenges, register the initial passkey, rotate/revoke a possessed session, and request immediate
@@ -1512,6 +1521,8 @@ pnpm run check:contracts
 pnpm run check:database
 pnpm run check:migration-runbook
 pnpm run test:migration-runbook-check
+pnpm run check:restore-runbook
+pnpm run test:restore-runbook-check
 pnpm run test:database:integration
 pnpm run test:migrate:postgres-integration
 pnpm run test:web-query-plan-evidence

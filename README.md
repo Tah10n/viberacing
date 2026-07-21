@@ -247,6 +247,16 @@ runtime deny matrix. This is not a successful concurrent deployment controller, 
 orchestration/rollback, old-backup deletion replay, external backup, cluster-role recovery,
 production restore, scale, or RPO/RTO result.
 
+A checked
+[isolated current-snapshot restore rehearsal runbook](docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md)
+now binds twenty ordered controls and four exact commands to that disposable restore oracle. It
+requires a synthetic current archive, isolated empty target, protected ownership and evidence,
+closed routing/runtime processes, one deployment-owned restore workflow, exact ledger/RLS/grant/
+digest/service verification, removal of temporary authority, and fail-closed incident handoff.
+Sixteen unsafe or drifted checker fixtures fail closed. The runbook explicitly stops before any
+archive that may contain real-user state or predate deletion; it is not external backup,
+stale-backup deletion replay, RPO/RTO, staging, production, recovery, or deployment evidence.
+
 A separate default-off one-shot migration runner now verifies the exact repository manifest,
 canonical paths, bounded UTF-8 source, and every SHA-256 digest before constructing one migration
 pool. It rejects a widened login through a closed owner-member/TLS/search-path probe, serializes the

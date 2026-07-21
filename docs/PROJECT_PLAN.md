@@ -934,6 +934,14 @@ post-apply oracles, containment, and forward-only repair. It contains no protect
 not prove a staging run, production authorization, monitoring, stale-backup deletion replay,
 recovery, or deployment.
 
+A separate checked current-snapshot restore rehearsal runbook binds twenty isolation, restore,
+verification, stale-backup stop, and incident-handoff controls to four exact repository commands and
+the existing twice-restored disposable PostgreSQL oracle. Sixteen missing, unsafe, or drifted
+variants fail closed. The runbook permits only the current synthetic snapshot and requires operators
+to stop before any pre-deletion or real-user archive. It adds no external backup store or protected
+record and proves no staging restore, stale-backup deletion replay, cluster recovery, RPO/RTO,
+production authorization, or deployment.
+
 ## Administration and operations
 
 - Admin uses a separate hostname behind Cloudflare Access plus application passkey step-up.
@@ -1323,9 +1331,10 @@ external TLS/edge, cache, capacity, or operational gate above.
 
 - Deploy isolated staging and production infrastructure.
 - Verify origin protection, migrations, backup restore, deletion replay, monitoring, incident
-  runbooks, connector signing, SBOM, provenance, and rollback. The local advisory-lock overlap,
-  current-snapshot database drills, and emitted migration-controller convergence are prerequisite
-  implementation evidence; they do not satisfy successful staging migration orchestration/rollback,
+  runbooks, connector signing, SBOM, provenance, and rollback. The checked migration and
+  current-snapshot restore runbooks plus the local advisory-lock overlap, twice-restored database
+  drill, and emitted migration-controller convergence are prerequisite implementation evidence; they
+  do not satisfy successful staging migration orchestration/rollback, a protected staging restore,
   stale-backup deletion replay, or any deployment gate.
 - Complete accessibility, privacy, legal, licensing, name/trademark, external security, and
   documentation review.

@@ -68,6 +68,10 @@ remain safe to publish verbatim.
 - [Staging migration and forward-recovery runbook](operations/MIGRATION_RUNBOOK.md) — checked
   default-off migration prerequisites, apply/verification controls, containment, and protected
   handoff boundaries; it is not staging or production evidence.
+- [Isolated current-snapshot restore rehearsal runbook](operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md)
+  — checked synthetic archive/target isolation, local evidence, restore verification, stale-backup
+  stop, and incident-handoff controls; it is not real-user, staging, production, recovery, or
+  deployment evidence.
 - [Third-party notices](../THIRD_PARTY_NOTICES.md) and [trademark policy](../TRADEMARKS.md) —
   current dependency and branding obligations.
 
@@ -77,8 +81,9 @@ remain safe to publish verbatim.
 - `architecture/` — implementation-level database model and protocol boundaries as code lands.
 - `security/` — incident-response and launch privacy/legal artifacts as operations become real.
 - `reference/` — public API, connector CLI, configuration, scoring, and CarRecipe reference.
-- `operations/` — the migration runbook exists; Railway/Cloudflare deployment, broader backups,
-  restore, alerts, SLOs, incident, and deletion runbooks remain pending.
+- `operations/` — checked migration and isolated current-snapshot restore rehearsal runbooks exist;
+  Railway/Cloudflare deployment, external backup storage, stale-backup deletion replay, alerts,
+  SLOs, incident, and deletion runbooks remain pending.
 - `decisions/` — new records whenever durable decisions change; initial ADRs exist now.
 - `releasing/` — versioning, changelog, signing, provenance, rollback, and supported-version policy.
 

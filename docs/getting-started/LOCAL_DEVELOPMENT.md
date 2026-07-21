@@ -447,6 +447,8 @@ operator prerequisite. The runbook is not evidence that staging or production wa
 Database-focused commands use deterministic synthetic fixtures:
 
 ```text
+pnpm run check:restore-runbook
+pnpm run test:restore-runbook-check
 pnpm run test:database-check
 pnpm run check:database
 pnpm run test:database:integration
@@ -455,7 +457,11 @@ pnpm run test:database:integration
 The integration command creates a uniquely named Compose project containing only `postgres-test`.
 That service publishes no host port, stores data on `tmpfs`, and is removed with its network and
 storage after the test. It does not touch the normal local database volume. See
-[`database/README.md`](../../database/README.md) before changing SQL, roles, or migrations.
+[`database/README.md`](../../database/README.md) before changing SQL, roles, or migrations, and read
+the
+[isolated current-snapshot restore rehearsal runbook](../operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md)
+before interpreting or extending restore evidence. The runbook does not authorize shared, staging,
+production, pre-deletion, or real-user database work.
 
 The separate full Ingest path is opt-in and also requires Docker:
 

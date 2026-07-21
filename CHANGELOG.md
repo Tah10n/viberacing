@@ -8,6 +8,15 @@ Versioning where its guarantees are applicable.
 
 ### Added
 
+- A checked isolated current-snapshot restore rehearsal runbook for the existing disposable
+  PostgreSQL oracle. Twenty ordered controls bind a synthetic current archive, isolated empty
+  target, protected owners/evidence, closed routing and runtime processes, one deployment-owned
+  restore workflow, exact ledger/RLS/grant/digest/service verification, temporary-authority removal,
+  stale-backup stop, and incident handoff. Four commands are drift-checked against root scripts, the
+  two-restore 64 MiB archive/32 MiB canonical-buffer implementation, `postgres-test` `tmpfs`
+  isolation, and exact aggregate evidence; sixteen unsafe or drifted variants fail closed. This is
+  not external backup, real-user or stale-backup restore, deletion replay, RPO/RTO, staging,
+  production, recovery, or deployment evidence.
 - A checked staging migration and forward-recovery runbook for the existing default-off one-shot
   controller. Eighteen ordered controls bind private owner assignment, backup/restore and
   service-compatibility prerequisites, exact enablement, one argument-free apply, ledger/role/TLS/

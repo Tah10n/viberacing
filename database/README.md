@@ -1090,6 +1090,14 @@ grants and denials. Every later lock-wait race and capability check therefore ru
 twice-restored database. The harness hashes and overwrites its bounded dump buffers, emits no dump
 content, and removes both container-only archives with the ephemeral `tmpfs` service.
 
+The
+[isolated current-snapshot restore rehearsal runbook](../docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md)
+binds this exact disposable oracle to twenty checked isolation, restore, verification, stale-backup
+stop, and incident-handoff controls. Its checker and sixteen fail-closed regression variants are
+available through `pnpm run check:restore-runbook` and `pnpm run test:restore-runbook-check`. The
+runbook permits no shared, production, pre-deletion, or real-user database and does not authorize a
+staging restore.
+
 This is a current-snapshot test of the repository-owned database only. The cluster roles created by
 `bootstrap_roles.sql` deliberately remain a prerequisite outside the dropped database. The drill
 does not exercise an older backup containing a deleted profile, deletion-marker replay, external

@@ -1,0 +1,341 @@
+import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import process from "node:process";
+
+const root = resolve(import.meta.dirname, "..");
+const runbookPath = resolve(root, "docs", "operations", "CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md");
+const rootPackagePath = resolve(root, "package.json");
+const databaseIntegrationPath = resolve(root, "scripts", "test-database-integration.mjs");
+const composePath = resolve(root, "compose.yaml");
+const maximumRunbookBytes = 32 * 1024;
+const failures = [];
+
+const expectedHeadings = Object.freeze([
+  "# Isolated current-snapshot restore rehearsal runbook",
+  "## Scope and evidence boundary",
+  "## Authority and prerequisites",
+  "## Preflight",
+  "## Local evidence",
+  "## Isolate and restore",
+  "## Verify",
+  "## Stale-backup and deletion boundary",
+  "## Failure and incident handoff",
+  "## Prohibited actions",
+]);
+const expectedControls = Object.freeze([
+  [
+    "VR-RESTORE-01",
+    "Pin the exact reviewed commit, immutable service artifacts, and backup workflow identity in the protected change record.",
+  ],
+  [
+    "VR-RESTORE-02",
+    "Assign backup, restore, database, privacy/deletion, and incident owners before the rehearsal window opens.",
+  ],
+  [
+    "VR-RESTORE-03",
+    "Prove the target is isolated, receives no public traffic, and shares no runtime credential or storage with another environment.",
+  ],
+  [
+    "VR-RESTORE-04",
+    "Classify the selected archive as a current synthetic snapshot and record its creation, retention, encryption, and expiry evidence privately.",
+  ],
+  [
+    "VR-RESTORE-05",
+    "Prove the restore controller can select only the approved archive and exact empty target through protected configuration.",
+  ],
+  [
+    "VR-RESTORE-06",
+    "Verify the pinned migration ledger, service compatibility matrix, database version, DNS name, trust material, and TLS policy privately.",
+  ],
+  [
+    "VR-RESTORE-07",
+    "Confirm protected monitoring, an append-only operator record, containment, and target-destruction authority are available before execution.",
+  ],
+  [
+    "VR-RESTORE-08",
+    "Record an explicit go or no-go decision after every repository-owned local gate below succeeds.",
+  ],
+  [
+    "VR-RESTORE-09",
+    "Open the protected change record and reconfirm the pinned archive, empty target, owners, controller identity, and window.",
+  ],
+  [
+    "VR-RESTORE-10",
+    "Hold public routing and every Web, Ingest, Jobs, scheduler, and migration process disabled for the isolated target.",
+  ],
+  [
+    "VR-RESTORE-11",
+    "Invoke the reviewed deployment-owned restore workflow once with no interactive archive, database, role, SQL, or filesystem override.",
+  ],
+  [
+    "VR-RESTORE-12",
+    "Keep the restored target isolated and prevent automatic migration, job, application, or traffic startup after database-tool settlement.",
+  ],
+  [
+    "VR-RESTORE-13",
+    "Remove restore authority after settlement and prove no controller, database session, temporary credential, or untracked archive copy remains.",
+  ],
+  [
+    "VR-RESTORE-14",
+    "Require the protected ledger oracle to equal the pinned contiguous migration manifest exactly before any service smoke.",
+  ],
+  [
+    "VR-RESTORE-15",
+    "Verify database ownership, forced RLS, runtime-role grants and denials, TLS, connection cleanup, and absence of unexpected schemas or extensions.",
+  ],
+  [
+    "VR-RESTORE-16",
+    "Compare protected canonical schema and data digest/length oracles with the approved source without exposing either dump.",
+  ],
+  [
+    "VR-RESTORE-17",
+    "Run the approved candidate and deployed-service read/write denial matrix while routing remains closed.",
+  ],
+  [
+    "VR-RESTORE-18",
+    "Record actual duration and residual risk without claiming an RPO, RTO, capacity, or recovery objective that this rehearsal did not prove.",
+  ],
+  [
+    "VR-RESTORE-19",
+    "Stop before service startup whenever the archive could predate a profile deletion or the protected deletion-marker oracle is absent, incomplete, or unverified.",
+  ],
+  [
+    "VR-RESTORE-20",
+    "On any failure, keep routing closed, quarantine or destroy the restored target, remove temporary authority, and hand the protected record to the assigned incident owner.",
+  ],
+]);
+const expectedControlIds = Object.freeze(expectedControls.map(([id]) => id));
+const expectedCommands = Object.freeze([
+  "pnpm run check:restore-runbook",
+  "pnpm run test:database-check",
+  "pnpm run check:database",
+  "pnpm run test:database:integration",
+]);
+const expectedRootScripts = Object.freeze({
+  "check:database": "node scripts/check-database.mjs",
+  "check:restore-runbook": "node scripts/check-restore-runbook.mjs",
+  "test:database-check": "node scripts/test-database-check.mjs",
+  "test:database:integration": "node scripts/test-database-integration.mjs",
+  "test:restore-runbook-check": "node scripts/test-restore-runbook-check.mjs",
+});
+const protectedPostgresVariableNames = [
+  "HOST",
+  "PORT",
+  "DATABASE",
+  "USER",
+  "PASSWORD",
+  ["PASS", "FILE"].join(""),
+  ["SSL", "MODE"].join(""),
+  ["SSL", "ROOT", "CERT"].join(""),
+  ["SSL", "CERT"].join(""),
+  ["SSL", "KEY"].join(""),
+]
+  .map((suffix) => `PG${suffix}`)
+  .join("|");
+const protectedDatabaseAssignmentPattern = new RegExp(
+  `(?:DATABASE_URL|${protectedPostgresVariableNames}|VIBERACING_(?:WEB|INGEST|JOBS|MIGRATIONS)_DATABASE_(?:CA|HOST|NAME|PASSWORD|PORT|USER))\\s*=\\s*\\S+`,
+  "iu",
+);
+const requiredStatements = Object.freeze([
+  "No repository command restores a shared staging or production database.",
+  "No production or real-user restore is authorized by this document.",
+  "The local archive budget is 64 MiB",
+  "each canonical schema or data buffer is bounded to 32 MiB",
+  "all 28 private tables with forced RLS",
+  "45 post-restore lock-wait races",
+  "12 relation-denial checks",
+  "67 cross-capability checks",
+  "Dump content is never emitted; bounded buffers are overwritten after hashing.",
+  "A successful local result is prerequisite evidence only.",
+  "Stale-backup deletion replay is not implemented.",
+  "Do not run raw `pg_dump`, `pg_restore`, a database-drop client, or `psql` from this public runbook.",
+]);
+const requiredIntegrationFragments = Object.freeze([
+  "const projectName = `vr-dbtest-${process.pid}`;\nconst composePrefix = [",
+  '  "--project-name",\n  projectName,\n  "--profile",\n  "test",',
+  'const sourceRestoreArchivePath = "/var/lib/postgresql/viberacing-source-snapshot.dump";',
+  'const normalizedRestoreArchivePath = "/var/lib/postgresql/viberacing-normalized-snapshot.dump";',
+  "const maximumCanonicalDumpBytes = 32 * 1024 * 1024;",
+  "const maximumRestoreArchiveBytes = 64 * 1024 * 1024;",
+  "const expectedObservedLockWaitRaceCount = 46;",
+  "const expectedObservedMigrationOverlapCount = 1;",
+  "const expectedObservedEarlyCompletionOverlapCount = 1;",
+  '"--format=custom"',
+  '"--serializable-deferrable"',
+  '"--lock-wait-timeout=5s"',
+  '"--exit-on-error"',
+  "function exerciseCurrentSnapshotRestore()",
+  'replaceDatabaseFromArchive(sourceRestoreArchivePath, "source current-snapshot restore");',
+  "replaceDatabaseFromArchive(",
+  'normalizedRestoreArchivePath, "normalized current-snapshot restore"',
+  "stdout.fill(0);",
+  'docker([...composePrefix, "down", "--volumes", "--remove-orphans"]',
+  'docker([...composePrefix, "up", "--detach", "--wait", "postgres-test"]',
+  "28 forced-RLS tables after two current-snapshot restores",
+  "SHA-256/length-identical",
+  "post-restore lock-wait races",
+  "12 relation-denial and 67 cross-capability checks",
+]);
+
+function fail(message) {
+  failures.push(message);
+}
+
+function readJson(path, label) {
+  try {
+    const value = JSON.parse(readFileSync(path, "utf8"));
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      fail(`${label} must be a JSON object`);
+      return undefined;
+    }
+    return value;
+  } catch {
+    fail(`${label} could not be read as JSON`);
+    return undefined;
+  }
+}
+
+let runbook;
+if (!existsSync(runbookPath)) {
+  fail("docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md is missing");
+} else {
+  const metadata = lstatSync(runbookPath);
+  if (metadata.isSymbolicLink() || !metadata.isFile()) {
+    fail("restore runbook must be one regular non-symlink file");
+  } else {
+    const bytes = readFileSync(runbookPath);
+    if (bytes.length === 0 || bytes.length > maximumRunbookBytes) {
+      fail(`restore runbook must be between 1 and ${maximumRunbookBytes} bytes`);
+    }
+    runbook = bytes.toString("utf8");
+    if (!Buffer.from(runbook, "utf8").equals(bytes) || runbook.includes("\0")) {
+      fail("restore runbook must be canonical UTF-8 text without NUL bytes");
+    }
+  }
+}
+
+if (runbook !== undefined) {
+  const normalizedRunbook = runbook.replace(/\s+/gu, " ");
+  const headings = [...runbook.matchAll(/^(#{1,6} .+)$/gmu)].map((match) => match[1]);
+  if (JSON.stringify(headings) !== JSON.stringify(expectedHeadings)) {
+    fail("restore runbook heading inventory or order drifted");
+  }
+
+  const controlIds = [...runbook.matchAll(/^- \[ \] (VR-RESTORE-\d{2}):/gmu)].map(
+    (match) => match[1],
+  );
+  if (JSON.stringify(controlIds) !== JSON.stringify(expectedControlIds)) {
+    fail("restore runbook control inventory or order drifted");
+  }
+  const lines = runbook.split(/\r?\n/u);
+  const observedControls = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^- \[ \] (VR-RESTORE-\d{2}):\s+(.+)$/u.exec(lines[index]);
+    if (match === null) {
+      continue;
+    }
+    const textParts = [match[2]];
+    while (index + 1 < lines.length && /^ {2,}\S/u.test(lines[index + 1])) {
+      index += 1;
+      textParts.push(lines[index].trim());
+    }
+    observedControls.push([match[1], textParts.join(" ")]);
+  }
+  if (JSON.stringify(observedControls) !== JSON.stringify(expectedControls)) {
+    fail("restore runbook control text drifted");
+  }
+
+  const fenceMarkers = [...runbook.matchAll(/^```.*$/gmu)].map((match) => match[0]);
+  if (JSON.stringify(fenceMarkers) !== JSON.stringify(["```text", "```"])) {
+    fail("restore runbook fenced command block inventory drifted");
+  }
+  const commands = [...runbook.matchAll(/```text\r?\n([\s\S]*?)```/gu)].flatMap((match) =>
+    match[1]
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter((line) => line !== ""),
+  );
+  if (JSON.stringify(commands) !== JSON.stringify(expectedCommands)) {
+    fail("restore runbook command inventory or order drifted");
+  }
+
+  for (const statement of requiredStatements) {
+    if (!normalizedRunbook.includes(statement)) {
+      fail(`restore runbook is missing required statement: ${statement}`);
+    }
+  }
+
+  if (protectedDatabaseAssignmentPattern.test(runbook)) {
+    fail("restore runbook must not contain an inline protected database assignment");
+  }
+}
+
+const rootPackage = readJson(rootPackagePath, "root package manifest");
+if (rootPackage !== undefined) {
+  const scripts = rootPackage.scripts;
+  if (scripts === null || typeof scripts !== "object" || Array.isArray(scripts)) {
+    fail("root package scripts must be an object");
+  } else {
+    for (const [name, expected] of Object.entries(expectedRootScripts)) {
+      if (scripts[name] !== expected) {
+        fail(`root package script ${name} drifted from the restore runbook contract`);
+      }
+    }
+  }
+}
+
+try {
+  const source = readFileSync(databaseIntegrationPath, "utf8");
+  const normalizedSource = source.replace(/\r\n/gu, "\n");
+  for (const fragment of requiredIntegrationFragments) {
+    if (!normalizedSource.includes(fragment)) {
+      fail(`database restore integration drifted from the runbook contract: ${fragment}`);
+    }
+  }
+  const restoreFunction = normalizedSource.match(
+    /function exerciseCurrentSnapshotRestore\(\) \{([\s\S]*?)\n\}\n\nfunction psql\(/u,
+  )?.[1];
+  if (restoreFunction === undefined) {
+    fail("database restore integration function boundary could not be read");
+  } else {
+    const restoreCalls = [...restoreFunction.matchAll(/replaceDatabaseFromArchive\(/gu)].length;
+    const securityChecks = [...restoreFunction.matchAll(/assertRestoredSecurityBoundary\(\);/gu)]
+      .length;
+    if (restoreCalls !== 2 || securityChecks !== 2) {
+      fail("database restore integration no longer performs two restores and two security checks");
+    }
+  }
+} catch {
+  fail("database restore integration source could not be read");
+}
+
+try {
+  const compose = readFileSync(composePath, "utf8");
+  const testService = compose.match(
+    /^  postgres-test:\r?\n([\s\S]*?)(?=^  [a-z0-9][a-z0-9-]*:\r?$|^volumes:\r?$)/mu,
+  )?.[0];
+  if (testService === undefined) {
+    fail("postgres-test Compose service could not be read");
+  } else if (
+    !testService.includes('profiles: ["test"]') ||
+    !testService.includes("tmpfs:") ||
+    !testService.includes("/var/lib/postgresql:rw,noexec,nosuid,nodev") ||
+    /^    (?:container_name|external_links|links|network_mode|ports|volumes):/mu.test(testService)
+  ) {
+    fail("postgres-test Compose isolation drifted from the restore runbook contract");
+  }
+} catch {
+  fail("Compose configuration could not be read for the restore runbook contract");
+}
+
+if (failures.length > 0) {
+  console.error(`Restore runbook check failed with ${failures.length} finding(s):`);
+  for (const failure of failures) {
+    console.error(`- ${failure}`);
+  }
+  process.exit(1);
+}
+
+console.log(
+  `Restore runbook check passed (${expectedControlIds.length} controls, ${expectedCommands.length} commands).`,
+);

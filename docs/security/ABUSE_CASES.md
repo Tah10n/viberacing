@@ -650,30 +650,34 @@ material availability cost.
   convergence plus cleanup. A checked staging migration runbook now binds eighteen ordered
   authority, restore, compatibility, apply, verification, containment, and forward-recovery controls
   to seven exact commands; thirteen unsafe or drifted variants fail closed. It neither provisions
-  protected operations state nor proves staging execution. Ingest has exactly three reviewed
-  functions; Jobs has exactly eighteen reviewed functions: bounded authentication-,
-  abandoned-enrollment-, audit-event-, invite-, CarRecipe-proposal-, ingest-, pairing-, session-,
-  and finalized-source-day retention cleanup, terminal deletion-job cleanup, aged revoked-passkey
-  cleanup, aged minimized revoked-device cleanup, pairing approval-provenance redaction, fixed
-  pairing-rate-window reset, primary profile deletion, open-season scoring refresh, terminal season
-  finalization, and bounded oldest-known historical season finalization. Web alone receives the
-  bounded public score and separate race functions; Ingest, Jobs, and Admin are explicitly denied.
-  The Web adapter uses one dedicated pool, fixed parameterized function calls, and checks effective
-  role, distinct non-privileged login, exact Web-only membership, database capability, search path,
-  and read-only state before every pooled read. Failed sessions are destroyed and raw driver errors
-  are not forwarded. The local Jobs adapter independently checks an exact Jobs-only
-  login/membership, CONNECT without CREATE/TEMPORARY, and safe search path before exactly one of the
-  eighteen prepared function calls. Its pool maximum is one, input/result shapes are closed, failed
-  clients are destroyed, and CLI output reflects no configuration, command, SQL, count, or error
-  detail. The separate default-off scheduler can construct only that runner, selects only a frozen
-  maximum-18 fixed UTC catalog, and validates each object again through the runner; it adds no SQL
-  or database capability. The local Ingest adapter independently caps its pool at four, probes the
-  exact Ingest login/role and safe search path before each capability, exposes only fixed
-  parameterized origin replay, device lookup, and submission calls, reconstructs and revalidates
-  inputs, copies mutable values, accepts only closed rows, and destroys failed clients without
-  forwarding driver/configuration details. Its full synthetic gate additionally observes four
-  lock-waiting origin-consume queries and rejects a fifth HTTP request without a fifth database call
-  before the four settle successfully.
+  protected operations state nor proves staging execution. A separate checked current-snapshot
+  restore runbook binds twenty isolation, restore, verification, stale-backup stop, and
+  incident-handoff controls to four exact commands and the existing twice-restored database oracle;
+  sixteen unsafe or drifted variants fail closed. It permits only synthetic current state, stops
+  before any pre-deletion or real-user archive, and neither provisions an external backup system nor
+  proves a staging restore. Ingest has exactly three reviewed functions; Jobs has exactly eighteen
+  reviewed functions: bounded authentication-, abandoned-enrollment-, audit-event-, invite-,
+  CarRecipe-proposal-, ingest-, pairing-, session-, and finalized-source-day retention cleanup,
+  terminal deletion-job cleanup, aged revoked-passkey cleanup, aged minimized revoked-device
+  cleanup, pairing approval-provenance redaction, fixed pairing-rate-window reset, primary profile
+  deletion, open-season scoring refresh, terminal season finalization, and bounded oldest-known
+  historical season finalization. Web alone receives the bounded public score and separate race
+  functions; Ingest, Jobs, and Admin are explicitly denied. The Web adapter uses one dedicated pool,
+  fixed parameterized function calls, and checks effective role, distinct non-privileged login,
+  exact Web-only membership, database capability, search path, and read-only state before every
+  pooled read. Failed sessions are destroyed and raw driver errors are not forwarded. The local Jobs
+  adapter independently checks an exact Jobs-only login/membership, CONNECT without
+  CREATE/TEMPORARY, and safe search path before exactly one of the eighteen prepared function calls.
+  Its pool maximum is one, input/result shapes are closed, failed clients are destroyed, and CLI
+  output reflects no configuration, command, SQL, count, or error detail. The separate default-off
+  scheduler can construct only that runner, selects only a frozen maximum-18 fixed UTC catalog, and
+  validates each object again through the runner; it adds no SQL or database capability. The local
+  Ingest adapter independently caps its pool at four, probes the exact Ingest login/role and safe
+  search path before each capability, exposes only fixed parameterized origin replay, device lookup,
+  and submission calls, reconstructs and revalidates inputs, copies mutable values, accepts only
+  closed rows, and destroys failed clients without forwarding driver/configuration details. Its full
+  synthetic gate additionally observes four lock-waiting origin-consume queries and rejects a fifth
+  HTTP request without a fifth database call before the four settle successfully.
 - **Residual risk:** A migration owner is highly privileged and belongs only in a protected
   migration workflow. Its local emitted-controller gate has no production credential/trust, staging
   service-compatibility/rollback, deployed replica, monitoring, or recovery result. The checked
@@ -791,10 +795,12 @@ material availability cost.
   reference cleanup-eligible after 180 days. The isolated database gate now restores its current
   synthetic snapshot twice, checks exact data digests/lengths, stable restored schema, all 28
   forced-RLS tables and selected role grants, then executes all 45 post-restore lock-wait races and
-  the final runtime deny matrix on that state. It contains no pre-deletion backup or keyed marker
-  and therefore does not test resurrection or deletion replay. No external audit sink is supplied.
-  Cache invalidation, deployed scheduler/monitoring, keyed tombstone policy, backup expiry, and
-  stale-backup restore replay remain unimplemented.
+  the final runtime deny matrix on that state. Its checked rehearsal runbook requires that source to
+  remain synthetic and current, closes service routing, requires exact ledger/data/schema/RLS/grant
+  oracles and cleanup, and stops before any pre-deletion or real-user archive. The drill contains no
+  pre-deletion backup or keyed marker and therefore does not test resurrection or deletion replay.
+  No external audit sink is supplied. Cache invalidation, deployed scheduler/monitoring, keyed
+  tombstone policy, backup expiry, and stale-backup restore replay remain unimplemented.
 - **Residual risk:** Immutable backup media may retain encrypted data until documented expiry.
 
 ### VR-ABUSE-RESOURCE-EXHAUSTION — Expensive endpoint or state-table growth

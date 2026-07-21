@@ -50,6 +50,11 @@ runbook.
       before execution.
 - [ ] VR-MIG-08: Record an explicit go or no-go decision after every local gate below succeeds.
 
+The repository's checked synthetic prerequisite is documented in the
+[isolated current-snapshot restore rehearsal runbook](CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md). It
+neither supplies a staging backup nor authorizes a shared, production, pre-deletion, or real-user
+restore.
+
 Run these repository-owned gates from a clean checkout of the pinned commit. The two PostgreSQL
 integrations require their documented disposable Docker environment and remove it afterward.
 
