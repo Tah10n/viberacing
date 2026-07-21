@@ -962,6 +962,16 @@ production authorization, or deployment.
 - Backup restore, key rotation, compromised release, mass device revoke, source quarantine, and
   deletion failure have tested runbooks.
 
+A separate transport-free Admin invitation kernel now fixes the first sensitive-action sequence: one
+exact injected Access/individual-admin/fresh-passkey decision, an acknowledged external `authorized`
+audit event, the single probed `viberacing_api.issue_invite` capability under the `viberacing_admin`
+role, and an acknowledged external `committed` event must all succeed before one seven-day
+`BETA_ADMISSION` credential is returned. The external events omit the invite ID, secret, verifier
+digest, and raw proof. Ambiguous database or final-audit outcomes return no credential and never
+retry. The bounded database adapter is compiled but only fixture-composed; there is still no
+separate-origin Admin host, concrete Access/membership/WebAuthn verifier, external append-only
+backend/retention policy, composed PostgreSQL result, issuer UI/API/CLI, monitoring, or deployment.
+
 A checked capability-containment and recovery rehearsal runbook now binds all eight existing
 exact-default-off decisions to 24 ordered controls and eight repository commands. It requires
 protected authority, independent containment, Web process replacement, Ingest/Jobs/migration
@@ -999,7 +1009,8 @@ The planned public tree is:
 |-- apps/
 |   |-- web/
 |   |-- ingest/
-|   `-- jobs/
+|   |-- jobs/
+|   `-- admin/
 |-- contracts/
 |   `-- v1/
 |-- crates/
@@ -1358,7 +1369,8 @@ external TLS/edge, cache, capacity, or operational gate above.
 - Complete accessibility, privacy, legal, licensing, name/trademark, external security, and
   documentation review.
 - Start with a small invite cohort and expand only after reviewing reliability, cost, abuse,
-  support, and deletion evidence.
+  support, and deletion evidence. The transport-free Admin invitation kernel is a local prerequisite
+  only; it does not create or authorize that cohort.
 
 ## Public-beta release gates
 

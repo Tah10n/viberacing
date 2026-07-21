@@ -3,8 +3,8 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and thirty-nine checksum-ledgered database migrations. Repository verification uses synthetic data
-and injected capabilities only. It has procedure-only identity, passkey login/management, restricted
+and forty checksum-ledgered database migrations. Repository verification uses synthetic data and
+injected capabilities only. It has procedure-only identity, passkey login/management, restricted
 recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
 retention cleanup, bounded primary profile deletion, scoring, terminal finalization, and public
 score/race/status projection procedures. A local Web slice now composes invite redemption, GitHub
@@ -14,7 +14,9 @@ revocation of an owned non-current passkey, and logout. It can also add a backup
 separate existing-key assertion and registration ceremonies and rotate a ten-code recovery batch
 after a fresh passkey assertion. A separate local `/recover` flow performs bounded exact-code/dummy
 Argon2id work, creates only a five-minute restricted authority, and requires exact replacement
-WebAuthn registration before a normal session exists. It has no working invite/OAuth/database
+WebAuthn registration before a normal session exists. A transport-free Admin kernel now fixes the
+authorization/audit/database sequence for one beta invite, but it has no concrete verifier, audit
+backend, host, or operational composition. There is still no working invite/OAuth/database
 credential or live-authenticator evidence. A local `/connect` page adds session-rate-limited
 pending-code review, opaque new or active existing source selection, and fresh-passkey approval with
 synthetic evidence. Distributed recovery/anonymous pairing edge controls, deployed cleanup cadence,
@@ -599,8 +601,9 @@ placeholders and intentionally do not publish deployment work factors or respons
 `VIBERACING_PAIRING_APPROVAL_ATTEMPT_LIMIT` and `VIBERACING_PAIRING_APPROVAL_WINDOW_SECONDS`. Do not
 commit real keys or selected production attempt policy. A manual flow also needs an externally
 issued invite whose stored digest matches its 256-bit secret; this repository intentionally provides
-no issuer shortcut or sample valid invite. Never reuse these values between development, staging,
-and production.
+no runnable issuer shortcut or sample valid invite. The library-only Admin kernel cannot issue one
+without future Access/admin/passkey/audit/host adapters. Never reuse these values between
+development, staging, and production.
 
 Constructing the start/activation pairing service additionally requires a fresh, distinct 32-byte
 canonical base64url value in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL`; the code key above

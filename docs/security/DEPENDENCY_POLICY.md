@@ -8,13 +8,12 @@ checks when they are clear and maintainable.
 
 Mature frameworks and analysis tools are used only where their maintained behavior materially
 reduces project risk. The current deliberate set includes Next.js and React for the web runtime,
-`@noble/ed25519` for two strict server-side device-signature checks, `pg` for four confined pool
-wrappers serving six narrow server-side PostgreSQL adapters, `@simplewebauthn/server` and
-`@simplewebauthn/browser` for one passkey-registration ceremony, Fastify for one confined Ingest
-HTTP server factory, and CSpell, TypeScript, ESLint, Vitest, jsdom, and axe-core for offline
-verification. Every direct package is exact-pinned, installs without lifecycle scripts, and is
-represented with its complete transitive graph in the dependency inventory. Pull-request CI is
-secretless.
+`@noble/ed25519` for two strict server-side device-signature checks, `pg` for six confined
+server-side pool wrappers, `@simplewebauthn/server` and `@simplewebauthn/browser` for one
+passkey-registration ceremony, Fastify for one confined Ingest HTTP server factory, and CSpell,
+TypeScript, ESLint, Vitest, jsdom, and axe-core for offline verification. Every direct package is
+exact-pinned, installs without lifecycle scripts, and is represented with its complete transitive
+graph in the dependency inventory. Pull-request CI is secretless.
 
 The project does not auto-merge dependency updates. A green dependency pull request still requires
 human review of purpose, provenance, release history, permissions, transitive changes, and license.

@@ -5,6 +5,8 @@ import process from "node:process";
 
 const root = resolve(import.meta.dirname, "..");
 const require = createRequire(import.meta.url);
+const adminRoot = resolve(root, "apps", "admin");
+const adminRequire = createRequire(resolve(adminRoot, "package.json"));
 const contractsRoot = resolve(root, "packages", "contracts");
 const contractsRequire = createRequire(resolve(contractsRoot, "package.json"));
 const ingestRoot = resolve(root, "apps", "ingest");
@@ -19,6 +21,9 @@ const migrateRoot = resolve(root, "apps", "migrate");
 const migrateRequire = createRequire(resolve(migrateRoot, "package.json"));
 const webRoot = resolve(root, "apps", "web");
 const webRequire = createRequire(resolve(webRoot, "package.json"));
+const adminEslintBin = resolve(dirname(adminRequire.resolve("eslint")), "..", "bin", "eslint.js");
+const adminTscBin = adminRequire.resolve("typescript/bin/tsc");
+const adminVitestBin = resolve(dirname(adminRequire.resolve("vitest")), "vitest.mjs");
 const contractsEslintBin = resolve(
   dirname(contractsRequire.resolve("eslint")),
   "..",
@@ -234,6 +239,15 @@ const checks = [
     [resolve(import.meta.dirname, "test-spelling-check.mjs")],
   ],
   ["spelling", process.execPath, [resolve(import.meta.dirname, "check-spelling.mjs")]],
+  ["Admin lint", process.execPath, [adminEslintBin, "."], adminRoot],
+  ["Admin types", process.execPath, [adminTscBin, "--noEmit"], adminRoot],
+  ["Admin tests and coverage", process.execPath, [adminVitestBin, "run", "--coverage"], adminRoot],
+  [
+    "Admin production build",
+    process.execPath,
+    [adminTscBin, "--project", "tsconfig.build.json"],
+    adminRoot,
+  ],
   ["contract lint", process.execPath, [contractsEslintBin, "."], contractsRoot],
   ["contract types", process.execPath, [contractsTscBin, "--noEmit"], contractsRoot],
   [

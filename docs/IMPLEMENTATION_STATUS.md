@@ -171,6 +171,17 @@ Disabled EN/RU pages omit both forms, HTTP stops before request/runtime/admissio
 all four service methods repeat literal-true enforcement before OAuth/WebAuthn/database work while
 returning login/recovery remain available.
 
+A separate transport-free Admin invitation kernel now requires an exact injected
+Access/individual-admin/fresh-passkey authorization, an acknowledged external `authorized` audit, a
+second non-regressing clock check, one probed `viberacing_api.issue_invite` call under the bounded
+Admin role, and an acknowledged external `committed` audit before returning one fixed seven-day beta
+credential compatible with the Web parser. It withholds the credential and never retries on
+ambiguous state. Its 125 deterministic tests reach 100% statements, lines, and functions plus 98.16%
+branches. Authorization, audit, and database execution evidence is fixture-injected; the runtime
+suite adds only one OS-backed credential-shape check. There is no Admin host, concrete verifier or
+append-only backend, composed PostgreSQL execution, operational issuer, UI/API/CLI, production
+login/TLS, monitoring, or deployment.
+
 A checked capability-containment and recovery rehearsal runbook now binds the five Web decisions and
 the Ingest, Jobs-scheduler, and migration startup decisions to 24 ordered controls and eight exact
 commands. It requires seven tracked false defaults, absent tracked migration enablement, exact

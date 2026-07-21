@@ -74,6 +74,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0063](0063-default-off-local-jobs-scheduler.md)                | Default-off local Jobs scheduler                                    | Accepted; local scheduler; deployment pending          |
 | [0064](0064-default-off-reviewed-migration-runner.md)           | Default-off reviewed migration runner                               | Accepted; local PostgreSQL gate; deployment pending    |
 | [0065](0065-bounded-historical-season-backlog-finalization.md)  | Bounded historical season backlog finalization                      | Accepted; local catalog; deployment pending            |
+| [0066](0066-bounded-admin-invite-issuance-kernel.md)            | Bounded Admin invitation issuance kernel                            | Accepted; transport-free kernel; adapters pending      |
 
 ## Lifecycle
 

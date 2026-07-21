@@ -32,7 +32,10 @@ passkey, необратимое отключение источника со с�
 после свежей проверки passkey, а также logout. Репозиторий не предоставляет рабочий invite issuer,
 вход по коду восстановления или замену passkey, OAuth registration, реальные secrets, live
 OAuth/authenticator/database credentials, scheduled deletion purge, cache/backup/tombstone handling,
-restore replay, edge abuse controls или evidence с реальным пользователем.
+restore replay, edge abuse controls или evidence с реальным пользователем. Отдельное transport-free
+Admin-ядро теперь проверяет фиксированный порядок authorization, внешнего audit и единственного
+database capability для одного beta invite, но concrete Access/admin/passkey/audit adapters, host,
+UI и operational composition отсутствуют.
 
 Страница аккаунта теперь также рендерит семь derived-баллов по дням текущей Community-недели и
 bounded summary через один объединённый server-side visibility/score checkout. Hidden-профиль не
@@ -66,6 +69,7 @@ Verified-лига останется выключенной до появлен�
 - [Compatibility policy (EN)](docs/architecture/COMPATIBILITY_POLICY.md)
 - [Версионированные публичные контракты (EN)](contracts/README.md)
 - [Database foundation и role matrix (EN)](database/README.md)
+- [Admin invitation application kernel (EN)](apps/admin/README.md)
 - [Architecture decisions (EN)](docs/decisions/README.md)
 - [Политика данных публичного репозитория (EN)](docs/security/PUBLIC_REPOSITORY_POLICY.md)
 - [Локальная разработка (EN)](docs/getting-started/LOCAL_DEVELOPMENT.md)

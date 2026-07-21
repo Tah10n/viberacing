@@ -242,6 +242,13 @@ scheduler or deployed public-race read, season correction, deployed cleanup cade
 cleanup, deployment, or a hosted security control exists until its implementation and verification
 are present in the working tree.
 
+A separate transport-free Admin invitation kernel now requires one exact injected
+Access/admin/fresh-passkey decision, an acknowledged external authorization audit event, a second
+non-regressing clock check, the single probed Admin database capability, and an acknowledged
+committed audit event before returning one fixed seven-day beta invite. It has no concrete
+authorization or audit adapter, host, listener, page, CLI, composed PostgreSQL result, operational
+issuer, or deployment evidence.
+
 A second checked local Agent Skill now selects only repository-owned read-only verification from the
 real Git scope, distinguishes focused, root, staged, history, synthetic, and live evidence, and has
 no edit, staging, commit, installation, network, publication, push, or deployment authority.
@@ -266,6 +273,9 @@ replay, real-user deletion, recovery, or deployment.
 - `scripts/` contains repository verification and black-box policy tests.
 - `config/` contains reviewed external-host and dependency-license policy; do not widen either
   allowlist as a workaround for a failing check.
+- `apps/admin/` contains the transport-free bounded beta-invitation application, required injected
+  authorization/audit ports, and single-capability Admin PostgreSQL adapter. It is not an Admin UI,
+  API, CLI, host, or working issuer. Read `apps/admin/AGENTS.md` before editing it.
 - `apps/web/` contains the synthetic Next.js frontend, default-off local public score/race/status
   routes and adapters, default-off bounded invite/OAuth/initial-passkey enrollment,
   returning-passkey login, private account controls, and passkey-protected recovery-code rotation
@@ -310,8 +320,8 @@ replay, real-user deletion, recovery, or deployment.
 
 - `pnpm run verify` runs public-data/history, checker regression, documentation/link, spelling,
   license inventory, formatting, Markdown, configuration, workflow-policy,
-  contract/Ingest/Jobs/Jobs-scheduler/migration-runner/frontend lint/type/coverage/production-build,
-  and Rust formatting/check/test/Clippy gates.
+  Admin/contract/Ingest/Jobs/Jobs-scheduler/migration-runner/frontend
+  lint/type/coverage/production-build, and Rust formatting/check/test/Clippy gates.
 - `pnpm run verify:node` runs the same deterministic gates except Rust; CI runs Rust separately.
 - `pnpm run check:agent-skills` derives the proposal skill's enum inventory, CLI flags, generic
   output, and both skills' metadata from canonical sources, then binds the verification skill to the
@@ -322,6 +332,12 @@ replay, real-user deletion, recovery, or deployment.
 - `pnpm run check:architecture` validates required security/architecture contracts, structured abuse
   cases, ADR metadata/indexes, compatibility fail-closed state, privacy classes, and Mermaid fence
   structure.
+- `pnpm run lint:admin`, `pnpm run typecheck:admin`, `pnpm run test:admin:coverage`, and
+  `pnpm run build:admin` verify the transport-free invitation kernel, exact authorization/audit
+  ordering, one-time credential construction, ambiguous-failure suppression, protected database
+  configuration, single-capability runtime probe/query, client cleanup, and import confinement. They
+  use injected authorization/audit/pool fixtures and prove no Admin host, real Access/passkey,
+  external audit backend, composed PostgreSQL execution, production login/TLS, or deployment.
 - `pnpm run check:codex-compatibility` validates canonical exact-version manifests, extract/fixture
   digests, fixed stable methods, safe paths, evidence inventory, and candidate/matrix separation.
 - `pnpm run test:connector:windows-portable` builds the locked Windows x86_64 release profile,

@@ -708,6 +708,15 @@ material availability cost.
 - **Impact:** Broad integrity/privacy harm and loss of governance trust.
 - **Controls:** Separate origin behind Access, individual least-privileged roles, fresh passkey,
   reason, external append-only audit, conflict rules, and no shared account.
+- **Current evidence:** The transport-free invitation kernel accepts only one exact, frozen,
+  invite-purpose authorization decision with an opaque individual actor and separate Access/fresh-
+  passkey times. It requires an acknowledged external `authorized` event, then rejects expired
+  authority or backward time before database work, probes the Admin login's single current procedure
+  capability, and withholds the credential until an acknowledged external `committed` event. Both
+  events omit invite material and ambiguous outcomes never retry or return a credential.
+  Authorization, audit, and pool composition are injected tests only; no separate-origin host,
+  concrete Access/membership/WebAuthn verifier, append-only backend, composed PostgreSQL result, or
+  operational issuer exists.
 - **Detection:** Audit completeness checks, access review, anomaly alerts, and independent review of
   sensitive actions.
 - **Recovery:** Revoke the role, rotate credentials, reverse only reversible actions through an

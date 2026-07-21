@@ -2,6 +2,7 @@
   "schemaVersion": 2,
   "generatedFrom": [
     "package.json",
+    "apps/admin/package.json",
     "apps/ingest/package.json",
     "apps/ingest-host/package.json",
     "apps/jobs/package.json",
@@ -158,6 +159,7 @@
       "version": "9.39.5",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/admin", "scope": "development" },
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
@@ -343,6 +345,7 @@
       "version": "24.13.3",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/admin", "scope": "development" },
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
@@ -357,6 +360,7 @@
       "version": "8.20.0",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/admin", "scope": "development" },
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
         { "workspace": "apps/migrate", "scope": "development" },
@@ -426,6 +430,7 @@
       "version": "4.1.10",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/admin", "scope": "development" },
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
@@ -533,6 +538,7 @@
       "version": "9.39.5",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/admin", "scope": "development" },
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
@@ -817,6 +823,7 @@
       "version": "8.22.0",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/admin", "scope": "runtime" },
         { "workspace": "apps/ingest", "scope": "runtime" },
         { "workspace": "apps/jobs", "scope": "runtime" },
         { "workspace": "apps/migrate", "scope": "runtime" },
@@ -923,6 +930,7 @@
       "version": "6.0.3",
       "license": "Apache-2.0",
       "direct": [
+        { "workspace": "apps/admin", "scope": "development" },
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
@@ -937,6 +945,7 @@
       "version": "8.63.0",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/admin", "scope": "development" },
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },
@@ -957,6 +966,7 @@
       "version": "4.1.10",
       "license": "MIT",
       "direct": [
+        { "workspace": "apps/admin", "scope": "development" },
         { "workspace": "apps/ingest", "scope": "development" },
         { "workspace": "apps/ingest-host", "scope": "development" },
         { "workspace": "apps/jobs", "scope": "development" },

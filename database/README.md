@@ -375,7 +375,10 @@ Runtime access must remain procedure-only and must have positive and negative in
 ## Implemented procedure boundary
 
 - `issue_invite` is admin-only, requires a bounded reason code and audit reference, and refuses an
-  expiry more than 90 days ahead.
+  expiry more than 90 days ahead. The separate transport-free Admin kernel maps only one fixed
+  seven-day `BETA_ADMISSION` operation through a probed single-capability adapter, but concrete
+  Access/admin/passkey authorization, external audit, a host, and composed PostgreSQL evidence are
+  still absent.
 - `enroll_profile` atomically proves invite-verifier possession, creates one enrolling profile and a
   fresh bounded session, redeems the invite, and appends an audit reference. A failed redemption
   leaves none of those rows behind.

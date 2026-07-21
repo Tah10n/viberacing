@@ -86,6 +86,47 @@ policy, or live route/Jobs evidence is supplied. Data labels refer to the classi
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
+## Admin beta invitation issuance
+
+```mermaid
+sequenceDiagram
+  actor Operator
+  participant Host as Future separate-origin Admin host
+  participant Auth as Access/admin/passkey gateway
+  participant Audit as External append-only audit
+  participant Kernel as Transport-free Admin kernel
+  participant DB as Admin database role
+
+  Operator->>Host: Request one beta invite with fresh passkey
+  Host->>Kernel: Invoke fixed argument-free operation
+  Kernel->>Auth: Require invite-purpose authorization
+  Auth-->>Kernel: Exact opaque actor and fresh proof times
+  Kernel->>Audit: Append authorized event without invite material
+  Audit-->>Kernel: Exact phase/request acknowledgement
+  Kernel->>DB: Probe single capability and issue digest-bound invite
+  DB-->>Kernel: Exact issued result; audit row uses supplied reference
+  Kernel->>Audit: Append committed event without invite material
+  Audit-->>Kernel: Exact phase/request acknowledgement
+  Kernel-->>Host: One Web-compatible seven-day credential
+  Host-->>Operator: Future one-time protected delivery
+```
+
+Only the transport-free `Kernel` and bounded database adapter exist. `Host`, `Auth`, `Audit`,
+protected delivery, and their real identities/credentials are future trust boundaries represented by
+injected tests. The kernel accepts one exact frozen version 1 decision for purpose `invite_issue`;
+Access and passkey proof times must be ordered, not future-dated, and at most five minutes old. It
+fixes reason `BETA_ADMISSION`, generates the UUIDs, request ID, and 256-bit secret from the OS
+CSPRNG, sends only the digest to PostgreSQL, and clears mutable material on every path.
+
+Database work cannot start before the `authorized` event is acknowledged and the kernel has rejected
+expired authority or backward time on a second clock read. The credential cannot leave the kernel
+before `committed` is acknowledged. A database or final-audit ambiguity returns no credential and
+never retries. It can leave an inaccessible invite that expires under the existing policy; this
+slice has no lookup, revoke, list, repair, or reconciliation authority. Neither audit event contains
+the invite ID, secret, digest, raw Access/passkey proof, configuration, row, or error. There is no
+operational issuer, separate origin, composed PostgreSQL result, real external audit, monitoring,
+capacity evidence, or deployment.
+
 ## Enrollment and passkey bootstrap
 
 ```mermaid
