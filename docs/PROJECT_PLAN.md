@@ -968,9 +968,14 @@ audit event, the single probed `viberacing_api.issue_invite` capability under th
 role, and an acknowledged external `committed` event must all succeed before one seven-day
 `BETA_ADMISSION` credential is returned. The external events omit the invite ID, secret, verifier
 digest, and raw proof. Ambiguous database or final-audit outcomes return no credential and never
-retry. The bounded database adapter is compiled but only fixture-composed; there is still no
-separate-origin Admin host, concrete Access/membership/WebAuthn verifier, external append-only
-backend/retention policy, composed PostgreSQL result, issuer UI/API/CLI, monitoring, or deployment.
+retry. The bounded database adapter now proves a two-phase login/TLS then assumed-role capability
+boundary and mandatory reset-before-reuse. One opt-in synthetic gate composes the built production
+kernel with injected authorization/audit ports and a disposable hostname-verified TLS PostgreSQL
+database: it rejects an extra-membership login without private mutation and verifies one exact
+invite plus database audit through the narrow login. There is still no separate-origin Admin host,
+concrete Access/membership/WebAuthn verifier, external append-only backend/retention policy,
+protected production login/certificate, issuer UI/API/CLI, ambiguous-state operator workflow,
+monitoring, capacity evidence, or deployment.
 
 A checked capability-containment and recovery rehearsal runbook now binds all eight existing
 exact-default-off decisions to 24 ordered controls and eight repository commands. It requires

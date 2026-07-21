@@ -4,12 +4,13 @@ import { Pool } from "pg";
 
 import type { AdminDatabaseConfig } from "./database-config.js";
 
-const runtimeBoundaryQuery = `SELECT
-  CURRENT_USER = 'viberacing_admin' AS role_ok,
+const loginBoundaryQuery = `SELECT
   (
-    SESSION_USER = $1::name
-    AND SESSION_USER <> CURRENT_USER
-    AND EXISTS (
+    CURRENT_USER = SESSION_USER
+    AND SESSION_USER = $1::name
+  ) AS login_ok,
+  (
+    EXISTS (
       SELECT 1
       FROM pg_catalog.pg_auth_members AS membership
       JOIN pg_catalog.pg_roles AS member_role
@@ -61,6 +62,30 @@ const runtimeBoundaryQuery = `SELECT
           WHERE outbound_membership.member = admin_role.oid
         )
     )
+    AND NOT pg_catalog.has_schema_privilege(SESSION_USER, 'viberacing_api', 'USAGE')
+    AND NOT pg_catalog.has_schema_privilege(SESSION_USER, 'viberacing_api', 'CREATE')
+    AND NOT pg_catalog.has_schema_privilege(SESSION_USER, 'viberacing_private', 'USAGE')
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_proc AS procedure
+      JOIN pg_catalog.pg_namespace AS namespace
+        ON namespace.oid = procedure.pronamespace
+      WHERE namespace.nspname = 'viberacing_api'
+        AND pg_catalog.has_function_privilege(SESSION_USER, procedure.oid, 'EXECUTE')
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_class AS relation
+      JOIN pg_catalog.pg_namespace AS namespace
+        ON namespace.oid = relation.relnamespace
+      WHERE namespace.nspname = 'viberacing_private'
+        AND relation.relkind IN ('r', 'p', 'v', 'm', 'f')
+        AND pg_catalog.has_table_privilege(
+          SESSION_USER,
+          relation.oid,
+          'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+        )
+    )
     AND pg_catalog.has_database_privilege(
       SESSION_USER,
       pg_catalog.current_database(),
@@ -77,6 +102,23 @@ const runtimeBoundaryQuery = `SELECT
       'TEMPORARY'
     )
   ) AS login_scope_ok,
+  pg_catalog.current_setting('search_path') = 'pg_catalog,pg_temp' AS search_path_ok,
+  EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_stat_ssl AS ssl_state
+    WHERE ssl_state.pid = pg_catalog.pg_backend_pid()
+      AND ssl_state.ssl = $2::boolean
+  ) AS transport_ok,
+  pg_catalog.current_setting('transaction_read_only') = 'off' AS read_write_ok`;
+
+const assumeAdminRoleQuery = "SET ROLE viberacing_admin";
+const resetAdminRoleQuery = "RESET ROLE";
+
+const capabilityBoundaryQuery = `SELECT
+  (
+    CURRENT_USER = 'viberacing_admin'
+    AND SESSION_USER = $1::name
+  ) AS role_ok,
   (
     pg_catalog.has_schema_privilege(CURRENT_USER, 'viberacing_api', 'USAGE')
     AND NOT pg_catalog.has_schema_privilege(CURRENT_USER, 'viberacing_api', 'CREATE')
@@ -114,12 +156,6 @@ const runtimeBoundaryQuery = `SELECT
     )
   ) AS capability_scope_ok,
   pg_catalog.current_setting('search_path') = 'pg_catalog,pg_temp' AS search_path_ok,
-  EXISTS (
-    SELECT 1
-    FROM pg_catalog.pg_stat_ssl AS ssl_state
-    WHERE ssl_state.pid = pg_catalog.pg_backend_pid()
-      AND ssl_state.ssl = $2::boolean
-  ) AS transport_ok,
   pg_catalog.current_setting('transaction_read_only') = 'off' AS read_write_ok`;
 
 const issueInviteQuery = `WITH applied AS MATERIALIZED (
@@ -148,9 +184,12 @@ export type AdminDatabasePoolSignal = "idle_client_error";
 export type AdminDatabasePoolSignalSink = (signal: AdminDatabasePoolSignal) => Promise<void> | void;
 
 export interface AdminDatabaseClient {
+  assumeAdminRole(): Promise<void>;
   issueInvite(input: AdminInviteDatabaseInput): Promise<unknown>;
   release(destroy?: boolean): void;
-  verifyRuntimeBoundary(): Promise<unknown>;
+  resetAdminRole(): Promise<void>;
+  verifyCapabilityBoundary(): Promise<unknown>;
+  verifyLoginBoundary(): Promise<unknown>;
 }
 
 export interface AdminDatabasePool {
@@ -196,6 +235,9 @@ function wrapClient(client: NodePostgresClient, config: AdminDatabaseConfig): Ad
   }
 
   return Object.freeze({
+    async assumeAdminRole(): Promise<void> {
+      await fixedQuery(assumeAdminRoleQuery);
+    },
     async issueInvite(input: AdminInviteDatabaseInput): Promise<unknown> {
       const verifierDigest = Buffer.from(input.verifierDigest);
       try {
@@ -214,8 +256,14 @@ function wrapClient(client: NodePostgresClient, config: AdminDatabaseConfig): Ad
     release(destroy = false): void {
       client.release(destroy);
     },
-    verifyRuntimeBoundary(): Promise<unknown> {
-      return fixedQuery(runtimeBoundaryQuery, [config.user, config.ssl !== false]);
+    async resetAdminRole(): Promise<void> {
+      await fixedQuery(resetAdminRoleQuery);
+    },
+    verifyCapabilityBoundary(): Promise<unknown> {
+      return fixedQuery(capabilityBoundaryQuery, [config.user]);
+    },
+    verifyLoginBoundary(): Promise<unknown> {
+      return fixedQuery(loginBoundaryQuery, [config.user, config.ssl !== false]);
     },
   });
 }

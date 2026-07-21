@@ -246,8 +246,10 @@ A separate transport-free Admin invitation kernel now requires one exact injecte
 Access/admin/fresh-passkey decision, an acknowledged external authorization audit event, a second
 non-regressing clock check, the single probed Admin database capability, and an acknowledged
 committed audit event before returning one fixed seven-day beta invite. It has no concrete
-authorization or audit adapter, host, listener, page, CLI, composed PostgreSQL result, operational
-issuer, or deployment evidence.
+authorization or audit adapter, host, listener, page, CLI, operational issuer, or deployment
+evidence. One opt-in synthetic integration now composes the built kernel and injected ports with a
+disposable hostname-verified TLS PostgreSQL database, proves extra-membership denial, and verifies
+one exact invite/database-audit result through the narrow login.
 
 A second checked local Agent Skill now selects only repository-owned read-only verification from the
 real Git scope, distinguishes focused, root, staged, history, synthetic, and live evidence, and has
@@ -335,9 +337,17 @@ replay, real-user deletion, recovery, or deployment.
 - `pnpm run lint:admin`, `pnpm run typecheck:admin`, `pnpm run test:admin:coverage`, and
   `pnpm run build:admin` verify the transport-free invitation kernel, exact authorization/audit
   ordering, one-time credential construction, ambiguous-failure suppression, protected database
-  configuration, single-capability runtime probe/query, client cleanup, and import confinement. They
-  use injected authorization/audit/pool fixtures and prove no Admin host, real Access/passkey,
-  external audit backend, composed PostgreSQL execution, production login/TLS, or deployment.
+  configuration, pre-role login/TLS denial probe, fixed role assumption and single-capability query,
+  reset-before-reuse, client cleanup, and import confinement. They use injected
+  authorization/audit/pool fixtures and prove no Admin host, real Access/passkey, external audit
+  backend, production login/TLS, or deployment.
+- `pnpm run test:admin:postgres-integration` builds the production Admin workspace, applies the
+  reviewed migration ledger to one disposable hostname-verified TLS PostgreSQL container, rejects a
+  deliberately widened login before private-state mutation, and proves the narrow login writes one
+  exact active invite plus its database audit row without non-target mutation before role reset and
+  connection cleanup. Authorization and external audit remain injected; this proves no host,
+  production credential/certificate, real Access/passkey, external sink, capacity, monitoring, or
+  deployment.
 - `pnpm run check:codex-compatibility` validates canonical exact-version manifests, extract/fixture
   digests, fixed stable methods, safe paths, evidence inventory, and candidate/matrix separation.
 - `pnpm run test:connector:windows-portable` builds the locked Windows x86_64 release profile,

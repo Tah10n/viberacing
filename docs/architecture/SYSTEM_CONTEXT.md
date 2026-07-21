@@ -276,7 +276,7 @@ authority shown in the design remain planned.
 | Jobs scheduler   | Default-off fixed UTC cadence, sequential Jobs invocation, in-memory slots, bounded process shutdown                                                               | Database queries, caller-selected work, durable queue/history, network, monitoring, deployment credentials       | TB-07 and TB-11        |
 | PostgreSQL       | Constraints, role separation, transactional state, immutable season/deletion enforcement                                                                           | Public routing, connector trust, release credentials                                                             | TB-07                  |
 | Rust connector   | Local App Server lifecycle, compatibility adapter, local key custody/removal, canonical signing, safe scheduling                                                   | Website commands, server revoke, experimental App Server API, arbitrary telemetry/upload, profile administration | TB-03, TB-04, TB-05    |
-| Admin kernel     | Transport-free invite-purpose authorization/audit ordering, fixed credential construction, single Admin database capability                                        | Listener/UI/CLI, proof verification, normal Web sessions, audit backend, generic query or retry                  | TB-07 and TB-08        |
+| Admin kernel     | Transport-free invite-purpose authorization/audit ordering, fixed credential construction, two-phase single Admin database capability                              | Listener/UI/CLI, proof verification, normal Web sessions, audit backend, generic query or retry                  | TB-07 and TB-08        |
 | Admin surface    | Reasoned exceptional actions, quarantine/correction, security operations                                                                                           | Normal user session reuse, shared identities, routine exact-usage access                                         | TB-08                  |
 | CI               | Evaluate untrusted source without secrets; produce read-only and ephemeral no-upload Windows smoke evidence                                                        | Deployment, signing, package publication from pull requests                                                      | TB-09                  |
 | Release pipeline | Build protected revision, SBOM, provenance, checksum, sign and publish                                                                                             | Unreviewed pull-request execution, long-lived broad credentials                                                  | TB-10                  |
@@ -285,11 +285,14 @@ The repository-verification Agent Skill is a local read-only TB-09 control. It m
 gates for the real Git scope and report exact evidence, but it cannot edit, stage, commit, install,
 access network/live services, publish, push, deploy, or make production claims.
 
-The Admin kernel row has fixture-composed authorization, audit, and pool evidence, controlled
-clock/entropy cases, and one OS-backed credential-shape check. The Admin surface row remains
-planned: no concrete Access/individual membership/WebAuthn adapter, external append-only sink,
-separate-origin host, protected delivery, composed PostgreSQL result, monitoring, or deployment
-exists.
+The Admin kernel row has fixture-composed authorization and external-audit evidence, controlled
+clock/entropy cases, and one OS-backed credential-shape check. Its built application/pool is also
+composed by an opt-in synthetic gate with one disposable hostname-verified TLS PostgreSQL database:
+an extra-membership login cannot mutate private state, while the narrow login produces one exact
+invite/database-audit result, resets its role, and closes. The Admin surface row remains planned: no
+concrete Access/individual membership/WebAuthn adapter, external append-only sink, separate-origin
+host, protected delivery or production login/certificate, monitoring, capacity evidence, or
+deployment exists.
 
 Trust-boundary IDs are defined in the [threat model](../security/THREAT_MODEL.md).
 

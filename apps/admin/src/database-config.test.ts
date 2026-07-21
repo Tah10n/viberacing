@@ -47,7 +47,7 @@ describe("Admin database configuration", () => {
       maxLifetimeSeconds: 300,
       maxUses: 25,
       min: 0,
-      options: "-c role=viberacing_admin -c search_path=pg_catalog,pg_temp",
+      options: "-c search_path=pg_catalog,pg_temp",
       port: 54_329,
       query_timeout: 6_000,
       ssl: false,

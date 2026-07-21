@@ -83,22 +83,28 @@ issuance is enabled.
 ## Database boundary
 
 The only PostgreSQL driver import is `src/database-pool.ts`. The pool is bounded to one client and
-uses a distinct login that may set only the NOLOGIN, NOINHERIT `viberacing_admin` role. Before every
-fixed issuance call, one closed probe requires:
+uses a distinct NOINHERIT login that may set only the NOLOGIN, NOINHERIT `viberacing_admin` role.
+The connection begins under that otherwise capability-free login so its own TLS session remains
+visible without granting a statistics role. Before every fixed issuance call, the adapter requires:
 
-- effective role `viberacing_admin` and the exact configured distinct NOINHERIT login;
+- current and session identity both equal the exact configured NOINHERIT login;
 - one non-admin, non-inherited, SET-only Admin membership and no other group membership;
 - no superuser, database/role creation, replication, or RLS-bypass authority;
 - CONNECT without CREATE or TEMPORARY;
 - an unchanged non-login, non-privileged Admin role with no outbound membership;
+- no direct login usage or creation on either application schema, no executable application
+  function, and no private-table privilege;
+- `pg_catalog,pg_temp`, read-write state, and observed TLS state matching configuration;
+- one fixed `SET ROLE viberacing_admin`, followed by an exact effective-role check;
 - API schema usage without creation, no private-schema usage or private-table privilege, and exactly
   the one `viberacing_owner`-owned, security-definer, closed-search-path
-  `issue_invite(uuid,bytea,timestamptz,uuid,text,text)` API capability;
-- `pg_catalog,pg_temp`, read-write state, and observed TLS state matching configuration.
+  `issue_invite(uuid,bytea,timestamptz,uuid,text,text)` API capability.
 
-The adapter then submits one fixed parameterized materialized query and validates one exact
-`issued: true` row. Failed, malformed, or widened sessions are destroyed. It exposes no generic
-query, table, migration, Web, Ingest, Jobs, owner, or second Admin capability.
+The adapter submits one fixed parameterized materialized query and validates one exact
+`issued: true` row. It then performs one fixed `RESET ROLE` and repeats the login boundary before
+the session can return to the pool. Failed, malformed, widened, or incompletely reset sessions are
+destroyed; post-write reset/probe failure is treated as ambiguous committed state. The adapter
+exposes no generic query, table, migration, Web, Ingest, Jobs, owner, or second Admin capability.
 
 Only these configuration names are recognized by the exported protected reader:
 
@@ -126,15 +132,19 @@ pnpm run lint:admin
 pnpm run typecheck:admin
 pnpm run test:admin:coverage
 pnpm run build:admin
+pnpm run test:admin:postgres-integration
 pnpm run verify
 ```
 
-Current deterministic evidence is 125 tests with 100% statements, lines, and functions plus 98.16%
+Current deterministic evidence is 130 tests with 100% statements, lines, and functions plus 98.16%
 branches. They cover closed authorization/audit/result shapes, ordering, freshness, purpose, exact
 credential grammar, entropy and mutable-buffer clearing, ambiguous failure behavior, configuration,
-TLS policy, narrow pool/query structure, client destruction, and PostgreSQL-import confinement. The
-existing database integration independently proves the Admin role can invoke only the bounded
-procedure; these new application tests use injected authorization, audit, pool, and controlled
-clock/entropy fixtures plus one OS-backed credential-shape check. There is no composed PostgreSQL,
-real Access/passkey, external audit, browser, host, capacity, monitoring, or deployment evidence for
-this workspace.
+TLS policy, two-phase login/role boundary, reset-before-reuse, client destruction, and
+PostgreSQL-import confinement. A separate opt-in synthetic integration builds the production Admin
+JavaScript, applies the reviewed 40-migration ledger to one disposable TLS PostgreSQL container,
+rejects an extra-membership login before private-table mutation, and runs the exact injected
+authorization/audit application through the narrow login. It proves hostname-verified TLS, one
+stored active invite, one exact database audit row, no non-target private-table mutation, role
+reset, and closed connections. Authorization and external audit remain injected; there is no real
+Access/passkey, append-only sink, browser, host, protected production login/certificate, capacity,
+monitoring, operational issuer, or deployment evidence.

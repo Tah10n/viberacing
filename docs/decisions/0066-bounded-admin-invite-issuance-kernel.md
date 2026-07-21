@@ -12,8 +12,8 @@ The Web enrollment flow already accepts a one-time credential containing one UUI
 256-bit secret, immediately reduces the secret to its SHA-256 digest, and atomically redeems that
 digest through the Web role. PostgreSQL separately grants `viberacing_admin` exactly one bounded
 `issue_invite` function, with a 90-day absolute lifetime limit, fixed audit reference, and bounded
-reason. No application currently composes that capability, so every enrollment test uses synthetic
-or externally seeded data and the repository has no working invite issuer.
+reason. At selection time no application composed that capability, every enrollment test used
+synthetic or externally seeded data, and the repository had no working invite issuer.
 
 A direct database script or one-shot operator CLI would close that usability gap while bypassing the
 selected Admin trust boundary. VR-ADMIN-001 and VR-ABUSE-ADMIN-MISUSE require a separate policy,
@@ -57,14 +57,18 @@ ID, plaintext secret, verifier digest, raw proof/token, configuration, database 
 acknowledgement, the application rereads its clock and rejects expired authority or backward time
 before invoking the store.
 
-The bounded store then probes one client before submitting a fixed parameterized call. Its distinct
+The bounded store probes one client before submitting a fixed parameterized call. Its distinct
 NOINHERIT login must have exactly one SET-only membership in the unchanged NOLOGIN, NOINHERIT
-`viberacing_admin` role. The probe requires non-privileged login and group attributes, CONNECT
-without CREATE/TEMPORARY, safe search path, read-write state, matching TLS state, API usage without
-creation, no private schema/table privilege, and exactly the single current
-`viberacing_owner`-owned, security-definer, closed-search-path
-`issue_invite(uuid,bytea,timestamptz,uuid,text,text)` API capability. The pool has one client;
-failed or malformed sessions are destroyed; no generic query is exported.
+`viberacing_admin` role. While current and session identity are still that otherwise capability-free
+login, the first probe requires non-privileged login and group attributes, CONNECT without
+CREATE/TEMPORARY, no direct application-schema/function/private-table authority, safe search path,
+read-write state, and matching TLS state. The adapter then performs one fixed
+`SET ROLE viberacing_admin` and proves API usage without creation, no private schema/table
+privilege, and exactly the single current `viberacing_owner`-owned, security-definer,
+closed-search-path `issue_invite(uuid,bytea,timestamptz,uuid,text,text)` API capability. After the
+exact issued result, one fixed `RESET ROLE` plus the repeated login probe is mandatory before reuse.
+The pool has one client; failed, malformed, widened, or incompletely reset sessions are destroyed;
+no generic query is exported.
 
 Only after the database returns one exact success row must the same external sink append and
 acknowledge phase `committed`. The one-time credential is constructed and returned only after that
@@ -136,7 +140,7 @@ secret to recover an ambiguous operation.
 
 Current local evidence includes:
 
-- 125 deterministic unit and policy tests with 100% statements, lines, and functions plus 98.16%
+- 130 deterministic unit and policy tests with 100% statements, lines, and functions plus 98.16%
   branches;
 - positive exact ordering and Web-compatible credential checks;
 - stale/future/wrong-purpose/open/accessor/proxy authorization denial before entropy or state work;
@@ -144,19 +148,24 @@ Current local evidence includes:
   initial acknowledgement and credential suppression after final-audit failure;
 - OS-CSPRNG size, UUID collision/grammar, fixed expiry/reason, immutable output, and mutable-copy
   clearing checks;
-- protected configuration, loopback/verified-TLS policy, exact role/capability/table/search-path/TLS
-  probe, fixed parameterized query, result-shape, client-destruction, and idle-signal checks;
+- protected configuration, loopback/verified-TLS policy, exact pre-role login/TLS/direct-denial
+  probe, fixed role assumption, capability/table probe, fixed parameterized query, role reset,
+  post-reset login proof, result-shape, client-destruction, and idle-signal checks;
 - lint confinement proving no PostgreSQL import outside the pool adapter; and
 - strict types, production compilation, root verifier wiring, frozen lockfile, and dependency
   inventory review.
 
 The existing disposable database suite independently proves the Admin role's single capability and
-cross-role denials. This slice does not compose its emitted JavaScript with PostgreSQL and supplies
-only injected authorization/audit dependencies. A complete next gate needs a separate-origin Admin
-host with real Access and individual membership policy, consumed fresh-passkey proof, a protected
-append-only audit backend and retention policy, a narrow production-owned Admin login/TLS path,
-ambiguous-state operator handling, monitoring, capacity/abuse controls, and deployed browser
-evidence.
+cross-role denials. A separate opt-in synthetic integration now composes the built production
+JavaScript and injected authorization/audit ports with one disposable hostname-verified TLS
+PostgreSQL database. It applies the exact reviewed 40-migration ledger, proves an extra-membership
+login fails before private-state mutation, then proves the narrow login stores one active invite and
+one exact database audit row, leaves every non-target private table unchanged, resets its role, and
+closes all connections. This is not a working issuer: a complete next gate still needs a
+separate-origin Admin host with real Access and individual membership policy, consumed fresh-passkey
+proof, a protected append-only audit backend and retention policy, a narrow production-owned Admin
+login/TLS path, ambiguous-state operator handling, monitoring, capacity/abuse controls, and deployed
+browser evidence.
 
 ## References
 

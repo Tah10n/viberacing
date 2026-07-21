@@ -37,7 +37,8 @@ registration, real secret, live OAuth/authenticator/database credentials, deploy
 cache/backup/tombstone handling, restore replay, distributed edge abuse controls, recovery cleanup
 or notifications, or live-user evidence. A separate transport-free Admin kernel now enforces fixed
 authorization/audit/database ordering for one beta invite, but it has no concrete Access,
-individual-admin, passkey, external-audit, host, UI, or operational composition.
+individual-admin, passkey, external-audit, host, UI, or operational composition. An opt-in synthetic
+gate composes its built application with disposable hostname-verified TLS PostgreSQL only.
 
 The authenticated account page now also renders the current Community week's seven derived daily
 scores and bounded summary from one combined server-side visibility/score checkout. Hidden profiles

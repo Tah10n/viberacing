@@ -714,9 +714,11 @@ material availability cost.
   authority or backward time before database work, probes the Admin login's single current procedure
   capability, and withholds the credential until an acknowledged external `committed` event. Both
   events omit invite material and ambiguous outcomes never retry or return a credential.
-  Authorization, audit, and pool composition are injected tests only; no separate-origin host,
-  concrete Access/membership/WebAuthn verifier, append-only backend, composed PostgreSQL result, or
-  operational issuer exists.
+  Authorization and external audit remain injected. One opt-in synthetic integration composes the
+  built kernel/pool with hostname-verified TLS PostgreSQL, proves an extra-membership login fails
+  before private mutation, and verifies one exact invite/database-audit pair plus role reset through
+  the narrow login. No separate-origin host, concrete Access/membership/WebAuthn verifier,
+  append-only backend, protected production login/certificate, or operational issuer exists.
 - **Detection:** Audit completeness checks, access review, anomaly alerts, and independent review of
   sensitive actions.
 - **Recovery:** Revoke the role, rotate credentials, reverse only reversible actions through an

@@ -25,7 +25,7 @@ const inviteInput = Object.freeze({
 });
 
 describe("Admin database pool", () => {
-  it("exposes only the fixed probe and issuance query, clears its digest copy, and closes", async () => {
+  it("exposes only the fixed boundary, role, issuance, and reset queries", async () => {
     const observedDigests: Buffer[] = [];
     const query = vi.fn((structuredQuery: { text: string; values: unknown[] }) => {
       const digest = structuredQuery.values[1];
@@ -51,36 +51,50 @@ describe("Admin database pool", () => {
     const pool = createAdminDatabasePool(config, signal, factory);
     const client = await pool.connect();
 
-    await expect(client.verifyRuntimeBoundary()).resolves.toEqual([{ issued: true }]);
+    await expect(client.verifyLoginBoundary()).resolves.toEqual([{ issued: true }]);
+    await expect(client.assumeAdminRole()).resolves.toBeUndefined();
+    await expect(client.verifyCapabilityBoundary()).resolves.toEqual([{ issued: true }]);
     await expect(client.issueInvite(inviteInput)).resolves.toEqual([{ issued: true }]);
+    await expect(client.resetAdminRole()).resolves.toBeUndefined();
     expect(client).not.toHaveProperty("query");
     expect(factory).toHaveBeenCalledWith(config);
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(5);
     expect(query.mock.calls[0]![0].values).toEqual(["viberacing_admin_login", false]);
-    expect(query.mock.calls[0]![0].text).toContain("CURRENT_USER = 'viberacing_admin'");
+    expect(query.mock.calls[0]![0].text).toContain("CURRENT_USER = SESSION_USER");
     expect(query.mock.calls[0]![0].text).toContain("granted_role.rolname <> 'viberacing_admin'");
     expect(query.mock.calls[0]![0].text).toContain("pg_catalog.pg_stat_ssl");
-    expect(query.mock.calls[0]![0].text).toContain("procedure.proname = 'issue_invite'");
-    expect(query.mock.calls[0]![0].text).toContain("owner_role.rolname = 'viberacing_owner'");
-    expect(query.mock.calls[0]![0].text).toContain("procedure.prosecdef");
     expect(query.mock.calls[0]![0].text).toContain(
+      "has_schema_privilege(SESSION_USER, 'viberacing_api', 'USAGE')",
+    );
+    expect(query.mock.calls[0]![0].text).toContain(
+      "has_function_privilege(SESSION_USER, procedure.oid, 'EXECUTE')",
+    );
+    expect(query.mock.calls[0]![0].text).toContain("has_table_privilege(\n          SESSION_USER");
+    expect(query.mock.calls[1]![0]).toEqual({ text: "SET ROLE viberacing_admin", values: [] });
+    expect(query.mock.calls[2]![0].values).toEqual(["viberacing_admin_login"]);
+    expect(query.mock.calls[2]![0].text).toContain("CURRENT_USER = 'viberacing_admin'");
+    expect(query.mock.calls[2]![0].text).toContain("procedure.proname = 'issue_invite'");
+    expect(query.mock.calls[2]![0].text).toContain("owner_role.rolname = 'viberacing_owner'");
+    expect(query.mock.calls[2]![0].text).toContain("procedure.prosecdef");
+    expect(query.mock.calls[2]![0].text).toContain(
       "procedure.proconfig @> ARRAY['search_path=pg_catalog, pg_temp']::text[]",
     );
-    expect(query.mock.calls[0]![0].text).toContain("namespace.nspname = 'viberacing_private'");
-    expect(query.mock.calls[1]![0].text).toContain(
+    expect(query.mock.calls[2]![0].text).toContain("namespace.nspname = 'viberacing_private'");
+    expect(query.mock.calls[3]![0].text).toContain(
       "viberacing_api.issue_invite(\n    $1::uuid,\n    $2::bytea",
     );
-    expect(query.mock.calls[1]![0].values).toHaveLength(6);
-    expect(query.mock.calls[1]![0].values[0]).toBe(inviteInput.inviteId);
-    expect(query.mock.calls[1]![0].values[1]).not.toBe(inviteInput.verifierDigest);
-    expect(query.mock.calls[1]![0].values[2]).toBe(inviteInput.expiresAt);
-    expect(query.mock.calls[1]![0].values.slice(3)).toEqual([
+    expect(query.mock.calls[3]![0].values).toHaveLength(6);
+    expect(query.mock.calls[3]![0].values[0]).toBe(inviteInput.inviteId);
+    expect(query.mock.calls[3]![0].values[1]).not.toBe(inviteInput.verifierDigest);
+    expect(query.mock.calls[3]![0].values[2]).toBe(inviteInput.expiresAt);
+    expect(query.mock.calls[3]![0].values.slice(3)).toEqual([
       inviteInput.auditEventId,
       inviteInput.requestId,
       "BETA_ADMISSION",
     ]);
     expect(observedDigests).toEqual([Buffer.alloc(32, 0x41)]);
-    expect(query.mock.calls[1]![0].values[1]).toEqual(Buffer.alloc(32));
+    expect(query.mock.calls[3]![0].values[1]).toEqual(Buffer.alloc(32));
+    expect(query.mock.calls[4]![0]).toEqual({ text: "RESET ROLE", values: [] });
     expect(inviteInput.verifierDigest).toEqual(Buffer.alloc(32, 0x41));
 
     client.release(true);

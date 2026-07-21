@@ -56,7 +56,7 @@ export interface AdminDatabaseConfig {
   readonly maxLifetimeSeconds: 300;
   readonly maxUses: 25;
   readonly min: 0;
-  readonly options: "-c role=viberacing_admin -c search_path=pg_catalog,pg_temp";
+  readonly options: "-c search_path=pg_catalog,pg_temp";
   readonly password: string;
   readonly port: number;
   readonly query_timeout: typeof adminDatabaseQueryTimeoutMs;
@@ -167,7 +167,7 @@ function buildConfig(environment: Environment): AdminDatabaseConfig {
     maxLifetimeSeconds: 300,
     maxUses: 25,
     min: 0,
-    options: "-c role=viberacing_admin -c search_path=pg_catalog,pg_temp",
+    options: "-c search_path=pg_catalog,pg_temp",
     password,
     port,
     query_timeout: adminDatabaseQueryTimeoutMs,

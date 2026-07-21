@@ -14,11 +14,16 @@ const inputKeys = new Set([
   "requestId",
   "verifierDigest",
 ]);
-const runtimeBoundaryKeys = new Set([
+const capabilityBoundaryKeys = new Set([
   "capability_scope_ok",
-  "login_scope_ok",
   "read_write_ok",
   "role_ok",
+  "search_path_ok",
+]);
+const loginBoundaryKeys = new Set([
+  "login_ok",
+  "login_scope_ok",
+  "read_write_ok",
   "search_path_ok",
   "transport_ok",
 ]);
@@ -152,9 +157,9 @@ function readSingleRow(value: unknown, expectedKeys: ReadonlySet<string>): objec
   }
 }
 
-function validateRuntimeBoundary(value: unknown): void {
-  const row = readSingleRow(value, runtimeBoundaryKeys);
-  for (const key of runtimeBoundaryKeys) {
+function validateBoundary(value: unknown, expectedKeys: ReadonlySet<string>): void {
+  const row = readSingleRow(value, expectedKeys);
+  for (const key of expectedKeys) {
     if (ownDataValue(row, key) !== true) {
       fail("runtime_boundary_mismatch");
     }
@@ -190,13 +195,27 @@ export function createAdminInviteStore(pool: AdminDatabasePool): AdminInviteStor
 
       let destroy = true;
       try {
-        let boundary: unknown;
+        let loginBoundary: unknown;
         try {
-          boundary = await client.verifyRuntimeBoundary();
+          loginBoundary = await client.verifyLoginBoundary();
         } catch {
           fail("query_failed");
         }
-        validateRuntimeBoundary(boundary);
+        validateBoundary(loginBoundary, loginBoundaryKeys);
+
+        try {
+          await client.assumeAdminRole();
+        } catch {
+          fail("query_failed");
+        }
+
+        let capabilityBoundary: unknown;
+        try {
+          capabilityBoundary = await client.verifyCapabilityBoundary();
+        } catch {
+          fail("query_failed");
+        }
+        validateBoundary(capabilityBoundary, capabilityBoundaryKeys);
 
         let result: unknown;
         try {
@@ -205,6 +224,20 @@ export function createAdminInviteStore(pool: AdminDatabasePool): AdminInviteStor
           fail("query_failed");
         }
         validateIssueResult(result);
+
+        try {
+          await client.resetAdminRole();
+        } catch {
+          fail("query_failed");
+        }
+
+        let resetBoundary: unknown;
+        try {
+          resetBoundary = await client.verifyLoginBoundary();
+        } catch {
+          fail("query_failed");
+        }
+        validateBoundary(resetBoundary, loginBoundaryKeys);
         destroy = false;
       } finally {
         input.verifierDigest.fill(0);

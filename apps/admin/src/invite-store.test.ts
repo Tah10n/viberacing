@@ -8,11 +8,16 @@ import {
   type AdminInviteStoreErrorCode,
 } from "./invite-store.js";
 
-const boundaryRow = Object.freeze({
+const capabilityBoundaryRow = Object.freeze({
   capability_scope_ok: true,
-  login_scope_ok: true,
   read_write_ok: true,
   role_ok: true,
+  search_path_ok: true,
+});
+const loginBoundaryRow = Object.freeze({
+  login_ok: true,
+  login_scope_ok: true,
+  read_write_ok: true,
   search_path_ok: true,
   transport_ok: true,
 });
@@ -36,9 +41,20 @@ function expectStoreError(
   });
 }
 
-function createHarness(boundary: unknown = [boundaryRow], result: unknown = [{ issued: true }]) {
+function createHarness({
+  capabilityBoundary = [capabilityBoundaryRow],
+  loginBoundary = [loginBoundaryRow],
+  result = [{ issued: true }],
+}: {
+  capabilityBoundary?: unknown;
+  loginBoundary?: unknown;
+  result?: unknown;
+} = {}) {
   let receivedDigest: Buffer | undefined;
-  const verifyRuntimeBoundary = vi.fn(() => Promise.resolve(boundary));
+  const assumeAdminRole = vi.fn(() => Promise.resolve());
+  const resetAdminRole = vi.fn(() => Promise.resolve());
+  const verifyCapabilityBoundary = vi.fn(() => Promise.resolve(capabilityBoundary));
+  const verifyLoginBoundary = vi.fn(() => Promise.resolve(loginBoundary));
   const issueInvite = vi.fn((input: unknown) => {
     if (typeof input === "object" && input !== null && "verifierDigest" in input) {
       receivedDigest = input.verifierDigest as Buffer;
@@ -46,24 +62,57 @@ function createHarness(boundary: unknown = [boundaryRow], result: unknown = [{ i
     return Promise.resolve(result);
   });
   const release = vi.fn();
-  const client = { issueInvite, release, verifyRuntimeBoundary };
+  const client = {
+    assumeAdminRole,
+    issueInvite,
+    release,
+    resetAdminRole,
+    verifyCapabilityBoundary,
+    verifyLoginBoundary,
+  };
   const connect = vi.fn(() => Promise.resolve(client));
   const pool = { close: vi.fn(() => Promise.resolve()), connect };
-  return { client, connect, issueInvite, pool, receivedDigest: () => receivedDigest, release };
+  return {
+    assumeAdminRole,
+    client,
+    connect,
+    issueInvite,
+    pool,
+    receivedDigest: () => receivedDigest,
+    release,
+    resetAdminRole,
+    verifyCapabilityBoundary,
+    verifyLoginBoundary,
+  };
 }
 
 describe("Admin invitation store", () => {
-  it("checks the narrow runtime boundary, issues once, clears its copy, and releases reusable", async () => {
+  it("checks login, assumes capability, issues, resets, and releases reusable", async () => {
     const harness = createHarness();
     const store = createAdminInviteStore(harness.pool);
 
     await expect(store.issueInvite(goodInput)).resolves.toBeUndefined();
     expect(Object.isFrozen(store)).toBe(true);
     expect(harness.connect).toHaveBeenCalledOnce();
-    expect(harness.client.verifyRuntimeBoundary).toHaveBeenCalledOnce();
+    expect(harness.verifyLoginBoundary).toHaveBeenCalledTimes(2);
+    expect(harness.assumeAdminRole).toHaveBeenCalledOnce();
+    expect(harness.verifyCapabilityBoundary).toHaveBeenCalledOnce();
     expect(harness.issueInvite).toHaveBeenCalledOnce();
-    expect(harness.issueInvite.mock.invocationCallOrder[0]).toBeGreaterThan(
-      harness.client.verifyRuntimeBoundary.mock.invocationCallOrder[0]!,
+    expect(harness.resetAdminRole).toHaveBeenCalledOnce();
+    expect(harness.verifyLoginBoundary.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.assumeAdminRole.mock.invocationCallOrder[0]!,
+    );
+    expect(harness.assumeAdminRole.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.verifyCapabilityBoundary.mock.invocationCallOrder[0]!,
+    );
+    expect(harness.verifyCapabilityBoundary.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.issueInvite.mock.invocationCallOrder[0]!,
+    );
+    expect(harness.issueInvite.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.resetAdminRole.mock.invocationCallOrder[0]!,
+    );
+    expect(harness.resetAdminRole.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.verifyLoginBoundary.mock.invocationCallOrder[1]!,
     );
     const received = harness.issueInvite.mock.calls[0]![0] as Record<string, unknown>;
     expect(received).toMatchObject({
@@ -147,12 +196,12 @@ describe("Admin invitation store", () => {
     );
     expect(inputHarness.connect).not.toHaveBeenCalled();
 
-    const result = new Proxy([boundaryRow], {
+    const result = new Proxy([loginBoundaryRow], {
       getPrototypeOf() {
         throw new Error("private result proxy detail");
       },
     });
-    const resultHarness = createHarness(result);
+    const resultHarness = createHarness({ loginBoundary: result });
     await expectStoreError(
       createAdminInviteStore(resultHarness.pool).issueInvite(goodInput),
       "result_invalid",
@@ -161,44 +210,79 @@ describe("Admin invitation store", () => {
   });
 
   it.each([
-    null,
-    [],
-    [],
-    [null],
-    [{ ...boundaryRow, extra: true }],
-    [{ ...boundaryRow, role_ok: false }],
-    [{ ...boundaryRow, capability_scope_ok: 1 }],
-  ])("destroys the session when the runtime boundary result is invalid", async (boundary) => {
-    const harness = createHarness(boundary);
-    const store = createAdminInviteStore(harness.pool);
+    [null, "result_invalid"],
+    [[], "result_invalid"],
+    [[null], "result_invalid"],
+    [[{ ...loginBoundaryRow, extra: true }], "result_invalid"],
+    [[{ ...loginBoundaryRow, login_ok: false }], "runtime_boundary_mismatch"],
+    [[{ ...loginBoundaryRow, transport_ok: 1 }], "runtime_boundary_mismatch"],
+  ] as const)("destroys the session for an invalid login boundary", async (boundary, code) => {
+    const harness = createHarness({ loginBoundary: boundary });
 
-    await expectStoreError(
-      store.issueInvite(goodInput),
-      Array.isArray(boundary) && boundary.length === 1 && boundary[0]?.role_ok === false
-        ? "runtime_boundary_mismatch"
-        : Array.isArray(boundary) && boundary.length === 1 && boundary[0]?.capability_scope_ok === 1
-          ? "runtime_boundary_mismatch"
-          : "result_invalid",
-    );
+    await expectStoreError(createAdminInviteStore(harness.pool).issueInvite(goodInput), code);
+    expect(harness.assumeAdminRole).not.toHaveBeenCalled();
     expect(harness.issueInvite).not.toHaveBeenCalled();
     expect(harness.release).toHaveBeenCalledWith(true);
   });
 
-  it("requires every exact runtime boolean", async () => {
-    for (const key of Object.keys(boundaryRow)) {
-      const harness = createHarness([{ ...boundaryRow, [key]: false }]);
+  it.each([
+    [null, "result_invalid"],
+    [[], "result_invalid"],
+    [[null], "result_invalid"],
+    [[{ ...capabilityBoundaryRow, extra: true }], "result_invalid"],
+    [[{ ...capabilityBoundaryRow, role_ok: false }], "runtime_boundary_mismatch"],
+    [[{ ...capabilityBoundaryRow, capability_scope_ok: 1 }], "runtime_boundary_mismatch"],
+  ] as const)(
+    "destroys the assumed-role session for an invalid capability boundary",
+    async (boundary, code) => {
+      const harness = createHarness({ capabilityBoundary: boundary });
+
+      await expectStoreError(createAdminInviteStore(harness.pool).issueInvite(goodInput), code);
+      expect(harness.assumeAdminRole).toHaveBeenCalledOnce();
+      expect(harness.issueInvite).not.toHaveBeenCalled();
+      expect(harness.release).toHaveBeenCalledWith(true);
+    },
+  );
+
+  it("requires every exact boundary boolean before and after capability use", async () => {
+    for (const key of Object.keys(loginBoundaryRow)) {
+      const harness = createHarness({
+        loginBoundary: [{ ...loginBoundaryRow, [key]: false }],
+      });
       await expectStoreError(
         createAdminInviteStore(harness.pool).issueInvite(goodInput),
         "runtime_boundary_mismatch",
       );
       expect(harness.release).toHaveBeenCalledWith(true);
     }
+    for (const key of Object.keys(capabilityBoundaryRow)) {
+      const harness = createHarness({
+        capabilityBoundary: [{ ...capabilityBoundaryRow, [key]: false }],
+      });
+      await expectStoreError(
+        createAdminInviteStore(harness.pool).issueInvite(goodInput),
+        "runtime_boundary_mismatch",
+      );
+      expect(harness.release).toHaveBeenCalledWith(true);
+    }
+
+    const resetHarness = createHarness();
+    resetHarness.verifyLoginBoundary
+      .mockResolvedValueOnce([loginBoundaryRow])
+      .mockResolvedValueOnce([{ ...loginBoundaryRow, login_ok: false }]);
+    await expectStoreError(
+      createAdminInviteStore(resetHarness.pool).issueInvite(goodInput),
+      "runtime_boundary_mismatch",
+    );
+    expect(resetHarness.issueInvite).toHaveBeenCalledOnce();
+    expect(resetHarness.resetAdminRole).toHaveBeenCalledOnce();
+    expect(resetHarness.release).toHaveBeenCalledWith(true);
   });
 
   it.each([null, [], [{ issued: false }], [{ issued: true, extra: true }], [{ issued: 1 }]])(
     "treats an invalid issuance result as ambiguous and destroys the session",
     async (result) => {
-      const harness = createHarness([boundaryRow], result);
+      const harness = createHarness({ result });
       const store = createAdminInviteStore(harness.pool);
 
       await expectStoreError(store.issueInvite(goodInput), "result_invalid");
@@ -208,7 +292,7 @@ describe("Admin invitation store", () => {
     },
   );
 
-  it("maps connection, probe, query, and release failures without reflecting details", async () => {
+  it("maps connection, boundary, role, query, reset, and release failures", async () => {
     const connectionPool = {
       close: vi.fn(),
       connect: vi.fn(() => Promise.reject(new Error("private connection detail"))),
@@ -219,14 +303,30 @@ describe("Admin invitation store", () => {
     );
 
     const probeHarness = createHarness();
-    probeHarness.client.verifyRuntimeBoundary.mockRejectedValueOnce(
-      new Error("private probe detail"),
-    );
+    probeHarness.verifyLoginBoundary.mockRejectedValueOnce(new Error("private probe detail"));
     await expectStoreError(
       createAdminInviteStore(probeHarness.pool).issueInvite(goodInput),
       "query_failed",
     );
     expect(probeHarness.release).toHaveBeenCalledWith(true);
+
+    const assumeHarness = createHarness();
+    assumeHarness.assumeAdminRole.mockRejectedValueOnce(new Error("private role detail"));
+    await expectStoreError(
+      createAdminInviteStore(assumeHarness.pool).issueInvite(goodInput),
+      "query_failed",
+    );
+    expect(assumeHarness.release).toHaveBeenCalledWith(true);
+
+    const capabilityHarness = createHarness();
+    capabilityHarness.verifyCapabilityBoundary.mockRejectedValueOnce(
+      new Error("private capability detail"),
+    );
+    await expectStoreError(
+      createAdminInviteStore(capabilityHarness.pool).issueInvite(goodInput),
+      "query_failed",
+    );
+    expect(capabilityHarness.release).toHaveBeenCalledWith(true);
 
     const queryHarness = createHarness();
     queryHarness.issueInvite.mockRejectedValueOnce(new Error("private query detail"));
@@ -235,6 +335,27 @@ describe("Admin invitation store", () => {
       "query_failed",
     );
     expect(queryHarness.release).toHaveBeenCalledWith(true);
+
+    const resetHarness = createHarness();
+    resetHarness.resetAdminRole.mockRejectedValueOnce(new Error("private reset detail"));
+    await expectStoreError(
+      createAdminInviteStore(resetHarness.pool).issueInvite(goodInput),
+      "query_failed",
+    );
+    expect(resetHarness.issueInvite).toHaveBeenCalledOnce();
+    expect(resetHarness.release).toHaveBeenCalledWith(true);
+
+    const resetProbeHarness = createHarness();
+    resetProbeHarness.verifyLoginBoundary
+      .mockResolvedValueOnce([loginBoundaryRow])
+      .mockRejectedValueOnce(new Error("private reset probe detail"));
+    await expectStoreError(
+      createAdminInviteStore(resetProbeHarness.pool).issueInvite(goodInput),
+      "query_failed",
+    );
+    expect(resetProbeHarness.issueInvite).toHaveBeenCalledOnce();
+    expect(resetProbeHarness.release).toHaveBeenCalledWith(true);
+
     const releaseHarness = createHarness();
     releaseHarness.release.mockImplementationOnce(() => {
       throw new Error("private release detail");

@@ -103,8 +103,11 @@ sequenceDiagram
   Auth-->>Kernel: Exact opaque actor and fresh proof times
   Kernel->>Audit: Append authorized event without invite material
   Audit-->>Kernel: Exact phase/request acknowledgement
+  Kernel->>DB: Probe narrow login/TLS; assume Admin role
   Kernel->>DB: Probe single capability and issue digest-bound invite
   DB-->>Kernel: Exact issued result; audit row uses supplied reference
+  Kernel->>DB: Reset role and re-probe narrow login
+  DB-->>Kernel: Exact reset boundary
   Kernel->>Audit: Append committed event without invite material
   Audit-->>Kernel: Exact phase/request acknowledgement
   Kernel-->>Host: One Web-compatible seven-day credential
@@ -123,9 +126,12 @@ expired authority or backward time on a second clock read. The credential cannot
 before `committed` is acknowledged. A database or final-audit ambiguity returns no credential and
 never retries. It can leave an inaccessible invite that expires under the existing policy; this
 slice has no lookup, revoke, list, repair, or reconciliation authority. Neither audit event contains
-the invite ID, secret, digest, raw Access/passkey proof, configuration, row, or error. There is no
-operational issuer, separate origin, composed PostgreSQL result, real external audit, monitoring,
-capacity evidence, or deployment.
+the invite ID, secret, digest, raw Access/passkey proof, configuration, row, or error. One opt-in
+synthetic gate composes the built kernel and injected authorization/audit ports with disposable
+hostname-verified TLS PostgreSQL. It proves an extra-membership login cannot mutate private state
+and the narrow login stores exactly one invite/database-audit pair before role reset and connection
+cleanup. There is no operational issuer, separate origin, real authorization or external audit,
+protected production login/certificate, monitoring, capacity evidence, or deployment.
 
 ## Enrollment and passkey bootstrap
 

@@ -19,8 +19,10 @@ documentation, and staged-review rules all apply.
   the same sink acknowledges the fixed `committed` event. Neither event may contain the invite ID,
   plaintext secret, verifier digest, database value, raw proof, token, or configuration.
 - The Admin database login is a distinct NOINHERIT principal whose only group membership is
-  `viberacing_admin`. Preserve the exact runtime role, membership, capability, table-denial,
-  search-path, read-write, and TLS probe before the one fixed parameterized `issue_invite` call.
+  `viberacing_admin`. Preserve the exact pre-role login, membership, direct-capability denial,
+  search-path, read-write, and TLS probe; the fixed role assumption; the Admin capability/table
+  denial probe; the one parameterized `issue_invite` call; and the fixed role reset plus repeated
+  login probe before a session can be reused.
 - The application creates one seven-day beta invitation from OS CSPRNG entropy. Keep the exact
   `BETA_ADMISSION` reason, canonical Web-compatible credential grammar, generated identifiers, and
   one-time return. Clear mutable secret/digest copies on every path and never log or persist the
@@ -42,8 +44,13 @@ pnpm run lint:admin
 pnpm run typecheck:admin
 pnpm run test:admin:coverage
 pnpm run build:admin
+pnpm run test:admin:postgres-integration
 pnpm run verify
 ```
+
+The PostgreSQL command is an explicit synthetic Docker gate. It does not supply or authorize a host,
+real Access/passkey proof, external audit backend, production credential/TLS path, network service,
+or deployment.
 
 Before committing, stage only intended files, run `git diff --cached --check` and
 `pnpm run check:public:staged`, then inspect every staged manifest, lockfile, source, test, ADR, and

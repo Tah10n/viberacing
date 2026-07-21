@@ -66,6 +66,7 @@
     "test:web-query-plan-evidence": "node scripts/test-web-query-plan-evidence.mjs",
     "test:admin": "pnpm --filter @viberacing/admin run test",
     "test:admin:coverage": "pnpm --filter @viberacing/admin run test:coverage",
+    "test:admin:postgres-integration": "node scripts/test-admin-postgres-integration.mjs",
     "test:agent-skills-check": "node scripts/test-agent-skills-check.mjs",
     "test:architecture-check": "node scripts/test-architecture-check.mjs",
     "test:config-check": "node scripts/test-config-check.mjs",
