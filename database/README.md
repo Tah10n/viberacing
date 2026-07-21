@@ -799,6 +799,16 @@ keyed identity tombstone, cache/backup purge, restore replay, production Jobs lo
 capacity, or deployment is implied. The CLI integration separately proves one emitted local purge
 and its exact terminal job/profile state.
 
+The checked
+[profile deletion failure rehearsal runbook](../docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md)
+binds that request/purge boundary plus revision 0032's separate 30-day terminal-job retention to
+protected classification, preserved lock-down, aggregate diagnosis, and one reviewed
+deployment-owned retry. Its checker and twenty-five fail-closed regression variants are available
+through `pnpm run check:deletion-failure-runbook` and
+`pnpm run test:deletion-failure-runbook-check`. The runbook runs no shared SQL or Jobs command and
+does not implement automatic retry, monitoring, notification, cache/backup deletion, stale-backup
+replay, or a production deletion result.
+
 Revision 0025 stores only the exact `CarRecipeV1` columns, with database checks repeating every
 version, enum, and seed bound. Both tables are forced-RLS and have no runtime table grants. Web may
 propose, read, approve, or reject only after the function derives an `active` or `hidden` profile

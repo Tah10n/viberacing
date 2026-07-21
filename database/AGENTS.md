@@ -1,8 +1,8 @@
 # Database guidance
 
 Read the root `AGENTS.md`, `database/README.md`, ADRs 0002–0004, the security invariants, abuse
-cases, privacy data map, and `docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md` before changing
-this subtree.
+cases, privacy data map, `docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md`, and
+`docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md` before changing this subtree.
 
 ## Hard boundaries
 
@@ -68,6 +68,8 @@ this subtree.
 ```text
 pnpm run check:restore-runbook
 pnpm run test:restore-runbook-check
+pnpm run check:deletion-failure-runbook
+pnpm run test:deletion-failure-runbook-check
 pnpm run test:database-check
 pnpm run check:database
 pnpm run test:database:integration

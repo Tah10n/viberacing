@@ -798,8 +798,15 @@ material availability cost.
   the final runtime deny matrix on that state. Its checked rehearsal runbook requires that source to
   remain synthetic and current, closes service routing, requires exact ledger/data/schema/RLS/grant
   oracles and cleanup, and stops before any pre-deletion or real-user archive. The drill contains no
-  pre-deletion backup or keyed marker and therefore does not test resurrection or deletion replay.
-  No external audit sink is supplied. Cache invalidation, deployed scheduler/monitoring, keyed
+  pre-deletion backup or keyed marker and therefore does not test resurrection or deletion replay. A
+  separate checked profile-deletion failure rehearsal binds 26 controls and ten commands to the
+  atomic request, maximum-ten Jobs-only purge, five-mutex and role boundary, 30-day terminal
+  retention, fixed scheduler catalog, rollback scenarios, and disposable PostgreSQL evidence.
+  Twenty-five unsafe or drifted variants fail closed. It preserves confirmed lock-down, requires
+  protected aggregate classification, allows only one reviewed deployment-owned retry, and rejects
+  any inference of automatic retry from unused schema fields. It does not run a shared purge, notify
+  a user, invalidate a cache, expire a backup, replay a tombstone, or prove a real deletion. No
+  external audit sink is supplied. Cache invalidation, deployed scheduler/monitoring, keyed
   tombstone policy, backup expiry, and stale-backup restore replay remain unimplemented.
 - **Residual risk:** Immutable backup media may retain encrypted data until documented expiry.
 

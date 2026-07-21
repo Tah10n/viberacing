@@ -333,6 +333,12 @@ cache, database row, network sink, or retention behavior. A future deployment co
 backend, or protected incident record must receive a separate purpose, access, jurisdiction,
 retention, incident-hold, export, and deletion review before collection.
 
+The checked profile-deletion failure runbook adds no profile, job, digest, timestamp, error, exact
+count, operator identity, notification record, log, metric, cache key, database query, or network
+sink. It requires only a future protected aggregate oracle and incident record, forbids those values
+from public output, and does not implement the record or oracle. Their purpose, access,
+jurisdiction, retention, incident hold, export, and deletion policy remain deployment prerequisites.
+
 ADR 0061 is a separate Jobs-only retention capability, not behavior of that module-load value. It
 adds no cookie, field, identifier, metric, log, or network destination and is described with
 revision 0038 below.
@@ -977,12 +983,12 @@ handles when not needed, OAuth/passkey material, device public keys/signatures/n
 keys/proofs/nonces, idempotency keys, recovery selectors/secrets/PHCs/authority verifiers, local
 paths, and prohibited data.
 
-The checked migration, current-snapshot restore, and capability-containment runbooks add no
-completed record, target, operator identity, reporter detail, credential, archive, log, or network
-sink to this repository. They require a future deployment-owned protected change/incident record
-containing only the redacted operational fields mapped above. Before collecting that record,
-deployment policy must define access, jurisdiction, retention, incident hold, export, and deletion;
-the public checklists are not that system.
+The checked migration, current-snapshot restore, capability-containment, and profile-deletion
+failure runbooks add no completed record, target, operator identity, reporter detail, credential,
+archive, profile/job reference, log, or network sink to this repository. They require a future
+deployment-owned protected change/incident record containing only the redacted operational fields
+mapped above. Before collecting that record, deployment policy must define access, jurisdiction,
+retention, incident hold, export, and deletion; the public checklists are not that system.
 
 Connector telemetry is off by default. The implemented candidate diagnostic preview is local,
 explicit, stdout-only, redacted, reviewed before sharing, and generated from a fixed allowlist; the

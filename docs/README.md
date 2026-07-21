@@ -76,6 +76,10 @@ remain safe to publish verbatim.
   — checked exact-default-off inventory, process-replacement, independent containment, preserved
   security/deletion paths, redacted evidence, and one-capability recovery; it is not a deployed
   control plane, private reporting channel, monitoring backend, or incident result.
+- [Profile deletion failure rehearsal runbook](operations/PROFILE_DELETION_FAILURE_RUNBOOK.md) —
+  checked request/purge/terminal-retention classification, preserved authority lock-down, protected
+  aggregate diagnosis, one bounded deployment-owned retry, and explicit no-automatic-retry and
+  stale-backup boundaries; it is not a deployed deletion or recovery result.
 - [Third-party notices](../THIRD_PARTY_NOTICES.md) and [trademark policy](../TRADEMARKS.md) —
   current dependency and branding obligations.
 
@@ -85,10 +89,10 @@ remain safe to publish verbatim.
 - `architecture/` — implementation-level database model and protocol boundaries as code lands.
 - `security/` — incident-response and launch privacy/legal artifacts as operations become real.
 - `reference/` — public API, connector CLI, configuration, scoring, and CarRecipe reference.
-- `operations/` — checked migration, isolated current-snapshot restore, and local capability-
-  containment rehearsal runbooks exist; Railway/Cloudflare deployment, external backup storage,
-  stale-backup deletion replay, alerts, SLOs, reporter coordination, compromised release, mass
-  revoke, incident communication, and deletion runbooks remain pending.
+- `operations/` — checked migration, isolated current-snapshot restore, local capability-
+  containment, and profile-deletion failure rehearsal runbooks exist; Railway/Cloudflare deployment,
+  external backup storage, stale-backup deletion replay, alerts, SLOs, reporter coordination,
+  compromised release, mass revoke, and broader incident communication runbooks remain pending.
 - `decisions/` — new records whenever durable decisions change; initial ADRs exist now.
 - `releasing/` — versioning, changelog, signing, provenance, rollback, and supported-version policy.
 

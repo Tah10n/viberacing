@@ -133,6 +133,11 @@ const checks = [
     [resolve(import.meta.dirname, "test-containment-runbook-check.mjs")],
   ],
   [
+    "profile deletion failure runbook checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-deletion-failure-runbook-check.mjs")],
+  ],
+  [
     "community-health checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-community-check.mjs")],
@@ -187,6 +192,11 @@ const checks = [
     "containment runbook",
     process.execPath,
     [resolve(import.meta.dirname, "check-containment-runbook.mjs")],
+  ],
+  [
+    "profile deletion failure runbook",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-deletion-failure-runbook.mjs")],
   ],
   [
     "external-link checker behavior",

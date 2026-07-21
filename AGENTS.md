@@ -22,6 +22,8 @@ Read these files before changing the project:
     restore behavior.
 13. `docs/operations/CAPABILITY_CONTAINMENT_RUNBOOK.md` before changing capability gates or planning
     incident containment and recovery.
+14. `docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md` before changing, diagnosing, or retrying
+    profile deletion.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync,
 Community score query/response, compatible race and race-status responses, and CarRecipe contracts,
@@ -244,6 +246,13 @@ A second checked local Agent Skill now selects only repository-owned read-only v
 real Git scope, distinguishes focused, root, staged, history, synthetic, and live evidence, and has
 no edit, staging, commit, installation, network, publication, push, or deployment authority.
 
+A separate checked profile-deletion failure rehearsal runbook binds the atomic Web request,
+Jobs-only maximum-ten purge, separate 30-day terminal retention, scheduler catalog, and existing
+rollback/role/race evidence to 26 controls and ten commands. Twenty-five unsafe or drifted variants
+fail closed. It preserves confirmed request lock-down, permits only one reviewed deployment-owned
+retry, and proves no automatic retry, monitoring, notification, cache/backup purge, stale-backup
+replay, real-user deletion, recovery, or deployment.
+
 ## Repository map
 
 - `.agents/skills/viberacing-propose-car/` contains the checked local conversational reducer for the
@@ -407,6 +416,14 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   `pnpm run test:containment-runbook-check` proves 22 unsafe or drifted variants fail closed. These
   are static local-prerequisite checks, not a private report, deployed control plane, dynamic kill
   switch, monitoring, containment, recovery, or deployment.
+- `pnpm run check:deletion-failure-runbook` binds the profile-deletion failure rehearsal document to
+  26 ordered controls, ten exact root commands, atomic Web request/cookie settlement, the Jobs-only
+  maximum-ten due-job purge, five private mutexes, exact runtime-role denial, separate 30-day
+  terminal retention, scheduler order, rollback/preservation SQL evidence, and both disposable
+  PostgreSQL integrations. `pnpm run test:deletion-failure-runbook-check` proves 25 unsafe or
+  drifted variants fail closed. These are static local-prerequisite checks, not raw/shared database
+  execution, automatic retry, monitoring, notification, cache/backup purge, stale-backup replay,
+  real-user deletion, recovery, or deployment.
 - `pnpm run test:migrate:postgres-integration` builds the emitted migration entry point, creates one
   disposable certificate-verified PostgreSQL database plus synthetic narrow and widened logins,
   proves widened-login denial before schema mutation, observes two narrow controllers behind one
@@ -525,6 +542,9 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
 - Read `docs/operations/CAPABILITY_CONTAINMENT_RUNBOOK.md` before changing any exact-default-off
   decision. Local environment values do not stop or replace running processes and prove no deployed
   containment.
+- Read `docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md` before changing or diagnosing the
+  request/purge/terminal-retention chain. It permits no raw Jobs or database command against shared
+  data and does not authorize queue mutation or automatic retry.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 

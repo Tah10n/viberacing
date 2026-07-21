@@ -68,6 +68,12 @@ inside one disposable local PostgreSQL container and removes that container and 
 
 From the repository root:
 
+The command examples below are local development surfaces, not incident actions. Before diagnosing
+or retrying a profile purge in any shared environment, follow the checked
+[profile deletion failure rehearsal runbook](../../docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md).
+It permits no raw package command against shared data and requires a reviewed deployment-owned
+controller, one fixed attempt, and protected aggregate verification.
+
 ```text
 pnpm run build:jobs
 pnpm run test:jobs:postgres-integration

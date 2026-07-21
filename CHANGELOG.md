@@ -8,6 +8,16 @@ Versioning where its guarantees are applicable.
 
 ### Added
 
+- A checked profile-deletion failure rehearsal runbook for the existing atomic request, Jobs-only
+  maximum-ten primary purge, and 30-day terminal-job retention boundary. Twenty-six controls and ten
+  exact commands distinguish request, purge, retention, and stale-backup/cache failure; preserve
+  immediate authority lock-down; require protected aggregate diagnosis and one deployment-owned
+  retry; and forbid invented automatic retry, queue edits, authority widening, early evidence
+  cleanup, and resurrection claims. The checker binds Web composition, three SQL procedures, exact
+  role/batch/state/mutex behavior, fixed Jobs commands/queries, scheduler order, rollback/retention
+  SQL evidence, and both disposable PostgreSQL integrations; twenty-five unsafe or drifted variants
+  fail closed. This is not a deployed alert, retry controller, notification path, cache/backup
+  purge, stale-backup replay, real-user deletion result, recovery, or deployment evidence.
 - A checked capability-containment and recovery rehearsal runbook for the eight existing
   exact-default-off decisions. Twenty-four controls and eight commands bind seven tracked false
   defaults, absent tracked migration enablement, exact source admission at 20 Web module-load

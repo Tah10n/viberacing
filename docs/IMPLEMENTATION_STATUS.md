@@ -180,6 +180,16 @@ capability at a time. Twenty-two unsafe or drifted regression variants fail clos
 public prerequisite evidence, not a private reporting channel, deployed control plane, dynamic kill
 switch, monitoring backend, production containment, recovery, staging, or deployment.
 
+A separate checked profile-deletion failure rehearsal runbook now binds the atomic Web request,
+Jobs-only maximum-ten primary purge, separate 30-day terminal-job retention, fixed scheduler
+catalog, and existing rollback/role/race evidence to 26 ordered controls and ten exact commands. It
+preserves confirmed request lock-down, separates request/purge/retention/restore state, requires
+protected aggregate diagnosis, allows only one reviewed deployment-owned retry, and rejects any
+claim that unused `running`/`retry_wait`/lease fields create automatic retry. Twenty-five unsafe or
+drifted variants fail closed. This is static public prerequisite evidence, not a deployed alert,
+retry controller, notification path, cache/backup purge, stale-backup replay, real-user deletion
+result, recovery, staging, or deployment.
+
 A bounded Rust `connect` command generates a key and client rate ID with the OS CSPRNG, persists
 resumable state only in a native credential store, and performs the exact start/proof/poll sequence.
 A separate Windows x86_64 `sync` command now checks an active record before either bounded
@@ -861,6 +871,15 @@ scheduler/cadence exists.
   archive. This is a static public rehearsal contract, not a staging restore, stale-backup deletion
   replay, external backup system, cluster recovery, production authorization, RPO/RTO, or deployment
   result.
+- A checked profile-deletion failure rehearsal runbook for the existing request/purge/retention
+  chain. Twenty-six ordered controls bind ten exact root commands, atomic Web request/cookie
+  settlement, maximum-ten due-job Jobs-only purge, five-mutex and role boundaries, separate 30-day
+  terminal retention, fixed scheduler order, state-drift rollback, preservation scenarios, worker
+  races, and both disposable PostgreSQL integrations. Twenty-five unsafe or drifted regression
+  variants fail closed. The runbook permits no queue mutation or raw database/Jobs command, treats
+  confirmed request lock-down as durable incident state, and does not claim automatic retry,
+  monitoring, notification, cache/backup purge, stale-backup replay, production deletion, recovery,
+  or deployment.
 - A closed procedure-only API boundary: Admin can issue bounded, reasoned invites; Web can
   atomically redeem an invite, create an enrolling profile/session, create and consume exact-session
   challenges, register the initial passkey, rotate/revoke a possessed session, and request immediate
@@ -1536,6 +1555,8 @@ pnpm run check:restore-runbook
 pnpm run test:restore-runbook-check
 pnpm run check:containment-runbook
 pnpm run test:containment-runbook-check
+pnpm run check:deletion-failure-runbook
+pnpm run test:deletion-failure-runbook-check
 pnpm run test:database:integration
 pnpm run test:migrate:postgres-integration
 pnpm run test:web-query-plan-evidence

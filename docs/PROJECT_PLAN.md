@@ -970,6 +970,16 @@ capability at a time; 22 unsafe or drifted variants fail closed. This is local p
 only, not a private reporting channel, deployed control plane, dynamic kill switch, monitoring,
 containment, recovery, or deployment.
 
+A separate checked profile-deletion failure rehearsal runbook now binds the implemented atomic
+request, Jobs-only maximum-ten primary purge, separate 30-day terminal retention, fixed scheduler
+catalog, and existing rollback/role/race evidence to 26 ordered controls and ten exact repository
+commands. Twenty-five missing, unsafe, or drifted variants fail closed. It distinguishes request,
+purge, terminal-retention, and stale-backup/cache state; preserves confirmed authority lock-down;
+requires protected aggregate diagnosis and at most one reviewed deployment-owned retry; and refuses
+to infer automatic retry from unused schema state. This is local prerequisite evidence only, not a
+deployed alert, retry controller, user notification path, cache/backup purge, stale-backup replay,
+real-user deletion outcome, recovery, staging, or deployment.
+
 ## Repository design
 
 The planned public tree is:

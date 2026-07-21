@@ -65,6 +65,13 @@ binds the repository's local exact-default-off decisions to protected triage and
 prerequisites. It does not enable private vulnerability reporting, operate a deployed switch, or
 prove monitoring, containment, notification, disclosure, or recovery.
 
+The checked
+[profile deletion failure rehearsal runbook](docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md)
+binds the current atomic request and bounded Jobs purge to protected classification, preserved
+authority lock-down, aggregate diagnosis, and one reviewed retry. It is not a private support
+channel, deployed alert or retry controller, user notification path, cache/backup deletion,
+stale-backup replay, or proof that a real profile was deleted.
+
 ## Scope priorities
 
 Reports are especially valuable when they affect:

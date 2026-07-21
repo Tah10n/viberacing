@@ -2,8 +2,10 @@
 
 Read the root `AGENTS.md`, this directory's `README.md`, `docs/PROJECT_PLAN.md`, the current
 implementation status, database capability documentation, security invariants, abuse cases, and
-privacy data map before editing this workspace. The root public-data, dependency, documentation, and
-staged-review rules all apply.
+privacy data map before editing this workspace. Read
+`docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md` before changing or diagnosing primary purge or
+terminal deletion-job cleanup. The root public-data, dependency, documentation, and staged-review
+rules all apply.
 
 ## Non-negotiable boundaries
 
@@ -21,7 +23,8 @@ staged-review rules all apply.
   contract. Pairing rate-window reset accepts no parameters and can touch only the fixed 130-row
   matrix. Primary profile purge accepts only the separate fixed 10-profile CLI batch. Unknown
   commands, fields, arguments, result columns, rows, accessors, and prototypes fail before they can
-  widen work.
+  widen work. The runner does not assign deletion leases, attempts, backoff, or retry state; do not
+  claim schema fields or scheduler recurrence provide automatic deletion retry.
 - Hold the client until the PostgreSQL call settles. Destroy failed clients, close the pool on every
   CLI path, and keep the client deadline outside the database function's 30-second deadline.
 - Do not log dates, counts, identifiers, SQL, environment values, database errors, stack traces, or

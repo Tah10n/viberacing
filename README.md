@@ -288,6 +288,17 @@ capability at a time; 22 unsafe or drifted checker fixtures fail closed. It chan
 and is not a private reporting channel, deployed control plane, dynamic kill switch, monitoring,
 production containment, recovery, staging, or deployment evidence.
 
+A separate checked
+[profile deletion failure rehearsal runbook](docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md)
+now binds 26 ordered controls and ten exact commands to the atomic Web request, Jobs-only
+maximum-ten purge, separate 30-day terminal-job retention, fixed scheduler catalog, and existing
+rollback/role/race evidence. Twenty-five unsafe or drifted checker fixtures fail closed. It
+preserves confirmed request lock-down, distinguishes request/purge/retention/restore state, permits
+only one protected deployment-owned retry after root-cause review, and explicitly rejects invented
+automatic retry. It is not a deployed alert, retry controller, user notification path, cache or
+backup purge, stale-backup replay, real-user deletion result, recovery, staging, or deployment
+evidence.
+
 Forty SQL migrations now add 28 private identity, passkey, restricted-recovery, source, device,
 pairing, audit, deletion, replay, usage, Community scoring, and CarRecipe tables with
 deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift detection, and

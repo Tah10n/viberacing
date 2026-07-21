@@ -2,7 +2,8 @@
 
 Read the root `AGENTS.md`, `apps/jobs/AGENTS.md`, this directory's `README.md`, ADR 0063, the
 security invariants, abuse cases, threat model, privacy data map, and current implementation status
-before changing this workspace.
+before changing this workspace. Read `docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md` before
+changing deletion catalog order or claiming retry behavior.
 
 ## Non-negotiable boundaries
 

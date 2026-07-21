@@ -144,7 +144,9 @@ apply.
   challenge. Consume the challenge and invoke the existing atomic hide/revoke/unlink/enqueue
   capability in one statement, clear all browser auth cookies only after success, and keep every
   failure generic. Do not claim that queueing itself invokes the separate Jobs purge command, clears
-  a future public cache, or proves tombstone/backup/restore replay.
+  a future public cache, or proves tombstone/backup/restore replay. Read
+  `docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md` before changing or diagnosing this boundary;
+  a confirmed request lock-down must not be undone during purge recovery.
 - Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
   correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
   CORS/auth/retry semantics to the common problem-response boundary.
