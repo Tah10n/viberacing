@@ -128,6 +128,11 @@ const checks = [
     [resolve(import.meta.dirname, "test-restore-runbook-check.mjs")],
   ],
   [
+    "containment runbook checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-containment-runbook-check.mjs")],
+  ],
+  [
     "community-health checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-community-check.mjs")],
@@ -177,6 +182,11 @@ const checks = [
     "restore runbook",
     process.execPath,
     [resolve(import.meta.dirname, "check-restore-runbook.mjs")],
+  ],
+  [
+    "containment runbook",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-containment-runbook.mjs")],
   ],
   [
     "external-link checker behavior",

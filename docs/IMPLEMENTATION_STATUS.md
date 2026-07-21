@@ -169,32 +169,43 @@ omitting editor/approve. The two enrollment pages and four GitHub/initial-passke
 independently require exact `VIBERACING_ENROLLMENT_ENABLED=true`; the tracked default is false.
 Disabled EN/RU pages omit both forms, HTTP stops before request/runtime/admission/private work, and
 all four service methods repeat literal-true enforcement before OAuth/WebAuthn/database work while
-returning login/recovery remain available. A bounded Rust `connect` command generates a key and
-client rate ID with the OS CSPRNG, persists resumable state only in a native credential store, and
-performs the exact start/proof/poll sequence. A separate Windows x86_64 `sync` command now checks an
-active record before either bounded fixed-name `PATH` discovery or explicit-path admission of the
-exact `0.144.5` artifact, holds its file against write substitution through launch, uses a fresh
-empty working directory and the existing bounded supervisor, creates fresh context from the active
-native record, and sends one exact signed body to the fixed endpoint without retry or edge-origin
-headers. Its loopback HTTP evidence validates only the five device headers and closed
-acknowledgement. A separate explicit `check-codex` command performs only the identical bounded exact
-candidate admission without an origin, credential-store access, Codex process, account read,
-persistence, or network; its fixed point-in-time result explicitly preserves the empty support
-matrix, and `sync` does not reuse it. Its opt-in diagnostic preview emits only compile-time
-connector/candidate versions, the fixed platform contract, a closed admission class, and that empty
-support state. It retains a failed exit, omits local/account data, and gives the connector no file
-or sharing capability. A separate exact `forget-local` command derives the same native-store account
-from a canonical origin and bounded label, invokes only idempotent credential deletion, and emits
-one fixed warning that server device authority was not revoked. It does not load the record,
-construct a signer, start Codex, or make a network call. No live database connection, real-account
-end-to-end result, released artifact, or deployment is claimed. Candidate release, schema, fixture,
-synthetic-process, admission, composer, pairing, signer, and loopback-upload evidence does not
-populate the support matrix. Phase 0 hosted-publication controls remain blocked on real maintainer
-identities and GitHub configuration. No production-ready anonymous edge perimeter, distributed
-recovery perimeter or cleanup, production secret-manager/edge key injection, trusted external Ingest
-TLS/edge route, production deployment, production Web/Jobs/Ingest database login/TLS integration,
-released or operational connector, supported Codex version, real-user ingestion, end-to-end public
-ranking, or deployed Jobs scheduler/cadence exists.
+returning login/recovery remain available.
+
+A checked capability-containment and recovery rehearsal runbook now binds the five Web decisions and
+the Ingest, Jobs-scheduler, and migration startup decisions to 24 ordered controls and eight exact
+commands. It requires seven tracked false defaults, absent tracked migration enablement, exact
+source admission at 20 Web module-load points, process replacement/settlement, independent
+containment, preserved returning security/deletion paths, redacted evidence, and recovery of one
+capability at a time. Twenty-two unsafe or drifted regression variants fail closed. This is static
+public prerequisite evidence, not a private reporting channel, deployed control plane, dynamic kill
+switch, monitoring backend, production containment, recovery, staging, or deployment.
+
+A bounded Rust `connect` command generates a key and client rate ID with the OS CSPRNG, persists
+resumable state only in a native credential store, and performs the exact start/proof/poll sequence.
+A separate Windows x86_64 `sync` command now checks an active record before either bounded
+fixed-name `PATH` discovery or explicit-path admission of the exact `0.144.5` artifact, holds its
+file against write substitution through launch, uses a fresh empty working directory and the
+existing bounded supervisor, creates fresh context from the active native record, and sends one
+exact signed body to the fixed endpoint without retry or edge-origin headers. Its loopback HTTP
+evidence validates only the five device headers and closed acknowledgement. A separate explicit
+`check-codex` command performs only the identical bounded exact candidate admission without an
+origin, credential-store access, Codex process, account read, persistence, or network; its fixed
+point-in-time result explicitly preserves the empty support matrix, and `sync` does not reuse it.
+Its opt-in diagnostic preview emits only compile-time connector/candidate versions, the fixed
+platform contract, a closed admission class, and that empty support state. It retains a failed exit,
+omits local/account data, and gives the connector no file or sharing capability. A separate exact
+`forget-local` command derives the same native-store account from a canonical origin and bounded
+label, invokes only idempotent credential deletion, and emits one fixed warning that server device
+authority was not revoked. It does not load the record, construct a signer, start Codex, or make a
+network call. No live database connection, real-account end-to-end result, released artifact, or
+deployment is claimed. Candidate release, schema, fixture, synthetic-process, admission, composer,
+pairing, signer, and loopback-upload evidence does not populate the support matrix. Phase 0
+hosted-publication controls remain blocked on real maintainer identities and GitHub configuration.
+No production-ready anonymous edge perimeter, distributed recovery perimeter or cleanup, production
+secret-manager/edge key injection, trusted external Ingest TLS/edge route, production deployment,
+production Web/Jobs/Ingest database login/TLS integration, released or operational connector,
+supported Codex version, real-user ingestion, end-to-end public ranking, or deployed Jobs
+scheduler/cadence exists.
 
 ## Implemented and locally verified
 
@@ -1523,6 +1534,8 @@ pnpm run check:migration-runbook
 pnpm run test:migration-runbook-check
 pnpm run check:restore-runbook
 pnpm run test:restore-runbook-check
+pnpm run check:containment-runbook
+pnpm run test:containment-runbook-check
 pnpm run test:database:integration
 pnpm run test:migrate:postgres-integration
 pnpm run test:web-query-plan-evidence

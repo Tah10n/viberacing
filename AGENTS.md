@@ -20,6 +20,8 @@ Read these files before changing the project:
 11. `docs/operations/MIGRATION_RUNBOOK.md` before preparing or executing a staging migration.
 12. `docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md` before changing or rehearsing backup and
     restore behavior.
+13. `docs/operations/CAPABILITY_CONTAINMENT_RUNBOOK.md` before changing capability gates or planning
+    incident containment and recovery.
 
 The repository currently contains a public foundation, a synthetic web prototype, versioned sync,
 Community score query/response, compatible race and race-status responses, and CarRecipe contracts,
@@ -136,10 +138,15 @@ closes browser proposal creation, browser approval, and device proposal ingress 
 state work; account UI preserves active/private previews and exact rejection. A sixth exact
 default-off decision now closes the invite/OAuth/initial-passkey enrollment pages, HTTP routes, and
 service methods while returning login and recovery remain available. None of these local gates is a
-deployed dynamic kill switch. The public home also has a local-only EN/RU score simulator that
-persists or transmits no hypothetical input; the stable score and legacy race response contracts
-remain unchanged. These local boundaries include one opt-in synthetic path through two emitted
-standalone Next production processes and a disposable narrow Web login over ephemeral self-signed
+deployed dynamic kill switch. A checked capability-containment and recovery rehearsal runbook now
+binds those five Web decisions plus Ingest, Jobs-scheduler, and migration startup decisions to 24
+ordered controls, eight exact commands, process-replacement semantics, preserved security/deletion
+paths, and recovery of one capability at a time. Twenty-two unsafe or drifted variants fail closed.
+It proves no private reporting channel, deployed controller, dynamic switch, monitoring,
+containment, or recovery. The public home also has a local-only EN/RU score simulator that persists
+or transmits no hypothetical input; the stable score and legacy race response contracts remain
+unchanged. These local boundaries include one opt-in synthetic path through two emitted standalone
+Next production processes and a disposable narrow Web login over ephemeral self-signed
 certificate-verified PostgreSQL transport, with widened-login denial, exact public contracts,
 `pg_stat_ssl` evidence, full private-table non-mutation, and six parameter-redacted bounded
 `auto_explain` plan oracles covering the three adapter calls and three nested projections through
@@ -393,6 +400,13 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
   proves sixteen missing, unsafe, or drifted variants fail closed. These are public
   local-prerequisite checks, not external backup, stale-backup deletion replay, real-user restore,
   RPO/RTO, staging, production, recovery, or deployment evidence.
+- `pnpm run check:containment-runbook` binds the capability-containment rehearsal document to 24
+  ordered controls, eight exact root commands, eight exact-default-off source decisions, 20 Web
+  module-load bindings, seven tracked false defaults, absent tracked migration enablement,
+  process-latch semantics, and preserved security/deletion paths.
+  `pnpm run test:containment-runbook-check` proves 22 unsafe or drifted variants fail closed. These
+  are static local-prerequisite checks, not a private report, deployed control plane, dynamic kill
+  switch, monitoring, containment, recovery, or deployment.
 - `pnpm run test:migrate:postgres-integration` builds the emitted migration entry point, creates one
   disposable certificate-verified PostgreSQL database plus synthetic narrow and widened logins,
   proves widened-login denial before schema mutation, observes two narrow controllers behind one
@@ -508,6 +522,9 @@ no edit, staging, commit, installation, network, publication, push, or deploymen
 - Read `docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md` before changing or invoking the restore
   drill. It permits only the repository-owned disposable synthetic gate and explicitly stops before
   any shared, real-user, stale-backup, staging, or production restore.
+- Read `docs/operations/CAPABILITY_CONTAINMENT_RUNBOOK.md` before changing any exact-default-off
+  decision. Local environment values do not stop or replace running processes and prove no deployed
+  containment.
 - `git diff --cached --check` checks staged whitespace and conflict markers.
 - `docker compose config --quiet` validates local database configuration without starting it.
 

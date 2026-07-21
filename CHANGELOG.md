@@ -8,6 +8,14 @@ Versioning where its guarantees are applicable.
 
 ### Added
 
+- A checked capability-containment and recovery rehearsal runbook for the eight existing
+  exact-default-off decisions. Twenty-four controls and eight commands bind seven tracked false
+  defaults, absent tracked migration enablement, exact source admission at 20 Web module-load
+  points, Web module replacement, Ingest/Jobs/migration process settlement, independent containment,
+  returning security/deletion paths, redacted evidence, and recovery of one capability at a time.
+  Twenty-two unsafe or drifted variants fail closed. This is not a private reporting channel,
+  deployed control plane, dynamic kill switch, monitoring backend, production containment, recovery,
+  staging, or deployment evidence.
 - A checked isolated current-snapshot restore rehearsal runbook for the existing disposable
   PostgreSQL oracle. Twenty ordered controls bind a synthetic current archive, isolated empty
   target, protected owners/evidence, closed routing and runtime processes, one deployment-owned

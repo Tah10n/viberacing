@@ -72,6 +72,10 @@ remain safe to publish verbatim.
   — checked synthetic archive/target isolation, local evidence, restore verification, stale-backup
   stop, and incident-handoff controls; it is not real-user, staging, production, recovery, or
   deployment evidence.
+- [Capability containment and recovery rehearsal runbook](operations/CAPABILITY_CONTAINMENT_RUNBOOK.md)
+  — checked exact-default-off inventory, process-replacement, independent containment, preserved
+  security/deletion paths, redacted evidence, and one-capability recovery; it is not a deployed
+  control plane, private reporting channel, monitoring backend, or incident result.
 - [Third-party notices](../THIRD_PARTY_NOTICES.md) and [trademark policy](../TRADEMARKS.md) —
   current dependency and branding obligations.
 
@@ -81,9 +85,10 @@ remain safe to publish verbatim.
 - `architecture/` — implementation-level database model and protocol boundaries as code lands.
 - `security/` — incident-response and launch privacy/legal artifacts as operations become real.
 - `reference/` — public API, connector CLI, configuration, scoring, and CarRecipe reference.
-- `operations/` — checked migration and isolated current-snapshot restore rehearsal runbooks exist;
-  Railway/Cloudflare deployment, external backup storage, stale-backup deletion replay, alerts,
-  SLOs, incident, and deletion runbooks remain pending.
+- `operations/` — checked migration, isolated current-snapshot restore, and local capability-
+  containment rehearsal runbooks exist; Railway/Cloudflare deployment, external backup storage,
+  stale-backup deletion replay, alerts, SLOs, reporter coordination, compromised release, mass
+  revoke, incident communication, and deletion runbooks remain pending.
 - `decisions/` — new records whenever durable decisions change; initial ADRs exist now.
 - `releasing/` — versioning, changelog, signing, provenance, rollback, and supported-version policy.
 

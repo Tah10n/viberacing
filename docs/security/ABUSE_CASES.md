@@ -895,26 +895,31 @@ material availability cost.
   `VIBERACING_ENROLLMENT_ENABLED=true` in both pages, all four route modules, and all four service
   methods; disabled UI omits its forms and disabled HTTP/service paths stop before private work.
   Returning login/recovery remain available. This is a local gate, not a distributed enrollment rate
-  limit, cleanup invocation, or deployed worker control. ADR 0061 separately provides an explicit
-  Jobs cleanup after retained authority expires, and ADR 0063 includes only that fixed object in its
-  default-off local catalog. Once pairing is enabled, the transport-free pairing-start application
-  bounds labels, metadata, keys, entropy, and HMAC work, admits four unsettled attempts without a
-  queue, holds each lease through a 250-millisecond floor, and makes no database call for malformed
-  input. Revision 0022 now adds one Web-only fixed-storage admission before start/poll database
-  work: every request locks/increments one operation-global row and one of 64 digest-selected
-  buckets under a five-second deadline. Counts saturate, windows reset in place, and neither raw
-  client ID nor digest is retained. Revision 0037 adds a zero-argument Jobs-only reset after the
-  maximum one-hour window, preserves the 130 fixed rows, and proves worker/worker plus
-  reset/admission serialization. The shared service retains the four-call no-queue ceiling across
-  both operations. This is distributed across Web instances using one database, but the
-  self-asserted ID is not a trusted edge/IP identity and still needs capacity evidence. Physical
-  pairing cleanup exists as a separate local capability and in the default-off local hourly catalog,
-  and the combined synthetic scheduler/PostgreSQL integration exercises it; deployed scheduling and
-  edge controls are still pending. The local Jobs runner adds a one-client ceiling, 2/31/32-second
-  connect/server/client deadlines, twelve fixed 1000-row cleanup commands, one zero-argument
-  maximum-130 rate-window reset, one fixed 1000-row approval-provenance redaction, one fixed
-  maximum-10 primary-purge command, canonical season validation, closed one-row results, and
-  destructive release on failure. Its synthetic integration executes those commands sequentially
+  limit, cleanup invocation, or deployed worker control. A checked containment/recovery rehearsal
+  now binds all eight local exact-default-off decisions to protected triage, independent capability
+  selection, Web worker replacement, Ingest/Jobs/migration settlement, preserved returning
+  security/deletion paths, redacted evidence, and recovery of one capability at a time. Its 24
+  controls, eight commands, and 22 fail-closed variants do not create a private reporting channel,
+  deployed controller, dynamic switch, monitor, containment result, or recovery result. ADR 0061
+  separately provides an explicit Jobs cleanup after retained authority expires, and ADR 0063
+  includes only that fixed object in its default-off local catalog. Once pairing is enabled, the
+  transport-free pairing-start application bounds labels, metadata, keys, entropy, and HMAC work,
+  admits four unsettled attempts without a queue, holds each lease through a 250-millisecond floor,
+  and makes no database call for malformed input. Revision 0022 now adds one Web-only fixed-storage
+  admission before start/poll database work: every request locks/increments one operation-global row
+  and one of 64 digest-selected buckets under a five-second deadline. Counts saturate, windows reset
+  in place, and neither raw client ID nor digest is retained. Revision 0037 adds a zero-argument
+  Jobs-only reset after the maximum one-hour window, preserves the 130 fixed rows, and proves
+  worker/worker plus reset/admission serialization. The shared service retains the four-call
+  no-queue ceiling across both operations. This is distributed across Web instances using one
+  database, but the self-asserted ID is not a trusted edge/IP identity and still needs capacity
+  evidence. Physical pairing cleanup exists as a separate local capability and in the default-off
+  local hourly catalog, and the combined synthetic scheduler/PostgreSQL integration exercises it;
+  deployed scheduling and edge controls are still pending. The local Jobs runner adds a one-client
+  ceiling, 2/31/32-second connect/server/client deadlines, twelve fixed 1000-row cleanup commands,
+  one zero-argument maximum-130 rate-window reset, one fixed 1000-row approval-provenance redaction,
+  one fixed maximum-10 primary-purge command, canonical season validation, closed one-row results,
+  and destructive release on failure. Its synthetic integration executes those commands sequentially
   against one disposable database. The scheduler separately limits execution to one non-overlapping
   sequential cycle, ignores timer ticks while it runs, and starts no later object after shutdown. A
   second opt-in synthetic integration composes that production scheduler core under fixed injected

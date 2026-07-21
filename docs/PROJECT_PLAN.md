@@ -962,6 +962,14 @@ production authorization, or deployment.
 - Backup restore, key rotation, compromised release, mass device revoke, source quarantine, and
   deletion failure have tested runbooks.
 
+A checked capability-containment and recovery rehearsal runbook now binds all eight existing
+exact-default-off decisions to 24 ordered controls and eight repository commands. It requires
+protected authority, independent containment, Web process replacement, Ingest/Jobs/migration
+settlement, preserved returning security/deletion paths, redacted evidence, and recovery of one
+capability at a time; 22 unsafe or drifted variants fail closed. This is local prerequisite evidence
+only, not a private reporting channel, deployed control plane, dynamic kill switch, monitoring,
+containment, recovery, or deployment.
+
 ## Repository design
 
 The planned public tree is:
@@ -1331,11 +1339,12 @@ external TLS/edge, cache, capacity, or operational gate above.
 
 - Deploy isolated staging and production infrastructure.
 - Verify origin protection, migrations, backup restore, deletion replay, monitoring, incident
-  runbooks, connector signing, SBOM, provenance, and rollback. The checked migration and
-  current-snapshot restore runbooks plus the local advisory-lock overlap, twice-restored database
-  drill, and emitted migration-controller convergence are prerequisite implementation evidence; they
-  do not satisfy successful staging migration orchestration/rollback, a protected staging restore,
-  stale-backup deletion replay, or any deployment gate.
+  runbooks, connector signing, SBOM, provenance, and rollback. The checked migration,
+  current-snapshot restore, and capability-containment runbooks plus the local advisory-lock
+  overlap, twice-restored database drill, exact-default-off decisions, and emitted
+  migration-controller convergence are prerequisite implementation evidence; they do not satisfy
+  successful staging migration orchestration/rollback, a protected staging restore, deployed
+  containment, stale-backup deletion replay, or any deployment gate.
 - Complete accessibility, privacy, legal, licensing, name/trademark, external security, and
   documentation review.
 - Start with a small invite cohort and expand only after reviewing reliability, cost, abuse,

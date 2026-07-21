@@ -279,6 +279,15 @@ thirteen unsafe or drifted checker fixtures fail closed. The document is prerequ
 not staging execution, production authorization, monitoring, stale-backup deletion replay, or
 deployment evidence.
 
+A checked
+[capability containment and recovery rehearsal runbook](docs/operations/CAPABILITY_CONTAINMENT_RUNBOOK.md)
+now binds all eight exact-default-off decisions to 24 controls and eight exact commands. It requires
+protected authority and evidence, independent containment, Web worker replacement, Ingest/Jobs/
+migration process settlement, preserved returning security/deletion actions, and recovery of one
+capability at a time; 22 unsafe or drifted checker fixtures fail closed. It changes no capability
+and is not a private reporting channel, deployed control plane, dynamic kill switch, monitoring,
+production containment, recovery, staging, or deployment evidence.
+
 Forty SQL migrations now add 28 private identity, passkey, restricted-recovery, source, device,
 pairing, audit, deletion, replay, usage, Community scoring, and CarRecipe tables with
 deny-by-default runtime roles, forced RLS, state-machine constraints, checksum drift detection, and

@@ -59,6 +59,12 @@ Maintainers will aim to:
 These are response targets, not contractual guarantees. Complex or upstream issues may require
 additional time.
 
+The checked
+[capability containment and recovery rehearsal runbook](docs/operations/CAPABILITY_CONTAINMENT_RUNBOOK.md)
+binds the repository's local exact-default-off decisions to protected triage and process-replacement
+prerequisites. It does not enable private vulnerability reporting, operate a deployed switch, or
+prove monitoring, containment, notification, disclosure, or recovery.
+
 ## Scope priorities
 
 Reports are especially valuable when they affect:
