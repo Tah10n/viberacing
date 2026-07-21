@@ -973,9 +973,14 @@ boundary and mandatory reset-before-reuse. One opt-in synthetic gate composes th
 kernel with injected authorization/audit ports and a disposable hostname-verified TLS PostgreSQL
 database: it rejects an extra-membership login without private mutation and verifies one exact
 invite plus database audit through the narrow login. There is still no separate-origin Admin host,
-concrete Access/membership/WebAuthn verifier, external append-only backend/retention policy,
-protected production login/certificate, issuer UI/API/CLI, ambiguous-state operator workflow,
-monitoring, capacity evidence, or deployment.
+complete fresh-passkey verifier/authorization composition, external append-only backend/retention
+policy, protected production login/certificate, issuer UI/API/CLI, ambiguous-state operator
+workflow, monitoring, capacity evidence, or deployment. A separate local prerequisite now verifies
+only exact bounded `Cf-Access-Jwt-Assertion` RS256 tokens against a protected one-or-two-key
+snapshot, exact team issuer/single audience, human token class, maximum one-hour lifetime, and
+one-to-sixteen individual opaque members. It returns no subject, email, token, key, or complete
+authorization and has no real Access policy/token, remote key refresh, passkey ceremony, host,
+origin protection, or deployment evidence.
 
 A checked capability-containment and recovery rehearsal runbook now binds all eight existing
 exact-default-off decisions to 24 ordered controls and eight repository commands. It requires

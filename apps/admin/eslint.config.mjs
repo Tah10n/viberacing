@@ -32,7 +32,83 @@ export default defineConfig([
   },
   {
     files: ["src/**/*.ts"],
-    ignores: ["src/**/*.test.ts", "src/database-pool.ts"],
+    ignores: ["src/**/*.test.ts", "src/access-verifier.ts", "src/database-pool.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportDeclaration[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ImportExpression[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ExportNamedDeclaration[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ExportAllDeclaration[source.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value='pg']",
+          message: "Only database-pool.ts may import the PostgreSQL driver.",
+        },
+        {
+          selector: "ImportDeclaration[source.value='jose']",
+          message: "Only access-verifier.ts may import the JOSE verifier.",
+        },
+        {
+          selector: "ImportExpression[source.value='jose']",
+          message: "Only access-verifier.ts may import the JOSE verifier.",
+        },
+        {
+          selector: "ExportNamedDeclaration[source.value='jose']",
+          message: "Only access-verifier.ts may import the JOSE verifier.",
+        },
+        {
+          selector: "ExportAllDeclaration[source.value='jose']",
+          message: "Only access-verifier.ts may import the JOSE verifier.",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value='jose']",
+          message: "Only access-verifier.ts may import the JOSE verifier.",
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/database-pool.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportDeclaration[source.value='jose']",
+          message: "Only access-verifier.ts may import the JOSE verifier.",
+        },
+        {
+          selector: "ImportExpression[source.value='jose']",
+          message: "Only access-verifier.ts may import the JOSE verifier.",
+        },
+        {
+          selector: "ExportNamedDeclaration[source.value='jose']",
+          message: "Only access-verifier.ts may import the JOSE verifier.",
+        },
+        {
+          selector: "ExportAllDeclaration[source.value='jose']",
+          message: "Only access-verifier.ts may import the JOSE verifier.",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value='jose']",
+          message: "Only access-verifier.ts may import the JOSE verifier.",
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/access-verifier.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",

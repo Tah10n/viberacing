@@ -1,4 +1,20 @@
 export {
+  AdminAccessConfigurationError,
+  resolveAdminAccessConfig,
+  type AdminAccessConfig,
+  type AdminAccessConfigurationErrorCode,
+} from "./access-config.js";
+export {
+  AdminAccessVerificationError,
+  adminAccessClockSkewSeconds,
+  adminAccessMaximumTokenLifetimeSeconds,
+  createAdminAccessVerifier,
+  type AdminAccessIdentity,
+  type AdminAccessVerificationErrorCode,
+  type AdminAccessVerifier,
+  type AdminAccessVerifierRuntime,
+} from "./access-verifier.js";
+export {
   AdminDatabaseConfigurationError,
   adminDatabaseConcurrencyLimit,
   adminDatabaseConnectionTimeoutMs,

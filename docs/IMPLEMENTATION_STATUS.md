@@ -176,15 +176,20 @@ Access/individual-admin/fresh-passkey authorization, an acknowledged external `a
 second non-regressing clock check, one probed `viberacing_api.issue_invite` call under the bounded
 Admin role, and an acknowledged external `committed` audit before returning one fixed seven-day beta
 credential compatible with the Web parser. It withholds the credential and never retries on
-ambiguous state. Its 130 deterministic tests reach 100% statements, lines, and functions plus 98.16%
-branches. Authorization and external audit remain fixture-injected; the unit suite adds one
-OS-backed credential-shape check. A separate opt-in synthetic integration applies the reviewed
-40-migration ledger to disposable hostname-verified TLS PostgreSQL, rejects an extra-membership
-login before any private mutation, and composes the built production kernel through the narrow login
-to prove one exact active invite, one database audit row, no non-target mutation, role reset, and
-connection cleanup. There is no Admin host, concrete verifier or append-only backend, operational
-issuer, UI/API/CLI, protected production login/certificate, monitoring, capacity evidence, or
-deployment.
+ambiguous state. A local prerequisite now reads one protected exact team domain, audience,
+one-or-two-key RS256 JWKS snapshot, and one-to-sixteen individual opaque member mappings; it
+verifies only `Cf-Access-Jwt-Assertion`, rejects alternate algorithms/keys/issuers/audiences,
+service tokens, email-shaped or unknown subjects, broad/expired assertions, and returns only a
+redacted `invite_issue` actor identity. The combined 236 deterministic tests reach 98.9% statements,
+98.89% lines, 97.8% branches, and 100% functions. Complete authorization and external audit remain
+fixture-injected; the unit suite adds one OS-backed credential-shape check. A separate opt-in
+synthetic integration applies the reviewed 40-migration ledger to disposable hostname-verified TLS
+PostgreSQL, rejects an extra-membership login before any private mutation, and composes the built
+production kernel through the narrow login to prove one exact active invite, one database audit row,
+no non-target mutation, role reset, and connection cleanup. There is no Admin host, real Access
+policy/token or protected key-refresh workflow, fresh-passkey verifier, complete authorization
+composer, append-only backend, operational issuer, UI/API/CLI, protected production
+login/certificate, monitoring, capacity evidence, or deployment.
 
 A checked capability-containment and recovery rehearsal runbook now binds the five Web decisions and
 the Ingest, Jobs-scheduler, and migration startup decisions to 24 ordered controls and eight exact

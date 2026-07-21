@@ -245,11 +245,15 @@ are present in the working tree.
 A separate transport-free Admin invitation kernel now requires one exact injected
 Access/admin/fresh-passkey decision, an acknowledged external authorization audit event, a second
 non-regressing clock check, the single probed Admin database capability, and an acknowledged
-committed audit event before returning one fixed seven-day beta invite. It has no concrete
-authorization or audit adapter, host, listener, page, CLI, operational issuer, or deployment
-evidence. One opt-in synthetic integration now composes the built kernel and injected ports with a
-disposable hostname-verified TLS PostgreSQL database, proves extra-membership denial, and verifies
-one exact invite/database-audit result through the narrow login.
+committed audit event before returning one fixed seven-day beta invite. A local prerequisite now
+validates only the exact `Cf-Access-Jwt-Assertion` against a protected current/previous RS256 JWKS
+snapshot, exact issuer/single audience, human application token, one-hour maximum lifetime, and
+individual opaque-member map before returning a redacted actor identity. It does not consume a
+passkey or create the complete authorization decision. There is still no complete authorization or
+audit adapter, host, listener, page, CLI, operational issuer, real Access policy/token/key refresh,
+or deployment evidence. One opt-in synthetic integration composes the built invitation kernel and
+injected ports with a disposable hostname-verified TLS PostgreSQL database, proves extra-membership
+denial, and verifies one exact invite/database-audit result through the narrow login.
 
 A second checked local Agent Skill now selects only repository-owned read-only verification from the
 real Git scope, distinguishes focused, root, staged, history, synthetic, and live evidence, and has
@@ -275,9 +279,10 @@ replay, real-user deletion, recovery, or deployment.
 - `scripts/` contains repository verification and black-box policy tests.
 - `config/` contains reviewed external-host and dependency-license policy; do not widen either
   allowlist as a workaround for a failing check.
-- `apps/admin/` contains the transport-free bounded beta-invitation application, required injected
-  authorization/audit ports, and single-capability Admin PostgreSQL adapter. It is not an Admin UI,
-  API, CLI, host, or working issuer. Read `apps/admin/AGENTS.md` before editing it.
+- `apps/admin/` contains the transport-free bounded Access/member verifier, beta-invitation
+  application, required injected complete-authorization/audit ports, and single-capability Admin
+  PostgreSQL adapter. It is not an Admin UI, API, CLI, host, fresh-passkey verifier, or working
+  issuer. Read `apps/admin/AGENTS.md` before editing it.
 - `apps/web/` contains the synthetic Next.js frontend, default-off local public score/race/status
   routes and adapters, default-off bounded invite/OAuth/initial-passkey enrollment,
   returning-passkey login, private account controls, and passkey-protected recovery-code rotation
@@ -335,19 +340,20 @@ replay, real-user deletion, recovery, or deployment.
   cases, ADR metadata/indexes, compatibility fail-closed state, privacy classes, and Mermaid fence
   structure.
 - `pnpm run lint:admin`, `pnpm run typecheck:admin`, `pnpm run test:admin:coverage`, and
-  `pnpm run build:admin` verify the transport-free invitation kernel, exact authorization/audit
-  ordering, one-time credential construction, ambiguous-failure suppression, protected database
-  configuration, pre-role login/TLS denial probe, fixed role assumption and single-capability query,
-  reset-before-reuse, client cleanup, and import confinement. They use injected
-  authorization/audit/pool fixtures and prove no Admin host, real Access/passkey, external audit
-  backend, production login/TLS, or deployment.
+  `pnpm run build:admin` verify the transport-free exact Access/JWKS/member boundary, RS256
+  assertion/claim checks and redacted identity, invitation authorization/audit ordering, one-time
+  credential construction, ambiguous-failure suppression, protected database configuration, pre-role
+  login/TLS denial probe, fixed role assumption and single-capability query, reset-before-reuse,
+  client cleanup, and dependency confinement. They use synthetic Access keys and injected
+  complete-authorization/audit/pool fixtures and prove no Admin host, real Access policy/token/key
+  refresh, passkey, external audit backend, production login/TLS, or deployment.
 - `pnpm run test:admin:postgres-integration` builds the production Admin workspace, applies the
   reviewed migration ledger to one disposable hostname-verified TLS PostgreSQL container, rejects a
   deliberately widened login before private-state mutation, and proves the narrow login writes one
   exact active invite plus its database audit row without non-target mutation before role reset and
-  connection cleanup. Authorization and external audit remain injected; this proves no host,
-  production credential/certificate, real Access/passkey, external sink, capacity, monitoring, or
-  deployment.
+  connection cleanup. Complete authorization and external audit remain injected; this proves no
+  host, production credential/certificate, real Access policy/token/key refresh, passkey, external
+  sink, capacity, monitoring, or deployment.
 - `pnpm run check:codex-compatibility` validates canonical exact-version manifests, extract/fixture
   digests, fixed stable methods, safe paths, evidence inventory, and candidate/matrix separation.
 - `pnpm run test:connector:windows-portable` builds the locked Windows x86_64 release profile,

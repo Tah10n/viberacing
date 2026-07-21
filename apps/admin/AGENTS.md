@@ -2,18 +2,27 @@
 
 Read the root `AGENTS.md`, this directory's `README.md`, `docs/PROJECT_PLAN.md`, the current
 implementation status, database capability documentation, security invariants, abuse cases, privacy
-data map, and ADR 0066 before editing this workspace. The root public-data, dependency,
-documentation, and staged-review rules all apply.
+data map, ADR 0066, ADR 0067, and the dependency policy before editing this workspace. The root
+public-data, dependency, documentation, and staged-review rules all apply.
 
 ## Non-negotiable boundaries
 
 - Keep this workspace transport-free. It has no HTTP listener, page, CLI, process entry point,
-  default authorization implementation, Cloudflare Access verifier, admin membership store, WebAuthn
-  verifier, external audit backend, or deployable host.
+  complete authorization implementation, WebAuthn verifier, external audit backend, or deployable
+  host. ADR 0067 adds only the bounded local Cloudflare Access assertion and individual-membership
+  prerequisite.
+- Preserve the exact Access boundary: header assertion only, local one-or-two-key RS256 JWKS
+  snapshot, exact team issuer and single audience, human application token, at-most-one-hour token,
+  opaque non-email subject, canonical 128-bit `adm_` mapping, second non-regressing clock read, and
+  redacted output. Reject service tokens, email identity, unknown/duplicate members, caller-built
+  config, remote key locations, alternate algorithms, broader audiences, and JWT/JWKS imports
+  outside `access-verifier.ts`. The protected snapshot still needs independently reviewed deployment
+  refresh and monitoring before real use.
 - Every invitation attempt must first obtain one exact, current decision from the injected
   request-scoped authorization gateway. That gateway contract requires separate Access policy,
-  individual admin membership, and consumed fresh-passkey proof. Do not accept a normal Web session,
-  caller-built allow object, shared admin identity, alternate reason, or reusable authorization.
+  individual admin membership, and consumed fresh-passkey proof. The local Access identity alone is
+  not this decision. Do not accept a normal Web session, caller-built allow object, shared admin
+  identity, alternate reason, or reusable authorization.
 - Append the fixed external `authorized` audit event before database work, then recheck that the
   decision remains current and that the clock did not move backward. Return the invite only after
   the same sink acknowledges the fixed `committed` event. Neither event may contain the invite ID,
@@ -31,9 +40,10 @@ documentation, and staged-review rules all apply.
   credential, perform no automatic retry, and retain only the preceding external authorization event
   plus any database-owned audit row. Do not add invite lookup, revoke, list, retry, repair, or
   generic SQL authority here.
-- Do not claim a working issuer, Admin UI/API, separate deployed origin, real Access/passkey proof,
-  external audit retention, production database/TLS result, monitoring, cohort workflow, or
-  deployment until those independent adapters and gates exist.
+- Do not claim a working issuer, Admin UI/API, separate deployed origin, real Access policy/token or
+  key refresh, consumed passkey proof, complete authorization composition, external audit retention,
+  production database/TLS result, monitoring, cohort workflow, or deployment until those independent
+  adapters and gates exist.
 
 ## Commands
 
@@ -49,8 +59,8 @@ pnpm run verify
 ```
 
 The PostgreSQL command is an explicit synthetic Docker gate. It does not supply or authorize a host,
-real Access/passkey proof, external audit backend, production credential/TLS path, network service,
-or deployment.
+real Access policy/token, passkey proof, external audit backend, production credential/TLS path,
+network service, or deployment.
 
 Before committing, stage only intended files, run `git diff --cached --check` and
 `pnpm run check:public:staged`, then inspect every staged manifest, lockfile, source, test, ADR, and

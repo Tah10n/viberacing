@@ -1,6 +1,8 @@
 import { Buffer } from "node:buffer";
 import { createHash, randomBytes as nodeRandomBytes, randomUUID } from "node:crypto";
 
+import { isAdminActorReference } from "./actor-reference.js";
+
 const authorizationKeys = new Set([
   "accessVerifiedAtMs",
   "actorReference",
@@ -13,7 +15,6 @@ const authorizationKeys = new Set([
 const auditAcknowledgementKeys = new Set(["accepted", "phase", "requestId", "version"]);
 const dependencyKeys = new Set(["appendAudit", "authorize", "issueInvite"]);
 const runtimeKeys = new Set(["clock", "randomBytes", "randomUuid"]);
-const actorReferencePattern = /^adm_[A-Za-z0-9_-]{21}[AQgw]$/;
 const uuidV4Pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const passkeyFreshnessMs = 5 * 60 * 1_000;
 const inviteLifetimeMs = 7 * 24 * 60 * 60 * 1_000;
@@ -204,8 +205,7 @@ function readAuthorization(value: unknown, now: number): AuthorizationDecision {
     if (
       typeof accessVerifiedAtMs !== "number" ||
       !Number.isSafeInteger(accessVerifiedAtMs) ||
-      typeof actorReference !== "string" ||
-      !actorReferencePattern.test(actorReference) ||
+      !isAdminActorReference(actorReference) ||
       typeof passkeyVerifiedAtMs !== "number" ||
       !Number.isSafeInteger(passkeyVerifiedAtMs) ||
       typeof validUntilMs !== "number" ||

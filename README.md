@@ -36,9 +36,12 @@ sign-in, and logout. It is locally tested only: the repository supplies no invit
 registration, real secret, live OAuth/authenticator/database credentials, deployed deletion purge,
 cache/backup/tombstone handling, restore replay, distributed edge abuse controls, recovery cleanup
 or notifications, or live-user evidence. A separate transport-free Admin kernel now enforces fixed
-authorization/audit/database ordering for one beta invite, but it has no concrete Access,
-individual-admin, passkey, external-audit, host, UI, or operational composition. An opt-in synthetic
-gate composes its built application with disposable hostname-verified TLS PostgreSQL only.
+authorization/audit/database ordering for one beta invite. Its local prerequisite verifies exact
+Cloudflare Access RS256 assertions and individual opaque membership against protected bounded
+configuration, but it has no real Access policy/token/key refresh, fresh-passkey or complete
+authorization composition, external-audit backend, host, UI, or operational composition. An opt-in
+synthetic gate composes its built invitation application with disposable hostname-verified TLS
+PostgreSQL only.
 
 The authenticated account page now also renders the current Community week's seven derived daily
 scores and bounded summary from one combined server-side visibility/score checkout. Hidden profiles
@@ -72,7 +75,7 @@ keys, or arbitrary user-uploaded files.
 - [Compatibility policy](docs/architecture/COMPATIBILITY_POLICY.md)
 - [Versioned public contracts](contracts/README.md)
 - [Database foundation](database/README.md)
-- [Admin invitation application kernel](apps/admin/README.md)
+- [Admin Access and invitation application kernel](apps/admin/README.md)
 - [Default-off migration runner](apps/migrate/README.md)
 - [Architecture decisions](docs/decisions/README.md)
 - [Local development](docs/getting-started/LOCAL_DEVELOPMENT.md)

@@ -7,20 +7,21 @@ dependency.
 
 ## Direct runtime packages
 
-| Component                                                               | Purpose                     | Declared license  |
-| ----------------------------------------------------------------------- | --------------------------- | ----------------- |
-| [@noble/ed25519](https://github.com/paulmillr/noble-ed25519)            | Strict Ed25519 verification | MIT               |
-| [Dalek Ed25519](https://github.com/dalek-cryptography/curve25519-dalek) | Isolated device signing     | BSD-3-Clause      |
-| [Fastify](https://github.com/fastify/fastify)                           | Bounded Ingest HTTP server  | MIT               |
-| [next](https://github.com/vercel/next.js)                               | Web application framework   | MIT               |
-| [pg](https://github.com/brianc/node-postgres)                           | PostgreSQL client and pool  | MIT               |
-| [React](https://github.com/facebook/react)                              | User-interface runtime      | MIT               |
-| [react-dom](https://github.com/facebook/react)                          | Browser rendering runtime   | MIT               |
-| [@simplewebauthn/browser](https://github.com/MasterKale/SimpleWebAuthn) | Native passkey ceremony     | MIT               |
-| [@simplewebauthn/server](https://github.com/MasterKale/SimpleWebAuthn)  | Passkey proof verification  | MIT               |
-| [RustCrypto SHA-2](https://github.com/RustCrypto/hashes)                | Exact-body SHA-256 digest   | MIT OR Apache-2.0 |
-| [Serde](https://github.com/serde-rs/serde)                              | Closed JSON field mapping   | MIT OR Apache-2.0 |
-| [serde_json](https://github.com/serde-rs/json)                          | Bounded JSON parse/compose  | MIT OR Apache-2.0 |
+| Component                                                               | Purpose                       | Declared license  |
+| ----------------------------------------------------------------------- | ----------------------------- | ----------------- |
+| [@noble/ed25519](https://github.com/paulmillr/noble-ed25519)            | Strict Ed25519 verification   | MIT               |
+| [Dalek Ed25519](https://github.com/dalek-cryptography/curve25519-dalek) | Isolated device signing       | BSD-3-Clause      |
+| [Fastify](https://github.com/fastify/fastify)                           | Bounded Ingest HTTP server    | MIT               |
+| [next](https://github.com/vercel/next.js)                               | Web application framework     | MIT               |
+| [pg](https://github.com/brianc/node-postgres)                           | PostgreSQL client and pool    | MIT               |
+| [React](https://github.com/facebook/react)                              | User-interface runtime        | MIT               |
+| [react-dom](https://github.com/facebook/react)                          | Browser rendering runtime     | MIT               |
+| [@simplewebauthn/browser](https://github.com/MasterKale/SimpleWebAuthn) | Native passkey ceremony       | MIT               |
+| [@simplewebauthn/server](https://github.com/MasterKale/SimpleWebAuthn)  | Passkey proof verification    | MIT               |
+| [jose](https://github.com/panva/jose)                                   | Admin Access JWT verification | MIT               |
+| [RustCrypto SHA-2](https://github.com/RustCrypto/hashes)                | Exact-body SHA-256 digest     | MIT OR Apache-2.0 |
+| [Serde](https://github.com/serde-rs/serde)                              | Closed JSON field mapping     | MIT OR Apache-2.0 |
+| [serde_json](https://github.com/serde-rs/json)                          | Bounded JSON parse/compose    | MIT OR Apache-2.0 |
 
 ## Direct development tools
 

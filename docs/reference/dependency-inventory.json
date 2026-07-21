@@ -598,7 +598,7 @@
     { "name": "glob-parent", "version": "6.0.2", "license": "ISC", "direct": [] },
     { "name": "global-directory", "version": "5.0.0", "license": "MIT", "direct": [] },
     { "name": "globals", "version": "14.0.0", "license": "MIT", "direct": [] },
-    { "name": "globby", "version": "16.2.0", "license": "MIT", "direct": [] },
+    { "name": "globby", "version": "16.2.1", "license": "MIT", "direct": [] },
     { "name": "has-flag", "version": "4.0.0", "license": "MIT", "direct": [] },
     { "name": "html-encoding-sniffer", "version": "6.0.0", "license": "MIT", "direct": [] },
     { "name": "html-escaper", "version": "2.0.2", "license": "MIT", "direct": [] },
@@ -634,9 +634,15 @@
     },
     { "name": "istanbul-lib-report", "version": "3.0.1", "license": "BSD-3-Clause", "direct": [] },
     { "name": "istanbul-reports", "version": "3.2.0", "license": "BSD-3-Clause", "direct": [] },
+    {
+      "name": "jose",
+      "version": "6.2.3",
+      "license": "MIT",
+      "direct": [{ "workspace": "apps/admin", "scope": "runtime" }]
+    },
     { "name": "js-tokens", "version": "10.0.0", "license": "MIT", "direct": [] },
     { "name": "js-yaml", "version": "4.3.0", "license": "MIT", "direct": [] },
-    { "name": "js-yaml", "version": "5.2.0", "license": "MIT", "direct": [] },
+    { "name": "js-yaml", "version": "5.2.1", "license": "MIT", "direct": [] },
     {
       "name": "jsdom",
       "version": "29.1.1",
@@ -723,11 +729,11 @@
     { "name": "magic-string", "version": "0.30.21", "license": "MIT", "direct": [] },
     { "name": "magicast", "version": "0.5.3", "license": "MIT", "direct": [] },
     { "name": "make-dir", "version": "4.0.0", "license": "MIT", "direct": [] },
-    { "name": "markdown-it", "version": "14.2.0", "license": "MIT", "direct": [] },
-    { "name": "markdownlint", "version": "0.41.0", "license": "MIT", "direct": [] },
+    { "name": "markdown-it", "version": "14.3.0", "license": "MIT", "direct": [] },
+    { "name": "markdownlint", "version": "0.41.1", "license": "MIT", "direct": [] },
     {
       "name": "markdownlint-cli2",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "license": "MIT",
       "direct": [{ "workspace": ".", "scope": "development" }]
     },

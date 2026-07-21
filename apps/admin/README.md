@@ -1,17 +1,20 @@
 # Vibe Racing Admin invitation kernel
 
-This private workspace is the transport-free application and PostgreSQL boundary for one future
-Admin action: issue one seven-day beta invitation. It is not an operational invite issuer. The
-repository still supplies no Admin page or API, separate deployed hostname, Cloudflare Access
-verifier, individual-admin membership source, WebAuthn step-up verifier, external append-only audit
+This private workspace is the transport-free Access/member, application, and PostgreSQL boundary for
+one future Admin action: issue one seven-day beta invitation. It is not an operational invite
+issuer. A local verifier can now validate a synthetically or externally supplied Cloudflare Access
+assertion against a protected bounded JWKS snapshot and individual-member map. The repository still
+supplies no Admin page or API, separate deployed hostname, real Access policy/token or key-refresh
+composition, WebAuthn step-up verifier, complete authorization gateway, external append-only audit
 backend, production database login, monitoring, or deployment composition.
 
-The workspace deliberately has no listener, route, page, CLI, process entry point, default
+The workspace deliberately has no listener, route, page, CLI, process entry point, complete
 authorization implementation, or default audit implementation. A future separately reviewed Admin
 host must inject all three request-scoped capabilities before this kernel can produce a credential:
 
-1. `authorize` must consume separate Access policy, individual Admin membership, and a fresh
-   invite-purpose passkey proof, then return the exact frozen decision described below.
+1. `authorize` must pass only `Cf-Access-Jwt-Assertion` through the local verifier, consume a fresh
+   invite-purpose passkey proof for that exact individual, keep Access valid through the full
+   decision window, then return the exact frozen decision described below.
 2. `appendAudit` must append and acknowledge the exact external `authorized` event before any
    database connection.
 3. `issueInvite` must use the bounded Admin store, which probes the exact database boundary and
@@ -23,6 +26,40 @@ Normal Web sessions, GitHub membership, caller-built allow objects, shared Admin
 alternate reason, caller-selected expiry, invitation identifiers, secrets, SQL, or retry commands
 are not accepted.
 
+## Access and individual membership prerequisite
+
+`resolveAdminAccessConfig` accepts only these protected names:
+
+```text
+VIBERACING_ADMIN_ACCESS_TEAM_DOMAIN
+VIBERACING_ADMIN_ACCESS_AUDIENCE
+VIBERACING_ADMIN_ACCESS_JWKS
+VIBERACING_ADMIN_ACCESS_MEMBERS
+```
+
+The team domain is one exact lowercase Cloudflare Access HTTPS origin. The audience is one exact
+256-bit lowercase application tag. The bounded JWKS snapshot contains only one current key or one
+current plus one previous RS256 public key; private material, extra fields, alternate algorithms,
+duplicate IDs, and moduli outside 2048–4096 bits fail closed. The one-to-sixteen member list maps a
+bounded opaque, non-email Access `sub` to a unique canonical 128-bit `adm_` reference. Raw subjects
+are reduced to an issuer-bound SHA-256 digest in the frozen, non-enumerable, JSON-redacted
+configuration object.
+
+`createAdminAccessVerifier` accepts exactly one compact assertion. It verifies RS256 locally through
+the reviewed `jose` boundary, requires an exact three-field protected header, issuer, one audience,
+`app` token type, integral times, no more than a one-hour token lifetime, no service-token identity,
+and a still-unexpired second clock read. Individual membership is compared through constant-time
+fixed-length digests. Success returns only a frozen redacted version 1 `invite_issue` identity with
+the opaque actor, verification time, and Access expiry. It never returns or logs the JWT, `sub`,
+email, key ID, issuer, audience, or raw claim.
+
+The snapshot is intentionally local so this workspace retains no outbound key-fetch transport. A
+future protected host/deployment must retrieve Cloudflare's current and previous keys, validate and
+atomically refresh the configuration around rotation, monitor staleness, pass only the assertion
+header, and fail closed. No real account key, subject, audience, token, or host configuration is
+tracked. Access verification still does not establish fresh passkey proof or produce the invitation
+kernel's complete authorization decision.
+
 ## Closed authorization and output
 
 The request-scoped authorization gateway returns one frozen, exact-key decision with:
@@ -33,10 +70,11 @@ The request-scoped authorization gateway returns one frozen, exact-key decision 
   application clock; and
 - an expiry exactly five minutes after passkey verification.
 
-This object is a closed adapter contract, not an implemented verifier. The future gateway must
-consume a one-time passkey challenge and establish individual policy independently of a normal user
-session. The kernel rejects an open, stale, future-dated, wrong-purpose, unsealed, accessor-bearing,
-or reflective result before entropy, audit, or database work.
+This object remains a closed complete-gateway contract. ADR 0067 implements only its Access and
+individual-membership prerequisite. The future gateway must consume a one-time passkey challenge for
+the same actor independently of a normal user session. The kernel rejects an open, stale,
+future-dated, wrong-purpose, unsealed, accessor-bearing, or reflective result before entropy, audit,
+or database work.
 
 After authorization, Node's OS-backed CSPRNG creates two distinct UUIDv4 identifiers, 128 request
 bits, and a 256-bit invitation secret. The reason is fixed to `BETA_ADMISSION`; expiry is fixed to
@@ -136,15 +174,18 @@ pnpm run test:admin:postgres-integration
 pnpm run verify
 ```
 
-Current deterministic evidence is 130 tests with 100% statements, lines, and functions plus 98.16%
-branches. They cover closed authorization/audit/result shapes, ordering, freshness, purpose, exact
-credential grammar, entropy and mutable-buffer clearing, ambiguous failure behavior, configuration,
-TLS policy, two-phase login/role boundary, reset-before-reuse, client destruction, and
-PostgreSQL-import confinement. A separate opt-in synthetic integration builds the production Admin
-JavaScript, applies the reviewed 40-migration ledger to one disposable TLS PostgreSQL container,
-rejects an extra-membership login before private-table mutation, and runs the exact injected
-authorization/audit application through the narrow login. It proves hostname-verified TLS, one
-stored active invite, one exact database audit row, no non-target private-table mutation, role
-reset, and closed connections. Authorization and external audit remain injected; there is no real
-Access/passkey, append-only sink, browser, host, protected production login/certificate, capacity,
+Current deterministic evidence is 236 tests with 98.9% statements, 98.89% lines, 97.8% branches, and
+100% functions. They cover exact Access configuration/JWKS/member shapes, generated
+current/previous-key RS256 assertions, algorithm/key/issuer/audience/service/member/time denial,
+redacted identity and dependency confinement, plus closed authorization/audit/result shapes,
+ordering, freshness, purpose, exact credential grammar, entropy and mutable-buffer clearing,
+ambiguous failure behavior, configuration, TLS policy, two-phase login/role boundary,
+reset-before-reuse, client destruction, and PostgreSQL-import confinement. A separate opt-in
+synthetic integration builds the production Admin JavaScript, applies the reviewed 40-migration
+ledger to one disposable TLS PostgreSQL container, rejects an extra-membership login before
+private-table mutation, and runs the exact injected authorization/audit application through the
+narrow login. It proves hostname-verified TLS, one stored active invite, one exact database audit
+row, no non-target private-table mutation, role reset, and closed connections. Complete
+authorization and external audit remain injected; there is no real Access policy/token/key refresh,
+passkey, append-only sink, browser, host, protected production login/certificate, capacity,
 monitoring, operational issuer, or deployment evidence.

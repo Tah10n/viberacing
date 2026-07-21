@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Transport-free bounded Vibe Racing admin invitation application kernel.",
+  "description": "Transport-free bounded Vibe Racing Admin Access and invitation kernel.",
   "license": "Apache-2.0",
   "exports": {
     ".": {
@@ -22,6 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "jose": "6.2.3",
     "pg": "8.22.0"
   },
   "devDependencies": {

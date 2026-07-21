@@ -92,7 +92,7 @@ and Prohibited.
 sequenceDiagram
   actor Operator
   participant Host as Future separate-origin Admin host
-  participant Auth as Access/admin/passkey gateway
+  participant Auth as Local Access/member plus future passkey gateway
   participant Audit as External append-only audit
   participant Kernel as Transport-free Admin kernel
   participant DB as Admin database role
@@ -100,6 +100,8 @@ sequenceDiagram
   Operator->>Host: Request one beta invite with fresh passkey
   Host->>Kernel: Invoke fixed argument-free operation
   Kernel->>Auth: Require invite-purpose authorization
+  Auth->>Auth: Verify Access RS256, issuer, audience, human member
+  Auth->>Auth: Future consume fresh passkey for same actor
   Auth-->>Kernel: Exact opaque actor and fresh proof times
   Kernel->>Audit: Append authorized event without invite material
   Audit-->>Kernel: Exact phase/request acknowledgement
@@ -114,12 +116,16 @@ sequenceDiagram
   Host-->>Operator: Future one-time protected delivery
 ```
 
-Only the transport-free `Kernel` and bounded database adapter exist. `Host`, `Auth`, `Audit`,
-protected delivery, and their real identities/credentials are future trust boundaries represented by
-injected tests. The kernel accepts one exact frozen version 1 decision for purpose `invite_issue`;
-Access and passkey proof times must be ordered, not future-dated, and at most five minutes old. It
-fixes reason `BETA_ADMISSION`, generates the UUIDs, request ID, and 256-bit secret from the OS
-CSPRNG, sends only the digest to PostgreSQL, and clears mutable material on every path.
+Only the transport-free `Kernel`, bounded database adapter, and local Access/member prerequisite
+inside `Auth` exist. `Host`, fresh-passkey/full-authorization composition, `Audit`, protected
+delivery, and their real identities/credentials are future trust boundaries represented by injected
+tests. The local prerequisite validates a bounded RS256 assertion through a protected static
+current/previous-key snapshot, exact issuer/single audience, human token class, and individual
+opaque membership, then returns no token, subject, email, or complete authorization. The kernel
+accepts one exact frozen version 1 decision for purpose `invite_issue`; Access and passkey proof
+times must be ordered, not future-dated, and at most five minutes old. It fixes reason
+`BETA_ADMISSION`, generates the UUIDs, request ID, and 256-bit secret from the OS CSPRNG, sends only
+the digest to PostgreSQL, and clears mutable material on every path.
 
 Database work cannot start before the `authorized` event is acknowledged and the kernel has rejected
 expired authority or backward time on a second clock read. The credential cannot leave the kernel
@@ -130,8 +136,9 @@ the invite ID, secret, digest, raw Access/passkey proof, configuration, row, or 
 synthetic gate composes the built kernel and injected authorization/audit ports with disposable
 hostname-verified TLS PostgreSQL. It proves an extra-membership login cannot mutate private state
 and the narrow login stores exactly one invite/database-audit pair before role reset and connection
-cleanup. There is no operational issuer, separate origin, real authorization or external audit,
-protected production login/certificate, monitoring, capacity evidence, or deployment.
+cleanup. There is no operational issuer, separate origin, real Access policy/token/key refresh,
+fresh-passkey/full authorization, external audit, protected production login/certificate,
+monitoring, capacity evidence, or deployment.
 
 ## Enrollment and passkey bootstrap
 

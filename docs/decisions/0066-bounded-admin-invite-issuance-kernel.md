@@ -1,6 +1,6 @@
 # ADR 0066: Bounded Admin invitation issuance kernel
 
-- Status: Accepted (transport-free kernel; authorization, audit, host, and deployment pending)
+- Status: Accepted (Access local; passkey/audit/host pending)
 - Date: 2026-07-21
 - Decision owners: Product, Admin/Auth, Security, Privacy, Database, and Operations
 - Supersedes: None
@@ -92,12 +92,13 @@ withholds bearer material until committed audit acknowledgement. Exact shapes, t
 reason, entropy sizes, identifier grammar, query, role probe, and result checks fail closed. A
 normal user session cannot reach a default composition because none exists.
 
-This does not verify Cloudflare Access, establish individual membership, perform WebAuthn, provide a
-separate origin, or make the future audit backend append-only. Those are trusted adapter and
-deployment responsibilities and must be proven together. A malicious host can inject permissive
-capabilities; a compromised process can inspect memory; JavaScript/driver/runtime copies are not a
-secure-erasure guarantee. Database-commit/audit-completion ambiguity deliberately sacrifices a
-credential rather than weakening audit or retry behavior.
+This kernel does not itself verify Cloudflare Access, establish individual membership, perform
+WebAuthn, provide a separate origin, or make the future audit backend append-only. ADR 0067 now adds
+the first two as a separate local prerequisite, but the remaining adapters and deployment
+responsibilities must still be proven together. A malicious host can inject permissive capabilities;
+a compromised process can inspect memory; JavaScript/driver/runtime copies are not a secure-erasure
+guarantee. Database-commit/audit-completion ambiguity deliberately sacrifices a credential rather
+than weakening audit or retry behavior.
 
 The existing invite ID, secret/digest, expiry, state, database audit reference, request reference,
 fixed reason, and timestamps remain Security/Operational data under the current map. This kernel
@@ -140,8 +141,8 @@ secret to recover an ambiguous operation.
 
 Current local evidence includes:
 
-- 130 deterministic unit and policy tests with 100% statements, lines, and functions plus 98.16%
-  branches;
+- 236 deterministic workspace unit and policy tests with 98.9% statements, 98.89% lines, 97.8%
+  branches, and 100% functions, including the separate ADR 0067 Access/member boundary;
 - positive exact ordering and Web-compatible credential checks;
 - stale/future/wrong-purpose/open/accessor/proxy authorization denial before entropy or state work;
 - initial/final audit acknowledgement and redaction checks, including database suppression before
@@ -161,14 +162,16 @@ JavaScript and injected authorization/audit ports with one disposable hostname-v
 PostgreSQL database. It applies the exact reviewed 40-migration ledger, proves an extra-membership
 login fails before private-state mutation, then proves the narrow login stores one active invite and
 one exact database audit row, leaves every non-target private table unchanged, resets its role, and
-closes all connections. This is not a working issuer: a complete next gate still needs a
-separate-origin Admin host with real Access and individual membership policy, consumed fresh-passkey
-proof, a protected append-only audit backend and retention policy, a narrow production-owned Admin
-login/TLS path, ambiguous-state operator handling, monitoring, capacity/abuse controls, and deployed
-browser evidence.
+closes all connections. A separate local prerequisite now proves bounded Access signature/policy and
+individual membership under synthetic keys. This is not a working issuer: a complete next gate still
+needs a separate-origin Admin host with real Access policy/token plus protected key refresh,
+consumed fresh-passkey proof and full authorization composition, a protected append-only audit
+backend and retention policy, a narrow production-owned Admin login/TLS path, ambiguous-state
+operator handling, monitoring, capacity/abuse controls, and deployed browser evidence.
 
 ## References
 
+- [Bounded Admin Access and membership verifier](0067-bounded-admin-access-membership-verifier.md)
 - [Project plan](../PROJECT_PLAN.md#administration-and-operations)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
 - [Threat model](../security/THREAT_MODEL.md)

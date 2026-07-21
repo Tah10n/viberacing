@@ -9,11 +9,12 @@ checks when they are clear and maintainable.
 Mature frameworks and analysis tools are used only where their maintained behavior materially
 reduces project risk. The current deliberate set includes Next.js and React for the web runtime,
 `@noble/ed25519` for two strict server-side device-signature checks, `pg` for six confined
-server-side pool wrappers, `@simplewebauthn/server` and `@simplewebauthn/browser` for one
-passkey-registration ceremony, Fastify for one confined Ingest HTTP server factory, and CSpell,
-TypeScript, ESLint, Vitest, jsdom, and axe-core for offline verification. Every direct package is
-exact-pinned, installs without lifecycle scripts, and is represented with its complete transitive
-graph in the dependency inventory. Pull-request CI is secretless.
+server-side pool wrappers, `jose` for one bounded Admin Access verifier, `@simplewebauthn/server`
+and `@simplewebauthn/browser` for one passkey-registration ceremony, Fastify for one confined Ingest
+HTTP server factory, and CSpell, TypeScript, ESLint, Vitest, jsdom, and axe-core for offline
+verification. Every direct package is exact-pinned, installs without lifecycle scripts, and is
+represented with its complete transitive graph in the dependency inventory. Pull-request CI is
+secretless.
 
 The project does not auto-merge dependency updates. A green dependency pull request still requires
 human review of purpose, provenance, release history, permissions, transitive changes, and license.
@@ -39,6 +40,16 @@ The offline gate rejects missing, extra, stale, malformed, unapproved, or invent
 metadata, including an installed package absent from the lockfile. `pnpm run audit:dependencies` is
 a separate online check pinned to the official npm registry and fails on moderate, high, or critical
 advisories.
+
+`markdownlint-cli2@0.23.1` is a root-only development tool for the repository Markdown gate. The
+patch update replaced the exact `globby`, `js-yaml`, `markdown-it`, and `markdownlint` lock nodes
+selected by 0.23.0 without adding a package or changing the runtime graph. It selects
+`js-yaml@5.2.1`, the upstream-patched release for CVE-2026-59870, instead of the affected 5.2.0
+release. The official-registry manifests and integrity values, upstream changelog, complete lock and
+inventory diff, MIT licenses, absence of install lifecycle scripts, release quarantine, Markdown
+output, and zero-moderate-or-higher online audit result were reviewed on 2026-07-21. An update
+requires the same registry, lock, license, script, advisory, formatting, documentation, and
+Markdown-gate review; this CLI must never enter a product workspace or runtime artifact.
 
 `@noble/ed25519@3.1.0` is the only current application cryptography dependency. A local probe showed
 that Node's native OpenSSL-backed verifier accepted an all-zero Ed25519 public key and signature, so
@@ -67,15 +78,31 @@ plus the options/proof, wrong-origin, wrong-RP, replay, user-verification, depen
 coverage, and production-build regressions. Remove both packages if passkeys are removed; do not
 replace the verifier with repository-owned WebAuthn parsing.
 
+`jose@6.2.3` implements compact JWS/JWT, local JWK-set selection, WebCrypto-backed RS256 signature
+verification, and registered-claim validation for the bounded Admin Cloudflare Access boundary.
+Cloudflare's official Node/TypeScript guidance uses this package; repository code additionally
+requires the exact assertion header shape, issuer, single audience, human application-token class,
+opaque individual membership, one-hour maximum token lifetime, and a second non-regressing clock
+read. Lint confines the only product import to `apps/admin/src/access-verifier.ts`, which uses only
+`createLocalJWKSet` and `jwtVerify`; remote JWK fetching, signing, decryption, arbitrary algorithms,
+email identity, and service tokens remain outside the capability. The exact package is ESM,
+side-effect-free, MIT, has no dependency, optional dependency, lifecycle script, native build, or
+browser bundle. Its canonical publisher/repository, 2026-04-27 release, registry integrity, release
+quarantine, installed manifest, notice, zero-node lock expansion, and online moderate-or-higher
+advisory result were reviewed under ADR 0067. An update requires renewed provenance,
+release/security/license/script review plus algorithm-confusion, key-rotation, issuer/audience,
+service-token, membership, time, confinement, coverage, and production-build regressions. Remove it
+if the Admin Access verifier is removed; do not replace it with repository-owned JWT/RSA parsing.
+
 `pg@8.22.0` is the only application PostgreSQL client. It is confined to fixed pool-wrapper files
-inside the private Web, Jobs, and Ingest workspaces; each workspace lint policy rejects static,
-dynamic, re-export, and CommonJS driver access elsewhere. The adapters expose only their reviewed
-parameterized functions and no general query or ORM surface. Its exact registry integrity, MIT
-license, transitive graph, optional unused native peer, absence of install lifecycle scripts,
-maintenance, and advisory state were reviewed under ADRs 0011, 0014, 0016, 0027, and 0028. Adding
-the second Web pool and its fixed pairing-start method changes no package version or transitive
-node. An update requires renewed source/release/advisory/license/script/transitive review plus all
-role, query, result, timeout, and failure-isolation regressions.
+inside the private Web, Ingest, Jobs, migration, and Admin workspaces; each workspace lint policy
+rejects static, dynamic, re-export, and CommonJS driver access elsewhere. The adapters expose only
+their reviewed parameterized functions and no general query or ORM surface. Its exact registry
+integrity, MIT license, transitive graph, optional unused native peer, absence of install lifecycle
+scripts, maintenance, and advisory state were reviewed under ADRs 0011, 0014, 0016, 0027, and 0028.
+Adding the second Web pool and its fixed pairing-start method changes no package version or
+transitive node. An update requires renewed source/release/advisory/license/script/transitive review
+plus all role, query, result, timeout, and failure-isolation regressions.
 
 `fastify@5.10.0` is the only direct HTTP server framework. It is confined to the private Ingest
 workspace and one reviewed server module; effective lint policy rejects Fastify imports, re-exports,
