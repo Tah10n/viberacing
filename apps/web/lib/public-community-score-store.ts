@@ -4,15 +4,18 @@ import type {
   CommunityRacePageV1,
   CommunityRaceStatusPageV1,
   CommunityScorePageV1,
+  CommunityTokenRaceStatusPageV1,
 } from "@viberacing/contracts";
 
 import {
   mapPublicCommunityRaceRows,
   mapPublicCommunityRaceStatusRows,
   mapPublicCommunityScoreRows,
+  mapPublicCommunityTokenRaceStatusRows,
   publicCommunityRacePageSize,
   publicCommunityRaceStatusPageSize,
   publicCommunityScorePageSize,
+  publicCommunityTokenRaceStatusPageSize,
 } from "./public-community-score-mapper";
 import { resolvePublicScoreDatabaseConfig } from "./public-score-database-config";
 import {
@@ -116,6 +119,26 @@ const publicRaceStatusQuery = `SELECT
 FROM viberacing_api.list_public_community_race_status($1::date, $2::integer) AS status
 ORDER BY status.display_position`;
 
+const publicTokenRaceStatusQuery = `SELECT
+  status.season_start::text AS season_start,
+  status.season_end::text AS season_end,
+  status.metric_version AS metric_version,
+  status.season_finalized AS season_finalized,
+  status.handle AS handle,
+  status.weekly_token_total::text AS weekly_token_total,
+  status.active_days AS active_days,
+  status.source_count AS source_count,
+  status.rank_position AS rank_position,
+  status.display_position AS display_position,
+  status.car_recipe AS car_recipe,
+  status.freshness_days AS freshness_days,
+  status.streak_days AS streak_days
+FROM viberacing_api.list_public_community_token_race_status(
+  $1::date,
+  $2::integer
+) AS status
+ORDER BY status.display_position`;
+
 export type PublicCommunityScoreStoreErrorCode =
   | "connection_release_failed"
   | "connection_unavailable"
@@ -156,6 +179,14 @@ export interface PublicCommunityRaceStatusStore {
 }
 
 export interface ConfiguredPublicCommunityRaceStatusStore extends PublicCommunityRaceStatusStore {
+  close(): Promise<void>;
+}
+
+export interface PublicCommunityTokenRaceStatusStore {
+  readonly read: (seasonStart: unknown) => Promise<CommunityTokenRaceStatusPageV1>;
+}
+
+export interface ConfiguredPublicCommunityTokenRaceStatusStore extends PublicCommunityTokenRaceStatusStore {
   close(): Promise<void>;
 }
 
@@ -328,6 +359,29 @@ export function createPublicCommunityRaceStatusStore(
   });
 }
 
+export function createPublicCommunityTokenRaceStatusStore(
+  pool: PublicScoreDatabasePool,
+): PublicCommunityTokenRaceStatusStore {
+  return Object.freeze({
+    async read(seasonStart: unknown): Promise<CommunityTokenRaceStatusPageV1> {
+      if (!validSeasonStart(seasonStart)) {
+        fail("invalid_season");
+      }
+      const rows = await readRows(
+        pool,
+        seasonStart,
+        publicTokenRaceStatusQuery,
+        publicCommunityTokenRaceStatusPageSize,
+      );
+      try {
+        return mapPublicCommunityTokenRaceStatusRows(rows);
+      } catch {
+        fail("projection_rejected");
+      }
+    },
+  });
+}
+
 export function createCloseablePublicCommunityScoreStore(
   pool: PublicScoreDatabasePool,
 ): ConfiguredPublicCommunityScoreStore {
@@ -376,6 +430,22 @@ export function createCloseablePublicCommunityRaceStatusStore(
   });
 }
 
+export function createCloseablePublicCommunityTokenRaceStatusStore(
+  pool: PublicScoreDatabasePool,
+): ConfiguredPublicCommunityTokenRaceStatusStore {
+  const store = createPublicCommunityTokenRaceStatusStore(pool);
+  return Object.freeze({
+    async close(): Promise<void> {
+      try {
+        await pool.close();
+      } catch {
+        fail("pool_close_failed");
+      }
+    },
+    read: store.read,
+  });
+}
+
 export function createConfiguredPublicCommunityScoreStore(
   environment: Readonly<Record<string, string | undefined>> = process.env,
   signalSink?: PublicScoreDatabasePoolSignalSink,
@@ -407,4 +477,15 @@ export function createConfiguredPublicCommunityRaceStatusStore(
     signalSink,
   );
   return createCloseablePublicCommunityRaceStatusStore(pool);
+}
+
+export function createConfiguredPublicCommunityTokenRaceStatusStore(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+  signalSink?: PublicScoreDatabasePoolSignalSink,
+): ConfiguredPublicCommunityTokenRaceStatusStore {
+  const pool = createPublicScoreDatabasePool(
+    resolvePublicScoreDatabaseConfig(environment),
+    signalSink,
+  );
+  return createCloseablePublicCommunityTokenRaceStatusStore(pool);
 }

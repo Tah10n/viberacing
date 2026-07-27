@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { codexAccountingRevision, codexProvider } from "./community-sync-verifier.js";
 import {
   CommunitySyncDatabaseError,
   createCloseableCommunitySyncDatabase,
@@ -12,7 +13,9 @@ import type {
   IngestDatabaseOriginNonce,
   IngestDatabasePool,
   IngestDatabaseSubmission,
+  IngestDatabaseUsageSubmission,
 } from "./database-pool.js";
+import { communitySyncRequestTarget, usageSyncRequestTarget } from "./protocol.js";
 
 const deviceId = "dev_AAAAAAAAAAAAAAAAAAAAAA";
 const sourceId = "src_BBBBBBBBBBBBBBBBBBBBBB";
@@ -22,7 +25,9 @@ const snapshotId = "00000000-0000-4000-8000-000000000202";
 const originExpiryMilliseconds = Date.parse("2026-07-15T12:01:00.000Z");
 const runtimeBoundary = [{ role_ok: true, login_scope_ok: true, search_path_ok: true }];
 const deviceRow = {
+  accounting_revision: codexAccountingRevision,
   device_key_id: deviceKeyId,
+  provider: codexProvider,
   public_key: Buffer.alloc(32, 7),
   source_id: sourceId,
 };
@@ -38,6 +43,7 @@ const explicitEnvironment = {
 
 function verifiedSubmission(): Record<string, unknown> {
   return {
+    accountingRevision: codexAccountingRevision,
     bodyDigestHex: "11".repeat(32),
     deviceId,
     deviceKeyId,
@@ -55,6 +61,34 @@ function verifiedSubmission(): Record<string, unknown> {
       sourceId,
       syncId,
     },
+    provider: codexProvider,
+    requestTarget: communitySyncRequestTarget,
+    signatureBase64Url: Buffer.alloc(64, 3).toString("base64url"),
+  };
+}
+
+function usageVerifiedSubmission(): Record<string, unknown> {
+  return {
+    accountingRevision: codexAccountingRevision,
+    bodyDigestHex: "11".repeat(32),
+    deviceId,
+    deviceKeyId,
+    idempotencyKey: syncId,
+    nonceDigestHex: "22".repeat(32),
+    payload: {
+      agentVersion: "0.144.5",
+      clientVersion: "1.2.3",
+      dailyEntries: [
+        { dailyTokenTotal: 42, reportedDate: "2026-07-13" },
+        { dailyTokenTotal: 84, reportedDate: "2026-07-14" },
+      ],
+      observedAt: "2026-07-15T12:00:00.000Z",
+      schemaVersion: 1,
+      sourceId,
+      syncId,
+    },
+    provider: codexProvider,
+    requestTarget: usageSyncRequestTarget,
     signatureBase64Url: Buffer.alloc(64, 3).toString("base64url"),
   };
 }
@@ -83,6 +117,7 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
   readDevice: ReturnType<typeof vi.fn>;
   release: ReturnType<typeof vi.fn>;
   submit: ReturnType<typeof vi.fn>;
+  submitUsage: ReturnType<typeof vi.fn>;
   verifyBoundary: ReturnType<typeof vi.fn>;
 }> {
   const readDevice = vi.fn(() =>
@@ -100,6 +135,13 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
         : [{ accepted_entries: 2, outcome: "accepted" }],
     ),
   );
+  const submitUsage = vi.fn(() =>
+    Promise.resolve(
+      Object.hasOwn(options, "submissionRows")
+        ? options.submissionRows
+        : [{ accepted_entries: 2, outcome: "accepted" }],
+    ),
+  );
   const verifyBoundary = vi.fn(() =>
     Promise.resolve(Object.hasOwn(options, "runtimeRows") ? options.runtimeRows : runtimeBoundary),
   );
@@ -109,6 +151,7 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
     readDeviceVerificationMaterial: readDevice,
     release,
     submitCommunitySync: submit,
+    submitUsageSync: submitUsage,
     verifyRuntimeBoundary: verifyBoundary,
   };
   const connect = vi.fn(() => Promise.resolve(client));
@@ -122,6 +165,7 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
     readDevice,
     release,
     submit,
+    submitUsage,
     verifyBoundary,
   });
 }
@@ -248,7 +292,13 @@ describe("Community sync database adapter", () => {
 
     const material = await database.readDeviceVerificationMaterial(deviceId);
 
-    expect(material).toEqual({ deviceKeyId, publicKey: Buffer.alloc(32, 7), sourceId });
+    expect(material).toEqual({
+      accountingRevision: codexAccountingRevision,
+      deviceKeyId,
+      provider: codexProvider,
+      publicKey: Buffer.alloc(32, 7),
+      sourceId,
+    });
     expect(Object.isFrozen(material)).toBe(true);
     expect(material?.publicKey).not.toBe(deviceRow.public_key);
     expect(fixture.readDevice).toHaveBeenCalledWith(deviceId);
@@ -296,6 +346,40 @@ describe("Community sync database adapter", () => {
     expect(fixture.release).toHaveBeenCalledWith(false);
   });
 
+  it("maps UsageSyncV1 to the distinct provider-derived procedure input", async () => {
+    const fixture = createFixture();
+    const database = createCommunitySyncDatabase(fixture.pool, () => snapshotId);
+
+    await expect(database.submit(usageVerifiedSubmission())).resolves.toEqual({
+      acceptedEntries: 2,
+      outcome: "accepted",
+    });
+
+    expect(fixture.submit).not.toHaveBeenCalled();
+    expect(fixture.submitUsage).toHaveBeenCalledOnce();
+    const mapped = fixture.submitUsage.mock.calls[0]![0] as IngestDatabaseUsageSubmission;
+    expect(mapped).toMatchObject({
+      accountingRevision: codexAccountingRevision,
+      agentVersion: "0.144.5",
+      clientVersion: "1.2.3",
+      dailyTokenTotals: [42, 84],
+      deviceId,
+      deviceKeyId,
+      observedAt: "2026-07-15T12:00:00.000Z",
+      provider: codexProvider,
+      reportedDates: ["2026-07-13", "2026-07-14"],
+      snapshotId,
+      sourceId,
+      syncId,
+    });
+    expect(mapped.bodyDigest).toEqual(Buffer.alloc(32, 0x11));
+    expect(mapped.nonceDigest).toEqual(Buffer.alloc(32, 0x22));
+    expect(mapped.signature).toEqual(Buffer.alloc(64, 3));
+    expect(Object.isFrozen(mapped)).toBe(true);
+    expect(Object.isFrozen(mapped.reportedDates)).toBe(true);
+    expect(Object.isFrozen(mapped.dailyTokenTotals)).toBe(true);
+  });
+
   it.each([
     [
       { accepted_entries: 0, outcome: "duplicate" },
@@ -335,6 +419,9 @@ describe("Community sync database adapter", () => {
     { ...verifiedSubmission(), idempotencyKey: "invalid" },
     { ...verifiedSubmission(), idempotencyKey: "syn_DDDDDDDDDDDDDDDDDDDDDD" },
     { ...verifiedSubmission(), nonceDigestHex: "zz".repeat(32) },
+    { ...verifiedSubmission(), provider: "claude-code" },
+    { ...verifiedSubmission(), accountingRevision: "codex_daily_usage_buckets_v2" },
+    { ...verifiedSubmission(), requestTarget: "/v1/community/private" },
     { ...verifiedSubmission(), signatureBase64Url: "invalid" },
     { ...verifiedSubmission(), signatureBase64Url: 42 },
     { ...verifiedSubmission(), payload: null },
@@ -367,6 +454,30 @@ describe("Community sync database adapter", () => {
 
     await expectDatabaseError(database.submit(input), "input_invalid");
     expect(fixture.connect).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed UsageSyncV1 shapes before acquiring a connection", async () => {
+    const base = usageVerifiedSubmission();
+    const payload = base.payload as Record<string, unknown>;
+    const inputs = [
+      { ...base, payload: null },
+      { ...base, payload: { ...payload, dailyEntries: [null] } },
+      {
+        ...base,
+        payload: {
+          ...payload,
+          dailyEntries: [{ dailyTokenTotal: -1, reportedDate: "2026-07-13" }],
+        },
+      },
+    ];
+
+    for (const input of inputs) {
+      const fixture = createFixture();
+      const database = createCommunitySyncDatabase(fixture.pool, () => snapshotId);
+
+      await expectDatabaseError(database.submit(input), "input_invalid");
+      expect(fixture.connect).not.toHaveBeenCalled();
+    }
   });
 
   it("rejects accessors, proxies, sparse arrays, and exotic array prototypes", async () => {
@@ -437,6 +548,8 @@ describe("Community sync database adapter", () => {
     { deviceRows: [deviceRow, deviceRow] },
     { deviceRows: [{ ...deviceRow, extra: true }] },
     { deviceRows: [{ ...deviceRow, device_key_id: "invalid" }] },
+    { deviceRows: [{ ...deviceRow, provider: "claude-code" }] },
+    { deviceRows: [{ ...deviceRow, accounting_revision: "codex_daily_usage_buckets_v2" }] },
     { deviceRows: [{ ...deviceRow, source_id: "invalid" }] },
     { deviceRows: [{ ...deviceRow, public_key: "invalid" }] },
     { deviceRows: [{ ...deviceRow, public_key: Buffer.alloc(31) }] },

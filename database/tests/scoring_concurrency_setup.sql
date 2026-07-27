@@ -20,6 +20,25 @@ VALUES (
   '00000000-0000-4000-8000-000000015101'
 );
 
+-- Exercise concurrency over the preserved legacy formula regardless of the calendar date on which
+-- the integration runs.
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  season_end,
+  score_version,
+  state,
+  grace_ends_at
+)
+VALUES (
+  pg_catalog.current_setting('viberacing.test_week_start')::date,
+  pg_catalog.current_setting('viberacing.test_week_start')::date + 6,
+  'community_v1',
+  'open',
+  viberacing_private.community_season_grace_ends_at(
+    pg_catalog.current_setting('viberacing.test_week_start')::date
+  )
+);
+
 INSERT INTO viberacing_private.device_keys (
   device_key_id,
   device_id,

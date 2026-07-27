@@ -33,7 +33,7 @@ $function$;
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 71
+    SELECT pg_catalog.count(*) = 73
     FROM pg_catalog.pg_proc AS procedure
     JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'viberacing_api'
@@ -59,7 +59,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 28
+    SELECT pg_catalog.count(*) = 29
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['lock_timeout=5s']::text[]
       )
@@ -94,7 +94,8 @@ SELECT pg_temp.assert_true(
         'refresh_community_season',
         'finalize_community_season_backlog',
         'finalize_community_season',
-        'submit_community_sync'
+        'submit_community_sync',
+        'submit_usage_sync'
       )
   ),
   'Ingest, Jobs, and CarRecipe functions have database-enforced lock-wait bounds'
@@ -116,7 +117,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 19
+    SELECT pg_catalog.count(*) = 20
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=30s']::text[]
       )
@@ -140,6 +141,7 @@ SELECT pg_temp.assert_true(
         'redact_aged_pairing_approval_provenance',
         'reset_expired_pairing_request_windows',
         'submit_community_sync',
+        'submit_usage_sync',
         'refresh_community_season',
         'finalize_community_season_backlog',
         'finalize_community_season'
@@ -173,7 +175,7 @@ SELECT pg_temp.assert_true(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 3
+    SELECT pg_catalog.count(*) = 4
       AND pg_catalog.bool_and(
         procedure.proconfig @> ARRAY['statement_timeout=5s']::text[]
       )
@@ -183,10 +185,11 @@ SELECT pg_temp.assert_true(
       AND procedure.proname IN (
         'list_public_community_race',
         'list_public_community_race_status',
+        'list_public_community_token_race_status',
         'list_public_community_scores'
       )
   ),
-  'the bounded public score, race, and race-status projections have database-enforced statement deadlines'
+  'the bounded public score, race, race-status, and token projections have database-enforced statement deadlines'
 );
 
 SELECT pg_temp.assert_true(
@@ -227,6 +230,7 @@ SELECT pg_temp.assert_true(
           'consume_origin_nonce',
           'read_device_verification_material',
           'submit_community_sync',
+          'submit_usage_sync',
           'cleanup_abandoned_enrollments',
           'cleanup_expired_auth_state',
           'cleanup_expired_audit_events',
@@ -264,7 +268,8 @@ SELECT pg_temp.assert_true(
         procedure.proname IN (
           'consume_origin_nonce',
           'read_device_verification_material',
-          'submit_community_sync'
+          'submit_community_sync',
+          'submit_usage_sync'
         )
       )
     )

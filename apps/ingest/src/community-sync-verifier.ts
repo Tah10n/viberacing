@@ -1,7 +1,12 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import { verifyAsync as verifyEd25519Strict } from "@noble/ed25519";
-import { validateConnectorSyncV1, type ConnectorSyncV1 } from "@viberacing/contracts";
+import {
+  validateConnectorSyncV1,
+  validateUsageSyncV1,
+  type ConnectorSyncV1,
+  type UsageSyncV1,
+} from "@viberacing/contracts";
 
 import { parseBoundedCommunitySyncJson } from "./bounded-json.js";
 import {
@@ -9,6 +14,7 @@ import {
   communitySyncMediaType,
   communitySyncMethod,
   communitySyncRequestTarget,
+  type CommunitySyncRequestTarget,
   createDeviceSignatureMessage,
   createOriginProofMessage,
   decodeCanonicalBase64Url,
@@ -30,7 +36,13 @@ import {
   originProofMaximumFutureSkewMilliseconds,
   originProofNonceBytes,
   requiredHeaderNames,
+  usageSyncRequestTarget,
 } from "./protocol.js";
+
+export const codexProvider = "codex";
+export const codexAccountingRevision = "codex_daily_usage_buckets_v1";
+export type AgentProvider = typeof codexProvider;
+export type AgentAccountingRevision = typeof codexAccountingRevision;
 
 export type CommunitySyncVerificationErrorCode =
   | "dependency_unavailable"
@@ -63,7 +75,9 @@ export interface OriginNonceConsumption {
 }
 
 export interface DeviceVerificationMaterial {
+  readonly accountingRevision: string;
   readonly deviceKeyId: string;
+  readonly provider: string;
   readonly publicKey: Uint8Array;
   readonly sourceId: string;
 }
@@ -81,12 +95,15 @@ export interface CommunitySyncVerifierOptions {
 }
 
 export interface VerifiedCommunitySync {
+  readonly accountingRevision: AgentAccountingRevision;
   readonly bodyDigestHex: string;
   readonly deviceId: string;
   readonly deviceKeyId: string;
   readonly idempotencyKey: string;
   readonly nonceDigestHex: string;
-  readonly payload: ConnectorSyncV1;
+  readonly payload: ConnectorSyncV1 | UsageSyncV1;
+  readonly provider: AgentProvider;
+  readonly requestTarget: CommunitySyncRequestTarget;
   readonly signatureBase64Url: string;
 }
 
@@ -97,10 +114,13 @@ export interface CommunitySyncVerifier {
 interface RawRequestEnvelope {
   readonly body: Buffer;
   readonly headers: Readonly<Record<RequiredHeaderName, string>>;
+  readonly requestTarget: CommunitySyncRequestTarget;
 }
 
 interface ValidatedDeviceMaterial {
+  readonly accountingRevision: string;
   readonly deviceKeyId: string;
+  readonly provider: string;
   readonly publicKey: Buffer;
   readonly sourceId: string;
 }
@@ -120,9 +140,17 @@ const optionKeys = new Set([
   "readDeviceVerificationMaterial",
 ]);
 const originKeyKeys = new Set(["keyId", "secret"]);
-const deviceMaterialKeys = new Set(["deviceKeyId", "publicKey", "sourceId"]);
+const deviceMaterialKeys = new Set([
+  "accountingRevision",
+  "deviceKeyId",
+  "provider",
+  "publicKey",
+  "sourceId",
+]);
 const requiredHeaderNameSet = new Set<string>(requiredHeaderNames);
 const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
+const providerPattern = /^[a-z][a-z0-9-]{1,31}$/;
+const accountingRevisionPattern = /^[a-z][a-z0-9_]{1,63}$/;
 const canonicalUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const headerNamePattern = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const headerValuePattern = /^[\x20-\x7e]*$/;
@@ -276,9 +304,10 @@ function readRawRequest(value: unknown): RawRequestEnvelope {
     if (!isPlainRecord(value) || !hasExactKeys(value, requestKeys)) {
       fail("invalid_request");
     }
+    const requestTarget = ownRequestDataValue(value, "requestTarget");
     if (
       ownRequestDataValue(value, "method") !== communitySyncMethod ||
-      ownRequestDataValue(value, "requestTarget") !== communitySyncRequestTarget
+      (requestTarget !== communitySyncRequestTarget && requestTarget !== usageSyncRequestTarget)
     ) {
       fail("invalid_request");
     }
@@ -328,6 +357,7 @@ function readRawRequest(value: unknown): RawRequestEnvelope {
     return {
       body,
       headers: Object.freeze(headers),
+      requestTarget,
     };
   } catch (error) {
     if (error instanceof CommunitySyncVerificationError) {
@@ -356,6 +386,25 @@ function canonicalPayload(value: ConnectorSyncV1): ConnectorSyncV1 {
   });
 }
 
+function canonicalUsagePayload(value: UsageSyncV1): UsageSyncV1 {
+  return Object.freeze({
+    schemaVersion: 1,
+    sourceId: value.sourceId,
+    syncId: value.syncId,
+    observedAt: value.observedAt,
+    clientVersion: value.clientVersion,
+    agentVersion: value.agentVersion,
+    dailyEntries: Object.freeze(
+      value.dailyEntries.map((entry) =>
+        Object.freeze({
+          reportedDate: entry.reportedDate,
+          dailyTokenTotal: entry.dailyTokenTotal,
+        }),
+      ),
+    ),
+  });
+}
+
 function readDeviceMaterial(
   value: unknown,
 ): ValidatedDeviceMaterial | null | typeof invalidDeviceMaterial {
@@ -366,19 +415,31 @@ function readDeviceMaterial(
     if (!isPlainRecord(value) || !hasExactKeys(value, deviceMaterialKeys)) {
       return invalidDeviceMaterial;
     }
+    const accountingRevision = ownDataValue(value, "accountingRevision");
     const deviceKeyId = ownDataValue(value, "deviceKeyId");
+    const provider = ownDataValue(value, "provider");
     const publicKey = copyExactBytes(ownDataValue(value, "publicKey"), devicePublicKeyBytes);
     const sourceId = ownDataValue(value, "sourceId");
     if (
+      typeof accountingRevision !== "string" ||
+      !accountingRevisionPattern.test(accountingRevision) ||
       typeof deviceKeyId !== "string" ||
       !canonicalUuidPattern.test(deviceKeyId) ||
+      typeof provider !== "string" ||
+      !providerPattern.test(provider) ||
       publicKey === undefined ||
       typeof sourceId !== "string" ||
       !sourceIdPattern.test(sourceId)
     ) {
       return invalidDeviceMaterial;
     }
-    return Object.freeze({ deviceKeyId, publicKey, sourceId });
+    return Object.freeze({
+      accountingRevision,
+      deviceKeyId,
+      provider,
+      publicKey,
+      sourceId,
+    });
   } catch {
     return invalidDeviceMaterial;
   }
@@ -412,7 +473,7 @@ class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
   async verify(request: unknown): Promise<VerifiedCommunitySync> {
     const envelope = readRawRequest(request);
     const bodyDigest = digestBody(envelope.body);
-    await this.#verifyOrigin(envelope.headers, bodyDigest.base64Url);
+    await this.#verifyOrigin(envelope.headers, bodyDigest.base64Url, envelope.requestTarget);
 
     let parsed: unknown;
     try {
@@ -420,11 +481,20 @@ class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
     } catch {
       fail("invalid_body");
     }
-    const validation = validateConnectorSyncV1(parsed);
-    if (!validation.ok) {
-      fail("invalid_body");
+    let payload: ConnectorSyncV1 | UsageSyncV1;
+    if (envelope.requestTarget === usageSyncRequestTarget) {
+      const validation = validateUsageSyncV1(parsed);
+      if (!validation.ok) {
+        fail("invalid_body");
+      }
+      payload = canonicalUsagePayload(validation.value);
+    } else {
+      const validation = validateConnectorSyncV1(parsed);
+      if (!validation.ok) {
+        fail("invalid_body");
+      }
+      payload = canonicalPayload(validation.value);
     }
-    const payload = canonicalPayload(validation.value);
 
     const deviceId = envelope.headers[headerNames.deviceId];
     const deviceNonce = envelope.headers[headerNames.deviceNonce];
@@ -460,6 +530,7 @@ class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
       deviceId,
       idempotencyKey,
       nonce: deviceNonce,
+      requestTarget: envelope.requestTarget,
       timestamp: deviceTimestamp,
     });
     const candidatePublicKey = deviceMaterial?.publicKey ?? dummyDevicePublicKey;
@@ -467,18 +538,23 @@ class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
     if (
       deviceMaterial === null ||
       !signatureValid ||
-      deviceMaterial.sourceId !== payload.sourceId
+      deviceMaterial.sourceId !== payload.sourceId ||
+      deviceMaterial.provider !== codexProvider ||
+      deviceMaterial.accountingRevision !== codexAccountingRevision
     ) {
       fail("device_rejected");
     }
 
     return Object.freeze({
+      accountingRevision: codexAccountingRevision,
       bodyDigestHex: bodyDigest.hex,
       deviceId,
       deviceKeyId: deviceMaterial.deviceKeyId,
       idempotencyKey,
       nonceDigestHex: createHash("sha256").update(nonceBytes).digest("hex"),
       payload,
+      provider: codexProvider,
+      requestTarget: envelope.requestTarget,
       signatureBase64Url,
     });
   }
@@ -486,6 +562,7 @@ class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
   async #verifyOrigin(
     headers: Readonly<Record<RequiredHeaderName, string>>,
     bodyDigestBase64Url: string,
+    requestTarget: CommunitySyncRequestTarget,
   ): Promise<void> {
     const keyId = headers[headerNames.originKeyId];
     const nonce = headers[headerNames.originNonce];
@@ -501,6 +578,7 @@ class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
           bodyDigestBase64Url,
           keyId,
           nonce,
+          requestTarget,
           timestamp,
         }),
       )

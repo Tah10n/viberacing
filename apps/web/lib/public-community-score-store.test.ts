@@ -3,11 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createCloseablePublicCommunityRaceStatusStore,
   createCloseablePublicCommunityScoreStore,
+  createCloseablePublicCommunityTokenRaceStatusStore,
   createConfiguredPublicCommunityRaceStatusStore,
   createConfiguredPublicCommunityScoreStore,
+  createConfiguredPublicCommunityTokenRaceStatusStore,
   createPublicCommunityRaceStore,
   createPublicCommunityRaceStatusStore,
   createPublicCommunityScoreStore,
+  createPublicCommunityTokenRaceStatusStore,
   PublicCommunityScoreStoreError,
   type PublicCommunityScoreStoreErrorCode,
 } from "./public-community-score-store";
@@ -35,6 +38,22 @@ interface RaceStatusProjectionRow extends ProjectionRow {
   readonly streak_days: number | null;
 }
 
+interface TokenProjectionRow {
+  readonly active_days: number;
+  readonly car_recipe: null;
+  readonly display_position: number;
+  readonly freshness_days: number;
+  readonly handle: string;
+  readonly metric_version: "community_tokens_v1";
+  readonly rank_position: number;
+  readonly season_end: string;
+  readonly season_finalized: boolean;
+  readonly season_start: string;
+  readonly source_count: number;
+  readonly streak_days: number | null;
+  readonly weekly_token_total: string;
+}
+
 interface QueryCall {
   readonly text: string;
   readonly values: readonly unknown[] | undefined;
@@ -58,6 +77,21 @@ const baseRuntimeBoundaryRow = {
   search_path_ok: true,
   read_only_ok: true,
 } as const;
+const baseTokenProjectionRow: TokenProjectionRow = {
+  season_start: "2026-07-27",
+  season_end: "2026-08-02",
+  metric_version: "community_tokens_v1",
+  season_finalized: false,
+  handle: "token-driver",
+  weekly_token_total: "12345678",
+  active_days: 5,
+  source_count: 2,
+  rank_position: 1,
+  display_position: 1,
+  car_recipe: null,
+  freshness_days: 0,
+  streak_days: null,
+};
 
 function runtimeBoundary(overrides: Record<string, unknown> = {}): unknown[] {
   return [{ ...baseRuntimeBoundaryRow, ...overrides }];
@@ -236,6 +270,50 @@ describe("public Community score store", () => {
     expect(statusCall?.text).toContain("status.streak_days AS streak_days");
     expect(statusCall?.text).not.toContain("list_public_community_race(");
     expect(testHarness.releases).toEqual([false]);
+  });
+
+  it("maps the fixed direct-token query from canonical bigint text", async () => {
+    const testHarness = harness([runtimeBoundary(), [baseTokenProjectionRow]]);
+    const store = createPublicCommunityTokenRaceStatusStore(testHarness.pool);
+
+    await expect(store.read("2026-07-27")).resolves.toMatchObject({
+      participants: [
+        {
+          handle: "token-driver",
+          metricVersion: "community_tokens_v1",
+          weeklyTokenTotal: 12_345_678,
+        },
+      ],
+    });
+
+    const tokenCall = testHarness.calls.find(({ text }) =>
+      text.includes("list_public_community_token_race_status"),
+    );
+    expect(tokenCall?.values).toEqual(["2026-07-27", 32]);
+    expect(tokenCall?.text).toContain("status.weekly_token_total::text AS weekly_token_total");
+    expect(tokenCall?.text).toContain("status.freshness_days AS freshness_days");
+    expect(tokenCall?.text).not.toContain("list_public_community_race_status(");
+    expect(testHarness.releases).toEqual([false]);
+    expect(Object.isFrozen(store)).toBe(true);
+  });
+
+  it("rejects invalid token input and database projection without retaining row detail", async () => {
+    const invalidSeasonHarness = harness([]);
+    await expectStoreError(
+      createPublicCommunityTokenRaceStatusStore(invalidSeasonHarness.pool).read("2026-07-29"),
+      "invalid_season",
+    );
+    expect(invalidSeasonHarness.connect).not.toHaveBeenCalled();
+
+    const invalidProjectionHarness = harness([
+      runtimeBoundary(),
+      [{ ...baseTokenProjectionRow, weekly_token_total: "9007199254740992" }],
+    ]);
+    await expectStoreError(
+      createPublicCommunityTokenRaceStatusStore(invalidProjectionHarness.pool).read("2026-07-27"),
+      "projection_rejected",
+    );
+    expect(invalidProjectionHarness.releases).toEqual([false]);
   });
 
   it("rejects an invalid race-status season before acquiring a connection", async () => {
@@ -463,6 +541,21 @@ describe("public Community score store", () => {
     await expect(store.close()).resolves.toBeUndefined();
   });
 
+  it("creates and closes the token adapter lazily without database work", async () => {
+    const store = createConfiguredPublicCommunityTokenRaceStatusStore({
+      NODE_ENV: "development",
+      VIBERACING_WEB_DATABASE_HOST: "127.0.0.1",
+      VIBERACING_WEB_DATABASE_NAME: "viberacing_local",
+      VIBERACING_WEB_DATABASE_PASSWORD: "private-configured-token-store-password",
+      VIBERACING_WEB_DATABASE_PORT: "54329",
+      VIBERACING_WEB_DATABASE_TLS_MODE: "disable",
+      VIBERACING_WEB_DATABASE_USER: "viberacing_web_login",
+    });
+
+    expect(Object.isFrozen(store)).toBe(true);
+    await expect(store.close()).resolves.toBeUndefined();
+  });
+
   it("closes a race-status store without opening a connection", async () => {
     const testHarness = harness([]);
     const store = createCloseablePublicCommunityRaceStatusStore(testHarness.pool);
@@ -484,5 +577,28 @@ describe("public Community score store", () => {
     const store = createCloseablePublicCommunityScoreStore(pool);
 
     await expectStoreError(store.close(), "pool_close_failed", privateValue);
+  });
+
+  it("closes the token store and sanitizes its isolated pool-close failure", async () => {
+    const successHarness = harness([]);
+    await expect(
+      createCloseablePublicCommunityTokenRaceStatusStore(successHarness.pool).close(),
+    ).resolves.toBeUndefined();
+    expect(successHarness.connect).not.toHaveBeenCalled();
+
+    const privateValue = "private-token-pool-close-error";
+    const pool: PublicScoreDatabasePool = {
+      close(): Promise<void> {
+        return Promise.reject(new Error(privateValue));
+      },
+      connect(): Promise<never> {
+        return Promise.reject(new Error("not used"));
+      },
+    };
+    await expectStoreError(
+      createCloseablePublicCommunityTokenRaceStatusStore(pool).close(),
+      "pool_close_failed",
+      privateValue,
+    );
   });
 });

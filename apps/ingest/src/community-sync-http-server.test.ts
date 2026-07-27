@@ -12,7 +12,7 @@ import {
   createCommunitySyncHttpServer,
   writeCommunitySyncClientError,
 } from "./community-sync-http-server.js";
-import { communitySyncRequestTarget } from "./protocol.js";
+import { communitySyncRequestTarget, usageSyncRequestTarget } from "./protocol.js";
 
 const requestId = "req_AAAAAAAAAAAAAAAAAAAAAA";
 const problemRequestId = "req_BBBBBBBBBBBBBBBBBBBBBB";
@@ -88,8 +88,8 @@ function application(
   return close === undefined ? Object.freeze({ execute }) : Object.freeze({ close, execute });
 }
 
-function buildServer(app: unknown): FastifyInstance {
-  const server = createCommunitySyncHttpServer(app);
+function buildServer(app: unknown, usageSyncEnabled = false): FastifyInstance {
+  const server = createCommunitySyncHttpServer(app, usageSyncEnabled);
   openServers.add(server);
   return server;
 }
@@ -253,6 +253,22 @@ describe("Community sync Fastify construction", () => {
     expect(() => createCommunitySyncHttpServer(candidate)).toThrow(CommunitySyncHttpServerError);
   });
 
+  it.each([null, 0, "true", {}])(
+    "rejects a non-boolean Usage Sync enablement value: %o",
+    (candidate) => {
+      const createWithUnknownEnablement = createCommunitySyncHttpServer as (
+        app: unknown,
+        enabled: unknown,
+      ) => FastifyInstance;
+      expect(() =>
+        createWithUnknownEnablement(
+          application(() => Promise.resolve(successDecision())),
+          candidate,
+        ),
+      ).toThrow(CommunitySyncHttpServerError);
+    },
+  );
+
   it("pins the reviewed HTTP, socket, parser, proxy, and admission policy", async () => {
     const server = buildServer(application(() => Promise.resolve(successDecision())));
 
@@ -340,6 +356,31 @@ describe("Community sync Fastify construction", () => {
 });
 
 describe("Community sync HTTP decisions", () => {
+  it("keeps Usage Sync absent by default and exposes it only after exact host enablement", async () => {
+    const execute = vi.fn(() => Promise.resolve(successDecision()));
+    const disabledServer = buildServer(application(execute));
+    const disabled = await disabledServer.inject(postOptions({ url: usageSyncRequestTarget }));
+
+    expect(disabled.statusCode).toBe(404);
+    expect(disabled.json()).toMatchObject({ errorCode: "not_found", status: 404 });
+    expect(execute).not.toHaveBeenCalled();
+
+    let captured: unknown;
+    const enabledServer = buildServer(
+      application((request) => {
+        captured = request;
+        return Promise.resolve(successDecision());
+      }),
+      true,
+    );
+    const enabled = await enabledServer.inject(postOptions({ url: usageSyncRequestTarget }));
+
+    expect(enabled.statusCode).toBe(200);
+    expect((captured as { readonly requestTarget: string }).requestTarget).toBe(
+      usageSyncRequestTarget,
+    );
+  });
+
   it("preserves exact body bytes and raw headers while ignoring proxy and inbound request IDs", async () => {
     let captured: unknown;
     const execute = vi.fn((request: unknown) => {
@@ -582,6 +623,21 @@ describe("Community sync HTTP rejection and resource policy", () => {
     },
   );
 
+  it("returns the same closed 405 for an enabled Usage Sync route", async () => {
+    const execute = vi.fn(() => Promise.resolve(successDecision()));
+    const server = buildServer(application(execute), true);
+    const response = await server.inject({
+      headers: { "content-type": "text/plain" },
+      method: "GET",
+      url: usageSyncRequestTarget,
+    });
+
+    expect(response.statusCode).toBe(405);
+    expect(response.headers.allow).toBe("POST");
+    expect(response.json()).toMatchObject({ errorCode: "method_not_allowed", status: 405 });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("returns a generic 404 for every unregistered path", async () => {
     const execute = vi.fn(() => Promise.resolve(successDecision()));
     const server = buildServer(application(execute));
@@ -714,6 +770,36 @@ describe("Community sync HTTP rejection and resource policy", () => {
     await expect(server.inject(postOptions())).resolves.toMatchObject({ statusCode: 200 });
   });
 
+  it("shares one no-queue admission budget across legacy and Usage Sync routes", async () => {
+    const resolvers: ((decision: unknown) => void)[] = [];
+    const execute = vi.fn(
+      () =>
+        new Promise<unknown>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const server = buildServer(application(execute), true);
+    const active = Array.from({ length: communitySyncHttpPolicy.admissionLimit }, (_, index) =>
+      server.inject(
+        postOptions({
+          url: index % 2 === 0 ? communitySyncRequestTarget : usageSyncRequestTarget,
+        }),
+      ),
+    );
+    await vi.waitFor(() => {
+      expect(resolvers).toHaveLength(communitySyncHttpPolicy.admissionLimit);
+    });
+
+    const rejected = await server.inject(postOptions({ url: usageSyncRequestTarget }));
+    expect(rejected.statusCode).toBe(503);
+    expect(execute).toHaveBeenCalledTimes(communitySyncHttpPolicy.admissionLimit);
+
+    for (const resolve of resolvers) {
+      resolve(successDecision());
+    }
+    await Promise.all(active);
+  });
+
   it("maps a handler-style deadline failure to a generic retryable 503", async () => {
     const timeout = Object.assign(new Error("private timeout detail"), { statusCode: 503 });
     const execute = vi
@@ -750,6 +836,16 @@ describe("Community sync raw listener behavior", () => {
       expect(response).toContain("allow: POST");
       expect(response).toContain('"errorCode":"method_not_allowed"');
     }
+
+    const usageServer = buildServer(application(execute), true);
+    const usagePort = await listenOnLoopback(usageServer);
+    const usageResponse = await exchangeRaw(
+      usagePort,
+      `PROPFIND ${usageSyncRequestTarget} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`,
+    );
+    expect(usageResponse).toContain("HTTP/1.1 405 Method Not Allowed");
+    expect(usageResponse).toContain("allow: POST");
+    expect(usageResponse).toContain('"errorCode":"method_not_allowed"');
     expect(execute).not.toHaveBeenCalled();
   });
 

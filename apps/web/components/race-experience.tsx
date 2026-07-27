@@ -16,13 +16,18 @@ import {
   type Locale,
 } from "@/lib/i18n";
 import type { PublicRaceParticipant, SyntheticRacePayload } from "@/lib/race-types";
+import type { PublicCommunityRaceMetric } from "@/lib/public-community-race";
 import { isRaceThemeId, raceThemeIds, type RaceThemeId } from "@/lib/theme";
 
 type MotionPreference = "system" | "on" | "off";
 type ScoreSource = "community" | "fallback" | "synthetic";
 
 type ScoreState =
-  | Readonly<{ participants: readonly PublicRaceParticipant[]; source: "community" }>
+  | Readonly<{
+      metric: PublicCommunityRaceMetric;
+      participants: readonly PublicRaceParticipant[];
+      source: "community";
+    }>
   | Readonly<{ source: Exclude<ScoreSource, "community"> }>;
 
 interface RaceExperienceProps {
@@ -109,17 +114,17 @@ export function RaceExperience({
     }
     const controller = new AbortController();
     void import("@/lib/public-community-race")
-      .then(({ loadPublicCommunityRace }) =>
-        loadPublicCommunityRace(communitySeasonStart, controller.signal),
+      .then(({ loadPreferredPublicCommunityRace }) =>
+        loadPreferredPublicCommunityRace(communitySeasonStart, controller.signal),
       )
-      .then((participants) => {
+      .then((result) => {
         if (controller.signal.aborted) {
           return;
         }
         setScoreState(
-          participants === undefined
+          result === undefined
             ? { source: "fallback" }
-            : { participants, source: "community" },
+            : { metric: result.metric, participants: result.participants, source: "community" },
         );
       })
       .catch(() => {
@@ -141,6 +146,9 @@ export function RaceExperience({
   const canvasAnimated = motionEnabled && !racePaused;
   const participants =
     scoreState.source === "community" ? scoreState.participants : payload.participants;
+  const tokenRanking = scoreState.source === "community" && scoreState.metric === "tokens";
+  const metricLabel = tokenRanking ? translation.weeklyTokens : translation.score;
+  const metricUnit = tokenRanking ? translation.tokens : translation.points;
   const selectedCommunityParticipant =
     scoreState.source === "community"
       ? selectedProfileHandle === undefined
@@ -165,7 +173,7 @@ export function RaceExperience({
   };
   const days = dayLabels(locale);
   const scoreSourceLabels: Record<ScoreSource, string> = {
-    community: translation.communityDataBadge,
+    community: tokenRanking ? translation.weeklyTokens : translation.communityDataBadge,
     fallback: translation.fallbackBadge,
     synthetic: translation.demoBadge,
   };
@@ -177,6 +185,7 @@ export function RaceExperience({
       className="race-app"
       data-motion={motionEnabled ? "on" : "off"}
       data-score-source={scoreState.source === "community" ? "community" : "synthetic"}
+      data-score-metric={tokenRanking ? "tokens" : "score"}
       data-theme={theme}
     >
       <a className="skip-link" href="#leaderboard">
@@ -195,7 +204,7 @@ export function RaceExperience({
         </span>
         <nav aria-label={translation.primaryNavigation} className="site-nav">
           <a href="#race">{translation.liveRace}</a>
-          <a href="#simulator">{translation.simulator}</a>
+          {tokenRanking ? null : <a href="#simulator">{translation.simulator}</a>}
           <a href="#leaderboard">{translation.leaderboard}</a>
           <a href="#profile">{translation.profile}</a>
           {accountSessionAvailable ? (
@@ -219,7 +228,7 @@ export function RaceExperience({
               <a className="primary-action" href="#leaderboard">
                 {translation.viewLeaderboard}
               </a>
-              <span>{translation.noRawTokens}</span>
+              <span>{tokenRanking ? translation.weeklyTokens : translation.noRawTokens}</span>
             </div>
           </div>
           <aside aria-label={translation.communityNotice} className="trust-banner">
@@ -256,7 +265,9 @@ export function RaceExperience({
             />
             <div aria-labelledby={controlGroupId} className="race-controls">
               <h3 id={controlGroupId}>{translation.privacyByDefault}</h3>
-              <p>{translation.exactTokensPrivate}</p>
+              <p>
+                {tokenRanking ? translation.tokenMethodologyCopy : translation.exactTokensPrivate}
+              </p>
               <label>
                 <span>{translation.theme}</span>
                 <select
@@ -312,7 +323,7 @@ export function RaceExperience({
           </p>
         </section>
 
-        <ScoreSimulator locale={locale} />
+        {tokenRanking ? null : <ScoreSimulator locale={locale} />}
 
         <section
           aria-labelledby="leaderboard-heading"
@@ -325,7 +336,9 @@ export function RaceExperience({
               <p className="eyebrow">{translation.communityNotice}</p>
               <h2 id="leaderboard-heading">{translation.leaderboard}</h2>
             </div>
-            <span className="score-cap">MAX 7,000 {translation.points}</span>
+            <span className="score-cap">
+              {tokenRanking ? translation.weeklyTokens : `MAX 7,000 ${translation.points}`}
+            </span>
           </div>
           <div className="table-region" tabIndex={0}>
             <table>
@@ -337,7 +350,7 @@ export function RaceExperience({
                   <th scope="col">{translation.rank}</th>
                   <th scope="col">{translation.driver}</th>
                   <th scope="col">{translation.car}</th>
-                  <th scope="col">{translation.score}</th>
+                  <th scope="col">{metricLabel}</th>
                   <th scope="col">{translation.activeDays}</th>
                   <th scope="col">{translation.streak}</th>
                   <th scope="col">{translation.freshness}</th>
@@ -403,7 +416,7 @@ export function RaceExperience({
                         )}
                       </td>
                       <td className="numeric-cell">
-                        {formatScore(participant.weeklyScore, locale)} {translation.points}
+                        {formatScore(participant.weeklyScore, locale)} {metricUnit}
                       </td>
                       <td>{participant.activeDays}/7</td>
                       <td>
@@ -460,7 +473,7 @@ export function RaceExperience({
           ) : (
             <div className="profile-grid">
               <article className="score-panel">
-                <h3>{translation.score}</h3>
+                <h3>{metricLabel}</h3>
                 {selectedCommunityParticipant === undefined ? (
                   <>
                     <strong className="large-score">
@@ -486,8 +499,7 @@ export function RaceExperience({
                 ) : (
                   <>
                     <strong className="large-score">
-                      {formatScore(selectedCommunityParticipant.weeklyScore, locale)}{" "}
-                      {translation.points}
+                      {formatScore(selectedCommunityParticipant.weeklyScore, locale)} {metricUnit}
                     </strong>
                     <dl className="stat-pair">
                       <div>
@@ -513,7 +525,11 @@ export function RaceExperience({
                         </dd>
                       </div>
                     </dl>
-                    <p>{translation.communityProfilePrivacy}</p>
+                    <p>
+                      {tokenRanking
+                        ? translation.tokenPrivacyCopy
+                        : translation.communityProfilePrivacy}
+                    </p>
                   </>
                 )}
               </article>
@@ -575,7 +591,7 @@ export function RaceExperience({
         <section aria-label={translation.dataControl} className="method-grid">
           <article>
             <h2>{translation.methodology}</h2>
-            <p>{translation.methodologyCopy}</p>
+            <p>{tokenRanking ? translation.tokenMethodologyCopy : translation.methodologyCopy}</p>
             <p>{translation.noGlobalClaim}</p>
           </article>
           <article>
@@ -583,7 +599,9 @@ export function RaceExperience({
             <p>{translation.dataControlCopy}</p>
             <p>
               {scoreState.source === "community"
-                ? translation.communityDataSecurityNote
+                ? tokenRanking
+                  ? translation.tokenPrivacyCopy
+                  : translation.communityDataSecurityNote
                 : translation.securityNote}
             </p>
           </article>
@@ -592,7 +610,7 @@ export function RaceExperience({
 
       <footer className="site-footer">
         <strong>{translation.brand}</strong>
-        <span>{translation.exactTokensPrivate}</span>
+        <span>{tokenRanking ? translation.weeklyTokens : translation.exactTokensPrivate}</span>
         <span>Apache-2.0 · Open source</span>
       </footer>
     </div>

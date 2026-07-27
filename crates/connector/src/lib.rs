@@ -2,7 +2,7 @@
 //!
 //! This crate implements the stable initialization exchange, a candidate-only account/usage
 //! adapter for one exact schema extract, a bounded one-shot child supervisor, an exact-body
-//! pairing-possession signer, Community sync composer, and isolated one-use request signer. It also
+//! pairing-possession signer, Community usage composer, and isolated one-use request signer. It also
 //! exposes bounded `connect`, `check-codex`, `sync`, local-credential removal, and proposal-only
 //! commands. The candidate-only Windows diagnostic performs only exact artifact admission, while
 //! its optional preview emits only fixed redacted version/admission/support state and no file or
@@ -42,11 +42,11 @@ pub use process::{
     MAX_APP_SERVER_STDOUT_FRAMES, ReviewedCodexLaunch,
 };
 pub use sync::{
-    COMMUNITY_SYNC_MEDIA_TYPE, COMMUNITY_SYNC_METHOD, COMMUNITY_SYNC_REQUEST_TARGET,
-    CandidateCommunitySyncV1Composer, CandidateCommunitySyncV1Signer, DEVICE_NONCE_BYTES,
+    COMMUNITY_USAGE_MEDIA_TYPE, COMMUNITY_USAGE_METHOD, COMMUNITY_USAGE_REQUEST_TARGET,
+    CandidateCommunityUsageV1Composer, CandidateCommunityUsageV1Signer, DEVICE_NONCE_BYTES,
     DEVICE_PUBLIC_KEY_BYTES, DEVICE_SIGNATURE_ALGORITHM, DEVICE_SIGNATURE_BYTES,
-    DEVICE_SIGNATURE_MESSAGE_PREFIX, MAX_COMMUNITY_SYNC_BODY_BYTES, PreparedCommunitySync,
-    ReviewedCommunitySyncContext, ReviewedDeviceSigningKey, SignedCommunitySync,
+    DEVICE_SIGNATURE_MESSAGE_PREFIX, MAX_COMMUNITY_USAGE_BODY_BYTES, PreparedCommunityUsage,
+    ReviewedCommunityUsageContext, ReviewedDeviceSigningKey, SignedCommunityUsage,
     SyncPreparationError, SyncSigningError,
 };
 

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "sourceId": "src_AAAAAAAAAAAAAAAAAAAAAA",
+  "syncId": "syn_BBBBBBBBBBBBBBBBBBBBBB",
+  "observedAt": "2026-07-15T12:34:56.789Z",
+  "deviceId": "dev_CCCCCCCCCCCCCCCCCCCCCC",
+  "deviceNonceBytes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "deviceNonceBase64Url": "AAECAwQFBgcICQoLDA0ODw",
+  "body": "{\"schemaVersion\":1,\"sourceId\":\"src_AAAAAAAAAAAAAAAAAAAAAA\",\"syncId\":\"syn_BBBBBBBBBBBBBBBBBBBBBB\",\"observedAt\":\"2026-07-15T12:34:56.789Z\",\"clientVersion\":\"0.0.0\",\"agentVersion\":\"0.144.5\",\"dailyEntries\":[{\"reportedDate\":\"2026-07-13\",\"dailyTokenTotal\":123},{\"reportedDate\":\"2026-07-14\",\"dailyTokenTotal\":456}]}",
+  "bodyDigestBase64Url": "mDOyuMIo-64wXXCOXlgszEHysTMEz-hNrkxnUdHVZrQ",
+  "deviceSignatureMessage": "viberacing-device-request-v1\nPOST\n/v1/community/usage\nmDOyuMIo-64wXXCOXlgszEHysTMEz-hNrkxnUdHVZrQ\ndev_CCCCCCCCCCCCCCCCCCCCCC\nAAECAwQFBgcICQoLDA0ODw\n2026-07-15T12:34:56.789Z\nsyn_BBBBBBBBBBBBBBBBBBBBBB",
+  "devicePublicKeyBase64Url": "9CmK9x_bL0OFX7PoJm34QnhUdpUWaiwEiDZ2lrUJaII",
+  "deviceSignatureBase64Url": "r_lBkXHVoDcxI_3F6IBA6dPjIg-Cnn_Ochmp8Xsp2DCGDQ0DoKXbkXnIsbfVjtFh87KJzk1KKTqTBnwn_PqZAg"
+}

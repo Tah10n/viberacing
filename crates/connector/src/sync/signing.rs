@@ -1,10 +1,10 @@
-//! One-use device signing for an already prepared Community sync request.
+//! One-use device signing for an already prepared Community usage request.
 
 use std::fmt;
 
 use ed25519_dalek::{Signer, SigningKey};
 
-use super::{PreparedCommunitySync, encode_base64url};
+use super::{PreparedCommunityUsage, encode_base64url};
 
 /// Device-signature algorithm fixed by the version 1 authentication policy.
 pub const DEVICE_SIGNATURE_ALGORITHM: &str = "Ed25519";
@@ -20,7 +20,7 @@ pub const DEVICE_SIGNATURE_BYTES: usize = ed25519_dalek::SIGNATURE_LENGTH;
 /// This type deliberately has no public constructor, accessor, `Clone`, `Debug`, or serialization.
 /// The private one-shot sync command loads an active paired key and its exact device identifier from
 /// the native credential record, then constructs this capability without exposing private key
-/// bytes. The capability is consumed by [`CandidateCommunitySyncV1Signer`], and the upstream
+/// bytes. The capability is consumed by [`CandidateCommunityUsageV1Signer`], and the upstream
 /// signing key is zeroized when it is dropped.
 pub struct ReviewedDeviceSigningKey {
     device_id: String,
@@ -55,12 +55,12 @@ impl ReviewedDeviceSigningKey {
     }
 }
 
-/// Exact signed Community sync body and device-authentication header values.
+/// Exact signed Community usage body and device-authentication header values.
 ///
 /// The body contains private usage material. This type does not implement `Debug`, `Display`,
 /// `Clone`, or serialization. Its read-only accessors exist solely for the bounded one-shot HTTP
 /// transport.
-pub struct SignedCommunitySync {
+pub struct SignedCommunityUsage {
     body: Vec<u8>,
     device_id: String,
     device_nonce: String,
@@ -69,7 +69,7 @@ pub struct SignedCommunitySync {
     idempotency_key: String,
 }
 
-impl SignedCommunitySync {
+impl SignedCommunityUsage {
     /// Returns the exact signed JSON request body.
     #[must_use]
     pub fn body(&self) -> &[u8] {
@@ -107,7 +107,7 @@ impl SignedCommunitySync {
     }
 }
 
-impl Drop for SignedCommunitySync {
+impl Drop for SignedCommunityUsage {
     fn drop(&mut self) {
         self.body.fill(0);
     }
@@ -122,16 +122,16 @@ pub enum SyncSigningError {
 
 impl fmt::Display for SyncSigningError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("community sync signing key is not bound to the request device")
+        formatter.write_str("community usage signing key is not bound to the request device")
     }
 }
 
 impl std::error::Error for SyncSigningError {}
 
-/// Candidate-only signer for an exact prepared version 1 Community sync request.
-pub struct CandidateCommunitySyncV1Signer;
+/// Candidate-only signer for an exact prepared version 1 Community usage request.
+pub struct CandidateCommunityUsageV1Signer;
 
-impl CandidateCommunitySyncV1Signer {
+impl CandidateCommunityUsageV1Signer {
     /// Consumes one device-bound key capability and one exact prepared request.
     ///
     /// Only the prepared LF-separated device message is signed. The returned body is the same
@@ -144,8 +144,8 @@ impl CandidateCommunitySyncV1Signer {
     /// bound to the exact prepared device identifier. Neither identifier is reflected.
     pub fn sign(
         key_capability: ReviewedDeviceSigningKey,
-        mut prepared: PreparedCommunitySync,
-    ) -> Result<SignedCommunitySync, SyncSigningError> {
+        mut prepared: PreparedCommunityUsage,
+    ) -> Result<SignedCommunityUsage, SyncSigningError> {
         if key_capability.device_id != prepared.device_id {
             return Err(SyncSigningError::DeviceBindingMismatch);
         }
@@ -156,7 +156,7 @@ impl CandidateCommunitySyncV1Signer {
         } = key_capability;
         let signature = signing_key.sign(&prepared.device_signature_message);
 
-        Ok(SignedCommunitySync {
+        Ok(SignedCommunityUsage {
             body: std::mem::take(&mut prepared.body),
             device_id: std::mem::take(&mut prepared.device_id),
             device_nonce: std::mem::take(&mut prepared.device_nonce),

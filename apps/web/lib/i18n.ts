@@ -34,7 +34,7 @@ const english = {
   exactTokensPrivate: "Exact token counts and source identifiers stay private.",
   freshness: "Freshness",
   heroCopy:
-    "A privacy-first weekly leaderboard where coding activity becomes a deterministic pixel-art race.",
+    "A privacy-first vibecode rating and weekly token leaderboard where coding activity becomes a deterministic pixel-art race.",
   heroTitle: "Build fast. Race fair.",
   joinRace: "Join with invite",
   language: "Language",
@@ -80,12 +80,18 @@ const english = {
   themeCyber: "Cyber Rally",
   themeNeon: "Neon Night Arcade",
   todayScore: "Today",
+  tokenMethodologyCopy:
+    "Rank is the exact accepted weekly total; ties share a place. Codex totals are self-reported. Tokenizers differ, so this is not a compute or cost comparison.",
+  tokenPrivacyCopy:
+    "The weekly total is public; daily totals, exact sync time, devices, and source IDs stay private.",
+  tokens: "tokens",
   unavailable: "Unavailable",
   verified: "Verified league",
   verifiedCopy: "Disabled until an authoritative verification boundary exists.",
   visualMarker: "Visual marker",
   viewLeaderboard: "View standings",
   viewProfile: "View profile",
+  weeklyTokens: "Weekly tokens",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -121,7 +127,7 @@ const russian: Record<TranslationKey, string> = {
   exactTokensPrivate: "Точные токены и идентификаторы источников остаются приватными.",
   freshness: "Обновление",
   heroCopy:
-    "Приватный недельный рейтинг, где активность в кодинге превращается в детерминированную пиксельную гонку.",
+    "Приватный vibecode rating и недельный рейтинг токенов, где активность в кодинге превращается в детерминированную пиксельную гонку.",
   heroTitle: "Коди быстро. Гоняй честно.",
   joinRace: "Войти по приглашению",
   language: "Язык",
@@ -168,12 +174,18 @@ const russian: Record<TranslationKey, string> = {
   themeCyber: "Кибер-ралли",
   themeNeon: "Неоновая аркада",
   todayScore: "Сегодня",
+  tokenMethodologyCopy:
+    "Место определяет точная принятая сумма за неделю; равные суммы делят место. Итоги Codex заявляют сами участники. Токенизаторы отличаются, поэтому это не сравнение вычислений или стоимости.",
+  tokenPrivacyCopy:
+    "Недельная сумма публична; дневные суммы, точное время синхронизации, устройства и источники приватны.",
+  tokens: "токенов",
   unavailable: "Недоступно",
   verified: "Проверенная лига",
   verifiedCopy: "Отключена до появления авторитетного механизма проверки.",
   visualMarker: "Визуальный маркер",
   viewLeaderboard: "Смотреть таблицу",
   viewProfile: "Открыть профиль",
+  weeklyTokens: "Токены за неделю",
 };
 
 export const translations: Readonly<Record<Locale, Readonly<Record<TranslationKey, string>>>> = {

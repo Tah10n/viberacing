@@ -6,13 +6,16 @@ import {
   communityRaceStatusPageV1Schema,
   communityScorePageV1Schema,
   communityScoreQueryV1Schema,
+  communityTokenRaceStatusPageV1Schema,
   connectorCarProposalResultV1Schema,
   connectorSyncV1Schema,
+  usageSyncV1Schema,
   validateCarRecipeV1,
   validateCommunityRacePageV1,
   validateCommunityRaceStatusPageV1,
   validateCommunityScorePageV1,
   validateCommunityScoreQueryV1,
+  validateCommunityTokenRaceStatusPageV1,
   validateConnectorCarProposalResultV1,
   validateConnectorPairingPollResultV1,
   validateConnectorPairingPollV1,
@@ -21,6 +24,8 @@ import {
   validateConnectorSyncResultV1,
   validateConnectorSyncV1,
   validateProblemDetailsV1,
+  validateUsageSyncResultV1,
+  validateUsageSyncV1,
 } from "./generated";
 
 function validCarRecipe() {
@@ -82,6 +87,31 @@ function validRaceStatusPage() {
   };
 }
 
+function validTokenRaceStatusPage() {
+  return {
+    schemaVersion: 1,
+    trustTier: "community",
+    selfReported: true,
+    participants: [
+      {
+        seasonStart: "2026-07-27",
+        seasonEnd: "2026-08-02",
+        metricVersion: "community_tokens_v1",
+        seasonFinalized: false,
+        handle: "token_driver",
+        carRecipe: validCarRecipe(),
+        weeklyTokenTotal: 12_345_678,
+        activeDays: 6,
+        sourceCount: 2,
+        rankPosition: 1,
+        displayPosition: 1,
+        freshnessDays: 0,
+        streakDays: 13,
+      },
+    ],
+  };
+}
+
 function validSync() {
   return {
     schemaVersion: 1,
@@ -97,8 +127,28 @@ function validSync() {
   };
 }
 
+function validUsageSync() {
+  return {
+    schemaVersion: 1,
+    sourceId: "src_0123456789ABCDEFGHIJKL",
+    syncId: "syn_0123456789ABCDEFGHIJKL",
+    observedAt: "2026-07-14T17:00:00.000Z",
+    clientVersion: "0.1.0",
+    agentVersion: "0.144.5",
+    dailyEntries: [
+      { reportedDate: "2026-07-13", dailyTokenTotal: 123_456 },
+      { reportedDate: "2026-07-14", dailyTokenTotal: 234_567 },
+    ],
+  };
+}
+
 function issueCodes(value: unknown): string[] {
   const result = validateConnectorSyncV1(value);
+  return result.ok ? [] : result.issues.map((issue) => issue.code);
+}
+
+function usageIssueCodes(value: unknown): string[] {
+  const result = validateUsageSyncV1(value);
   return result.ok ? [] : result.issues.map((issue) => issue.code);
 }
 
@@ -241,6 +291,76 @@ describe("generated connector sync contract", () => {
   });
 });
 
+describe("generated provider-neutral usage sync contract", () => {
+  it("accepts only the bounded provider-neutral writable payload", () => {
+    const input = validUsageSync();
+    const result = validateUsageSyncV1(input);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toBe(input);
+      expect(result.value.dailyEntries[0]?.dailyTokenTotal).toBe(123_456);
+    }
+    expect(Object.isFrozen(usageSyncV1Schema)).toBe(true);
+    expect(Object.isFrozen(usageSyncV1Schema.properties.dailyEntries.items.properties)).toBe(true);
+  });
+
+  it("rejects provider attribution, accounting metadata, and arbitrary local detail", () => {
+    for (const input of [
+      { ...validUsageSync(), provider: "codex" },
+      { ...validUsageSync(), accountingRevision: "codex_daily_usage_buckets_v1" },
+      { ...validUsageSync(), model: "private-model" },
+      {
+        ...validUsageSync(),
+        dailyEntries: [
+          {
+            reportedDate: "2026-07-14",
+            dailyTokenTotal: 1,
+            prompt: "private prompt",
+          },
+        ],
+      },
+    ]) {
+      const result = validateUsageSyncV1(input);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(JSON.stringify(result.issues)).not.toContain("private");
+      }
+    }
+  });
+
+  it("rejects malformed versions, dates, duplicate days, and unsafe totals", () => {
+    expect(usageIssueCodes({ ...validUsageSync(), clientVersion: "latest" })).toContain("pattern");
+    expect(usageIssueCodes({ ...validUsageSync(), agentVersion: "unknown" })).toContain("pattern");
+    expect(
+      usageIssueCodes({
+        ...validUsageSync(),
+        dailyEntries: [
+          { reportedDate: "2026-07-14", dailyTokenTotal: 1 },
+          { reportedDate: "2026-07-14", dailyTokenTotal: 2 },
+        ],
+      }),
+    ).toContain("duplicate_item_key");
+    expect(
+      usageIssueCodes({
+        ...validUsageSync(),
+        dailyEntries: [{ reportedDate: "2026-02-30", dailyTokenTotal: 1 }],
+      }),
+    ).toContain("format");
+    expect(
+      usageIssueCodes({
+        ...validUsageSync(),
+        dailyEntries: [{ reportedDate: "2026-07-14", dailyTokenTotal: 9_007_199_254_740_992 }],
+      }),
+    ).toContain("type");
+    expect(
+      usageIssueCodes({
+        ...validUsageSync(),
+        dailyEntries: [{ reportedDate: "2026-07-14", dailyTokenTotal: 1.5 }],
+      }),
+    ).toContain("type");
+  });
+});
+
 describe("generated connector pairing transport contracts", () => {
   it("accepts the exact start and poll request/result shapes", () => {
     expect(
@@ -342,6 +462,15 @@ describe("generated response contracts", () => {
     expect(Object.isFrozen(connectorCarProposalResultV1Schema)).toBe(true);
     expect(
       validateConnectorSyncResultV1({
+        schemaVersion: 1,
+        requestId: "req_0123456789ABCDEFGHIJKL",
+        syncId: "syn_0123456789ABCDEFGHIJKL",
+        outcome: "accepted",
+        acceptedEntries: 2,
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateUsageSyncResultV1({
         schemaVersion: 1,
         requestId: "req_0123456789ABCDEFGHIJKL",
         syncId: "syn_0123456789ABCDEFGHIJKL",
@@ -810,6 +939,86 @@ describe("generated Community race status response contract", () => {
     expect(
       validateCommunityScorePageV1({
         ...statusPage,
+        participants: [participant],
+      }).ok,
+    ).toBe(false);
+  });
+});
+
+describe("generated Community token race status response contract", () => {
+  it("accepts exact JavaScript-safe weekly token totals and optional presentation state", () => {
+    const input = validTokenRaceStatusPage();
+    const result = validateCommunityTokenRaceStatusPageV1(input);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toBe(input);
+      expect(result.value.participants[0]?.weeklyTokenTotal).toBe(12_345_678);
+    }
+
+    const participant = input.participants[0];
+    if (!participant) {
+      throw new Error("valid token fixture is missing its participant");
+    }
+    expect(
+      validateCommunityTokenRaceStatusPageV1({
+        ...input,
+        participants: [{ ...participant, weeklyTokenTotal: Number.MAX_SAFE_INTEGER }],
+      }).ok,
+    ).toBe(true);
+    const { carRecipe, streakDays, ...participantWithoutOptionals } = participant;
+    expect(carRecipe).toEqual(validCarRecipe());
+    expect(streakDays).toBe(13);
+    expect(
+      validateCommunityTokenRaceStatusPageV1({
+        ...input,
+        participants: [participantWithoutOptionals],
+      }).ok,
+    ).toBe(true);
+    expect(Object.isFrozen(communityTokenRaceStatusPageV1Schema)).toBe(true);
+  });
+
+  it("rejects normalized scores, unsafe totals, metric drift, and private usage detail", () => {
+    const input = validTokenRaceStatusPage();
+    const participant = input.participants[0];
+    if (!participant) {
+      throw new Error("valid token fixture is missing its participant");
+    }
+
+    for (const invalidParticipant of [
+      { ...participant, weeklyTokenTotal: -1 },
+      { ...participant, weeklyTokenTotal: Number.MAX_SAFE_INTEGER + 1 },
+      { ...participant, weeklyTokenTotal: 12.5 },
+      { ...participant, metricVersion: "community_v1" },
+      { ...participant, weeklyScore: 7000 },
+      { ...participant, dailyTokenTotals: [100, 200] },
+      { ...participant, provider: "codex" },
+      { ...participant, profileId: "private-profile" },
+    ]) {
+      expect(
+        validateCommunityTokenRaceStatusPageV1({
+          ...input,
+          participants: [invalidParticipant],
+        }).ok,
+      ).toBe(false);
+    }
+  });
+
+  it("does not reinterpret the earlier closed score or race-status components", () => {
+    const tokenPage = validTokenRaceStatusPage();
+    const participant = tokenPage.participants[0];
+    if (!participant) {
+      throw new Error("valid token fixture is missing its participant");
+    }
+    expect(
+      validateCommunityRaceStatusPageV1({
+        ...tokenPage,
+        participants: [participant],
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateCommunityScorePageV1({
+        ...tokenPage,
         participants: [participant],
       }).ok,
     ).toBe(false);

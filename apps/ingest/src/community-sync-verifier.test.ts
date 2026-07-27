@@ -3,6 +3,8 @@ import { createHash, createHmac, generateKeyPairSync, sign, type KeyObject } fro
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  codexAccountingRevision,
+  codexProvider,
   CommunitySyncVerificationError,
   CommunitySyncVerifierConfigurationError,
   createCommunitySyncVerifier,
@@ -15,6 +17,7 @@ import {
   communitySyncMediaType,
   communitySyncMethod,
   communitySyncRequestTarget,
+  type CommunitySyncRequestTarget,
   createDeviceSignatureMessage,
   createOriginProofMessage,
   digestBody,
@@ -22,6 +25,7 @@ import {
   maximumCommunitySyncBodyBytes,
   originProofMaximumAgeMilliseconds,
   originProofMaximumFutureSkewMilliseconds,
+  usageSyncRequestTarget,
 } from "./protocol";
 
 const nowMilliseconds = Date.UTC(2026, 6, 15, 18);
@@ -45,7 +49,7 @@ interface RawRequest {
   method: string;
   rawBody: Uint8Array;
   rawHeaders: string[];
-  requestTarget: string;
+  requestTarget: CommunitySyncRequestTarget;
 }
 
 interface RequestOptions {
@@ -61,6 +65,7 @@ interface RequestOptions {
   readonly payload?: unknown;
   readonly privateKey?: KeyObject;
   readonly rawBody?: Uint8Array;
+  readonly requestTarget?: CommunitySyncRequestTarget;
   readonly signature?: string;
 }
 
@@ -86,6 +91,21 @@ function validPayload(): Readonly<Record<string, unknown>> {
   };
 }
 
+function validUsagePayload(): Readonly<Record<string, unknown>> {
+  return {
+    schemaVersion: 1,
+    sourceId,
+    syncId,
+    observedAt,
+    clientVersion: "1.2.3",
+    agentVersion: "0.144.5",
+    dailyEntries: [
+      { reportedDate: "2026-07-14", dailyTokenTotal: 123 },
+      { reportedDate: "2026-07-15", dailyTokenTotal: 456 },
+    ],
+  };
+}
+
 function bufferWithExoticPrototype(length: number): Buffer {
   const value = Buffer.alloc(length);
   const prototype: object = {};
@@ -105,6 +125,7 @@ function buildRequest(options: RequestOptions = {}): RawRequest {
   const selectedOriginKeyId = options.originKeyId ?? originKeyId;
   const selectedOriginNonce = options.originNonce ?? originNonce;
   const selectedOriginTimestamp = options.originTimestamp ?? observedAt;
+  const selectedRequestTarget = options.requestTarget ?? communitySyncRequestTarget;
   const bodyDigest = digestBody(body).base64Url;
   const signature =
     options.signature ??
@@ -115,6 +136,7 @@ function buildRequest(options: RequestOptions = {}): RawRequest {
         deviceId: selectedDeviceId,
         idempotencyKey: selectedIdempotencyKey,
         nonce: selectedDeviceNonce,
+        requestTarget: selectedRequestTarget,
         timestamp: selectedDeviceTimestamp,
       }),
       options.privateKey ?? keyPair.privateKey,
@@ -127,6 +149,7 @@ function buildRequest(options: RequestOptions = {}): RawRequest {
           bodyDigestBase64Url: bodyDigest,
           keyId: selectedOriginKeyId,
           nonce: selectedOriginNonce,
+          requestTarget: selectedRequestTarget,
           timestamp: selectedOriginTimestamp,
         }),
       )
@@ -134,7 +157,7 @@ function buildRequest(options: RequestOptions = {}): RawRequest {
 
   return {
     method: communitySyncMethod,
-    requestTarget: communitySyncRequestTarget,
+    requestTarget: selectedRequestTarget,
     rawBody: body,
     rawHeaders: [
       headerNames.contentType,
@@ -190,6 +213,7 @@ function replaceOriginProof(request: RawRequest, secret: Uint8Array = originSecr
         bodyDigestBase64Url: digestBody(request.rawBody).base64Url,
         keyId: headerValue(request, headerNames.originKeyId),
         nonce: headerValue(request, headerNames.originNonce),
+        requestTarget: request.requestTarget,
         timestamp: headerValue(request, headerNames.originTimestamp),
       }),
     )
@@ -199,7 +223,9 @@ function replaceOriginProof(request: RawRequest, secret: Uint8Array = originSecr
 
 function validDeviceMaterial(): DeviceVerificationMaterial {
   return {
+    accountingRevision: codexAccountingRevision,
     deviceKeyId,
+    provider: codexProvider,
     publicKey: Buffer.from(devicePublicKey),
     sourceId,
   };
@@ -588,6 +614,7 @@ describe("Community sync body and device verification", () => {
     const result = await harness.verifier.verify(request);
 
     expect(result).toEqual({
+      accountingRevision: codexAccountingRevision,
       bodyDigestHex: digestBody(request.rawBody).hex,
       deviceId,
       deviceKeyId,
@@ -596,6 +623,8 @@ describe("Community sync body and device verification", () => {
         .update(Buffer.from(deviceNonce, "base64url"))
         .digest("hex"),
       payload: validPayload(),
+      provider: codexProvider,
+      requestTarget: communitySyncRequestTarget,
       signatureBase64Url: headerValue(request, headerNames.deviceSignature),
     });
     expect(Object.isFrozen(result)).toBe(true);
@@ -604,17 +633,42 @@ describe("Community sync body and device verification", () => {
     expect(result.payload.dailyEntries.every((entry) => Object.isFrozen(entry))).toBe(true);
     expect(Object.getPrototypeOf(result.payload)).toBe(Object.prototype);
     expect(Object.keys(result)).toEqual([
+      "accountingRevision",
       "bodyDigestHex",
       "deviceId",
       "deviceKeyId",
       "idempotencyKey",
       "nonceDigestHex",
       "payload",
+      "provider",
+      "requestTarget",
       "signatureBase64Url",
     ]);
     expect(harness.readDeviceVerificationMaterial).toHaveBeenCalledOnce();
     expect(harness.readDeviceVerificationMaterial).toHaveBeenCalledWith(deviceId);
     expect(harness.now).toHaveBeenCalledOnce();
+  });
+
+  it("accepts UsageSyncV1 only with the new path bound into both proofs", async () => {
+    const request = buildRequest({
+      payload: validUsagePayload(),
+      requestTarget: usageSyncRequestTarget,
+    });
+    const result = await createHarness().verifier.verify(request);
+
+    expect(result).toMatchObject({
+      accountingRevision: codexAccountingRevision,
+      payload: validUsagePayload(),
+      provider: codexProvider,
+      requestTarget: usageSyncRequestTarget,
+    });
+
+    const pathConfused = buildRequest({
+      payload: validUsagePayload(),
+      requestTarget: usageSyncRequestTarget,
+    });
+    pathConfused.requestTarget = communitySyncRequestTarget;
+    await expectFailure(createHarness().verifier.verify(pathConfused), "origin_rejected");
   });
 
   it("accepts a whitespace-padded body at the exact raw-byte ceiling", async () => {
@@ -650,6 +704,21 @@ describe("Community sync body and device verification", () => {
     expect(harness.readDeviceVerificationMaterial).not.toHaveBeenCalled();
   });
 
+  it("maps a contract-invalid UsageSyncV1 body to the same stable failure", async () => {
+    const harness = createHarness();
+    const payload = {
+      ...validUsagePayload(),
+      dailyEntries: [{ dailyTokenTotal: -1, reportedDate: "2026-07-14" }],
+    };
+
+    await expectFailure(
+      harness.verifier.verify(buildRequest({ payload, requestTarget: usageSyncRequestTarget })),
+      "invalid_body",
+    );
+    expect(harness.consumeOriginNonce).toHaveBeenCalledOnce();
+    expect(harness.readDeviceVerificationMaterial).not.toHaveBeenCalled();
+  });
+
   it.each([
     { deviceId: "dev_short" },
     { deviceNonce: "short" },
@@ -670,6 +739,17 @@ describe("Community sync body and device verification", () => {
       createHarness({ readDeviceVerificationMaterial: () => null }).verifier.verify(buildRequest()),
       "device_rejected",
     );
+    for (const material of [
+      { ...validDeviceMaterial(), provider: "claude-code" },
+      { ...validDeviceMaterial(), accountingRevision: "codex_daily_usage_buckets_v2" },
+    ]) {
+      await expectFailure(
+        createHarness({
+          readDeviceVerificationMaterial: () => material,
+        }).verifier.verify(buildRequest()),
+        "device_rejected",
+      );
+    }
     await expectFailure(
       createHarness({
         readDeviceVerificationMaterial: () => ({
@@ -736,6 +816,8 @@ describe("Community sync body and device verification", () => {
       { ...validDeviceMaterial(), extra: true },
       { ...validDeviceMaterial(), deviceKeyId: "not-a-uuid" },
       { ...validDeviceMaterial(), sourceId: "src_short" },
+      { ...validDeviceMaterial(), provider: "CODEX" },
+      { ...validDeviceMaterial(), accountingRevision: "../private" },
       { ...validDeviceMaterial(), publicKey: Buffer.alloc(31) },
       { ...validDeviceMaterial(), publicKey: new Uint8Array(new SharedArrayBuffer(32)) },
       { ...validDeviceMaterial(), publicKey: new (class extends Uint8Array {})(32) },

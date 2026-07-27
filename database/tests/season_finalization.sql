@@ -220,6 +220,23 @@ VALUES (
     - INTERVAL '1 hour'
 );
 
+-- Finalize one explicitly preserved legacy season so the compatibility assertions remain stable
+-- after the direct-token cutover and on every later calendar date.
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  season_end,
+  score_version,
+  state,
+  grace_ends_at
+)
+VALUES (
+  pg_temp.closed_season_date(0),
+  pg_temp.closed_season_date(6),
+  'community_v1',
+  'open',
+  viberacing_private.community_season_grace_ends_at(pg_temp.closed_season_date(0))
+);
+
 SET LOCAL ROLE viberacing_jobs;
 
 SELECT pg_temp.assert_true(

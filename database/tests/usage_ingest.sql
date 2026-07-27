@@ -84,6 +84,44 @@ AS $function$
   )
 $function$;
 
+CREATE FUNCTION pg_temp.submit_usage_fixture(
+  p_device_key_id uuid,
+  p_device_id text,
+  p_source_id text,
+  p_provider text,
+  p_accounting_revision text,
+  p_usage_snapshot_id uuid,
+  p_sync_id text,
+  p_observed_at timestamptz,
+  p_body_seed text,
+  p_signature_seed text,
+  p_nonce_seed text,
+  p_dates text[],
+  p_tokens bigint[]
+)
+RETURNS TABLE (outcome text, accepted_entries integer)
+LANGUAGE sql
+AS $function$
+  SELECT *
+  FROM viberacing_api.submit_usage_sync(
+    p_device_key_id,
+    p_device_id,
+    p_source_id,
+    p_provider,
+    p_accounting_revision,
+    p_usage_snapshot_id,
+    p_sync_id,
+    p_observed_at,
+    '0.0.0',
+    '0.144.5',
+    pg_catalog.decode(pg_catalog.lpad(p_body_seed, 64, '0'), 'hex'),
+    pg_catalog.decode(pg_catalog.lpad(p_signature_seed, 128, '0'), 'hex'),
+    pg_catalog.decode(pg_catalog.lpad(p_nonce_seed, 64, '0'), 'hex'),
+    p_dates,
+    p_tokens
+  )
+$function$;
+
 CREATE FUNCTION pg_temp.current_week_date(p_day_offset integer)
 RETURNS text
 LANGUAGE sql
@@ -156,6 +194,11 @@ VALUES
   (
     'src_' || pg_catalog.repeat('D', 22),
     '00000000-0000-4000-8000-000000010103',
+    'active'
+  ),
+  (
+    'src_' || pg_catalog.repeat('U', 22),
+    '00000000-0000-4000-8000-000000010101',
     'active'
   );
 
@@ -263,7 +306,56 @@ VALUES
     'revoked',
     pg_catalog.statement_timestamp(),
     pg_catalog.statement_timestamp()
+  ),
+  (
+    '00000000-0000-4000-8000-000000010408',
+    'dev_' || pg_catalog.repeat('U', 22),
+    'src_' || pg_catalog.repeat('U', 22),
+    pg_catalog.decode(pg_catalog.lpad('10408', 64, '0'), 'hex'),
+    'Usage Sync connector',
+    '0.0.0',
+    'windows',
+    'x86_64',
+    'active',
+    pg_catalog.statement_timestamp(),
+    NULL
   );
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 6
+      AND pg_catalog.bool_and(provider = 'codex')
+      AND pg_catalog.bool_and(accounting_revision = 'codex_daily_usage_buckets_v1')
+    FROM viberacing_private.codex_sources
+    WHERE source_id IN (
+      'src_' || pg_catalog.repeat('A', 22),
+      'src_' || pg_catalog.repeat('P', 22),
+      'src_' || pg_catalog.repeat('Q', 22),
+      'src_' || pg_catalog.repeat('H', 22),
+      'src_' || pg_catalog.repeat('D', 22),
+      'src_' || pg_catalog.repeat('U', 22)
+    )
+  ),
+  'every source has one closed provider and accounting revision'
+);
+
+SELECT pg_temp.expect_integrity_failure(
+  $sql$
+    UPDATE viberacing_private.codex_sources
+    SET provider = 'other'
+    WHERE source_id = 'src_' || pg_catalog.repeat('U', 22)
+  $sql$,
+  'source provider attribution is immutable'
+);
+
+SELECT pg_temp.expect_integrity_failure(
+  $sql$
+    UPDATE viberacing_private.codex_sources
+    SET accounting_revision = 'other'
+    WHERE source_id = 'src_' || pg_catalog.repeat('U', 22)
+  $sql$,
+  'source accounting revision is immutable'
+);
 
 RESET ROLE;
 SET LOCAL ROLE viberacing_ingest;
@@ -275,6 +367,8 @@ SELECT pg_temp.assert_true(
         device_key_id = '00000000-0000-4000-8000-000000010401'
         AND source_id = 'src_' || pg_catalog.repeat('A', 22)
         AND public_key = pg_catalog.decode(pg_catalog.lpad('10401', 64, '0'), 'hex')
+        AND provider = 'codex'
+        AND accounting_revision = 'codex_daily_usage_buckets_v1'
       )
     FROM viberacing_api.read_device_verification_material(
       'dev_' || pg_catalog.repeat('A', 22)
@@ -331,6 +425,94 @@ SELECT pg_temp.expect_operation_failure(
   $sql$SELECT * FROM viberacing_api.read_device_verification_material('bad-device')$sql$,
   'malformed device lookup fails closed'
 );
+
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT * FROM pg_temp.submit_usage_fixture(
+      '00000000-0000-4000-8000-000000010408',
+      'dev_' || pg_catalog.repeat('U', 22),
+      'src_' || pg_catalog.repeat('U', 22),
+      'other',
+      'codex_daily_usage_buckets_v1',
+      '00000000-0000-4000-8000-000000010525',
+      'syn_' || pg_catalog.repeat('5', 22),
+      pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
+      '20525', '21525', '22525',
+      ARRAY[pg_temp.current_week_date(2)], ARRAY[525]::bigint[]
+    )
+  $sql$,
+  'caller-supplied provider cannot override the source attribution'
+);
+
+SELECT pg_temp.expect_operation_failure(
+  $sql$
+    SELECT * FROM pg_temp.submit_usage_fixture(
+      '00000000-0000-4000-8000-000000010408',
+      'dev_' || pg_catalog.repeat('U', 22),
+      'src_' || pg_catalog.repeat('U', 22),
+      'codex',
+      'other',
+      '00000000-0000-4000-8000-000000010526',
+      'syn_' || pg_catalog.repeat('6', 22),
+      pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
+      '20526', '21526', '22526',
+      ARRAY[pg_temp.current_week_date(2)], ARRAY[526]::bigint[]
+    )
+  $sql$,
+  'caller-supplied accounting revision cannot override the source attribution'
+);
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT outcome = 'accepted' AND accepted_entries = 1
+    FROM pg_temp.submit_usage_fixture(
+      '00000000-0000-4000-8000-000000010408',
+      'dev_' || pg_catalog.repeat('U', 22),
+      'src_' || pg_catalog.repeat('U', 22),
+      'codex',
+      'codex_daily_usage_buckets_v1',
+      '00000000-0000-4000-8000-000000010524',
+      'syn_' || pg_catalog.repeat('4', 22),
+      pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
+      '20524', '21524', '22524',
+      ARRAY[pg_temp.current_week_date(2)], ARRAY[524]::bigint[]
+    )
+  ),
+  'provider-attributed Usage Sync is accepted through its separate bounded procedure'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_owner;
+
+SELECT pg_temp.assert_true(
+  (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.min(connector_version) = '0.0.0'
+      AND pg_catalog.min(codex_version) = '0.144.5'
+      AND pg_catalog.min(entry_count) = 1
+      AND pg_catalog.min(outcome) = 'accepted'
+    FROM viberacing_private.usage_snapshots
+    WHERE usage_snapshot_id = '00000000-0000-4000-8000-000000010524'
+  )
+  AND (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.min(tokens) = 524
+      AND pg_catalog.min(codex_reported_date) = pg_temp.current_week_date(2)::date
+    FROM viberacing_private.usage_snapshot_entries
+    WHERE usage_snapshot_id = '00000000-0000-4000-8000-000000010524'
+  )
+  AND (
+    SELECT pg_catalog.count(*) = 1
+      AND pg_catalog.min(tokens) = 524
+    FROM viberacing_private.source_day_values
+    WHERE source_id = 'src_' || pg_catalog.repeat('U', 22)
+      AND codex_reported_date = pg_temp.current_week_date(2)::date
+  ),
+  'Usage Sync maps generic client, agent, date, and total fields to the mature storage path'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_ingest;
 
 SELECT pg_temp.assert_true(
   (
@@ -875,11 +1057,11 @@ SELECT pg_temp.expect_integrity_failure(
 
 SELECT pg_temp.assert_true(
   (
-    SELECT pg_catalog.count(*) = 5
+    SELECT pg_catalog.count(*) = 6
     FROM viberacing_private.usage_snapshots
   )
   AND (
-    SELECT pg_catalog.count(*) = 5
+    SELECT pg_catalog.count(*) = 6
     FROM viberacing_private.device_nonces
   ),
   'rejected and duplicate requests create no extra persistent state'

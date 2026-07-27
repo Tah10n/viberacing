@@ -60,10 +60,19 @@ const evidenceDefinitions = Object.freeze([
     requiredNodeTypes: Object.freeze(["Function Scan"]),
   }),
   Object.freeze({
+    label: "token adapter",
+    matches: (queryText) =>
+      queryText.includes("FROM viberacing_api.list_public_community_token_race_status(") &&
+      queryText.includes("$1::date"),
+    requiredIndexGroups: Object.freeze([]),
+    requiredNodeTypes: Object.freeze(["Function Scan"]),
+  }),
+  Object.freeze({
     label: "score projection",
     matches: (queryText) =>
       queryText.includes("WITH visible_entries AS MATERIALIZED") &&
-      queryText.includes("viberacing_private.season_entries"),
+      queryText.includes("viberacing_private.season_entries") &&
+      queryText.includes("score_version = 'community_v1'"),
     requiredIndexGroups: Object.freeze([
       Object.freeze(["season_entries_profile_history_idx", "season_entries_pkey"]),
       Object.freeze(["seasons_pkey"]),
@@ -91,10 +100,38 @@ const evidenceDefinitions = Object.freeze([
     requiredIndexGroups: Object.freeze([
       Object.freeze(["finalized_season_profile_freshness_primary_key"]),
       Object.freeze(["source_day_values_date_idx"]),
-      Object.freeze(["codex_sources_profile_state_idx"]),
+      Object.freeze([
+        "codex_sources_profile_source_unique",
+        "codex_sources_profile_state_idx",
+        "codex_sources_pkey",
+      ]),
       Object.freeze(["season_daily_scores_positive_profile_date_idx"]),
     ]),
     requiredNodeTypes: Object.freeze(["Function Scan"]),
+  }),
+  Object.freeze({
+    label: "token projection",
+    matches: (queryText) =>
+      queryText.includes("WITH visible_entries AS MATERIALIZED") &&
+      queryText.includes("score_version = 'community_tokens_v1'") &&
+      queryText.includes("viberacing_private.profile_car_recipes") &&
+      queryText.includes("viberacing_private.finalized_season_profile_freshness") &&
+      queryText.includes("viberacing_private.source_day_values") &&
+      queryText.includes("viberacing_private.season_daily_scores"),
+    requiredIndexGroups: Object.freeze([
+      Object.freeze(["season_entries_profile_history_idx", "season_entries_pkey"]),
+      Object.freeze(["seasons_pkey"]),
+      Object.freeze(["profile_car_recipes_pkey"]),
+      Object.freeze(["finalized_season_profile_freshness_primary_key"]),
+      Object.freeze(["source_day_values_date_idx"]),
+      Object.freeze([
+        "codex_sources_profile_source_unique",
+        "codex_sources_profile_state_idx",
+        "codex_sources_pkey",
+      ]),
+      Object.freeze(["season_daily_scores_positive_profile_date_idx"]),
+    ]),
+    requiredNodeTypes: Object.freeze(["Limit"]),
   }),
 ]);
 
@@ -278,7 +315,7 @@ function assertBoundedReadPlan(entry, definition) {
     assert.equal(
       alternatives.some((indexName) => executedIndexNames.has(indexName)),
       true,
-      `${definition.label} omitted an executed reviewed index`,
+      `${definition.label} omitted an executed reviewed index: ${alternatives.join(" or ")}; observed ${[...executedIndexNames].sort().join(", ") || "none"}`,
     );
   }
 }

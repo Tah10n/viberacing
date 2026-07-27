@@ -78,7 +78,7 @@ macro_rules! string_unit {
     };
 }
 
-/// Maximum daily buckets admitted into a `ConnectorSyncV1` payload.
+/// Maximum daily buckets admitted into a `UsageSyncV1` payload.
 pub const MAX_DAILY_USAGE_ENTRIES: usize = 31;
 
 /// Largest exact token integer admitted by the language-neutral sync contract.

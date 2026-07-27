@@ -295,6 +295,70 @@ describe("RaceExperience interactions", () => {
     });
   });
 
+  it("renders the direct-token leaderboard first without score normalization UI", async () => {
+    installMatchMedia(false);
+    const fetchScore = vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            participants: [
+              {
+                activeDays: 6,
+                displayPosition: 1,
+                freshnessDays: 0,
+                handle: "token_driver",
+                metricVersion: "community_tokens_v1",
+                rankPosition: 1,
+                seasonEnd: "2026-08-02",
+                seasonFinalized: false,
+                seasonStart: "2026-07-27",
+                sourceCount: 1,
+                streakDays: 6,
+                weeklyTokenTotal: 12_345_678,
+              },
+            ],
+            schemaVersion: 1,
+            selfReported: true,
+            trustTier: "community",
+          }),
+          { headers: { "content-type": "application/json; charset=utf-8" } },
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchScore);
+
+    const mounted = mountExperience("2026-07-27");
+    await settleCommunityRequest(mounted.container);
+
+    const app = mounted.container.querySelector<HTMLElement>(".race-app");
+    expect(app?.dataset.scoreMetric).toBe("tokens");
+    expect(mounted.container.textContent).toContain("Community leaderboard");
+    expect(mounted.container.textContent).toContain("Weekly tokens");
+    expect(mounted.container.textContent).toContain("12,345,678 tokens");
+    expect(mounted.container.textContent).toContain("exact accepted weekly total");
+    expect(mounted.container.textContent).toContain("Tokenizers differ");
+    expect(mounted.container.textContent).toContain("not a compute or cost comparison");
+    expect(mounted.container.querySelector("#simulator")).toBeNull();
+    expect(mounted.container.querySelector('a[href="#simulator"]')).toBeNull();
+    expect(fetchScore).toHaveBeenCalledOnce();
+    expect(fetchScore).toHaveBeenCalledWith(
+      "/v1/community/tokens?seasonStart=2026-07-27",
+      expect.objectContaining({ credentials: "omit", method: "GET" }),
+    );
+
+    const localeSelect = mounted.container.querySelectorAll<HTMLSelectElement>("select")[1];
+    expect(localeSelect).toBeDefined();
+    changeSelect(localeSelect!, "ru");
+    expect(mounted.container.textContent).toContain("Токены за неделю");
+    expect(mounted.container.textContent).toContain("12 345 678 токенов");
+    expect(mounted.container.textContent).toContain("Токенизаторы отличаются");
+    expect(mounted.container.textContent).toContain("не сравнение вычислений или стоимости");
+
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
   it("labels and preserves the synthetic fallback when Community standings are unavailable", async () => {
     installMatchMedia(false);
     vi.stubGlobal(

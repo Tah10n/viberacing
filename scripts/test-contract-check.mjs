@@ -15,9 +15,19 @@ const implementedLocalEvidencePaths = [
   "apps/ingest/src/community-sync-admission.ts",
   "apps/ingest/src/community-sync-application.test.ts",
   "apps/ingest/src/community-sync-application.ts",
+  "apps/ingest/src/community-sync-database.test.ts",
+  "apps/ingest/src/community-sync-database.ts",
   "apps/ingest/src/community-sync-http-server-contract-failure.test.ts",
   "apps/ingest/src/community-sync-http-server.test.ts",
   "apps/ingest/src/community-sync-http-server.ts",
+  "apps/ingest/src/community-sync-verifier.test.ts",
+  "apps/ingest/src/community-sync-verifier.ts",
+  "apps/edge/src/worker.mjs",
+  "apps/edge/test/worker.test.mjs",
+  "database/migrations/0041_agent_source_provider_foundation.sql",
+  "database/migrations/0042_direct_community_token_leaderboard.sql",
+  "database/tests/community_token_leaderboard.sql",
+  "database/tests/usage_ingest.sql",
   "scripts/test-ingest-postgres-integration.mjs",
   "apps/web/app/v1/community/race/route.test.ts",
   "apps/web/app/v1/community/race/route.ts",
@@ -25,6 +35,8 @@ const implementedLocalEvidencePaths = [
   "apps/web/app/v1/community/race/status/route.ts",
   "apps/web/app/v1/community/scores/route.test.ts",
   "apps/web/app/v1/community/scores/route.ts",
+  "apps/web/app/v1/community/tokens/route.test.ts",
+  "apps/web/app/v1/community/tokens/route.ts",
   "apps/web/app/v1/connector/cars/proposals/route.test.ts",
   "apps/web/app/v1/connector/cars/proposals/route.ts",
   "apps/web/app/v1/connector/pairing/poll/route.test.ts",
@@ -124,6 +136,8 @@ async function expectGeneratedPublicOperations(name) {
     "/v1/community/race",
     "/v1/community/scores",
     "/v1/community/sync",
+    "/v1/community/tokens",
+    "/v1/community/usage",
     "/v1/connector/cars/proposals",
     "/v1/connector/pairing/poll",
     "/v1/connector/pairing/start",
@@ -236,6 +250,64 @@ async function expectGeneratedPublicOperations(name) {
     assert.deepEqual(syncOperation.responses[status].content["application/problem+json"].schema, {
       $ref: "#/components/schemas/ProblemDetailsV1",
     });
+  }
+
+  const tokenOperation = document.paths["/v1/community/tokens"].get;
+  assert.equal(tokenOperation.operationId, "getCommunityTokensV1");
+  assert.equal(tokenOperation["x-viberacing-status"], "implemented-local");
+  assert.equal(tokenOperation["x-viberacing-admission-policy"], "no-queue-4");
+  assert.equal(tokenOperation["x-viberacing-authentication-contract"], "none");
+  assert.equal(tokenOperation["x-viberacing-cache-policy"], "no-store");
+  assert.equal(tokenOperation["x-viberacing-cors-policy"], "same-origin");
+  assert.deepEqual(tokenOperation["x-viberacing-query-contract"], {
+    $ref: "#/components/schemas/CommunityScoreQueryV1",
+  });
+  assert.equal(tokenOperation["x-viberacing-query-policy"], "closed-single-value");
+  assert.deepEqual(tokenOperation.responses["200"].content["application/json"].schema, {
+    $ref: "#/components/schemas/CommunityTokenRaceStatusPageV1",
+  });
+  assert.deepEqual(Object.keys(tokenOperation.responses), [
+    "200",
+    "400",
+    "406",
+    "429",
+    "500",
+    "503",
+  ]);
+
+  const usageSyncOperation = document.paths["/v1/community/usage"].post;
+  assert.equal(usageSyncOperation.operationId, "postCommunityUsageSyncV1");
+  assert.equal(usageSyncOperation["x-viberacing-status"], "implemented-local");
+  assert.equal(usageSyncOperation["x-viberacing-admission-policy"], "no-queue-4");
+  assert.equal(
+    usageSyncOperation["x-viberacing-authentication-contract"],
+    "contracts/v1/connector-usage-sync-authentication.json",
+  );
+  assert.equal(usageSyncOperation["x-viberacing-request-body-policy"], "exact-raw-json-8192");
+  assert.deepEqual(usageSyncOperation["x-viberacing-request-contract"], {
+    $ref: "#/components/schemas/UsageSyncV1",
+  });
+  assert.deepEqual(usageSyncOperation.requestBody.content["application/json"].schema, {
+    $ref: "#/components/schemas/UsageSyncV1",
+  });
+  assert.deepEqual(usageSyncOperation.responses["200"].content["application/json"].schema, {
+    $ref: "#/components/schemas/UsageSyncResultV1",
+  });
+  assert.deepEqual(Object.keys(usageSyncOperation.responses), [
+    "200",
+    "400",
+    "401",
+    "405",
+    "406",
+    "422",
+    "500",
+    "503",
+  ]);
+  assert.equal(usageSyncOperation.responses["405"].headers.Allow.schema.const, "POST");
+  for (const response of Object.values(usageSyncOperation.responses)) {
+    assert.equal(response.headers["Cache-Control"].schema.const, "no-store");
+    assert.equal(response.headers.Vary.schema.const, "Accept");
+    assert.equal(Object.hasOwn(response.headers, "Access-Control-Allow-Origin"), false);
   }
 
   const proposalOperation = document.paths["/v1/connector/cars/proposals"].post;
@@ -413,7 +485,22 @@ try {
       };
       writeJson(path, schema);
     },
-    /connector daily-entry fields differ from the exact writable allowlist/,
+    /sync daily-entry fields differ from the exact writable allowlist/,
+  );
+  await expectFailure(
+    "usage-derived-provider-field",
+    (root) => {
+      const { path, schema } = readSchema(root, "usage-sync.schema.json");
+      schema.required.push("provider");
+      schema.properties.provider = {
+        type: "string",
+        enum: ["codex"],
+        minLength: 5,
+        maxLength: 5,
+      };
+      writeJson(path, schema);
+    },
+    /server-owned or prohibited field provider/,
   );
   await expectFailure(
     "community-trust-drift",
@@ -487,6 +574,39 @@ try {
       writeJson(path, schema);
     },
     /Community race participant bounds differ from the reviewed projection/,
+  );
+  await expectFailure(
+    "community-token-total-bound-drift",
+    (root) => {
+      const { path, schema } = readSchema(root, "community-token-race-status-page.schema.json");
+      schema.properties.participants.items.properties.weeklyTokenTotal.maximum -= 1;
+      writeJson(path, schema);
+    },
+    /Community token participant boundary differs from ADR 0072/,
+  );
+  await expectFailure(
+    "community-token-metric-drift",
+    (root) => {
+      const { path, schema } = readSchema(root, "community-token-race-status-page.schema.json");
+      schema.properties.participants.items.properties.metricVersion.const = "community_v1";
+      writeJson(path, schema);
+    },
+    /Community token participant boundary differs from ADR 0072/,
+  );
+  await expectFailure(
+    "community-token-private-field",
+    (root) => {
+      const { path, schema } = readSchema(root, "community-token-race-status-page.schema.json");
+      schema.properties.participants.items.required.push("dailyTokenTotals");
+      schema.properties.participants.items.properties.dailyTokenTotals = {
+        type: "array",
+        minItems: 0,
+        maxItems: 7,
+        items: { type: "integer", minimum: 0, maximum: 9007199254740991 },
+      };
+      writeJson(path, schema);
+    },
+    /Community token participant boundary differs from ADR 0072/,
   );
   await expectFailure(
     "optional-properties-on-scalar",
@@ -717,6 +837,20 @@ try {
     /implemented-local contract evidence is missing/,
   );
   await expectFailure(
+    "missing-usage-sync-database-evidence",
+    (root) => {
+      rmSync(resolve(root, "database", "migrations", "0041_agent_source_provider_foundation.sql"));
+    },
+    /implemented-local contract evidence is missing/,
+  );
+  await expectFailure(
+    "missing-token-route-evidence",
+    (root) => {
+      rmSync(resolve(root, "apps", "web", "app", "v1", "community", "tokens", "route.ts"));
+    },
+    /implemented-local contract evidence is missing/,
+  );
+  await expectFailure(
     "missing-car-proposal-implementation-evidence",
     (root) => {
       rmSync(resolve(root, "crates", "connector", "src", "car_proposal.rs"));
@@ -744,11 +878,21 @@ try {
     /Community sync operation differs from the reviewed HTTP contract/,
   );
   await expectFailure(
+    "token-operation-drift",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.operations[4].responseSchema = "CommunityRaceStatusPageV1";
+      writeJson(path, manifest);
+    },
+    /public Community token operation differs from the reviewed HTTP contract/,
+  );
+  await expectFailure(
     "car-proposal-operation-drift",
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[4].problemStatuses = [400, 401, 405, 406, 429, 500, 503];
+      manifest.operations[6].problemStatuses = [400, 401, 405, 406, 429, 500, 503];
       writeJson(path, manifest);
     },
     /connector car proposal operation differs from review/,
@@ -788,6 +932,31 @@ try {
       writeJson(path, policy);
     },
     /generated contract artifact has drifted/,
+  );
+  await expectFailure(
+    "usage-authentication-target-drift",
+    (root) => {
+      const path = resolve(root, "contracts", "v1", "connector-usage-sync-authentication.json");
+      const policy = JSON.parse(readFileSync(path, "utf8"));
+      policy.requestTarget = "/v1/community/sync";
+      writeJson(path, policy);
+    },
+    /usage sync authentication must differ/,
+  );
+  await expectFailure(
+    "usage-sync-vector-message-drift",
+    (root) => {
+      const path = resolve(
+        root,
+        "contracts",
+        "v1",
+        "connector-usage-sync-device-request.test-vector.json",
+      );
+      const vector = JSON.parse(readFileSync(path, "utf8"));
+      vector.deviceSignatureMessage += "\n";
+      writeJson(path, vector);
+    },
+    /shared connector usage vector differs from the reviewed boundary/,
   );
   await expectFailure(
     "pairing-policy-semantic-drift",
@@ -861,6 +1030,15 @@ try {
       writeJson(path, schema);
     },
     /unique by codexReportedDate/,
+  );
+  await expectFailure(
+    "missing-usage-date-dedup",
+    (root) => {
+      const { path, schema } = readSchema(root, "usage-sync.schema.json");
+      delete schema.properties.dailyEntries["x-viberacing-uniqueBy"];
+      writeJson(path, schema);
+    },
+    /unique by reportedDate/,
   );
   await expectFailure(
     "unsupported-schema-keyword",

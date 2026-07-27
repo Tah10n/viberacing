@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/usage-sync-result.schema.json",
+  "title": "UsageSyncResultV1",
+  "description": "Non-sensitive acknowledgement for one validated provider-neutral usage synchronization. Derived provider and internal anomaly reasons are intentionally absent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "requestId", "syncId", "outcome", "acceptedEntries"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "minimum": 1,
+      "maximum": 1
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26,
+      "pattern": "^req_[A-Za-z0-9_-]{22}$"
+    },
+    "syncId": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26,
+      "pattern": "^syn_[A-Za-z0-9_-]{22}$"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["accepted", "duplicate", "quarantined"],
+      "minLength": 8,
+      "maxLength": 11
+    },
+    "acceptedEntries": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 31
+    }
+  }
+}

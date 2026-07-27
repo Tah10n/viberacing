@@ -13,6 +13,7 @@ const names = Object.freeze({
   railwayDrainSeconds: "RAILWAY_DEPLOYMENT_DRAINING_SECONDS",
   railwayPort: "PORT",
   tlsTermination: "VIBERACING_INGEST_TLS_TERMINATION",
+  usageSyncEnabled: "VIBERACING_USAGE_SYNC_ENABLED",
 });
 
 export const ingestHostMinimumRailwayDrainSeconds = 40;
@@ -43,6 +44,7 @@ export interface IngestHostConfig {
   readonly host: "0.0.0.0" | "127.0.0.1" | "::1";
   readonly port: number;
   readonly tlsTermination: IngestHostTlsTermination;
+  readonly usageSyncEnabled: boolean;
 }
 
 function fail(code: IngestHostConfigurationErrorCode): never {
@@ -76,6 +78,20 @@ function environmentValue(environment: unknown, key: string): string | undefined
   }
 }
 
+function optionalExactEnablement(environment: object, key: string): boolean {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(environment, key);
+    return (
+      descriptor !== undefined &&
+      "value" in descriptor &&
+      descriptor.enumerable === true &&
+      descriptor.value === "true"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function parsePort(value: string | undefined, allowEphemeral: boolean): number {
   if (value === undefined || !canonicalIntegerPattern.test(value) || value.length > 5) {
     fail("port_invalid");
@@ -102,6 +118,7 @@ export function resolveIngestHostConfig(environment: unknown = process.env): Ing
     fail("ingest_disabled");
   }
 
+  const usageSyncEnabled = optionalExactEnablement(environment as object, names.usageSyncEnabled);
   const nodeEnvironment = environmentValue(environment, names.nodeEnvironment);
   const host = environmentValue(environment, names.host);
   const tlsTermination = environmentValue(environment, names.tlsTermination);
@@ -126,7 +143,7 @@ export function resolveIngestHostConfig(environment: unknown = process.env): Ing
     }
     const port = parsePort(environmentValue(environment, names.railwayPort), false);
     validateRailwayDrainSeconds(environmentValue(environment, names.railwayDrainSeconds));
-    return Object.freeze({ enabled: true, host, port, tlsTermination });
+    return Object.freeze({ enabled: true, host, port, tlsTermination, usageSyncEnabled });
   }
 
   if (host === undefined || !localHosts.has(host)) {
@@ -144,5 +161,6 @@ export function resolveIngestHostConfig(environment: unknown = process.env): Ing
     host: host as "127.0.0.1" | "::1",
     port,
     tlsTermination,
+    usageSyncEnabled,
   });
 }

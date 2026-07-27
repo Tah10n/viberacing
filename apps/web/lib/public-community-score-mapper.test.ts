@@ -1,14 +1,19 @@
-import { validateCommunityScorePageV1 } from "@viberacing/contracts";
+import {
+  validateCommunityScorePageV1,
+  validateCommunityTokenRaceStatusPageV1,
+} from "@viberacing/contracts";
 import { describe, expect, it } from "vitest";
 
 import {
   mapPublicCommunityRaceRows,
   mapPublicCommunityRaceStatusRows,
   mapPublicCommunityScoreRows,
+  mapPublicCommunityTokenRaceStatusRows,
   PublicCommunityScoreMappingError,
   publicCommunityRacePageSize,
   publicCommunityRaceStatusPageSize,
   publicCommunityScorePageSize,
+  publicCommunityTokenRaceStatusPageSize,
   type PublicCommunityScoreMappingErrorCode,
 } from "./public-community-score-mapper";
 
@@ -32,6 +37,22 @@ interface RaceProjectionRow extends ProjectionRow {
 interface RaceStatusProjectionRow extends RaceProjectionRow {
   readonly freshness_days: number;
   readonly streak_days: number | null;
+}
+
+interface TokenProjectionRow {
+  readonly active_days: number;
+  readonly car_recipe: unknown;
+  readonly display_position: number;
+  readonly freshness_days: number;
+  readonly handle: string;
+  readonly metric_version: string;
+  readonly rank_position: number;
+  readonly season_end: string;
+  readonly season_finalized: boolean;
+  readonly season_start: string;
+  readonly source_count: number;
+  readonly streak_days: number | null;
+  readonly weekly_token_total: unknown;
 }
 
 const baseRow: ProjectionRow = {
@@ -79,6 +100,25 @@ function raceStatusRow(
     ...raceRow(overrides),
     freshness_days: overrides.freshness_days ?? 2,
     streak_days: overrides.streak_days ?? null,
+  };
+}
+
+function tokenRow(overrides: Partial<TokenProjectionRow> = {}): TokenProjectionRow {
+  return {
+    season_start: "2026-07-27",
+    season_end: "2026-08-02",
+    metric_version: "community_tokens_v1",
+    season_finalized: false,
+    handle: "token-alpha",
+    weekly_token_total: "1500",
+    active_days: 2,
+    source_count: 2,
+    rank_position: 1,
+    display_position: 1,
+    car_recipe: null,
+    freshness_days: 0,
+    streak_days: null,
+    ...overrides,
   };
 }
 
@@ -456,5 +496,180 @@ describe("public Community score mapper", () => {
     }
     expectMappingError([valid], "invalid_projection", mapPublicCommunityRaceRows);
     expectMappingError([valid], "invalid_projection", mapPublicCommunityScoreRows);
+  });
+});
+
+describe("public Community token leaderboard mapper", () => {
+  const mapper = mapPublicCommunityTokenRaceStatusRows;
+
+  it("maps exact bigint text, optional presentation state, and an empty top-32 page", () => {
+    const recipe = {
+      schemaVersion: 1,
+      chassis: "formula",
+      nose: "wedge",
+      cockpit: "canopy",
+      wing: "high",
+      wheels: "slick",
+      palette: "mint",
+      trail: "spark",
+      seed: 42,
+    };
+    const page = mapper([
+      tokenRow({
+        car_recipe: recipe,
+        streak_days: 2,
+        weekly_token_total: String(Number.MAX_SAFE_INTEGER),
+      }),
+      tokenRow({
+        active_days: 1,
+        display_position: 2,
+        handle: "token-beta",
+        rank_position: 2,
+        source_count: 1,
+        weekly_token_total: "0",
+      }),
+    ]);
+
+    expect(page).toEqual({
+      schemaVersion: 1,
+      trustTier: "community",
+      selfReported: true,
+      participants: [
+        {
+          seasonStart: "2026-07-27",
+          seasonEnd: "2026-08-02",
+          metricVersion: "community_tokens_v1",
+          seasonFinalized: false,
+          handle: "token-alpha",
+          weeklyTokenTotal: Number.MAX_SAFE_INTEGER,
+          activeDays: 2,
+          sourceCount: 2,
+          rankPosition: 1,
+          displayPosition: 1,
+          carRecipe: recipe,
+          freshnessDays: 0,
+          streakDays: 2,
+        },
+        {
+          seasonStart: "2026-07-27",
+          seasonEnd: "2026-08-02",
+          metricVersion: "community_tokens_v1",
+          seasonFinalized: false,
+          handle: "token-beta",
+          weeklyTokenTotal: 0,
+          activeDays: 1,
+          sourceCount: 1,
+          rankPosition: 2,
+          displayPosition: 2,
+          freshnessDays: 0,
+        },
+      ],
+    });
+    expect(validateCommunityTokenRaceStatusPageV1(page)).toEqual({ ok: true, value: page });
+    expect(Object.isFrozen(page)).toBe(true);
+    expect(Object.isFrozen(page.participants)).toBe(true);
+    expect(page.participants.every(Object.isFrozen)).toBe(true);
+    expect(Object.isFrozen(page.participants[0]?.carRecipe)).toBe(true);
+    expect(mapper([]).participants).toEqual([]);
+
+    const topPage = Array.from({ length: publicCommunityTokenRaceStatusPageSize }, (_, index) =>
+      tokenRow({
+        display_position: index + 1,
+        handle: `token-${String(index + 1).padStart(2, "0")}`,
+        rank_position: 1,
+      }),
+    );
+    expect(mapper(topPage).participants).toHaveLength(32);
+  });
+
+  it("rejects malformed rows, noncanonical bigint text, and unsafe totals non-reflectively", () => {
+    const missingColumn = { ...tokenRow() } as Record<string, unknown>;
+    delete missingColumn.handle;
+    const extraColumn = { ...tokenRow(), private_value: "hidden" };
+    const inherited = Object.assign(Object.create({ private_value: true }) as object, tokenRow());
+    const accessor = { ...tokenRow() };
+    Object.defineProperty(accessor, "handle", {
+      enumerable: true,
+      get() {
+        return "private-value";
+      },
+    });
+
+    for (const value of [
+      [null],
+      [[]],
+      [inherited],
+      [missingColumn],
+      [extraColumn],
+      [accessor],
+      [tokenRow({ weekly_token_total: 1 })],
+      [tokenRow({ weekly_token_total: "-1" })],
+      [tokenRow({ weekly_token_total: "01" })],
+      [tokenRow({ weekly_token_total: "9007199254740992" })],
+      [tokenRow({ car_recipe: undefined })],
+      [tokenRow({ freshness_days: undefined as unknown as number })],
+      [tokenRow({ streak_days: undefined as unknown as null })],
+    ]) {
+      expectMappingError(value, "invalid_projection", mapper);
+    }
+
+    const trapped = new Proxy(tokenRow(), {
+      getPrototypeOf() {
+        throw new Error("private-value");
+      },
+    });
+    expectMappingError([trapped], "invalid_projection", mapper);
+  });
+
+  it("rejects contract drift before any token page can cross the public boundary", () => {
+    for (const value of [
+      [tokenRow({ metric_version: "community_v1" })],
+      [tokenRow({ freshness_days: 65_536 })],
+      [tokenRow({ active_days: 8 })],
+      [tokenRow({ car_recipe: { assetUrl: "https://invalid.example/car.svg" } })],
+    ]) {
+      expectMappingError(value, "contract_mismatch", mapper);
+    }
+  });
+
+  it("enforces exact-total ordering, tie gaps, visibility ordering, and one season window", () => {
+    const tiedPage = mapper([
+      tokenRow({ weekly_token_total: "1500" }),
+      tokenRow({
+        active_days: 1,
+        display_position: 2,
+        handle: "token-beta",
+        rank_position: 1,
+        source_count: 1,
+        weekly_token_total: "1500",
+      }),
+      tokenRow({
+        display_position: 3,
+        handle: "token-gamma",
+        rank_position: 3,
+        weekly_token_total: "100",
+      }),
+    ]);
+    expect(tiedPage.participants.map(({ rankPosition }) => rankPosition)).toEqual([1, 1, 3]);
+
+    const second = tokenRow({
+      display_position: 2,
+      handle: "token-beta",
+      rank_position: 2,
+      weekly_token_total: "100",
+    });
+    for (const rows of [
+      [tokenRow({ season_end: "2026-08-09" })],
+      [tokenRow(), { ...second, season_start: "2026-08-03", season_end: "2026-08-09" }],
+      [tokenRow(), { ...second, season_finalized: true }],
+      [tokenRow(), { ...second, display_position: 3 }],
+      [tokenRow(), { ...second, rank_position: 3 }],
+      [tokenRow(), { ...second, handle: "token-alpha" }],
+      [tokenRow({ weekly_token_total: "100" }), { ...second, weekly_token_total: "200" }],
+      [tokenRow(), { ...second, weekly_token_total: "1500", rank_position: 2 }],
+      [tokenRow(), { ...second, rank_position: 1 }],
+    ]) {
+      expectMappingError(rows, "projection_invariant", mapper);
+    }
   });
 });

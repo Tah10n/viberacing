@@ -59,6 +59,8 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(yaml@2.9.0)
 
+  apps/edge: {}
+
   apps/ingest:
     dependencies:
       '@noble/ed25519':

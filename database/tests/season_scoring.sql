@@ -392,6 +392,23 @@ SELECT pg_temp.expect_integrity_failure(
   'an existing score version cannot be deleted'
 );
 
+-- Pin this legacy-formula fixture to an already-created season. Without the explicit row, the
+-- production cutover would make the expected logarithmic values depend on the integration run date.
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  season_end,
+  score_version,
+  state,
+  grace_ends_at
+)
+VALUES (
+  pg_temp.scoring_date(0),
+  pg_temp.scoring_date(6),
+  'community_v1',
+  'open',
+  viberacing_private.community_season_grace_ends_at(pg_temp.scoring_date(0))
+);
+
 SET LOCAL ROLE viberacing_jobs;
 
 SELECT pg_temp.assert_true(

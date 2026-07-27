@@ -2,6 +2,7 @@ import type { CarRecipe } from "./car-recipe";
 import type { PublicRaceParticipant } from "./race-types";
 
 const scorePath = "/v1/community/race/status";
+const tokenPath = "/v1/community/tokens";
 const maximumResponseCharacters = 32_768;
 const minimumSeasonStart = "1999-12-27";
 const maximumSeasonStart = "2099-12-28";
@@ -23,6 +24,26 @@ const participantKeysWithCarRecipe = [...participantKeys, "carRecipe"] as const;
 const participantKeysWithStreak = [...participantKeys, "streakDays"] as const;
 const participantKeysWithCarRecipeAndStreak = [
   ...participantKeys,
+  "carRecipe",
+  "streakDays",
+] as const;
+const tokenParticipantKeys = [
+  "activeDays",
+  "displayPosition",
+  "freshnessDays",
+  "handle",
+  "metricVersion",
+  "rankPosition",
+  "seasonEnd",
+  "seasonFinalized",
+  "seasonStart",
+  "sourceCount",
+  "weeklyTokenTotal",
+] as const;
+const tokenParticipantKeysWithCarRecipe = [...tokenParticipantKeys, "carRecipe"] as const;
+const tokenParticipantKeysWithStreak = [...tokenParticipantKeys, "streakDays"] as const;
+const tokenParticipantKeysWithCarRecipeAndStreak = [
+  ...tokenParticipantKeys,
   "carRecipe",
   "streakDays",
 ] as const;
@@ -90,6 +111,13 @@ const fallbackCars = [
 ] as const satisfies readonly CarRecipe[];
 
 type ScoreFetch = (input: string, init: RequestInit) => Promise<Response>;
+
+export type PublicCommunityRaceMetric = "score" | "tokens";
+
+export interface LoadedPublicCommunityRace {
+  readonly metric: PublicCommunityRaceMetric;
+  readonly participants: readonly PublicRaceParticipant[];
+}
 
 function isPlainObject(value: unknown): value is object {
   return (
@@ -297,6 +325,117 @@ export function mapCommunityRaceStatusPageToRace(
   }
 }
 
+export function mapCommunityTokenRaceStatusPageToRace(
+  value: unknown,
+  expectedSeasonStart: string,
+): readonly PublicRaceParticipant[] | undefined {
+  try {
+    if (
+      !validSeasonStart(expectedSeasonStart) ||
+      !isPlainObject(value) ||
+      !hasExactDataKeys(value, pageKeys) ||
+      dataValue(value, "schemaVersion") !== 1 ||
+      dataValue(value, "trustTier") !== "community" ||
+      dataValue(value, "selfReported") !== true
+    ) {
+      return undefined;
+    }
+    const rows = dataValue(value, "participants");
+    if (
+      !Array.isArray(rows) ||
+      Object.getPrototypeOf(rows) !== Array.prototype ||
+      rows.length > 32 ||
+      Reflect.ownKeys(rows).length !== rows.length + 1
+    ) {
+      return undefined;
+    }
+    const expectedSeasonEnd = seasonEndFor(expectedSeasonStart);
+    const participants: PublicRaceParticipant[] = [];
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = dataValue(rows, String(index));
+      if (!isPlainObject(row)) {
+        return undefined;
+      }
+      const carRecipeDescriptor = Object.getOwnPropertyDescriptor(row, "carRecipe");
+      const streakDescriptor = Object.getOwnPropertyDescriptor(row, "streakDays");
+      const hasCarRecipe =
+        carRecipeDescriptor !== undefined &&
+        "value" in carRecipeDescriptor &&
+        carRecipeDescriptor.enumerable;
+      const hasStreak =
+        streakDescriptor !== undefined &&
+        "value" in streakDescriptor &&
+        streakDescriptor.enumerable;
+      const exactParticipantKeys = hasCarRecipe
+        ? hasStreak
+          ? tokenParticipantKeysWithCarRecipeAndStreak
+          : tokenParticipantKeysWithCarRecipe
+        : hasStreak
+          ? tokenParticipantKeysWithStreak
+          : tokenParticipantKeys;
+      if (!hasExactDataKeys(row, exactParticipantKeys)) {
+        return undefined;
+      }
+      const activeDays = dataValue(row, "activeDays");
+      const displayPosition = dataValue(row, "displayPosition");
+      const freshnessDays = dataValue(row, "freshnessDays");
+      const handle = dataValue(row, "handle");
+      const metricVersion = dataValue(row, "metricVersion");
+      const rankPosition = dataValue(row, "rankPosition");
+      const seasonEnd = dataValue(row, "seasonEnd");
+      const seasonFinalized = dataValue(row, "seasonFinalized");
+      const rowSeasonStart = dataValue(row, "seasonStart");
+      const sourceCount = dataValue(row, "sourceCount");
+      const weeklyTokenTotal = dataValue(row, "weeklyTokenTotal");
+      let streakDays: number | null = null;
+      if (hasStreak) {
+        const streakCandidate = dataValue(row, "streakDays");
+        if (!boundedInteger(streakCandidate, 0, 36_533)) {
+          return undefined;
+        }
+        streakDays = streakCandidate;
+      }
+      if (
+        !boundedInteger(activeDays, 0, 7) ||
+        displayPosition !== index + 1 ||
+        !boundedInteger(freshnessDays, 0, 65_535) ||
+        !isPublicCommunityHandle(handle) ||
+        metricVersion !== "community_tokens_v1" ||
+        !boundedInteger(rankPosition, 1, 32) ||
+        seasonEnd !== expectedSeasonEnd ||
+        typeof seasonFinalized !== "boolean" ||
+        rowSeasonStart !== expectedSeasonStart ||
+        !boundedInteger(sourceCount, 0, 32) ||
+        !boundedInteger(weeklyTokenTotal, 0, Number.MAX_SAFE_INTEGER)
+      ) {
+        return undefined;
+      }
+      const car = hasCarRecipe
+        ? readCarRecipe(dataValue(row, "carRecipe"))
+        : (fallbackCars[index % fallbackCars.length] ?? fallbackCars[0]);
+      if (car === undefined) {
+        return undefined;
+      }
+      participants.push(
+        Object.freeze({
+          activeDays,
+          car,
+          freshnessDays,
+          handle,
+          id: `community-${String(displayPosition)}`,
+          rank: rankPosition,
+          sourceCount,
+          streakDays,
+          weeklyScore: weeklyTokenTotal,
+        }),
+      );
+    }
+    return Object.freeze(participants);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function loadPublicCommunityRace(
   seasonStart: string,
   signal: AbortSignal,
@@ -328,4 +467,55 @@ export async function loadPublicCommunityRace(
   } catch {
     return undefined;
   }
+}
+
+export async function loadPublicCommunityTokenRace(
+  seasonStart: string,
+  signal: AbortSignal,
+  fetchScore: ScoreFetch = fetch,
+): Promise<readonly PublicRaceParticipant[] | undefined> {
+  if (!validSeasonStart(seasonStart)) {
+    return undefined;
+  }
+  try {
+    const response = await fetchScore(`${tokenPath}?seasonStart=${seasonStart}`, {
+      cache: "no-store",
+      credentials: "omit",
+      headers: { accept: "application/json" },
+      method: "GET",
+      redirect: "error",
+      signal,
+    });
+    if (
+      !response.ok ||
+      response.headers.get("content-type")?.toLowerCase() !== "application/json; charset=utf-8"
+    ) {
+      return undefined;
+    }
+    const body = await response.text();
+    if (body.length > maximumResponseCharacters) {
+      return undefined;
+    }
+    return mapCommunityTokenRaceStatusPageToRace(JSON.parse(body) as unknown, seasonStart);
+  } catch {
+    return undefined;
+  }
+}
+
+export async function loadPreferredPublicCommunityRace(
+  seasonStart: string,
+  signal: AbortSignal,
+  fetchScore: ScoreFetch = fetch,
+): Promise<LoadedPublicCommunityRace | undefined> {
+  const tokenParticipants = await loadPublicCommunityTokenRace(seasonStart, signal, fetchScore);
+  if (tokenParticipants !== undefined && tokenParticipants.length > 0) {
+    return Object.freeze({ metric: "tokens", participants: tokenParticipants });
+  }
+  const scoreParticipants = await loadPublicCommunityRace(seasonStart, signal, fetchScore);
+  if (scoreParticipants !== undefined) {
+    return Object.freeze({ metric: "score", participants: scoreParticipants });
+  }
+  return tokenParticipants === undefined
+    ? undefined
+    : Object.freeze({ metric: "tokens", participants: tokenParticipants });
 }

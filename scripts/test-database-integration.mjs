@@ -823,8 +823,28 @@ function loadReviewedMigrations() {
       sql: filesByPath.get(migration.path),
       exerciseOverlap: migration.revision === 39,
     };
-    if (migration.revision !== 39) {
+    if (migration.revision !== 39 && migration.revision !== 41) {
       return [migrationInput];
+    }
+
+    if (migration.revision === 41) {
+      return [
+        {
+          label: "revision 0041 source-attribution backfill setup",
+          sql: readFileSync(
+            resolve(root, "database/tests/agent_source_provider_migration_setup.sql"),
+            "utf8",
+          ),
+        },
+        migrationInput,
+        {
+          label: "revision 0041 source-attribution backfill assertions",
+          sql: readFileSync(
+            resolve(root, "database/tests/agent_source_provider_migration_assertions.sql"),
+            "utf8",
+          ),
+        },
+      ];
     }
 
     return [
@@ -970,6 +990,10 @@ try {
     {
       label: "Community open-season scoring scenarios",
       sql: readFileSync(resolve(root, "database/tests/season_scoring.sql"), "utf8"),
+    },
+    {
+      label: "Community direct-token leaderboard scenarios",
+      sql: readFileSync(resolve(root, "database/tests/community_token_leaderboard.sql"), "utf8"),
     },
     {
       label: "Community season finalization scenarios",

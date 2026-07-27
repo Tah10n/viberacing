@@ -5,6 +5,7 @@ import {
   createIngestDatabasePool,
   type IngestDatabaseOriginNonce,
   type IngestDatabaseSubmission,
+  type IngestDatabaseUsageSubmission,
 } from "./database-pool.js";
 
 const config = resolveIngestDatabaseConfig({
@@ -39,6 +40,24 @@ const originNonce: IngestDatabaseOriginNonce = {
   originKeyId: "edge_primary",
 };
 
+const usageSubmission: IngestDatabaseUsageSubmission = {
+  accountingRevision: "codex_daily_usage_buckets_v1",
+  agentVersion: "0.144.5",
+  bodyDigest: Buffer.alloc(32, 5),
+  clientVersion: "0.0.0",
+  dailyTokenTotals: [84],
+  deviceId: submission.deviceId,
+  deviceKeyId: submission.deviceKeyId,
+  nonceDigest: Buffer.alloc(32, 6),
+  observedAt: submission.observedAt,
+  provider: "codex",
+  reportedDates: ["2026-07-14"],
+  signature: Buffer.alloc(64, 7),
+  snapshotId: submission.snapshotId,
+  sourceId: submission.sourceId,
+  syncId: "syn_DDDDDDDDDDDDDDDDDDDDDD",
+};
+
 describe("Ingest database pool", () => {
   it("exposes only fixed structured capabilities and copies binary and array parameters", async () => {
     const query = vi.fn((structuredQuery: { text: string; values: unknown[] }) => {
@@ -68,8 +87,9 @@ describe("Ingest database pool", () => {
       { value: 1 },
     ]);
     await expect(client.submitCommunitySync(submission)).resolves.toEqual([{ value: 1 }]);
+    await expect(client.submitUsageSync(usageSubmission)).resolves.toEqual([{ value: 1 }]);
     expect(client).not.toHaveProperty("query");
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(5);
     expect(query.mock.calls[0]![0]).toMatchObject({ values: [] });
     const boundaryQuery = query.mock.calls[0]![0].text;
     expect(boundaryQuery).toContain("CURRENT_USER = 'viberacing_ingest'");
@@ -105,7 +125,9 @@ describe("Ingest database pool", () => {
       `SELECT
   material.device_key_id::text AS device_key_id,
   material.source_id AS source_id,
-  material.public_key AS public_key
+  material.public_key AS public_key,
+  material.provider AS provider,
+  material.accounting_revision AS accounting_revision
 FROM viberacing_api.read_device_verification_material($1::text) AS material`,
     );
     const submitQuery = query.mock.calls[3]![0];
@@ -142,6 +164,44 @@ FROM viberacing_api.read_device_verification_material($1::text) AS material`,
     expect(submitQuery.values[10]).not.toBe(submission.nonceDigest);
     expect(submitQuery.values[11]).not.toBe(submission.codexReportedDates);
     expect(submitQuery.values[12]).not.toBe(submission.tokens);
+    const usageQuery = query.mock.calls[4]![0];
+    expect(usageQuery.text).toContain("viberacing_api.submit_usage_sync(");
+    expect(usageQuery.text).not.toContain(";");
+    expect(usageQuery.text.match(/\$[0-9]+/g)).toEqual(
+      Array.from({ length: 15 }, (_, index) => `$${String(index + 1)}`),
+    );
+    expect(usageQuery.text).toContain("$1::uuid");
+    expect(usageQuery.text).toContain("$4::text");
+    expect(usageQuery.text).toContain("$5::text");
+    expect(usageQuery.text).toContain("$6::uuid");
+    expect(usageQuery.text).toContain("$8::timestamptz");
+    expect(usageQuery.text).toContain("$11::bytea");
+    expect(usageQuery.text).toContain("$12::bytea");
+    expect(usageQuery.text).toContain("$13::bytea");
+    expect(usageQuery.text).toContain("$14::text[]");
+    expect(usageQuery.text).toContain("$15::bigint[]");
+    expect(usageQuery.values).toEqual([
+      usageSubmission.deviceKeyId,
+      usageSubmission.deviceId,
+      usageSubmission.sourceId,
+      usageSubmission.provider,
+      usageSubmission.accountingRevision,
+      usageSubmission.snapshotId,
+      usageSubmission.syncId,
+      usageSubmission.observedAt,
+      usageSubmission.clientVersion,
+      usageSubmission.agentVersion,
+      usageSubmission.bodyDigest,
+      usageSubmission.signature,
+      usageSubmission.nonceDigest,
+      ["2026-07-14"],
+      ["84"],
+    ]);
+    expect(usageQuery.values[10]).not.toBe(usageSubmission.bodyDigest);
+    expect(usageQuery.values[11]).not.toBe(usageSubmission.signature);
+    expect(usageQuery.values[12]).not.toBe(usageSubmission.nonceDigest);
+    expect(usageQuery.values[13]).not.toBe(usageSubmission.reportedDates);
+    expect(usageQuery.values[14]).not.toBe(usageSubmission.dailyTokenTotals);
 
     client.release();
     client.release(true);

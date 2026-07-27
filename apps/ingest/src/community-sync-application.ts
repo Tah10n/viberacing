@@ -4,8 +4,10 @@ import crypto from "node:crypto";
 import {
   validateConnectorSyncResultV1,
   validateProblemDetailsV1,
+  validateUsageSyncResultV1,
   type ConnectorSyncResultV1,
   type ProblemDetailsV1,
+  type UsageSyncResultV1,
 } from "@viberacing/contracts";
 
 import {
@@ -15,28 +17,47 @@ import {
   type CommunitySyncSubmissionResult,
 } from "./community-sync-database.js";
 import {
+  codexAccountingRevision,
+  codexProvider,
   CommunitySyncVerificationError,
   type CommunitySyncVerificationErrorCode,
   type VerifiedCommunitySync,
 } from "./community-sync-verifier.js";
 import type { IngestDatabasePoolSignalSink } from "./database-pool.js";
 import { createConfiguredCommunitySyncVerifier } from "./origin-proof-config.js";
+import {
+  communitySyncRequestTarget,
+  usageSyncRequestTarget,
+  type CommunitySyncRequestTarget,
+} from "./protocol.js";
 
 const requestEntropyBytes = 16;
 const syncIdPattern = /^syn_[A-Za-z0-9_-]{22}$/;
 const dependencyKeys = new Set(["submit", "verify"]);
 const verifiedSubmissionKeys = new Set([
+  "accountingRevision",
   "bodyDigestHex",
   "deviceId",
   "deviceKeyId",
   "idempotencyKey",
   "nonceDigestHex",
   "payload",
+  "provider",
+  "requestTarget",
   "signatureBase64Url",
 ]);
-const payloadKeys = new Set([
+const connectorPayloadKeys = new Set([
   "codexVersion",
   "connectorVersion",
+  "dailyEntries",
+  "observedAt",
+  "schemaVersion",
+  "sourceId",
+  "syncId",
+]);
+const usagePayloadKeys = new Set([
+  "agentVersion",
+  "clientVersion",
   "dailyEntries",
   "observedAt",
   "schemaVersion",
@@ -69,7 +90,7 @@ export class CommunitySyncApplicationError extends Error {
 
 export type CommunitySyncApplicationDecision =
   | Readonly<{
-      body: ConnectorSyncResultV1;
+      body: ConnectorSyncResultV1 | UsageSyncResultV1;
       ok: true;
       status: 200;
     }>
@@ -100,6 +121,7 @@ interface ProblemDefinition {
 
 interface VerifiedSummary {
   readonly entryCount: number;
+  readonly requestTarget: CommunitySyncRequestTarget;
   readonly syncId: string;
 }
 
@@ -265,11 +287,20 @@ function readVerifiedSummary(value: unknown): VerifiedSummary | undefined {
     ) {
       return undefined;
     }
+    const accountingRevision = ownDataValue(value, "accountingRevision");
+    const provider = ownDataValue(value, "provider");
+    const requestTarget = ownDataValue(value, "requestTarget");
     const payload = ownDataValue(value, "payload");
     if (
+      accountingRevision !== codexAccountingRevision ||
+      provider !== codexProvider ||
+      (requestTarget !== communitySyncRequestTarget && requestTarget !== usageSyncRequestTarget) ||
       !isPlainRecord(payload) ||
       !Object.isFrozen(payload) ||
-      !hasExactKeys(payload, payloadKeys)
+      !hasExactKeys(
+        payload,
+        requestTarget === usageSyncRequestTarget ? usagePayloadKeys : connectorPayloadKeys,
+      )
     ) {
       return undefined;
     }
@@ -282,7 +313,7 @@ function readVerifiedSummary(value: unknown): VerifiedSummary | undefined {
     ) {
       return undefined;
     }
-    return Object.freeze({ entryCount: dailyEntries.length, syncId });
+    return Object.freeze({ entryCount: dailyEntries.length, requestTarget, syncId });
   } catch {
     return undefined;
   }
@@ -315,6 +346,7 @@ function readSubmissionResult(
 
 function createSuccessDecision(
   requestId: string,
+  requestTarget: CommunitySyncRequestTarget,
   syncId: string,
   result: CommunitySyncSubmissionResult,
 ): CommunitySyncApplicationDecision {
@@ -324,11 +356,15 @@ function createSuccessDecision(
     syncId,
     outcome: result.outcome,
     acceptedEntries: result.acceptedEntries,
-  } as const satisfies ConnectorSyncResultV1;
+  } as const satisfies ConnectorSyncResultV1 & UsageSyncResultV1;
   const body = Object.freeze(
     Object.assign(Object.create(null) as object, values),
-  ) as ConnectorSyncResultV1;
-  if (!validateConnectorSyncResultV1(body).ok) {
+  ) as ConnectorSyncResultV1 & UsageSyncResultV1;
+  const valid =
+    requestTarget === usageSyncRequestTarget
+      ? validateUsageSyncResultV1(body).ok
+      : validateConnectorSyncResultV1(body).ok;
+  if (!valid) {
     fail("contract_rejected");
   }
   return Object.freeze({ body, ok: true, status: 200 });
@@ -396,7 +432,7 @@ export function createCommunitySyncApplication(dependencies: unknown): Community
       const result = readSubmissionResult(rawResult, summary.entryCount);
       return result === undefined
         ? createProblemDecision("internal_error", requestId)
-        : createSuccessDecision(requestId, summary.syncId, result);
+        : createSuccessDecision(requestId, summary.requestTarget, summary.syncId, result);
     },
   });
 }

@@ -2,6 +2,7 @@ import type {
   CommunityRacePageV1,
   CommunityRaceStatusPageV1,
   CommunityScorePageV1,
+  CommunityTokenRaceStatusPageV1,
 } from "@viberacing/contracts";
 import { describe, expect, it, vi } from "vitest";
 
@@ -10,12 +11,15 @@ import {
   createPublicCommunityRaceRoute,
   createPublicCommunityRaceStatusRoute,
   createPublicCommunityScoreRoute,
+  createPublicCommunityTokenRoute,
   parsePublicCommunityRaceQuery,
   parsePublicCommunityRaceStatusQuery,
   parsePublicCommunityScoreQuery,
+  parsePublicCommunityTokenQuery,
   publicCommunityRaceRoutePolicy,
   publicCommunityRaceStatusRoutePolicy,
   publicCommunityScoreRoutePolicy,
+  publicCommunityTokenRoutePolicy,
 } from "./public-community-score-route";
 import { PublicCommunityScoreStoreError } from "./public-community-score-store";
 import { PublicScoreDatabaseConfigurationError } from "./public-score-database-config";
@@ -25,6 +29,7 @@ import { createPublicScoreAdmission } from "./public-score-admission";
 const routeUrl = "https://viberacing.invalid/v1/community/scores";
 const raceRouteUrl = "https://viberacing.invalid/v1/community/race";
 const raceStatusRouteUrl = "https://viberacing.invalid/v1/community/race/status";
+const tokenRouteUrl = "https://viberacing.invalid/v1/community/tokens";
 const validQuery = "?seasonStart=2026-07-13";
 const emptyPage: CommunityScorePageV1 = Object.freeze({
   schemaVersion: 1,
@@ -46,6 +51,10 @@ function raceStatusRequest(query = validQuery, headers?: HeadersInit): Request {
     `${raceStatusRouteUrl}${query}`,
     headers === undefined ? undefined : { headers },
   );
+}
+
+function tokenRequest(query = validQuery, headers?: HeadersInit): Request {
+  return new Request(`${tokenRouteUrl}${query}`, headers === undefined ? undefined : { headers });
 }
 
 function createRoute(readScores: (seasonStart: string) => Promise<unknown>, admissionLimit = 4) {
@@ -75,6 +84,18 @@ function createRaceStatusRoute(
     createRequestId: createPublicRequestId,
     enabled: true,
     readRaceStatus,
+  });
+}
+
+function createTokenRoute(
+  readTokens: (seasonStart: string) => Promise<unknown>,
+  admissionLimit = 4,
+) {
+  return createPublicCommunityTokenRoute({
+    admission: createPublicScoreAdmission(admissionLimit),
+    createRequestId: createPublicRequestId,
+    enabled: true,
+    readTokens,
   });
 }
 
@@ -274,9 +295,10 @@ describe("public Community score route", () => {
     },
   );
 
-  it("applies the same disabled decision to race and race-status factories", async () => {
+  it("applies the same disabled decision to race, race-status, and token factories", async () => {
     const readRace = vi.fn(() => Promise.resolve(emptyPage));
     const readRaceStatus = vi.fn(() => Promise.resolve(emptyPage));
+    const readTokens = vi.fn(() => Promise.resolve(emptyPage));
     const admission = createPublicScoreAdmission(4);
     const raceRoute = createPublicCommunityRaceRoute({
       admission,
@@ -289,6 +311,12 @@ describe("public Community score route", () => {
       createRequestId: createPublicRequestId,
       enabled: false,
       readRaceStatus,
+    });
+    const tokenRoute = createPublicCommunityTokenRoute({
+      admission,
+      createRequestId: createPublicRequestId,
+      enabled: false,
+      readTokens,
     });
 
     await expectProblem(await raceRoute.get(raceRequest()), {
@@ -303,8 +331,15 @@ describe("public Community score route", () => {
       status: 503,
       title: "Temporarily unavailable",
     });
+    await expectProblem(await tokenRoute.get(tokenRequest()), {
+      code: "temporarily_unavailable",
+      retryable: true,
+      status: 503,
+      title: "Temporarily unavailable",
+    });
     expect(readRace).not.toHaveBeenCalled();
     expect(readRaceStatus).not.toHaveBeenCalled();
+    expect(readTokens).not.toHaveBeenCalled();
   });
 
   it("returns one validated no-store page without CORS or private response fields", async () => {
@@ -630,5 +665,63 @@ describe("public Community race route", () => {
   it("shares the same bounded policy for the race-status operation", () => {
     expect(publicCommunityRaceStatusRoutePolicy).toBe(publicCommunityScoreRoutePolicy);
     expect(publicCommunityRaceStatusRoutePolicy).toBe(publicCommunityRaceRoutePolicy);
+  });
+});
+
+describe("public Community token route", () => {
+  const tokenPage: CommunityTokenRaceStatusPageV1 = {
+    schemaVersion: 1,
+    trustTier: "community",
+    selfReported: true,
+    participants: [
+      {
+        seasonStart: "2026-07-27",
+        seasonEnd: "2026-08-02",
+        metricVersion: "community_tokens_v1",
+        seasonFinalized: false,
+        handle: "token_driver",
+        weeklyTokenTotal: 12_345_678,
+        activeDays: 5,
+        sourceCount: 1,
+        rankPosition: 1,
+        displayPosition: 1,
+        freshnessDays: 0,
+      },
+    ],
+  };
+  const tokenQuery = "?seasonStart=2026-07-27";
+
+  it("keeps the token path exact and independent from every legacy route", () => {
+    expect(parsePublicCommunityTokenQuery(tokenRequest(tokenQuery))).toEqual({
+      seasonStart: "2026-07-27",
+    });
+    expect(parsePublicCommunityTokenQuery(request(tokenQuery))).toBeUndefined();
+    expect(parsePublicCommunityTokenQuery(raceRequest(tokenQuery))).toBeUndefined();
+    expect(parsePublicCommunityScoreQuery(tokenRequest(tokenQuery))).toBeUndefined();
+    expect(parsePublicCommunityRaceStatusQuery(tokenRequest(tokenQuery))).toBeUndefined();
+  });
+
+  it("returns only the separately validated direct-token contract", async () => {
+    const readTokens = vi.fn(() => Promise.resolve(tokenPage));
+    const response = await createTokenRoute(readTokens).get(tokenRequest(tokenQuery));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    await expect(response.json()).resolves.toEqual(tokenPage);
+    expect(readTokens).toHaveBeenCalledWith("2026-07-27");
+
+    const invalid = await createTokenRoute(() =>
+      Promise.resolve({
+        ...tokenPage,
+        participants: [{ ...tokenPage.participants[0], weeklyScore: 7000 }],
+      }),
+    ).get(tokenRequest(tokenQuery));
+    expect(invalid.status).toBe(500);
+  });
+
+  it("shares the bounded route policy without sharing the independent enable decision", () => {
+    expect(publicCommunityTokenRoutePolicy).toBe(publicCommunityScoreRoutePolicy);
+    expect(publicCommunityTokenRoutePolicy).toBe(publicCommunityRaceStatusRoutePolicy);
   });
 });

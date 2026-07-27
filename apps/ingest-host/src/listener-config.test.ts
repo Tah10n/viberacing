@@ -58,6 +58,7 @@ describe("resolveIngestHostConfig", () => {
       host: "127.0.0.1",
       port: 8788,
       tlsTermination: "loopback-cleartext",
+      usageSyncEnabled: false,
     });
     expect(Object.isFrozen(config)).toBe(true);
   });
@@ -71,7 +72,13 @@ describe("resolveIngestHostConfig", () => {
           VIBERACING_INGEST_LISTENER_PORT: "0",
         }),
       ),
-    ).toEqual({ enabled: true, host: "::1", port: 0, tlsTermination: "loopback-cleartext" });
+    ).toEqual({
+      enabled: true,
+      host: "::1",
+      port: 0,
+      tlsTermination: "loopback-cleartext",
+      usageSyncEnabled: false,
+    });
   });
 
   it("uses only Railway PORT and an explicit external TLS contract in production", () => {
@@ -82,6 +89,7 @@ describe("resolveIngestHostConfig", () => {
       host: "0.0.0.0",
       port: 8080,
       tlsTermination: "railway-edge",
+      usageSyncEnabled: false,
     });
     expect(ingestHostMinimumRailwayDrainSeconds).toBe(40);
   });
@@ -98,7 +106,49 @@ describe("resolveIngestHostConfig", () => {
       host: "127.0.0.1",
       port: 0,
       tlsTermination: "loopback-cleartext",
+      usageSyncEnabled: false,
     });
+  });
+
+  it("enables Usage Sync only for one exact own enumerable data value", () => {
+    expect(
+      resolveIngestHostConfig(replace(localEnvironment, { VIBERACING_USAGE_SYNC_ENABLED: "true" })),
+    ).toMatchObject({ usageSyncEnabled: true });
+
+    const inherited = Object.assign(
+      Object.create({ VIBERACING_USAGE_SYNC_ENABLED: "true" }) as Record<string, unknown>,
+      localEnvironment,
+    );
+    const accessor = { ...localEnvironment };
+    Object.defineProperty(accessor, "VIBERACING_USAGE_SYNC_ENABLED", {
+      enumerable: true,
+      get: () => "true",
+    });
+    const nonEnumerable = { ...localEnvironment };
+    Object.defineProperty(nonEnumerable, "VIBERACING_USAGE_SYNC_ENABLED", {
+      enumerable: false,
+      value: "true",
+    });
+    const hostile = new Proxy(localEnvironment, {
+      getOwnPropertyDescriptor(target, key) {
+        if (key === "VIBERACING_USAGE_SYNC_ENABLED") {
+          throw new Error("private-environment-value");
+        }
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    });
+
+    for (const environment of [
+      localEnvironment,
+      replace(localEnvironment, { VIBERACING_USAGE_SYNC_ENABLED: "TRUE" }),
+      replace(localEnvironment, { VIBERACING_USAGE_SYNC_ENABLED: false }),
+      inherited,
+      accessor,
+      nonEnumerable,
+      hostile,
+    ]) {
+      expect(resolveIngestHostConfig(environment)).toMatchObject({ usageSyncEnabled: false });
+    }
   });
 
   it.each([undefined, "", "false", "TRUE", "1", "enabled"])(

@@ -5,6 +5,7 @@ import {
   validateCommunityRaceStatusPageV1,
   validateCommunityScorePageV1,
   validateCommunityScoreQueryV1,
+  validateCommunityTokenRaceStatusPageV1,
   type CommunityScoreQueryV1,
 } from "@viberacing/contracts";
 
@@ -29,6 +30,7 @@ import type { PublicScoreAdmission } from "./public-score-admission";
 const raceRoutePath = "/v1/community/race";
 const raceStatusRoutePath = "/v1/community/race/status";
 const scoreRoutePath = "/v1/community/scores";
+const tokenRoutePath = "/v1/community/tokens";
 const queryPrefix = "?seasonStart=";
 const maximumUrlLength = 2_048;
 const maximumQueryLength = 128;
@@ -52,6 +54,7 @@ export const publicCommunityScoreRoutePolicy = Object.freeze({
 });
 export const publicCommunityRaceRoutePolicy = publicCommunityScoreRoutePolicy;
 export const publicCommunityRaceStatusRoutePolicy = publicCommunityScoreRoutePolicy;
+export const publicCommunityTokenRoutePolicy = publicCommunityScoreRoutePolicy;
 
 export interface PublicCommunityScoreRouteDependencies {
   readonly admission: PublicScoreAdmission;
@@ -72,6 +75,13 @@ export interface PublicCommunityRaceStatusRouteDependencies {
   readonly createRequestId: () => PublicRequestId;
   readonly enabled: unknown;
   readonly readRaceStatus: (seasonStart: string) => Promise<unknown>;
+}
+
+export interface PublicCommunityTokenRouteDependencies {
+  readonly admission: PublicScoreAdmission;
+  readonly createRequestId: () => PublicRequestId;
+  readonly enabled: unknown;
+  readonly readTokens: (seasonStart: string) => Promise<unknown>;
 }
 
 export interface PublicCommunityScoreRoute {
@@ -283,6 +293,12 @@ export function parsePublicCommunityRaceStatusQuery(
   return parsePublicCommunityQuery(request, raceStatusRoutePath);
 }
 
+export function parsePublicCommunityTokenQuery(
+  request: Request,
+): CommunityScoreQueryV1 | undefined {
+  return parsePublicCommunityQuery(request, tokenRoutePath);
+}
+
 function problemResponse(
   kind: PublicProblemKind,
   requestId: PublicRequestId,
@@ -413,5 +429,18 @@ export function createPublicCommunityRaceStatusRoute(
     parseQuery: parsePublicCommunityRaceStatusQuery,
     readPage: dependencies.readRaceStatus,
     validatePage: validateCommunityRaceStatusPageV1,
+  });
+}
+
+export function createPublicCommunityTokenRoute(
+  dependencies: PublicCommunityTokenRouteDependencies,
+): PublicCommunityScoreRoute {
+  return createPublicCommunityRoute({
+    admission: dependencies.admission,
+    createRequestId: dependencies.createRequestId,
+    enabled: dependencies.enabled,
+    parseQuery: parsePublicCommunityTokenQuery,
+    readPage: dependencies.readTokens,
+    validatePage: validateCommunityTokenRaceStatusPageV1,
   });
 }

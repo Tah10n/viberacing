@@ -17,6 +17,10 @@
     {
       "file": "connector-sync-authentication.json",
       "policyId": "viberacing-community-sync-auth-v1"
+    },
+    {
+      "file": "connector-usage-sync-authentication.json",
+      "policyId": "viberacing-usage-sync-auth-v1"
     }
   ],
   "schemas": [
@@ -44,6 +48,11 @@
       "file": "community-score-query.schema.json",
       "exportName": "communityScoreQueryV1",
       "typeName": "CommunityScoreQueryV1"
+    },
+    {
+      "file": "community-token-race-status-page.schema.json",
+      "exportName": "communityTokenRaceStatusPageV1",
+      "typeName": "CommunityTokenRaceStatusPageV1"
     },
     {
       "file": "connector-car-proposal-result.schema.json",
@@ -84,6 +93,16 @@
       "file": "problem-details.schema.json",
       "exportName": "problemDetailsV1",
       "typeName": "ProblemDetailsV1"
+    },
+    {
+      "file": "usage-sync-result.schema.json",
+      "exportName": "usageSyncResultV1",
+      "typeName": "UsageSyncResultV1"
+    },
+    {
+      "file": "usage-sync.schema.json",
+      "exportName": "usageSyncV1",
+      "typeName": "UsageSyncV1"
     }
   ],
   "operations": [
@@ -158,6 +177,42 @@
       "requestSchema": "ConnectorSyncV1",
       "responseSchema": "ConnectorSyncResultV1",
       "summary": "Submit one bounded Community usage snapshot"
+    },
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "none",
+      "cacheControl": "no-store",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "implemented-local",
+      "method": "get",
+      "operationId": "getCommunityTokensV1",
+      "path": "/v1/community/tokens",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 406, 429, 500, 503],
+      "queryPolicy": "closed-single-value",
+      "querySchema": "CommunityScoreQueryV1",
+      "requestBodyPolicy": "none",
+      "requestSchema": "none",
+      "responseSchema": "CommunityTokenRaceStatusPageV1",
+      "summary": "Read one bounded Community token leaderboard page"
+    },
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "connector-usage-sync-authentication.json",
+      "cacheControl": "no-store",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "implemented-local",
+      "method": "post",
+      "operationId": "postCommunityUsageSyncV1",
+      "path": "/v1/community/usage",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 401, 405, 406, 422, 500, 503],
+      "queryPolicy": "none",
+      "querySchema": "none",
+      "requestBodyPolicy": "exact-raw-json-8192",
+      "requestSchema": "UsageSyncV1",
+      "responseSchema": "UsageSyncResultV1",
+      "summary": "Submit one bounded provider-neutral Community usage snapshot"
     },
     {
       "admissionPolicy": "no-queue-4",

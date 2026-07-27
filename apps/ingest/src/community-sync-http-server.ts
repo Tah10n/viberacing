@@ -24,6 +24,7 @@ import {
   communitySyncRequestTarget,
   maximumCommunitySyncBodyBytes,
   maximumCommunitySyncRawHeaderPairs,
+  usageSyncRequestTarget,
 } from "./protocol.js";
 
 const requestEntropyBytes = 16;
@@ -536,7 +537,13 @@ function methodNotAllowed(_request: FastifyRequest, reply: FastifyReply): void {
   sendProblem(reply, "method_not_allowed", true);
 }
 
-export function createCommunitySyncHttpServer(application: unknown): FastifyInstance {
+export function createCommunitySyncHttpServer(
+  application: unknown,
+  usageSyncEnabled = false,
+): FastifyInstance {
+  if (typeof usageSyncEnabled !== "boolean") {
+    fail("application_invalid");
+  }
   const validatedApplication = readApplication(application);
   const admission = createCommunitySyncAdmission(communitySyncHttpPolicy.admissionLimit);
   const options: FastifyHttpOptions<RawServerDefault> = {
@@ -602,56 +609,66 @@ export function createCommunitySyncHttpServer(application: unknown): FastifyInst
     }
   });
   server.setNotFoundHandler((request, reply) => {
+    const enabledRequestTargets = usageSyncEnabled
+      ? [communitySyncRequestTarget, usageSyncRequestTarget]
+      : [communitySyncRequestTarget];
     if (
-      request.raw.url === communitySyncRequestTarget &&
+      enabledRequestTargets.includes(String(request.raw.url)) &&
       request.raw.method !== communitySyncMethod
     ) {
       return sendProblem(reply, "method_not_allowed", true);
     }
     return sendProblem(reply, "not_found");
   });
-  server.route({
-    handler: methodNotAllowed,
-    method: nonPostMethods,
-    onRequest: methodNotAllowed,
-    url: communitySyncRequestTarget,
-  });
-  server.post(
-    communitySyncRequestTarget,
-    {
-      bodyLimit: communitySyncHttpPolicy.maximumBodyBytes,
-      handlerTimeout: communitySyncHttpPolicy.handlerTimeoutMs,
-    },
-    async (request, reply) => {
-      if (!acceptsCommunitySyncJson(request.headers.accept)) {
-        sendProblem(reply, "not_acceptable");
-        return;
-      }
-      const lease = admission.tryAcquire();
-      if (lease === undefined) {
-        sendProblem(reply, "temporarily_unavailable");
-        return;
-      }
-      try {
-        const decision = await validatedApplication.execute(createRawEnvelope(request));
-        // Fastify's handler-timeout signal also observes the IncomingMessage `close` event, which
-        // Node emits after a normally completed request stream. `readableAborted` distinguishes a
-        // stream destroyed or errored before `end`; a timeout or later client disconnect has
-        // already sent or destroyed the outgoing response.
-        if (request.raw.readableAborted || reply.raw.destroyed || reply.sent) {
+  function registerSyncRoute(requestTarget: string): void {
+    server.route({
+      handler: methodNotAllowed,
+      method: nonPostMethods,
+      onRequest: methodNotAllowed,
+      url: requestTarget,
+    });
+    server.post(
+      requestTarget,
+      {
+        bodyLimit: communitySyncHttpPolicy.maximumBodyBytes,
+        handlerTimeout: communitySyncHttpPolicy.handlerTimeoutMs,
+      },
+      async (request, reply) => {
+        if (!acceptsCommunitySyncJson(request.headers.accept)) {
+          sendProblem(reply, "not_acceptable");
           return;
         }
-        const serialized = readApplicationDecision(decision);
-        if (serialized === undefined) {
-          sendProblem(reply, "internal_error");
-        } else {
-          sendDecision(reply, serialized);
+        const lease = admission.tryAcquire();
+        if (lease === undefined) {
+          sendProblem(reply, "temporarily_unavailable");
+          return;
         }
-      } finally {
-        lease.release();
-      }
-    },
-  );
+        try {
+          const decision = await validatedApplication.execute(createRawEnvelope(request));
+          // Fastify's handler-timeout signal also observes the IncomingMessage `close` event, which
+          // Node emits after a normally completed request stream. `readableAborted` distinguishes a
+          // stream destroyed or errored before `end`; a timeout or later client disconnect has
+          // already sent or destroyed the outgoing response.
+          if (request.raw.readableAborted || reply.raw.destroyed || reply.sent) {
+            return;
+          }
+          const serialized = readApplicationDecision(decision);
+          if (serialized === undefined) {
+            sendProblem(reply, "internal_error");
+          } else {
+            sendDecision(reply, serialized);
+          }
+        } finally {
+          lease.release();
+        }
+      },
+    );
+  }
+
+  registerSyncRoute(communitySyncRequestTarget);
+  if (usageSyncEnabled) {
+    registerSyncRoute(usageSyncRequestTarget);
+  }
 
   if (validatedApplication.close !== undefined) {
     server.addHook("onClose", async () => {

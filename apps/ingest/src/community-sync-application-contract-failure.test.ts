@@ -36,11 +36,15 @@ import {
   type CommunitySyncApplicationError,
 } from "./community-sync-application.js";
 import {
+  codexAccountingRevision,
+  codexProvider,
   CommunitySyncVerificationError,
   type VerifiedCommunitySync,
 } from "./community-sync-verifier.js";
+import { communitySyncRequestTarget } from "./protocol.js";
 
 const submission = Object.freeze({
+  accountingRevision: codexAccountingRevision,
   bodyDigestHex: "11".repeat(32),
   deviceId: "dev_AAAAAAAAAAAAAAAAAAAAAA",
   deviceKeyId: "11111111-2222-4333-8444-555555555555",
@@ -55,6 +59,8 @@ const submission = Object.freeze({
     codexVersion: "2.3.4",
     dailyEntries: Object.freeze([Object.freeze({ codexReportedDate: "2026-07-15", tokens: 123 })]),
   }),
+  provider: codexProvider,
+  requestTarget: communitySyncRequestTarget,
   signatureBase64Url: Buffer.alloc(64, 0x44).toString("base64url"),
 }) satisfies VerifiedCommunitySync;
 

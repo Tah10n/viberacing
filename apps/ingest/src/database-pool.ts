@@ -42,7 +42,9 @@ const runtimeBoundaryQuery = `SELECT
 const deviceVerificationQuery = `SELECT
   material.device_key_id::text AS device_key_id,
   material.source_id AS source_id,
-  material.public_key AS public_key
+  material.public_key AS public_key,
+  material.provider AS provider,
+  material.accounting_revision AS accounting_revision
 FROM viberacing_api.read_device_verification_material($1::text) AS material`;
 
 const consumeOriginNonceQuery = `SELECT
@@ -71,6 +73,27 @@ FROM viberacing_api.submit_community_sync(
   $13::bigint[]
 ) AS submission`;
 
+const submitUsageSyncQuery = `SELECT
+  submission.outcome AS outcome,
+  submission.accepted_entries AS accepted_entries
+FROM viberacing_api.submit_usage_sync(
+  $1::uuid,
+  $2::text,
+  $3::text,
+  $4::text,
+  $5::text,
+  $6::uuid,
+  $7::text,
+  $8::timestamptz,
+  $9::text,
+  $10::text,
+  $11::bytea,
+  $12::bytea,
+  $13::bytea,
+  $14::text[],
+  $15::bigint[]
+) AS submission`;
+
 export interface IngestDatabaseSubmission {
   readonly bodyDigest: Uint8Array;
   readonly codexReportedDates: readonly string[];
@@ -93,6 +116,24 @@ export interface IngestDatabaseOriginNonce {
   readonly originKeyId: string;
 }
 
+export interface IngestDatabaseUsageSubmission {
+  readonly accountingRevision: string;
+  readonly agentVersion: string;
+  readonly bodyDigest: Uint8Array;
+  readonly clientVersion: string;
+  readonly dailyTokenTotals: readonly number[];
+  readonly deviceId: string;
+  readonly deviceKeyId: string;
+  readonly nonceDigest: Uint8Array;
+  readonly observedAt: string;
+  readonly provider: string;
+  readonly reportedDates: readonly string[];
+  readonly signature: Uint8Array;
+  readonly snapshotId: string;
+  readonly sourceId: string;
+  readonly syncId: string;
+}
+
 export type IngestDatabasePoolSignal = "idle_client_error";
 export type IngestDatabasePoolSignalSink = (
   signal: IngestDatabasePoolSignal,
@@ -103,6 +144,7 @@ export interface IngestDatabaseClient {
   readDeviceVerificationMaterial(deviceId: string): Promise<unknown>;
   release(destroy?: boolean): void;
   submitCommunitySync(input: IngestDatabaseSubmission): Promise<unknown>;
+  submitUsageSync(input: IngestDatabaseUsageSubmission): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
 }
 
@@ -177,6 +219,25 @@ function wrapClient(client: NodePostgresClient): IngestDatabaseClient {
         Buffer.from(input.nonceDigest),
         [...input.codexReportedDates],
         input.tokens.map(String),
+      ]);
+    },
+    submitUsageSync(input: IngestDatabaseUsageSubmission): Promise<unknown> {
+      return fixedQuery(submitUsageSyncQuery, [
+        input.deviceKeyId,
+        input.deviceId,
+        input.sourceId,
+        input.provider,
+        input.accountingRevision,
+        input.snapshotId,
+        input.syncId,
+        input.observedAt,
+        input.clientVersion,
+        input.agentVersion,
+        Buffer.from(input.bodyDigest),
+        Buffer.from(input.signature),
+        Buffer.from(input.nonceDigest),
+        [...input.reportedDates],
+        input.dailyTokenTotals.map(String),
       ]);
     },
     verifyRuntimeBoundary(): Promise<unknown> {

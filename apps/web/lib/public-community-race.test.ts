@@ -1,15 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { CommunityRaceStatusPageV1 } from "@viberacing/contracts";
+import type {
+  CommunityRaceStatusPageV1,
+  CommunityTokenRaceStatusPageV1,
+} from "@viberacing/contracts";
 
 import {
   currentCommunitySeasonStart,
   isPublicCommunityHandle,
+  loadPreferredPublicCommunityRace,
   loadPublicCommunityRace,
+  loadPublicCommunityTokenRace,
   mapCommunityRaceStatusPageToRace,
+  mapCommunityTokenRaceStatusPageToRace,
 } from "./public-community-race";
 
 const seasonStart = "2026-07-13";
+const tokenSeasonStart = "2026-07-27";
 const activeRecipe = {
   schemaVersion: 1,
   chassis: "formula",
@@ -56,6 +63,41 @@ const validPage = {
   selfReported: true,
   trustTier: "community",
 } as const satisfies CommunityRaceStatusPageV1;
+const validTokenPage = {
+  participants: [
+    {
+      activeDays: 7,
+      displayPosition: 1,
+      freshnessDays: 0,
+      handle: "token_one",
+      carRecipe: activeRecipe,
+      metricVersion: "community_tokens_v1",
+      rankPosition: 1,
+      seasonEnd: "2026-08-02",
+      seasonFinalized: false,
+      seasonStart: tokenSeasonStart,
+      sourceCount: 2,
+      streakDays: 13,
+      weeklyTokenTotal: 12_345_678,
+    },
+    {
+      activeDays: 6,
+      displayPosition: 2,
+      freshnessDays: 1,
+      handle: "token_two",
+      metricVersion: "community_tokens_v1",
+      rankPosition: 2,
+      seasonEnd: "2026-08-02",
+      seasonFinalized: false,
+      seasonStart: tokenSeasonStart,
+      sourceCount: 1,
+      weeklyTokenTotal: 9_876_543,
+    },
+  ],
+  schemaVersion: 1,
+  selfReported: true,
+  trustTier: "community",
+} as const satisfies CommunityTokenRaceStatusPageV1;
 
 function scoreResponse(value: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(value), {
@@ -199,6 +241,107 @@ describe("visible public Community race", () => {
     expect(mapCommunityRaceStatusPageToRace(page, expectedSeason)).toBeUndefined();
   });
 
+  it("maps the direct-token contract into the existing relative race presentation", () => {
+    const participants = mapCommunityTokenRaceStatusPageToRace(validTokenPage, tokenSeasonStart);
+
+    expect(participants).toEqual([
+      expect.objectContaining({
+        car: activeRecipe,
+        handle: "token_one",
+        rank: 1,
+        streakDays: 13,
+        weeklyScore: 12_345_678,
+      }),
+      expect.objectContaining({
+        handle: "token_two",
+        rank: 2,
+        weeklyScore: 9_876_543,
+      }),
+    ]);
+    expect(Object.isFrozen(participants)).toBe(true);
+    expect(Object.isFrozen(participants?.[0])).toBe(true);
+    expect(participants?.[1]?.car).not.toEqual(activeRecipe);
+
+    const carOnly = {
+      ...validTokenPage,
+      participants: [
+        {
+          ...validTokenPage.participants[0],
+          streakDays: undefined,
+        },
+      ],
+    };
+    delete (carOnly.participants[0] as { streakDays?: unknown }).streakDays;
+    const streakOnly = {
+      ...validTokenPage,
+      participants: [
+        {
+          ...validTokenPage.participants[1],
+          displayPosition: 1,
+          streakDays: 2,
+        },
+      ],
+    };
+    expect(mapCommunityTokenRaceStatusPageToRace(carOnly, tokenSeasonStart)).toHaveLength(1);
+    expect(mapCommunityTokenRaceStatusPageToRace(streakOnly, tokenSeasonStart)).toHaveLength(1);
+  });
+
+  it.each([
+    [{ ...validTokenPage, trustTier: "verified" }, tokenSeasonStart],
+    [
+      {
+        ...validTokenPage,
+        participants: [{ ...validTokenPage.participants[0], metricVersion: "community_v1" }],
+      },
+      tokenSeasonStart,
+    ],
+    [
+      {
+        ...validTokenPage,
+        participants: [
+          { ...validTokenPage.participants[0], weeklyTokenTotal: Number.MAX_SAFE_INTEGER + 1 },
+        ],
+      },
+      tokenSeasonStart,
+    ],
+    [
+      {
+        ...validTokenPage,
+        participants: [{ ...validTokenPage.participants[0], weeklyScore: 7000 }],
+      },
+      tokenSeasonStart,
+    ],
+    [
+      {
+        ...validTokenPage,
+        participants: [{ ...validTokenPage.participants[0], displayPosition: 2 }],
+      },
+      tokenSeasonStart,
+    ],
+    [
+      {
+        ...validTokenPage,
+        participants: [{ ...validTokenPage.participants[0], streakDays: null }],
+      },
+      tokenSeasonStart,
+    ],
+    [
+      {
+        ...validTokenPage,
+        participants: [
+          {
+            ...validTokenPage.participants[0],
+            carRecipe: { ...activeRecipe, palette: "#ffffff" },
+          },
+        ],
+      },
+      tokenSeasonStart,
+    ],
+    [validTokenPage, "2026-07-28"],
+  ])("fails closed for invalid direct-token pages", (page, expectedSeason) => {
+    expect(mapCommunityTokenRaceStatusPageToRace(page, expectedSeason)).toBeUndefined();
+  });
+
   it("reads the exact same-origin endpoint without credentials or caching", async () => {
     const controller = new AbortController();
     const fetchScore = vi.fn((input: string, init: RequestInit) => {
@@ -249,6 +392,97 @@ describe("visible public Community race", () => {
       loadPublicCommunityRace(seasonStart, new AbortController().signal, () =>
         Promise.resolve(response),
       ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("loads the exact token endpoint without credentials and maps its response", async () => {
+    const controller = new AbortController();
+    const fetchScore = vi.fn((input: string, init: RequestInit) => {
+      expect(input).toBe("/v1/community/tokens?seasonStart=2026-07-27");
+      expect(init).toMatchObject({
+        cache: "no-store",
+        credentials: "omit",
+        headers: { accept: "application/json" },
+        method: "GET",
+        redirect: "error",
+        signal: controller.signal,
+      });
+      return Promise.resolve(scoreResponse(validTokenPage));
+    });
+
+    await expect(
+      loadPublicCommunityTokenRace(tokenSeasonStart, controller.signal, fetchScore),
+    ).resolves.toHaveLength(2);
+    expect(fetchScore).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed for invalid token seasons, responses, and oversized bodies", async () => {
+    const fetchScore = vi.fn(() => Promise.resolve(scoreResponse(validTokenPage)));
+    await expect(
+      loadPublicCommunityTokenRace("2026-07-28", new AbortController().signal, fetchScore),
+    ).resolves.toBeUndefined();
+    expect(fetchScore).not.toHaveBeenCalled();
+
+    for (const response of [
+      new Response("unavailable", { status: 503 }),
+      new Response(JSON.stringify(validTokenPage), {
+        headers: { "content-type": "text/plain" },
+      }),
+      scoreResponse({ ...validTokenPage, selfReported: false }),
+      new Response("{" + "x".repeat(32_768), {
+        headers: { "content-type": "application/json; charset=utf-8" },
+      }),
+    ]) {
+      await expect(
+        loadPublicCommunityTokenRace(tokenSeasonStart, new AbortController().signal, () =>
+          Promise.resolve(response.clone()),
+        ),
+      ).resolves.toBeUndefined();
+    }
+    await expect(
+      loadPublicCommunityTokenRace(tokenSeasonStart, new AbortController().signal, () =>
+        Promise.reject(new Error("private-network-error")),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("prefers nonempty token standings and otherwise falls back without inventing data", async () => {
+    const signal = new AbortController().signal;
+    const tokenFirst = vi.fn(() => Promise.resolve(scoreResponse(validTokenPage)));
+    await expect(
+      loadPreferredPublicCommunityRace(tokenSeasonStart, signal, tokenFirst),
+    ).resolves.toMatchObject({ metric: "tokens", participants: { length: 2 } });
+    expect(tokenFirst).toHaveBeenCalledOnce();
+
+    const emptyTokenPage = { ...validTokenPage, participants: [] };
+    const fallback = vi
+      .fn<(input: string) => Promise<Response>>()
+      .mockResolvedValueOnce(scoreResponse(emptyTokenPage))
+      .mockResolvedValueOnce(scoreResponse(validPage));
+    await expect(
+      loadPreferredPublicCommunityRace(seasonStart, signal, fallback),
+    ).resolves.toMatchObject({ metric: "score", participants: { length: 2 } });
+    expect(fallback).toHaveBeenCalledTimes(2);
+
+    const unavailableToken = vi
+      .fn<(input: string) => Promise<Response>>()
+      .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
+      .mockResolvedValueOnce(scoreResponse(validPage));
+    await expect(
+      loadPreferredPublicCommunityRace(seasonStart, signal, unavailableToken),
+    ).resolves.toMatchObject({ metric: "score", participants: { length: 2 } });
+
+    const emptyOnly = vi
+      .fn<(input: string) => Promise<Response>>()
+      .mockResolvedValueOnce(scoreResponse(emptyTokenPage))
+      .mockResolvedValueOnce(new Response("unavailable", { status: 503 }));
+    await expect(
+      loadPreferredPublicCommunityRace(tokenSeasonStart, signal, emptyOnly),
+    ).resolves.toEqual({ metric: "tokens", participants: [] });
+
+    const unavailable = vi.fn(() => Promise.resolve(new Response("unavailable", { status: 503 })));
+    await expect(
+      loadPreferredPublicCommunityRace(tokenSeasonStart, signal, unavailable),
     ).resolves.toBeUndefined();
   });
 });

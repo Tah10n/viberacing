@@ -14,9 +14,9 @@ use crate::process::{
     CandidateCodex01445Collector, ReviewedCodexLaunch, current_allowed_environment,
 };
 use crate::sync::{
-    COMMUNITY_SYNC_MEDIA_TYPE, COMMUNITY_SYNC_REQUEST_TARGET, CandidateCommunitySyncV1Composer,
-    CandidateCommunitySyncV1Signer, DEVICE_NONCE_BYTES, ReviewedCommunitySyncContext,
-    ReviewedDeviceSigningKey, SignedCommunitySync, encode_base64url,
+    COMMUNITY_USAGE_MEDIA_TYPE, COMMUNITY_USAGE_REQUEST_TARGET, CandidateCommunityUsageV1Composer,
+    CandidateCommunityUsageV1Signer, DEVICE_NONCE_BYTES, ReviewedCommunityUsageContext,
+    ReviewedDeviceSigningKey, SignedCommunityUsage, encode_base64url,
 };
 
 use super::{
@@ -79,7 +79,7 @@ pub(super) fn run_sync(
 fn prepare_fresh_sync(
     record: &CredentialRecord,
     daily_usage: DailyUsage,
-) -> Result<SignedCommunitySync, ConnectorCliError> {
+) -> Result<SignedCommunityUsage, ConnectorCliError> {
     let mut sync_random = [0_u8; 16];
     let mut device_nonce = [0_u8; DEVICE_NONCE_BYTES];
     getrandom::fill(&mut sync_random).map_err(|_| ConnectorCliError::EntropyUnavailable)?;
@@ -102,7 +102,7 @@ fn prepare_sync(
     observed_at: String,
     sync_random: [u8; 16],
     device_nonce: [u8; DEVICE_NONCE_BYTES],
-) -> Result<SignedCommunitySync, ConnectorCliError> {
+) -> Result<SignedCommunityUsage, ConnectorCliError> {
     if record.state != RecordState::Active || daily_usage.is_empty() {
         return Err(if daily_usage.is_empty() {
             ConnectorCliError::NoUsage
@@ -117,7 +117,7 @@ fn prepare_sync(
         .map_err(|_| ConnectorCliError::SecureStorageInvalid)?
         .to_owned();
     let sync_id = format!("syn_{}", encode_base64url(&sync_random));
-    let context = ReviewedCommunitySyncContext::from_active_device(
+    let context = ReviewedCommunityUsageContext::from_active_device(
         source_id,
         sync_id,
         observed_at,
@@ -125,9 +125,9 @@ fn prepare_sync(
         device_nonce,
     );
     let key = ReviewedDeviceSigningKey::from_active_device(device_id, record.secret_key);
-    let prepared = CandidateCommunitySyncV1Composer::compose(context, daily_usage)
+    let prepared = CandidateCommunityUsageV1Composer::compose(context, daily_usage)
         .map_err(|_| ConnectorCliError::SyncPreparationUnavailable)?;
-    CandidateCommunitySyncV1Signer::sign(key, prepared)
+    CandidateCommunityUsageV1Signer::sign(key, prepared)
         .map_err(|_| ConnectorCliError::SecureStorageInvalid)
 }
 
@@ -239,14 +239,14 @@ impl HttpSyncTransport {
 
     fn send(
         &self,
-        request: &SignedCommunitySync,
+        request: &SignedCommunityUsage,
         submitted_entries: usize,
     ) -> Result<SyncOutcome, ConnectorCliError> {
         let response = self
             .agent
-            .post(format!("{}{COMMUNITY_SYNC_REQUEST_TARGET}", self.origin))
-            .content_type(COMMUNITY_SYNC_MEDIA_TYPE)
-            .header("accept", COMMUNITY_SYNC_MEDIA_TYPE)
+            .post(format!("{}{COMMUNITY_USAGE_REQUEST_TARGET}", self.origin))
+            .content_type(COMMUNITY_USAGE_MEDIA_TYPE)
+            .header("accept", COMMUNITY_USAGE_MEDIA_TYPE)
             .header(DEVICE_ID_HEADER, request.device_id())
             .header(DEVICE_TIMESTAMP_HEADER, request.device_timestamp())
             .header(DEVICE_NONCE_HEADER, request.device_nonce())
@@ -294,7 +294,7 @@ impl HttpSyncTransport {
 }
 
 fn validate_sync_response(
-    request: &SignedCommunitySync,
+    request: &SignedCommunityUsage,
     header_request_id: &str,
     response: &SyncResponse,
     submitted_entries: usize,
@@ -356,7 +356,7 @@ mod tests {
         record
     }
 
-    fn signed_request(origin: &Origin) -> SignedCommunitySync {
+    fn signed_request(origin: &Origin) -> SignedCommunityUsage {
         prepare_sync(
             &active_record(origin),
             daily_usage(),
@@ -398,7 +398,7 @@ mod tests {
         let signed = signed_request(&origin);
         let body = str::from_utf8(signed.body()).unwrap();
         assert!(body.contains(SOURCE_ID));
-        assert!(body.contains("\"codexVersion\":\"0.144.5\""));
+        assert!(body.contains("\"agentVersion\":\"0.144.5\""));
         assert_eq!(signed.device_id(), DEVICE_ID);
         assert!(valid_public_id(signed.idempotency_key(), "syn_"));
         assert_eq!(signed.device_nonce().len(), 22);
@@ -445,7 +445,7 @@ mod tests {
                         .parse::<usize>()
                         .unwrap();
                     if request.len() >= header_end + content_length {
-                        assert!(headers.starts_with("POST /v1/community/sync HTTP/1.1\r\n"));
+                        assert!(headers.starts_with("POST /v1/community/usage HTTP/1.1\r\n"));
                         assert_eq!(
                             header_value(headers, DEVICE_ID_HEADER),
                             Some(expected_device.as_str())

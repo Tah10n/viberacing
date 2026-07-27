@@ -6,7 +6,7 @@ import {
 
 import { resolveIngestHostConfig, type IngestHostConfig } from "./listener-config.js";
 
-const configKeys = new Set(["enabled", "host", "port", "tlsTermination"]);
+const configKeys = new Set(["enabled", "host", "port", "tlsTermination", "usageSyncEnabled"]);
 const dependencyKeys = new Set(["createApplication", "createServer"]);
 const applicationKeys = new Set(["close", "execute"]);
 
@@ -93,6 +93,7 @@ function readConfig(value: unknown): IngestHostConfig {
     const host = ownDataValue(value, "host");
     const port = ownDataValue(value, "port");
     const tlsTermination = ownDataValue(value, "tlsTermination");
+    const usageSyncEnabled = ownDataValue(value, "usageSyncEnabled");
     if (
       enabled !== true ||
       (host !== "0.0.0.0" && host !== "127.0.0.1" && host !== "::1") ||
@@ -101,12 +102,13 @@ function readConfig(value: unknown): IngestHostConfig {
       port < 0 ||
       port > 65_535 ||
       (tlsTermination !== "loopback-cleartext" && tlsTermination !== "railway-edge") ||
+      typeof usageSyncEnabled !== "boolean" ||
       (tlsTermination === "railway-edge" && (host !== "0.0.0.0" || port === 0)) ||
       (tlsTermination === "loopback-cleartext" && host === "0.0.0.0")
     ) {
       fail("configuration_invalid");
     }
-    return Object.freeze({ enabled, host, port, tlsTermination });
+    return Object.freeze({ enabled, host, port, tlsTermination, usageSyncEnabled });
   } catch (error) {
     if (error instanceof IngestHostError) {
       throw error;
@@ -256,7 +258,8 @@ export async function startConfiguredIngestHost(
   const config = resolveIngestHostConfig(environment);
   const dependencies = Object.freeze({
     createApplication: () => createConfiguredCommunitySyncApplication(environment),
-    createServer: (application: unknown) => createCommunitySyncHttpServer(application),
+    createServer: (application: unknown) =>
+      createCommunitySyncHttpServer(application, config.usageSyncEnabled),
   });
   return startIngestHost(config, dependencies);
 }

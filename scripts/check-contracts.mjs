@@ -44,6 +44,7 @@ const schemaTypes = new Set(["array", "boolean", "integer", "object", "string"])
 const forbiddenConnectorFields = new Set([
   "accessToken",
   "accountId",
+  "accountingRevision",
   "activeDays",
   "apiKey",
   "conversation",
@@ -53,7 +54,9 @@ const forbiddenConnectorFields = new Set([
   "githubUserId",
   "handle",
   "moderationState",
+  "metricVersion",
   "profileId",
+  "provider",
   "prompt",
   "rank",
   "rankPosition",
@@ -70,6 +73,7 @@ const forbiddenConnectorFields = new Set([
   "streak",
   "trustTier",
   "weeklyScore",
+  "weeklyTokenTotal",
 ]);
 const expectedFields = new Map([
   [
@@ -89,6 +93,10 @@ const expectedFields = new Map([
     ["schemaVersion", "trustTier", "selfReported", "participants"],
   ],
   ["community-score-query.schema.json", ["seasonStart"]],
+  [
+    "community-token-race-status-page.schema.json",
+    ["schemaVersion", "trustTier", "selfReported", "participants"],
+  ],
   ["connector-car-proposal-result.schema.json", ["schemaVersion", "requestId", "outcome"]],
   ["connector-pairing-poll-result.schema.json", ["schemaVersion", "requestId", "deviceBindings"]],
   ["connector-pairing-poll.schema.json", ["schemaVersion", "pollToken", "possessionSignature"]],
@@ -134,6 +142,22 @@ const expectedFields = new Map([
   [
     "problem-details.schema.json",
     ["schemaVersion", "requestId", "status", "errorCode", "title", "retryable"],
+  ],
+  [
+    "usage-sync-result.schema.json",
+    ["schemaVersion", "requestId", "syncId", "outcome", "acceptedEntries"],
+  ],
+  [
+    "usage-sync.schema.json",
+    [
+      "schemaVersion",
+      "sourceId",
+      "syncId",
+      "observedAt",
+      "clientVersion",
+      "agentVersion",
+      "dailyEntries",
+    ],
   ],
 ]);
 const publicProblemCodes = [
@@ -207,6 +231,21 @@ const implementedLocalEvidencePaths = new Map([
     ],
   ],
   [
+    "getCommunityTokensV1",
+    [
+      "apps/web/app/v1/community/tokens/route.test.ts",
+      "apps/web/app/v1/community/tokens/route.ts",
+      "apps/web/lib/public-community-score-mapper.test.ts",
+      "apps/web/lib/public-community-score-mapper.ts",
+      "apps/web/lib/public-community-score-route.test.ts",
+      "apps/web/lib/public-community-score-route.ts",
+      "apps/web/lib/public-community-score-store.test.ts",
+      "apps/web/lib/public-community-score-store.ts",
+      "database/migrations/0042_direct_community_token_leaderboard.sql",
+      "database/tests/community_token_leaderboard.sql",
+    ],
+  ],
+  [
     "postCommunitySyncV1",
     [
       "apps/ingest/src/community-sync-admission.test.ts",
@@ -216,6 +255,24 @@ const implementedLocalEvidencePaths = new Map([
       "apps/ingest/src/community-sync-http-server-contract-failure.test.ts",
       "apps/ingest/src/community-sync-http-server.test.ts",
       "apps/ingest/src/community-sync-http-server.ts",
+      "scripts/test-ingest-postgres-integration.mjs",
+    ],
+  ],
+  [
+    "postCommunityUsageSyncV1",
+    [
+      "apps/edge/src/worker.mjs",
+      "apps/edge/test/worker.test.mjs",
+      "apps/ingest/src/community-sync-application.test.ts",
+      "apps/ingest/src/community-sync-application.ts",
+      "apps/ingest/src/community-sync-database.test.ts",
+      "apps/ingest/src/community-sync-database.ts",
+      "apps/ingest/src/community-sync-http-server.test.ts",
+      "apps/ingest/src/community-sync-http-server.ts",
+      "apps/ingest/src/community-sync-verifier.test.ts",
+      "apps/ingest/src/community-sync-verifier.ts",
+      "database/migrations/0041_agent_source_provider_foundation.sql",
+      "database/tests/usage_ingest.sql",
       "scripts/test-ingest-postgres-integration.mjs",
     ],
   ],
@@ -553,6 +610,84 @@ function validateCarProposalVector() {
   }
 }
 
+function validateUsageSyncVector() {
+  const relativePath = "contracts/v1/connector-usage-sync-device-request.test-vector.json";
+  const absolutePath = resolve(root, relativePath);
+  if (!existsSync(absolutePath)) {
+    report(relativePath, "shared connector usage vector is missing");
+    return;
+  }
+  const stats = lstatSync(absolutePath);
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    report(relativePath, "shared connector usage vector must be a regular file");
+    return;
+  }
+  let vector;
+  try {
+    vector = JSON.parse(readFileSync(absolutePath, "utf8"));
+  } catch {
+    report(relativePath, "shared connector usage vector must be valid JSON");
+    return;
+  }
+  const expectedKeys = [
+    "body",
+    "bodyDigestBase64Url",
+    "deviceId",
+    "deviceNonceBase64Url",
+    "deviceNonceBytes",
+    "devicePublicKeyBase64Url",
+    "deviceSignatureBase64Url",
+    "deviceSignatureMessage",
+    "observedAt",
+    "schemaVersion",
+    "sourceId",
+    "syncId",
+  ];
+  const nonce = Buffer.from(Array.from({ length: 16 }, (_, index) => index));
+  const expectedBody =
+    '{"schemaVersion":1,"sourceId":"src_AAAAAAAAAAAAAAAAAAAAAA","syncId":"syn_BBBBBBBBBBBBBBBBBBBBBB","observedAt":"2026-07-15T12:34:56.789Z","clientVersion":"0.0.0","agentVersion":"0.144.5","dailyEntries":[{"reportedDate":"2026-07-13","dailyTokenTotal":123},{"reportedDate":"2026-07-14","dailyTokenTotal":456}]}';
+  const expectedDigest = createHash("sha256").update(expectedBody).digest("base64url");
+  const canonicalBase64Url = (value, expectedBytes) => {
+    if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value)) {
+      return false;
+    }
+    const decoded = Buffer.from(value, "base64url");
+    return (
+      decoded.length === expectedBytes &&
+      decoded.toString("base64url") === value &&
+      value.length === Math.ceil((expectedBytes * 8) / 6)
+    );
+  };
+  if (
+    !isObject(vector) ||
+    !sameEntries(Object.keys(vector).sort(), expectedKeys) ||
+    vector.schemaVersion !== 1 ||
+    vector.sourceId !== "src_AAAAAAAAAAAAAAAAAAAAAA" ||
+    vector.syncId !== "syn_BBBBBBBBBBBBBBBBBBBBBB" ||
+    vector.observedAt !== "2026-07-15T12:34:56.789Z" ||
+    vector.deviceId !== "dev_CCCCCCCCCCCCCCCCCCCCCC" ||
+    !sameEntries(vector.deviceNonceBytes ?? [], [...nonce]) ||
+    vector.deviceNonceBase64Url !== nonce.toString("base64url") ||
+    vector.body !== expectedBody ||
+    vector.bodyDigestBase64Url !== expectedDigest ||
+    !canonicalBase64Url(vector.devicePublicKeyBase64Url, 32) ||
+    !canonicalBase64Url(vector.deviceSignatureBase64Url, 64) ||
+    vector.deviceSignatureMessage !==
+      [
+        "viberacing-device-request-v1",
+        "POST",
+        "/v1/community/usage",
+        expectedDigest,
+        vector.deviceId,
+        vector.deviceNonceBase64Url,
+        vector.observedAt,
+        vector.syncId,
+      ].join("\n")
+  ) {
+    report(relativePath, "shared connector usage vector differs from the reviewed boundary");
+  }
+}
+
 function validatePairingVector() {
   const relativePath = "contracts/v1/connector-pairing-possession.test-vector.json";
   const absolutePath = resolve(root, relativePath);
@@ -865,6 +1000,7 @@ if (sources !== undefined) {
         "connector-pairing-authentication.json",
         "connector-pairing-transport.json",
         "connector-sync-authentication.json",
+        "connector-usage-sync-authentication.json",
       ],
     )
   ) {
@@ -887,7 +1023,30 @@ if (sources !== undefined) {
       validatePairingTransportPolicy(record);
     }
   }
+  const connectorSyncPolicy = policies.find(
+    ({ entry }) => entry.file === "connector-sync-authentication.json",
+  )?.policy;
+  const usageSyncPolicy = policies.find(
+    ({ entry }) => entry.file === "connector-usage-sync-authentication.json",
+  )?.policy;
+  if (
+    !isObject(connectorSyncPolicy) ||
+    connectorSyncPolicy.protocolId !== "viberacing-community-sync-auth-v1" ||
+    connectorSyncPolicy.requestTarget !== "/v1/community/sync" ||
+    !isObject(usageSyncPolicy) ||
+    !isDeepStrictEqual(usageSyncPolicy, {
+      ...connectorSyncPolicy,
+      protocolId: "viberacing-usage-sync-auth-v1",
+      requestTarget: "/v1/community/usage",
+    })
+  ) {
+    report(
+      "contracts/v1/connector-usage-sync-authentication.json",
+      "usage sync authentication must differ from the reviewed connector policy only by protocol ID and exact request target",
+    );
+  }
   validateCarProposalVector();
+  validateUsageSyncVector();
   validatePairingVector();
 
   let previousFile = "";
@@ -928,12 +1087,14 @@ if (sources !== undefined) {
     if (expected === undefined || !sameEntries(fields, expected)) {
       report(scope, "top-level fields differ from the reviewed contract boundary");
     }
-    if (entry.file === "connector-sync.schema.json") {
+    if (entry.file === "connector-sync.schema.json" || entry.file === "usage-sync.schema.json") {
       const dailyEntry = schema?.properties?.dailyEntries?.items;
-      if (
-        !sameEntries(Object.keys(dailyEntry?.properties ?? {}), ["codexReportedDate", "tokens"])
-      ) {
-        report(scope, "connector daily-entry fields differ from the exact writable allowlist");
+      const isUsageSync = entry.file === "usage-sync.schema.json";
+      const expectedDailyFields = isUsageSync
+        ? ["reportedDate", "dailyTokenTotal"]
+        : ["codexReportedDate", "tokens"];
+      if (!sameEntries(Object.keys(dailyEntry?.properties ?? {}), expectedDailyFields)) {
+        report(scope, "sync daily-entry fields differ from the exact writable allowlist");
       }
       const nestedNames = [];
       const collectNames = (node) => {
@@ -954,8 +1115,9 @@ if (sources !== undefined) {
           );
         }
       }
-      if (schema?.properties?.dailyEntries?.["x-viberacing-uniqueBy"] !== "codexReportedDate") {
-        report(scope, "daily entries must remain unique by codexReportedDate");
+      const expectedUniqueField = isUsageSync ? "reportedDate" : "codexReportedDate";
+      if (schema?.properties?.dailyEntries?.["x-viberacing-uniqueBy"] !== expectedUniqueField) {
+        report(scope, `daily entries must remain unique by ${expectedUniqueField}`);
       }
     }
     if (
@@ -1121,6 +1283,94 @@ if (sources !== undefined) {
         );
       }
     }
+    if (entry.file === "community-token-race-status-page.schema.json") {
+      const participantArray = schema?.properties?.participants;
+      const participantProperties = participantArray?.items?.properties ?? {};
+      const expectedParticipantFields = [
+        "seasonStart",
+        "seasonEnd",
+        "metricVersion",
+        "seasonFinalized",
+        "handle",
+        "carRecipe",
+        "weeklyTokenTotal",
+        "activeDays",
+        "sourceCount",
+        "rankPosition",
+        "displayPosition",
+        "freshnessDays",
+        "streakDays",
+      ];
+      const requiredParticipantFields = [
+        "seasonStart",
+        "seasonEnd",
+        "metricVersion",
+        "seasonFinalized",
+        "handle",
+        "weeklyTokenTotal",
+        "activeDays",
+        "sourceCount",
+        "rankPosition",
+        "displayPosition",
+        "freshnessDays",
+      ];
+      const carRecipeSchema = records.find(
+        (candidate) => candidate.entry.file === "car-recipe.schema.json",
+      )?.schema;
+      const canonicalCarRecipeShape = {
+        type: carRecipeSchema?.type,
+        additionalProperties: carRecipeSchema?.additionalProperties,
+        required: carRecipeSchema?.required,
+        properties: carRecipeSchema?.properties,
+      };
+      const exactIntegerBounds = [
+        ["weeklyTokenTotal", 0, 9_007_199_254_740_991],
+        ["activeDays", 0, 7],
+        ["sourceCount", 0, 32],
+        ["rankPosition", 1, 32],
+        ["displayPosition", 1, 32],
+        ["freshnessDays", 0, 65_535],
+        ["streakDays", 0, 36_533],
+      ];
+      if (
+        schema?.properties?.trustTier?.const !== "community" ||
+        schema?.properties?.selfReported?.const !== true ||
+        participantArray?.minItems !== 0 ||
+        participantArray?.maxItems !== 32 ||
+        participantArray?.["x-viberacing-uniqueBy"] !== "displayPosition" ||
+        !sameEntries(Object.keys(participantProperties), expectedParticipantFields) ||
+        !sameEntries(participantArray?.items?.required ?? [], requiredParticipantFields) ||
+        !sameEntries(participantArray?.items?.["x-viberacing-optionalProperties"] ?? [], [
+          "carRecipe",
+          "streakDays",
+        ]) ||
+        !isDeepStrictEqual(participantProperties.carRecipe, canonicalCarRecipeShape) ||
+        exactIntegerBounds.some(([name, minimum, maximum]) => {
+          const field = participantProperties[name];
+          return field?.minimum !== minimum || field?.maximum !== maximum;
+        }) ||
+        participantProperties.metricVersion?.const !== "community_tokens_v1" ||
+        participantProperties.metricVersion?.minLength !== 19 ||
+        participantProperties.metricVersion?.maxLength !== 19 ||
+        participantProperties.handle?.minLength !== 3 ||
+        participantProperties.handle?.maxLength !== 24 ||
+        participantProperties.handle?.pattern !== "^[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]$" ||
+        participantProperties.seasonStart?.format !== "date" ||
+        participantProperties.seasonStart?.pattern !==
+          "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$" ||
+        participantProperties.seasonStart?.["x-viberacing-dateMinimum"] !== "1999-12-27" ||
+        participantProperties.seasonStart?.["x-viberacing-dateMaximum"] !== "2099-12-28" ||
+        participantProperties.seasonStart?.["x-viberacing-isoWeekday"] !== 1 ||
+        participantProperties.seasonEnd?.format !== "date" ||
+        participantProperties.seasonEnd?.pattern !==
+          "^(?:20[0-9]{2}-[0-9]{2}-[0-9]{2}|2100-01-03)$" ||
+        participantProperties.seasonEnd?.["x-viberacing-dateMinimum"] !== "2000-01-02" ||
+        participantProperties.seasonEnd?.["x-viberacing-dateMaximum"] !== "2100-01-03" ||
+        participantProperties.seasonEnd?.["x-viberacing-isoWeekday"] !== 7
+      ) {
+        report(scope, "Community token participant boundary differs from ADR 0072");
+      }
+    }
     if (entry.file === "community-score-query.schema.json") {
       const seasonStart = schema?.properties?.seasonStart;
       if (
@@ -1206,7 +1456,7 @@ if (sources !== undefined) {
 
   const publicRaceStatusOperation = operations[0];
   if (
-    operations.length !== 7 ||
+    operations.length !== 9 ||
     publicRaceStatusOperation?.entry.method !== "get" ||
     publicRaceStatusOperation.entry.path !== "/v1/community/race/status" ||
     publicRaceStatusOperation.entry.operationId !== "getCommunityRaceStatusV1" ||
@@ -1232,7 +1482,7 @@ if (sources !== undefined) {
 
   const publicRaceOperation = operations[1];
   if (
-    operations.length !== 7 ||
+    operations.length !== 9 ||
     publicRaceOperation?.entry.method !== "get" ||
     publicRaceOperation.entry.path !== "/v1/community/race" ||
     publicRaceOperation.entry.operationId !== "getCommunityRaceV1" ||
@@ -1258,7 +1508,7 @@ if (sources !== undefined) {
 
   const publicScoreOperation = operations[2];
   if (
-    operations.length !== 7 ||
+    operations.length !== 9 ||
     publicScoreOperation?.entry.method !== "get" ||
     publicScoreOperation.entry.path !== "/v1/community/scores" ||
     publicScoreOperation.entry.operationId !== "getCommunityScoresV1" ||
@@ -1284,7 +1534,7 @@ if (sources !== undefined) {
 
   const communitySyncOperation = operations[3];
   if (
-    operations.length !== 7 ||
+    operations.length !== 9 ||
     communitySyncOperation?.entry.method !== "post" ||
     communitySyncOperation.entry.path !== "/v1/community/sync" ||
     communitySyncOperation.entry.operationId !== "postCommunitySyncV1" ||
@@ -1311,7 +1561,62 @@ if (sources !== undefined) {
     );
   }
 
-  const carProposalOperation = operations[4];
+  const publicTokenOperation = operations[4];
+  if (
+    publicTokenOperation?.entry.method !== "get" ||
+    publicTokenOperation.entry.path !== "/v1/community/tokens" ||
+    publicTokenOperation.entry.operationId !== "getCommunityTokensV1" ||
+    publicTokenOperation.entry.implementationStatus !== "implemented-local" ||
+    publicTokenOperation.entry.summary !== "Read one bounded Community token leaderboard page" ||
+    publicTokenOperation.entry.admissionPolicy !== "no-queue-4" ||
+    publicTokenOperation.entry.authenticationContract !== "none" ||
+    publicTokenOperation.entry.querySchema !== "CommunityScoreQueryV1" ||
+    publicTokenOperation.entry.requestSchema !== "none" ||
+    publicTokenOperation.entry.responseSchema !== "CommunityTokenRaceStatusPageV1" ||
+    publicTokenOperation.entry.problemSchema !== "ProblemDetailsV1" ||
+    !sameEntries(publicTokenOperation.entry.problemStatuses, [400, 406, 429, 500, 503]) ||
+    publicTokenOperation.entry.queryPolicy !== "closed-single-value" ||
+    publicTokenOperation.entry.requestBodyPolicy !== "none" ||
+    publicTokenOperation.entry.cacheControl !== "no-store" ||
+    publicTokenOperation.entry.corsPolicy !== "same-origin"
+  ) {
+    report(
+      "contracts/v1/manifest.json",
+      "public Community token operation differs from the reviewed HTTP contract",
+    );
+  }
+
+  const communityUsageSyncOperation = operations[5];
+  if (
+    communityUsageSyncOperation?.entry.method !== "post" ||
+    communityUsageSyncOperation.entry.path !== "/v1/community/usage" ||
+    communityUsageSyncOperation.entry.operationId !== "postCommunityUsageSyncV1" ||
+    communityUsageSyncOperation.entry.implementationStatus !== "implemented-local" ||
+    communityUsageSyncOperation.entry.summary !==
+      "Submit one bounded provider-neutral Community usage snapshot" ||
+    communityUsageSyncOperation.entry.admissionPolicy !== "no-queue-4" ||
+    communityUsageSyncOperation.entry.authenticationContract !==
+      "connector-usage-sync-authentication.json" ||
+    communityUsageSyncOperation.entry.querySchema !== "none" ||
+    communityUsageSyncOperation.entry.requestSchema !== "UsageSyncV1" ||
+    communityUsageSyncOperation.entry.responseSchema !== "UsageSyncResultV1" ||
+    communityUsageSyncOperation.entry.problemSchema !== "ProblemDetailsV1" ||
+    !sameEntries(
+      communityUsageSyncOperation.entry.problemStatuses,
+      [400, 401, 405, 406, 422, 500, 503],
+    ) ||
+    communityUsageSyncOperation.entry.queryPolicy !== "none" ||
+    communityUsageSyncOperation.entry.requestBodyPolicy !== "exact-raw-json-8192" ||
+    communityUsageSyncOperation.entry.cacheControl !== "no-store" ||
+    communityUsageSyncOperation.entry.corsPolicy !== "same-origin"
+  ) {
+    report(
+      "contracts/v1/manifest.json",
+      "provider-neutral Community usage sync operation differs from the reviewed HTTP contract",
+    );
+  }
+
+  const carProposalOperation = operations[6];
   if (
     carProposalOperation?.entry.method !== "post" ||
     carProposalOperation.entry.path !== "/v1/connector/cars/proposals" ||
@@ -1337,7 +1642,7 @@ if (sources !== undefined) {
     report("contracts/v1/manifest.json", "connector car proposal operation differs from review");
   }
 
-  const pairingPollOperation = operations[5];
+  const pairingPollOperation = operations[7];
   if (
     pairingPollOperation?.entry.method !== "post" ||
     pairingPollOperation.entry.path !== "/v1/connector/pairing/poll" ||
@@ -1359,7 +1664,7 @@ if (sources !== undefined) {
     report("contracts/v1/manifest.json", "pairing poll operation differs from review");
   }
 
-  const pairingStartOperation = operations[6];
+  const pairingStartOperation = operations[8];
   if (
     pairingStartOperation?.entry.method !== "post" ||
     pairingStartOperation.entry.path !== "/v1/connector/pairing/start" ||

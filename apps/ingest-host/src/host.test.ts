@@ -16,6 +16,7 @@ const loopbackConfig = Object.freeze({
   host: "127.0.0.1",
   port: 0,
   tlsTermination: "loopback-cleartext",
+  usageSyncEnabled: false,
 });
 
 function createApplication(close = vi.fn(async () => undefined)) {
@@ -80,12 +81,19 @@ describe("startIngestHost", () => {
   });
 
   it.each([
-    Object.freeze({ enabled: true, host: "::1", port: 0, tlsTermination: "loopback-cleartext" }),
+    Object.freeze({
+      enabled: true,
+      host: "::1",
+      port: 0,
+      tlsTermination: "loopback-cleartext",
+      usageSyncEnabled: false,
+    }),
     Object.freeze({
       enabled: true,
       host: "0.0.0.0",
       port: 8080,
       tlsTermination: "railway-edge",
+      usageSyncEnabled: true,
     }),
     Object.freeze(
       Object.assign(Object.create(null) as Record<string, unknown>, {
@@ -93,6 +101,7 @@ describe("startIngestHost", () => {
         host: "127.0.0.1",
         port: 0,
         tlsTermination: "loopback-cleartext",
+        usageSyncEnabled: false,
       }),
     ),
   ])("accepts the closed valid configuration variant %#", async (configuration) => {
@@ -148,6 +157,7 @@ describe("startIngestHost", () => {
     Object.freeze({ ...loopbackConfig, port: -1 }),
     Object.freeze({ ...loopbackConfig, port: 65_536 }),
     Object.freeze({ ...loopbackConfig, tlsTermination: "disabled" }),
+    Object.freeze({ ...loopbackConfig, usageSyncEnabled: "true" }),
     Object.freeze({ host: "127.0.0.1", port: 0, tlsTermination: "loopback-cleartext" }),
     Object.freeze({ host: "127.0.0.1", port: 8080, tlsTermination: "railway-edge" }),
     Object.freeze({ host: "0.0.0.0", port: 8080, tlsTermination: "loopback-cleartext" }),

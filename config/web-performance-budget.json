@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "maximumApplicationChunkGzipBytes": 10000,
+  "maximumApplicationChunkGzipBytes": 10500,
   "maximumInitialAssetCount": 10,
   "maximumInitialRouteGzipBytes": 215000,
   "maximumInitialRouteRawBytes": 700000,

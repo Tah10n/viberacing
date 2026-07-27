@@ -47,7 +47,11 @@ function validPlans() {
       node("Sort", { plans: [node("Function Scan")] }),
     ),
     plan(
-      "WITH visible_entries AS MATERIALIZED (SELECT * FROM viberacing_private.season_entries) SELECT * FROM visible_entries",
+      "SELECT status.* FROM viberacing_api.list_public_community_token_race_status($1::date, $2::integer) AS status",
+      node("Sort", { plans: [node("Function Scan")] }),
+    ),
+    plan(
+      "WITH visible_entries AS MATERIALIZED (SELECT * FROM viberacing_private.season_entries JOIN viberacing_private.seasons ON true WHERE score_version = 'community_v1') SELECT * FROM visible_entries",
       node("Limit", {
         plans: [
           node("Index Scan", { index: "season_entries_profile_history_idx" }),
@@ -66,6 +70,22 @@ function validPlans() {
       node("Sort", {
         plans: [
           node("Function Scan"),
+          node("Index Scan", { index: "finalized_season_profile_freshness_primary_key" }),
+          node("Index Scan", { index: "source_day_values_date_idx" }),
+          node("Bitmap Index Scan", { index: "codex_sources_profile_state_idx" }),
+          node("Index Only Scan", {
+            index: "season_daily_scores_positive_profile_date_idx",
+          }),
+        ],
+      }),
+    ),
+    plan(
+      "WITH visible_entries AS MATERIALIZED (SELECT * FROM viberacing_private.seasons JOIN viberacing_private.season_entries ON true WHERE score_version = 'community_tokens_v1') SELECT * FROM visible_entries LEFT JOIN viberacing_private.profile_car_recipes ON true LEFT JOIN viberacing_private.finalized_season_profile_freshness ON true JOIN viberacing_private.codex_sources ON true JOIN viberacing_private.source_day_values ON true JOIN viberacing_private.season_daily_scores ON true LIMIT 32",
+      node("Limit", {
+        plans: [
+          node("Index Scan", { index: "season_entries_profile_history_idx" }),
+          node("Index Scan", { index: "seasons_pkey" }),
+          node("Index Scan", { index: "profile_car_recipes_pkey" }),
           node("Index Scan", { index: "finalized_season_profile_freshness_primary_key" }),
           node("Index Scan", { index: "source_day_values_date_idx" }),
           node("Bitmap Index Scan", { index: "codex_sources_profile_state_idx" }),
@@ -102,9 +122,23 @@ function expectFailure(callback, expected) {
 
 const validLog = renderLog(validPlans());
 const parsed = parse(validLog);
-assert.equal(parsed.length, 6);
-assert.deepEqual(assertPublicCommunityPlanEvidence(parsed), { evidencedPlanCount: 6 });
-assert.equal(parse(renderLog(validPlans(), "\r\n")).length, 6);
+assert.equal(parsed.length, 8);
+assert.deepEqual(assertPublicCommunityPlanEvidence(parsed), { evidencedPlanCount: 8 });
+assert.equal(parse(renderLog(validPlans(), "\r\n")).length, 8);
+const primaryKeyJoinPlans = validPlans();
+for (const entry of primaryKeyJoinPlans) {
+  const pending = [entry.Plan];
+  while (pending.length > 0) {
+    const candidate = pending.pop();
+    if (candidate["Index Name"] === "codex_sources_profile_state_idx") {
+      candidate["Index Name"] = "codex_sources_pkey";
+    }
+    pending.push(...(candidate.Plans ?? []));
+  }
+}
+assert.deepEqual(assertPublicCommunityPlanEvidence(primaryKeyJoinPlans), {
+  evidencedPlanCount: 8,
+});
 
 expectFailure(() => parse(`${validLog}private-marker`), /exposed a private integration value/);
 expectFailure(() => parse(validLog, 10), /exceeded their fixed byte budget/);
@@ -150,7 +184,7 @@ expectFailure(
   /too many auto_explain plans/,
 );
 
-for (let index = 0; index < 6; index += 1) {
+for (let index = 0; index < 8; index += 1) {
   const missing = validPlans();
   missing.splice(index, 1);
   expectFailure(() => assertPublicCommunityPlanEvidence(missing), /plan evidence was not emitted/);
@@ -182,7 +216,7 @@ mutation[0].Plan.Plans.push(node("ModifyTable"));
 expectFailure(() => assertPublicCommunityPlanEvidence(mutation), /mutating or locking plan node/);
 
 const sequentialScan = validPlans();
-sequentialScan[3].Plan.Plans.push(node("Seq Scan", { relation: "season_entries" }));
+sequentialScan[4].Plan.Plans.push(node("Seq Scan", { relation: "season_entries" }));
 expectFailure(
   () => assertPublicCommunityPlanEvidence(sequentialScan),
   /sequentially scanned a bounded-index relation/,
@@ -215,7 +249,7 @@ for (const indexName of [
 }
 
 const plannedOnlyIndex = validPlans();
-plannedOnlyIndex[3].Plan.Plans[0]["Actual Loops"] = 0;
+plannedOnlyIndex[4].Plan.Plans[0]["Actual Loops"] = 0;
 expectFailure(
   () => assertPublicCommunityPlanEvidence(plannedOnlyIndex),
   /omitted an executed reviewed index/,
@@ -264,7 +298,7 @@ expectFailure(() => assertPublicCommunityPlanEvidence(nonObjectEntry), /entry mu
 
 const braceInQuery = validPlans();
 braceInQuery[0]["Query Text"] += ' /* { "escaped": "}\\\"" } */';
-assert.equal(parse(renderLog(braceInQuery)).length, 6);
+assert.equal(parse(renderLog(braceInQuery)).length, 8);
 
 console.log(
   `Web query-plan evidence tests passed (${failClosedCaseCount} fail-closed cases plus the valid oracle).`,

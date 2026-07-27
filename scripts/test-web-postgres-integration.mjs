@@ -78,6 +78,8 @@ const privateValueMarkers = Object.freeze([
   "900000000000032103",
   `syn_${"W".repeat(22)}`,
   `syn_${"X".repeat(22)}`,
+  `syn_${"Y".repeat(22)}`,
+  `syn_${"Z".repeat(22)}`,
   `dev_${"W".repeat(22)}`,
   `dev_${"X".repeat(22)}`,
 ]);
@@ -321,7 +323,7 @@ function assertAutoExplainEvidence() {
     maximumBytes: maximumDatabaseLogBytes,
     privateMarkers: privateValueMarkers,
   });
-  assert.deepEqual(assertPublicCommunityPlanEvidence(plans), { evidencedPlanCount: 6 });
+  assert.deepEqual(assertPublicCommunityPlanEvidence(plans), { evidencedPlanCount: 8 });
 }
 
 async function stopDatabaseReadBlocker(blocker) {
@@ -521,6 +523,7 @@ function nextProcessEnvironment() {
     NEXT_TELEMETRY_DISABLED: "1",
     NODE_ENV: "production",
     VIBERACING_PUBLIC_RANKING_ENABLED: "true",
+    VIBERACING_TOKEN_RANKING_ENABLED: "true",
   };
   for (const key of ["SystemRoot", "TEMP", "TMP", "WINDIR"]) {
     const value = process.env[key];
@@ -989,7 +992,7 @@ function assertSuccess(result, expected, validate) {
   assertNoPrivateResponseValues(result.body);
 }
 
-function seedSyntheticState(seasonStart) {
+function seedSyntheticState(scoreSeasonStart, tokenSeasonStart) {
   psql(
     `BEGIN;
 SET LOCAL ROLE viberacing_owner;
@@ -1076,12 +1079,19 @@ INSERT INTO viberacing_private.seasons (
   score_version,
   grace_ends_at
 )
-VALUES (
-  DATE '${seasonStart}',
-  DATE '${seasonStart}' + 6,
-  'community_v1',
-  viberacing_private.community_season_grace_ends_at(DATE '${seasonStart}')
-);
+VALUES
+  (
+    DATE '${scoreSeasonStart}',
+    DATE '${scoreSeasonStart}' + 6,
+    'community_v1',
+    viberacing_private.community_season_grace_ends_at(DATE '${scoreSeasonStart}')
+  ),
+  (
+    DATE '${tokenSeasonStart}',
+    DATE '${tokenSeasonStart}' + 6,
+    'community_tokens_v1',
+    viberacing_private.community_season_grace_ends_at(DATE '${tokenSeasonStart}')
+  );
 
 INSERT INTO viberacing_private.season_entries (
   season_start,
@@ -1095,7 +1105,7 @@ INSERT INTO viberacing_private.season_entries (
 )
 VALUES
   (
-    DATE '${seasonStart}',
+    DATE '${scoreSeasonStart}',
     '${fixture.hiddenProfileId}',
     900,
     7,
@@ -1105,7 +1115,7 @@ VALUES
     pg_catalog.statement_timestamp()
   ),
   (
-    DATE '${seasonStart}',
+    DATE '${scoreSeasonStart}',
     '${fixture.alphaProfileId}',
     700,
     6,
@@ -1115,12 +1125,42 @@ VALUES
     pg_catalog.statement_timestamp()
   ),
   (
-    DATE '${seasonStart}',
+    DATE '${scoreSeasonStart}',
     '${fixture.betaProfileId}',
     500,
     5,
     1,
     3,
+    3,
+    pg_catalog.statement_timestamp()
+  ),
+  (
+    DATE '${tokenSeasonStart}',
+    '${fixture.hiddenProfileId}',
+    9000,
+    7,
+    3,
+    1,
+    1,
+    pg_catalog.statement_timestamp()
+  ),
+  (
+    DATE '${tokenSeasonStart}',
+    '${fixture.alphaProfileId}',
+    1234,
+    7,
+    2,
+    2,
+    2,
+    pg_catalog.statement_timestamp()
+  ),
+  (
+    DATE '${tokenSeasonStart}',
+    '${fixture.betaProfileId}',
+    1234,
+    5,
+    1,
+    2,
     3,
     pg_catalog.statement_timestamp()
   );
@@ -1143,7 +1183,7 @@ INSERT INTO viberacing_private.source_day_values (
 VALUES
   (
     '${fixture.alphaSourceId}',
-    DATE '${seasonStart}',
+    DATE '${scoreSeasonStart}',
     1000,
     NULL,
     'syn_' || pg_catalog.repeat('W', 22),
@@ -1153,10 +1193,30 @@ VALUES
   ),
   (
     '${fixture.betaSourceId}',
-    DATE '${seasonStart}',
+    DATE '${scoreSeasonStart}',
     900,
     NULL,
     'syn_' || pg_catalog.repeat('X', 22),
+    'dev_' || pg_catalog.repeat('X', 22),
+    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC'),
+    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC')
+  ),
+  (
+    '${fixture.alphaSourceId}',
+    DATE '${tokenSeasonStart}',
+    1234,
+    NULL,
+    'syn_' || pg_catalog.repeat('Y', 22),
+    'dev_' || pg_catalog.repeat('W', 22),
+    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC'),
+    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC')
+  ),
+  (
+    '${fixture.betaSourceId}',
+    DATE '${tokenSeasonStart}',
+    1234,
+    NULL,
+    'syn_' || pg_catalog.repeat('Z', 22),
     'dev_' || pg_catalog.repeat('X', 22),
     ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC'),
     ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC')
@@ -1169,13 +1229,28 @@ INSERT INTO viberacing_private.season_daily_scores (
   daily_score
 )
 SELECT
-  DATE '${seasonStart}',
+  DATE '${scoreSeasonStart}',
   profile_score.profile_id,
-  DATE '${seasonStart}' + day_record.day_offset,
+  DATE '${scoreSeasonStart}' + day_record.day_offset,
   CASE
     WHEN day_record.day_offset < profile_score.positive_day_count THEN 100
     ELSE 0
   END::smallint
+FROM (
+  VALUES
+    ('${fixture.alphaProfileId}'::uuid, 7),
+    ('${fixture.betaProfileId}'::uuid, 5)
+) AS profile_score(profile_id, positive_day_count)
+CROSS JOIN pg_catalog.generate_series(0, 6) AS day_record(day_offset)
+UNION ALL
+SELECT
+  DATE '${tokenSeasonStart}',
+  profile_score.profile_id,
+  DATE '${tokenSeasonStart}' + day_record.day_offset,
+  CASE
+    WHEN day_record.day_offset < profile_score.positive_day_count THEN 200
+    ELSE 0
+  END::bigint
 FROM (
   VALUES
     ('${fixture.alphaProfileId}'::uuid, 7),
@@ -1198,21 +1273,24 @@ function utcDateDifference(laterDate, earlierDate) {
   return difference;
 }
 
-function expectedPages(seasonStart, observedDate, acceptedDate) {
-  const seasonEnd = new Date(Date.parse(`${seasonStart}T00:00:00.000Z`) + 6 * 86_400_000)
+function expectedPages(scoreSeasonStart, tokenSeasonStart, observedDate, acceptedDate) {
+  const scoreSeasonEnd = new Date(Date.parse(`${scoreSeasonStart}T00:00:00.000Z`) + 6 * 86_400_000)
     .toISOString()
     .slice(0, 10);
-  const observedSeasonDay = utcDateDifference(observedDate, seasonStart);
+  const tokenSeasonEnd = new Date(Date.parse(`${tokenSeasonStart}T00:00:00.000Z`) + 6 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const observedSeasonDay = utcDateDifference(observedDate, scoreSeasonStart);
   const freshnessDays = Math.min(
     65_535,
     Math.max(0, utcDateDifference(observedDate, acceptedDate)),
   );
   assert.ok(observedSeasonDay >= 0, "the observed date must not precede the seeded season");
-  const streakDays = observedDate <= seasonEnd ? Math.min(7, observedSeasonDay + 1) : 7;
+  const streakDays = 7 + (observedDate <= scoreSeasonEnd ? Math.min(7, observedSeasonDay + 1) : 7);
   const scoreParticipants = [
     {
-      seasonStart,
-      seasonEnd,
+      seasonStart: scoreSeasonStart,
+      seasonEnd: scoreSeasonEnd,
       scoreVersion: "community_v1",
       seasonFinalized: false,
       handle: "web_alpha",
@@ -1223,8 +1301,8 @@ function expectedPages(seasonStart, observedDate, acceptedDate) {
       displayPosition: 1,
     },
     {
-      seasonStart,
-      seasonEnd,
+      seasonStart: scoreSeasonStart,
+      seasonEnd: scoreSeasonEnd,
       scoreVersion: "community_v1",
       seasonFinalized: false,
       handle: "web_beta",
@@ -1246,6 +1324,36 @@ function expectedPages(seasonStart, observedDate, acceptedDate) {
     trail: "spark",
     seed: 321,
   };
+  const tokenParticipants = [
+    {
+      seasonStart: tokenSeasonStart,
+      seasonEnd: tokenSeasonEnd,
+      metricVersion: "community_tokens_v1",
+      seasonFinalized: false,
+      handle: "web_alpha",
+      weeklyTokenTotal: 1234,
+      activeDays: 7,
+      sourceCount: 2,
+      rankPosition: 1,
+      displayPosition: 1,
+      carRecipe: alphaRecipe,
+      freshnessDays,
+      streakDays: 7,
+    },
+    {
+      seasonStart: tokenSeasonStart,
+      seasonEnd: tokenSeasonEnd,
+      metricVersion: "community_tokens_v1",
+      seasonFinalized: false,
+      handle: "web_beta",
+      weeklyTokenTotal: 1234,
+      activeDays: 5,
+      sourceCount: 1,
+      rankPosition: 1,
+      displayPosition: 2,
+      freshnessDays,
+    },
+  ];
   return Object.freeze({
     race: {
       schemaVersion: 1,
@@ -1276,6 +1384,12 @@ function expectedPages(seasonStart, observedDate, acceptedDate) {
         { ...scoreParticipants[1], freshnessDays },
       ],
     },
+    token: {
+      schemaVersion: 1,
+      trustTier: "community",
+      selfReported: true,
+      participants: tokenParticipants,
+    },
   });
 }
 
@@ -1291,7 +1405,7 @@ function readCurrentUtcDate(label) {
 function readFixtureAcceptedDate() {
   const acceptedDate = psqlScalar(
     `SELECT CASE
-  WHEN pg_catalog.count(*) = 2
+  WHEN pg_catalog.count(*) = 4
     AND pg_catalog.count(
       DISTINCT (source_value.last_accepted_at AT TIME ZONE 'UTC')::date
     ) = 1
@@ -1310,7 +1424,8 @@ WHERE source_value.source_id IN ('${fixture.alphaSourceId}', '${fixture.betaSour
 
 async function exerciseUnavailableRoutes(
   databasePort,
-  seasonStart,
+  scoreSeasonStart,
+  tokenSeasonStart,
   validateProblemDetailsV1,
   tlsCertificatePath,
 ) {
@@ -1322,10 +1437,11 @@ async function exerciseUnavailableRoutes(
   );
   const baseUrl = `http://127.0.0.1:${server.port}`;
   try {
-    for (const path of [
-      "/v1/community/scores",
-      "/v1/community/race",
-      "/v1/community/race/status",
+    for (const [path, seasonStart] of [
+      ["/v1/community/scores", scoreSeasonStart],
+      ["/v1/community/race", scoreSeasonStart],
+      ["/v1/community/race/status", scoreSeasonStart],
+      ["/v1/community/tokens", tokenSeasonStart],
     ]) {
       assertUnavailable(await getJson(baseUrl, path, seasonStart), validateProblemDetailsV1);
     }
@@ -1372,7 +1488,8 @@ async function exerciseNoQueueAdmission(baseUrl, seasonStart, expectedScore, con
 
 async function exerciseSuccessfulRoutes(
   databasePort,
-  seasonStart,
+  scoreSeasonStart,
+  tokenSeasonStart,
   acceptedDate,
   contracts,
   tlsCertificatePath,
@@ -1385,28 +1502,41 @@ async function exerciseSuccessfulRoutes(
   );
   const baseUrl = `http://127.0.0.1:${server.port}`;
   try {
-    const stableExpected = expectedPages(seasonStart, acceptedDate, acceptedDate);
+    const stableExpected = expectedPages(
+      scoreSeasonStart,
+      tokenSeasonStart,
+      acceptedDate,
+      acceptedDate,
+    );
     assertSuccess(
-      await getJson(baseUrl, "/v1/community/scores", seasonStart),
+      await getJson(baseUrl, "/v1/community/scores", scoreSeasonStart),
       stableExpected.score,
       contracts.validateCommunityScorePageV1,
     );
     assertWebTlsConnection("production Web TLS connection observation");
     assertSuccess(
-      await getJson(baseUrl, "/v1/community/race", seasonStart),
+      await getJson(baseUrl, "/v1/community/race", scoreSeasonStart),
       stableExpected.race,
       contracts.validateCommunityRacePageV1,
     );
     let statusValidated = false;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const beforeDate = readCurrentUtcDate(`pre-status UTC date attempt ${attempt}`);
-      const result = await getJson(baseUrl, "/v1/community/race/status", seasonStart);
+      const statusResult = await getJson(baseUrl, "/v1/community/race/status", scoreSeasonStart);
+      const tokenResult = await getJson(baseUrl, "/v1/community/tokens", tokenSeasonStart);
       const afterDate = readCurrentUtcDate(`post-status UTC date attempt ${attempt}`);
       if (beforeDate === afterDate) {
+        const expected = expectedPages(
+          scoreSeasonStart,
+          tokenSeasonStart,
+          beforeDate,
+          acceptedDate,
+        );
+        assertSuccess(statusResult, expected.status, contracts.validateCommunityRaceStatusPageV1);
         assertSuccess(
-          result,
-          expectedPages(seasonStart, beforeDate, acceptedDate).status,
-          contracts.validateCommunityRaceStatusPageV1,
+          tokenResult,
+          expected.token,
+          contracts.validateCommunityTokenRaceStatusPageV1,
         );
         statusValidated = true;
         break;
@@ -1415,7 +1545,7 @@ async function exerciseSuccessfulRoutes(
     if (!statusValidated) {
       throw new Error("UTC date did not remain stable around the bounded status request.");
     }
-    await exerciseNoQueueAdmission(baseUrl, seasonStart, stableExpected.score, contracts);
+    await exerciseNoQueueAdmission(baseUrl, scoreSeasonStart, stableExpected.score, contracts);
   } finally {
     await stopProductionNextServer(server);
   }
@@ -1523,8 +1653,8 @@ COMMIT;`,
 
     const calendar = JSON.parse(
       psqlScalar(
-        `SELECT pg_catalog.jsonb_build_object(
-  'seasonStart', (
+        `WITH current_season AS (
+  SELECT (
     (pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date
     - (
       pg_catalog.date_part(
@@ -1532,21 +1662,30 @@ COMMIT;`,
         pg_catalog.statement_timestamp() AT TIME ZONE 'UTC'
       )::integer - 1
     )
-  )::text
-)::text;`,
+  ) AS season_start
+)
+SELECT pg_catalog.jsonb_build_object(
+  'seasonStart', current_season.season_start::text,
+  'tokenSeasonStart', (current_season.season_start - 7)::text
+)::text
+FROM current_season;`,
         "current Community season discovery",
       ),
     );
     assert.match(calendar.seasonStart, /^\d{4}-\d{2}-\d{2}$/);
+    assert.match(calendar.tokenSeasonStart, /^\d{4}-\d{2}-\d{2}$/);
     assert.equal(new Date(`${calendar.seasonStart}T00:00:00.000Z`).getUTCDay(), 1);
+    assert.equal(new Date(`${calendar.tokenSeasonStart}T00:00:00.000Z`).getUTCDay(), 1);
+    assert.equal(utcDateDifference(calendar.seasonStart, calendar.tokenSeasonStart), 7);
 
-    seedSyntheticState(calendar.seasonStart);
+    seedSyntheticState(calendar.seasonStart, calendar.tokenSeasonStart);
     const acceptedDate = readFixtureAcceptedDate();
     const initialState = readPrivateStateFingerprint("initial Web private-state fingerprint");
 
     await exerciseUnavailableRoutes(
       databasePort,
       calendar.seasonStart,
+      calendar.tokenSeasonStart,
       contracts.validateProblemDetailsV1,
       tlsMaterial.certificatePath,
     );
@@ -1559,6 +1698,7 @@ COMMIT;`,
     await exerciseSuccessfulRoutes(
       databasePort,
       calendar.seasonStart,
+      calendar.tokenSeasonStart,
       acceptedDate,
       contracts,
       tlsMaterial.certificatePath,
@@ -1571,7 +1711,7 @@ COMMIT;`,
     assertAutoExplainEvidence();
 
     console.log(
-      "Web PostgreSQL integration passed (two built production Next processes over synthetic verified TLS, three real HTTP routes, six bounded query-plan oracles, four-slot no-queue admission, least-privilege denial, exact contracts, and read-only stored state).",
+      "Web PostgreSQL integration passed (two built production Next processes over synthetic verified TLS, four real HTTP routes, eight bounded query-plan oracles, four-slot no-queue admission, least-privilege denial, exact contracts, and read-only stored state).",
     );
   } catch (error) {
     primaryFailure = error;

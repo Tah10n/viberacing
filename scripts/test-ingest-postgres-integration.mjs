@@ -38,6 +38,7 @@ const admissionDeviceKeyId = "00000000-0000-4000-8000-000000026202";
 const admissionSourceId = `src_${"N".repeat(22)}`;
 const admissionDeviceId = `dev_${"N".repeat(22)}`;
 const acceptedSyncId = `syn_${"A".repeat(22)}`;
+const usageSyncId = `syn_${"U".repeat(22)}`;
 const revokedSyncId = `syn_${"R".repeat(22)}`;
 const admissionSyncIds = Object.freeze(
   Array.from({ length: 4 }, (_, index) => `syn_${String(index + 1).repeat(22)}`),
@@ -147,6 +148,7 @@ const privateValueMarkers = Object.freeze([
   admissionSourceId,
   admissionDeviceId,
   acceptedSyncId,
+  usageSyncId,
   revokedSyncId,
   ...admissionSyncIds,
   rejectedAdmissionSyncId,
@@ -537,6 +539,21 @@ function readAuthenticationPolicy() {
   return value;
 }
 
+function readUsageAuthenticationPolicy(legacyPolicy) {
+  const value = JSON.parse(
+    readFileSync(
+      resolve(root, "contracts", "v1", "connector-usage-sync-authentication.json"),
+      "utf8",
+    ),
+  );
+  assert.deepEqual(value, {
+    ...legacyPolicy,
+    protocolId: "viberacing-usage-sync-auth-v1",
+    requestTarget: "/v1/community/usage",
+  });
+  return value;
+}
+
 function canonicalMessage(fieldOrder, values) {
   assert.ok(Array.isArray(fieldOrder));
   const fields = fieldOrder.map((field) => {
@@ -573,6 +590,23 @@ function createPayload(
     connectorVersion: "1.2.3",
     codexVersion: "0.144.5",
     dailyEntries: [{ codexReportedDate, tokens }],
+  };
+}
+
+function createUsagePayload(
+  syncId,
+  observedAt,
+  dailyTokenTotal,
+  { payloadSourceId = sourceId, reportedDate = observedAt.slice(0, 10) } = {},
+) {
+  return {
+    schemaVersion: 1,
+    sourceId: payloadSourceId,
+    syncId,
+    observedAt,
+    clientVersion: "0.0.0",
+    agentVersion: "0.144.5",
+    dailyEntries: [{ reportedDate, dailyTokenTotal }],
   };
 }
 
@@ -876,6 +910,7 @@ function ingestEnvironment(databasePort, listenerPort) {
   return Object.freeze({
     NODE_ENV: "test",
     VIBERACING_INGEST_ENABLED: "true",
+    VIBERACING_USAGE_SYNC_ENABLED: "true",
     VIBERACING_INGEST_DATABASE_HOST: "127.0.0.1",
     VIBERACING_INGEST_DATABASE_NAME: databaseName,
     VIBERACING_INGEST_DATABASE_PASSWORD: ingestPassword,
@@ -1549,6 +1584,7 @@ async function main() {
   buildWorkspace("apps/ingest-host", "Ingest host production build");
 
   const policy = readAuthenticationPolicy();
+  const usagePolicy = readUsageAuthenticationPolicy(policy);
   const keyPair = generateKeyPairSync("ed25519");
   const publicKey = readDevicePublicKey(keyPair);
   const admissionKeyPair = generateKeyPairSync("ed25519");
@@ -1686,6 +1722,22 @@ COMMIT;`,
         syncId: acceptedSyncId,
       });
 
+      const usageObservedAt = acceptedObservedAt;
+      const usageRequest = buildSignedRequest({
+        deviceNonceBytes: Buffer.alloc(16, 0x13),
+        keyPair,
+        originNonceBytes: Buffer.alloc(16, 0x24),
+        originTimestamp: usageObservedAt,
+        payload: createUsagePayload(usageSyncId, usageObservedAt, 321),
+        policy: usagePolicy,
+      });
+      const usageResult = await postSignedRequest(host.baseUrl, usagePolicy, usageRequest);
+      assertSuccess(usageResult, {
+        acceptedEntries: 1,
+        outcome: "accepted",
+        syncId: usageSyncId,
+      });
+
       const duplicateRequest = buildSignedRequest({
         deviceNonceBytes: Buffer.alloc(16, 0x11),
         keyPair,
@@ -1751,13 +1803,14 @@ COMMIT;`,
 
       const requestIds = new Set([
         acceptedResult.body.requestId,
+        usageResult.body.requestId,
         duplicateResult.body.requestId,
         replayResult.body.requestId,
         revokedResult.body.requestId,
         ...admissionResults.map((result) => result.body.requestId),
         emittedProcessResult.body.requestId,
       ]);
-      assert.equal(requestIds.size, 10);
+      assert.equal(requestIds.size, 11);
 
       const storedState = JSON.parse(
         psqlScalar(
@@ -1815,7 +1868,26 @@ SELECT pg_catalog.jsonb_build_object(
   'snapshotOutcome', (
     SELECT outcome
     FROM viberacing_private.usage_snapshots
-    WHERE device_key_id = '${deviceKeyId}'
+    WHERE sync_id = '${acceptedSyncId}'
+  ),
+  'usageSnapshotProvider', (
+    SELECT source_record.provider
+    FROM viberacing_private.usage_snapshots AS snapshot_record
+    JOIN viberacing_private.codex_sources AS source_record
+      ON source_record.source_id = snapshot_record.source_id
+    WHERE snapshot_record.sync_id = '${usageSyncId}'
+  ),
+  'usageSnapshotAccountingRevision', (
+    SELECT source_record.accounting_revision
+    FROM viberacing_private.usage_snapshots AS snapshot_record
+    JOIN viberacing_private.codex_sources AS source_record
+      ON source_record.source_id = snapshot_record.source_id
+    WHERE snapshot_record.sync_id = '${usageSyncId}'
+  ),
+  'usageSnapshotVersions', (
+    SELECT pg_catalog.jsonb_build_array(connector_version, codex_version)
+    FROM viberacing_private.usage_snapshots
+    WHERE sync_id = '${usageSyncId}'
   ),
   'sourceDayCount', (
     SELECT pg_catalog.count(*)::integer
@@ -1863,21 +1935,24 @@ SELECT pg_catalog.jsonb_build_object(
         admissionSnapshotEntryCount: 5,
         admissionSourceDayCount: 5,
         admissionSourceTokens: [200, 201, 202, 203, 300],
-        deviceNonceCount: 1,
+        deviceNonceCount: 2,
         deviceState: "revoked",
         emittedProcessSyncCount: 1,
-        originCount: 8,
+        originCount: 9,
         rejectedAdmissionSyncCount: 0,
-        snapshotCount: 1,
-        snapshotEntryCount: 1,
+        snapshotCount: 2,
+        snapshotEntryCount: 2,
         snapshotOutcome: "accepted",
         sourceDayCount: 1,
-        sourceTokens: 123,
+        sourceTokens: 321,
         unexpectedSyncCount: 0,
+        usageSnapshotAccountingRevision: "codex_daily_usage_buckets_v1",
+        usageSnapshotProvider: "codex",
+        usageSnapshotVersions: ["0.0.0", "0.144.5"],
       });
 
       console.log(
-        "Ingest PostgreSQL integration passed (factory and emitted-process acceptance, duplicate, replay denial, revocation denial, four-slot no-queue admission, and exact stored state).",
+        "Ingest PostgreSQL integration passed (legacy and Usage Sync acceptance, duplicate, replay denial, revocation denial, four-slot no-queue admission, emitted-process acceptance, and exact stored state).",
       );
     }
   } catch (error) {

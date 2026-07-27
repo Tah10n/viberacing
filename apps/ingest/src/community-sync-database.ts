@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { validateConnectorSyncV1, type ConnectorSyncV1 } from "@viberacing/contracts";
+import {
+  validateConnectorSyncV1,
+  validateUsageSyncV1,
+  type ConnectorSyncV1,
+  type UsageSyncV1,
+} from "@viberacing/contracts";
 
 import {
   createIngestDatabasePool,
@@ -9,31 +14,38 @@ import {
   type IngestDatabasePool,
   type IngestDatabasePoolSignalSink,
   type IngestDatabaseSubmission,
+  type IngestDatabaseUsageSubmission,
 } from "./database-pool.js";
 import { resolveIngestDatabaseConfig } from "./database-config.js";
 import type {
   DeviceVerificationMaterial,
   OriginNonceConsumption,
 } from "./community-sync-verifier.js";
+import { codexAccountingRevision, codexProvider } from "./community-sync-verifier.js";
 import {
+  communitySyncRequestTarget,
   decodeCanonicalBase64Url,
   deviceIdPattern,
   devicePublicKeyBytes,
   deviceSignatureBytes,
   idempotencyKeyPattern,
   originKeyIdPattern,
+  usageSyncRequestTarget,
 } from "./protocol.js";
 
 const verifiedSubmissionKeys = new Set([
   "bodyDigestHex",
+  "accountingRevision",
   "deviceId",
   "deviceKeyId",
   "idempotencyKey",
   "nonceDigestHex",
   "payload",
+  "provider",
+  "requestTarget",
   "signatureBase64Url",
 ]);
-const payloadKeys = new Set([
+const connectorPayloadKeys = new Set([
   "codexVersion",
   "connectorVersion",
   "dailyEntries",
@@ -42,8 +54,24 @@ const payloadKeys = new Set([
   "sourceId",
   "syncId",
 ]);
+const usagePayloadKeys = new Set([
+  "agentVersion",
+  "clientVersion",
+  "dailyEntries",
+  "observedAt",
+  "schemaVersion",
+  "sourceId",
+  "syncId",
+]);
 const dailyEntryKeys = new Set(["codexReportedDate", "tokens"]);
-const deviceRowKeys = new Set(["device_key_id", "public_key", "source_id"]);
+const usageDailyEntryKeys = new Set(["dailyTokenTotal", "reportedDate"]);
+const deviceRowKeys = new Set([
+  "accounting_revision",
+  "device_key_id",
+  "provider",
+  "public_key",
+  "source_id",
+]);
 const originNonceKeys = new Set(["expiresAtMilliseconds", "keyId", "nonceDigestHex"]);
 const originNonceRowKeys = new Set(["consumed"]);
 const submissionRowKeys = new Set(["accepted_entries", "outcome"]);
@@ -92,11 +120,14 @@ export interface ConfiguredCommunitySyncDatabase extends CommunitySyncDatabase {
 export type SnapshotIdFactory = () => string;
 
 interface ValidatedSubmission {
+  readonly accountingRevision: typeof codexAccountingRevision;
   readonly bodyDigest: Buffer;
   readonly deviceId: string;
   readonly deviceKeyId: string;
   readonly nonceDigest: Buffer;
-  readonly payload: ConnectorSyncV1;
+  readonly payload: ConnectorSyncV1 | UsageSyncV1;
+  readonly provider: typeof codexProvider;
+  readonly requestTarget: typeof communitySyncRequestTarget | typeof usageSyncRequestTarget;
   readonly signature: Buffer;
 }
 
@@ -197,8 +228,8 @@ function readDenseArray(value: unknown, maximumLength: number): unknown[] {
   return copy;
 }
 
-function readPayload(value: unknown): ConnectorSyncV1 {
-  if (!isPlainRecord(value) || !hasExactKeys(value, payloadKeys)) {
+function readConnectorPayload(value: unknown): ConnectorSyncV1 {
+  if (!isPlainRecord(value) || !hasExactKeys(value, connectorPayloadKeys)) {
     fail("input_invalid");
   }
   const rawEntries = readDenseArray(ownDataValue(value, "dailyEntries", "input_invalid"), 31);
@@ -242,6 +273,51 @@ function readPayload(value: unknown): ConnectorSyncV1 {
   });
 }
 
+function readUsagePayload(value: unknown): UsageSyncV1 {
+  if (!isPlainRecord(value) || !hasExactKeys(value, usagePayloadKeys)) {
+    fail("input_invalid");
+  }
+  const rawEntries = readDenseArray(ownDataValue(value, "dailyEntries", "input_invalid"), 31);
+  const dailyEntries = rawEntries.map((entry) => {
+    if (!isPlainRecord(entry) || !hasExactKeys(entry, usageDailyEntryKeys)) {
+      fail("input_invalid");
+    }
+    return {
+      dailyTokenTotal: ownDataValue(entry, "dailyTokenTotal", "input_invalid"),
+      reportedDate: ownDataValue(entry, "reportedDate", "input_invalid"),
+    };
+  });
+  const candidate = {
+    agentVersion: ownDataValue(value, "agentVersion", "input_invalid"),
+    clientVersion: ownDataValue(value, "clientVersion", "input_invalid"),
+    dailyEntries,
+    observedAt: ownDataValue(value, "observedAt", "input_invalid"),
+    schemaVersion: ownDataValue(value, "schemaVersion", "input_invalid"),
+    sourceId: ownDataValue(value, "sourceId", "input_invalid"),
+    syncId: ownDataValue(value, "syncId", "input_invalid"),
+  };
+  const validation = validateUsageSyncV1(candidate);
+  if (!validation.ok) {
+    fail("input_invalid");
+  }
+  return Object.freeze({
+    agentVersion: validation.value.agentVersion,
+    clientVersion: validation.value.clientVersion,
+    dailyEntries: Object.freeze(
+      validation.value.dailyEntries.map((entry) =>
+        Object.freeze({
+          dailyTokenTotal: entry.dailyTokenTotal,
+          reportedDate: entry.reportedDate,
+        }),
+      ),
+    ),
+    observedAt: validation.value.observedAt,
+    schemaVersion: 1,
+    sourceId: validation.value.sourceId,
+    syncId: validation.value.syncId,
+  });
+}
+
 function decodeHex(value: unknown): Buffer | undefined {
   if (typeof value !== "string" || !digestHexPattern.test(value)) {
     return undefined;
@@ -254,18 +330,28 @@ function readVerifiedSubmission(value: unknown): ValidatedSubmission {
     if (!isPlainRecord(value) || !hasExactKeys(value, verifiedSubmissionKeys)) {
       fail("input_invalid");
     }
+    const accountingRevision = ownDataValue(value, "accountingRevision", "input_invalid");
     const bodyDigest = decodeHex(ownDataValue(value, "bodyDigestHex", "input_invalid"));
     const deviceId = ownDataValue(value, "deviceId", "input_invalid");
     const deviceKeyId = ownDataValue(value, "deviceKeyId", "input_invalid");
     const idempotencyKey = ownDataValue(value, "idempotencyKey", "input_invalid");
     const nonceDigest = decodeHex(ownDataValue(value, "nonceDigestHex", "input_invalid"));
-    const payload = readPayload(ownDataValue(value, "payload", "input_invalid"));
+    const provider = ownDataValue(value, "provider", "input_invalid");
+    const requestTarget = ownDataValue(value, "requestTarget", "input_invalid");
+    if (requestTarget !== usageSyncRequestTarget && requestTarget !== communitySyncRequestTarget) {
+      fail("input_invalid");
+    }
+    const payload =
+      requestTarget === usageSyncRequestTarget
+        ? readUsagePayload(ownDataValue(value, "payload", "input_invalid"))
+        : readConnectorPayload(ownDataValue(value, "payload", "input_invalid"));
     const signatureValue = ownDataValue(value, "signatureBase64Url", "input_invalid");
     const signature =
       typeof signatureValue === "string"
         ? decodeCanonicalBase64Url(signatureValue, deviceSignatureBytes)
         : undefined;
     if (
+      accountingRevision !== codexAccountingRevision ||
       bodyDigest === undefined ||
       typeof deviceId !== "string" ||
       !deviceIdPattern.test(deviceId) ||
@@ -275,11 +361,22 @@ function readVerifiedSubmission(value: unknown): ValidatedSubmission {
       !idempotencyKeyPattern.test(idempotencyKey) ||
       idempotencyKey !== payload.syncId ||
       nonceDigest === undefined ||
+      provider !== codexProvider ||
       signature === undefined
     ) {
       fail("input_invalid");
     }
-    return Object.freeze({ bodyDigest, deviceId, deviceKeyId, nonceDigest, payload, signature });
+    return Object.freeze({
+      accountingRevision,
+      bodyDigest,
+      deviceId,
+      deviceKeyId,
+      nonceDigest,
+      payload,
+      provider,
+      requestTarget,
+      signature,
+    });
   } catch (error) {
     if (error instanceof CommunitySyncDatabaseError) {
       throw error;
@@ -333,22 +430,32 @@ function readDeviceResult(value: unknown): DeviceVerificationMaterial | null {
     if (!isPlainRecord(row) || !hasExactKeys(row, deviceRowKeys)) {
       fail("result_invalid");
     }
+    const accountingRevision = ownDataValue(row, "accounting_revision", "result_invalid");
     const deviceKeyId = ownDataValue(row, "device_key_id", "result_invalid");
+    const provider = ownDataValue(row, "provider", "result_invalid");
     const publicKey = copyExactBytes(
       ownDataValue(row, "public_key", "result_invalid"),
       devicePublicKeyBytes,
     );
     const sourceId = ownDataValue(row, "source_id", "result_invalid");
     if (
+      accountingRevision !== codexAccountingRevision ||
       typeof deviceKeyId !== "string" ||
       !canonicalUuidPattern.test(deviceKeyId) ||
+      provider !== codexProvider ||
       publicKey === undefined ||
       typeof sourceId !== "string" ||
       !sourceIdPattern.test(sourceId)
     ) {
       fail("result_invalid");
     }
-    return Object.freeze({ deviceKeyId, publicKey, sourceId });
+    return Object.freeze({
+      accountingRevision,
+      deviceKeyId,
+      provider,
+      publicKey,
+      sourceId,
+    });
   } catch (error) {
     if (error instanceof CommunitySyncDatabaseError) {
       throw error;
@@ -489,23 +596,53 @@ function createSnapshotId(factory: SnapshotIdFactory): string {
 function toDatabaseSubmission(
   submission: ValidatedSubmission,
   snapshotId: string,
-): IngestDatabaseSubmission {
+):
+  | Readonly<{ kind: "connector"; value: IngestDatabaseSubmission }>
+  | Readonly<{ kind: "usage"; value: IngestDatabaseUsageSubmission }> {
+  if (submission.requestTarget === usageSyncRequestTarget) {
+    const payload = submission.payload as UsageSyncV1;
+    return Object.freeze({
+      kind: "usage",
+      value: Object.freeze({
+        accountingRevision: submission.accountingRevision,
+        agentVersion: payload.agentVersion,
+        bodyDigest: Buffer.from(submission.bodyDigest),
+        clientVersion: payload.clientVersion,
+        dailyTokenTotals: Object.freeze(payload.dailyEntries.map((entry) => entry.dailyTokenTotal)),
+        deviceId: submission.deviceId,
+        deviceKeyId: submission.deviceKeyId,
+        nonceDigest: Buffer.from(submission.nonceDigest),
+        observedAt: payload.observedAt,
+        provider: submission.provider,
+        reportedDates: Object.freeze(payload.dailyEntries.map((entry) => entry.reportedDate)),
+        signature: Buffer.from(submission.signature),
+        snapshotId,
+        sourceId: payload.sourceId,
+        syncId: payload.syncId,
+      }),
+    });
+  }
+
+  const payload = submission.payload as ConnectorSyncV1;
   return Object.freeze({
-    bodyDigest: Buffer.from(submission.bodyDigest),
-    codexReportedDates: Object.freeze(
-      submission.payload.dailyEntries.map((entry) => entry.codexReportedDate),
-    ),
-    codexVersion: submission.payload.codexVersion,
-    connectorVersion: submission.payload.connectorVersion,
-    deviceId: submission.deviceId,
-    deviceKeyId: submission.deviceKeyId,
-    nonceDigest: Buffer.from(submission.nonceDigest),
-    observedAt: submission.payload.observedAt,
-    signature: Buffer.from(submission.signature),
-    snapshotId,
-    sourceId: submission.payload.sourceId,
-    syncId: submission.payload.syncId,
-    tokens: Object.freeze(submission.payload.dailyEntries.map((entry) => entry.tokens)),
+    kind: "connector",
+    value: Object.freeze({
+      bodyDigest: Buffer.from(submission.bodyDigest),
+      codexReportedDates: Object.freeze(
+        payload.dailyEntries.map((entry) => entry.codexReportedDate),
+      ),
+      codexVersion: payload.codexVersion,
+      connectorVersion: payload.connectorVersion,
+      deviceId: submission.deviceId,
+      deviceKeyId: submission.deviceKeyId,
+      nonceDigest: Buffer.from(submission.nonceDigest),
+      observedAt: payload.observedAt,
+      signature: Buffer.from(submission.signature),
+      snapshotId,
+      sourceId: payload.sourceId,
+      syncId: payload.syncId,
+      tokens: Object.freeze(payload.dailyEntries.map((entry) => entry.tokens)),
+    }),
   });
 }
 
@@ -536,7 +673,9 @@ export function createCommunitySyncDatabase(
       const databaseSubmission = toDatabaseSubmission(submission, snapshotId);
       return withClient(pool, async (client) =>
         readSubmissionResult(
-          await client.submitCommunitySync(databaseSubmission),
+          databaseSubmission.kind === "usage"
+            ? await client.submitUsageSync(databaseSubmission.value)
+            : await client.submitCommunitySync(databaseSubmission.value),
           submission.payload.dailyEntries.length,
         ),
       );

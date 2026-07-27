@@ -28,6 +28,25 @@ VALUES (
   '00000000-0000-4000-8000-000000017101'
 );
 
+-- This race verifies compatibility finalization, so bind it to a preserved legacy season instead
+-- of letting the fixed production cutover change the expected projection as wall time advances.
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  season_end,
+  score_version,
+  state,
+  grace_ends_at
+)
+VALUES (
+  pg_temp.finalization_race_date(0),
+  pg_temp.finalization_race_date(6),
+  'community_v1',
+  'open',
+  viberacing_private.community_season_grace_ends_at(
+    pg_temp.finalization_race_date(0)
+  )
+);
+
 INSERT INTO viberacing_private.device_keys (
   device_key_id,
   device_id,
