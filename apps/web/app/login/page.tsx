@@ -6,7 +6,8 @@ import { readEnrollmentPageSession } from "@/lib/enrollment-page-session";
 
 export const metadata: Metadata = {
   description: "Sign in to Vibe Racing with a registered passkey.",
-  title: "Sign in | Vibe Racing",
+  robots: { follow: false, index: false },
+  title: "Sign in",
 };
 
 interface LoginPageProps {

@@ -4,16 +4,40 @@ import { resolvePublicOrigin } from "@/lib/public-origin";
 
 import "./globals.css";
 
+const siteDescription =
+  "Vibe Racing is a privacy-first vibecode rating: a self-reported weekly token leaderboard visualized as a deterministic pixel-art race.";
+const siteTitle = "Vibe Racing — Vibecode rating and token leaderboard";
+
 export const metadata: Metadata = {
   applicationName: "Vibe Racing",
-  description:
-    "A privacy-first community leaderboard that turns weekly coding activity into a pixel-art race.",
-  keywords: ["vibe coding", "community leaderboard", "pixel art", "coding activity"],
+  description: siteDescription,
+  keywords: [
+    "vibecode rating",
+    "vibe code rating",
+    "vibe coding rating",
+    "coding token leaderboard",
+    "Codex token leaderboard",
+    "community leaderboard",
+    "pixel art",
+  ],
   metadataBase: resolvePublicOrigin(),
+  openGraph: {
+    alternateLocale: ["ru_RU"],
+    description: siteDescription,
+    locale: "en_US",
+    siteName: "Vibe Racing",
+    title: siteTitle,
+    type: "website",
+  },
   robots: { follow: true, index: true },
   title: {
-    default: "Vibe Racing — community coding race",
+    default: siteTitle,
     template: "%s · Vibe Racing",
+  },
+  twitter: {
+    card: "summary_large_image",
+    description: siteDescription,
+    title: siteTitle,
   },
 };
 

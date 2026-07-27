@@ -6,7 +6,8 @@ import { resolveSourceCreationConfig } from "@/lib/source-creation-config";
 
 export const metadata: Metadata = {
   description: "Review and approve one Vibe Racing connector device with a passkey.",
-  title: "Connect a device | Vibe Racing",
+  robots: { follow: false, index: false },
+  title: "Connect a device",
 };
 
 const sourceCreationConfig = resolveSourceCreationConfig();

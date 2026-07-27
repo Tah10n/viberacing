@@ -6,7 +6,8 @@ import { readEnrollmentPageSession } from "@/lib/enrollment-page-session";
 
 export const metadata: Metadata = {
   description: "Recover a Vibe Racing profile by registering a replacement passkey.",
-  title: "Recover profile | Vibe Racing",
+  robots: { follow: false, index: false },
+  title: "Recover profile",
 };
 
 export default async function RecoveryPage() {

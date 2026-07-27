@@ -7,7 +7,8 @@ import { readEnrollmentPageSession } from "@/lib/enrollment-page-session";
 
 export const metadata: Metadata = {
   description: "Protect a Vibe Racing profile with a WebAuthn passkey.",
-  title: "Create passkey | Vibe Racing",
+  robots: { follow: false, index: false },
+  title: "Create passkey",
 };
 
 const enrollmentConfig = resolveEnrollmentEnableConfig();

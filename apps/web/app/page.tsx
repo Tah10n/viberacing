@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { connection } from "next/server";
 
 import { RaceExperience } from "@/components/race-experience";
@@ -8,6 +9,10 @@ import { getSyntheticRacePayload } from "@/lib/race-data";
 interface HomePageProps {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   await connection();

@@ -7,7 +7,8 @@ import { readEnrollmentPageSession } from "@/lib/enrollment-page-session";
 
 export const metadata: Metadata = {
   description: "Join the self-reported Vibe Racing Community leaderboard with an invite.",
-  title: "Join | Vibe Racing",
+  robots: { follow: false, index: false },
+  title: "Join",
 };
 
 const enrollmentConfig = resolveEnrollmentEnableConfig();

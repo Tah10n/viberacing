@@ -7,7 +7,8 @@ import { readEnrollmentPageAccount } from "@/lib/enrollment-page-session";
 
 export const metadata: Metadata = {
   description: "Manage a protected Vibe Racing Community profile.",
-  title: "Account | Vibe Racing",
+  robots: { follow: false, index: false },
+  title: "Account",
 };
 
 const carProposalsConfig = resolveCarProposalsConfig();
