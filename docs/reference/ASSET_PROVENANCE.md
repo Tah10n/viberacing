@@ -23,6 +23,26 @@ themes. No automotive logo, brand name, uploaded asset, arbitrary color, remote 
 metadata, or user drawing command enters this pipeline. Visual trade-dress review remains a release
 gate even for project-authored combinations.
 
+## Race-broadcast design reference
+
+| Field                       | Record                                                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Repository path             | `docs/design/` and `docs/design/prototypes/race-broadcast.html`                                                                                                    |
+| Purpose                     | Reusable brand/interface rules plus a standalone synthetic reference for a possible race-broadcast refresh                                                         |
+| Created                     | 2026-07-25; public curation and review updated 2026-07-26                                                                                                          |
+| Method                      | OpenDesign-assisted exploration from repository-owned public product/security/design inputs, followed by manual contract, privacy, trust, and accessibility review |
+| Third-party source material | None; participant names, values, cars, copy, HTML, CSS, and canvas drawing are synthetic or project-authored                                                       |
+| Runtime dependencies        | None; no remote font, image, icon, script, analytics, account state, or network request                                                                            |
+| Browser persistence         | Exactly locale, theme, and motion preferences                                                                                                                      |
+| Private tool state          | Downloaded skills, copied plugin source, local paths, and project/run/conversation/artifact identifiers are excluded from the repository                           |
+| Opaque/generated binary     | None; the prototype and design contracts are reviewable text                                                                                                       |
+| Distribution basis          | Project-authored reviewed output distributed under the repository Apache-2.0 license                                                                               |
+| Drift evidence              | Manual review of the text-only reference; implemented behavior remains covered in `apps/web`                                                                       |
+
+This record does not make the standalone prototype a production surface or browser-baseline result.
+Implemented Web behavior and its checked evidence remain authoritative. Any adoption in `apps/web`
+requires the normal EN/RU, accessibility, coverage, build, asset-budget, and browser-evidence gates.
+
 ## Phase 1 responsive viewport baselines
 
 | Field                       | Record                                                                                                        |
@@ -86,7 +106,7 @@ Reproduce the sanitation after replacing this asset:
 
 ```text
 node scripts/sanitize-png-metadata.mjs apps/web/app/opengraph-image.png
-pnpm run test:png-content-policy
+node scripts/test-png-content-policy.mjs
 pnpm run check:public
 ```
 

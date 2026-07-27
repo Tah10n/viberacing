@@ -1,0 +1,2483 @@
+<!doctype html>
+<html lang="en" data-motion="system">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Vibe Racing: Race Broadcast Prototype</title>
+    <style>
+      :root {
+        --bg: oklch(18.57% 0.0668 288.68);
+        --surface: oklch(23.27% 0.0801 292.7);
+        --fg: oklch(96.87% 0.018 303.42);
+        --muted: oklch(78.16% 0.0532 298.76);
+        --border: oklch(96.87% 0.018 303.42);
+        --accent: oklch(92.24% 0.1427 97.78);
+        --font-display: "Courier New", "Lucida Console", Monaco, monospace;
+        --font-body: "Courier New", "Lucida Console", Monaco, monospace;
+        --font-mono: ui-monospace, "Cascadia Mono", monospace;
+        --shadow: color-mix(in oklch, var(--fg) 22%, transparent);
+        --soft-line: color-mix(in oklch, var(--border) 20%, transparent);
+        --soft-surface: color-mix(in oklch, var(--surface) 76%, var(--bg));
+        --page-pad: clamp(0.875rem, 3.6vw, 3rem);
+        --content: 92rem;
+      }
+      [data-theme="classic-grand-prix"] {
+        --bg: oklch(94.73% 0.0266 87.85);
+        --surface: oklch(98.62% 0.0142 84.58);
+        --fg: oklch(24.3% 0.024 248.84);
+        --muted: oklch(45.84% 0.0171 84.59);
+        --border: oklch(24.3% 0.024 248.84);
+        --accent: oklch(50.79% 0.1721 23.38);
+      }
+      [data-theme="cyber-rally"] {
+        --bg: oklch(20.89% 0.0272 191.11);
+        --surface: oklch(28.31% 0.0398 184.62);
+        --fg: oklch(98.06% 0.0356 138.88);
+        --muted: oklch(79.24% 0.054 168.5);
+        --border: oklch(98.06% 0.0356 138.88);
+        --accent: oklch(91.98% 0.2192 128.77);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        background: var(--bg);
+      }
+      html[data-motion="off"] {
+        scroll-behavior: auto;
+      }
+      body {
+        min-width: 20rem;
+        margin: 0;
+        overflow-x: hidden;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--font-body);
+        font-size: 1rem;
+        line-height: 1.55;
+        transition:
+          background 160ms linear,
+          color 160ms linear;
+      }
+      button,
+      input,
+      select {
+        color: inherit;
+        font: inherit;
+      }
+      button,
+      a,
+      input,
+      select {
+        min-width: 2.75rem !important;
+        min-height: 2.75rem !important;
+      }
+      button,
+      select,
+      input {
+        border-radius: 0;
+      }
+      a {
+        display: inline-flex !important;
+        align-items: center;
+        color: inherit;
+      }
+      :focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 4px;
+      }
+      .skip-link {
+        position: fixed;
+        top: 0.75rem;
+        left: 0.75rem;
+        z-index: 100;
+        padding: 0.65rem 0.85rem;
+        border: 3px solid var(--border);
+        background: var(--surface);
+        transform: translateY(-180%);
+      }
+      .skip-link:focus {
+        transform: none;
+      }
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: clamp(0.65rem, 1.5vw, 1.4rem);
+        min-height: 4.5rem;
+        padding: 0.65rem var(--page-pad);
+        border-bottom: 3px solid var(--border);
+        background: color-mix(in oklch, var(--bg) 94%, transparent);
+        backdrop-filter: blur(12px);
+      }
+      .brand-lockup {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-height: 2.75rem;
+        text-decoration: none;
+      }
+      .brand-mark {
+        display: grid;
+        width: 2.75rem;
+        height: 2.75rem;
+        place-items: center;
+        border: 3px solid var(--border);
+        background: var(--accent);
+        color: var(--bg);
+        box-shadow: 4px 4px 0 var(--shadow);
+        font-family: var(--font-mono);
+        font-weight: 700;
+        letter-spacing: -0.03em;
+      }
+      .brand-name {
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .desktop-nav {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: clamp(0.75rem, 2vw, 1.5rem);
+      }
+      .desktop-nav a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.75rem;
+        color: var(--muted);
+        font-size: 0.82rem;
+        letter-spacing: 0.02em;
+        text-underline-offset: 0.35rem;
+      }
+      .desktop-nav a:hover {
+        color: var(--fg);
+      }
+      .header-controls {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(6.6rem, auto));
+        gap: 0.4rem;
+      }
+      .header-controls label {
+        display: grid;
+        gap: 0.15rem;
+        min-width: 0;
+        color: var(--muted);
+        font-size: 0.58rem;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+      .header-controls .control-select {
+        min-width: 0;
+        min-height: 2.75rem;
+        padding: 0.25rem 1.6rem 0.25rem 0.45rem;
+        font-size: 0.68rem;
+        font-weight: 700;
+      }
+      .status-cluster {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.55rem;
+      }
+      .source-badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2rem;
+        padding: 0.25rem 0.55rem;
+        border: 2px solid var(--accent);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        line-height: 1.2;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .menu-button {
+        display: none;
+        min-width: 4.4rem;
+        padding: 0.55rem 0.7rem;
+        border: 2px solid var(--border);
+        background: var(--surface);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .mobile-menu {
+        display: none;
+      }
+      .steward-strip {
+        position: sticky;
+        top: 4.5rem;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-height: 2.5rem;
+        padding: 0.4rem var(--page-pad);
+        border-bottom: 1px solid var(--soft-line);
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 0.72rem;
+        letter-spacing: 0.02em;
+      }
+      .steward-strip strong {
+        flex: 0 0 auto;
+        color: var(--fg);
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .steward-strip a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.75rem;
+        margin-left: auto;
+        color: var(--fg);
+        white-space: nowrap;
+        text-underline-offset: 0.25rem;
+      }
+      main {
+        width: min(100%, var(--content));
+        margin-inline: auto;
+        padding: 0 var(--page-pad) 5rem;
+      }
+      .quick-start {
+        display: grid;
+        grid-template-columns: minmax(12rem, 0.48fr) minmax(0, 1.52fr);
+        gap: clamp(1.25rem, 3vw, 2.75rem);
+        align-items: start;
+        padding: clamp(0.8rem, 1.8vw, 1.2rem) 0;
+        border-bottom: 3px solid var(--border);
+      }
+      .quick-start h2 {
+        max-width: 15ch;
+        font-size: clamp(1.25rem, 2vw, 1.9rem);
+        line-height: 1.05;
+      }
+      .quick-start-copy {
+        max-width: 39ch;
+        margin: 0.45rem 0 0;
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+      .quick-flow {
+        display: grid;
+        gap: 0.45rem;
+        min-width: 0;
+      }
+      .quick-steps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 0.85rem;
+        margin: 0;
+        padding: 0;
+        color: var(--muted);
+        font-size: 0.6rem;
+        letter-spacing: 0.07em;
+        list-style: none;
+        text-transform: uppercase;
+      }
+      .quick-steps li {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+      }
+      .quick-steps li::before {
+        display: grid;
+        width: 1.2rem;
+        height: 1.2rem;
+        place-items: center;
+        border: 2px solid var(--border);
+        color: var(--fg);
+        font-family: var(--font-mono);
+        font-size: 0.58rem;
+        font-weight: 700;
+        content: attr(data-step);
+      }
+      .agent-picker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .agent-choice {
+        min-height: 2.75rem;
+        padding: 0.35rem 0.6rem;
+        border: 2px solid var(--border);
+        background: var(--surface);
+        box-shadow: 3px 3px 0 transparent;
+        font-size: 0.68rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .agent-choice[aria-pressed="true"] {
+        background: var(--fg);
+        color: var(--bg);
+        box-shadow: 3px 3px 0 var(--accent);
+      }
+      .agent-choice[aria-pressed="false"]:hover {
+        background: color-mix(in oklch, var(--surface) 84%, var(--fg));
+      }
+      .agent-choice:active,
+      .copy-prompt:active,
+      .builder-action:active {
+        transform: translate(2px, 2px);
+        box-shadow: none;
+      }
+      .prompt-console {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.45rem;
+        align-items: stretch;
+        padding: 0.45rem;
+        border: 2px solid var(--border);
+        background: var(--surface);
+        box-shadow: 4px 4px 0 var(--shadow);
+      }
+      .prompt-console code {
+        display: block;
+        max-height: 4.3rem;
+        padding: 0.35rem;
+        overflow: auto;
+        color: var(--fg);
+        font: 0.65rem/1.45 var(--font-mono);
+        overflow-wrap: anywhere;
+        white-space: normal;
+      }
+      .copy-prompt,
+      .builder-action {
+        min-height: 2.75rem;
+        padding: 0.5rem 0.75rem;
+        border: 2px solid var(--border);
+        background: var(--fg);
+        color: var(--bg);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .quick-caveat {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.58rem;
+      }
+      .race-hero {
+        padding: clamp(0.9rem, 1.8vw, 1.4rem) 0 clamp(2.5rem, 6vw, 5rem);
+      }
+      .hero-heading-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 0.8rem;
+        margin-bottom: clamp(1rem, 2.3vw, 1.75rem);
+      }
+      .eyebrow {
+        margin: 0 0 0.35rem;
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        overflow-wrap: anywhere;
+      }
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-family: var(--font-display);
+      }
+      h1 {
+        max-width: 18ch;
+        font-size: clamp(2rem, 5vw, 4.5rem);
+        line-height: 0.95;
+        letter-spacing: -0.03em;
+        text-wrap: balance;
+      }
+      h2 {
+        font-size: clamp(1.7rem, 3.4vw, 3.1rem);
+        line-height: 1.02;
+        letter-spacing: -0.02em;
+      }
+      h3 {
+        font-size: clamp(1.05rem, 1.8vw, 1.35rem);
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+      }
+      .hero-intro {
+        max-width: 62ch;
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(0.85rem, 1.3vw, 1rem);
+      }
+      .broadcast-grid {
+        display: block;
+      }
+      .race-monitor {
+        min-width: 0;
+        border: 3px solid var(--border);
+        background: var(--surface);
+        box-shadow: 8px 8px 0 var(--shadow);
+      }
+      .monitor-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-height: 3.1rem;
+        padding: 0.45rem 0.65rem 0.45rem 0.85rem;
+        border-bottom: 3px solid var(--border);
+      }
+      .monitor-bar strong {
+        font-size: 0.75rem;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+      .live-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 0.7rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .live-indicator::before {
+        width: 0.55rem;
+        height: 0.55rem;
+        border: 2px solid currentColor;
+        content: "";
+      }
+      .pause-button {
+        min-height: 2.75rem;
+        padding: 0.35rem 0.6rem;
+        border: 2px solid var(--border);
+        background: transparent;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .pause-button[aria-pressed="true"] {
+        background: var(--fg);
+        color: var(--bg);
+      }
+      .pause-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.58;
+      }
+      .track-wrap {
+        background: var(--bg);
+      }
+      .raceboard-scroll {
+        max-height: 26rem;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-color: var(--muted) var(--bg);
+        scrollbar-gutter: stable;
+      }
+      .track-caption {
+        margin: 0;
+        padding: 0.65rem 0.85rem;
+        border-top: 2px solid var(--border);
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 0.68rem;
+        letter-spacing: 0.02em;
+      }
+      .raceboard-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .raceboard-list li {
+        contain: layout paint style;
+        content-visibility: auto;
+        contain-intrinsic-size: auto 4rem;
+      }
+      .raceboard-row {
+        display: grid;
+        grid-template-columns: clamp(11rem, 24vw, 17rem) minmax(0, 1fr) clamp(5rem, 8vw, 7rem);
+        align-items: stretch;
+        width: 100%;
+        min-height: 4rem;
+        padding: 0;
+        border: 0;
+        border-bottom: 1px solid color-mix(in oklch, var(--border) 18%, transparent);
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+      }
+      .raceboard-list li:last-child .raceboard-row {
+        border-bottom: 0;
+      }
+      .raceboard-row:hover {
+        background: color-mix(in oklch, var(--surface) 18%, transparent);
+      }
+      .raceboard-row[aria-current="true"] {
+        box-shadow:
+          inset 4px 0 0 var(--fg),
+          inset -4px 0 0 var(--fg);
+      }
+      .raceboard-identity,
+      .raceboard-score {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        background: color-mix(in oklch, var(--bg) 91%, transparent);
+        backdrop-filter: blur(6px);
+      }
+      .raceboard-identity {
+        gap: clamp(0.4rem, 1.1vw, 0.75rem);
+        padding: 0.2rem clamp(0.45rem, 1.2vw, 0.85rem);
+      }
+      .raceboard-position {
+        flex: 0 0 2.2rem;
+        font-family: var(--font-mono);
+        font-size: clamp(0.66rem, 1vw, 0.82rem);
+        font-weight: 700;
+      }
+      .raceboard-car {
+        flex: 0 0 auto;
+        width: 1.1rem;
+        height: 0.65rem;
+        border: 2px solid var(--fg);
+        background: var(--car-color);
+        box-shadow: 3px 0 0 var(--car-trim);
+      }
+      .raceboard-handle {
+        overflow: hidden;
+        font-size: clamp(0.72rem, 1vw, 0.9rem);
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .raceboard-lane {
+        position: relative;
+        align-self: center;
+        min-width: 0;
+        height: 0.85rem;
+        margin-inline: clamp(0.45rem, 1.5vw, 1rem);
+        border-top: 2px dashed var(--soft-line);
+        border-right: 4px solid var(--fg);
+      }
+      .raceboard-lane::after {
+        position: absolute;
+        top: -0.47rem;
+        left: clamp(0px, calc(var(--progress) - 0.55rem), calc(100% - 1.1rem));
+        width: 1rem;
+        height: 0.58rem;
+        border: 2px solid var(--fg);
+        background: var(--car-color);
+        box-shadow:
+          3px 0 0 var(--car-trim),
+          -0.15rem 0.4rem 0 -0.08rem var(--fg),
+          0.65rem 0.4rem 0 -0.08rem var(--fg);
+        content: "";
+      }
+      [data-race-running="true"] .raceboard-row[aria-current="true"] .raceboard-lane::after {
+        animation: raceboard-idle 480ms steps(2, end) infinite;
+      }
+      .raceboard-score {
+        justify-content: flex-end;
+        padding: 0.2rem clamp(0.45rem, 1.2vw, 0.85rem);
+        color: var(--fg);
+        font-family: var(--font-mono);
+        font-size: clamp(0.68rem, 1vw, 0.82rem);
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      @keyframes raceboard-idle {
+        50% {
+          transform: translateX(2px);
+        }
+      }
+      .control-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .primary-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 2.9rem;
+        padding: 0.7rem 0.9rem;
+        border: 3px solid var(--border);
+        background: var(--accent);
+        color: var(--bg);
+        box-shadow: 5px 5px 0 var(--shadow);
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-align: center;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+      .primary-action:hover {
+        box-shadow: 2px 2px 0 var(--shadow);
+        transform: translate(3px, 3px);
+      }
+      .privacy-note {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.7rem;
+      }
+      .section {
+        padding: clamp(3rem, 8vw, 7rem) 0;
+        border-top: 1px solid var(--soft-line);
+      }
+      .race-hero,
+      .section,
+      #controls {
+        scroll-margin-top: 8rem;
+      }
+      .section-heading {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+        margin-bottom: clamp(1.6rem, 4vw, 3rem);
+      }
+      .section-lede {
+        max-width: 62ch;
+        margin: 0;
+        color: var(--muted);
+      }
+      .driver-inspector {
+        display: grid;
+        grid-template-columns: minmax(12rem, 0.75fr) minmax(18rem, 1.1fr) minmax(15rem, 0.8fr);
+        gap: clamp(1rem, 3vw, 2rem);
+        align-items: center;
+        padding: clamp(0.85rem, 2vw, 1.25rem);
+        border-top: 3px solid var(--border);
+      }
+      .inspector-primary {
+        min-width: 0;
+      }
+      .inspector-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.45rem;
+        color: var(--muted);
+        font-size: 0.67rem;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+      .inspector-handle {
+        margin-bottom: 0.5rem;
+        overflow: hidden;
+        font-size: clamp(1.05rem, 2vw, 1.55rem);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .inspector-score {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: clamp(1.55rem, 3vw, 2.65rem);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        line-height: 1;
+      }
+      .inspector-stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin: 0;
+        border-top: 1px solid var(--soft-line);
+      }
+      .inspector-stats div {
+        padding: 0.55rem 0;
+        border-bottom: 1px solid var(--soft-line);
+      }
+      .inspector-stats dt {
+        color: var(--muted);
+        font-size: 0.65rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .inspector-stats dd {
+        margin: 0.2rem 0 0;
+        font-family: var(--font-mono);
+        font-weight: 700;
+      }
+      .lab-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
+        gap: clamp(1.5rem, 5vw, 5rem);
+      }
+      .ghost-lap,
+      .garage {
+        min-width: 0;
+      }
+      .subhead {
+        margin-bottom: 1.35rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 3px solid var(--border);
+      }
+      .subhead p {
+        max-width: 58ch;
+        margin: 0.65rem 0 0;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .ghost-controls {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(8rem, 0.45fr);
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+      }
+      .field {
+        display: grid;
+        gap: 0.4rem;
+        min-width: 0;
+      }
+      .field span {
+        font-size: 0.68rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .field input,
+      .field select,
+      .control-select {
+        width: 100%;
+        min-height: 2.9rem;
+        padding: 0.55rem 0.65rem;
+        border: 2px solid var(--border);
+        background: var(--surface);
+      }
+      .ghost-output {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 1rem;
+        min-height: 5.5rem;
+        padding: 0.85rem 0;
+        border-top: 1px solid var(--soft-line);
+        border-bottom: 1px solid var(--soft-line);
+      }
+      .ghost-output strong {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: clamp(1.7rem, 4vw, 3rem);
+        letter-spacing: -0.03em;
+        line-height: 1;
+      }
+      .ghost-output span {
+        display: block;
+        margin-top: 0.4rem;
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+      .ghost-canvas {
+        display: block;
+        width: min(10rem, 36vw);
+        height: auto;
+        border: 2px solid var(--border);
+        image-rendering: pixelated;
+      }
+      .local-only {
+        margin: 0.75rem 0 0;
+        color: var(--muted);
+        font-size: 0.7rem;
+      }
+      .garage-stage {
+        display: grid;
+        grid-template-columns: minmax(9rem, 1fr) minmax(10rem, 0.8fr);
+        gap: 1.25rem;
+        align-items: center;
+        padding: 1rem 0;
+        border-top: 1px solid var(--soft-line);
+        border-bottom: 1px solid var(--soft-line);
+      }
+      .garage-canvas {
+        display: block;
+        width: 100%;
+        max-width: 24rem;
+        height: auto;
+        image-rendering: pixelated;
+      }
+      .garage-builder {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.65rem;
+        min-width: 0;
+      }
+      .garage-builder .field span {
+        color: var(--muted);
+        font-size: 0.6rem;
+      }
+      .garage-builder .field select {
+        min-height: 2.75rem;
+        padding-inline: 0.45rem 0.2rem;
+        font-size: 0.65rem;
+      }
+      .builder-footer {
+        display: grid;
+        grid-column: 1 / -1;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 0.75rem;
+        padding-top: 0.35rem;
+      }
+      .builder-action {
+        justify-self: start;
+        white-space: nowrap;
+      }
+      .builder-footer p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.62rem;
+      }
+      .rules-layout {
+        display: grid;
+        grid-template-columns: minmax(16rem, 0.65fr) minmax(0, 1.35fr);
+        gap: clamp(2rem, 8vw, 8rem);
+        align-items: start;
+      }
+      .rule-statement {
+        max-width: 18ch;
+        font-size: clamp(1.65rem, 3.5vw, 3rem);
+        line-height: 1.08;
+        letter-spacing: -0.02em;
+      }
+      .rules {
+        counter-reset: rules;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        border-top: 3px solid var(--border);
+      }
+      .rules li {
+        display: grid;
+        grid-template-columns: 2.2rem minmax(0, 1fr);
+        gap: 1rem;
+        padding: 1.15rem 0;
+        border-bottom: 1px solid var(--soft-line);
+        color: var(--muted);
+      }
+      .rules li::before {
+        counter-increment: rules;
+        color: var(--fg);
+        font-family: var(--font-mono);
+        font-weight: 700;
+        content: "0" counter(rules);
+      }
+      .closing {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 2rem;
+        align-items: center;
+        padding: clamp(2rem, 6vw, 4rem) 0 1rem;
+        border-top: 3px solid var(--border);
+      }
+      .closing p {
+        max-width: 56ch;
+        margin: 0.75rem 0 0;
+        color: var(--muted);
+      }
+      .sr-only {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+      }
+      [data-motion="off"] *,
+      [data-motion="off"] *::before,
+      [data-motion="off"] *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+      }
+      @media (max-width: 68rem) {
+        .desktop-nav {
+          display: none;
+        }
+        .site-header {
+          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-rows: auto auto;
+          gap: 0.5rem;
+        }
+        .header-controls {
+          grid-row: 2;
+          grid-column: 1 / -1;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .steward-strip {
+          top: 7.75rem;
+        }
+        .status-cluster {
+          grid-row: 1;
+          grid-column: 2;
+        }
+        .menu-button {
+          display: block;
+        }
+        .mobile-menu[data-open="true"] {
+          position: fixed;
+          top: 7.75rem;
+          right: 0;
+          left: 0;
+          z-index: 40;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          padding: 0.75rem var(--page-pad) 1rem;
+          border-bottom: 3px solid var(--border);
+          background: var(--surface);
+        }
+        .mobile-menu a {
+          display: flex;
+          align-items: center;
+          min-height: 2.75rem;
+          padding: 0.45rem;
+          font-size: 0.76rem;
+        }
+        .driver-inspector {
+          grid-template-columns: minmax(12rem, 0.75fr) minmax(18rem, 1fr);
+        }
+        .driver-inspector > .privacy-note {
+          grid-column: 1 / -1;
+        }
+        .lab-grid,
+        .rules-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 44rem) {
+        .site-header {
+          min-height: 8rem;
+        }
+        .header-controls label {
+          gap: 0.25rem;
+        }
+        .header-controls .control-select,
+        .menu-button {
+          min-height: 2.75rem;
+        }
+        .brand-mark {
+          width: 2.5rem;
+          height: 2.5rem;
+        }
+        .brand-name {
+          font-size: 0.82rem;
+        }
+        .steward-strip {
+          position: relative;
+          top: auto;
+          align-items: flex-start;
+          min-height: 3.15rem;
+          line-height: 1.35;
+        }
+        .steward-strip strong {
+          display: none;
+        }
+        .steward-strip a {
+          align-self: center;
+        }
+        .hero-heading-row,
+        .section-heading,
+        .closing {
+          grid-template-columns: 1fr;
+        }
+        .quick-start {
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
+        .quick-steps {
+          display: none;
+        }
+        .mobile-menu[data-open="true"] {
+          top: 8rem;
+        }
+        .prompt-console {
+          grid-template-columns: 1fr;
+        }
+        .copy-prompt {
+          width: 100%;
+        }
+        .hero-heading-row {
+          gap: 0.75rem;
+        }
+        .race-hero {
+          padding-top: 1rem;
+        }
+        .monitor-bar {
+          flex-wrap: wrap;
+        }
+        .live-indicator {
+          display: none;
+        }
+        .pause-button {
+          margin-left: auto;
+        }
+        .raceboard-scroll {
+          max-height: 22rem;
+        }
+        .raceboard-row {
+          min-height: 3.5rem;
+          grid-template-columns: minmax(7.8rem, 42%) minmax(0, 1fr) 4.8rem;
+        }
+        .raceboard-identity {
+          gap: 0.38rem;
+          padding-inline: 0.4rem;
+        }
+        .raceboard-position {
+          flex-basis: 1.8rem;
+        }
+        .raceboard-car {
+          display: none;
+        }
+        .raceboard-lane {
+          margin-inline: 0.45rem;
+        }
+        .raceboard-score {
+          padding-inline: 0.4rem;
+        }
+        .driver-inspector {
+          grid-template-columns: 1fr;
+        }
+        .driver-inspector > .privacy-note {
+          grid-column: auto;
+        }
+        .ghost-controls,
+        .garage-stage {
+          grid-template-columns: 1fr;
+        }
+        .garage-builder {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .ghost-output {
+          align-items: start;
+          grid-template-columns: 1fr;
+        }
+        .ghost-canvas {
+          width: 100%;
+        }
+        .garage-canvas {
+          max-width: none;
+        }
+      }
+      @media (max-width: 25rem) {
+        .brand-name {
+          max-width: 6.5rem;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .mobile-menu[data-open="true"] {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .source-badge {
+          white-space: normal;
+        }
+        .raceboard-handle {
+          font-size: 0.8rem;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.001ms !important;
+          animation-duration: 0.001ms !important;
+        }
+      }
+      @media (forced-colors: active) {
+        .brand-mark,
+        .source-badge,
+        .race-monitor,
+        .primary-action,
+        .driver-inspector,
+        .raceboard-row,
+        .subhead,
+        .rules,
+        .closing,
+        input,
+        select,
+        button {
+          forced-color-adjust: auto;
+          border-color: CanvasText;
+        }
+        .ghost-canvas,
+        .garage-canvas {
+          forced-color-adjust: none;
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="neon-night">
+    <a class="skip-link" href="#standings" data-i18n="skip">Skip to standings</a>
+    <header class="site-header" data-od-id="race-control-header">
+      <a class="brand-lockup" href="#top" aria-label="Vibe Racing" data-od-id="brand-lockup">
+        <span class="brand-mark" aria-hidden="true">VR</span>
+        <span class="brand-name">Vibe Racing</span>
+      </a>
+      <nav
+        class="desktop-nav"
+        aria-label="Primary navigation"
+        data-i18n-aria-label="primaryNavigationLabel"
+        data-od-id="desktop-navigation"
+      >
+        <a href="#join" data-i18n="navJoin">Join</a>
+        <a href="#race" data-i18n="navRace">Race</a>
+        <a href="#standings" data-i18n="navStandings">Standings</a>
+        <a href="#garage" data-i18n="navGarage">Garage</a>
+        <a href="#stewards" data-i18n="navRules">Rules</a>
+      </nav>
+      <div class="header-controls" id="controls" data-od-id="display-controls">
+        <label>
+          <span data-i18n="theme">Venue</span>
+          <select class="control-select" id="theme-select" data-od-id="theme-select">
+            <option value="neon-night">Neon Night</option>
+            <option value="classic-grand-prix">Classic GP</option>
+            <option value="cyber-rally">Cyber Rally</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="language">Language</span>
+          <select class="control-select" id="language-select" data-od-id="language-select">
+            <option value="en">English</option>
+            <option value="ru">Русский</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="motion">Motion</span>
+          <select class="control-select" id="motion-select" data-od-id="motion-select">
+            <option value="system">System</option>
+            <option value="on">On</option>
+            <option value="off">Reduced</option>
+          </select>
+        </label>
+      </div>
+      <div class="status-cluster">
+        <button
+          class="menu-button"
+          id="menu-button"
+          type="button"
+          aria-expanded="false"
+          aria-controls="mobile-menu"
+          data-od-id="mobile-menu-button"
+        >
+          Menu
+        </button>
+      </div>
+    </header>
+    <nav
+      class="mobile-menu"
+      id="mobile-menu"
+      data-open="false"
+      aria-label="Mobile navigation"
+      data-i18n-aria-label="mobileNavigationLabel"
+      data-od-id="mobile-navigation"
+    >
+      <a href="#join" data-i18n="navJoin">Join</a>
+      <a href="#race" data-i18n="navRace">Race</a>
+      <a href="#standings" data-i18n="navStandings">Standings</a>
+      <a href="#garage" data-i18n="navGarage">Garage</a>
+      <a href="#stewards" data-i18n="navRules">Rules</a>
+      <a href="#controls" data-i18n="navControls">Controls</a>
+    </nav>
+    <aside class="steward-strip" data-od-id="race-steward-strip">
+      <strong>Race steward</strong>
+      <span data-i18n="stewardStrip"
+        >Community scores are self-reported and are not verified or endorsed by any provider.</span
+      >
+      <a href="#stewards" data-i18n="readRules">Read rules</a>
+    </aside>
+    <main id="top">
+      <section
+        class="quick-start"
+        id="join"
+        aria-labelledby="join-title"
+        data-od-id="agent-quick-start"
+      >
+        <div>
+          <h2 id="join-title" data-od-id="agent-quick-start-heading" data-i18n="joinTitle">
+            One prompt. Then race.
+          </h2>
+          <p class="quick-start-copy" data-i18n="joinCopy">
+            Pick the agents you use. The prompt checks support before suggesting any local setup.
+          </p>
+        </div>
+        <div class="quick-flow">
+          <ol class="quick-steps" aria-label="Quick start">
+            <li data-step="1" data-i18n="stepAgents">Pick agents</li>
+            <li data-step="2" data-i18n="stepPrompt">Copy prompt</li>
+            <li data-step="3" data-i18n="stepPosition">Check position</li>
+          </ol>
+          <div
+            class="agent-picker"
+            id="agent-picker"
+            aria-label="Coding agents"
+            data-od-id="agent-picker"
+          ></div>
+          <div class="prompt-console" data-od-id="agent-prompt-console">
+            <code id="agent-prompt"
+              >Check whether Vibe Racing currently supports Codex. Explain what remains private and
+              the exact local steps. Do not install or connect anything until I confirm.</code
+            >
+            <button
+              class="copy-prompt"
+              id="copy-agent-prompt"
+              type="button"
+              data-od-id="copy-agent-prompt"
+              data-i18n="copyPrompt"
+            >
+              Copy prompt
+            </button>
+          </div>
+          <p class="quick-caveat" id="copy-status" aria-live="polite" data-i18n="supportCaveat">
+            Codex is a candidate. Other agents are proposed. Support is checked before setup.
+          </p>
+        </div>
+      </section>
+      <section class="race-hero" id="race" aria-labelledby="race-title" data-od-id="race-day-hero">
+        <div class="hero-heading-row">
+          <div>
+            <p class="eyebrow" data-i18n="week">Current demo week</p>
+            <h1 id="race-title" data-od-id="race-day-title" data-i18n="headline">
+              Your week on the starting grid.
+            </h1>
+          </div>
+          <p class="hero-intro" data-i18n="heroCopy">
+            One public Community score across your selected agents. Exact usage stays private. Only
+            the derived score enters the race.
+          </p>
+        </div>
+        <div class="broadcast-grid">
+          <article
+            class="race-monitor"
+            id="standings"
+            aria-labelledby="race-title"
+            data-od-id="unified-raceboard"
+          >
+            <div class="monitor-bar">
+              <strong data-i18n="trackFeed">Raceboard: all drivers</strong>
+              <span class="live-indicator" id="live-indicator" data-i18n="motionLive"
+                >Motion on</span
+              >
+              <span class="source-badge" data-i18n="syntheticShort">Synthetic</span>
+              <button
+                class="pause-button"
+                id="pause-button"
+                type="button"
+                aria-pressed="false"
+                data-od-id="pause-race-control"
+                data-i18n="pause"
+              >
+                Pause
+              </button>
+            </div>
+            <div class="track-wrap">
+              <div
+                class="raceboard-scroll"
+                id="raceboard-scroll"
+                tabindex="0"
+                aria-describedby="track-description"
+                data-od-id="raceboard-scroll-viewport"
+              >
+                <ol
+                  class="raceboard-list"
+                  id="raceboard-list"
+                  aria-label="Synthetic Community standings"
+                  data-od-id="raceboard-driver-list"
+                ></ol>
+              </div>
+            </div>
+            <p class="track-caption" id="track-description" data-i18n="trackCaption">
+              Every lane combines position, driver, relative progress, and public score. Exact token
+              totals stay private.
+            </p>
+            <aside
+              class="driver-inspector"
+              id="driver-inspector"
+              aria-live="polite"
+              data-od-id="driver-inspector"
+            >
+              <div class="inspector-primary">
+                <div class="inspector-meta">
+                  <span data-i18n="selectedDriver">Selected driver</span>
+                  <span id="inspector-rank">P3</span>
+                </div>
+                <h3 class="inspector-handle" id="inspector-handle">demo_driver</h3>
+                <strong class="inspector-score" id="inspector-score">3,777</strong>
+              </div>
+              <dl class="inspector-stats">
+                <div>
+                  <dt data-i18n="activeDays">Active days</dt>
+                  <dd id="inspector-days">6/7</dd>
+                </div>
+                <div>
+                  <dt data-i18n="streak">Streak</dt>
+                  <dd id="inspector-streak">3d</dd>
+                </div>
+                <div>
+                  <dt data-i18n="freshness">Freshness</dt>
+                  <dd id="inspector-freshness">today</dd>
+                </div>
+                <div>
+                  <dt data-i18n="sources">Sources</dt>
+                  <dd id="inspector-sources">2</dd>
+                </div>
+              </dl>
+              <p class="privacy-note" style="margin-top: 1rem" data-i18n="inspectorPrivacy">
+                Daily detail, exact sync time, token totals, devices, and source IDs remain private.
+              </p>
+            </aside>
+          </article>
+        </div>
+      </section>
+      <section
+        class="section"
+        aria-label="Local simulator and garage"
+        data-i18n-aria-label="localSimulatorLabel"
+        data-od-id="race-lab-section"
+      >
+        <div class="lab-grid">
+          <article class="ghost-lap" id="ghost" data-od-id="local-ghost-lap">
+            <div class="subhead">
+              <h2 data-od-id="ghost-lap-heading" data-i18n="ghostLap">Local ghost lap</h2>
+              <p data-i18n="ghostCopy">
+                Try the public formula with hypothetical input. The ghost never joins the race
+                order.
+              </p>
+            </div>
+            <div class="ghost-controls">
+              <label class="field">
+                <span data-i18n="tokensLabel">Hypothetical tokens per active day</span>
+                <input
+                  id="token-input"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="16"
+                  autocomplete="off"
+                  spellcheck="false"
+                  value="10000"
+                  aria-describedby="ghost-local-note"
+                  data-od-id="ghost-token-input"
+                />
+              </label>
+              <label class="field">
+                <span data-i18n="daysLabel">Active days</span>
+                <select id="days-input" data-od-id="ghost-days-select">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5" selected="">5</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                </select>
+              </label>
+            </div>
+            <div class="ghost-output" aria-live="polite">
+              <div>
+                <strong id="ghost-score">865 pts</strong>
+                <span id="ghost-detail">173 pts per active day</span>
+              </div>
+              <canvas
+                class="ghost-canvas"
+                id="ghost-canvas"
+                width="480"
+                height="180"
+                role="img"
+                aria-label="Hypothetical local ghost car"
+              ></canvas>
+            </div>
+            <p class="local-only" id="ghost-local-note" data-i18n="localOnly">
+              Hypothetical input. Local only, not stored, and does not change standings.
+            </p>
+          </article>
+          <article class="garage" id="garage" data-od-id="synthetic-garage">
+            <div class="subhead">
+              <h2 data-od-id="garage-heading" data-i18n="garage">Driver garage</h2>
+              <p data-i18n="garageCopy">
+                Tune the selected car. Every control redraws the same deterministic pixel recipe
+                locally.
+              </p>
+            </div>
+            <div class="garage-stage">
+              <canvas
+                class="garage-canvas"
+                id="garage-canvas"
+                width="660"
+                height="300"
+                role="img"
+                aria-label="Selected synthetic pixel car"
+              ></canvas>
+              <form
+                class="garage-builder"
+                id="garage-builder"
+                aria-labelledby="garage-heading"
+                data-od-id="car-constructor"
+              >
+                <label class="field">
+                  <span data-i18n="chassis">Chassis</span>
+                  <select id="car-chassis" data-car-field="chassis" data-od-id="car-chassis-select">
+                    <option value="formula" data-i18n="formula">Formula</option>
+                    <option value="rally" data-i18n="rally">Rally</option>
+                    <option value="roadster" data-i18n="roadster">Roadster</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span data-i18n="paint">Paint</span>
+                  <select id="car-palette" data-car-field="palette" data-od-id="car-paint-select">
+                    <option value="magenta" data-i18n="paintMagenta">Pit magenta</option>
+                    <option value="turbo-blue" data-i18n="paintBlue">Turbo blue</option>
+                    <option value="sunburst" data-i18n="paintSunburst">Sunburst</option>
+                    <option value="mint" data-i18n="paintMint">Signal mint</option>
+                    <option value="redline" data-i18n="paintRedline">Redline</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span data-i18n="cockpit">Cockpit</span>
+                  <select id="car-cockpit" data-car-field="cockpit" data-od-id="car-cockpit-select">
+                    <option value="canopy" data-i18n="canopy">Canopy</option>
+                    <option value="open" data-i18n="open">Open</option>
+                    <option value="rally" data-i18n="rally">Rally</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span data-i18n="wing">Wing</span>
+                  <select id="car-wing" data-car-field="wing" data-od-id="car-wing-select">
+                    <option value="high" data-i18n="wingHigh">High</option>
+                    <option value="low" data-i18n="wingLow">Low</option>
+                    <option value="none" data-i18n="none">None</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span data-i18n="wheels">Wheels</span>
+                  <select id="car-wheels" data-car-field="wheels" data-od-id="car-wheels-select">
+                    <option value="slick" data-i18n="slick">Slick</option>
+                    <option value="street" data-i18n="street">Street</option>
+                    <option value="all-terrain" data-i18n="all-terrain">All-terrain</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span data-i18n="trail">Trail</span>
+                  <select id="car-trail" data-car-field="trail" data-od-id="car-trail-select">
+                    <option value="spark" data-i18n="spark">Spark</option>
+                    <option value="grid" data-i18n="grid">Grid</option>
+                    <option value="none" data-i18n="none">None</option>
+                  </select>
+                </label>
+                <div class="builder-footer">
+                  <p data-i18n="builderLocal">Live local preview. No upload.</p>
+                  <button class="builder-action" id="reset-car" type="button" data-i18n="resetCar">
+                    Reset car
+                  </button>
+                </div>
+              </form>
+            </div>
+          </article>
+        </div>
+      </section>
+      <section
+        class="section"
+        id="stewards"
+        aria-labelledby="rules-heading"
+        data-od-id="steward-rules-section"
+      >
+        <div class="rules-layout">
+          <div>
+            <p class="eyebrow" data-i18n="stewardDesk">Steward desk</p>
+            <h2
+              class="rule-statement"
+              id="rules-heading"
+              data-od-id="rules-heading"
+              data-i18n="rulesTitle"
+            >
+              How this leaderboard stays bounded.
+            </h2>
+          </div>
+          <ol class="rules">
+            <li data-i18n="ruleOne">
+              Community scores are self-reported by participating users and are not audited,
+              verified, or endorsed by any provider.
+            </li>
+            <li data-i18n="ruleTwo">
+              The ranking covers Vibe Racing participants only, not every user of a coding agent.
+            </li>
+            <li data-i18n="ruleThree">
+              Exact token totals, daily detail, device counts, source identifiers, and exact receipt
+              times stay private.
+            </li>
+            <li data-i18n="ruleFour">
+              Streak, freshness, source count, and car recipe are informational; they never break a
+              score tie.
+            </li>
+          </ol>
+        </div>
+      </section>
+      <section class="closing" data-od-id="closing-action">
+        <div>
+          <h2 data-i18n="closingTitle">Review the race. Check the rules.</h2>
+          <p data-i18n="closingCopy">
+            This prototype changes no account, connector, score, or production setting.
+          </p>
+        </div>
+        <a
+          class="primary-action"
+          href="#race"
+          data-od-id="return-to-race-cta"
+          data-i18n="returnRace"
+          >Return to race</a
+        >
+      </section>
+    </main>
+    <script>
+      (() => {
+        "use strict";
+        const participants = [
+          {
+            id: "neon-otter",
+            handle: "neon_otter",
+            rank: 1,
+            score: 4732,
+            days: 7,
+            streak: 13,
+            freshness: 0,
+            sources: 3,
+            color: "#ff4fc8",
+            trim: "#ffe66d",
+            palette: "magenta",
+            chassis: "formula",
+            cockpit: "canopy",
+            wing: "high",
+            wheels: "slick",
+            trail: "spark",
+          },
+          {
+            id: "syntax-spark",
+            handle: "syntax_spark",
+            rank: 2,
+            score: 4478,
+            days: 7,
+            streak: 8,
+            freshness: 0,
+            sources: 2,
+            color: "#ff9f43",
+            trim: "#ffe66d",
+            palette: "sunburst",
+            chassis: "roadster",
+            cockpit: "open",
+            wing: "low",
+            wheels: "street",
+            trail: "grid",
+          },
+          {
+            id: "demo-driver",
+            handle: "demo_driver",
+            rank: 3,
+            score: 3777,
+            days: 6,
+            streak: 3,
+            freshness: 0,
+            sources: 2,
+            color: "#38a7ff",
+            trim: "#55f7ff",
+            palette: "turbo-blue",
+            chassis: "rally",
+            cockpit: "rally",
+            wing: "high",
+            wheels: "all-terrain",
+            trail: "spark",
+          },
+          {
+            id: "loop-lantern",
+            handle: "loop_lantern",
+            rank: 3,
+            score: 3777,
+            days: 6,
+            streak: null,
+            freshness: 1,
+            sources: 1,
+            color: "#48e5a8",
+            trim: "#c5ff8a",
+            palette: "mint",
+            chassis: "roadster",
+            cockpit: "canopy",
+            wing: "none",
+            wheels: "street",
+            trail: "none",
+          },
+          {
+            id: "pixel-pulse",
+            handle: "pixel_pulse",
+            rank: 5,
+            score: 3473,
+            days: 6,
+            streak: 4,
+            freshness: 0,
+            sources: 3,
+            color: "#ff5a67",
+            trim: "#ffffff",
+            palette: "redline",
+            chassis: "formula",
+            cockpit: "open",
+            wing: "low",
+            wheels: "slick",
+            trail: "grid",
+          },
+          {
+            id: "stack-rover",
+            handle: "stack_rover",
+            rank: 6,
+            score: 2764,
+            days: 5,
+            streak: null,
+            freshness: 2,
+            sources: 1,
+            color: "#ff9f43",
+            trim: "#ffe66d",
+            palette: "sunburst",
+            chassis: "rally",
+            cockpit: "rally",
+            wing: "high",
+            wheels: "all-terrain",
+            trail: "spark",
+          },
+          {
+            id: "cache-comet",
+            handle: "cache_comet",
+            rank: 7,
+            score: 2448,
+            days: 5,
+            streak: 2,
+            freshness: 1,
+            sources: 2,
+            color: "#ff4fc8",
+            trim: "#ffe66d",
+            palette: "magenta",
+            chassis: "roadster",
+            cockpit: "open",
+            wing: "none",
+            wheels: "street",
+            trail: "none",
+          },
+          {
+            id: "debug-dash",
+            handle: "debug_dash",
+            rank: 8,
+            score: 2091,
+            days: 5,
+            streak: null,
+            freshness: 3,
+            sources: 1,
+            color: "#48e5a8",
+            trim: "#c5ff8a",
+            palette: "mint",
+            chassis: "formula",
+            cockpit: "canopy",
+            wing: "low",
+            wheels: "slick",
+            trail: "grid",
+          },
+        ];
+        const carPaints = {
+          magenta: { color: "#ff4fc8", trim: "#ffe66d" },
+          "turbo-blue": { color: "#38a7ff", trim: "#55f7ff" },
+          sunburst: { color: "#ff9f43", trim: "#ffe66d" },
+          mint: { color: "#48e5a8", trim: "#c5ff8a" },
+          redline: { color: "#ff5a67", trim: "#ffffff" },
+        };
+        const codingAgents = [
+          { id: "codex", label: "Codex", status: "candidate" },
+          { id: "claude-code", label: "Claude Code", status: "proposed" },
+          { id: "opencode", label: "opencode", status: "proposed" },
+          { id: "qwen-code", label: "Qwen Code", status: "proposed" },
+          { id: "cline", label: "Cline", status: "proposed" },
+          { id: "aider", label: "Aider", status: "proposed" },
+        ];
+        const originalCars = new Map(
+          participants.map((participant) => [participant.id, { ...participant }]),
+        );
+        const strings = {
+          en: {
+            skip: "Skip to standings",
+            navJoin: "Join",
+            navRace: "Race",
+            navStandings: "Standings",
+            navGarage: "Garage",
+            navRules: "Rules",
+            navControls: "Controls",
+            primaryNavigationLabel: "Primary navigation",
+            mobileNavigationLabel: "Mobile navigation",
+            localSimulatorLabel: "Local simulator and garage",
+            synthetic: "Synthetic preview",
+            syntheticShort: "Synthetic",
+            menu: "Menu",
+            close: "Close",
+            stewardStrip:
+              "Community scores are self-reported and are not verified or endorsed by any provider.",
+            readRules: "Read rules",
+            joinFast: "Safe grid entry",
+            joinTitle: "One prompt. Then race.",
+            joinCopy:
+              "Pick the agents you use. The prompt checks support before suggesting any local setup.",
+            stepAgents: "Pick agents",
+            stepPrompt: "Copy prompt",
+            stepPosition: "Confirm setup",
+            copyPrompt: "Copy prompt",
+            copiedPrompt: "Prompt copied. Paste it into your agent.",
+            copyFailed: "Copy unavailable. Select the prompt text and copy it manually.",
+            supportCaveat:
+              "Codex is a candidate. Other agents are proposed. Support is checked before setup.",
+            agentCandidate: "Candidate",
+            agentProposed: "Proposed",
+            agentPickerLabel: "Coding agents",
+            quickStepsLabel: "Quick start",
+            promptTemplate:
+              "Check whether Vibe Racing currently supports {agents}. Explain what remains private and the exact local steps. Do not install or connect anything until I confirm.",
+            week: "Current demo week",
+            headline: "Your week on the starting grid.",
+            heroCopy:
+              "One public Community score across your selected agents. Exact usage stays private. Only the derived score enters the race.",
+            trackFeed: "Raceboard: all drivers",
+            motionLive: "Motion on",
+            motionStill: "Motion reduced",
+            pause: "Pause",
+            resume: "Resume",
+            trackCaption:
+              "The full field scrolls inside this viewport. Every lane combines position, driver, relative progress, and public score.",
+            raceOrder: "Race order",
+            viewStandings: "View full standings",
+            noRaw: "No raw token totals",
+            communityLabel: "Community projection",
+            standings: "Full standings",
+            standingsCopy:
+              "Select a driver to update the track, table, and inspector together. Equal scores share a rank.",
+            tableCaption: "Synthetic Community standings with public derived scores.",
+            rank: "Rank",
+            car: "Car",
+            driver: "Driver",
+            days: "Days",
+            freshness: "Freshness",
+            score: "Score",
+            selectedDriver: "Selected driver",
+            activeDays: "Active days",
+            streak: "Streak",
+            sources: "Sources",
+            today: "today",
+            day: "day",
+            daysWord: "days",
+            inspectorPrivacy:
+              "Daily detail, exact sync time, token totals, devices, and source IDs remain private.",
+            method: "Scoring method",
+            ghostLap: "Local ghost lap",
+            ghostCopy:
+              "Try the public formula with hypothetical input. The ghost never joins the race order.",
+            tokensLabel: "Hypothetical tokens per active day",
+            daysLabel: "Active days",
+            pts: "pts",
+            perDay: "pts per active day",
+            localOnly: "Hypothetical input. Local only, not stored, and does not change standings.",
+            syntheticGarage: "Synthetic garage",
+            garage: "Driver garage",
+            garageCopy:
+              "Tune the selected car. Every control redraws the same deterministic pixel recipe locally.",
+            chassis: "Chassis",
+            paint: "Paint",
+            cockpit: "Cockpit",
+            wing: "Wing",
+            wheels: "Wheels",
+            trail: "Trail",
+            paintMagenta: "Pit magenta",
+            paintBlue: "Turbo blue",
+            paintSunburst: "Sunburst",
+            paintMint: "Signal mint",
+            paintRedline: "Redline",
+            wingHigh: "High",
+            wingLow: "Low",
+            builderLocal: "Live local preview. No upload.",
+            resetCar: "Reset car",
+            stewardDesk: "Steward desk",
+            rulesTitle: "How this leaderboard stays bounded.",
+            ruleOne:
+              "Community scores are self-reported by participating users and are not audited, verified, or endorsed by any provider.",
+            ruleTwo:
+              "The ranking covers Vibe Racing participants only, not every user of a coding agent.",
+            ruleThree:
+              "Exact token totals, daily detail, device counts, source identifiers, and exact receipt times stay private.",
+            ruleFour:
+              "Streak, freshness, source count, and car recipe are informational; they never break a score tie.",
+            nextLap: "Next lap",
+            closingTitle: "Review the race. Check the rules.",
+            closingCopy:
+              "This prototype changes no account, connector, score, or production setting.",
+            returnRace: "Return to race",
+            theme: "Venue",
+            language: "Language",
+            motion: "Motion",
+            themeNeon: "Neon Night",
+            themeClassic: "Classic GP",
+            themeCyber: "Cyber Rally",
+            motionSystem: "System",
+            motionOn: "On",
+            motionOff: "Reduced",
+            raceCanvasLabel: "Weekly pixel race with all eight synthetic drivers",
+            ghostCanvasLabel: "Hypothetical local ghost car",
+            garageCanvasLabel: "Selected synthetic pixel car",
+            sharedRank: "shared rank",
+            dayShort: "d",
+            formula: "Formula",
+            rally: "Rally",
+            roadster: "Roadster",
+            canopy: "Canopy",
+            open: "Open",
+            slick: "Slick",
+            street: "Street",
+            "all-terrain": "All-terrain",
+            spark: "Spark",
+            grid: "Grid",
+            none: "None",
+            invalid: "Enter a whole number from 0 through 9,007,199,254,740,991.",
+            notAvailable: "N/A",
+          },
+          ru: {
+            skip: "К таблице лидеров",
+            navJoin: "В рейтинг",
+            navRace: "Гонка",
+            navStandings: "Таблица",
+            navGarage: "Гараж",
+            navRules: "Правила",
+            navControls: "Настройки",
+            primaryNavigationLabel: "Основная навигация",
+            mobileNavigationLabel: "Мобильная навигация",
+            localSimulatorLabel: "Локальный симулятор и гараж",
+            synthetic: "Синтетическое превью",
+            syntheticShort: "Синтетика",
+            menu: "Меню",
+            close: "Закрыть",
+            stewardStrip:
+              "Результаты Community заявляют сами участники; ни один провайдер их не проверяет и не подтверждает.",
+            readRules: "Все правила",
+            joinFast: "Безопасный вход в рейтинг",
+            joinTitle: "Один промпт. И вы в гонке.",
+            joinCopy:
+              "Выберите своих агентов. Промпт проверит поддержку до любых локальных действий.",
+            stepAgents: "Выберите агентов",
+            stepPrompt: "Скопируйте промпт",
+            stepPosition: "Подтвердите настройку",
+            copyPrompt: "Копировать промпт",
+            copiedPrompt: "Промпт скопирован. Вставьте его в своего агента.",
+            copyFailed: "Автокопирование недоступно. Выделите текст промпта и скопируйте вручную.",
+            supportCaveat:
+              "Codex имеет статус кандидата. Остальные агенты предложены. Поддержка проверяется до настройки.",
+            agentCandidate: "Кандидат",
+            agentProposed: "Предложено",
+            agentPickerLabel: "Агенты для кодинга",
+            quickStepsLabel: "Быстрый старт",
+            promptTemplate:
+              "Проверь, поддерживает ли Vibe Racing сейчас {agents}. Объясни, что останется приватным, и покажи точные локальные шаги. Ничего не устанавливай и не подключай без моего подтверждения.",
+            week: "Текущая демо-неделя",
+            headline: "Ваша неделя на стартовой решётке.",
+            heroCopy:
+              "Один публичный балл Community для выбранных агентов. Точное использование остаётся приватным. В гонку попадает только производный балл.",
+            trackFeed: "Рейтинг на трассе: все пилоты",
+            motionLive: "Движение включено",
+            motionStill: "Движение снижено",
+            pause: "Пауза",
+            resume: "Продолжить",
+            trackCaption:
+              "Весь пелотон прокручивается внутри этого окна. Каждая полоса объединяет место, пилота, относительный прогресс и публичный балл.",
+            raceOrder: "Порядок гонки",
+            viewStandings: "Вся таблица",
+            noRaw: "Без публикации токенов",
+            communityLabel: "Проекция Community",
+            standings: "Полная таблица",
+            standingsCopy:
+              "Выберите пилота: порядок гонки, машина и инспектор обновятся вместе. Равные результаты делят место.",
+            tableCaption: "Синтетическая таблица Community с публичными производными баллами.",
+            rank: "Место",
+            car: "Авто",
+            driver: "Пилот",
+            days: "Дни",
+            freshness: "Обновление",
+            score: "Баллы",
+            selectedDriver: "Выбранный пилот",
+            activeDays: "Активные дни",
+            streak: "Серия",
+            sources: "Источники",
+            today: "сегодня",
+            day: "день",
+            daysWord: "дня",
+            inspectorPrivacy:
+              "Баллы по дням, точное время синхронизации, токены, устройства и ID источников остаются приватными.",
+            method: "Формула баллов",
+            ghostLap: "Локальный ghost lap",
+            ghostCopy:
+              "Проверьте публичную формулу на условном вводе. Призрачная машина не входит в порядок гонки.",
+            tokensLabel: "Условные токены за активный день",
+            daysLabel: "Активные дни",
+            pts: "б.",
+            perDay: "б. за активный день",
+            localOnly: "Условный ввод. Только локально, без сохранения и влияния на рейтинг.",
+            syntheticGarage: "Синтетический гараж",
+            garage: "Гараж пилота",
+            garageCopy:
+              "Настройте выбранную машину. Каждый элемент управления локально перерисовывает тот же детерминированный пиксельный рецепт.",
+            chassis: "Шасси",
+            paint: "Окраска",
+            cockpit: "Кокпит",
+            wing: "Антикрыло",
+            wheels: "Колёса",
+            trail: "След",
+            paintMagenta: "Пит-магент",
+            paintBlue: "Турбо-синий",
+            paintSunburst: "Солнечный",
+            paintMint: "Сигнальная мята",
+            paintRedline: "Красная линия",
+            wingHigh: "Высокое",
+            wingLow: "Низкое",
+            builderLocal: "Живое локальное превью. Без загрузки.",
+            resetCar: "Сбросить авто",
+            stewardDesk: "Судейская",
+            rulesTitle: "Как устроены границы этого рейтинга.",
+            ruleOne:
+              "Результаты Community заявляют сами участники. Ни один провайдер их не проверяет и не подтверждает.",
+            ruleTwo:
+              "Рейтинг охватывает только участников Vibe Racing, а не всех пользователей любого агента.",
+            ruleThree:
+              "Точные токены, детали по дням, число устройств, ID источников и точное время получения остаются приватными.",
+            ruleFour:
+              "Серия, обновление, число источников и рецепт машины справочны и не влияют на разрешение ничьей.",
+            nextLap: "Следующий круг",
+            closingTitle: "Проверьте гонку. Прочитайте правила.",
+            closingCopy:
+              "Этот прототип не меняет аккаунт, коннектор, баллы или production-настройки.",
+            returnRace: "Вернуться к гонке",
+            theme: "Трасса",
+            language: "Язык",
+            motion: "Анимация",
+            themeNeon: "Неон",
+            themeClassic: "Классика",
+            themeCyber: "Кибер-ралли",
+            motionSystem: "Системная",
+            motionOn: "Включена",
+            motionOff: "Снижена",
+            raceCanvasLabel: "Недельная пиксельная гонка всех восьми синтетических пилотов",
+            ghostCanvasLabel: "Условная локальная призрачная машина",
+            garageCanvasLabel: "Выбранная синтетическая пиксельная машина",
+            sharedRank: "общее место",
+            dayShort: "дн.",
+            formula: "Формула",
+            rally: "Ралли",
+            roadster: "Родстер",
+            canopy: "Фонарь",
+            open: "Открытый",
+            slick: "Слики",
+            street: "Дорожные",
+            "all-terrain": "Внедорожные",
+            spark: "Искры",
+            grid: "Сетка",
+            none: "Нет",
+            invalid: "Введите целое число от 0 до 9 007 199 254 740 991.",
+            notAvailable: "н/д",
+          },
+        };
+        const state = {
+          locale: "en",
+          theme: "neon-night",
+          motion: "system",
+          paused: false,
+          selectedId: "demo-driver",
+          selectedAgents: new Set(["codex"]),
+        };
+        const body = document.body;
+        const raceboardList = document.getElementById("raceboard-list");
+        const raceboardButtons = new Map();
+        const ghostCanvas = document.getElementById("ghost-canvas");
+        const ghostContext = ghostCanvas.getContext("2d");
+        const garageCanvas = document.getElementById("garage-canvas");
+        const garageContext = garageCanvas.getContext("2d");
+        const motionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
+        function t(key) {
+          return strings[state.locale][key] ?? strings.en[key] ?? key;
+        }
+        function formatNumber(value) {
+          return new Intl.NumberFormat(state.locale === "ru" ? "ru-RU" : "en-US").format(value);
+        }
+        function selectedParticipant() {
+          return (
+            participants.find((participant) => participant.id === state.selectedId) ??
+            participants[0]
+          );
+        }
+        function selectedAgentNames() {
+          return codingAgents
+            .filter((agent) => state.selectedAgents.has(agent.id))
+            .map((agent) => agent.label);
+        }
+        function renderAgentPrompt() {
+          const names = selectedAgentNames();
+          document.getElementById("agent-prompt").textContent = t("promptTemplate").replace(
+            "{agents}",
+            names.join(", "),
+          );
+        }
+        function renderAgentPicker() {
+          const picker = document.getElementById("agent-picker");
+          picker.innerHTML = "";
+          picker.setAttribute("aria-label", t("agentPickerLabel"));
+          codingAgents.forEach((agent) => {
+            const button = document.createElement("button");
+            const selected = state.selectedAgents.has(agent.id);
+            const statusLabel = t(
+              agent.status === "candidate" ? "agentCandidate" : "agentProposed",
+            );
+            button.type = "button";
+            button.className = "agent-choice";
+            button.dataset.agentId = agent.id;
+            button.setAttribute("aria-pressed", String(selected));
+            button.setAttribute("aria-label", `${agent.label}: ${statusLabel}`);
+            button.title = statusLabel;
+            button.textContent = agent.label;
+            picker.append(button);
+          });
+          renderAgentPrompt();
+        }
+        function toggleAgent(id) {
+          if (!codingAgents.some((agent) => agent.id === id)) return;
+          if (state.selectedAgents.has(id)) {
+            if (state.selectedAgents.size === 1) return;
+            state.selectedAgents.delete(id);
+          } else {
+            state.selectedAgents.add(id);
+          }
+          document.getElementById("copy-status").dataset.i18n = "supportCaveat";
+          document.getElementById("copy-status").textContent = t("supportCaveat");
+          renderAgentPicker();
+        }
+        async function copyAgentPrompt() {
+          const prompt = document.getElementById("agent-prompt").textContent.trim();
+          let copied = false;
+          try {
+            if (navigator.clipboard?.writeText) {
+              await navigator.clipboard.writeText(prompt);
+              copied = true;
+            } else {
+              const temporary = document.createElement("textarea");
+              temporary.value = prompt;
+              temporary.setAttribute("readonly", "");
+              temporary.style.position = "fixed";
+              temporary.style.opacity = "0";
+              document.body.append(temporary);
+              temporary.select();
+              copied = document.execCommand?.("copy") === true;
+              temporary.remove();
+            }
+          } catch (_) {
+            copied = false;
+          }
+          const status = document.getElementById("copy-status");
+          status.dataset.i18n = copied ? "copiedPrompt" : "copyFailed";
+          status.textContent = t(status.dataset.i18n);
+        }
+        function syncGarageBuilder() {
+          const participant = selectedParticipant();
+          document.querySelectorAll("[data-car-field]").forEach((control) => {
+            control.value = participant[control.dataset.carField];
+          });
+        }
+        function renderCarSurfaces() {
+          updateRaceboardCar(selectedParticipant());
+          drawGarage();
+        }
+        function updateCar(field, value) {
+          const participant = selectedParticipant();
+          if (!["chassis", "palette", "cockpit", "wing", "wheels", "trail"].includes(field)) return;
+          participant[field] = value;
+          if (field === "palette" && carPaints[value]) {
+            participant.color = carPaints[value].color;
+            participant.trim = carPaints[value].trim;
+          }
+          renderCarSurfaces();
+        }
+        function resetSelectedCar() {
+          const participant = selectedParticipant();
+          const original = originalCars.get(participant.id);
+          if (!original) return;
+          ["color", "trim", "palette", "chassis", "cockpit", "wing", "wheels", "trail"].forEach(
+            (field) => {
+              participant[field] = original[field];
+            },
+          );
+          syncGarageBuilder();
+          renderCarSurfaces();
+        }
+        function cssToken(name) {
+          return getComputedStyle(body).getPropertyValue(name).trim();
+        }
+        function isMotionEnabled() {
+          return (
+            !state.paused &&
+            state.motion !== "off" &&
+            !(state.motion === "system" && motionMedia.matches)
+          );
+        }
+        function paintCar(ctx, x, y, scale, participant, ghost = false) {
+          const bodyColor = ghost ? cssToken("--fg") : participant.color;
+          const trimColor = ghost ? cssToken("--muted") : participant.trim;
+          const wheelColor = cssToken("--bg");
+          ctx.save();
+          ctx.globalAlpha = ghost ? 0.62 : 1;
+          if (participant.trail === "spark") {
+            ctx.fillStyle = trimColor;
+            ctx.fillRect(x - 4 * scale, y + 3 * scale, 2 * scale, scale);
+            ctx.fillRect(x - 7 * scale, y + 5 * scale, scale, scale);
+          } else if (participant.trail === "grid") {
+            ctx.fillStyle = trimColor;
+            ctx.fillRect(x - 6 * scale, y + 2 * scale, 4 * scale, scale);
+            ctx.fillRect(x - 5 * scale, y + 4 * scale, 3 * scale, scale);
+          }
+          ctx.fillStyle = bodyColor;
+          if (participant.chassis === "formula") {
+            ctx.fillRect(x + scale, y + 2 * scale, 12 * scale, 3 * scale);
+            ctx.fillRect(x + 12 * scale, y + 3 * scale, 3 * scale, scale);
+          } else if (participant.chassis === "rally") {
+            ctx.fillRect(x + 2 * scale, y + scale, 11 * scale, 4 * scale);
+            ctx.fillRect(x + scale, y + 3 * scale, 14 * scale, 2 * scale);
+          } else {
+            ctx.fillRect(x + 2 * scale, y + 2 * scale, 12 * scale, 3 * scale);
+            ctx.fillRect(x + 12 * scale, y + scale, 2 * scale, scale);
+          }
+          ctx.fillStyle = trimColor;
+          if (participant.cockpit === "canopy") {
+            ctx.fillRect(x + 6 * scale, y, 5 * scale, 2 * scale);
+            ctx.fillStyle = wheelColor;
+            ctx.fillRect(x + 7 * scale, y, 3 * scale, scale);
+          } else if (participant.cockpit === "rally") {
+            ctx.fillRect(x + 5 * scale, y - scale, 6 * scale, 2 * scale);
+            ctx.fillStyle = wheelColor;
+            ctx.fillRect(x + 6 * scale, y - scale, 4 * scale, scale);
+          } else {
+            ctx.fillRect(x + 7 * scale, y + scale, 4 * scale, scale);
+            ctx.fillStyle = wheelColor;
+            ctx.fillRect(x + 8 * scale, y, 2 * scale, 2 * scale);
+          }
+          ctx.fillStyle = trimColor;
+          ctx.fillRect(x, y + 3 * scale, 15 * scale, scale);
+          if (participant.wing === "high") {
+            ctx.fillRect(x, y - scale, 3 * scale, scale);
+            ctx.fillRect(x + scale, y, scale, 3 * scale);
+          } else if (participant.wing === "low") {
+            ctx.fillRect(x, y + scale, 3 * scale, scale);
+            ctx.fillRect(x + scale, y + 2 * scale, scale, scale);
+          }
+          const wheelSize =
+            participant.wheels === "all-terrain" ? 3 : participant.wheels === "street" ? 2 : 2;
+          const wheelY = participant.wheels === "all-terrain" ? 5 : 5;
+          ctx.fillStyle = wheelColor;
+          ctx.fillRect(x + 3 * scale, y + wheelY * scale, wheelSize * scale, wheelSize * scale);
+          ctx.fillRect(x + 10 * scale, y + wheelY * scale, wheelSize * scale, wheelSize * scale);
+          if (participant.wheels === "slick") {
+            ctx.fillStyle = trimColor;
+            ctx.fillRect(x + 3 * scale, y + 5 * scale, 2 * scale, scale);
+            ctx.fillRect(x + 10 * scale, y + 5 * scale, 2 * scale, scale);
+          }
+          ctx.restore();
+        }
+        function drawGhost(dailyScore, weeklyScore) {
+          const ctx = ghostContext;
+          const scale = 3;
+          const width = 160;
+          const height = 60;
+          ctx.setTransform(scale, 0, 0, scale, 0, 0);
+          ctx.clearRect(0, 0, width, height);
+          ctx.fillStyle = cssToken("--bg");
+          ctx.fillRect(0, 0, width, height);
+          ctx.save();
+          ctx.globalAlpha = 0.35;
+          ctx.strokeStyle = cssToken("--fg");
+          for (let x = 0; x < width; x += 16) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+          }
+          ctx.restore();
+          const progress = Math.max(0, Math.min(1, weeklyScore / 7e3));
+          paintCar(ctx, 8 + progress * 124, 25, 1, participants[2], true);
+          ctx.fillStyle = cssToken("--accent");
+          ctx.fillRect(146, 0, 3, height);
+          ctx.font = "5px monospace";
+          ctx.fillText(String(dailyScore), 4, 9);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+        function drawGarage() {
+          const participant = selectedParticipant();
+          const ctx = garageContext;
+          const scale = 3;
+          const width = 220;
+          const height = 100;
+          ctx.setTransform(scale, 0, 0, scale, 0, 0);
+          ctx.clearRect(0, 0, width, height);
+          ctx.fillStyle = cssToken("--surface");
+          ctx.fillRect(0, 0, width, height);
+          ctx.save();
+          ctx.globalAlpha = 0.24;
+          ctx.strokeStyle = cssToken("--muted");
+          for (let x = -height; x < width; x += 12) {
+            ctx.beginPath();
+            ctx.moveTo(x, height);
+            ctx.lineTo(x + height, 0);
+            ctx.stroke();
+          }
+          ctx.restore();
+          ctx.fillStyle = cssToken("--muted");
+          ctx.fillRect(0, 73, width, 27);
+          paintCar(ctx, 63, 40, 6, participant);
+          ctx.fillStyle = cssToken("--fg");
+          ctx.font = "7px monospace";
+          ctx.fillText(participant.handle.toUpperCase(), 8, 14);
+          ctx.font = "5px monospace";
+          ctx.fillText("ACTIVE / SYNTHETIC", 8, 23);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+        function updateRaceboardCar(participant) {
+          const button = raceboardButtons.get(participant.id);
+          if (!button) return;
+          button.style.setProperty("--car-color", participant.color);
+          button.style.setProperty("--car-trim", participant.trim);
+          const car = button.querySelector(".raceboard-car");
+          car?.style.setProperty("--car-color", participant.color);
+          car?.style.setProperty("--car-trim", participant.trim);
+        }
+        function renderRaceboard() {
+          const leader = participants[0].score;
+          const last = participants.at(-1).score;
+          const fragment = document.createDocumentFragment();
+          raceboardButtons.clear();
+          participants.forEach((participant, index) => {
+            const item = document.createElement("li");
+            const button = document.createElement("button");
+            const progress = (participant.score - last) / Math.max(1, leader - last);
+            item.setAttribute("aria-posinset", String(index + 1));
+            item.setAttribute("aria-setsize", String(participants.length));
+            button.type = "button";
+            button.className = "raceboard-row";
+            button.dataset.driverId = participant.id;
+            button.dataset.odId = `raceboard-row-${participant.id}`;
+            button.style.setProperty("--progress", `${Math.round(progress * 100)}%`);
+            button.style.setProperty("--car-color", participant.color);
+            button.style.setProperty("--car-trim", participant.trim);
+            button.setAttribute("aria-current", String(participant.id === state.selectedId));
+            button.setAttribute(
+              "aria-label",
+              `${t("rank")} ${participant.rank}, ${t("driver")} ${participant.handle}, ${t("score")} ${formatNumber(participant.score)}`,
+            );
+            button.innerHTML = `\n <span class="raceboard-identity">\n <span class="raceboard-position">P${participant.rank}</span>\n <span class="raceboard-car" aria-hidden="true" style="--car-color:${participant.color};--car-trim:${participant.trim}"></span>\n <span class="raceboard-handle">${participant.handle}</span>\n </span>\n <span class="raceboard-lane" aria-hidden="true"></span>\n <span class="raceboard-score">${formatNumber(participant.score)}</span>\n `;
+            item.append(button);
+            fragment.append(item);
+            raceboardButtons.set(participant.id, button);
+          });
+          raceboardList.replaceChildren(fragment);
+        }
+        function renderInspector() {
+          const participant = selectedParticipant();
+          document.getElementById("inspector-rank").textContent = `P${participant.rank}`;
+          document.getElementById("inspector-handle").textContent = participant.handle;
+          document.getElementById("inspector-score").textContent = formatNumber(participant.score);
+          document.getElementById("inspector-days").textContent = `${participant.days}/7`;
+          document.getElementById("inspector-streak").textContent =
+            participant.streak === null
+              ? t("notAvailable")
+              : `${participant.streak}${t("dayShort")}`;
+          document.getElementById("inspector-freshness").textContent =
+            participant.freshness === 0
+              ? t("today")
+              : `${participant.freshness} ${participant.freshness === 1 ? t("day") : t("daysWord")}`;
+          document.getElementById("inspector-sources").textContent = String(participant.sources);
+          syncGarageBuilder();
+          drawGarage();
+        }
+        function renderTranslations() {
+          document.documentElement.lang = state.locale;
+          document.querySelectorAll("[data-i18n]").forEach((element) => {
+            element.textContent = t(element.dataset.i18n);
+          });
+          document.querySelectorAll("[data-i18n-aria-label]").forEach((element) => {
+            element.setAttribute("aria-label", t(element.dataset.i18nAriaLabel));
+          });
+          const themeSelect = document.getElementById("theme-select");
+          themeSelect.options[0].textContent = t("themeNeon");
+          themeSelect.options[1].textContent = t("themeClassic");
+          themeSelect.options[2].textContent = t("themeCyber");
+          const motionSelect = document.getElementById("motion-select");
+          motionSelect.options[0].textContent = t("motionSystem");
+          motionSelect.options[1].textContent = t("motionOn");
+          motionSelect.options[2].textContent = t("motionOff");
+          raceboardList.setAttribute("aria-label", t("tableCaption"));
+          ghostCanvas.setAttribute("aria-label", t("ghostCanvasLabel"));
+          garageCanvas.setAttribute("aria-label", t("garageCanvasLabel"));
+          document.querySelector(".quick-steps").setAttribute("aria-label", t("quickStepsLabel"));
+          renderAgentPicker();
+        }
+        function renderMenuState() {
+          const menu = document.getElementById("mobile-menu");
+          const button = document.getElementById("menu-button");
+          const open = menu.dataset.open === "true";
+          button.setAttribute("aria-expanded", String(open));
+          button.textContent = t(open ? "close" : "menu");
+        }
+        function renderMotionState() {
+          const enabled = isMotionEnabled();
+          const passivelyReduced =
+            !state.paused &&
+            (state.motion === "off" || (state.motion === "system" && motionMedia.matches));
+          document.documentElement.dataset.motion = state.motion;
+          body.dataset.raceRunning = String(enabled);
+          const button = document.getElementById("pause-button");
+          button.setAttribute("aria-pressed", String(state.paused));
+          button.disabled = passivelyReduced;
+          button.textContent = passivelyReduced
+            ? t("motionOff")
+            : state.paused
+              ? t("resume")
+              : t("pause");
+          document.getElementById("live-indicator").textContent = enabled
+            ? t("motionLive")
+            : t("motionStill");
+        }
+        function updateGhost() {
+          const raw = document.getElementById("token-input").value.trim();
+          const days = Number(document.getElementById("days-input").value);
+          const valid = /^[0-9]+$/.test(raw) && Number.isSafeInteger(Number(raw));
+          const input = document.getElementById("token-input");
+          input.setAttribute("aria-invalid", String(!valid));
+          if (!valid) {
+            document.getElementById("ghost-score").textContent = t("notAvailable");
+            document.getElementById("ghost-detail").textContent = t("invalid");
+            drawGhost(0, 0);
+            return;
+          }
+          const tokens = Number(raw);
+          const daily = Math.min(1e3, Math.round(250 * Math.log1p(tokens / 1e4)));
+          const weekly = Math.min(7e3, daily * days);
+          document.getElementById("ghost-score").textContent =
+            `${formatNumber(weekly)} ${t("pts")}`;
+          document.getElementById("ghost-detail").textContent =
+            `${formatNumber(daily)} ${t("perDay")}`;
+          drawGhost(daily, weekly);
+        }
+        function selectDriver(id) {
+          if (!participants.some((participant) => participant.id === id)) return;
+          const previousId = state.selectedId;
+          state.selectedId = id;
+          raceboardButtons.get(previousId)?.setAttribute("aria-current", "false");
+          raceboardButtons.get(id)?.setAttribute("aria-current", "true");
+          renderInspector();
+        }
+        function persistPreferences() {
+          try {
+            localStorage.setItem("viberacing.locale", state.locale);
+            localStorage.setItem("viberacing.theme", state.theme);
+            localStorage.setItem("viberacing.motion", state.motion);
+          } catch (_) {}
+        }
+        function loadPreferences() {
+          try {
+            const locale = localStorage.getItem("viberacing.locale");
+            const theme = localStorage.getItem("viberacing.theme");
+            const motion = localStorage.getItem("viberacing.motion");
+            if (locale === "en" || locale === "ru") state.locale = locale;
+            if (["neon-night", "classic-grand-prix", "cyber-rally"].includes(theme))
+              state.theme = theme;
+            if (["system", "on", "off"].includes(motion)) state.motion = motion;
+          } catch (_) {}
+        }
+        function applyTheme() {
+          body.dataset.theme = state.theme;
+          document.getElementById("theme-select").value = state.theme;
+          updateGhost();
+          drawGarage();
+        }
+        function renderAll() {
+          body.dataset.theme = state.theme;
+          document.getElementById("theme-select").value = state.theme;
+          document.getElementById("language-select").value = state.locale;
+          document.getElementById("motion-select").value = state.motion;
+          renderTranslations();
+          renderMenuState();
+          renderRaceboard();
+          renderInspector();
+          renderMotionState();
+          updateGhost();
+        }
+        document.addEventListener("click", (event) => {
+          const agentButton = event.target.closest("[data-agent-id]");
+          if (agentButton) {
+            toggleAgent(agentButton.dataset.agentId);
+            return;
+          }
+          const driverButton = event.target.closest("[data-driver-id]");
+          if (driverButton) selectDriver(driverButton.dataset.driverId);
+        });
+        document.getElementById("copy-agent-prompt").addEventListener("click", copyAgentPrompt);
+        document.getElementById("menu-button").addEventListener("click", () => {
+          const menu = document.getElementById("mobile-menu");
+          const open = menu.dataset.open !== "true";
+          menu.dataset.open = String(open);
+          renderMenuState();
+        });
+        document.getElementById("mobile-menu").addEventListener("click", (event) => {
+          if (event.target.closest("a")) {
+            document.getElementById("mobile-menu").dataset.open = "false";
+            renderMenuState();
+          }
+        });
+        document.getElementById("pause-button").addEventListener("click", () => {
+          state.paused = !state.paused;
+          renderMotionState();
+        });
+        document.getElementById("theme-select").addEventListener("change", (event) => {
+          state.theme = event.currentTarget.value;
+          applyTheme();
+          persistPreferences();
+        });
+        document.getElementById("language-select").addEventListener("change", (event) => {
+          state.locale = event.currentTarget.value;
+          renderAll();
+          persistPreferences();
+        });
+        document.getElementById("motion-select").addEventListener("change", (event) => {
+          state.motion = event.currentTarget.value;
+          renderMotionState();
+          persistPreferences();
+        });
+        document.getElementById("token-input").addEventListener("input", updateGhost);
+        document.getElementById("days-input").addEventListener("change", updateGhost);
+        document.getElementById("garage-builder").addEventListener("change", (event) => {
+          const control = event.target.closest("[data-car-field]");
+          if (control) updateCar(control.dataset.carField, control.value);
+        });
+        document.getElementById("reset-car").addEventListener("click", resetSelectedCar);
+        motionMedia.addEventListener("change", renderMotionState);
+        loadPreferences();
+        renderAll();
+      })();
+    </script>
+  </body>
+</html>
