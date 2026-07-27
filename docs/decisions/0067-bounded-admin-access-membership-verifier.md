@@ -136,8 +136,8 @@ There is no database migration, role change, public protocol, route, cookie, lis
 credential, or enabled runtime. Starting the website still does not apply or create a migration. The
 only application dependency change is the exact zero-transitive `jose` package in the private Admin
 workspace. The same reviewed slice patch-updates the root-only Markdown tool to
-`markdownlint-cli2@0.23.1`, which selects the patched `js-yaml@5.2.1`; neither tool is part of a
-product runtime.
+`markdownlint-cli2@0.23.1`; a later exact advisory override selects `js-yaml@5.2.2`. Neither tool is
+part of a product runtime.
 
 Rollback is to remove the config/verifier modules, dependency declaration and lock record, ADR/index
 entry, notice/inventory records, tests, and current-state documentation. The ADR 0066 invitation

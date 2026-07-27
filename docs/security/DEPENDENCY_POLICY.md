@@ -43,13 +43,14 @@ advisories.
 
 `markdownlint-cli2@0.23.1` is a root-only development tool for the repository Markdown gate. The
 patch update replaced the exact `globby`, `js-yaml`, `markdown-it`, and `markdownlint` lock nodes
-selected by 0.23.0 without adding a package or changing the runtime graph. It selects
-`js-yaml@5.2.1`, the upstream-patched release for CVE-2026-59870, instead of the affected 5.2.0
-release. The official-registry manifests and integrity values, upstream changelog, complete lock and
-inventory diff, MIT licenses, absence of install lifecycle scripts, release quarantine, Markdown
-output, and zero-moderate-or-higher online audit result were reviewed on 2026-07-21. An update
-requires the same registry, lock, license, script, advisory, formatting, documentation, and
-Markdown-gate review; this CLI must never enter a product workspace or runtime artifact.
+selected by 0.23.0 without adding a package or changing the runtime graph. A later exact
+parent-scoped override selects `js-yaml@5.2.2`, the upstream patch for GHSA-pm4m-ph32-ghv5; direct
+`markdownlint-cli2@0.23.2` was not admitted while it remained inside the 24-hour release quarantine.
+The official-registry manifests and integrity values, upstream changelog, complete lock and
+inventory diff, MIT licenses, disabled install lifecycle scripts, Markdown output, and
+zero-moderate-or-higher online audit result were reviewed through 2026-07-27. An update requires the
+same registry, lock, license, script, advisory, formatting, documentation, and Markdown-gate review;
+this CLI must never enter a product workspace or runtime artifact.
 
 `@noble/ed25519@3.1.0` is the only current application cryptography dependency. A local probe showed
 that Node's native OpenSSL-backed verifier accepted an all-zero Ed25519 public key and signature, so
@@ -120,6 +121,12 @@ The added declarations are MIT or BSD-3-Clause. An update requires renewed
 source/release/security/license/script/transitive review plus the raw-framing, proxy, timeout,
 overload, generic-error, response-contract, and production-build regressions.
 
+The 2026-07-27 registry audit required exact parent-scoped patches for the unchanged Fastify
+release: `fast-uri@3.1.4` and `fast-uri@4.1.1` close GHSA-v2hh-gcrm-f6hx, while `find-my-way@9.7.0`
+closes GHSA-c96f-x56v-gq3h within Fastify's declared range. The exact production runtime inventory,
+Ingest unit and PostgreSQL integrations, Edge compatibility, signal settlement, and pinned
+production image must remain green until upstream parents select those versions.
+
 `config/license-policy.json` is a reviewed allowlist of the license expressions currently present;
 it is not a general statement that a license is suitable for every future distribution. The checker
 also inventories every workflow and binds pinned Actions, command-invoked container images, and
@@ -139,14 +146,21 @@ unreviewed declarations fail closed.
 
 Resolution overrides are exceptions, not invisible configuration. Each exact selector and
 replacement must be mirrored in `config/dependency-overrides.json` with a reason, review date,
-expiry date, and removal condition. One current override moves Next.js's PostCSS dependency from the
-advisory-affected 8.4.31 release to the patched 8.5.19 release; another removes Next.js's optional
-`sharp` graph because this application disables remote images and does not use image optimization.
-Both expire on 2026-10-12. The PostCSS override must be removed when the pinned Next.js release
-resolves a patched version itself; `sharp` must be restored and re-reviewed before any feature
-depends on image optimization. A `never`-typed declaration satisfies Next.js's upstream type-only
-`sharp` reference without exposing a runtime implementation, and the effective ESLint policy rejects
-static, dynamic, re-export, and CommonJS product imports of the package.
+expiry date, and removal condition. Current security overrides close the official-registry
+advisories in the Fastify, Markdown, and ESLint tool graphs without relaxing the online audit.
+ESLint 9's three parents use only the named `Minimatch` constructor retained by the
+quarantine-cleared `minimatch@10.2.5`; its child is fixed at `brace-expansion@5.0.8` until the
+parents select a safe pair themselves. Every workspace lint gate is the compatibility oracle for
+that temporary cross-major substitution.
+
+The two remaining Next.js overrides move its PostCSS dependency from advisory-affected 8.4.31 to
+patched 8.5.19 and remove the optional `sharp` graph because this application disables remote images
+and does not use image optimization. All current overrides expire on 2026-10-25. The PostCSS
+override must be removed when the pinned Next.js release resolves a patched version itself; `sharp`
+must be restored and re-reviewed before any feature depends on image optimization. A `never`-typed
+declaration satisfies Next.js's upstream type-only `sharp` reference without exposing a runtime
+implementation, and the effective ESLint policy rejects static, dynamic, re-export, and CommonJS
+product imports of the package.
 
 An install-script exception requires source review, exact package and version scope, a documented
 reason, and a regression check. `dangerouslyAllowAllBuilds` is prohibited.

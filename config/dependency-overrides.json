@@ -2,18 +2,90 @@
   "schemaVersion": 1,
   "overrides": [
     {
-      "selector": "next@16.2.10>postcss",
+      "selector": "@eslint/config-array@0.21.2>minimatch",
+      "replacement": "10.2.5",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
+      "reason": "The official registry audit reports GHSA-mh99-v99m-4gvg in the minimatch 3.1.5 brace-expansion branch. This parent uses only the stable named Minimatch constructor, which minimatch 10.2.5 retains, and the full lint matrix exercises its config matching.",
+      "removalCondition": "Remove when the pinned ESLint graph selects a non-vulnerable minimatch and brace-expansion pair itself, then rerun every workspace lint gate and the online moderate-level audit."
+    },
+    {
+      "selector": "@eslint/eslintrc@3.3.6>minimatch",
+      "replacement": "10.2.5",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
+      "reason": "The official registry audit reports GHSA-mh99-v99m-4gvg in the minimatch 3.1.5 brace-expansion branch. This parent imports only the named Minimatch constructor, which minimatch 10.2.5 retains, and the full lint matrix covers override matching.",
+      "removalCondition": "Remove when the pinned ESLint graph selects a non-vulnerable minimatch and brace-expansion pair itself, then rerun every workspace lint gate and the online moderate-level audit."
+    },
+    {
+      "selector": "@fastify/ajv-compiler@4.0.5>fast-uri",
+      "replacement": "3.1.4",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
+      "reason": "The official registry audit reports GHSA-v2hh-gcrm-f6hx in fast-uri 3.1.3. Version 3.1.4 is the upstream same-line security patch, preserves the AJV compiler dependency contract, and has passed the release quarantine.",
+      "removalCondition": "Remove when the pinned Fastify compiler graph resolves fast-uri 3.1.4 or newer itself, then rerun Ingest unit, compatibility, PostgreSQL, signal, and production-image gates."
+    },
+    {
+      "selector": "ajv@8.20.0>fast-uri",
+      "replacement": "3.1.4",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
+      "reason": "The official registry audit reports GHSA-v2hh-gcrm-f6hx in fast-uri 3.1.3. Version 3.1.4 is the upstream same-line security patch, preserves AJV's declared dependency contract, and has passed the release quarantine.",
+      "removalCondition": "Remove when the pinned AJV and Fastify graph resolves fast-uri 3.1.4 or newer itself, then rerun Ingest validation, compatibility, PostgreSQL, signal, and production-image gates."
+    },
+    {
+      "selector": "eslint@9.39.5>minimatch",
+      "replacement": "10.2.5",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
+      "reason": "The official registry audit reports GHSA-mh99-v99m-4gvg in the minimatch 3.1.5 brace-expansion branch. ESLint uses the retained named Minimatch constructor, and every repository lint configuration is exercised by the release gate.",
+      "removalCondition": "Remove when the pinned ESLint release selects a non-vulnerable minimatch and brace-expansion pair itself, then rerun every workspace lint gate and the online moderate-level audit."
+    },
+    {
+      "selector": "fast-json-stringify@7.0.1>fast-uri",
+      "replacement": "4.1.1",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
+      "reason": "The official registry audit reports GHSA-v2hh-gcrm-f6hx in fast-uri 4.1.0. Version 4.1.1 is the upstream same-line security patch, preserves the serializer dependency contract, and has passed the release quarantine.",
+      "removalCondition": "Remove when the pinned Fastify serializer graph resolves fast-uri 4.1.1 or newer itself, then rerun Ingest response, compatibility, PostgreSQL, signal, and production-image gates."
+    },
+    {
+      "selector": "fastify@5.10.0>find-my-way",
+      "replacement": "9.7.0",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
+      "reason": "The official registry audit reports GHSA-c96f-x56v-gq3h in find-my-way 9.6.0. Version 9.7.0 satisfies Fastify's declared ^9.6.0 range, keeps the supported Node floor, and has passed the release quarantine.",
+      "removalCondition": "Remove when the pinned Fastify release selects find-my-way 9.7.0 or newer itself, then rerun Ingest routing, overload, PostgreSQL, signal, and production-image gates."
+    },
+    {
+      "selector": "markdownlint-cli2@0.23.1>js-yaml",
+      "replacement": "5.2.2",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
+      "reason": "The official registry audit reports GHSA-pm4m-ph32-ghv5 in js-yaml 5.2.1. Version 5.2.2 is the upstream same-line security patch; the direct markdownlint-cli2 0.23.2 release remains inside the repository quarantine.",
+      "removalCondition": "Remove after a quarantined markdownlint-cli2 release selects js-yaml 5.2.2 or newer itself, then rerun Markdown lint, formatting, documentation links, licenses, and the online audit."
+    },
+    {
+      "selector": "minimatch@10.2.5>brace-expansion",
+      "replacement": "5.0.8",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
+      "reason": "The official registry audit reports GHSA-mh99-v99m-4gvg in brace-expansion 5.0.7. Version 5.0.8 is the upstream same-line security patch, satisfies minimatch's declared ^5.0.5 range, and has passed the release quarantine.",
+      "removalCondition": "Remove when the pinned minimatch release selects brace-expansion 5.0.8 or newer itself, then rerun all workspace lint and TypeScript gates plus the online moderate-level audit."
+    },
+    {
+      "selector": "next@16.2.11>postcss",
       "replacement": "8.5.19",
-      "reviewedOn": "2026-07-14",
-      "expiresOn": "2026-10-12",
-      "reason": "Next.js 16.2.10 resolves postcss 8.4.31, which is affected by GHSA-qx2v-qp2m-jg93. The patched 8.5.19 release is already exercised by this workspace's Vite graph and remains within the same major API line.",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
+      "reason": "Next.js 16.2.11 resolves postcss 8.4.31, which is affected by GHSA-qx2v-qp2m-jg93. The patched 8.5.19 release is already exercised by this workspace's Vite graph and remains within the same major API line.",
       "removalCondition": "Remove this override once the pinned Next.js release resolves postcss 8.5.10 or newer itself, then rerun the registry audit, production build, and CSS/browser verification."
     },
     {
-      "selector": "next@16.2.10>sharp",
+      "selector": "next@16.2.11>sharp",
       "replacement": "-",
-      "reviewedOn": "2026-07-14",
-      "expiresOn": "2026-10-12",
+      "reviewedOn": "2026-07-27",
+      "expiresOn": "2026-10-25",
       "reason": "The current web application does not use next/image or runtime image optimization, so the native sharp and libvips graph is unnecessary product code and distribution surface. A never-typed ambient sentinel satisfies Next.js's upstream type-only reference, while ESLint forbids product imports.",
       "removalCondition": "Remove this override and the type-only sentinel before enabling Next.js image optimization or any feature that requires sharp, then review the native binary and LGPL obligations."
     }
