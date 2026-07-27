@@ -159,7 +159,7 @@ Current local evidence includes:
 The existing disposable database suite independently proves the Admin role's single capability and
 cross-role denials. A separate opt-in synthetic integration now composes the built production
 JavaScript and injected authorization/audit ports with one disposable hostname-verified TLS
-PostgreSQL database. It applies the exact reviewed 40-migration ledger, proves an extra-membership
+PostgreSQL database. It applies the exact reviewed 42-migration ledger, proves an extra-membership
 login fails before private-state mutation, then proves the narrow login stores one active invite and
 one exact database audit row, leaves every non-target private table unchanged, resets its role, and
 closes all connections. A separate local prerequisite now proves bounded Access signature/policy and

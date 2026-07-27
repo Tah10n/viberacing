@@ -3,26 +3,26 @@
 This workspace is the Phase 1 product shell: a responsive pixel-art race, Community leaderboard, and
 demo profile with committed synthetic fallback data. It is suitable for local design, accessibility,
 localization, and scoring review. The visible race, leaderboard, and selectable participant summary
-now request the current server-selected Community week from the exact same-origin public race status
-route, validate the bounded response in the browser, and retain the labeled synthetic fallback on
-any failure. Community summaries add only complete-UTC-day freshness and an optional
-preference-gated streak to the existing public score, source-count, and current-car fields. Exact
-receipt time, daily detail, device counts, exact usage, and identifiers remain absent; the selected
-handle is carried only in a canonical `/?profile=handle#profile` URL. Invalid or duplicate values
-are ignored, a missing current top-32 row is not replaced, and a public signed-in profile links to
-its current summary. An ordinary same-tab selection updates the summary and URL without a reload;
-modified clicks retain native link behavior. The fallback demo garage and default product shell
-remain synthetic and unauthenticated, with no deployment database login, real user data, or
-deployment. A separate opt-in integration uses only disposable synthetic Web logins and data. The
-same page exposes an EN/RU score simulator backed by the production scoring functions. It accepts
-only one canonical non-negative safe integer and one to seven active days, keeps both values only in
-component memory, and never fetches, logs, persists, submits, or preloads account or race data. A
-separate local Phase 2 slice now implements invite redemption, GitHub OAuth state plus PKCE,
-encrypted HttpOnly continuations, initial passkey registration, returning login, a session-scoped
-passkey inventory, an account page, public-profile hide/show, source
-inventory/pause/reactivation/unlink, active-device revoke, fresh backup-passkey addition, revocation
-of an owned non-current passkey, an exact-handle fresh-passkey profile-deletion request,
-fresh-passkey recovery-code rotation with one-time display, one-time recovery-code
+now request the current server-selected Community week from the exact same-origin direct-token route
+first, use the legacy race-status route when that surface is unavailable, validate the bounded
+response in the browser, and retain the labeled synthetic fallback on any failure. Community
+summaries add complete-UTC-day freshness and an optional preference-gated streak to the public score
+or direct weekly token total, source-count, and current-car fields. Exact receipt time, daily/source
+detail, device counts, and identifiers remain absent; the selected handle is carried only in a
+canonical `/?profile=handle#profile` URL. Invalid or duplicate values are ignored, a missing current
+top-32 row is not replaced, and a public signed-in profile links to its current summary. An ordinary
+same-tab selection updates the summary and URL without a reload; modified clicks retain native link
+behavior. The fallback demo garage and default product shell remain synthetic and unauthenticated,
+with no deployment database login, real user data, or deployment. A separate opt-in integration uses
+only disposable synthetic Web logins and data. The same page exposes an EN/RU score simulator backed
+by the production scoring functions. It accepts only one canonical non-negative safe integer and one
+to seven active days, keeps both values only in component memory, and never fetches, logs, persists,
+submits, or preloads account or race data. A separate local Phase 2 slice now implements invite
+redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations, initial passkey
+registration, returning login, a session-scoped passkey inventory, an account page, public-profile
+hide/show, source inventory/pause/reactivation/unlink, active-device revoke, fresh backup-passkey
+addition, revocation of an owned non-current passkey, an exact-handle fresh-passkey profile-deletion
+request, fresh-passkey recovery-code rotation with one-time display, one-time recovery-code
 replacement-passkey sign-in, and logout. It fails closed without externally provisioned
 configuration. A signed-in `/connect` page also performs one session-rate-limited pending-code
 lookup, displays only bounded device evidence and a full public-key fingerprint, then requires a
@@ -55,19 +55,28 @@ needed for the synthetic race. Live local score/race/status reads additionally r
 `VIBERACING_PUBLIC_RANKING_ENABLED=true` before their route modules load; the tracked example stays
 false and the browser keeps the labeled synthetic fallback. The optional server-only
 `VIBERACING_PUBLIC_ORIGIN` setting controls absolute social metadata and is mandatory for a hosted
-deployment; it is public configuration, not a secret. Focused checks are available as
-`pnpm run lint:web`, `pnpm run typecheck:web`, `pnpm run test:web:coverage`, and
-`pnpm run build:web`; `pnpm run check:web-build` validates the built artifact, and the root
-`pnpm run verify` runs all of them, including the deterministic fail-closed query-plan parser suite.
+deployment; it is public configuration, not a secret. The emitted home HTML uses the exact
+discoverability phrase `vibecode rating` in honest self-reported leaderboard copy, publishes one
+root canonical, and exposes an origin-bound `robots.txt` plus `sitemap.xml`. Account, enrollment,
+recovery, and pairing pages are `noindex`; API routes stay out of the crawl surface. These files let
+search crawlers discover the deployed site but do not prove that a search engine has indexed or
+ranked it. Use `pnpm run lint:web`, `pnpm run typecheck:web`, and `pnpm run test:web` while
+iterating. Coverage, the production build, the built-artifact check, and the deterministic
+query-plan parser are boundary/release evidence included by `pnpm run verify:release`, not by the
+normal root development gate. `pnpm run verify:web:deployment` additionally builds and exercises the
+emitted standalone runtime with its search metadata/discovery endpoints and the static asset layout
+used by the root production image. The safe Web-only Railway procedure is documented in
+[`docs/getting-started/RAILWAY_WEB_STAGING.md`](../../docs/getting-started/RAILWAY_WEB_STAGING.md);
+it keeps every participant capability disabled and is not a data-backed beta deployment.
 `pnpm run test:web:postgres-integration` is the separate Docker-backed synthetic boundary: it builds
 the emitted standalone artifact, bundles the reviewed `pg` driver, and launches two Next production
 processes on loopback against a TLS-enabled disposable PostgreSQL database with one ephemeral
 self-signed DNS certificate. It verifies widened-login denial, exact narrow-login contracts, TLS
 1.2/1.3, and that neither path mutates private tables. Its test-only database-scoped `auto_explain`
-configuration additionally verifies the three fixed adapter plans and their three nested
-score/race/status projections without logging parameters or retaining the plan log. It also proves
-the four-request no-queue admission boundary with four observed blocked score queries and a rejected
-fifth request. The Docker gate is intentionally outside root `verify`.
+configuration additionally verifies the four fixed adapter plans and their four nested
+score/race/status/token projections without logging parameters or retaining the plan log. It also
+proves the four-request no-queue admission boundary with four observed blocked score queries and a
+rejected fifth request. The Docker gate is intentionally outside root `verify`.
 
 The separate stored viewport evidence covers every combination of three reviewed breakpoints, both
 locales, and all three themes with motion disabled. `pnpm run check:phase1-visual-baselines`
@@ -98,7 +107,9 @@ enrollment additionally requires exact `VIBERACING_ENROLLMENT_ENABLED=true` befo
 pages and all four GitHub/initial-passkey route modules load. Manual pairing requires exact
 `VIBERACING_PAIRING_ENABLED=true` before all four pairing route modules load. New-source pairing
 also requires exact `VIBERACING_SOURCE_CREATION_ENABLED=true` before the `/connect` page and both
-approval modules load. Changing a value afterward does not reload an existing worker.
+approval modules load. Changing a value afterward does not reload an existing worker. The
+direct-token public route independently requires exact `VIBERACING_TOKEN_RANKING_ENABLED=true`;
+enabling or disabling it does not change the legacy public-ranking decision.
 
 ## Module map
 
@@ -106,11 +117,12 @@ approval modules load. Changing a value afterward does not reload an existing wo
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `app/page.tsx`                                                                   | Selects the current week and builds the synthetic fallback               | Must pass only public labels and presentation data into the client tree              |
 | `lib/race-data.ts`                                                               | Clearly synthetic raw activity fixtures and payload projection           | Marked `server-only`; never replace with exports or real account data                |
-| `lib/public-community-race.ts`                                                   | Loads and independently maps the current public race status page         | Lazy exact same-origin GET; no credentials/cache; closed status/recipe and fallback  |
-| `lib/public-community-score-mapper.ts`                                           | Validates the exact SQL score, race, and status projections              | Server-only, exact ten/eleven/thirteen columns, top-32, and fail-closed              |
-| `lib/public-community-score-store.ts`                                            | Executes the three fixed public score/race/status procedures             | Canonical Monday only; verifies every checkout; routes construct lazily              |
-| `lib/public-community-score-route.ts`                                            | Parses and serializes all three public GET boundaries                    | Exact paths/query/Accept, generic errors, admission, deadlines, and no CORS          |
+| `lib/public-community-race.ts`                                                   | Loads the token race first with a legacy status fallback                 | Lazy exact same-origin GET; no credentials/cache; closed metric/status/recipe fields |
+| `lib/public-community-score-mapper.ts`                                           | Validates the exact SQL score, race, status, and token projections       | Server-only, four exact top-32 shapes, and fail-closed                               |
+| `lib/public-community-score-store.ts`                                            | Executes the four fixed public score/race/status/token procedures        | Canonical Monday only; verifies every checkout; routes construct lazily              |
+| `lib/public-community-score-route.ts`                                            | Parses and serializes all four public GET boundaries                     | Exact paths/query/Accept, generic errors, admission, deadlines, and no CORS          |
 | `lib/public-ranking-config.ts`                                                   | Resolves one shared default-off public-ranking decision                  | Exact own string value; no database/request field or reflection                      |
+| `lib/public-token-ranking-config.ts`                                             | Resolves the independent default-off direct-token decision               | Exact own string value; no database/request field or reflection                      |
 | `lib/public-score-admission.ts`                                                  | Enforces the no-queue public-read concurrency ceiling                    | Four active reads; lease held until adapter settlement                               |
 | `lib/public-http-problem.ts`                                                     | Generates opaque request IDs and closed public error responses           | Server-only; validates the contract; no inbound ID, CORS, detail, or cause           |
 | `app/join`, `app/login`, `app/recover`, `app/account`, `app/connect`, `app/auth` | Routes enrollment, recovery, account, pairing approval, deletion, logout | Thin session/browser entrypoints; no admin                                           |
@@ -178,6 +190,13 @@ settles. The route validates the final page again before JSON serialization and 
 without CORS. Every other Next.js route method receives the closed 405 response and `Allow: GET`;
 the stable score and legacy race responses reject the separate status fields.
 
+The additive `GET /v1/community/tokens` route uses the same closed boundary but resolves only exact
+`VIBERACING_TOKEN_RANKING_ENABLED=true` at module load. It calls the fixed token projection and
+returns only `community_tokens_v1` with direct `weeklyTokenTotal`, shared rank, cosmetic recipe,
+rounded freshness, and optional streak. It does not expose a provider, source/day breakdown, exact
+receipt time, or legacy score. The browser tries this route first and uses the legacy status route
+only when the token surface is unavailable.
+
 The route has no outer `Promise.race` that could return while database work continued. Its deadline
 policy is the adapter's enforced two-second connection timeout, six-second query timeout, and
 five-second PostgreSQL statement timeout; failed clients are destroyed before admission is released.
@@ -186,7 +205,7 @@ invariant failure maps to a generic 500. The documented 429 remains reserved: no
 is claimed. No raw URL/header, SQL, driver error, configuration value, or row value is logged or
 reflected.
 
-The generated contract marks all three routes `implemented-local` with one bounded Monday
+The generated contract marks all four routes `implemented-local` with one bounded Monday
 `seasonStart`, `no-store`, `Vary: Accept`, same-origin/no-CORS semantics, and closed
 200/400/406/429/500/503 responses. The legacy race response preserves the ten score fields and may
 add one exact current `CarRecipeV1`. The status response separately requires privacy-rounded
@@ -200,22 +219,23 @@ The opt-in `test:web:postgres-integration` gate builds the emitted standalone ar
 bundles Next's otherwise externalized reviewed `pg` driver, and applies the reviewed migration
 ledger to a one-off PostgreSQL container. It generates one ephemeral self-signed certificate for an
 exact local DNS name, enables PostgreSQL TLS, seeds only obviously synthetic profiles, and invokes
-all three GETs through two emitted Next production processes. A login with one extra role membership
+all four GETs through two emitted Next production processes. A login with one extra role membership
 must receive only the closed generic 503 on every route while a full private-table fingerprint
-remains unchanged. A narrow login with only `viberacing_web` must return the exact score, race, and
-status contracts, omit hidden/private state, observe TLS 1.2 or 1.3 in `pg_stat_ssl`, and leave the
-same fingerprint unchanged. Only that narrow synthetic login receives superuser-provisioned,
-database-scoped `auto_explain` settings. Parameter values are disabled; a two-mebibyte parser budget
-requires all three fixed adapter calls and all three nested projection plans, at most 32 root rows,
-one execution, the reviewed score/race/status indexes, no mutation/locking node, no sequential scan
-of the bounded-index relations, and no dirty/written or temporary block. The bounded plan log is
-private-marker scanned, discarded, and removed with the container. The harness then uses a bounded
-owner-held table lock to hold exactly four observed score queries, requires a fifth request to
-return the same closed generic 503 without adding a fifth public-score query, rolls back the lock,
-and validates the first four exact 200 responses. It bounds and discards both Next and blocker
-output, then removes all ephemeral key material, three processes, the container, network, and
-storage. This proves no deployment certificate/login, external TLS/edge path, cache, edge rate
-policy, monitoring, representative plan/load/capacity result, real-user data, or deployment.
+remains unchanged. A narrow login with only `viberacing_web` must return the exact score, race,
+status, and token contracts, omit hidden/private state, observe TLS 1.2 or 1.3 in `pg_stat_ssl`, and
+leave the same fingerprint unchanged. Only that narrow synthetic login receives
+superuser-provisioned, database-scoped `auto_explain` settings. Parameter values are disabled; a
+two-mebibyte parser budget requires all four fixed adapter calls and all four nested projection
+plans, at most 32 root rows, one execution, the reviewed score/race/status indexes, no
+mutation/locking node, no sequential scan of the bounded-index relations, and no dirty/written or
+temporary block. The bounded plan log is private-marker scanned, discarded, and removed with the
+container. The harness then uses a bounded owner-held table lock to hold exactly four observed score
+queries, requires a fifth request to return the same closed generic 503 without adding a fifth
+public-score query, rolls back the lock, and validates the first four exact 200 responses. It bounds
+and discards both Next and blocker output, then removes all ephemeral key material, three processes,
+the container, network, and storage. This proves no deployment certificate/login, external TLS/edge
+path, cache, edge rate policy, monitoring, representative plan/load/capacity result, real-user data,
+or deployment.
 
 ## Score database adapter configuration
 
@@ -584,14 +604,15 @@ two-candidate SQL, read-write role probes, the shared strict proof, hostile inpu
 shapes, server IDs, admission/timing, generic failures, clearing, release, and close without a real
 key or connection. Canvas tests execute real render loops against a typed context stub, including
 animated and no-context paths. Visible-score tests cover current-week selection, the exact
-credential-free status fetch, closed public response mapping, freshness/streak presentation and
-bounds, legacy-component rejection, success/fallback states, and empty standings. Preference tests
-cover valid settings, reduced motion, pausing, invalid/blocked storage, and cleanup.
+credential-free token-first/legacy-fallback fetch, closed public response mapping, freshness/streak
+presentation and bounds, legacy-component rejection, success/fallback states, and empty standings.
+Preference tests cover valid settings, reduced motion, pausing, invalid/blocked storage, and
+cleanup.
 
 The separate Docker-backed Web integration exercises the otherwise-thin framework entrypoints with
-real loopback HTTP and the actual `pg` adapter. It validates all three closed contracts, the
+real loopback HTTP and the actual `pg` adapter. It validates all four closed contracts, the
 every-checkout least-privilege probe, widened-login fail-closed behavior, hidden/private omission,
-six bounded adapter/nested-projection plan oracles, four-slot no-queue admission, and complete
+eight bounded adapter/nested-projection plan oracles, four-slot no-queue admission, and complete
 private-table non-mutation. It remains synthetic local evidence, not representative load, live,
 capacity, or deployed behavior.
 
@@ -611,5 +632,6 @@ Core Web Vitals remain open and are listed honestly in `docs/IMPLEMENTATION_STAT
 2. Add negative tests for every new input, persistence key, URL, or serialization field.
 3. Test keyboard and reduced-motion behavior for visible interaction changes.
 4. Keep visual assets local; sanitize binary metadata and document provenance before staging them.
-5. Run `pnpm run verify`, then inspect and scan the exact staged snapshot as documented in the root
-   `AGENTS.md`.
+5. Run the focused Web checks and `pnpm run verify`, then inspect and scan the exact staged snapshot
+   as documented in the root `AGENTS.md`. Add `pnpm run verify:release` only at its explicit release
+   or broad cross-cutting boundary.

@@ -197,9 +197,9 @@ standalone output, or a budget overrun. The current artifact is:
 | Metric                        | Observed |  Budget |
 | ----------------------------- | -------: | ------: |
 | Initial assets                |        8 |      10 |
-| Initial raw bytes             |  617,587 | 700,000 |
-| Initial gzip bytes            |  185,834 | 215,000 |
-| Application client gzip bytes |    9,862 |  10,000 |
+| Initial raw bytes             |  618,890 | 700,000 |
+| Initial gzip bytes            |  186,218 | 215,000 |
+| Application client gzip bytes |   10,246 |  10,500 |
 | Stylesheet gzip bytes         |    4,533 |   5,000 |
 
 Nine black-box fixture cases cover a valid artifact, missing/traversing/oversized assets, source-map

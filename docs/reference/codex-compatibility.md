@@ -93,16 +93,16 @@ terminal for that state-machine instance and errors do not reflect server conten
 
 The candidate adapter adds exact-version parsing evidence described above. The one-shot supervisor
 accepts only the inaccessible `ReviewedCodexLaunch` capability. A composer and one-use signer keep
-the exact sync bytes and device key behind two further inaccessible capabilities. `connect`
+the exact `UsageSyncV1` bytes and device key behind two further inaccessible capabilities. `connect`
 generates and activates the native-store credential. The Windows x86_64 `sync` command validates
 that active record before bounded fixed-name discovery or an explicit path, canonicalizes and
 hash-admits only the exact candidate, keeps a no-write-sharing handle through launch, creates fresh
-request context, and sends one closed signed request without proxy, redirect, retry, or edge-origin
-credentials. It cannot admit another version or platform, create a release, or make the candidate
-supported. `check-codex` separately reuses only the artifact selector and grants no launch, account,
-credential, network, or cached authority. Its preview adds only redacted fixed state and grants no
-support or report authenticity. Every matrix row still requires the complete admission evidence
-above.
+request context, and sends one closed signed `/v1/community/usage` request without proxy, redirect,
+retry, legacy-path fallback, or edge-origin credentials. It cannot admit another version or
+platform, create a release, or make the candidate supported. `check-codex` separately reuses only
+the artifact selector and grants no launch, account, credential, network, or cached authority. Its
+preview adds only redacted fixed state and grants no support or report authenticity. Every matrix
+row still requires the complete admission evidence above.
 
 ## Planned stable surface
 
@@ -111,7 +111,7 @@ for bounded usage daily buckets. The `0.144.5` candidate proves those methods an
 exist in one generated stable schema and implements their closed parser. It is still not a current
 support claim. The first proposed row must additionally prove clean-machine supported platforms,
 real-account privacy egress, packaged artifact signature/SBOM/provenance, release review, and a
-released connector range. The shared signed sync vector and loopback upload remain synthetic
+released connector range. The shared signed Usage Sync vector and loopback upload remain synthetic
 cryptographic/transport evidence only.
 
 All other App Server methods and transports are denied for connector v1. In particular, Vibe Racing

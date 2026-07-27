@@ -48,57 +48,16 @@ certificate, scheduler enable value, deployment manifest, or hosted schedule.
 Unit tests use a fake clock, timer, and runner to prove UTC dates, fixed cadence, dependency order,
 non-overlap, failure containment, shutdown, and default-off ordering. The built-entrypoint gate
 proves disabled startup exits silently before Jobs configuration. The existing Jobs PostgreSQL
-integration separately proves all eighteen emitted CLI commands. The opt-in
-`pnpm run test:jobs-scheduler:postgres-integration` gate additionally composes the production
-scheduler core with a fixed injected UTC clock/timer, the real Jobs runner, and one disposable
-PostgreSQL database. It proves the exact ordered catalog, full private-table non-mutation for a
-deliberately widened login, and exact stored state for the narrow login. It does not execute the
-emitted scheduler process. The separate opt-in
-`pnpm run test:jobs-scheduler:timer-postgres-integration` gate advances the injected clock by one
-UTC hour, invokes the production interval handler twice during the active real-runner cycle, proves
-the exact recurring catalog plus overlap and same-slot suppression, and verifies the rearmed
-terminal reset. It does not prove host-timer delivery or an emitted recurring callback. The separate
-opt-in `pnpm run test:jobs-scheduler:lifecycle-postgres-integration` gate injects the production
-first-signal handler during the penultimate database job, requires that active call to settle,
-proves the later scheduler reset does not start, and requires exact graceful lifecycle cleanup and
-exit code 0. It invokes the omitted reset only afterward before the shared state oracle; it does not
-prove OS-signal delivery or emitted-process graceful shutdown. The separate opt-in
-`pnpm run test:jobs-scheduler:process-postgres-integration` gate starts the built entry point with
-the real clock from a link-free read-only production graph under pinned Linux Node and requires
-host/database UTC-date agreement. The harness temporarily revokes only the Jobs role's exact
-backlog-function execution grant. The first process emits one generic cycle-failure line, leaves the
-backlog unchanged, reaches the later terminal marker, and exits with code 0 after an OS `SIGTERM`.
-The harness restores and verifies the grant, rearms the marker, holds the scoring mutex, and starts
-the same runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires
-exit 137 plus session release, and proves the backlog and marker remain unchanged. After releasing
-the holder, a restart finalizes the backlog before a silent code-0 signal exit. A disposable
-post-insert barrier then stops a second backlog only after its first daily projection insert. A
-second `SIGKILL` must release the session and roll back the season plus all projection rows while
-retaining the source/day input and marker. The harness removes the test trigger/function, verifies
-no schema residue, and a clean-schema restart finalizes that backlog exactly once. One more
-rearm/restart proves a silent repeated cycle. All six starts leave no scheduler sessions, the
-runtime fingerprint is unchanged, and the exact stored-state oracle passes. This is local
-failure/crash containment, restart retry, and one controlled uncommitted PostgreSQL transaction
-rollback, not committed/external-effect or every-capability recovery, automatic privilege repair, a
-deployed-controller restart, or orchestrator grace policy. The separate opt-in
-`pnpm run test:jobs-scheduler:wall-clock-postgres-integration` gate starts the same built process
-from the same bounded runtime shape without replacing `Date.now()` or native `setInterval(60_000)`.
-After the startup catalog settles, an owner session holds the scoring mutex until the emitted
-production refresh is observed in a later real five-minute slot; the harness delivers a real
-`SIGTERM`, releases the mutex before the database deadline, and requires the active refresh to
-commit before silent code-0 exit, session release, and runtime-fingerprint revalidation. This proves
-one local recurring host-timer refresh and graceful signal settlement but not a deployed controller,
-orchestrator grace, or durable cadence. The separate opt-in
-`pnpm run test:jobs-scheduler:signal-postgres-integration` gate copies only the built scheduler,
-built Jobs runner, and exact 14-package installed production graph into a link-free temporary
-runtime, mounts it read-only under the pinned Linux Node 24.18 image, and joins only the disposable
-PostgreSQL container's network namespace. An owner session holds the first finalization mutex until
-the emitted scheduler is observed in an exact database lock wait; the harness then delivers a real
-`SIGTERM`, releases the mutex before the database deadline, and requires the finalization call to
-settle without starting refresh or any later job. The process must exit silently with code 0,
-release its database session, leave the runtime fingerprint unchanged, and pass the shared exact
-state oracle after the seventeen omitted one-shot commands run separately. These are local synthetic
-Linux OS-signal results. Together the three emitted gates prove only one controlled post-insert
-transaction rollback; they do not prove recovery from committed/external effects or every Jobs
-capability, a deployed signal route, controller/orchestrator grace policy, managed restart,
-production TLS/login, durable cadence, monitoring, capacity, deployment, or real-user retention.
+integration separately proves all eighteen emitted CLI commands. The six opt-in PostgreSQL gates
+(`postgres-integration`, `timer-postgres-integration`, `lifecycle-postgres-integration`,
+`process-postgres-integration`, `wall-clock-postgres-integration`, `signal-postgres-integration`)
+compose the production scheduler core with the real Jobs runner and disposable PostgreSQL under
+fixed and real clocks. Together they prove the exact ordered catalog, widened-login non-mutation,
+recurring execution with overlap suppression, graceful lifecycle and OS-signal settlement,
+failure/crash containment with clean-schema retry, one controlled uncommitted post-insert
+transaction rollback, and one local host-timer recurring refresh. They are local synthetic results:
+they do not prove recovery from committed/external effects, a deployed signal route,
+controller/orchestrator grace policy, managed restart, production TLS/login, durable cadence,
+monitoring, capacity, deployment, or real-user retention. Full evidence is in
+[IMPLEMENTATION_STATUS.md](../../docs/IMPLEMENTATION_STATUS.md) and
+[ADR 0063](../../docs/decisions/0063-default-off-local-jobs-scheduler.md).

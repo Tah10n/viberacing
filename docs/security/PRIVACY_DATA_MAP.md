@@ -10,25 +10,26 @@ aggregate lock-waiting count, rejects a fifth before replay work, and retains no
 history. It also contains library-only connector protocol/parser boundaries, a synthetic one-shot
 process supervisor, an exact-body composer, isolated pairing/request signers, a pure Web pairing
 verifier, local pairing applications/routes and bounded native-store connect/local-removal commands,
-a visible public-race consumer with a synthetic fallback, a separate synthetic all-three-route
-emitted-Next-production-to-TLS-enabled-disposable-PostgreSQL gate, a browser-memory-only
-hypothetical score simulator, and bounded database/local Jobs ingest, pairing, authentication,
-CarRecipe-proposal, eligible expired-invite/session, abandoned-enrollment, aged unreferenced
-revoked-passkey, and aged minimized revoked-device cleanup plus primary profile purge and bounded
-oldest-known historical season finalization. A local invite/OAuth/initial-passkey enrollment,
-returning-passkey login, private passkey inventory, and private active-device inventory and revoke
-slice now add encrypted short-lived cookies, fixed Web/Auth database calls, an account page, and
-logout with injected/synthetic evidence, but there is no live OAuth app, authenticator-backed
-result, deployed application database, production service, operational connector, or real user data.
-This document remains the required inventory for implementation. A field may not be collected merely
-because it appears here: its schema, purpose, visibility, retention, deletion, and access tests must
-exist first. The implemented column-level mapping is documented in
-[`database/README.md`](../../database/README.md#data-and-privacy-map).
+a visible token-first public-race consumer with legacy and synthetic fallbacks, a separate synthetic
+all-four-route emitted-Next-production-to-TLS-enabled-disposable-PostgreSQL gate, a
+browser-memory-only hypothetical score simulator, and bounded database/local Jobs ingest, pairing,
+authentication, CarRecipe-proposal, eligible expired-invite/session, abandoned-enrollment, aged
+unreferenced revoked-passkey, and aged minimized revoked-device cleanup plus primary profile purge
+and bounded oldest-known historical season finalization. A local invite/OAuth/initial-passkey
+enrollment, returning-passkey login, private passkey inventory, and private active-device inventory
+and revoke slice now add encrypted short-lived cookies, fixed Web/Auth database calls, an account
+page, and logout with injected/synthetic evidence, but there is no live OAuth app,
+authenticator-backed result, deployed application database, production service, operational
+connector, or real user data. This document remains the required inventory for implementation. A
+field may not be collected merely because it appears here: its schema, purpose, visibility,
+retention, deletion, and access tests must exist first. The implemented column-level mapping is
+documented in [`database/README.md`](../../database/README.md#data-and-privacy-map).
 
 Vibe Racing applies these rules:
 
 - collect the minimum data needed for an invite-only Community race;
-- keep exact usage private and publish only derived, intentionally selected fields;
+- keep daily/source/provider usage private and publish only derived, intentionally selected fields,
+  including the deliberate weekly profile aggregate on `community_tokens_v1`;
 - never collect prompts, conversations, repository contents, Codex credentials, API keys, account
   email, or arbitrary files;
 - separate public, account, security, usage, and operational capabilities;
@@ -251,6 +252,24 @@ buffers. The environment strings and verifier-owned copies remain protected runt
 JavaScript memory-erasure guarantee is claimed. Synthetic tests add no real key, user field, store,
 log, metric, cache, export, edge signer, or retention sink.
 
+ADR 0070 adds a dependency-free local Worker that transiently receives the already mapped Usage body
+and device-authentication fields, creates the already mapped origin proof and Operational request
+ID, and forwards the unchanged body once. Repository code adds no log, metric, analytics event,
+cache, queue, database row, export, or retention. Cloudflare route/access-log configuration and real
+secret delivery remain provider controls that are not yet deployed and require separate review
+before they can create operational evidence.
+
+ADR 0071 adds two private source-attribution fields: exact provider `codex` and accounting revision
+`codex_daily_usage_buckets_v1`. Revision 0041 backfills them on existing sources and makes both
+immutable; they are read only through the source-bound Ingest verification capability and deleted
+with the source/profile. `UsageSyncV1` adds no provider, model, session, prompt, repository,
+account, or component field. It transiently carries the already mapped opaque source/sync IDs,
+canonical observation time, client/agent versions, reported date, and daily total, then reuses the
+existing 15-minute nonce and 30-day raw-snapshot retention. The new non-personal
+`VIBERACING_USAGE_SYNC_ENABLED` Operational value is fixed false in tracked configuration and used
+only to decide whether Edge and Ingest expose that route; it is not logged, persisted, returned, or
+treated as a dynamic control.
+
 ADRs 0016 and 0018 add no user field. The adapter reconstructs the origin key ID, digest, and
 expiry, then reconstructs the verifier allowlist, copies the existing digests, signature, canonical
 payload, and identifiers, creates one opaque snapshot UUID, reads the existing minimal device tuple,
@@ -353,12 +372,13 @@ passkey, session, account, cookie, database row, metric, trace, audit event, exp
 network destination is added or extended. A future dynamic control, operator event, monitoring sink,
 or deployment audit still needs a separate purpose, access policy, and retention decision.
 
-The checked capability-containment runbook names only these already mapped non-personal decisions
-plus the Jobs-scheduler and migration startup decisions. It adds no runtime field, dynamic control,
-completed incident record, operator identity, reporter detail, target, credential, log, metric,
-cache, database row, network sink, or retention behavior. A future deployment controller, monitoring
-backend, or protected incident record must receive a separate purpose, access, jurisdiction,
-retention, incident-hold, export, and deletion review before collection.
+The checked capability-containment runbook names only these already mapped non-personal decisions,
+including the Usage Sync route decision, plus the Jobs-scheduler and migration startup decisions. It
+adds no runtime field, dynamic control, completed incident record, operator identity, reporter
+detail, target, credential, log, metric, cache, database row, network sink, or retention behavior. A
+future deployment controller, monitoring backend, or protected incident record must receive a
+separate purpose, access, jurisdiction, retention, incident-hold, export, and deletion review before
+collection.
 
 The checked profile-deletion failure runbook adds no profile, job, digest, timestamp, error, exact
 count, operator identity, notification record, log, metric, cache key, database query, or network
@@ -418,12 +438,13 @@ handling, and fixed start/poll egress.
 
 ADR 0031 adds no persistent field, log, metric, cache, analytics event, export, or browser storage.
 The private sync command transiently reads the active record's already mapped source/device IDs and
-device key, generates one random sync ID and nonce, formats current millisecond UTC, and sends only
-the existing `ConnectorSyncV1` body plus five device-authentication headers to the explicit origin.
-Only the selected exact version is displayed locally before launch. The canonical executable path,
-exact usage, body, key, nonce, signature, identifiers, and acknowledgement request ID are neither
-sent as diagnostics nor printed. The synthetic HTTP test uses only reserved values; repository tests
-never open a real credential or local account.
+device key, generates one random sync ID and nonce, and formats current millisecond UTC. ADR 0073
+makes the current candidate send only the `UsageSyncV1` body plus five device-authentication headers
+to the explicit origin; legacy `ConnectorSyncV1` remains server compatibility only. Only the
+selected exact version is displayed locally before launch. The canonical executable path, exact
+usage, body, key, nonce, signature, identifiers, and acknowledgement request ID are neither sent as
+diagnostics nor printed. The synthetic HTTP test uses only reserved values; repository tests never
+open a real credential or local account.
 
 ADR 0051 adds no collected or retained field and no new sink. Only after active-record validation,
 the candidate sync command may transiently read a `PATH` value of at most 65,536 encoded bytes,
@@ -836,12 +857,71 @@ removes the complete row from the next no-store response, while already observed
 be archived by a visitor. No cache purge, scrape resistance, live credential, monitoring, load
 evidence, or deployment is proven.
 
+### Multi-agent and thin-client data classes (ADR 0068, ADR 0069, ADR 0071–0073)
+
+[ADR 0068](../decisions/0068-multi-agent-token-leaderboard-and-mcp.md) and
+[ADR 0069](../decisions/0069-thin-client-and-low-friction-onboarding.md) propose the broader data
+classes below. ADRs 0071–0073 implement only the marked Codex attribution, canonical source/day
+total, public weekly token total, and existing connector-key slices. Every other row remains
+planning scope, and each subsystem's focused ADR must fix the exact store, retention, and deletion
+before implementation.
+
+| Data                                                                                                                      | Class                  | Source and purpose                                                                                                                                                         | Visibility and access                                                                                                                                                                           | Planned store                                                                                                                                                              | Retention, deletion, and rotation                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Anonymous identity bootstrap key — Ed25519 private key (proposed, ADR 0069)                                               | Secret / Identity      | Client OS CSPRNG; establish a restricted bootstrap session, register exactly the first passkey, or complete GitHub upgrade while no passkey exists; never recovery or sync | Client-only; never transmitted; public key sent at enrollment                                                                                                                                   | OS native credential store keyed to service origin                                                                                                                         | Server authority retires with promotion or expires with the ownership lease/grace; client deletes only after authenticated retirement/terminal-state read-back or explicit local forget; loss is unrecoverable but converges to server cleanup; a retained copy never regains authority                                                                                                                                                              |
+| Anonymous identity bootstrap key — Ed25519 public key/state (proposed, ADR 0069)                                          | Identity / Security    | Server; verify the closed temporary bootstrap allowlist, lease renewal, terminal-grace promotion, and rejection after retirement/expiry                                    | Web/Auth and system-expiry Jobs capability only; never public                                                                                                                                   | Profile identity binding with active/expired/retired lifecycle                                                                                                             | Retired atomically with first passkey or GitHub upgrade; expired after the server-owned lease/grace; retained only for bounded replay/audit needs fixed by the focused identity ADR and removed with system-expiry/profile deletion; never separately exportable                                                                                                                                                                                     |
+| Anonymous ownership lease and terminal-expiry state (proposed, ADR 0069)                                                  | Security / Operational | Server database clock; bound no-passkey anonymous ownership and converge lost bootstrap credentials to privacy-safe cleanup                                                | Web/Auth, Ingest eligibility, public visibility filter, and bounded Jobs cleanup only                                                                                                           | `anonymous_owner_expires_at`, expiry/grace state, and minimal cleanup outcome; no client-supplied deadline                                                                 | Created for 90 days at enrollment; renewed to database-now plus 90 days only by a valid pre-expiry bootstrap-session proof; ordinary sync never renews it; expiry hides/pauses immediately, allows only two promotion proofs for 30 days, then separate Jobs-only system expiry removes profile-owned state under restore policy                                                                                                                     |
+| Device-bound, source-scoped sync key — Ed25519 key pair (proposed, ADR 0069)                                              | Secret / Usage         | Client OS CSPRNG per local installation/device authority; sign payloads only for the one server-bound source; cannot add passkeys or delete the profile                    | Intended for local connector use and never intentionally transmitted; public key sent at enrollment or passkey-approved device attachment; same-user process compromise remains a residual risk | OS native credential store per device/source binding with no plaintext-file or product export/copy workflow; public key in an independently revocable device-authority row | One key per device authority; multiple independently revocable keys may bind one source. This does not claim hardware-backed non-exportability: a compromised user process may extract or use local material. Server-side source/device removal revokes authority but cannot delete an offline client copy; local deletion occurs only after authenticated revocation read-back or explicit `forget-local`, and a retained copy remains unauthorized |
+| Admission proof and local consumption state — invite or external token (proposed, ADR 0069)                               | Security / Operational | Client/server; admit exactly one enrollment transaction before challenge issuance                                                                                          | Raw proof only in bounded admission handling; never logged or support-visible                                                                                                                   | Invite verifier gains one exact expiring reservation; external proof becomes one unique keyed local digest after provider validation; raw token is discarded               | Invite reservation may release only by compare-and-set for the same still-active/unexpired invite; external consumption cannot roll back or become reusable and remains replay-blocking for a bounded period; neither raw proof is exported                                                                                                                                                                                                          |
+| Network origin — rate-limit signal (proposed, ADR 0069)                                                                   | Operational            | Server; rate-limit enrollment and ingest per network origin as defense-in-depth                                                                                            | Server-only; never public; used only for rate-limit bucketing                                                                                                                                   | In-memory or short-lived rate-limit counter; not persisted as a personal field                                                                                             | Discarded when the rate-limit window expires; not logged, exported, or retained beyond the window                                                                                                                                                                                                                                                                                                                                                    |
+| Agent provider identifier (Codex foundation implemented, ADR 0071; expansion proposed, ADR 0068)                          | Usage / Operational    | Existing source backfill and future passkey-authorized source creation select a reviewed reader/accounting compatibility entry                                             | Server/account only; absent from UsageSyncV1; the public contributing-source count does not reveal provider labels                                                                              | Immutable source provider column; Ingest derives the current exact `codex` pair through the verified device/source binding                                                 | Deleted with the source or profile; provider additions require a reader and forward migration; a sync-body provider field is rejected rather than stored or reconciled                                                                                                                                                                                                                                                                               |
+| Canonical source/day token total (Codex reader/transport/storage implemented, ADR 0071/0073; additional readers proposed) | Usage                  | Current exact Codex App Server reader or a future reviewed reader derives one provider aggregate after deduplication and emits UsageSyncV1                                 | Source-bound submit authority, Ingest, own account, and scoring only; never public by source/provider/date                                                                                      | Existing current source/date usage state plus raw snapshot and minimized finalized projection under the established retention boundary                                     | Current values follow open-season correction and source/profile deletion; raw provider components remain outside the request and are never retained                                                                                                                                                                                                                                                                                                  |
+| Public weekly token total (implemented locally, ADR 0072)                                                                 | Public                 | Server; direct exact sum of accepted canonical daily totals for one explicitly public participating profile                                                                | Public `weeklyTokenTotal`; no daily, source, provider, model, session, or component breakdown                                                                                                   | Versioned `community_tokens_v1` public season projection                                                                                                                   | Immutable after finalization; hidden immediately with profile visibility change and purged with the profile/public cache                                                                                                                                                                                                                                                                                                                             |
+| Optional MCP connection metadata (proposed, ADR 0068)                                                                     | Usage / Operational    | Optional MCP server; bind an already-supported MCP-reported source to a profile through pairing and carry only the exact UsageSyncV1 allowlist                             | Server-only; never public; no arbitrary MCP request/response, prompt, tool-call, model, or agent context                                                                                        | Existing pairing/device/source-binding rows only; no generic MCP transcript or payload store                                                                               | Follows existing pairing retention; redacted after 180 days per existing cleanup; deleted with profile; exact UsageSyncV1 values follow the normal source/day lifecycle                                                                                                                                                                                                                                                                              |
+| Provider OAuth tokens — Verified tier (proposed, ADR 0068)                                                                | Secret                 | Provider OAuth callback; server-side usage fetch for the Verified tier                                                                                                     | Server-only; never logged, stored in fixtures, or committed; minimal scope                                                                                                                      | Encrypted server-side token store; never in logs, support exports, or the public repository                                                                                | Rotated per provider policy; revoked on profile deletion or user-initiated disconnect; never persisted in plaintext                                                                                                                                                                                                                                                                                                                                  |
+| Enrollment challenge and transaction (proposed, ADR 0069)                                                                 | Security / Operational | Server; one-time nonce and proof-class-specific admission binding for anonymous or GitHub enrollment                                                                       | Server-only; never logged; bound to handle, public keys/source declaration, and admission transaction                                                                                           | Short-lived transaction plus invite reservation reference or external-proof consumption reference                                                                          | Challenge is consumed on completion or expires; invite release is conditional and bounded; external consumption remains replay-blocking and requires a new token; cleanup policy fixed before enablement                                                                                                                                                                                                                                             |
+| Enrollment proof signatures (proposed, ADR 0069)                                                                          | Operational            | Client; domain-separated Ed25519 signatures over the enrollment challenge                                                                                                  | Transient; verified by the server and discarded; never stored                                                                                                                                   | Not persisted; verified in memory during the enrollment transaction                                                                                                        | Discarded immediately after verification; never logged, exported, or retained                                                                                                                                                                                                                                                                                                                                                                        |
+| GitHub device-flow enrollment/upgrade binding (proposed, ADR 0069)                                                        | Security / Account     | Web/Auth; bind minimal-scope GitHub ID resolution to admission, first-device possession, and exact profile authority                                                       | Web/Auth and the unique identity procedure only; generic collision response                                                                                                                     | Short-lived state/challenge; successful upgrade stores only the existing numeric GitHub ID on the same profile and retires the bootstrap key                               | Failed/colliding flow mutates nothing and is discarded at expiry; no automatic merge or source/score transfer; success keeps existing profile history and follows normal profile deletion                                                                                                                                                                                                                                                            |
+| GitHub first-passkey authority, challenge, and monotonic completion state (proposed, ADR 0069)                            | Security / Identity    | Web/Auth; let a GitHub-linked profile that has never activated a passkey register exactly its first passkey from a fresh same-ID device-flow transaction                   | Server-only; raw provider token discarded; authority and challenge never public, logged, or exportable                                                                                          | Short-lived single-purpose authority and WebAuthn challenge plus one profile-level `first-passkey-complete` boolean                                                        | Authority/challenge are atomically consumed or expire under focused cleanup; completion state never resets after passkey revocation/provenance cleanup and is deleted only with the profile; GitHub cannot use it as recovery                                                                                                                                                                                                                        |
+| Credential binding digest (proposed, ADR 0069)                                                                            | Operational            | Server; hash binding the identity public key and first device public key to the enrollment transaction                                                                     | Server-only; never public                                                                                                                                                                       | Enrollment transaction record                                                                                                                                              | Consumed with the enrollment transaction; retained only as part of the profile/device/source binding; deleted with the profile                                                                                                                                                                                                                                                                                                                       |
+
+For the implemented ADR 0071–0073 slice, provider attribution is not client-writable in UsageSyncV1:
+Ingest derives it from the immutable source reached through the verified device binding. The current
+candidate reader emits only the canonical Codex daily total, and the public token projection exposes
+only the weekly profile aggregate. Future reader work must ensure raw provider components are
+discarded locally after deriving the canonical daily total; the current request contract has no
+component field to retain.
+
+The anonymous identity bootstrap and device-bound sync private keys MUST NOT leave the client or
+enter logs, fixtures, sync payloads, or the repository. The server stores only public keys and
+lifecycle state. The bootstrap key grants only the restricted temporary allowlist while no passkey
+exists and its ownership lease is current; during terminal grace it grants only first-passkey or
+GitHub promotion. It is never a recovery credential and is terminally retired by promotion or made
+useless by expiry and system cleanup. Ordinary sync cannot renew its 90-day server-clock lease.
+Every sync key grants only one independently revocable device authority for one source; no private
+key is shared across devices by product workflows. Native credential-store protection has no
+plaintext-file or product export/copy fallback, but it is not a hardware-backed non-exportability
+guarantee: a compromised process running with the user's authority may extract or use the key.
+Server revocation makes a retained local copy useless but cannot erase an offline credential store,
+so authenticated read-back or explicit `forget-local` owns local deletion. `submit all` and initial
+backfill remain local sequential loops over independent single-source/single-season requests and
+introduce no combined network body, database transaction, or retained cross-source/cross-season
+envelope. Admission proofs are never logged in plaintext: invites use exact conditional reservation,
+while externally validated proof tokens become only a one-way local consumption digest and cannot be
+released for reuse. Network-origin rate signals are ephemeral and discarded when the window expires.
+Provider OAuth tokens MUST NOT enter logs, fixtures, support exports, or the public repository.
+Model names, session counts, and provider-shaped token components are outside `UsageSyncV1`; the
+reader discards them after deriving the canonical daily total, so no optional-telemetry cleanup
+state is created.
+
 ## Prohibited data
 
 The connector, schemas, services, logs, analytics, support process, fixtures, and release artifacts
 must reject or omit:
 
-- prompts, conversation or thread content, model responses, approvals, tool calls, and MCP data;
+- prompts, conversation or thread content, model responses, approvals, tool-call content, and
+  arbitrary MCP request/response data outside the exact `UsageSyncV1` allowlist and minimal
+  pairing/device/source metadata mapped above;
 - repository names, paths, contents, diffs, Git metadata, shell history, and terminal output;
 - Codex authentication tokens, ChatGPT cookies, API keys, cloud credentials, and account email;
 - arbitrary files, screenshots, archives, images, SVG, HTML, CSS, scripts, shaders, or remote URLs;
@@ -1008,7 +1088,7 @@ Future operational logs may use stable event names, those request IDs, coarse ou
 numeric metrics only after a retention review. They omit raw URLs, request bodies, raw token values,
 handles when not needed, OAuth/passkey material, device public keys/signatures/nonces, origin
 keys/proofs/nonces, idempotency keys, recovery selectors/secrets/PHCs/authority verifiers, local
-paths, and prohibited data.
+paths and prohibited data.
 
 The checked migration, current-snapshot restore, capability-containment, and profile-deletion
 failure runbooks add no completed record, target, operator identity, reporter detail, credential,
@@ -1030,7 +1110,8 @@ Before real-user ingestion:
 1. Map every schema column, log field, metric label, cache field, and support export to this
    inventory.
 2. Replace each **launch decision required** with an implemented retention and purge rule.
-3. Prove prohibited fields cannot cross the connector egress contract or enter logs.
+3. Prove prohibited fields cannot cross connector/service egress contracts or enter logs, traces,
+   support exports, or persistence.
 4. Test public/private serialization, cache separation, role access, hide, revoke, unlink, deletion,
    restore replay, and backup expiry.
 5. Verify provider settings and contracts against the public Privacy Policy and launch

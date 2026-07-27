@@ -7,7 +7,7 @@ addition, non-current-passkey revocation, recovery-code rotation/replacement-pas
 immediate profile-deletion-request, source inventory/pause/reactivation/unlink, active-device
 revoke, and pairing-approval sequences below plus the public race-status consumer are now locally
 implemented boundaries; none has live credentials, distributed edge policy, deployed purge cadence,
-or deployment evidence. Revisions 0001 through 0040 provide private
+or deployment evidence. Revisions 0001 through 0041 provide private
 identity/source/device/pairing/audit/deletion/usage tables, deny-by-default roles, and a narrow
 database slice for invite issuance, enrollment, exact-session challenges, initial-passkey
 activation, passkey login and management, restricted recovery, session rotation/revocation,
@@ -80,9 +80,10 @@ and bounded cleanup. A transport-free application now composes those exact local
 validates only closed acknowledgement/problem decisions. A bounded local Fastify factory preserves
 exact raw HTTP evidence, enforces no-queue and deadline policy, and serializes only revalidated
 contracts. A separate local host now binds that exact composition under closed loopback or declared
-Railway-edge configuration and bounded process shutdown. There is no edge/live-database/deployment
-integration. No trusted external TLS route, deployment login/certificate, edge signer/direct-origin
-policy, or live route/Jobs evidence is supplied. Data labels refer to the classifications in the
+Railway-edge configuration and bounded process shutdown. A dependency-free Worker creates the exact
+origin proof, and a local compatibility test passes it through the production verifier. There is no
+live database/deployment integration. No trusted external TLS route, deployment login/certificate,
+deployed direct-origin policy, or live route/Jobs evidence is supplied. Data labels refer to the
 [privacy data map](../security/PRIVACY_DATA_MAP.md): Public, Account, Security, Usage, Operational,
 and Prohibited.
 
@@ -200,6 +201,18 @@ account security actions stay outside this gate. The local decision does not dyn
 ten-minute OAuth continuation, five-minute passkey continuation, or pending session; terminate
 in-flight requests; repair an invite; clean an abandoned enrolling profile; coordinate workers; or
 prove deployed route denial.
+
+Proposed ADR 0069 does not change that implemented flow until acceptance and focused implementation.
+Its hybrid replacement has two closed bootstrap paths. Anonymous enrollment creates one temporary
+identity credential plus the first independently revocable device key, then atomically creates one
+profile, one source, and one device-authority binding. GitHub enrollment creates no anonymous
+credential: a fresh device flow plus first-device proof creates the profile/source/device binding
+and a basic session plus one short-lived, single-purpose first-passkey authority. While that GitHub
+profile has never activated a passkey, a later fresh same-ID returning device-flow transaction may
+replace only an expired authority. Activation consumes the authority and WebAuthn challenge and sets
+monotonic completion state; GitHub can never reset it or replace restricted recovery. An anonymous
+profile with an active passkey can perform later passkey-protected source/device actions without
+linking GitHub.
 
 ## Passkey login and credential management
 
@@ -459,6 +472,56 @@ the database-side submission enforcement described below.
 
 ## Local collection and signed synchronization
 
+ADR 0071 implements the signed `UsageSyncV1` transport and mature storage mapping for the existing
+Codex source. ADR 0072 implements its direct `community_tokens_v1` projection, and ADR 0073 makes
+the current unreleased exact-version Codex candidate connector emit that request. The thin reader
+and additional providers shown below remain proposed by ADR 0068/0069. Each future reader, rather
+than MCP or the server, remains responsible for mapping an exact supported agent schema to one
+canonical provider-reported daily total:
+
+```mermaid
+sequenceDiagram
+  participant Storage as Mixed-content agent storage
+  participant Reader as Thin bounded reader
+  participant Ingest
+  participant DB as Usage and season procedures
+  participant Web as Public leaderboard
+
+  Reader->>Storage: Read exact supported files/rows within fixed bounds
+  Storage-->>Reader: Provider aggregate or documented disjoint components
+  Reader->>Reader: Deduplicate snapshots and count nested details once
+  Reader->>Reader: Discard prompts, paths, models, sessions, and raw components
+  Reader->>Ingest: Signed UsageSyncV1 with source/date/dailyTokenTotal
+  Ingest->>Ingest: Verify device/source; derive immutable provider; reject provider field
+  Ingest->>Ingest: Reject unknown schema, authority, replay, or unsafe integer
+  Ingest->>DB: Store one monotonic current source/date total
+  DB->>DB: Direct exact weekly sum; no provider/model/cost multiplier
+  DB-->>Web: weeklyTokenTotal, shared rank, source count, rounded freshness
+```
+
+In the current local slice, Edge and Ingest expose the Usage Sync request only after exact
+`VIBERACING_USAGE_SYNC_ENABLED=true`; both signatures bind `/v1/community/usage`. Ingest derives the
+immutable `codex`/`codex_daily_usage_buckets_v1` pair from the registered device/source lookup, and
+the Ingest-only database wrapper rechecks it before mapping client/agent/date/total fields into the
+unchanged Community snapshot procedure. The current candidate connector's bounded Codex App Server
+reader creates this provider-neutral body and signs the new path. The legacy `/v1/community/sync`
+path remains accepted for compatibility. New seasons use `community_tokens_v1`; the independent
+default-off public token route returns the direct weekly total while legacy score routes remain
+unchanged.
+
+An optional MCP tool may carry the same already-derived `UsageSyncV1` object for a reviewed
+integration. It cannot carry arbitrary MCP/tool/prompt context. MCP compatibility does not discover
+usage, define token semantics, relabel the server-owned AgentSource provider, or make an unsupported
+provider valid. Different provider tokenizers remain different units of provider-reported tokens;
+the public copy does not claim normalized compute or cost.
+
+First-run backfill uses the same request shape but partitions each source by derived ISO season. The
+current-week request is independent from an immediately preceding-week request sent during its
+Monday/Tuesday grace. If server receipt crosses Wednesday 00:00 UTC, ADR 0008 may quarantine only
+the previous-season request; current-season dates cannot share that atomic failure.
+
+The implemented Codex-only candidate `UsageSyncV1` and `community_tokens_v1` flow is:
+
 ```mermaid
 sequenceDiagram
   participant Scheduler as User-scoped scheduler
@@ -478,7 +541,7 @@ sequenceDiagram
   Connector->>Connector: Reject unknown schema; select only date and token buckets
   Connector->>KeyStore: Use source-bound device private key
   Connector->>Connector: Sign method, path, body hash, device, nonce, time, idempotency
-  Connector->>Edge: Bounded ConnectorSyncV1 Community payload
+  Connector->>Edge: Bounded UsageSyncV1 Community payload
   Edge->>Ingest: Fresh body-bound origin proof plus original signed request
   Ingest->>Ingest: Validate proof, signature, source, schema, replay, and bounds
   Ingest->>DB: Execute narrow idempotent submission procedure
@@ -492,7 +555,7 @@ sequenceDiagram
   Jobs->>DB: Delete bounded aged unreferenced revoked passkeys
   Jobs->>DB: Delete bounded aged minimized pairing/revoked-device pairs
   Jobs->>DB: Reset fixed pairing rate windows after the maximum duration
-  Jobs->>DB: Aggregate sources then apply one profile daily cap
+  Jobs->>DB: Aggregate exact source/day totals into direct weekly token rank
 ```
 
 Prompts, conversations, repositories, account email, Codex credentials, API keys, and process logs
@@ -512,9 +575,10 @@ devices, pause, and revoke.
 ADR 0015 implements a pure local part of the Ingest application step. A closed raw envelope copies
 the exact body and required headers, enforces transport and JSON budgets, rejects duplicate required
 headers and decoded JSON keys, and verifies a fresh HMAC-SHA-256 origin proof before body parsing or
-device lookup. The parser then validates `ConnectorSyncV1`; timestamp and idempotency headers must
-equal their body fields; and a minimal injected device tuple verifies the exact-body request with
-strict Ed25519 semantics before a frozen database-ready allowlist is returned.
+device lookup. The parser then validates `ConnectorSyncV1` or `UsageSyncV1` from the exact request
+path; timestamp and idempotency headers must equal their body fields; and a minimal injected device
+tuple verifies the exact-body request with strict Ed25519 semantics before a frozen database-ready
+allowlist is returned.
 
 ADR 0016 adds the local application-to-database mapping. A dedicated four-client pool parses only
 namespaced settings, requires certificate-verified non-loopback TLS, and probes the exact Ingest
@@ -587,31 +651,31 @@ working directory/environment with ambient variables cleared, local pipes, bound
 deadlines, terminal-event checks, and reap-before-success cleanup. The required launch capability
 has no generic public constructor; ADR 0031 later gives only the exact-admission command a private
 construction path. ADR 0024 then consumes the normalized output only with another inaccessible
-capability containing reviewed source/device/time/nonce inputs. It emits the exact bounded
-`ConnectorSyncV1` bytes, SHA-256 digest, unpadded base64url nonce, and LF-separated device message
-verified by Ingest. ADR 0025 removes public unsigned access and consumes that value only with an
-inaccessible, device-bound, one-use Ed25519 key capability; the returned envelope contains the same
-body and five exact header values. ADR 0026 adds a separate pending-key/challenge signer and pure
-Web verifier for one exact pairing-possession proof. ADR 0027 adds protected poll verification,
-fixed approved-material lookup, strict proof-to-activation mapping, and local admission/timing
-composition. ADR 0028 adds closed pairing-start composition with fresh material, separate keyed
-poll/code verifiers, and one fixed database call. ADR 0030 opens only those pairing applications
-through exact HTTP routes and a pairing-only native-store connector command; the local `/connect`
-route performs the browser/passkey approval. ADR 0031 adds exact internal Windows artifact admission
-plus one active-record context/key construction and fixed-path upload. Only that explicit local
-command can construct the three sync capabilities; no boundary discovers a binary, schedules
-execution, or alters the empty support matrix.
+capability containing reviewed source/device/time/nonce inputs. ADR 0073 makes the current candidate
+emit exact bounded `UsageSyncV1` bytes, SHA-256 digest, unpadded base64url nonce, and the
+path-separated device message verified by Ingest. ADR 0025 removes public unsigned access and
+consumes that value only with an inaccessible, device-bound, one-use Ed25519 key capability; the
+returned envelope contains the same body and five exact header values. ADR 0026 adds a separate
+pending-key/challenge signer and pure Web verifier for one exact pairing-possession proof. ADR 0027
+adds protected poll verification, fixed approved-material lookup, strict proof-to-activation
+mapping, and local admission/timing composition. ADR 0028 adds closed pairing-start composition with
+fresh material, separate keyed poll/code verifiers, and one fixed database call. ADR 0030 opens only
+those pairing applications through exact HTTP routes and a pairing-only native-store connector
+command; the local `/connect` route performs the browser/passkey approval. ADR 0031 adds exact
+internal Windows artifact admission plus one active-record context/key construction and fixed-path
+upload. Only that explicit local command can construct the three sync capabilities; no boundary
+discovers a binary, schedules execution, or alters the empty support matrix.
 
-The released or scheduled connector layers, edge signer, direct-origin denial, trusted external
-Ingest TLS/edge route, live secret-manager/edge key injection, deployment PostgreSQL login/TLS
-connection, distributed rate/backpressure controls, monitoring, and load evidence are still absent.
-Revisions 0008 and 0012 give Jobs a server-time, 1-to-1000 batch procedure for expired origin
-nonces, device nonces, and raw snapshots. It serializes callers, caps each class independently,
-cascades raw entries, preserves current source/day values, and clears only their deleted raw
-reference. The expiry columns still do not delete rows by themselves. The local one-shot Jobs
-command can invoke one fixed 1000-row batch. The default-off local scheduler and combined synthetic
-PostgreSQL integration exercise it in the hourly catalog, but no monitor, production login/TLS path,
-or deployed cadence invokes it operationally.
+The released or scheduled connector layers, deployed direct-origin denial, trusted external Ingest
+TLS/edge route, live secret-manager/edge key injection, deployment PostgreSQL login/TLS connection,
+distributed rate/backpressure controls, monitoring, and load evidence are still absent. Revisions
+0008 and 0012 give Jobs a server-time, 1-to-1000 batch procedure for expired origin nonces, device
+nonces, and raw snapshots. It serializes callers, caps each class independently, cascades raw
+entries, preserves current source/day values, and clears only their deleted raw reference. The
+expiry columns still do not delete rows by themselves. The local one-shot Jobs command can invoke
+one fixed 1000-row batch. The default-off local scheduler and combined synthetic PostgreSQL
+integration exercise it in the hourly catalog, but no monitor, production login/TLS path, or
+deployed cadence invokes it operationally.
 
 Revision 0013 adds a separate private mutex and oldest-first 1-to-1000 batch for expired `pending`,
 `approved`, or `cancelled` pairing transactions whose exact key is still pending and unbound. It
@@ -715,40 +779,15 @@ an extra-membership login before mutation, observes only generic process output,
 stored state, and removes the container, network, and storage. ADR 0063 separately wraps the runner
 with one exact-default-off UTC catalog; ADR 0065 places the bounded backlog step first in its hourly
 catalog. Slot state remains in memory, invocation is sequential and non-overlapping, and signal
-shutdown is bounded. Ninety-four tests use a fake clock, timer, and runner. A second opt-in
-synthetic integration composes the production scheduler core under one fixed injected UTC
-clock/timer with the real Jobs runner and disposable PostgreSQL; it proves exact catalog order, full
-private-table non-mutation for the widened login, and exact stored state for the narrow login. A
-third advances the fixed clock by one hour, invokes the production interval handler twice during the
-active real-runner cycle, proves the exact recurring catalog plus overlap and same-slot suppression,
-and verifies the rearmed terminal reset. A fourth composes the process lifecycle, injects its first
-handler during the penultimate real database job, and proves active-call settlement, no later
-scheduler job, and exact graceful cleanup. A fifth starts the built scheduler entry point under the
-real host clock from a link-free production-only runtime mounted read-only under pinned Linux Node.
-The harness temporarily denies only the Jobs role's backlog function, then proves one generic cycle
-signal, no backlog mutation, and later terminal-job settlement before a code-0 `SIGTERM` exit. It
-restores and rechecks the exact grant, rearms the marker, holds the scoring mutex, and starts the
-same runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit
-137 plus session release, and proves the backlog and marker remain unchanged. After releasing the
-holder, a restart finalizes the backlog before a silent code-0 signal exit. A disposable post-insert
-barrier then holds a second backlog after its first daily projection insert; another `SIGKILL` must
-release the session and roll back every new projection row. The barrier is removed and verified
-absent before a clean-schema restart finalizes the backlog exactly once. A final rearm/restart
-proves another silent repeated cycle, session cleanup after all six starts, runtime-fingerprint
-revalidation, and exact state. A sixth uses the same bounded runtime shape, leaves the native
-clock/timer unchanged, holds the scoring mutex after startup, and observes a refresh in a later real
-five-minute slot. It delivers an OS `SIGTERM`, releases the mutex, and requires active-refresh
-settlement, a newer timestamp, silent code-0 exit, session release, and runtime-fingerprint
-revalidation. A seventh uses the same bounded runtime shape, holds the first finalization call,
-delivers an OS `SIGTERM`, and proves graceful settlement without starting refresh or a later job.
-The fifth gate proves local failure/crash containment, later-job continuation, successful
-clean-schema retries, a later repeated restart, four graceful post-startup `SIGTERM` settlements,
-two abrupt active-call `SIGKILL` exits, and one controlled uncommitted post-insert transaction
-rollback; the sixth proves one local host-timer recurring refresh plus active-call signal
-settlement. No committed/external-effect or every-capability recovery, automatic privilege repair,
-deployed signal route or scheduler, controller/orchestrator grace, managed restart, representative
-backlog/capacity result, external audit sink, production login/certificate, audited correction,
-tombstone/restore replay, deployed route, or public cache exists.
+shutdown is bounded. Ninety-four tests use a fake clock, timer, and runner. The opt-in scheduler
+integrations compose that production core with the real Jobs runner and disposable PostgreSQL under
+fixed and real clocks, proving exact catalog order, widened-login non-mutation, recurring execution
+with overlap suppression, graceful and abrupt OS-signal settlement, clean-schema retry, one
+controlled uncommitted post-insert transaction rollback, and one local host-timer recurring refresh.
+No committed/external-effect recovery, deployed signal route or scheduler, controller/orchestrator
+grace, production login/certificate, or public cache exists; see
+[implementation status](../IMPLEMENTATION_STATUS.md) and
+[ADR 0063](../decisions/0063-default-off-local-jobs-scheduler.md).
 
 ## CarRecipe proposal origins and browser approval
 
@@ -924,6 +963,31 @@ redacted audit linkage. The default-off local scheduler includes that exact comm
 cadence, public cache purge, keyed tombstone policy, backup expiry, and restore replay are still
 planned.
 
+## Stable service-source deployment
+
+```mermaid
+sequenceDiagram
+  participant Release as Stable GitHub Release
+  participant Verify as Secretless verification job
+  participant Environment as Protected production Environment
+  participant Railway
+  participant Cloudflare
+
+  Release->>Verify: Exact stable tag reachable from main
+  Verify->>Verify: Release and synthetic integration gates
+  Verify->>Environment: Request protected approval
+  Environment->>Railway: One narrow project token
+  Railway->>Railway: Enable, run, then close migration latch
+  Railway->>Railway: Deploy Web, Ingest flag/runtime, then Jobs
+  Environment->>Cloudflare: Deploy Edge last with coordinated flag
+  Environment->>Environment: Require public HTTPS Web smoke
+```
+
+The repository checks this order and its secret boundary. It does not create the Environment,
+tokens, platform configuration, database, Worker route, or a hosted result. Manual dispatch is for a
+same-tag redeploy and repeats verification plus approval; old-version and database rollback remain
+separate reviewed operations because migrations are forward-only.
+
 ## Trusted release
 
 ```mermaid
@@ -946,8 +1010,10 @@ sequenceDiagram
   User->>User: Verify expected signer, checksum, and provenance
 ```
 
-Release and deployment workflows do not run a pull-request revision with privileged credentials.
-Promotion reuses the verified artifact rather than rebuilding from mutable source.
+The artifact release sequence remains required for connector distribution and is not implemented by
+the service-source deployment workflow. Neither path may run a pull-request revision with privileged
+credentials. Artifact promotion reuses the verified artifact rather than rebuilding from mutable
+source.
 
 ## Flow-change checklist
 

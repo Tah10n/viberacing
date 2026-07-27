@@ -52,15 +52,14 @@ Run from the repository root:
 ```text
 pnpm run lint:admin
 pnpm run typecheck:admin
-pnpm run test:admin:coverage
-pnpm run build:admin
-pnpm run test:admin:postgres-integration
+pnpm run test:admin
 pnpm run verify
 ```
 
-The PostgreSQL command is an explicit synthetic Docker gate. It does not supply or authorize a host,
-real Access policy/token, passkey proof, external audit backend, production credential/TLS path,
-network service, or deployment.
+Run coverage and the production build when Admin behavior changes. Run
+`pnpm run test:admin:postgres-integration` only when the database capability, login probe, or
+transaction boundary changes; it is an explicit synthetic Docker gate. `pnpm run verify:release`
+belongs to release/publication preparation or broad cross-cutting work, not routine Admin edits.
 
 Before committing, stage only intended files, run `git diff --cached --check` and
 `pnpm run check:public:staged`, then inspect every staged manifest, lockfile, source, test, ADR, and

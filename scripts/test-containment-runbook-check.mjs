@@ -10,12 +10,14 @@ const runbookRelativePath = join("docs", "operations", "CAPABILITY_CONTAINMENT_R
 const fixtureRelativePaths = Object.freeze([
   ".env.example",
   join("scripts", "check-config.mjs"),
+  join("apps", "web", "lib", "public-token-ranking-config.ts"),
   join("apps", "web", "lib", "public-ranking-config.ts"),
   join("apps", "web", "lib", "pairing-config.ts"),
   join("apps", "web", "lib", "source-creation-config.ts"),
   join("apps", "web", "lib", "car-proposals-config.ts"),
   join("apps", "web", "lib", "enrollment-enable-config.ts"),
   join("apps", "web", "app", "v1", "community", "scores", "route.ts"),
+  join("apps", "web", "app", "v1", "community", "tokens", "route.ts"),
   join("apps", "web", "app", "v1", "community", "race", "route.ts"),
   join("apps", "web", "app", "v1", "community", "race", "status", "route.ts"),
   join("apps", "web", "app", "v1", "connector", "pairing", "start", "route.ts"),
@@ -34,6 +36,8 @@ const fixtureRelativePaths = Object.freeze([
   join("apps", "web", "app", "auth", "passkey", "options", "route.ts"),
   join("apps", "web", "app", "auth", "passkey", "verify", "route.ts"),
   join("apps", "ingest-host", "src", "listener-config.ts"),
+  join("apps", "ingest-host", "src", "host.ts"),
+  join("apps", "edge", "src", "worker.mjs"),
   join("apps", "jobs-scheduler", "src", "config.ts"),
   join("apps", "migrate", "src", "enablement.ts"),
 ]);
@@ -54,7 +58,7 @@ const validRootPackage = Object.freeze({
     "test:jobs-scheduler:coverage": "pnpm --filter @viberacing/jobs-scheduler run test:coverage",
     "test:migrate:coverage": "pnpm --filter @viberacing/migrate run test:coverage",
     "test:web:coverage": "pnpm --filter @viberacing/web run test:coverage",
-    "verify:node": "node scripts/verify.mjs --node-only",
+    "verify:release:node": "node scripts/verify.mjs --release --node-only",
   },
 });
 
@@ -185,6 +189,14 @@ try {
 
   restoreValidFixture();
   mutateFixture(
+    join("apps", "web", "lib", "public-token-ranking-config.ts"),
+    'readEnvironmentValue(environment) === "true"',
+    'readEnvironmentValue(environment) !== "false"',
+  );
+  expectFailure("token-ranking Web admission drift", "Web capability source");
+
+  restoreValidFixture();
+  mutateFixture(
     join("apps", "web", "lib", "public-ranking-config.ts"),
     "VIBERACING_PUBLIC_RANKING_ENABLED",
     "VIBERACING_PUBLIC_READS_ENABLED",
@@ -221,6 +233,22 @@ try {
 
   restoreValidFixture();
   mutateFixture(
+    join("apps", "ingest-host", "src", "listener-config.ts"),
+    "const usageSyncEnabled = optionalExactEnablement(environment as object, names.usageSyncEnabled)",
+    'const usageSyncEnabled = environmentValue(environment, names.usageSyncEnabled) !== "false"',
+  );
+  expectFailure("Usage Sync Ingest admission drift", "Usage Sync Ingest capability source drifted");
+
+  restoreValidFixture();
+  mutateFixture(
+    join("apps", "edge", "src", "worker.mjs"),
+    'descriptor.value === "true"',
+    'descriptor.value !== "false"',
+  );
+  expectFailure("Usage Sync Edge admission drift", "Usage Sync Edge capability source drifted");
+
+  restoreValidFixture();
+  mutateFixture(
     join("apps", "jobs-scheduler", "src", "config.ts"),
     'environment[enabledEnvironmentName] !== "true"',
     'environment[enabledEnvironmentName] === "false"',
@@ -245,7 +273,7 @@ try {
   restoreValidFixture();
   writeFixture(
     runbookRelativePath,
-    runbookSource.replace("resolve their decisions at module evaluation.", "read a decision"),
+    runbookSource.replace(/resolve\s+their decisions\s+at module evaluation\./u, "read a decision"),
   );
   expectFailure("module-load boundary removal", "missing required statement");
 
@@ -267,7 +295,7 @@ try {
   writeFileSync(runbookPath, Buffer.from([0xff]));
   expectFailure("invalid UTF-8", "canonical UTF-8 text without NUL bytes");
 
-  console.log("Containment runbook checker regressions passed (22 unsafe/drift variants).");
+  console.log("Containment runbook checker regressions passed (25 unsafe/drift variants).");
 } finally {
   rmSync(temporaryRoot, { force: true, recursive: true });
 }

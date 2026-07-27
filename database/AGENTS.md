@@ -66,15 +66,14 @@ cases, privacy data map, `docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md`, 
 ## Required verification
 
 ```text
-pnpm run check:restore-runbook
-pnpm run test:restore-runbook-check
-pnpm run check:deletion-failure-runbook
-pnpm run test:deletion-failure-runbook-check
-pnpm run test:database-check
 pnpm run check:database
-pnpm run test:database:integration
 pnpm run verify
 ```
+
+Run `pnpm run test:database-check` only when changing the checker, and run the restore/deletion
+runbook checks only when editing those documents. SQL, role, lock, or migration changes additionally
+require `pnpm run test:database:integration`; documentation-only edits do not. The full
+`pnpm run verify:release` gate is reserved for release or broad cross-cutting work.
 
 The integration runner uses only the isolated `postgres-test` Compose profile. Do not point it at a
 shared database or change it to reuse the normal local volume. Its current-snapshot drill may drop

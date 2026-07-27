@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains forty SQL-first revisions for identity, passkey login and management,
+This directory contains forty-one SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
 finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
 PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,
@@ -172,6 +172,13 @@ production login, monitoring, deployed cadence, or deployment exists.
 - `migrations/0040_historical_season_backlog_finalization.sql` adds a Jobs-only zero-argument
   oldest-known-season finalization step plus one partial open-season index, reusing the existing
   source-date index without a queue, run ledger, caller-selected date, or new retained field.
+- `migrations/0041_agent_source_provider_foundation.sql` backfills exact immutable
+  `codex`/`codex_daily_usage_buckets_v1` source attribution, extends the device-verification result,
+  and adds one Ingest-only provider-attributed Usage Sync wrapper over the unchanged mature
+  submission procedure.
+- `migrations/0042_direct_community_token_leaderboard.sql` adds the immutable `community_tokens_v1`
+  metric for new seasons, widens private projection values to the JavaScript-safe integer range,
+  preserves legacy metric semantics, and exposes one bounded Web-only direct-token projection.
 - `tests/identity_invariants.sql` uses deterministic synthetic rows inside a rolled-back transaction
   to exercise valid state and expected integrity failures.
 - `tests/identity_capabilities.sql` exercises the exact grant matrix, session possession,
@@ -204,7 +211,8 @@ production login, monitoring, deployed cadence, or deployment exists.
   mutexes, idempotency, atomic rollback, and the Jobs-only grant matrix.
 - `tests/usage_ingest.sql` exercises exact device/source binding, strict bounds, canonical time,
   replay/idempotency, same-source device deduplication, monotonic state, quarantine, lifecycle
-  rejection, retention markers, direct-transition constraints, and the exact role boundary.
+  rejection, provider/revision derivation and immutability, the separate Usage Sync wrapper,
+  retention markers, direct-transition constraints, and the exact role boundary.
 - `tests/origin_replay.sql` exercises first use, exact replay, rotation-key separation,
   expired-tuple reuse, strict digest/key/time input, and bounded proof lifetime.
 - `tests/ingest_cleanup.sql` exercises batch bounds, deterministic expiry order, idempotency,
@@ -217,6 +225,12 @@ production login, monitoring, deployed cadence, or deployment exists.
   `tests/finalized_source_day_migration_assertions.sql` place one synthetic terminal season after
   revision 0038, then prove revision 0039 backfills its exact UTC-day/count projection without
   changing source/day state.
+- `tests/agent_source_provider_migration_setup.sql` and
+  `tests/agent_source_provider_migration_assertions.sql` place one source after revision 0040, then
+  prove revision 0041 backfills the exact provider/accounting pair and rejects relabeling.
+- `tests/community_token_leaderboard.sql` proves metric cutover without legacy reinterpretation,
+  exact source/date and profile/week sums, shared ranks, noncompetitive display order, overflow
+  omission, visibility/deletion re-ranking, terminal immutability, and the Web-only grant matrix.
 - `tests/pairing_cleanup.sql` exercises bounded oldest-first pending/approved/cancelled deletion,
   challenge cascade, idempotency, activated/live preservation, mutex failure, and exact role denial.
 - `tests/auth_cleanup.sql` exercises independent challenge/authority bounds, consumed and terminal
@@ -662,32 +676,15 @@ deployed scheduler, monitoring, retention policy, or real-user purge evidence ex
 local runner can invoke one fixed maximum-size batch only after its Jobs-role probe. The shared
 opt-in integration now proves that emitted command through one disposable narrow login and exact
 stored state. ADR 0063 separately supplies an exact-default-off in-memory UTC catalog against a fake
-runner and clock, plus a second fixed-clock synthetic composition with the real runner and
-disposable PostgreSQL. A third advances the fixed clock by one hour, invokes the production interval
-handler twice during the active real-runner cycle, proves the exact recurring catalog plus overlap
-and same-slot suppression, and verifies the rearmed terminal reset. A fourth composes the production
-process lifecycle under fixed time, injects its first handler during the penultimate real database
-job, and proves graceful settlement plus no later scheduler job. A fifth starts the built entry
-point from a link-free read-only graph under pinned Linux Node with the real clock after temporarily
-revoking only the Jobs role's backlog-function grant. It proves one generic cycle signal, an
-unchanged backlog, and later terminal reset before a code-0 `SIGTERM` exit. The harness restores and
-rechecks the exact grant, rearms the marker, holds the scoring mutex, and starts the same runtime
-again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus
-session release, and proves the backlog and marker remain unchanged. After releasing the holder, a
-restart finalizes the backlog before a silent code-0 signal exit. A disposable post-insert barrier
-then holds a second backlog; another `SIGKILL` must roll back its whole projection transaction. The
-barrier is removed and verified absent before a clean-schema restart finalizes that backlog exactly
-once. A final rearm/restart proves another silent repeated cycle, session cleanup after all six
-starts, runtime immutability, and exact state. A sixth runs that unchanged entry point from the same
-bounded runtime shape, holds the scoring mutex after startup, observes a native minute-timer refresh
-in a later real five-minute slot, delivers an OS `SIGTERM`, releases the mutex, and proves
-active-refresh settlement before silent code-0 exit. A seventh pinned-Linux gate delivers an OS
-`SIGTERM` while finalization is active and proves graceful settlement without a later job. These
-supply local failure/crash-containment, clean-schema retry, one controlled uncommitted post-insert
-transaction rollback, host-timer, and OS-signal evidence, not committed/external-effect or
-every-capability recovery, automatic privilege repair, a deployed controller/orchestrator grace
-policy, production login/TLS, durable/deployed cadence, monitoring, capacity, or real-user purge
-evidence.
+runner and clock. The opt-in scheduler integrations compose that production core with the real
+runner and disposable PostgreSQL under fixed and real clocks, proving exact catalog order, recurring
+execution with overlap suppression, graceful and abrupt OS-signal settlement, clean-schema retry,
+one controlled uncommitted post-insert transaction rollback, and one local host-timer recurring
+refresh. These supply local evidence, not committed/external-effect recovery, a deployed
+controller/orchestrator grace policy, production login/TLS, durable/deployed cadence, monitoring,
+capacity, or real-user purge evidence; see
+[IMPLEMENTATION_STATUS.md](../docs/IMPLEMENTATION_STATUS.md) and
+[ADR 0063](../docs/decisions/0063-default-off-local-jobs-scheduler.md).
 
 Revision 0009 materializes only an open Community season. It binds each ISO Monday-through-Sunday
 season to immutable `community_v1` parameters, sums current eligible source/day values with numeric
@@ -1002,6 +999,24 @@ private date/source and public season-state keys. The eighteen-command integrati
 scheduler/PostgreSQL modes prove exact local progress, but not representative backlog capacity,
 production login/TLS, deployed cadence, monitoring, or real-user recovery.
 
+Revision 0041 keeps the physical source table and existing ConnectorSyncV1 path intact while adding
+two non-null server-owned attribution columns. The only admitted pair is
+`codex`/`codex_daily_usage_buckets_v1`, matching the only implemented bounded reader. The exact
+device lookup returns that pair, and only Ingest may invoke `submit_usage_sync`, which independently
+rechecks the device/source attribution before mapping provider-neutral client/agent/date/total
+fields into the existing replay-safe submission procedure. The database suite inserts one
+revision-0040 source before applying 0041 to prove the backfill, then exercises positive and
+wrong-attribution calls plus the grant matrix. This proves no second provider, source-creation
+workflow, production credential, migration rollout, or deployment.
+
+Revision 0042 preserves every existing and finalized `community_v1` season while selecting
+`community_tokens_v1` for a newly created season on or after 2026-07-27. Its refresh sums each
+eligible source/date once, then sums the seven exact profile-day values into `weeklyTokenTotal`.
+Equal totals share rank; active days, source count, car, and deterministic display order are
+noncompetitive. A profile whose daily or weekly aggregate exceeds `Number.MAX_SAFE_INTEGER` is
+omitted without blocking valid profiles. Only the bounded Web projection can read the direct weekly
+aggregate; source/day/provider detail remains private.
+
 The local account application consumes those capabilities through the same probed read-write pool.
 Its combined overview query reads visibility and the current week's derived score with one checkout,
 then accepts only one all-null empty row or exactly seven consecutive, internally consistent daily
@@ -1068,20 +1083,21 @@ pnpm run test:web:postgres-integration
 pnpm run test:ingest:postgres-integration
 ```
 
-The first two commands are offline and part of `pnpm run verify`. All four integration commands
-require Docker and never connect to the normal `postgres` volume. The database suite starts only the
-portless `postgres-test` service in a uniquely named Compose project with ephemeral `tmpfs` storage.
-The Migration, Web, and Ingest suites each start a separate one-off `postgres-test` container with
-only an ephemeral loopback-published port. The Migration and Web suites additionally mount one
-generated read-only test-only certificate/key directory, copy the material under closed container
-permissions before the original PostgreSQL entrypoint, and require hostname-verified TLS from their
-emitted processes. All suites remove their process/container/network/storage resources in `finally`;
-Migration and Web also remove their ephemeral host key directories.
+The migration checker is part of `pnpm run verify`; its checker-regression test is release-only. All
+four integration commands require Docker and never connect to the normal `postgres` volume. The
+database suite starts only the portless `postgres-test` service in a uniquely named Compose project
+with ephemeral `tmpfs` storage. The Migration, Web, and Ingest suites each start a separate one-off
+`postgres-test` container with only an ephemeral loopback-published port. The Migration and Web
+suites additionally mount one generated read-only test-only certificate/key directory, copy the
+material under closed container permissions before the original PostgreSQL entrypoint, and require
+hostname-verified TLS from their emitted processes. All suites remove their
+process/container/network/storage resources in `finally`; Migration and Web also remove their
+ephemeral host key directories.
 
 The Migration suite runs one widened emitted controller and requires generic denial before either
 application schema exists. It then holds the fixed session advisory key externally, observes two
 narrow emitted controllers waiting behind that holder over TLS 1.2/1.3, releases it, and requires
-both controllers to succeed. The final oracle checks the exact 40-row manifest ledger, all 28
+both controllers to succeed. The final oracle checks the exact 42-row manifest ledger, all 28
 owner-owned forced-RLS private tables, identity invariants, zero controller connections, and a free
 session lock. This is local disposable controller convergence, not staging orchestration, a
 production login/certificate, deployed replica behavior, monitoring, rollback, or recovery.
@@ -1149,15 +1165,12 @@ something the script silently broadens or repairs.
   integration does not replace those gates.
 - Deploy the default-off local scheduler with a production Jobs login/TLS path,
   single-replica/cadence policy, monitoring, representative backlog-recovery and capacity evidence,
-  plus audited corrections. The pinned-Linux emitted signal gate proves one local OS `SIGTERM` while
-  the first finalization call is lock-waiting, the separate native-timer gate proves one local
-  recurring refresh settles through OS `SIGTERM`, and the startup gate proves local failure
-  containment, later-job continuation, two injected active-call process losses, clean-schema
-  retries, a later repeated restart, four graceful post-catalog `SIGTERM` settlements, two abrupt
-  `SIGKILL` exits, and one controlled uncommitted post-insert transaction rollback. The evidence
-  still does not provide committed/external-effect or every-capability recovery, automatic privilege
-  repair, a deployed signal route, controller/orchestrator grace policy, managed restart, durable
-  cadence, production configuration, or deployed evidence.
+  plus audited corrections. The local scheduler gates prove OS-signal settlement, failure
+  containment, clean-schema retry, one controlled uncommitted post-insert transaction rollback, and
+  one local recurring refresh (see [IMPLEMENTATION_STATUS.md](../docs/IMPLEMENTATION_STATUS.md) and
+  [ADR 0063](../docs/decisions/0063-default-off-local-jobs-scheduler.md)); they still do not provide
+  committed/external-effect recovery, a deployed signal route, controller/orchestrator grace policy,
+  managed restart, durable cadence, production configuration, or deployed evidence.
 - Integrate the bounded database adapter and local score/race/status routes with a
   deployment-provisioned Web-only login and verified TLS, then add cache/invalidation, edge request
   shaping, representative/deployed query-plan and load/capacity evidence, monitoring, and deployment

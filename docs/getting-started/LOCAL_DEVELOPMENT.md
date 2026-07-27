@@ -3,7 +3,7 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and forty checksum-ledgered database migrations. Repository verification uses synthetic data and
+and forty-one checksum-ledgered database migrations. Repository verification uses synthetic data and
 injected capabilities only. It has procedure-only identity, passkey login/management, restricted
 recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
 retention cleanup, bounded primary profile deletion, scoring, terminal finalization, and public
@@ -59,42 +59,21 @@ shutdown. A separate opt-in gate now proves one full synthetic loopback HTTP-to-
 through a disposable dedicated Ingest login. There is no deployment database credential/certificate,
 trusted external TLS/edge path, supported connector adapter, or deployment. A bounded local one-shot
 Jobs process now wraps only cleanup/refresh/finalization. A separate default-off local scheduler
-invokes only that runner from fixed UTC process slots. An opt-in synthetic gate composes its
-production core under fixed injected UTC time with the real Jobs runner and disposable PostgreSQL. A
-second advances the fixed clock by one hour, invokes the production interval handler twice during
-the active real-runner cycle, proves the exact recurring catalog plus overlap and same-slot
-suppression, and verifies the rearmed terminal reset. A third composes the production process
-lifecycle, injects its first handler during the penultimate real database job, and proves graceful
-active-call settlement plus no later scheduler job. A fourth starts the built entry point under the
-real host clock from a link-free read-only production graph under pinned Linux Node. The harness
-temporarily denies only the Jobs role's backlog function, then proves one generic cycle signal, no
-backlog mutation, and later terminal-job settlement before a code-0 `SIGTERM` exit. It restores and
-rechecks the exact grant, rearms the marker, holds the scoring mutex, and starts the same runtime
-again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus
-session release, and proves the backlog and marker remain unchanged. After releasing the holder, a
-restart finalizes the backlog before a silent signal exit. A disposable post-insert barrier then
-holds a second backlog after its first daily projection insert; another `SIGKILL` must release the
-session and roll back that complete transaction. The barrier is removed and verified absent before a
-clean-schema restart finalizes the backlog exactly once. A final rearm/restart proves another silent
-repeated cycle, session cleanup after all six starts, runtime immutability, and exact state. A fifth
-runs the unchanged entry point from the same bounded runtime shape, holds the scoring mutex after
-startup, observes a native minute-timer refresh in a later real five-minute slot, delivers an OS
-`SIGTERM`, releases the mutex, and proves active-refresh settlement before silent code-0 exit. A
-sixth uses the same bounded runtime shape, blocks the emitted first finalization call, delivers an
-OS `SIGTERM`, and proves graceful settlement without starting a later job. The fourth gate proves
-local failure/crash containment, later-job continuation, successful clean-schema retries, a later
-repeated restart, four graceful post-startup `SIGTERM` settlements, two abrupt active-call `SIGKILL`
-exits, and one controlled uncommitted post-insert transaction rollback; the fifth proves one local
-host-timer recurring refresh plus active-call signal settlement. There is still no
-committed/external-effect or every-capability recovery, automatic privilege repair, deployed signal
-route, controller/orchestrator grace, managed restart, production login, durable/deployed cadence,
-monitor, or deployment. A bounded server-only Web PostgreSQL adapter and local public-score GET are
-implemented and unit/build-tested, but this repository supplies no working deployment login or TLS
-certificate. A successful setup proves repository gates, synthetic frontend behavior, route/adapter
-boundaries, SQL constraints, session-bound procedure behavior, lifecycle/scoring concurrency, and
-database role isolation; it does not prove a live adapter, deployed API, or production flow. The
-Ingest server tests bind only ephemeral loopback sockets and use synthetic requests; no development
-command exposes it to the LAN or Internet.
+invokes only that runner from fixed UTC process slots. The opt-in scheduler gates compose that
+production core with the real Jobs runner and disposable PostgreSQL under fixed and real clocks,
+proving exact catalog order, recurring execution with overlap suppression, graceful and abrupt
+OS-signal settlement, clean-schema retry, one controlled uncommitted post-insert transaction
+rollback, and one local host-timer recurring refresh. There is still no committed/external-effect
+recovery, deployed signal route, controller/orchestrator grace, production login, durable/deployed
+cadence, monitor, or deployment; see [implementation status](../IMPLEMENTATION_STATUS.md) and
+[ADR 0063](../decisions/0063-default-off-local-jobs-scheduler.md). A bounded server-only Web
+PostgreSQL adapter and local public-score GET are implemented and unit/build-tested, but this
+repository supplies no working deployment login or TLS certificate. A successful setup proves
+repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
+session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
+does not prove a live adapter, deployed API, or production flow. The Ingest server tests bind only
+ephemeral loopback sockets and use synthetic requests; no development command exposes it to the LAN
+or Internet.
 
 ## Prerequisites
 
@@ -119,16 +98,18 @@ Direct dependencies are exact versions and the lockfile is committed. The worksp
 unreviewed dependency build scripts, newly published packages inside the quarantine window,
 untrusted registry redirects, and exotic transitive sources.
 
-`pnpm run verify` is deterministic and offline after installation. It includes a complete reachable
-Git-history scan, external-host policy, English spelling, dependency-license inventory, contract,
-Ingest, Ingest-host, Jobs, Jobs-scheduler, and Migration lint/types/coverage, their required
-production compilation, the built Ingest-host, Jobs-scheduler, and Migration entrypoint checks,
-contract generation/drift checks and coverage, web component coverage, and a production web build.
-It also runs the offline migration manifest/capability checker plus Rust formatting, all-target
-checking, tests, and Clippy. Docker-backed PostgreSQL integrations remain separate opt-in commands
-declared by secretless CI. The optional `pnpm run check:external-links:online` performs bounded
-network validation and may fail closed behind a private DNS/proxy; do not weaken its address or
-redirect rules to accommodate a workstation.
+`pnpm run verify` is the normal deterministic development gate. It checks the public/configuration
+boundaries, generated contracts, migration integrity, lint, types, unit tests across the workspaces,
+and Rust formatting/check/test/Clippy. It intentionally skips coverage collection, production
+builds, checker mutation suites, history/documentation/publication policy, visual evidence, and
+Docker-backed integrations.
+
+Use `pnpm run verify:release` only before release/publication or after a broad cross-cutting change.
+That command retains the exhaustive offline evidence. Docker-backed PostgreSQL integrations remain
+separate opt-in commands and run in secretless CI only on `main` or manual dispatch. The optional
+`pnpm run check:external-links:online` performs bounded network validation and may fail closed
+behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
+workstation.
 
 After an intentionally reviewed dependency change, regenerate the machine inventory with
 `node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
@@ -225,9 +206,10 @@ launch an installed Codex binary, read a local account, open a credential store,
 
 ```text
 pnpm run check:codex-compatibility
-pnpm run test:codex-compatibility-check
 cargo test --workspace --all-targets --all-features --locked
 ```
+
+The release gate also exercises the compatibility checker's fail-closed fixtures.
 
 The `0.144.5` directory, synthetic process fixture, and exact signed sync vector are candidate
 development evidence, not a supported-version installation. The vector uses only synthetic
@@ -314,12 +296,15 @@ After those ordered builds, the emitted entrypoint is `node apps/ingest-host/dis
 with Node directly so SIGTERM reaches the process. Tracked `.env.example` values are deliberately
 non-working and keep `VIBERACING_INGEST_ENABLED=false`. An ignored local environment must first set
 that field to exact `true`; only then can exact loopback host/port and `loopback-cleartext` be
-evaluated. Production additionally requires exact `0.0.0.0`, Railway-injected `PORT`,
-`railway-edge`, and a 40-to-300-second platform drain declaration. The latch is startup-only: it
-does not prove a deployed restart, route denial, or already-running instance drain. Do not add real
-login/key values to a repository file or treat a successful local bind as external TLS/deployment
-evidence. See [`apps/ingest-host/README.md`](../../apps/ingest-host/README.md) for the complete
-listener and shutdown contract.
+evaluated. The independent tracked `VIBERACING_USAGE_SYNC_ENABLED=false` keeps
+`POST /v1/community/usage` absent while preserving the legacy route; set it to exact `true` only
+when intentionally exercising the additive Usage Sync contract, and use the same decision at Edge.
+Production additionally requires exact `0.0.0.0`, Railway-injected `PORT`, `railway-edge`, and a
+40-to-300-second platform drain declaration. The latch is startup-only: it does not prove a deployed
+restart, route denial, or already-running instance drain. Do not add real login/key values to a
+repository file or treat a successful local bind as external TLS/deployment evidence. See
+[`apps/ingest-host/README.md`](../../apps/ingest-host/README.md) for the complete listener and
+shutdown contract.
 
 Jobs-focused commands use injected synthetic results and never need a database credential:
 
@@ -373,39 +358,15 @@ pnpm run test:jobs-scheduler:signal-postgres-integration
 The first PostgreSQL command is a separate opt-in Docker gate. It builds the production scheduler
 core and Jobs runner, injects one fixed UTC clock/timer, runs the exact ordered eighteen-job catalog
 against one disposable PostgreSQL database, fingerprints every private table around a widened-login
-denial, and checks exact narrow-login stored state. The second advances the fixed clock by one hour,
-invokes the production interval handler twice during the active real-runner cycle, proves the exact
-recurring catalog plus overlap and same-slot suppression, and verifies the rearmed terminal reset.
-The third injects the production first-signal handler during the penultimate real database job,
-proves active-call settlement and no later scheduler job, and requires exact graceful cleanup plus
-code 0 before invoking the omitted reset separately. The fourth copies only the built scheduler,
-built runner, and exact installed production graph into a link-free temporary runtime under pinned
-Linux Node, starts the built entry point under the real host clock, requires host/database UTC-date
-agreement, then temporarily denies only the Jobs role's backlog function. It requires one generic
-cycle signal, no backlog mutation, and later terminal-job settlement before a code-0 `SIGTERM` exit.
-The harness restores and rechecks the exact grant, rearms the marker, holds the scoring mutex, and
-starts the same runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`,
-requires exit 137 plus session release, and proves the backlog and marker remain unchanged. After
-releasing the holder, a restart finalizes the backlog before a silent signal exit. A disposable
-post-insert barrier then holds a second backlog after its first projection insert; another `SIGKILL`
-must roll back the complete transaction. The barrier is removed and verified absent before a
-clean-schema restart finalizes that backlog exactly once. A final rearm/restart requires another
-silent repeated cycle, session cleanup after all six starts, runtime fingerprint revalidation, and
-the same exact state. The timer mode does not prove host-timer delivery, and the lifecycle mode by
-itself does not prove OS-signal delivery. The fifth uses the same bounded runtime shape, leaves the
-native clock/timer unchanged, waits for startup, and holds the scoring mutex until refresh reaches
-it in a later real five-minute slot. It delivers a real `SIGTERM`, releases the mutex, and requires
-active-refresh settlement, a newer timestamp, silent exit code 0, session release, and runtime
-fingerprint revalidation. The sixth uses the same bounded runtime shape, holds the emitted first
-finalization call, and delivers a real `SIGTERM`. It requires graceful active-call settlement, no
-refresh or later job, silent exit code 0, session release, and an unchanged runtime fingerprint
-before the seventeen omitted commands complete the shared final-state oracle. These prove local
-failure/crash containment and clean-schema retry plus four graceful Docker-delivered Linux signal
-paths, two abrupt active-call `SIGKILL` paths, one controlled uncommitted post-insert transaction
-rollback, and one native host-timer callback. They do not prove committed/external-effect or
-every-capability recovery, automatic privilege repair, a deployed-controller restart, orchestrator
-grace policy, durable/deployed cadence, production credentials/TLS, monitoring, capacity, or
-real-user retention.
+denial, and checks exact narrow-login stored state. The remaining gates advance the fixed clock to
+prove recurring execution with overlap suppression, inject the first signal to prove graceful
+lifecycle settlement, run the built entry point under the real host clock to prove failure/crash
+containment and clean-schema retry (including one controlled uncommitted post-insert transaction
+rollback), and prove one native host-timer recurring refresh plus graceful Docker-delivered signal
+settlement. They do not prove committed/external-effect recovery, a deployed-controller restart,
+orchestrator grace policy, durable/deployed cadence, production credentials/TLS, monitoring,
+capacity, or real-user retention; see [implementation status](../IMPLEMENTATION_STATUS.md) and
+[ADR 0063](../decisions/0063-default-off-local-jobs-scheduler.md).
 
 The emitted process accepts no arguments and remains disabled unless the runtime supplies exact
 `VIBERACING_JOBS_SCHEDULER_ENABLED=true`. That latch is read before the Jobs runner or any database
@@ -437,7 +398,7 @@ pnpm run test:migrate:postgres-integration
 The integration builds the emitted entry point and starts one TLS-enabled disposable `postgres-test`
 container on an ephemeral loopback port. It proves one deliberately widened login fails before
 schema creation, holds the fixed session lock externally until two narrow emitted controllers are
-observed waiting over hostname-verified TLS, and then requires both to converge on the exact 40-row
+observed waiting over hostname-verified TLS, and then requires both to converge on the exact 42-row
 ledger. It also checks all 28 owner-owned forced-RLS private tables, identity invariants, and
 complete connection/lock cleanup before removing the generated certificate/key, container, network,
 and storage. It never uses the normal local database volume and proves no production credential/TLS,
@@ -516,6 +477,11 @@ environment sets exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` before their mod
 tracked example stays false, so the visible page keeps its synthetic fallback. This local gate does
 not prove deployed route/cache denial or reload already-running instances.
 
+The direct-token route separately requires exact `VIBERACING_TOKEN_RANKING_ENABLED=true` before its
+module loads. The tracked example also stays false. The visible page tries this route first, falls
+back to the enabled legacy status route when the token route is unavailable, and otherwise retains
+the synthetic fallback.
+
 The separate full public-read path is opt-in and requires Docker:
 
 ```text
@@ -526,12 +492,12 @@ It builds the emitted standalone Web artifact with the reviewed `pg` driver bund
 ephemeral self-signed exact-DNS certificate, and applies the reviewed migrations to a TLS-enabled
 one-off `postgres-test` container. It starts two emitted Next production processes on loopback,
 proves a login with extra membership fails generically without private-table mutation, validates
-exact score/race/status contracts plus TLS 1.2/1.3 through the narrow synthetic login, and repeats
-the full private-state fingerprint after successful reads. It then holds exactly four observed score
-queries behind a controlled owner lock, rejects a fifth request without a fifth public-score query,
-rolls back, and validates the four original responses. It restores the exact pre-run
-`next-env.d.ts`, bounds and discards all child output, and removes the ephemeral key directory, both
-Next processes, the blocker, container, network, and storage. It is not a deployment
+exact score/race/status/token contracts plus TLS 1.2/1.3 through the narrow synthetic login, and
+repeats the full private-state fingerprint after successful reads. It then holds exactly four
+observed score queries behind a controlled owner lock, rejects a fifth request without a fifth
+public-score query, rolls back, and validates the four original responses. It restores the exact
+pre-run `next-env.d.ts`, bounds and discards all child output, and removes the ephemeral key
+directory, both Next processes, the blocker, container, network, and storage. It is not a deployment
 certificate/login, external TLS/edge, cache, monitoring, load/capacity, real-user, or deployment
 test.
 
@@ -678,7 +644,7 @@ docker compose ps
 The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
 index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
 stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
-this persistent service automatically; revisions 0001 through 0040 are currently exercised by the
+this persistent service automatically; revisions 0001 through 0041 are currently exercised by the
 isolated integration runner only.
 
 Stop the service without deleting its volume:
@@ -697,7 +663,8 @@ Never point these commands at a production Compose project or reuse this file fo
 
 ## Before a commit
 
-Run the complete deterministic gate, then scan the exact staged blobs:
+Run the focused checks for the changed workspace plus the bounded root gate, then scan the exact
+staged blobs:
 
 ```text
 pnpm run verify
@@ -709,6 +676,7 @@ git diff --cached
 
 The last command is a required human review, not ceremonial output. Check generated files, binary
 metadata, fixtures, links, environment examples, and workflow permissions before committing.
+Release/publication preparation additionally runs `pnpm run verify:release`.
 
 ## Troubleshooting versions
 

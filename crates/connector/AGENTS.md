@@ -12,14 +12,15 @@ changing it.
 - Emit only reviewed method names and fixed-shape parameters. Never add a generic arbitrary-method
   escape hatch.
 - Keep App Server communication on local stdio only. Connector commands may call only the two
-  versioned pairing paths, the versioned Community sync path, and the proposal-only CarRecipe path
+  versioned pairing paths, the versioned Community usage path, and the proposal-only CarRecipe path
   over HTTPS (or explicit loopback HTTP), with proxies and redirects disabled; do not add WebSocket,
   generic TCP/URL methods, shell interpolation, or inherited secret access.
 - Never read, retain, log, or transmit prompts, conversations, repositories, Codex credentials,
   account email, or App Server paths.
-- Treat exact sync bodies, daily usage, nonces, and device-signature messages as private security
+- Treat exact usage bodies, daily usage, nonces, and device-signature messages as private security
   material. Keep their types non-reflective, bind signatures to returned bytes, and match the
-  versioned Ingest authentication policy and shared synthetic vector exactly.
+  `UsageSyncV1` Ingest authentication policy and shared synthetic vector exactly. The legacy
+  Community sync route remains server compatibility surface, not a second connector fallback.
 - Keep source/device/time/nonce context construction confined to the reviewed one-shot sync command,
   which owns source binding, canonical time, and replay behavior. The composer/signer boundary must
   not grow a scheduler, generic upload client, or Codex network client. Pairing key
@@ -56,4 +57,5 @@ changing it.
   explicitly includes that boundary.
 
 Run `cargo test --workspace --all-targets --all-features --locked` while developing. Before handoff,
-run the root `pnpm run verify` gate.
+run the root `pnpm run verify` gate. Use `pnpm run verify:release` and the Windows portable
+lifecycle only for release preparation or when those exact boundaries change.

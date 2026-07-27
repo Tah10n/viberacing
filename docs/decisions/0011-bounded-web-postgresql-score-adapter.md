@@ -168,9 +168,10 @@ Current repository evidence covers:
 - one opt-in emitted standalone integration that generates and removes an ephemeral self-signed DNS
   certificate/key, starts TLS-enabled disposable PostgreSQL, proves the reviewed driver is usable
   from the standalone artifact, observes TLS 1.2 or 1.3 for the narrow login, rejects a widened
-  login, validates all three public contracts, and preserves every private table;
-- three fixed adapter plus three nested security-definer projection plans with a 32-row root cap,
-  one execution, reviewed score/race/status indexes, no mutation or row-lock node, no sequential
+  login, validates the three original public contracts plus the additive token contract, and
+  preserves every private table;
+- four fixed adapter plus four nested security-definer projection plans with a 32-row root cap, one
+  execution, reviewed score/race/status/token indexes, no mutation or row-lock node, no sequential
   scan over bounded-index relations, no dirty/written or temporary block, no parameter/private
   payload, and fixed log/plan/depth/node budgets;
 - deterministic fail-closed parser/oracle cases that require no Docker; and

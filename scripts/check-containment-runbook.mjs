@@ -8,6 +8,8 @@ const rootPackagePath = resolve(root, "package.json");
 const envExamplePath = resolve(root, ".env.example");
 const configCheckerPath = resolve(root, "scripts", "check-config.mjs");
 const ingestConfigPath = resolve(root, "apps", "ingest-host", "src", "listener-config.ts");
+const ingestHostPath = resolve(root, "apps", "ingest-host", "src", "host.ts");
+const edgeWorkerPath = resolve(root, "apps", "edge", "src", "worker.mjs");
 const jobsConfigPath = resolve(root, "apps", "jobs-scheduler", "src", "config.ts");
 const migrationConfigPath = resolve(root, "apps", "migrate", "src", "enablement.ts");
 const maximumRunbookBytes = 32 * 1024;
@@ -65,7 +67,7 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-CONTAIN-10",
-    "Replace every affected Web worker because enrollment, pairing, source creation, CarRecipe proposals, and public ranking resolve their decisions at module evaluation.",
+    "Replace every affected Web worker because enrollment, pairing, source creation, CarRecipe proposals, legacy public ranking, and direct-token ranking resolve their decisions at module evaluation.",
   ],
   [
     "VR-CONTAIN-11",
@@ -133,7 +135,7 @@ const expectedCommands = Object.freeze([
   "pnpm run test:ingest-host:coverage",
   "pnpm run test:jobs-scheduler:coverage",
   "pnpm run test:migrate:coverage",
-  "pnpm run verify:node",
+  "pnpm run verify:release:node",
 ]);
 const expectedRootScripts = Object.freeze({
   "check:config": "node scripts/check-config.mjs",
@@ -144,13 +146,15 @@ const expectedRootScripts = Object.freeze({
   "test:jobs-scheduler:coverage": "pnpm --filter @viberacing/jobs-scheduler run test:coverage",
   "test:migrate:coverage": "pnpm --filter @viberacing/migrate run test:coverage",
   "test:web:coverage": "pnpm --filter @viberacing/web run test:coverage",
-  "verify:node": "node scripts/verify.mjs --node-only",
+  "verify:release:node": "node scripts/verify.mjs --release --node-only",
 });
 const expectedGateNames = Object.freeze([
   "VIBERACING_MIGRATIONS_ENABLED",
   "VIBERACING_JOBS_SCHEDULER_ENABLED",
   "VIBERACING_INGEST_ENABLED",
+  "VIBERACING_USAGE_SYNC_ENABLED",
   "VIBERACING_PUBLIC_RANKING_ENABLED",
+  "VIBERACING_TOKEN_RANKING_ENABLED",
   "VIBERACING_PAIRING_ENABLED",
   "VIBERACING_SOURCE_CREATION_ENABLED",
   "VIBERACING_CAR_PROPOSALS_ENABLED",
@@ -158,6 +162,11 @@ const expectedGateNames = Object.freeze([
 ]);
 const trackedFalseGateNames = Object.freeze(expectedGateNames.slice(1));
 const webGateSources = Object.freeze([
+  [
+    "VIBERACING_TOKEN_RANKING_ENABLED",
+    "tokenRankingEnabledName",
+    resolve(root, "apps", "web", "lib", "public-token-ranking-config.ts"),
+  ],
   [
     "VIBERACING_PUBLIC_RANKING_ENABLED",
     "publicRankingEnabledName",
@@ -185,6 +194,10 @@ const webGateSources = Object.freeze([
   ],
 ]);
 const webModuleGateBindings = Object.freeze([
+  [
+    resolve(root, "apps", "web", "app", "v1", "community", "tokens", "route.ts"),
+    "const tokenRankingConfig = resolvePublicTokenRankingConfig();",
+  ],
   [
     resolve(root, "apps", "web", "app", "v1", "community", "scores", "route.ts"),
     "const publicRankingConfig = resolvePublicRankingConfig();",
@@ -268,7 +281,7 @@ const webModuleGateBindings = Object.freeze([
 ]);
 const requiredStatements = Object.freeze([
   "Every decision admits only the exact string `true`; absence, `false`, alternate case, another type, or unreadable state fails closed.",
-  "The local checker binds five Web decisions to 20 exact module-load points: three public-ranking, four pairing, three source-creation, four CarRecipe-proposal, and six enrollment modules.",
+  "The local checker binds six Web decisions to 21 exact module-load points: three legacy public-ranking, one direct-token-ranking, four pairing, three source-creation, four CarRecipe-proposal, and six enrollment modules.",
   "Editing that file is never an incident action.",
   "It is not a deployed control plane, dynamic kill switch, private reporting channel, monitoring backend, incident exercise, or proof that an external service was contained.",
   "They do not inspect, change, or observe deployed capability state.",
@@ -456,6 +469,39 @@ if (ingestConfig !== undefined) {
   ) {
     fail("Ingest capability source drifted from first exact fail-closed admission");
   }
+}
+
+const ingestHost = normalizedFile(ingestHostPath, "Usage Sync Ingest host binding");
+if (
+  ingestConfig !== undefined &&
+  (!ingestConfig.includes('usageSyncEnabled: "VIBERACING_USAGE_SYNC_ENABLED"') ||
+    !ingestConfig.includes(
+      "const usageSyncEnabled = optionalExactEnablement(environment as object, names.usageSyncEnabled)",
+    ) ||
+    ingestConfig.indexOf(
+      "const usageSyncEnabled = optionalExactEnablement(environment as object, names.usageSyncEnabled)",
+    ) >
+      ingestConfig.indexOf(
+        "const nodeEnvironment = environmentValue(environment, names.nodeEnvironment)",
+      ))
+) {
+  fail("Usage Sync Ingest capability source drifted from exact pre-application admission");
+}
+if (
+  ingestHost !== undefined &&
+  !ingestHost.includes("createCommunitySyncHttpServer(application, config.usageSyncEnabled)")
+) {
+  fail("Usage Sync Ingest host binding drifted from validated listener configuration");
+}
+
+const edgeWorker = normalizedFile(edgeWorkerPath, "Usage Sync Edge capability source");
+if (
+  edgeWorker !== undefined &&
+  (!edgeWorker.includes("usageSyncIsEnabled") ||
+    !edgeWorker.includes('"VIBERACING_USAGE_SYNC_ENABLED"') ||
+    !edgeWorker.includes('descriptor.value === "true"'))
+) {
+  fail("Usage Sync Edge capability source drifted from exact fail-closed admission");
 }
 
 const jobsConfig = normalizedFile(jobsConfigPath, "Jobs scheduler capability source");

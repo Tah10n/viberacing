@@ -44,8 +44,9 @@ changing this workspace.
 
 ## Required checks
 
-Run `pnpm run lint:ingest`, `pnpm run typecheck:ingest`, `pnpm run test:ingest:coverage`,
-`pnpm run build:ingest`, `pnpm run test:ingest:postgres-integration`,
-`pnpm run test:ingest:signal-postgres-integration`, and the root `pnpm run verify`. Before
-committing, review the exact staged diff and run `pnpm run check:public:staged` plus
-`git diff --cached --check`.
+During iteration run `pnpm run lint:ingest`, `pnpm run typecheck:ingest`, and
+`pnpm run test:ingest`. Add coverage/build when Ingest behavior changes. Run the PostgreSQL or
+signal integration only when its database, HTTP, or process-settlement boundary changes. Use root
+`pnpm run verify` for handoff and `pnpm run verify:release` only at the release or broad
+cross-cutting boundary. Before committing, review the exact staged diff and run
+`pnpm run check:public:staged` plus `git diff --cached --check`.

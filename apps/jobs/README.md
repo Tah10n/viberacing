@@ -104,47 +104,17 @@ prints the command input, affected counts, configuration, SQL, or exception deta
 The Docker-backed CLI integration command applies the checksum-validated migration manifest, creates
 a least-privileged synthetic Jobs login plus a deliberately widened negative-control login, runs all
 eighteen built CLI commands as separate processes, verifies their generic output and exact database
-effects, and cleans up its container, network, and storage. The separate opt-in
-`pnpm run test:jobs-scheduler:postgres-integration` mode composes the production scheduler core
-under a fixed injected UTC clock/timer directly with this real runner and the same disposable
-PostgreSQL boundary. It verifies the exact ordered catalog, a full private-table non-mutation
-fingerprint for the widened login, and exact narrow-login effects. The timer mode advances the
-injected clock by one hour, invokes the production interval handler twice during the active
-real-runner cycle, proves the exact recurring catalog plus overlap and same-slot suppression, and
-verifies the rearmed terminal reset; it does not prove host-timer delivery. The lifecycle mode
-injects the production first-signal handler during the penultimate real database call, proves that
-active call settles and no later scheduler job starts, and requires exact graceful lifecycle cleanup
-plus code 0. It invokes the omitted reset only afterward for the shared final-state oracle and does
-not prove OS-signal delivery. The emitted-process mode starts the built scheduler entry point from a
-link-free read-only production graph under pinned Linux Node with the real clock. The harness
-temporarily denies only this runner's exact backlog function, then proves one generic cycle signal,
-no backlog mutation, and later terminal-job settlement before a code-0 `SIGTERM` exit. It restores
-and rechecks the grant, rearms the marker, holds the scoring mutex, and starts the same runtime
-again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus
-session release, and proves the backlog and marker remain unchanged. After releasing the holder, a
-restart finalizes the backlog before a silent code-0 signal exit. A disposable post-insert barrier
-then stops a second backlog after its first daily projection insert; a second `SIGKILL` must roll
-back the entire uncommitted projection transaction. The harness removes and verifies absence of the
-test-only schema objects before a clean-schema retry finalizes that backlog exactly once. A final
-rearm/restart proves another silent repeated cycle, with no scheduler sessions left after any of the
-six starts, runtime immutability, and exact state. This is local failure/crash containment, restart
-retry, and one controlled PostgreSQL partial-write rollback, not recovery from committed or external
-effects or every Jobs capability, automatic privilege repair, a wall-clock recurring process
-callback, or a deployed-controller restart. A separate wall-clock process mode starts the same built
-entry point from the same bounded runtime shape without replacing its native clock or minute
-interval, waits for startup, holds the scoring mutex, and observes the production refresh in a later
-real five-minute slot. It delivers an OS `SIGTERM`, releases the mutex, and requires the active
-refresh to commit before silent code-0 exit, session release, and runtime fingerprint revalidation.
-It proves one local recurring host-timer refresh and graceful signal settlement, not durable cadence
-or a deployed controller/orchestrator policy. A separate signal-process mode constructs a link-free,
-production-only runtime from this built runner and its exact installed `pg` graph, mounts it
-read-only in the pinned Linux Node image, holds the emitted first finalization call, and delivers an
-OS `SIGTERM`. It proves that active call settles, no later job starts, the process exits silently
-with code 0, and the database session closes; the seventeen omitted one-shot commands run only
-afterward for the shared exact-state oracle. Together these modes prove only one controlled
-post-insert transaction rollback; they do not prove committed/external-effect or every-capability
-recovery, an external audit sink, deployed signal path, production TLS/credentials, durable cadence,
-monitoring, capacity, real-user retention, or deployment.
+effects, and cleans up its container, network, and storage. The separate opt-in scheduler PostgreSQL
+modes (`postgres-integration`, timer, lifecycle, emitted-process, wall-clock-process, and
+signal-process) compose the production scheduler core with this real runner and the same disposable
+PostgreSQL boundary under fixed and real clocks. Together they prove the exact ordered catalog,
+widened-login non-mutation, recurring execution with overlap suppression, graceful lifecycle and
+OS-signal settlement, failure/crash containment with clean-schema retry, one controlled uncommitted
+post-insert transaction rollback, and one local host-timer recurring refresh. They do not prove
+committed/external-effect or every-capability recovery, an external audit sink, deployed signal
+path, production TLS/credentials, durable cadence, monitoring, capacity, real-user retention, or
+deployment; see [IMPLEMENTATION_STATUS.md](../../docs/IMPLEMENTATION_STATUS.md) and
+[ADR 0063](../../docs/decisions/0063-default-off-local-jobs-scheduler.md).
 
 The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
 Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package

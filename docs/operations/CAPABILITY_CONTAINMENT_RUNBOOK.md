@@ -3,21 +3,23 @@
 ## Scope and evidence boundary
 
 This is the checked operator prerequisite for containing one or more Vibe Racing capabilities after
-a security, privacy, integrity, or reliability incident. It binds the eight repository-owned
+a security, privacy, integrity, or reliability incident. It binds the ten repository-owned
 default-off decisions to protected triage, process replacement, verification, and recovery of one
 capability at a time. It is not a deployed control plane, dynamic kill switch, private reporting
 channel, monitoring backend, incident exercise, or proof that an external service was contained.
 
-The eight decisions are `VIBERACING_MIGRATIONS_ENABLED`, `VIBERACING_JOBS_SCHEDULER_ENABLED`,
-`VIBERACING_INGEST_ENABLED`, `VIBERACING_PUBLIC_RANKING_ENABLED`, `VIBERACING_PAIRING_ENABLED`,
+The ten decisions are `VIBERACING_MIGRATIONS_ENABLED`, `VIBERACING_JOBS_SCHEDULER_ENABLED`,
+`VIBERACING_INGEST_ENABLED`, `VIBERACING_USAGE_SYNC_ENABLED`, `VIBERACING_PUBLIC_RANKING_ENABLED`,
+`VIBERACING_TOKEN_RANKING_ENABLED`, `VIBERACING_PAIRING_ENABLED`,
 `VIBERACING_SOURCE_CREATION_ENABLED`, `VIBERACING_CAR_PROPOSALS_ENABLED`, and
 `VIBERACING_ENROLLMENT_ENABLED`. Every decision admits only the exact string `true`; absence,
 `false`, alternate case, another type, or unreadable state fails closed.
 
-The local checker binds five Web decisions to 20 exact module-load points: three public-ranking,
-four pairing, three source-creation, four CarRecipe-proposal, and six enrollment modules.
+The local checker binds six Web decisions to 21 exact module-load points: three legacy
+public-ranking, one direct-token-ranking, four pairing, three source-creation, four
+CarRecipe-proposal, and six enrollment modules.
 
-The tracked public environment keeps seven runtime decisions false and does not contain migration
+The tracked public environment keeps nine runtime decisions false and does not contain migration
 enablement. Editing that file is never an incident action. A deployment-owned controller must change
 protected environment state, replace or stop the affected processes, manage routing and caches, and
 write only redacted evidence to a protected append-only record.
@@ -69,7 +71,7 @@ pnpm run test:web:coverage
 pnpm run test:ingest-host:coverage
 pnpm run test:jobs-scheduler:coverage
 pnpm run test:migrate:coverage
-pnpm run verify:node
+pnpm run verify:release:node
 ```
 
 A successful local result is prerequisite evidence only. It does not prove controller access,
@@ -85,7 +87,8 @@ monitoring, user notification, production containment, or recovery.
 - [ ] VR-CONTAIN-09: Remove enablement for each affected capability through protected configuration;
       do not patch the application to invert, bypass, or merge independent decisions.
 - [ ] VR-CONTAIN-10: Replace every affected Web worker because enrollment, pairing, source creation,
-      CarRecipe proposals, and public ranking resolve their decisions at module evaluation.
+      CarRecipe proposals, legacy public ranking, and direct-token ranking resolve their decisions
+      at module evaluation.
 - [ ] VR-CONTAIN-11: Drain or stop every affected Ingest host before removing its startup
       enablement; changing environment state does not stop an already-running listener.
 - [ ] VR-CONTAIN-12: Stop every affected scheduler or migration process; their startup latches do
@@ -96,9 +99,13 @@ monitoring, user notification, production containment, or recovery.
       only through its separately approved workflow and verify that old authority is denied.
 
 Source creation and CarRecipe proposal mutation remain independently containable from pairing.
-Enrollment remains independently containable from returning login and recovery. Public ranking can
-be closed without using it as evidence that private data or ingestion is contained. Ingest, Jobs,
-and migrations require their own process and database-session verification.
+Enrollment remains independently containable from returning login and recovery. Legacy public
+ranking and direct-token ranking remain independently containable from each other; closing either is
+not evidence that private data or ingestion is contained. Ingest, Jobs, and migrations require their
+own process and database-session verification. Usage Sync remains independently containable from the
+legacy Community sync route. Removing its protected value requires replacing both the Ingest host,
+which resolves it at startup, and the Edge worker; it does not terminate an already-running process
+or prove that an old route is unreachable.
 
 ## Preserve security and deletion paths
 
@@ -140,8 +147,9 @@ closed.
 
 Recovery must preserve independent decisions. Enabling pairing does not authorize source creation;
 enabling account pages does not authorize enrollment or CarRecipe mutation; enabling public reads
-does not authorize Ingest; enabling Jobs does not authorize migrations. A local green build is not a
-go-live decision.
+does not authorize direct-token ranking or Ingest; enabling direct-token ranking does not authorize
+legacy public ranking or Ingest; enabling Ingest does not authorize Usage Sync; enabling Jobs does
+not authorize migrations. A local green build is not a go-live decision.
 
 ## Failure and incident handoff
 

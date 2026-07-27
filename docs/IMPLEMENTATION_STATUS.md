@@ -3,6 +3,51 @@
 This page records only evidence that exists in the public working tree. The
 [project plan](PROJECT_PLAN.md) remains the source of intended behavior.
 
+## Capability summary
+
+A scannable index of what exists and what does not. "Local" means synthetic or injected evidence in
+the working tree, not a deployed service, production credential, or real-user result. The detailed
+evidence for each row follows in the sections below and in the linked ADRs; this table is an index,
+not a replacement for them. [ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md)
+records the proposed direct multi-agent token accounting, leaderboard, and optional MCP direction,
+and [ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md) records the proposed thin
+client, anonymous onboarding, and low-friction hybrid enrollment direction. Those broad directions
+remain planning scope. ADRs [0071](decisions/0071-provider-attributed-usage-sync-foundation.md),
+[0072](decisions/0072-direct-community-token-leaderboard.md), and
+[0073](decisions/0073-candidate-connector-usage-sync-cutover.md) implement the shortest local
+Codex-only path from the existing reader through `UsageSyncV1` to a direct token leaderboard.
+
+| Capability                                                                               | Status                             | Evidence pointer                                                                                                  |
+| ---------------------------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Public foundation: governance, CI, supply-chain, licenses, links, history                | Implemented                        | `check:community`, `check:licenses`, `check:external-links`, `check:history`                                      |
+| Public-safety scans: secrets, personal data, local paths, staged blobs                   | Implemented                        | `check:public`, `check:public:staged`                                                                             |
+| Phase 1 visual prototype: three themes, pixel renderer, a11y, EN/RU                      | Implemented (local)                | `check:phase1-visual-baselines`                                                                                   |
+| Web preview production image and standalone runtime smoke                                | Implemented (local)                | `verify:web:deployment`, `Dockerfile`, `railway.json`                                                             |
+| Web search metadata, root canonical, robots and sitemap                                  | Implemented (local)                | `test:web`, `verify:web:deployment`                                                                               |
+| Ingest, Jobs-scheduler, and migration production images and Railway configs              | Implemented (local packaging)      | `deploy/`, three local image builds                                                                               |
+| Cloudflare sync origin signer and production-Ingest proof compatibility                  | Implemented (local)                | `test:edge`, `test:edge-ingest-compatibility`, ADR 0070                                                           |
+| Design system and standalone race-broadcast exploration                                  | Documented reference only          | `docs/design/`; manual reference review, not implemented in `apps/web`                                            |
+| Contracts: JSON Schema, generated TypeScript/OpenAPI, runtime validator                  | Implemented                        | `check:contracts`, `test:contracts:coverage`                                                                      |
+| Database: 42 migrations, forced-RLS private tables, isolated roles, procedures           | Implemented (local integration)    | `check:database`, `test:database:integration`                                                                     |
+| Public score/race/status/token routes and least-privilege Web adapters                   | Implemented (local, default-off)   | `test:web:postgres-integration`, `test:web-query-plan-evidence`                                                   |
+| Identity, passkeys, restricted recovery, sessions, account controls                      | Implemented (local, synthetic)     | `test:web:coverage`                                                                                               |
+| Source/device lifecycle and pairing approval                                             | Implemented (local, default-off)   | `test:web:coverage`                                                                                               |
+| CarRecipe proposal/approval: session, device ingress, agent skill                        | Implemented (local, default-off)   | `test:web:coverage`, `check:agent-skills`                                                                         |
+| Ingest: kernel, adapter, application, HTTP factory, host                                 | Implemented (local, default-off)   | `test:ingest:coverage`, `test:ingest:postgres-integration`                                                        |
+| Provider-attributed UsageSyncV1 for the existing Codex source path                       | Implemented (local, default-off)   | ADR 0071, `check:contracts`, `test:ingest:postgres-integration`                                                   |
+| Direct Community token leaderboard and EN/RU token-first race                            | Implemented (local, default-off)   | ADR 0072, `test:web:coverage`, `test:web:postgres-integration`                                                    |
+| Jobs runner: eighteen bounded maintenance capabilities                                   | Implemented (local)                | `test:jobs:coverage`, `test:jobs:postgres-integration`                                                            |
+| Jobs scheduler: default-off UTC catalog, no-overlap, bounded lifecycle                   | Implemented (local)                | `test:jobs-scheduler:coverage` plus six scheduler integrations                                                    |
+| Migration runner: default-off, digest-verified ledger, narrow login                      | Implemented (local)                | `test:migrate:coverage`, `test:migrate:postgres-integration`                                                      |
+| Rust connector: handshake, reader, UsageSync signer, connect/sync commands               | Implemented (library, Windows dev) | ADR 0073, `cargo test --workspace`, `test:connector:windows-portable`                                             |
+| Admin: invitation kernel and Access/membership verifier                                  | Implemented (local)                | `test:admin:coverage`, `test:admin:postgres-integration`                                                          |
+| Operational runbooks: migration, restore, containment, deletion-failure                  | Implemented (static checks)        | `check:migration-runbook`, `check:restore-runbook`, `check:containment-runbook`, `check:deletion-failure-runbook` |
+| Additional agent readers, optional MCP, and per-provider Verified tier                   | Proposed (ADR 0068)                | [ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md); plan Phases 6, 9, and 10                     |
+| Thin client, hybrid onboarding, ownership lease, per-device keys, partitioned backfill   | Proposed (ADR 0069)                | [ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md); plan Phase 6                               |
+| Hosted deployment, production login/TLS, live edge route, released connector, real OAuth | Not implemented                    | See [Not implemented yet](#not-implemented-yet)                                                                   |
+| Phase 0 publication: maintainer identity, CODEOWNERS, remote, hosted CI                  | Pending                            | `check:publication` (intentionally failing)                                                                       |
+| Phase 1 release evidence: provisioned browser, native screen-reader, field CWV           | Pending                            | See [Phase 1 still pending](#phase-1-still-pending)                                                               |
+
 ## Current phase
 
 Phase 1 product code is locally complete, with the manual release-evidence items below still open.
@@ -12,48 +57,54 @@ retention cleanup for ingest, authentication, invitation, session, abandoned enr
 terminal-deletion-job, database audit-event, aged revoked-passkey state, and aged minimized
 revoked-device/pairing state plus pairing approval-provenance redaction and fixed anonymous
 pairing-rate-window reset, primary profile deletion, open-season scoring, terminal season
-finalization, a public score-only database projection, and a separate compatible active-CarRecipe
-race projection plus a third compatible rounded-freshness/optional-streak status projection and
-their server-only projection-to-contract mappers; Phase 3 database-only source/device lifecycle,
-same-source deduplication, and bounded pairing-retention cleanup have also started. A server-only
-public problem-response factory, closed query/OpenAPI operations, and locally implemented public
-score/race/status GETs now exist behind one exact default-off module-load gate. A separate opt-in
+finalization, a public score-only database projection, a separate compatible active-CarRecipe race
+projection, a third compatible rounded-freshness/optional-streak status projection, and a direct
+token-total projection with their server-only projection-to-contract mappers; Phase 3 database-only
+source/device lifecycle, same-source deduplication, and bounded pairing-retention cleanup have also
+started. A server-only public problem-response factory, closed query/OpenAPI operations, and locally
+implemented public score/race/status GETs now exist behind one exact default-off module-load gate.
+The additive token GET has its own independent exact default-off module-load gate. A separate opt-in
 synthetic integration applies the reviewed migrations to TLS-enabled disposable PostgreSQL, builds
 the standalone Web artifact with the reviewed `pg` driver bundled, and starts two emitted Next
 production processes on loopback. It rejects a deliberately widened Web login without changing any
 private table, validates exact contracts plus TLS 1.2/1.3 through a narrow login, and proves the
 successful reads are also non-mutating. It additionally proves the four-request no-queue boundary
 through four observed blocked score queries, a rejected fifth request with no fifth public-score
-query, and four successful responses after release. The narrow synthetic login also produces six
+query, and four successful responses after release. The narrow synthetic login also produces eight
 parameter-payload-free bounded `auto_explain` adapter/projection oracles with exact reviewed-index,
 no-mutation/locking, no-dirty/written-block, and no-temporary-I/O assertions; its server log is
 bounded, private-marker scanned, discarded, and removed with the container. The visible home race
-requests the current server-selected Community week from the separate same-origin status route,
-replaces only its race/leaderboard after closed browser-side validation, uses an exact current
-approved recipe or repository-owned absence fallback, shows only complete-UTC-day freshness and an
-optional preference-gated streak, lets a handle select a same-page summary from those public fields,
-exposes that selection through a canonical public-handle URL and public-account link, and retains a
-labeled synthetic fallback on failure. The same public page now exposes a local-only EN/RU score
-simulator that validates one hypothetical daily token total, applies the production daily and weekly
-scoring functions for one to seven active days, and never requests, logs, stores, preloads, or
-submits that value or changes a standing. Local identity slices now implement exact same-origin
-bounded forms, GitHub OAuth state and S256 PKCE with no extra scope, purpose-separated encrypted
-HttpOnly continuations, atomic profile/session creation, required initial WebAuthn registration,
-returning discoverable-credential login, a session-scoped minimal passkey inventory, an active
-account page, immediate public-profile hide/show, source inventory and pause, fresh-passkey
-paused-source reactivation and terminal unlink, fresh backup-passkey addition, revocation of an
-owned non-current passkey, a bounded active-device inventory with immediate owned-device revoke,
-fresh-passkey recovery-code rotation with one-time display, an exact-handle fresh-passkey
-profile-deletion request, one-time recovery-code replacement-passkey sign-in, and database-backed
-logout. Login options retain the profile-free challenge only in a separate encrypted cookie; valid
-proof alone reaches one atomic create-consume-session call. Its GitHub, passkey-verifier, database,
-and browser evidence is injected or synthetic; no working invite issuer, OAuth registration, secret,
-live authenticator/database login, distributed edge abuse control, deployed recovery/deletion
-cleanup cadence, cache/backup/tombstone purge, restore replay, notification, or deployment is
-supplied. A local one-shot Jobs runner invokes only the eighteen existing maintenance functions
-through a bounded least-privileged adapter. One opt-in synthetic integration applies the reviewed
-migrations to disposable PostgreSQL, runs every emitted Jobs command through a narrow login, rejects
-an extra-membership login before mutation, and verifies exact stored state. A separate
+requests the current server-selected Community week from the same-origin token route first and falls
+back to the legacy status route when that surface is unavailable, replaces only its race/leaderboard
+after closed browser-side validation, uses an exact current approved recipe or repository-owned
+absence fallback, shows only complete-UTC-day freshness and an optional preference-gated streak,
+lets a handle select a same-page summary from those public fields, exposes that selection through a
+canonical public-handle URL and public-account link, and retains a labeled synthetic fallback on
+failure. The production home metadata and visible EN/RU copy now use the honest alternate search
+phrase `vibecode rating`; one root canonical, origin-bound robots/sitemap discovery, and `noindex`
+account/enrollment/recovery/pairing pages are locally covered by unit and standalone-runtime
+evidence. This lets search crawlers discover a hosted origin but is not evidence of search-engine
+indexing or ranking. The same public page now exposes a local-only EN/RU score simulator that
+validates one hypothetical daily token total, applies the production daily and weekly scoring
+functions for one to seven active days, and never requests, logs, stores, preloads, or submits that
+value or changes a standing. Local identity slices now implement exact same-origin bounded forms,
+GitHub OAuth state and S256 PKCE with no extra scope, purpose-separated encrypted HttpOnly
+continuations, atomic profile/session creation, required initial WebAuthn registration, returning
+discoverable-credential login, a session-scoped minimal passkey inventory, an active account page,
+immediate public-profile hide/show, source inventory and pause, fresh-passkey paused-source
+reactivation and terminal unlink, fresh backup-passkey addition, revocation of an owned non-current
+passkey, a bounded active-device inventory with immediate owned-device revoke, fresh-passkey
+recovery-code rotation with one-time display, an exact-handle fresh-passkey profile-deletion
+request, one-time recovery-code replacement-passkey sign-in, and database-backed logout. Login
+options retain the profile-free challenge only in a separate encrypted cookie; valid proof alone
+reaches one atomic create-consume-session call. Its GitHub, passkey-verifier, database, and browser
+evidence is injected or synthetic; no working invite issuer, OAuth registration, secret, live
+authenticator/database login, distributed edge abuse control, deployed recovery/deletion cleanup
+cadence, cache/backup/tombstone purge, restore replay, notification, or deployment is supplied. A
+local one-shot Jobs runner invokes only the eighteen existing maintenance functions through a
+bounded least-privileged adapter. One opt-in synthetic integration applies the reviewed migrations
+to disposable PostgreSQL, runs every emitted Jobs command through a narrow login, rejects an
+extra-membership login before mutation, and verifies exact stored state. A separate
 exact-default-off local Jobs scheduler derives only fixed UTC five-minute/hour/day slots, invokes
 that closed runner sequentially without overlap or same-slot retry, retains slot state only in
 memory, and bounds first-signal shutdown. An opt-in synthetic integration composes the production
@@ -106,7 +157,7 @@ plus strict build and built disabled-startup checks. A separate opt-in synthetic
 one widened and two narrow emitted processes against one disposable hostname-verified TLS PostgreSQL
 database. It denies the widened login before schema creation, observes both narrow controllers
 behind one external holder, requires both to converge successfully after release, and verifies the
-exact 40-row ledger, all 28 owner-owned forced-RLS private tables, identity invariants, and
+exact 42-row ledger, all 28 owner-owned forced-RLS private tables, identity invariants, and
 connection/lock cleanup. It proves no production credential/TLS, staging orchestration/rollback,
 deployed-replica behavior, monitoring, deployment, or recovery. A local Ingest kernel now bounds and
 authenticates the exact Community sync envelope, consumes an injected origin nonce, parses bounded
@@ -183,7 +234,7 @@ service tokens, email-shaped or unknown subjects, broad/expired assertions, and 
 redacted `invite_issue` actor identity. The combined 236 deterministic tests reach 98.9% statements,
 98.89% lines, 97.8% branches, and 100% functions. Complete authorization and external audit remain
 fixture-injected; the unit suite adds one OS-backed credential-shape check. A separate opt-in
-synthetic integration applies the reviewed 40-migration ledger to disposable hostname-verified TLS
+synthetic integration applies the reviewed 42-migration ledger to disposable hostname-verified TLS
 PostgreSQL, rejects an extra-membership login before any private mutation, and composes the built
 production kernel through the narrow login to prove one exact active invite, one database audit row,
 no non-target mutation, role reset, and connection cleanup. There is no Admin host, real Access
@@ -191,14 +242,14 @@ policy/token or protected key-refresh workflow, fresh-passkey verifier, complete
 composer, append-only backend, operational issuer, UI/API/CLI, protected production
 login/certificate, monitoring, capacity evidence, or deployment.
 
-A checked capability-containment and recovery rehearsal runbook now binds the five Web decisions and
+A checked capability-containment and recovery rehearsal runbook now binds the six Web decisions and
 the Ingest, Jobs-scheduler, and migration startup decisions to 24 ordered controls and eight exact
-commands. It requires seven tracked false defaults, absent tracked migration enablement, exact
-source admission at 20 Web module-load points, process replacement/settlement, independent
-containment, preserved returning security/deletion paths, redacted evidence, and recovery of one
-capability at a time. Twenty-two unsafe or drifted regression variants fail closed. This is static
-public prerequisite evidence, not a private reporting channel, deployed control plane, dynamic kill
-switch, monitoring backend, production containment, recovery, staging, or deployment.
+commands. It requires nine tracked false defaults, absent tracked migration enablement, exact source
+admission at 21 Web module-load points, process replacement/settlement, independent containment,
+preserved returning security/deletion paths, redacted evidence, and recovery of one capability at a
+time. Twenty-five unsafe or drifted regression variants fail closed. This is static public
+prerequisite evidence, not a private reporting channel, deployed control plane, dynamic kill switch,
+monitoring backend, production containment, recovery, staging, or deployment.
 
 A separate checked profile-deletion failure rehearsal runbook now binds the atomic Web request,
 Jobs-only maximum-ten primary purge, separate 30-day terminal-job retention, fixed scheduler
@@ -268,7 +319,7 @@ scheduler/cadence exists.
 - An offline external-link gate with 12 reviewed hosts, HTTPS/credential/port/query/address rules,
   no dormant host permissions, and eight black-box cases. A separate online mode pins public DNS
   results, sends no credentials, follows no redirects, and is excluded from deterministic PR CI.
-- A deterministic dependency inventory covering 522 locked npm packages, 209 Cargo packages, two
+- A deterministic dependency inventory covering 523 locked npm packages, 209 Cargo packages, two
   pinned GitHub Actions, and one pinned local-development container. License expressions, installed
   manifests, every root/workspace importer, dependency scopes, direct notices, and external-artifact
   usage are checked with ten black-box cases.
@@ -276,16 +327,18 @@ scheduler/cadence exists.
   interpolation, timeouts, complete-history checkout, checkout credentials, forbidden triggers, and
   the exact no-upload Windows portable-connector job surface.
 - A secretless, read-only GitHub Actions CI definition and bounded weekly Dependabot configuration.
-  The Node job scans the public tree before installing anything, fetches the exact Cargo lock graph
-  without builds for offline license metadata, and leaves compilation/tests to the separate Rust
-  job. A separate `windows-2025` job scans first, installs pinned minimal Rust, builds the locked
-  connector release profile, and runs only the bounded portable copy/removal smoke. Its policy
-  permits no artifact upload, package publication, credential operation, signing, or release
+  Pull requests run the bounded Node development gate plus the separate Rust and database jobs.
+  Main/manual runs additionally fetch the exact Cargo graph for license metadata, run exhaustive
+  Node/repository evidence and the eleven declared service integrations, and enable the separate
+  `windows-2025` portable-smoke job. That job scans first, installs pinned minimal Rust, builds the
+  locked connector release profile, and runs only the bounded portable copy/removal smoke. Its
+  policy permits no artifact upload, package publication, credential operation, signing, or release
   environment. These are checked workflow declarations; no hosted run is claimed from the local
   tree.
 - A loopback-only disposable PostgreSQL Compose service plus an opt-in portless `tmpfs` integration
   service, both pinned to the same version and index digest.
-- Cross-platform root verification entry point: `pnpm run verify`.
+- Cross-platform bounded development gate (`pnpm run verify`) plus an explicit exhaustive
+  release/publication gate (`pnpm run verify:release`).
 - Governance, maintainer, conduct, DCO, support, roadmap, changelog, release, trademark, and
   third-party notice policies.
 - Structured bug, feature, documentation, and pull-request forms that warn against sensitive data
@@ -356,36 +409,37 @@ scheduler/cadence exists.
   still no live database login, deployed edge, cross-platform result, or released connector. A
   separate candidate-only composer consumes the real parser output behind another capability with no
   public constructor. It revalidates source/sync/device IDs, canonical UTC time, and daily bounds;
-  manually emits the exact seven-field body; computes the SHA-256 digest; and builds the exact
-  unpadded base64url, LF-separated device message. An isolated one-use signer consumes that
-  otherwise inaccessible value with a device-bound Ed25519 key capability, rejects an exact device
-  mismatch, signs only the fixed message, and returns the same body plus five header values. Nine
-  Rust sync cases plus one production-path Ingest case share and strictly verify an exact synthetic
-  body, public-key, and signature vector. Prepared/signed private byte buffers and the upstream key
-  are zeroed on drop. The one-shot sync command now constructs those private capabilities only from
-  an active record, fresh OS-random sync ID/nonce, and canonical `20xx` millisecond UTC. It performs
-  one no-proxy, no-redirect fixed-path POST and validates a bounded request-ID/sync-ID-matched
-  acknowledgement; five focused cases cover time, binding, exact HTTP egress, excess accepted-count
-  rejection, and refusal before connection. The pairing command supplies fresh OS entropy, a bounded
-  local clock/retry policy, native key custody, and exact pairing transport. The separate sync
-  command supplies only the local candidate context and one upload; no schedule, deployed egress,
-  packaging, release, or support claim exists, and the compatibility matrix remains empty. A third
-  fixed `propose-car` command starts no Codex process: it accepts only explicit recipe enums and a
-  canonical bounded seed, loads the active native device key, creates a fresh nonce/time, signs the
-  proposal-specific exact body message, sends one no-retry fixed-path POST, and validates only a
-  generic acknowledgement. Four Rust proposal cases share the exact body/message/key/signature
-  vector with Web. A self-contained repository Agent Skill now reduces an existing styling request
-  to only those exact enums and seed, requires explicit shell-safe origin/label values, invokes the
-  fixed command once, and recognizes only its exact generic success line. A second self-contained
-  repository skill reads the governing instructions and real Git scope, selects only the reviewed
-  focused/root/staged/history verification gates, and separates synthetic/local evidence from live
-  or deployment claims without gaining mutation, installation, network, publication, push, or
-  deployment authority. One dedicated checker derives proposal schema/CLI expectations and the
-  verification script/runtime policy from production sources. Twenty-five combined mutation cases
-  prove enum, shell, invocation-allowlist, retry, authority, output, front matter, UI metadata,
-  command, Git-scope, runtime, public-output, and evidence-claim drift fail closed. No released
-  connector, live endpoint, edge policy, or deployment is claimed.
-- An ADR lifecycle/template and sixty accepted design decisions covering Community trust,
+  manually emits the exact seven-field `UsageSyncV1` body for `/v1/community/usage`; computes the
+  SHA-256 digest; and builds the exact unpadded base64url, LF-separated device message. An isolated
+  one-use signer consumes that otherwise inaccessible value with a device-bound Ed25519 key
+  capability, rejects an exact device mismatch, signs only the fixed message, and returns the same
+  body plus five header values. Nine Rust sync cases plus one production-path Ingest case share and
+  strictly verify an exact synthetic body, public-key, and signature vector. Prepared/signed private
+  byte buffers and the upstream key are zeroed on drop. The one-shot sync command now constructs
+  those private capabilities only from an active record, fresh OS-random sync ID/nonce, and
+  canonical `20xx` millisecond UTC. It performs one no-proxy, no-redirect fixed-path POST and
+  validates a bounded request-ID/sync-ID-matched acknowledgement; five focused cases cover time,
+  binding, exact HTTP egress, excess accepted-count rejection, and refusal before connection. The
+  pairing command supplies fresh OS entropy, a bounded local clock/retry policy, native key custody,
+  and exact pairing transport. The separate sync command supplies only the local candidate context
+  and one upload; no schedule, deployed egress, packaging, release, or support claim exists, and the
+  compatibility matrix remains empty. A third fixed `propose-car` command starts no Codex process:
+  it accepts only explicit recipe enums and a canonical bounded seed, loads the active native device
+  key, creates a fresh nonce/time, signs the proposal-specific exact body message, sends one
+  no-retry fixed-path POST, and validates only a generic acknowledgement. Four Rust proposal cases
+  share the exact body/message/key/signature vector with Web. A self-contained repository Agent
+  Skill now reduces an existing styling request to only those exact enums and seed, requires
+  explicit shell-safe origin/label values, invokes the fixed command once, and recognizes only its
+  exact generic success line. A second self-contained repository skill reads the governing
+  instructions and real Git scope, selects only the reviewed focused/root/staged/history
+  verification gates, and separates synthetic/local evidence from live or deployment claims without
+  gaining mutation, installation, network, publication, push, or deployment authority. One dedicated
+  checker derives proposal schema/CLI expectations and the verification script/runtime policy from
+  production sources. Twenty-five combined mutation cases prove enum, shell, invocation-allowlist,
+  retry, authority, output, front matter, UI metadata, command, Git-scope, runtime, public-output,
+  and evidence-claim drift fail closed. No released connector, live endpoint, edge policy, or
+  deployment is claimed.
+- An ADR lifecycle/template and seventy-three accepted design decisions covering Community trust,
   multi-source aggregation, identity/device authority, restricted recovery, edge/service/database
   isolation, CarRecipe, public repository safety, season finalization, and the public score
   projection/response/adapter, common HTTP problem boundaries, and the locally implemented public
@@ -415,26 +469,28 @@ scheduler/cadence exists.
   for schema/CLI drift, command or authority widening, contradictory invocation input, unsafe shell
   input, retry permission, stale success output, Git-scope/runtime/public-output/evidence drift,
   front-matter widening, and UI metadata.
-- Thirteen canonical JSON Schema 2020-12 contracts for bounded Community connector sync and pairing
+- Sixteen canonical JSON Schema 2020-12 contracts for bounded Community connector sync and pairing
   start/poll requests and responses, a non-sensitive sync acknowledgement, stable problem details, a
   one-field public score season query, a response-only top-32 Community score page with constant
   trust metadata, a separate compatible race page with one optional exact recipe, a third compatible
-  status page with required rounded freshness and optional streak, plus the exact nine-field
-  `CarRecipeV1`. Every object is closed; scalar and collection values are bounded; the recipe
-  accepts only project-owned enums and a 0-to-65535 seed; reviewed date-range/ISO-weekday extensions
-  make the score calendar executable; connector input has an executable writable-field allowlist
-  that excludes identity, trust, rank, score, season, moderation, credentials, and prohibited data.
+  status page with required rounded freshness and optional streak, a direct token-race status page,
+  provider-neutral Usage Sync request/result contracts, plus the exact nine-field `CarRecipeV1`.
+  Every object is closed; scalar and collection values are bounded; the recipe accepts only
+  project-owned enums and a 0-to-65535 seed; reviewed date-range/ISO-weekday extensions make the
+  score calendar executable; connector input has an executable writable-field allowlist that
+  excludes identity, trust, rank, score, season, moderation, credentials, and prohibited data.
 - Deterministically generated readonly TypeScript types, embedded validator wrappers, source digest,
-  and an OpenAPI 3.1 document with seven explicitly `implemented-local` Community
-  score/race/status/sync, device CarRecipe proposal, and connector pairing start/poll operations.
-  Their exact method-specific query/body, response/problem, admission, authentication-reference,
-  `no-store`, `Vary: Accept`, generated request ID, and same-origin CORS policies are
-  manifest-driven without claiming deployment. All four inventoried authentication/transport
-  policies participate in the generated source digest. A manifest/schema/drift checker has 53
-  black-box cases covering generated operation/status/evidence semantics, unsafe/duplicate/drifted
-  operations, unknown fields, missing bounds, client-derived score aliases, Community
-  trust/problem/date drift, private response fields, unlisted/path-traversing schemas, unsupported
-  keywords, missing date deduplication, and stale generated output.
+  and an OpenAPI 3.1 document with nine explicitly `implemented-local` Community
+  score/race/status/token/sync/usage, device CarRecipe proposal, and connector pairing start/poll
+  operations. Their exact method-specific query/body, response/problem, admission,
+  authentication-reference, `no-store`, `Vary: Accept`, generated request ID, and same-origin CORS
+  policies are manifest-driven without claiming deployment. All five inventoried
+  authentication/transport policies participate in the generated source digest. A
+  manifest/schema/drift checker has 63 black-box cases covering generated operation/status/evidence
+  semantics, unsafe/duplicate/drifted operations, unknown fields, missing bounds, client-derived
+  score aliases, Community trust/problem/date drift, private response fields,
+  unlisted/path-traversing schemas, unsupported keywords, missing date deduplication, and stale
+  generated output.
 - A dependency-free runtime contract validator with fail-closed reflection handling; strict
   calendar/range/ISO-weekday/UTC timestamp and safe-integer checks; depth, node, key, item, and
   issue budgets; and privacy-safe issue output that never echoes unknown property names or submitted
@@ -461,9 +517,9 @@ scheduler/cadence exists.
   both IDs and key material must differ. The config-backed factory accepts only exact nonce, clock,
   and device-lookup dependencies, constructs the verifier internally, exposes no reusable key
   container, overwrites temporary decoded buffers, and emits only generic bounded configuration
-  errors. Twenty-eight adversarial config/dependency/proof-path cases remain in the 427-test Ingest
+  errors. Twenty-eight adversarial config/dependency/proof-path cases remain in the 446-test Ingest
   suite at 100% statement/branch/function/line coverage. Synthetic environment values prove no
-  secret-manager binding, edge signer, real rotation, or deployment.
+  secret-manager binding, deployed signer, real rotation, or deployment.
 - A bounded local Ingest PostgreSQL configuration/pool/adapter boundary. It accepts only six
   namespaced fields, permits cleartext solely on explicit loopback development/test, otherwise
   requires certificate-verified TLS, hides its password from enumeration/JSON, and caps one process
@@ -475,7 +531,7 @@ scheduler/cadence exists.
   allowlist to the fixed 13-parameter submission procedure. It copies bytes/arrays, generates a
   server UUID, validates coherent accepted/duplicate/quarantined output, destroys failed clients,
   and emits only bounded internal errors. One hundred eighteen
-  configuration/pool/mapper/import-isolation cases remain in the current 427-test Ingest suite at
+  configuration/pool/mapper/import-isolation cases remain in the current 446-test Ingest suite at
   100% statement/branch/function/line coverage. Focused tests use mock pools; the separate opt-in
   integration exercises the same adapter through a synthetic dedicated loopback login. No deployment
   credential, certificate/TLS result, or production connection is claimed.
@@ -624,67 +680,73 @@ scheduler/cadence exists.
   failure, and exposes only `execute` plus `close`. Each execution creates one server-owned 128-bit
   request ID before verification, requires the frozen verifier allowlist, waits for database
   settlement, reconstructs coherent accepted/duplicate/quarantined output, and validates either a
-  frozen null-prototype `ConnectorSyncResultV1` or the closed generic `ProblemDetailsV1` subset.
-  Origin/device rejection is one unauthorized result; dependency outages are generic retryable 503;
-  internal drift and unknown failures are non-reflective 500. Fifty-four new adversarial and
-  composition cases bring the Ingest suite to 317 tests at 100% statement/branch/function/line
-  coverage. One signed synthetic request passes through the actual production verifier, replay and
-  device capabilities, adapter mapper, and submission order using a mock pool. No HTTP object,
-  serialization/header policy, or socket belongs to this application layer; the separate opt-in
-  integration composes it through the host and disposable PostgreSQL. No log sink, deployment
-  login/certificate, edge path, connector, or deployment is claimed.
+  frozen null-prototype result matching the legacy or Usage Sync path, or the closed generic
+  `ProblemDetailsV1` subset. Origin/device rejection is one unauthorized result; dependency outages
+  are generic retryable 503; internal drift and unknown failures are non-reflective 500. Adversarial
+  and composition cases are included in the current 446-test Ingest suite. Signed synthetic requests
+  pass through the actual production verifier, replay and device capabilities, adapter mapper, and
+  submission order using a mock pool. No HTTP object, serialization/header policy, or socket belongs
+  to this application layer; the separate opt-in integration composes it through the host and
+  disposable PostgreSQL. No log sink, deployment login/certificate, edge path, connector, or
+  deployment is claimed.
 - A bounded local Community sync Fastify server factory. Only one reviewed Ingest module may import
-  the exact-pinned framework. It registers exact `POST /v1/community/sync`, copies at most 8192 raw
-  body bytes and the original raw-header sequence, disables proxy trust, inbound request IDs, and
-  framework logging, and admits four unsettled application calls without a queue. Explicit 16384
-  header-byte, 64 raw-header-pair, 32-connection, 16-request-per-socket, and 5/33/34-second request/
-  handler/connection policies bound one process. Closed content/`Accept`/route/method handling,
-  generic 400/404/405/406/500/503 transport problems, `no-store`, `Vary: Accept`, `nosniff`, no CORS
-  grant, CSPRNG request IDs, and final generated-contract validation prevent request or framework
-  reflection. 109 additional adversarial injection and real-loopback framing/drain cases bring the
-  Ingest suite to 427 tests at 100% statement/branch/function/line coverage, plus strict lint, type
-  checking, and production build. The handler limit is bound and classified but is not a production
-  capacity result. This factory still owns no listener or process lifecycle. No edge signer,
-  direct-origin denial, trusted deployment route, external TLS evidence, deployment database
-  credential, monitoring, connector, load evidence, or deployment is claimed.
+  the exact-pinned framework. It always registers exact `POST /v1/community/sync` and registers
+  exact `POST /v1/community/usage` only after a boolean host decision, while both routes share one
+  four-call no-queue admission budget. It copies at most 8192 raw body bytes and the original
+  raw-header sequence, disables proxy trust, inbound request IDs, and framework logging, and admits
+  four unsettled application calls without a queue. Explicit 16384 header-byte, 64 raw-header-pair,
+  32-connection, 16-request-per-socket, and 5/33/34-second request/ handler/connection policies
+  bound one process. Closed content/`Accept`/route/method handling, generic 400/404/405/406/500/503
+  transport problems, `no-store`, `Vary: Accept`, `nosniff`, no CORS grant, CSPRNG request IDs, and
+  final generated-contract validation prevent request or framework reflection. Adversarial injection
+  and real-loopback framing/drain cases bring the current Ingest suite to 446 tests, plus strict
+  lint, type checking, and production build. The handler limit is bound and classified but is not a
+  production capacity result. This factory still owns no listener or process lifecycle. The separate
+  local Worker supplies a compatible signer, but no deployed direct-origin denial, trusted route,
+  external TLS evidence, deployment database credential, monitoring, connector, load evidence, or
+  deployment is claimed.
 - A separate local Ingest host workspace that owns only closed listener configuration, one bind,
   startup composition, and process shutdown. Exact `VIBERACING_INGEST_ENABLED=true` is required
   before any other host field or protected application configuration is inspected; missing or any
   alternate value fails with the existing generic silent startup behavior. The frozen validated
   config also carries literal `enabled: true`, while tracked `.env.example` remains false.
-  Development/test then admits cleartext only on exact IPv4 or IPv6 loopback; production requires
-  exact `0.0.0.0:$PORT`, the explicit `railway-edge` external-TLS declaration, and a canonical
-  40-to-300-second Railway drain window. It composes only the reviewed configured application and
-  Fastify factories, closes every completed lower boundary on startup failure, and returns one
-  idempotent close controller. Signal handlers are installed before startup; the first
-  SIGINT/SIGTERM starts a 36-second close deadline, while a second signal, deadline, or close
-  failure forces unsuccessful exit. Runtime ESM package exports and a black-box emitted-entrypoint
-  check prevent a TypeScript-only or reflective startup failure. Its 130 tests have 100%
-  statement/branch/function/line coverage with strict lint, type checking, and production builds.
-  The `railway-edge` value is an operator assertion, not proof of Railway, external TLS, Cloudflare
-  routing, direct-origin denial, protected secrets, a deployment login, capacity, or deployment. The
-  latch is startup-only and proves no deployed restart, route denial, old-instance drain, operator
-  audit, monitoring, or other capability switch.
+  Separately, only exact own enumerable string `VIBERACING_USAGE_SYNC_ENABLED=true` registers the
+  additive route before application construction; every other shape leaves it absent without
+  changing the legacy route. Development/test then admits cleartext only on exact IPv4 or IPv6
+  loopback; production requires exact `0.0.0.0:$PORT`, the explicit `railway-edge` external-TLS
+  declaration, and a canonical 40-to-300-second Railway drain window. It composes only the reviewed
+  configured application and Fastify factories, closes every completed lower boundary on startup
+  failure, and returns one idempotent close controller. Signal handlers are installed before
+  startup; the first SIGINT/SIGTERM starts a 36-second close deadline, while a second signal,
+  deadline, or close failure forces unsuccessful exit. Runtime ESM package exports and a black-box
+  emitted-entrypoint check prevent a TypeScript-only or reflective startup failure. Its 132 tests
+  have 100% statement/branch/function/line coverage with strict lint, type checking, and production
+  builds. The `railway-edge` value is an operator assertion, not proof of Railway, external TLS,
+  Cloudflare routing, direct-origin denial, protected secrets, a deployment login, capacity, or
+  deployment. The latch is startup-only and proves no deployed restart, route denial, old-instance
+  drain, operator audit, monitoring, or other capability switch.
 - An opt-in full local Ingest HTTP-to-PostgreSQL gate. It builds emitted contracts, Ingest, and host
   code; starts one disposable `postgres-test` container with an ephemeral loopback-only port;
-  applies all 40 reviewed migrations; creates a synthetic login with only `viberacing_ingest`; and
-  seeds two synthetic source-bound Ed25519 devices. Independently composed signed requests prove an
-  accepted write, an exact duplicate under a fresh origin nonce, persistent origin replay denial,
+  applies all 42 reviewed migrations; creates a synthetic login with only `viberacing_ingest`; and
+  seeds two synthetic source-bound Ed25519 devices. Independently composed signed requests prove a
+  legacy accepted write, a separate provider-attributed Usage Sync write through the same mature
+  storage path, an exact duplicate under a fresh origin nonce, persistent origin replay denial,
   revoked-device denial, and the closed success/problem headers. A controlled owner lock then holds
   four valid requests at `consume_origin_nonce`; `pg_stat_activity` observes exactly four
   lock-waiting Ingest calls, a fifth valid request returns generic 503 without a fifth replay call,
   and all four original requests return exact accepted acknowledgements after release. The imported
   host then closes, the built `dist/main.js` entry point starts as a separate silent process, a
   connection-only probe observes its loopback listener without application work, and a separate
-  signed request returns exact accepted before the harness forcibly ends only that test child. Ten
-  server request IDs are unique. Owner-only state verification proves eight consumed origin nonces,
-  six device nonces, six exact accepted snapshots/entries/current values, terminal first-device
-  revocation, no revoked-device snapshot, no state for the rejected fifth request, and exactly one
-  emitted-process snapshot. The command removes its blocker, imported host, emitted child,
-  container, network, and storage and is required by CI. It proves no OS-signal delivery, graceful
-  emitted-child settlement, deployment drain, external TLS/edge route, protected secret delivery,
-  production credential, real-user input, monitoring, distributed load control, representative
-  load/capacity, or deployment.
+  signed request returns exact accepted before the harness forcibly ends only that test child.
+  Eleven server request IDs are unique. Owner-only state verification proves nine consumed origin
+  nonces, seven device nonces, seven exact accepted snapshots/entries, six current source/date
+  values, the exact `codex`/`codex_daily_usage_buckets_v1` attribution and mapped client/agent
+  versions, terminal first-device revocation, no revoked-device snapshot, no state for the rejected
+  fifth request, and exactly one emitted-process snapshot. The command removes its blocker, imported
+  host, emitted child, container, network, and storage and is required by CI. It proves no OS-signal
+  delivery, graceful emitted-child settlement, deployment drain, external TLS/edge route, protected
+  secret delivery, production credential, real-user input, monitoring, distributed load control,
+  representative load/capacity, or deployment.
 - A separate opt-in emitted Ingest OS-signal gate. It builds a link-free runtime containing only the
   emitted host, Ingest, contracts, and exact installed production graph; fingerprints it; and mounts
   it read-only under the pinned Linux Node 24.18 image in only the disposable database network
@@ -722,60 +784,66 @@ scheduler/cadence exists.
   returning early from an outer promise race. The reserved 429 does not claim a client-rate limiter.
   The module-load gate proves no deployed route/cache denial, simultaneous worker reload,
   old-instance drain, operator audit, monitoring, or dynamic switch.
+- A fourth dynamic Node.js `GET /v1/community/tokens` route uses the same closed query, admission,
+  error, and serialization boundary with an independent `VIBERACING_TOKEN_RANKING_ENABLED=true`
+  module-load decision. It returns only `community_tokens_v1` rows with direct safe-integer
+  `weeklyTokenTotal`, shared rank, cosmetic recipe, rounded freshness, and optional streak. It
+  exposes no provider, source/day breakdown, exact receipt time, or legacy score field.
 - An opt-in full local Web HTTP-to-PostgreSQL gate. It builds the emitted contract runtime and Web
   standalone artifact, explicitly bundles Next's otherwise externalized reviewed `pg` driver,
   generates one ephemeral self-signed DNS certificate, starts one TLS-enabled disposable
-  `postgres-test` container with an ephemeral loopback-only port, applies all 40 reviewed
+  `postgres-test` container with an ephemeral loopback-only port, applies all 42 reviewed
   migrations, seeds only synthetic public/private state, and starts two sequential emitted Next
   production processes. The deliberately widened login receives exact generic 503 contracts from all
-  three public-ranking GETs while a SHA-256 fingerprint over every private table remains unchanged.
-  The narrow login then returns the exact score, race, and status pages, including active-only
-  visibility, current recipe, rounded freshness, and preference-gated streak omission, while
-  `pg_stat_ssl` proves TLS 1.2 or 1.3. Contract validators plus private-marker checks prove a
+  four public-ranking GETs while a SHA-256 fingerprint over every private table remains unchanged.
+  The narrow login then returns the exact score, race, status, and token pages, including
+  active-only visibility, current recipe, rounded freshness, and preference-gated streak omission,
+  while `pg_stat_ssl` proves TLS 1.2 or 1.3. Contract validators plus private-marker checks prove a
   public-only response, while the same full-state fingerprint proves non-mutating behavior. The
   disposable database preloads `auto_explain`; database-scoped settings provisioned by the synthetic
-  owner apply only to the narrow login and suppress every parameter value. The harness requires six
-  exact plan classes: the three fixed adapter statements and their three nested score/race/status
-  projections. It bounds plan count/depth/nodes/bytes and root rows, requires one execution plus the
-  reviewed ranking/recipe/freshness/streak indexes, and rejects a mutation or lock node, a
-  sequential scan over bounded-index relations, any dirty/written or temporary block, any private
-  marker, or missing evidence. A bounded owner-held table lock then leaves exactly four narrow-login
-  score queries observable in PostgreSQL. A fifth HTTP request must return the exact generic 503
-  under a narrower harness deadline without adding a fifth public-score query; rollback releases the
-  original four, which must all return exact 200 contracts. Next, blocker, and plan output is
-  bounded, checked for private fixture/credential/path reflection, and discarded; all ephemeral key
-  material, three processes, the container, network, and storage are removed. Secretless CI declares
-  the command. It proves no deployment certificate/login, external TLS/edge path, cache, edge rate
-  policy, representative plan/load/capacity result, monitoring, real-user data, hosted pass, or
-  deployment.
+  owner apply only to the narrow login and suppress every parameter value. The harness requires
+  eight exact plan classes: the four fixed adapter statements and their four nested
+  score/race/status/token projections. It bounds plan count/depth/nodes/bytes and root rows,
+  requires one execution plus the reviewed ranking/recipe/freshness/streak indexes, and rejects a
+  mutation or lock node, a sequential scan over bounded-index relations, any dirty/written or
+  temporary block, any private marker, or missing evidence. A bounded owner-held table lock then
+  leaves exactly four narrow-login score queries observable in PostgreSQL. A fifth HTTP request must
+  return the exact generic 503 under a narrower harness deadline without adding a fifth public-score
+  query; rollback releases the original four, which must all return exact 200 contracts. Next,
+  blocker, and plan output is bounded, checked for private fixture/credential/path reflection, and
+  discarded; all ephemeral key material, three processes, the container, network, and storage are
+  removed. Secretless CI declares the command. It proves no deployment certificate/login, external
+  TLS/edge path, cache, edge rate policy, representative plan/load/capacity result, monitoring,
+  real-user data, hosted pass, or deployment.
 - A visible public-race consumer. The dynamic server page derives the current ISO Monday and passes
   only that public label to the client. After hydration, the browser lazily loads its compact
-  independent validator and issues one credential-free, `no-store`, same-origin request to the exact
-  status route. It accepts at most 32 dense rows with the closed public field set, constant
-  Community/self-reported metadata, required complete-UTC-day freshness, optional preference-gated
-  streak, and at most one exact current active `CarRecipeV1`, then replaces only the race and
-  leaderboard. An absent recipe receives a fixed repository-owned presentation fallback; an omitted
-  streak remains absent. Invalid, oversized, non-JSON, failed, or unavailable responses retain the
-  clearly labeled synthetic preview. A Community handle selects a same-page summary containing only
-  weekly score, rank, active days, source count, rounded freshness, optional streak, and an explicit
-  visual-marker car; daily detail, device counts, exact usage or receipt time, and identifiers
-  remain absent. The selection uses only one canonical `/?profile=handle#profile` URL value. A
-  normal click updates the summary and URL in place while modified clicks retain native behavior.
-  Invalid/duplicate values are ignored, a missing current top-32 row stays missing rather than
-  selecting the leader, and only a public account renders its own link. The fallback demo garage
-  stays synthetic, and no retry, cookie, browser persistence, analytics, or third-party destination
-  is added.
+  independent validator and issues one credential-free, `no-store`, same-origin request to the token
+  route first, falling back to the legacy status route only when that surface is unavailable. It
+  accepts at most 32 dense rows with the closed public field set, constant Community/self-reported
+  metadata, required complete-UTC-day freshness, optional preference-gated streak, and at most one
+  exact current active `CarRecipeV1`, then replaces only the race and leaderboard. An absent recipe
+  receives a fixed repository-owned presentation fallback; an omitted streak remains absent.
+  Invalid, oversized, non-JSON, failed, or unavailable responses retain the clearly labeled
+  synthetic preview. A Community handle selects a same-page summary containing only weekly score or
+  direct weekly token total, rank, active days, source count, rounded freshness, optional streak,
+  and an explicit visual-marker car; daily detail, device counts, exact receipt time, and
+  identifiers remain absent. The selection uses only one canonical `/?profile=handle#profile` URL
+  value. A normal click updates the summary and URL in place while modified clicks retain native
+  behavior. Invalid/duplicate values are ignored, a missing current top-32 row stays missing rather
+  than selecting the leader, and only a public account renders its own link. The fallback demo
+  garage stays synthetic, and no retry, cookie, browser persistence, analytics, or third-party
+  destination is added.
 - An idempotent cluster-role bootstrap for separate `NOLOGIN`, non-owner Web, Ingest, Jobs, Admin,
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- Forty checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and 28
-  forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and restricted
-  authorities, session-bound challenges, opaque sources, pending/active/revoked device keys,
-  pairing, bounded audit references, deletion work/tombstones, seven fixed maintenance mutex rows,
-  origin and device nonces, bounded raw Community snapshots, monotonic current source/day values,
-  immutable score versions and season definitions, derived season entries/daily scores, terminal
-  UTC-day/count freshness projections, active CarRecipes and pending proposals, and schema
+- Forty-two checksum-ledgered, transactional SQL migrations with bounded lock/statement execution
+  and 28 forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and
+  restricted authorities, session-bound challenges, opaque sources, pending/active/revoked device
+  keys, pairing, bounded audit references, deletion work/tombstones, seven fixed maintenance mutex
+  rows, origin and device nonces, bounded raw Community snapshots, monotonic current source/day
+  values, immutable score versions and season definitions, derived season entries/daily scores,
+  terminal UTC-day/count freshness projections, active CarRecipes and pending proposals, and schema
   revisions. There is intentionally no GitHub token, account email, prompt, repository, credential,
   arbitrary JSON, or free-form diagnostic column.
 - Database constraints and triggers enforce unique GitHub bindings, normalized handles, keyed
@@ -859,7 +927,7 @@ scheduler/cadence exists.
   the emitted entry point with a widened negative login and two narrow logins against one disposable
   hostname-verified TLS PostgreSQL database. It proves the widened process fails generically before
   schema creation, observes both narrow processes behind one external holder of the fixed session
-  key, then requires both to succeed and converge on the exact 40-row ledger. The same oracle checks
+  key, then requires both to succeed and converge on the exact 42-row ledger. The same oracle checks
   all 28 private tables remain owner-owned with forced RLS, runs the identity invariants, and proves
   the controller sessions and lock are gone before deleting every resource. This is actual local
   DDL/driver/TLS/convergence evidence, but not production TLS/login, staging rollout/rollback,
@@ -1371,20 +1439,50 @@ scheduler/cadence exists.
   deployment without a real HTTPS DNS value remains forbidden. The separate enrollment slice stores
   account state only in encrypted HttpOnly cookies and reads its exact server-only configuration
   lazily; the default preview still needs none of it.
-- Seven hundred eight unit, component, interaction, security-header, localization, scoring,
+- Nine hundred unit, component, interaction, security-header, localization, scoring,
   HTTP-route/admission, database-adapter configuration/pool/store, and accessibility tests. The
-  coverage gate currently reports 86.87% statements, 85.23% branches, 95.34% functions, and 86.99%
+  coverage gate currently reports 87.45% statements, 86.26% branches, 95.48% functions, and 87.58%
   lines over product components and libraries; framework entrypoints are verified by the production
   build instead of artificial unit coverage.
-- A root verification pipeline that now includes contract generation/drift; contract, Ingest, and
-  Jobs lint, strict type checking, coverage, and production compilation; plus web lint, strict type
-  checking, coverage, and a production Next.js build on every deterministic CI run.
+- A bounded root development pipeline with contract generation/drift, migration/config/public
+  boundaries, workspace lint/types/unit tests, and Rust. Coverage, production compilation,
+  checker-regression, documentation/history, and publication evidence are isolated in the explicit
+  release gate instead of running on every pull request.
 - A manifest-driven production artifact gate with nine black-box cases and enforced limits for
   initial raw/gzip bytes, application/CSS gzip bytes, asset count, source maps, fonts, path safety,
-  and standalone output. The current initial route is 185,834 gzip bytes across eight assets;
-  application JavaScript remains within its separate 10,000-byte budget at 9,862 gzip bytes and CSS
+  and standalone output. The current initial route is 186,218 gzip bytes across eight assets;
+  application JavaScript remains within its separate 10,500-byte budget at 10,246 gzip bytes and CSS
   remains within 5,000 bytes at 4,533 gzip bytes.
-- A lock-integrity-bound metadata cache for platform-specific npm packages, ten license-checker
+- A pinned multi-stage Web production image and root Railway configuration for the default-off
+  synthetic preview. The runtime contains only the emitted standalone server and required static
+  assets, runs as the unprivileged image user, and exposes the platform-assigned port. A local
+  standalone smoke requires the home HTML, referenced CSS/JavaScript, production CSP/HSTS,
+  configured public origin, and generic default-off ranking response. This is packaging evidence
+  only: no database, OAuth, Ingest, Jobs, edge direct-origin control, real user, or deployed result
+  is claimed.
+- Three additional pinned multi-stage production images package only the emitted Ingest host,
+  default-off Jobs scheduler, or one-shot migration runner and their exact production dependency
+  graphs. Their separate Railway configurations fix the reviewed Dockerfile, replica, restart,
+  overlap, and drain decisions. Local builds run as the unprivileged image user; disabled executions
+  fail closed, and the migration image resolves the exact 42-file catalog. This is packaging
+  evidence, not a compatible hosted PostgreSQL service, role provisioning, secret delivery,
+  scheduler cadence, migration execution, monitoring, or deployment.
+- A dependency-free Cloudflare Worker now admits only exact Community sync, preserves the bounded
+  device-signed body, rejects caller-supplied origin authority, and adds one fresh canonical
+  HMAC-SHA-256 proof before one no-retry HTTPS origin call. Eighteen Node Fetch/Web Crypto tests
+  cover proof, route/header/body, key rotation, failure, response, and dependency bounds. A
+  production-build compatibility test requires the generated proof and a synthetic Ed25519 device
+  signature to pass `createCommunitySyncVerifier`. Exact-version Wrangler dry-run evidence proves
+  only local bundling; no Cloudflare route, account, secret, Railway origin, external TLS,
+  direct-origin negative result, provider logging state, WAF, capacity, or deployment is claimed.
+- A separate stable-release workflow now accepts only a published non-prerelease stable tag or an
+  explicit stable tag dispatched from `main`, proves main ancestry, completes secretless release and
+  synthetic PostgreSQL gates, and only then enters the protected `production` Environment. It uses
+  pinned Railway/Cloudflare/Wrangler inputs and fixes migration-latch cleanup plus Migration, Web,
+  Ingest, Jobs, and Edge order. Seventy-nine configuration-checker cases cover its exact contract
+  and unsafe mutations. This is a local checked declaration: no GitHub Environment, protected
+  credential, Railway project, Cloudflare route, hosted run, migration, or deployment is proven.
+- A lock-integrity-bound metadata cache for platform-specific npm packages, twelve license-checker
   regression cases, and two expiring reviewed overrides: one resolves Next.js to patched
   `postcss@8.5.19`, and one removes unused `sharp`/libvips code while Next.js image optimization
   remains disabled. The official registry audit reports zero known vulnerabilities after resolution.
@@ -1422,21 +1520,22 @@ scheduler/cadence exists.
 The local Compose smoke test pulled the pinned index, reached `healthy`, exposed only
 `127.0.0.1:54329`, returned the expected synthetic database and user from a read-only query, and
 then removed its test container, network, and volume. The separate database integration project also
-reached `healthy`, validated and applied revisions 0001 through 0040 from the checksum manifest,
-passed one pre-restore serialized migration-overlap race with one successful application and one
-expected `42P07` rollback, 28-table state/ownership/RLS assertions, forty-five observed post-restore
-lock-wait races, one observed early-completion activation overlap, twelve relation-denial checks,
-sixty-seven cross-capability denials, and the identity, passkey, recovery, pairing, source/device
-lifecycle, Community ingest, origin replay, ingest-retention, pairing-retention,
-authentication-retention, invite-retention, session-retention, abandoned-enrollment retention,
-primary-profile deletion, terminal deletion-job retention, audit-event retention, pairing
-approval-provenance, revoked-passkey retention, revoked-device retention, pairing-rate-window reset,
-finalized-source-day retention, CarRecipe proposal/approval and retention, scoring, finalization,
-and public score/race/status scenarios, then removed its portless container, network, and ephemeral
-storage.
+reached `healthy`, validated and applied revisions 0001 through 0041 from the checksum manifest,
+proved revision 0041 backfilled and froze the exact attribution on a source inserted after revision
+0040, passed one pre-restore serialized migration-overlap race with one successful application and
+one expected `42P07` rollback, 28-table state/ownership/RLS assertions, forty-five observed
+post-restore lock-wait races, one observed early-completion activation overlap, twelve
+relation-denial checks, sixty-seven cross-capability denials, and the identity, passkey, recovery,
+pairing, source/device lifecycle, Community ingest, origin replay, ingest-retention,
+pairing-retention, authentication-retention, invite-retention, session-retention,
+abandoned-enrollment retention, primary-profile deletion, terminal deletion-job retention,
+audit-event retention, pairing approval-provenance, revoked-passkey retention, revoked-device
+retention, pairing-rate-window reset, finalized-source-day retention, CarRecipe proposal/approval
+and retention, scoring, finalization, and public score/race/status scenarios, then removed its
+portless container, network, and ephemeral storage.
 
 The separate Jobs integration also reached `healthy`, revalidated and applied revisions 0001 through
-0040, created only synthetic non-owner logins, rejected the one login with an extra group membership
+0041, created only synthetic non-owner logins, rejected the one login with an extra group membership
 before its requested reset changed state, and ran all eighteen built Jobs commands through the
 narrow login. It observed only the constant success/failure sentences and verified the exact
 authentication/abandoned-enrollment/audit-event/invite/CarRecipe-proposal/ingest/pairing/session/
@@ -1519,7 +1618,7 @@ limitations.
 ## Not implemented yet
 
 Invite issuance UI, trusted anonymous login/pairing/recovery edge limits, recovery notification,
-trusted Ingest edge routing/external TLS and direct-origin denial, live secret-manager/edge key
+deployed Ingest edge routing/external TLS and direct-origin denial, live secret-manager/edge key
 injection, the Ingest deployment PostgreSQL credential/TLS connection, distributed rate/backpressure
 controls and load evidence, deployed operation of the local Ingest startup latch and public-ranking
 and pairing module gates plus the new-source, CarRecipe-proposal, and enrollment module/service
@@ -1565,8 +1664,9 @@ Run from the repository root:
 
 ```text
 pnpm run verify
+pnpm run verify:release
+pnpm run verify:web:deployment
 pnpm run check:agent-skills
-pnpm run test:agent-skills-check
 pnpm run check:contracts
 pnpm run check:database
 pnpm run check:migration-runbook
@@ -1602,6 +1702,10 @@ pnpm run check:web-build
 pnpm run check:public:staged
 git diff --cached --check
 ```
+
+The first command is the normal development gate. `verify:release` and the explicit coverage,
+production-build, checker-regression, and Docker commands are release or boundary-specific evidence;
+they are not required for every local edit.
 
 `pnpm run check:publication` is intentionally failing in this pre-public tree. It becomes a required
 passing gate only after the public maintainer identity, CODEOWNERS, GitHub remote, and private

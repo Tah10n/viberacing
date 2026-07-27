@@ -77,7 +77,7 @@ pnpm run test:jobs:coverage
 pnpm run test:jobs-scheduler:coverage
 pnpm run test:database:integration
 pnpm run test:jobs:postgres-integration
-pnpm run verify:node
+pnpm run verify:release:node
 ```
 
 The database evidence covers the request state machine, maximum-ten due-job selection, exact role

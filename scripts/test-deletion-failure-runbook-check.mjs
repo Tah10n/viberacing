@@ -39,7 +39,7 @@ const validRootPackage = Object.freeze({
     "test:jobs:coverage": "pnpm --filter @viberacing/jobs run test:coverage",
     "test:jobs:postgres-integration": "node scripts/test-jobs-postgres-integration.mjs",
     "test:web:coverage": "pnpm --filter @viberacing/web run test:coverage",
-    "verify:node": "node scripts/verify.mjs --node-only",
+    "verify:release:node": "node scripts/verify.mjs --release --node-only",
   },
 });
 
@@ -144,9 +144,9 @@ try {
   restoreValidFixture();
   writeFixture(
     runbookRelativePath,
-    `${runbookSource}\nRun psql with an operator-selected profile.\n`,
+    `${runbookSource}\n\`\`\`text\npsql --file operator-selected.sql\n\`\`\`\n`,
   );
-  expectFailure("unreviewed inline command", "content digest drifted");
+  expectFailure("unreviewed command block", "fenced command block inventory drifted");
 
   restoreValidFixture();
   writeJson(rootPackagePath, {

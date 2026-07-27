@@ -77,29 +77,29 @@ under the sync bounds. The candidate manifest records release metadata, full gen
 digests, minimal extracts, fixtures, and unresolved blockers. A one-shot supervisor now composes
 those exact state machines through a fixed `app-server` argument, local pipes, a capability-owned
 working directory/environment, bounded output/time, and reap-before-success cleanup. The capability
-has no public constructor. A second inaccessible reviewed context permits exact `ConnectorSyncV1`
-body, SHA-256 digest, nonce, and device-message composition from that candidate output. An isolated
-one-use signer consumes that otherwise inaccessible material only with a third inaccessible
-device-bound key capability and returns the same body plus five signed header values. The `connect`
-command can generate a real device key in a native OS credential store and complete the local
-start/approve/poll journey. A separate Windows x86_64 development `sync` command can construct the
-three private capabilities only after validating an active record and admitting the exact `0.144.5`
-artifact size and SHA-256. Selection is either an explicit canonical path or bounded fixed-name
-discovery through at most 64 absolute `PATH` directories and four distinct exact-size hashes; both
-retain the same no-write-sharing handle. It creates fresh context and submits one closed signed
-request without automatic retry. It cannot admit another version or platform, produce clean-machine
-privacy evidence, negotiate support, or alter the empty matrix. A separate explicitly invoked
-`check-codex` command reuses only the same selector without origin, credential-store, process,
-account, persistence, or network access. It releases the handle before fixed output, explicitly says
-no version is supported, and creates no reusable result; `sync` always repeats admission after
-active-record validation. Its optional diagnostic preview exposes only compile-time versions, the
-fixed platform contract, one closed admission class, and the empty support state; failed admission
-remains nonzero and no local value, file, or transport is added. A separate Windows release-profile
-smoke copies the repository-built `0.0.0` connector to an isolated temporary directory, verifies
-only its closed help and generic candidate-missing behavior, and removes it. That portable lifecycle
-check neither executes Codex nor creates a connector package, version, clean-machine account result,
-provenance, release, or support row. ADRs 0021 through 0026, 0030, 0031, and 0051 through 0054
-record those distinctions.
+has no public constructor. A second inaccessible reviewed context permits exact `UsageSyncV1` body,
+SHA-256 digest, nonce, and `/v1/community/usage` device-message composition from that candidate
+output. An isolated one-use signer consumes that otherwise inaccessible material only with a third
+inaccessible device-bound key capability and returns the same body plus five signed header values.
+The `connect` command can generate a real device key in a native OS credential store and complete
+the local start/approve/poll journey. A separate Windows x86_64 development `sync` command can
+construct the three private capabilities only after validating an active record and admitting the
+exact `0.144.5` artifact size and SHA-256. Selection is either an explicit canonical path or bounded
+fixed-name discovery through at most 64 absolute `PATH` directories and four distinct exact-size
+hashes; both retain the same no-write-sharing handle. It creates fresh context and submits one
+closed signed Usage Sync request without automatic retry or legacy-path fallback. It cannot admit
+another version or platform, produce clean-machine privacy evidence, negotiate support, or alter the
+empty matrix. A separate explicitly invoked `check-codex` command reuses only the same selector
+without origin, credential-store, process, account, persistence, or network access. It releases the
+handle before fixed output, explicitly says no version is supported, and creates no reusable result;
+`sync` always repeats admission after active-record validation. Its optional diagnostic preview
+exposes only compile-time versions, the fixed platform contract, one closed admission class, and the
+empty support state; failed admission remains nonzero and no local value, file, or transport is
+added. A separate Windows release-profile smoke copies the repository-built `0.0.0` connector to an
+isolated temporary directory, verifies only its closed help and generic candidate-missing behavior,
+and removes it. That portable lifecycle check neither executes Codex nor creates a connector
+package, version, clean-machine account result, provenance, release, or support row. ADRs 0021
+through 0026, 0030, 0031, and 0051 through 0054 record those distinctions.
 
 Generated schema output is exact to the Codex version that produced it. The repository commits only
 reviewed relevant schema extracts and synthetic fixtures, not account data or a developer's local
@@ -155,6 +155,9 @@ through local timezone conversion.
 - `CommunityRacePageV1` and `CommunityRaceStatusPageV1` are also independently closed. The status
   route is the only one that carries `freshnessDays` or `streakDays`; changing their UTC-day,
   visibility, or streak-anchor semantics requires a reviewed compatibility decision.
+- `CommunityTokenRaceStatusPageV1` is a separate closed metric contract. It does not reinterpret
+  `weeklyScore`; changing `community_tokens_v1`, direct-sum/shared-rank semantics, or
+  `weeklyTokenTotal` requires a reviewed compatibility decision.
 - The reviewed `x-viberacing-dateMinimum`, `x-viberacing-dateMaximum`, and `x-viberacing-isoWeekday`
   keywords are executable contract semantics. A consumer that treats them as inert annotations
   cannot be the server admission validator for a score season.
@@ -163,9 +166,9 @@ through local timezone conversion.
 - Errors use a versioned bounded problem-details shape and request ID without stack, SQL, hostname,
   secret, or record disclosure. The common server-only factory now enforces the closed mapping,
   generated opaque ID, runtime validation, and no-store response baseline. The manifest-generated
-  three public score/race/status operations and local Web routes enforce their own query, response,
-  status, cache, same-origin, and implementation-status contracts. This does not claim deployment or
-  make future `/v1` operations implicitly compatible.
+  four public score/race/status/token operations and local Web routes enforce their own query,
+  response, status, cache, same-origin, and implementation-status contracts. This does not claim
+  deployment or make future `/v1` operations implicitly compatible.
 - Generated OpenAPI, TypeScript, Rust fixtures, and documentation identify their canonical schema
   source; CI rejects drift.
 

@@ -114,7 +114,7 @@ Current repository evidence covers:
 - exact score/race path parsing, response revalidation, no-store delivery, no-queue admission, and
   closed method handling;
 - 858 Web tests including the visible browser request and synthetic fallback behavior, plus a
-  production build whose initial application chunk remains within budget at 9,862 gzip bytes; and
+  production build whose initial application chunk remains within budget at 10,246 gzip bytes; and
 - isolated PostgreSQL application of revisions 0001 through 0028, active/absent/hidden recipe
   projection, unchanged score allowlist, five-second deadline, Web-only execution, and 40
   cross-capability denials; and

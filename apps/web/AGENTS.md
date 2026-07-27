@@ -51,12 +51,12 @@ apply.
 - Keep compose `DATABASE_*` owner credentials out of Web code. The public-score adapter uses only
   `VIBERACING_WEB_DATABASE_*`, strict TLS/config parsing, a dedicated bounded pool, and an effective
   Web-role/login-capability probe before every query. Do not bypass the store with generic SQL or
-  wire it outside the three exact `/v1/community/scores`, `/v1/community/race`, and
-  `/v1/community/race/status` boundaries.
+  wire it outside the four exact `/v1/community/scores`, `/v1/community/race`,
+  `/v1/community/race/status`, and `/v1/community/tokens` boundaries.
 - Keep `auto_explain` and plan-log access confined to the opt-in disposable Web PostgreSQL harness.
   Only its synthetic owner may provision database-scoped, parameter-disabled capture for the narrow
   synthetic login; product Web code must not load it, alter settings, consume plans, or create a
-  query log. Preserve the byte/plan/depth/node budgets, complete private-marker scan, six exact
+  query log. Preserve the byte/plan/depth/node budgets, complete private-marker scan, eight exact
   adapter/projection oracle classes, and container-bound deletion. Do not claim the small fixed
   fixture is representative load, latency, capacity, production statistics, monitoring, or
   deployment.
@@ -65,6 +65,11 @@ apply.
   generic 503 before URL/query/header parsing, admission acquisition, or store construction; keep
   the tracked example false. Do not add a truthy/default-on parser, per-request environment read,
   alternate enable source, or claim dynamic/deployed route and cache denial.
+- Keep the direct-token GET independently behind exact `VIBERACING_TOKEN_RANKING_ENABLED=true`
+  resolved once per route-module evaluation. Every alternate or unreadable state must return the
+  same generic 503 before URL/query/header parsing, admission acquisition, or store construction;
+  keep the tracked example false. Do not let this decision enable or disable the three compatible
+  score routes.
 - Keep connector pairing start/poll and signed-in approval options/verification behind exact
   `VIBERACING_PAIRING_ENABLED=true` resolved once per route-module evaluation. Disabled POST may
   cancel its body but must return the existing generic 503 before request parsing, runtime/service
@@ -183,36 +188,35 @@ Run from the repository root:
 ```text
 pnpm run lint:web
 pnpm run typecheck:web
-pnpm run test:web:coverage
-pnpm run build:web
-pnpm run check:web-build
-pnpm run test:web-query-plan-evidence
-pnpm run test:web:postgres-integration
-pnpm run check:phase1-visual-baselines
-pnpm run verify:phase1-visual-baselines -- --origin <loopback-http-origin> --browser <absolute-path-to-reviewed-chromium>
+pnpm run test:web
+pnpm run verify
 ```
 
-The baseline check is offline. The explicit local verify command uses a temporary profile, requires
-the committed exact browser product/platform, compares decoded pixels without writing, and audits
-the canonical keyboard order, skip-target focus, accessibility tree, forced-colors state, and closed
-animation-on/reduced-motion lab performance samples. It still relies on an operator-reviewed
-executable and does not replace native screen-reader, cross-browser, field Core Web Vitals, or
-staging SLO evidence. Regeneration uses the root `capture:phase1-visual-baselines` command only
-against the same explicit loopback production build; it does not replace manual image review or
-cross-browser release evidence.
+Add coverage/build and `check:web-build` when Web behavior or emitted assets change. Run the query
+plan/PostgreSQL gates only when their adapter or database boundary changes. Run visual-baseline
+checks only for a visible UI change: `pnpm run check:phase1-visual-baselines` is offline, and the
+root `verify:phase1-visual-baselines` command with an explicit loopback origin and reviewed browser
+path is the browser gate. It uses a temporary profile, requires the committed exact browser
+product/platform, compares decoded pixels without writing, and audits the canonical keyboard order,
+skip-target focus, accessibility tree, forced-colors state, and closed animation-on/reduced-motion
+lab performance samples. It still relies on an operator-reviewed executable and does not replace
+native screen-reader, cross-browser, field Core Web Vitals, or staging SLO evidence. Regeneration
+uses the root `capture:phase1-visual-baselines` command only against the same explicit loopback
+production build; it does not replace manual image review or cross-browser release evidence.
 
 The PostgreSQL integration command is an opt-in Docker-backed synthetic gate, not part of root
 `verify`. It builds and starts the emitted standalone Next production boundary only on loopback,
 bundles the reviewed `pg` driver, creates one ephemeral self-signed DNS certificate plus disposable
-narrow and deliberately widened Web logins, checks all three public score/race/status contracts, TLS
-1.2/1.3, and full private-table non-mutation, and proves the four-request no-queue boundary with a
-controlled database lock plus a rejected fifth request. It removes every ephemeral key,
-process/container/network/storage resource. It does not prove a deployment certificate/login,
-external TLS/edge path, cache, edge policy, monitoring, load/capacity, real-user data, or
-deployment.
+narrow and deliberately widened Web logins, checks all four public score/race/status/token
+contracts, TLS 1.2/1.3, full private-table non-mutation, and eight plan oracles, and proves the
+four-request no-queue boundary with a controlled database lock plus a rejected fifth request. It
+removes every ephemeral key, process/container/network/storage resource. It does not prove a
+deployment certificate/login, external TLS/edge path, cache, edge policy, monitoring, load/capacity,
+real-user data, or deployment.
 
-Run `pnpm run verify` before completion. The focused commands do not replace repository history,
-public-data, license, documentation, or staged-snapshot gates.
+Use `pnpm run verify:release` only for release/publication preparation or broad cross-cutting work.
+Focused commands plus the root development gate do not replace the staged public-data scan and
+manual diff review.
 
 ## Implementation conventions
 

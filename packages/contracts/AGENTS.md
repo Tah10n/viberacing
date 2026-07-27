@@ -27,7 +27,9 @@ this workspace's `README.md` before changing a public contract or validator.
 2. Run `pnpm run generate:contracts`.
 3. Review generated TypeScript and OpenAPI diffs, including the source digest.
 4. Add positive, reject-unknown, bounds, malformed-structure, privacy, and resource-budget tests.
-5. Run `pnpm run check:contracts`, the package lint/type/coverage gates, and root `pnpm run verify`.
+5. Run `pnpm run check:contracts`, package lint/type/unit tests, and root `pnpm run verify`. Add
+   coverage/build when the contract or validator behavior changes; use `pnpm run verify:release`
+   only at the release or broad cross-cutting boundary.
 
 A contract change also updates its API/reference documentation, privacy classification, threat or
 abuse mapping, compatibility notes, and migration/version decision when applicable.

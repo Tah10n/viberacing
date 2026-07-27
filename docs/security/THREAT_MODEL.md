@@ -88,39 +88,24 @@ certificate/login, external TLS/edge path, cache, representative load/capacity, 
 deployment. The Jobs runner has strict command/config/pool/role/result evidence plus a synthetic
 CLI-to-PostgreSQL path with a widened-login denial and exact-state checks. The scheduler separately
 has exact-default-off, fixed-UTC-catalog, sequential/no-overlap, in-memory-slot,
-failure-containment, bounded-shutdown, fixed-clock production-core/PostgreSQL composition, and
-injected repeated-timer and process-lifecycle settlement evidence plus one pinned-Linux real-clock
-emitted startup path that temporarily denies only the Jobs role's backlog function. It proves one
-generic cycle signal, no backlog mutation, and later terminal-job settlement before a code-0 OS
-`SIGTERM` exit. The harness restores and rechecks the exact grant, rearms the marker, holds the
-scoring mutex, and starts the same runtime again. It observes the first finalization lock-wait,
-delivers `SIGKILL`, requires exit 137 plus session release, and proves the backlog and marker remain
-unchanged. After releasing the holder, a restart finalizes the backlog before a silent signal exit.
-A disposable post-insert barrier then holds a second backlog; another `SIGKILL` must roll back its
-whole projection transaction. The barrier is removed and verified absent before a clean-schema
-restart finalizes that backlog exactly once. A final rearm/restart proves another silent repeated
-cycle, session cleanup after all six starts, runtime immutability, and exact stored state. A
-separate pinned-Linux path leaves the native timer unchanged, holds the scoring mutex after startup,
-observes a refresh in a later real five-minute slot, delivers an OS `SIGTERM`, releases the mutex,
-and proves active-refresh settlement, a newer timestamp, silent code-0 exit, session release, and
-runtime immutability. Another pinned-Linux path holds the emitted first finalization call, delivers
-an OS `SIGTERM`, and proves graceful settlement, no later job, silent code-0 exit, and session
-release. The startup path proves local failure/crash containment, later-job continuation, successful
-clean-schema retries, a later repeated restart, four graceful post-startup `SIGTERM` settlements,
-two abrupt active-call `SIGKILL` exits, and one controlled uncommitted post-insert transaction
-rollback; the recurring path proves one local host-timer refresh plus active-call signal settlement.
-This does not prove committed/external-effect or every-capability recovery, automatic privilege
-repair, a deployed signal route, controller/orchestrator grace policy, or managed restart. The
-identity slice has exact-origin/body/cookie, state/PKCE, token minimization, initial-registration,
-returning-login, session-derived passkey inventory, non-current-key revocation, backup-key addition,
-exact-handle profile-deletion request, source inventory/pause/reactivation/unlink, and active-device
-revoke including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only
-OAuth `form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay
-server-only; source controls receive only a 15-minute encrypted token bound to the active session.
-Pairing start/poll and approval options/verification have a second exact Web module gate with
-factory-level negative evidence. None has a production database login, OAuth app, authenticator,
-edge, deployed scheduler/cadence, cache/backup purge, tombstone/restore replay, or network
-deployment. Controls below are marked **implemented** only when executable evidence exists in
+failure-containment, bounded-shutdown, and fixed-clock production-core/PostgreSQL composition
+evidence; its opt-in integrations prove recurring execution with overlap suppression, graceful and
+abrupt OS-signal settlement, clean-schema retry, one controlled uncommitted post-insert transaction
+rollback, and one local host-timer recurring refresh (see
+[implementation status](../IMPLEMENTATION_STATUS.md) and
+[ADR 0063](../decisions/0063-default-off-local-jobs-scheduler.md)). This does not prove
+committed/external-effect or every-capability recovery, automatic privilege repair, a deployed
+signal route, controller/orchestrator grace policy, or managed restart. The identity slice has
+exact-origin/body/cookie, state/PKCE, token minimization, initial-registration, returning-login,
+session-derived passkey inventory, non-current-key revocation, backup-key addition, exact-handle
+profile-deletion request, source inventory/pause/reactivation/unlink, and active-device revoke
+including hidden-profile PostgreSQL evidence, fixed queries, admission, exact GitHub-only OAuth
+`form-action`, and EN/RU UI evidence with injected dependencies. Raw source IDs stay server-only;
+source controls receive only a 15-minute encrypted token bound to the active session. Pairing
+start/poll and approval options/verification have a second exact Web module gate with factory-level
+negative evidence. None has a production database login, OAuth app, authenticator, edge, deployed
+scheduler/cadence, cache/backup purge, tombstone/restore replay, or network deployment. Controls
+below are marked **implemented** only when executable evidence exists in
 [implementation status](../IMPLEMENTATION_STATUS.md). Other controls are release requirements, not
 security claims about the current tree.
 
@@ -151,29 +136,49 @@ containment, and forward-only repair without placing a target or secret in the r
 static operator prerequisite; no protected change system, staging execution, monitoring,
 stale-backup deletion replay, production authorization, recovery, or deployment is proven.
 
-The checked capability-containment and recovery rehearsal runbook separately binds the eight local
+The checked capability-containment and recovery rehearsal runbook separately binds the ten local
 exact-default-off decisions to 24 ordered controls and eight commands, including Web process
 replacement, Ingest/Jobs/migration settlement, preserved returning security/deletion paths, and
-recovery of one capability at a time. Twenty-two unsafe or drifted variants fail closed. This is
+recovery of one capability at a time. Twenty-five unsafe or drifted variants fail closed. This is
 static prerequisite evidence, not a private reporting channel, deployed control plane, dynamic kill
 switch, monitoring, containment, recovery, or deployment.
 
+[ADR 0068](../decisions/0068-multi-agent-token-leaderboard-and-mcp.md) proposes broadening the
+product to an agent-neutral direct token-total leaderboard with thin-client readers, optional MCP
+submission, a per-provider Verified tier, and a provider-neutral racing presentation of the token
+rank. ADRs 0071–0073 implement only the narrow Codex Community slice: immutable server-owned
+provider/accounting attribution, the separate default-off `UsageSyncV1` boundary, a current
+candidate connector that binds the new path, and the independent default-off `community_tokens_v1`
+public ranking. That slice activates VR-TOKEN-001 but adds no thin reader, second provider, optional
+MCP surface, Verified tier, production route, or deployment. The remaining direction would add trust
+boundaries TB-12 and TB-13 below, the proposed VR-MCP-001 and VR-PROVIDER-001 invariants, and
+additional canonical-total/provider classes in the privacy data map.
+[ADR 0069](../decisions/0069-thin-client-and-low-friction-onboarding.md) proposes a thin auditable
+client that reads agent local storage directly, anonymous enrollment with an admission gate, and
+low-friction hybrid onboarding. Its anonymous bootstrap authority has a server-clock ownership
+lease: sync cannot renew it, expiry hides/pauses the profile, promotion grace cannot auto-reactivate
+it, and separate Jobs-only cleanup prevents an indefinite lost-key orphan. If accepted, that
+direction would add trust boundaries TB-14 and TB-15 below, the proposed VR-CLIENT-001 and
+VR-ENROLL-001 invariants, and amendments to VR-AUTH-001 and VR-SOURCE-001. Both broad ADRs remain
+non-authoritative planning scope; their unimplemented surfaces do not inherit evidence from the
+narrow ADR 0071–0073 slice.
+
 ### Assets and security objectives
 
-| Asset or objective                                | Why it matters                                                               | Required protection                                                                                            |
-| ------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Public project and release integrity              | Users may execute connector binaries and trust deployment artifacts          | Protected revisions, review, signed artifacts, checksums, SBOM, provenance, rollback                           |
-| Connector device private keys                     | A stolen key can submit as its bound Community source                        | OS credential store, source binding, server revocation, bounded local removal, rotation, no plaintext fallback |
-| Sessions, passkeys, recovery, and invites         | They control profile identity and security-sensitive actions                 | Exact origins, one-time challenges, restricted recovery authority, hashed tokens, fixation and replay defenses |
-| GitHub identity binding                           | It enforces one Vibe Racing profile per resolved GitHub user ID              | Minimal OAuth scope, state, PKCE, exact redirects, token disposal, database uniqueness                         |
-| Private usage buckets and exact timestamps        | They can reveal work volume and schedule                                     | Data minimization, private-by-default access, bounded retention, log redaction, deletion                       |
-| Public handle, score, rank, source count, and car | They affect reputation even though they grant no privilege                   | Server-derived fields, plain-text rendering, bounded recipes, clear Community label                            |
-| Season and scoring integrity                      | Finalized public results must not be silently rewritten                      | Versioned formula, profile-level cap, server deadlines, immutable finalization, audited correction             |
-| Database roles and migration ownership            | A role escalation could cross identity, usage, admin, or deletion boundaries | Separate non-owner roles, procedure-only ingest, constraints, capability-matrix tests                          |
-| Edge and origin-proof keys                        | Direct-origin access could bypass WAF and request shaping                    | Body-bound short-lived proofs, replay rejection, rotation, Cloudflare-only public ingress                      |
-| Admin, deploy, and signing authority              | Compromise can affect every user or official artifact                        | Separate identities, passkey step-up, protected environments, reasons, external audit                          |
-| Deletion state and tombstones                     | Restore or job failure must not resurrect a deleted profile                  | Immediate hide/revoke, idempotent purge, bounded tombstone, deletion replay after restore                      |
-| Audit evidence                                    | Incident response needs attributable decisions without exposing usage data   | Append-only external records, redaction, access control, bounded retention                                     |
+| Asset or objective                                       | Why it matters                                                               | Required protection                                                                                            |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Public project and release integrity                     | Users may execute connector binaries and trust deployment artifacts          | Protected revisions, review, signed artifacts, checksums, SBOM, provenance, rollback                           |
+| Connector device private keys                            | A stolen key can submit as its bound Community source                        | OS credential store, source binding, server revocation, bounded local removal, rotation, no plaintext fallback |
+| Sessions, passkeys, recovery, and invites                | They control profile identity and security-sensitive actions                 | Exact origins, one-time challenges, restricted recovery authority, hashed tokens, fixation and replay defenses |
+| GitHub identity binding                                  | It enforces one Vibe Racing profile per resolved GitHub user ID              | Minimal OAuth scope, state, PKCE, exact redirects, token disposal, database uniqueness                         |
+| Private usage buckets and exact timestamps               | They can reveal work volume and schedule                                     | Data minimization, private-by-default access, bounded retention, log redaction, deletion                       |
+| Public handle, metric value, rank, source count, and car | They affect reputation even though they grant no privilege                   | Server-derived fields, plain-text rendering, bounded recipes, clear Community label                            |
+| Season and metric integrity                              | Finalized public results must not be silently rewritten                      | Versioned metric, canonical accounting, server deadlines, immutable finalization, audited correction           |
+| Database roles and migration ownership                   | A role escalation could cross identity, usage, admin, or deletion boundaries | Separate non-owner roles, procedure-only ingest, constraints, capability-matrix tests                          |
+| Edge and origin-proof keys                               | Direct-origin access could bypass WAF and request shaping                    | Body-bound short-lived proofs, replay rejection, rotation, Cloudflare-only public ingress                      |
+| Admin, deploy, and signing authority                     | Compromise can affect every user or official artifact                        | Separate identities, passkey step-up, protected environments, reasons, external audit                          |
+| Deletion state and tombstones                            | Restore or job failure must not resurrect a deleted profile                  | Immediate hide/revoke, idempotent purge, bounded tombstone, deletion replay after restore                      |
+| Audit evidence                                           | Incident response needs attributable decisions without exposing usage data   | Append-only external records, redaction, access control, bounded retention                                     |
 
 Prompts, conversations, repository contents, Codex credentials, API keys, account email, and
 arbitrary user files are prohibited data, not assets the service may collect.
@@ -185,7 +190,9 @@ arbitrary user files are prohibited data, not assets the service may collect.
 - A public visitor can send arbitrary browser and HTTP input, scrape public data, automate requests,
   and attempt client-side attacks.
 - An enrolled user can control their browser, create multiple GitHub accounts when upstream permits,
-  declare multiple sources, alter a local connector, and submit fabricated Community usage.
+  declare multiple sources, alter a local connector or thin client, and submit fabricated Community
+  usage. An anonymous user can additionally generate cheap Ed25519 credentials and attempt bulk
+  enrollment if admission controls are weak.
 - A network attacker can delay, replay, reorder, or modify traffic unless transport and application
   integrity controls stop them.
 - A local attacker may control the Codex executable path, App Server output, environment, working
@@ -201,19 +208,23 @@ arbitrary user files are prohibited data, not assets the service may collect.
 
 ### Trust boundaries
 
-| ID    | Boundary                                                | Untrusted side                                                        | Trusted decision point                                                                        | Principal failure modes                                                                     |
-| ----- | ------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| TB-01 | Visitor browser to Cloudflare edge                      | Browser state, URL, headers, body, cookies, automation                | Edge policy and Web/Auth validation                                                           | XSS, CSRF, IDOR, cache confusion, redirects, scraping, denial of service                    |
-| TB-02 | GitHub OAuth, recovery secret, and WebAuthn to Web/Auth | Callback, recovery selector/secret, browser ceremony, upstream errors | Exact OAuth binding, bounded Argon2id verification, and RP/origin/challenge validation        | Login CSRF, account oracle, offline guessing, replay, fixation, recovery or step-up bypass  |
-| TB-03 | Local Codex App Server to connector                     | Process path, JSONL framing, JSON values, stderr, timing              | Bounded exact-artifact selection, pinned adapter, strict field allowlist                      | Prompt or credential exfiltration, parser abuse, process escape, resource exhaustion        |
-| TB-04 | Local key store and scheduler to connector              | Host filesystem, environment, job definition, local user              | OS credential API, exact local deletion, fixed executable/arguments, retained artifact handle | Key theft, shell injection, binary substitution, false revoke assumption, persistence abuse |
-| TB-05 | Connector to public edge                                | Entire payload except possession proof                                | Edge proof plus ingest signature, source, schema, nonce, and idempotency validation           | Forgery, replay, cross-source submission, oversized input, request floods                   |
-| TB-06 | Cloudflare edge to Railway origins                      | Forwarded headers and edge proof                                      | Origin verifier before application routing                                                    | Direct-origin bypass, stale proof, body substitution, spoofed client IP                     |
-| TB-07 | Web/Auth, Ingest, and Jobs to PostgreSQL                | Service queries and compromised runtime role                          | Adapter session probes plus database grants, procedures, constraints, and transactions        | SQL injection, role escalation, cross-profile writes, finalized-season mutation             |
-| TB-08 | User session to admin surface                           | Normal identity and browser claims                                    | Separate origin, Cloudflare Access, admin policy, fresh passkey, audit                        | Privilege escalation, confused deputy, shared-account actions                               |
-| TB-09 | Source and dependencies to CI                           | Pull-request tree and upstream artifacts                              | Secretless read-only CI, protected review, pinned inputs                                      | Workflow injection, credential theft, dependency substitution, artifact publication         |
-| TB-10 | Protected source to release consumers                   | Build runner, signing environment, downloadable artifact              | Protected release workflow, signatures, checksums, SBOM, provenance                           | Official malware, key compromise, unsigned substitution, rollback failure                   |
-| TB-11 | Primary data to backups, logs, support, and deletion    | Copies and derived operational records                                | Retention, access, redaction, purge, restore replay                                           | Data over-retention, resurrection, support disclosure, unaudited access                     |
+| ID    | Boundary                                                                 | Untrusted side                                                                                                                      | Trusted decision point                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Principal failure modes                                                                                                                                                                                                                                                                                                          |
+| ----- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TB-01 | Visitor browser to Cloudflare edge                                       | Browser state, URL, headers, body, cookies, automation                                                                              | Edge policy and Web/Auth validation                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | XSS, CSRF, IDOR, cache confusion, redirects, scraping, denial of service                                                                                                                                                                                                                                                         |
+| TB-02 | GitHub OAuth, recovery secret, and WebAuthn to Web/Auth                  | Callback, recovery selector/secret, browser ceremony, upstream errors                                                               | Exact OAuth binding, bounded Argon2id verification, and RP/origin/challenge validation                                                                                                                                                                                                                                                                                                                                                                                                                | Login CSRF, account oracle, offline guessing, replay, fixation, recovery or step-up bypass                                                                                                                                                                                                                                       |
+| TB-03 | Local Codex App Server to connector                                      | Process path, JSONL framing, JSON values, stderr, timing                                                                            | Bounded exact-artifact selection, pinned adapter, strict field allowlist                                                                                                                                                                                                                                                                                                                                                                                                                              | Prompt or credential exfiltration, parser abuse, process escape, resource exhaustion                                                                                                                                                                                                                                             |
+| TB-04 | Local key store and scheduler to connector                               | Host filesystem, environment, job definition, local user                                                                            | OS credential API, exact local deletion, fixed executable/arguments, retained artifact handle                                                                                                                                                                                                                                                                                                                                                                                                         | Key theft, shell injection, binary substitution, false revoke assumption, persistence abuse                                                                                                                                                                                                                                      |
+| TB-05 | Connector or Usage Sync client to public edge                            | Entire payload except possession proof                                                                                              | Edge proof plus Ingest signature, exact route/schema, source binding, server-derived provider/accounting attribution, nonce, and idempotency validation                                                                                                                                                                                                                                                                                                                                               | Forgery, replay, path confusion, cross-source submission, provider relabel, oversized input, request floods                                                                                                                                                                                                                      |
+| TB-06 | Cloudflare edge to Railway origins                                       | Forwarded headers and edge proof                                                                                                    | Origin verifier before application routing                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Direct-origin bypass, stale proof, body substitution, spoofed client IP                                                                                                                                                                                                                                                          |
+| TB-07 | Web/Auth, Ingest, and Jobs to PostgreSQL                                 | Service queries and compromised runtime role                                                                                        | Adapter session probes plus database grants, procedures, constraints, and transactions                                                                                                                                                                                                                                                                                                                                                                                                                | SQL injection, role escalation, cross-profile writes, finalized-season mutation                                                                                                                                                                                                                                                  |
+| TB-08 | User session to admin surface                                            | Normal identity and browser claims                                                                                                  | Separate origin, Cloudflare Access, admin policy, fresh passkey, audit                                                                                                                                                                                                                                                                                                                                                                                                                                | Privilege escalation, confused deputy, shared-account actions                                                                                                                                                                                                                                                                    |
+| TB-09 | Source and dependencies to CI                                            | Pull-request tree and upstream artifacts                                                                                            | Secretless read-only CI, protected review, pinned inputs                                                                                                                                                                                                                                                                                                                                                                                                                                              | Workflow injection, credential theft, dependency substitution, artifact publication                                                                                                                                                                                                                                              |
+| TB-10 | Protected source to service deployments and release consumers            | Release tag, build/deploy runner, signing environment, deployment token, downloadable artifact                                      | Stable-tag/main-ancestry checks, secretless verification, protected deployment environment, signatures, checksums, SBOM, provenance                                                                                                                                                                                                                                                                                                                                                                   | Unauthorized deployment, official malware, key compromise, unsigned substitution, rollback failure                                                                                                                                                                                                                               |
+| TB-11 | Primary data to backups, logs, support, and deletion                     | Copies and derived operational records                                                                                              | Retention, access, redaction, purge, restore replay                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Data over-retention, resurrection, support disclosure, unaudited access                                                                                                                                                                                                                                                          |
+| TB-12 | Optional MCP agent to MCP server and Ingest (proposed, ADR 0068)         | Arbitrary MCP client, entire reported payload, connection metadata                                                                  | Pairing-bound device/source authority plus exact `UsageSyncV1` allowlist, server-derived immutable AgentSource provider, the existing Ingest verification kernel, replay store, and admission                                                                                                                                                                                                                                                                                                         | Forgery, replay, cross-profile/cross-source submission, provider relabel, arbitrary MCP/tool/prompt reflection, unsupported accounting schema, oversized input, floods                                                                                                                                                           |
+| TB-13 | Web/Auth to provider usage API, Verified tier (proposed, ADR 0068)       | Provider OAuth callback and usage responses                                                                                         | Minimal-scope OAuth, exact redirect, server-side usage fetch, Community/Verified separation                                                                                                                                                                                                                                                                                                                                                                                                           | Token misuse, provider spoofing, over-scope, cross-account linking, credential leakage                                                                                                                                                                                                                                           |
+| TB-14 | Agent local storage to thin client reader (proposed, ADR 0069)           | Mixed-content session logs, rollout files, SQLite databases                                                                         | Bounded read-only derivation of one canonical daily total; aggregate/component fixtures; cumulative-snapshot deduplication; strict size/record/field bounds; symlink and path-traversal rejection; fail-closed on malformed input                                                                                                                                                                                                                                                                     | Sensitive-field exfiltration, aggregate/component double counting, snapshot replay, unsupported-schema guessing, parser abuse, symlink traversal, resource exhaustion                                                                                                                                                            |
+| TB-15 | Low-friction enrollment and first-passkey bootstrap (proposed, ADR 0069) | Handle, bootstrap public key or exact GitHub device-flow result, first device public key, admission proof, first source declaration | Proof-class-specific admission before challenge; dual domain-separated possession proof; atomic profile/source/first-device creation; independently revocable per-device keys; temporary anonymous bootstrap allowlist; server-clock ownership lease that sync cannot renew; hide/pause at expiry; promotion-only grace without automatic reactivation; separate Jobs-only system-expiry cleanup; same-ID single-purpose GitHub first-passkey authority; monotonic completion and terminal retirement | Sybil enrollment, proof concurrency/replay, external-token reuse, shared-key/device impersonation, sync-key escalation, GitHub bootstrap as recovery, credential theft before promotion, use after retirement, client-time or sync renewal, expiry/promotion race, indefinite orphan retention, automatic post-expiry collection |
 
 ### Input ownership
 
@@ -243,8 +254,9 @@ pass into trusted-source, hosted, or production evidence.
   sources. This is an accepted integrity limitation, not proof of a connector vulnerability.
 - Community results remain visibly self-reported and cannot grant money, prizes, access,
   authorization, moderation power, or another valuable benefit.
-- The Verified league remains server-disabled and has no client-writable ingestion path until a
-  separately reviewed server-verifiable OpenAI contract exists.
+- The current Accepted VR-TRUST-002 keeps Verified disabled until a server-verifiable OpenAI source
+  exists and has no client-writable ingestion path. Proposed ADR 0068 would generalize that rule to
+  an independent per-provider decision; it has not amended the active invariant.
 - GitHub authenticates the upstream GitHub identity, but Vibe Racing still validates OAuth state and
   binding. GitHub identity does not prove unique human identity or unique Codex ownership.
 - Platform TLS, Cloudflare, Railway, PostgreSQL, operating-system credential stores, GitHub, and
@@ -277,7 +289,7 @@ and migration or rollback where applicable.
 | Pairing and device management       | A code guess or stolen session binds an attacker's key; a device attempts profile administration                                | Default-off pairing gate, short-lived split codes, fresh passkey, source-bound key, deny-by-default device scope, pause, unlink, revoke, and rotate                    | Route gate, DB, approval, lifecycle, exact HTTP/native client, proof/activation tested; live/cross-platform/edge evidence planned                                                                                                                                                                                            |
 | Connector process boundary          | Hostile JSONL or binary substitution extracts local data, hangs, floods output, or executes a command                           | Bounded fixed-name selection, exact artifact admission, retained handle, bounded child/output/time, sanitized environment, no shell, strict adapter                    | Protocol, supervisor, synthetic Windows discovery/admission and redacted process-free preview tested; other platforms, support planned                                                                                                                                                                                       |
 | Connector request protocol          | A client changes source, body, time, or nonce after signing, or replays a valid request                                         | Canonical signature, body hash, device/source binding, server receipt time, replay and idempotency stores                                                              | Local signer/vector, verifier, replay stores, application, and HTTP tested; operational/live planned                                                                                                                                                                                                                         |
-| Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                                          | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                                                        | Local verifier/config/replay/server/host tested; edge injection, trusted route, direct-origin planned                                                                                                                                                                                                                        |
+| Edge and origin                     | A client reaches Railway directly or forges forwarded IP/proof headers                                                          | Cloudflare-only ingress, short-lived method/path/body proof, direct-origin deny, trusted header chain, rotation                                                        | Local signer/verifier/config/replay/server/host and signer-to-verifier compatibility tested; secret injection, trusted route, direct-origin planned                                                                                                                                                                          |
 | Ingest and database                 | Malformed input writes derived fields, crosses a profile, injects SQL, or exhausts connections                                  | Default-off startup, strict schema, bounded bodies, fixed adapter/procedure, non-owner role, constraints, deadlines, backpressure                                      | Startup latch, full synthetic loopback HTTP-to-PostgreSQL including controlled four-slot no-queue contention and one silent built-entry-point request, and isolated SQL tested; OS-signal and deployed operation planned                                                                                                     |
 | Scoring and jobs                    | Source multiplication bypasses a cap, a race changes finalized scores, or a failed job double-applies work                      | Source/date dedup, profile cap after aggregation, versioned formula, idempotent jobs, server deadlines, immutable seasons                                              | SQL, CLI/PostgreSQL, fixed-clock core, injected timer/lifecycle, and real-clock emitted-process terminal-marker evidence tested; deployed cadence, production login, correction planned                                                                                                                                      |
 | CarRecipe and assets                | A proposal, agent shell, or public row smuggles a URL, command, markup, executable value, copyrighted binary, or nondeterminism | Default-off mutation, enum-only schema, checked reducer, proposal-only device authority, browser-only decision, projection, provenance, snapshots                      | Local gate/agent/browser/device/DB/public race, Jobs cleanup, and local catalog tested; deployed cadence, release, edge, deployment pending                                                                                                                                                                                  |
@@ -355,16 +367,18 @@ and migration or rollback where applicable.
    reader now requires one exact primary and at most one complete distinct rotation pair without a
    default or returned key container. Revision 0012 persistently consumes only the key-bound digest
    and expiry through an Ingest-only atomic function; observed contention yields one fresh result,
-   and Jobs can delete bounded expired tuples. A real Cloudflare signer, secret-manager/edge key
-   injection, Railway direct-origin denial, trusted proxy chain, and production cleanup scheduling
-   remain required. The local HTTP boundary deliberately trusts no proxy/forwarded identity, and the
-   transport-free application binds the same replay/device/submission adapter and maps only generic
-   public decisions. The separate host requires exact `0.0.0.0:$PORT` and an explicit `railway-edge`
-   declaration in production, but treats that value only as startup policy: it does not authenticate
-   the platform, forwarded headers, or request path. The full synthetic loopback gate proves that
-   the persistent origin nonce rejects a repeated HTTP proof before a second write and that local
-   admission rejects a fifth request before a fifth replay query while four queries are
-   lock-waiting, but it does not prove edge signing, distributed shaping, or direct-origin denial.
+   and Jobs can delete bounded expired tuples. A dependency-free local Cloudflare Worker creates the
+   exact proof and one compatibility gate passes it through the production verifier. Live
+   secret-manager/edge key injection, Railway direct-origin denial, trusted proxy chain, and
+   production cleanup scheduling remain required. The local HTTP boundary deliberately trusts no
+   proxy/forwarded identity, and the transport-free application binds the same
+   replay/device/submission adapter and maps only generic public decisions. The separate host
+   requires exact `0.0.0.0:$PORT` and an explicit `railway-edge` declaration in production, but
+   treats that value only as startup policy: it does not authenticate the platform, forwarded
+   headers, or request path. The full synthetic loopback gate proves that the persistent origin
+   nonce rejects a repeated HTTP proof before a second write and that local admission rejects a
+   fifth request before a fifth replay query while four queries are lock-waiting, but it does not
+   prove a deployed edge route, distributed shaping, or direct-origin denial.
 6. **Season race and cap bypass.** Parallel source updates or jobs double count, exceed the daily
    profile cap, or mutate a finalized season. Current SQL proves unique source/day state, one
    transactional profile cap, immutable formula/season binding, serialized idempotent open-season
@@ -384,14 +398,15 @@ and migration or rollback where applicable.
    non-mutating public responses plus TLS 1.2/1.3 through the narrow Web login, and proves the
    four-slot application admission rejects a fifth request without a fifth public-score query. The
    same disposable narrow-login path now captures parameter-payload-free nested `auto_explain`
-   output under a fixed byte/plan/node budget and fails unless all three adapter calls plus all
-   three projections use their reviewed bounded plans without mutation/locking nodes, temporary or
-   written blocks, or sequential scans over bounded-index relations. It scans the complete ephemeral
-   log for private markers and retains no artifact. This is synthetic planner evidence, not
-   representative cardinality, latency, capacity, monitoring, or deployment evidence. ADR 0056 now
-   keeps all three public GET compositions default-off before query/header parsing, admission
-   acquisition, or storage work unless their module-load value is exact true; it proves no deployed
-   or dynamic route/cache denial. A local one-shot Jobs runner now validates one of eighteen fixed
+   output under a fixed byte/plan/node budget and fails unless all four adapter calls plus all four
+   projections use their reviewed bounded plans without mutation/locking nodes, temporary or written
+   blocks, or sequential scans over bounded-index relations. It scans the complete ephemeral log for
+   private markers and retains no artifact. This is synthetic planner evidence, not representative
+   cardinality, latency, capacity, monitoring, or deployment evidence. ADR 0056 now keeps all three
+   legacy public GET compositions default-off before query/header parsing, admission acquisition, or
+   storage work unless their module-load value is exact true; the direct token GET has an
+   independent exact module-load gate. Neither proves deployed or dynamic route/cache denial. A
+   local one-shot Jobs runner now validates one of eighteen fixed
    authentication/abandoned-enrollment/audit-event/invite/CarRecipe-proposal/ingest/finalized-source-day/pairing/session/
    terminal-deletion-job/aged-revoked-passkey/aged-revoked-device cleanup, pairing
    approval-provenance redaction, fixed pairing-rate-window reset, primary-profile purge,
@@ -403,54 +418,32 @@ and migration or rollback where applicable.
    current and latest grace-eligible Monday plus at most one oldest known data-backed season per
    hour from UTC and retained state, marks fixed slots in memory before sequential invocation,
    prevents overlap and same-slot retry, and bounds first-signal shutdown. It has no queue,
-   caller-selected date, or added database authority. Its 94 tests use a fake runner and clock. A
-   second opt-in integration composes the production scheduler core under fixed injected UTC time
-   with the real Jobs runner and disposable PostgreSQL, proving exact dependency order, full
-   private-table widened-login non-mutation, and exact narrow-login state. A third advances the
-   fixed clock by one hour, invokes the production interval handler twice during the active
-   real-runner cycle, proves the exact recurring catalog plus overlap and same-slot suppression, and
-   verifies the rearmed terminal reset. A fourth composes the production process lifecycle, starts
-   the penultimate real-runner call before injecting its first handler, and proves that call settles
-   without starting the later job. A fifth starts the built entry point under the real host clock
-   from a link-free read-only graph under pinned Linux Node after temporarily denying only the Jobs
-   role's backlog function. It proves one generic cycle signal, no backlog mutation, and later
-   terminal-job settlement before a code-0 OS `SIGTERM` exit. The harness restores and rechecks the
-   exact grant, rearms the marker, holds the scoring mutex, and starts the same runtime again. It
-   observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus session
-   release, and proves the backlog and marker remain unchanged. After releasing the holder, a
-   restart finalizes the backlog before a silent signal exit. A disposable post-insert barrier then
-   holds a second backlog; another `SIGKILL` must roll back its whole projection transaction. The
-   barrier is removed and verified absent before a clean-schema restart finalizes that backlog
-   exactly once. A final rearm/restart proves another silent repeated cycle, session cleanup after
-   all six starts, runtime immutability, and exact state. A sixth starts that unchanged emitted
-   entry point from the same bounded runtime shape, observes a native minute-timer refresh in a
-   later real five-minute slot, delivers an OS `SIGTERM`, releases its controlled scoring lock, and
-   proves active-refresh settlement before silent code-0 exit. A seventh uses the same bounded
-   runtime shape, blocks the emitted first finalization call, delivers an OS `SIGTERM`, and proves
-   graceful settlement without starting any later job. The fifth proves local failure/crash
-   containment, later-job continuation, successful clean-schema retries, a later repeated restart,
-   four graceful post-startup `SIGTERM` settlements, two abrupt active-call `SIGKILL` exits, and one
-   controlled uncommitted post-insert transaction rollback; the sixth proves one local host-timer
-   recurring refresh plus active-call signal settlement. None proves committed/external-effect or
-   every-capability recovery, automatic privilege repair, a deployed controller/orchestrator grace
-   policy, managed restart, or signal route. Eligible expired invites are removed without deleting
-   redeemed provenance; eligible expired sessions are removed only when no retained predecessor or
-   pairing provenance requires the row; exact activated-pairing approval references are redacted
-   only after 180 days while the device binding remains; revoked passkeys are removed only after 180
-   days and after every exact session/challenge/pairing reference is absent; minimized activated
-   pairings and their exact revoked device keys are removed only after both are 180 days old and
-   every approval, authorization-challenge, nonce, and raw-snapshot reference is absent; terminal
-   deletion jobs are removed only after 30 days; database audit references are removed only after
-   180 days. A canonical abandoned `enrolling` profile and its redeemed invite are removed only
-   after every exact enrollment-session/registration-challenge expiry is past and no other recovery,
-   passkey, source, deletion, scoring, or recipe state exists; a locked in-flight initial-passkey
-   activation is skipped. Exact source/day values are removable only 30 days after terminal
-   finalization, after a smaller UTC-day/count projection exists and repeated live/captured
-   integrity checks pass; the public status result remains stable. Open, recent, missing-projection,
-   or drifted seasons are not cleanup-eligible. An external append-only audit sink, production
-   login/TLS and edge evidence, deployed signal routing and orchestrator grace policy, durable or
-   deployed scheduler evidence, audited correction authority, trusted-edge rate policy, and capacity
-   evidence are still required before publishing durable results.
+   caller-selected date, or added database authority. Its 94 tests use a fake runner and clock. The
+   opt-in scheduler integrations compose that production core with the real Jobs runner and
+   disposable PostgreSQL under fixed and real clocks, proving exact dependency order, widened-login
+   non-mutation, recurring execution with overlap suppression, graceful and abrupt OS-signal
+   settlement, clean-schema retry, one controlled uncommitted post-insert transaction rollback, and
+   one local host-timer recurring refresh (see [implementation status](../IMPLEMENTATION_STATUS.md)
+   and [ADR 0063](../decisions/0063-default-off-local-jobs-scheduler.md)). None proves
+   committed/external-effect or every-capability recovery, automatic privilege repair, a deployed
+   controller/orchestrator grace policy, managed restart, or signal route. Eligible expired invites
+   are removed without deleting redeemed provenance; eligible expired sessions are removed only when
+   no retained predecessor or pairing provenance requires the row; exact activated-pairing approval
+   references are redacted only after 180 days while the device binding remains; revoked passkeys
+   are removed only after 180 days and after every exact session/challenge/pairing reference is
+   absent; minimized activated pairings and their exact revoked device keys are removed only after
+   both are 180 days old and every approval, authorization-challenge, nonce, and raw-snapshot
+   reference is absent; terminal deletion jobs are removed only after 30 days; database audit
+   references are removed only after 180 days. A canonical abandoned `enrolling` profile and its
+   redeemed invite are removed only after every exact enrollment-session/registration-challenge
+   expiry is past and no other recovery, passkey, source, deletion, scoring, or recipe state exists;
+   a locked in-flight initial-passkey activation is skipped. Exact source/day values are removable
+   only 30 days after terminal finalization, after a smaller UTC-day/count projection exists and
+   repeated live/captured integrity checks pass; the public status result remains stable. Open,
+   recent, missing-projection, or drifted seasons are not cleanup-eligible. An external append-only
+   audit sink, production login/TLS and edge evidence, deployed signal routing and orchestrator
+   grace policy, durable or deployed scheduler evidence, audited correction authority, trusted-edge
+   rate policy, and capacity evidence are still required before publishing durable results.
 7. **Deletion resurrection.** A retry, partial outage, or restore brings back public data or device
    access. Visibility and authority are revoked synchronously, purge is idempotent, and restore
    procedures replay deletion markers before service resumes. The local current-snapshot drill
@@ -460,7 +453,11 @@ and migration or rollback where applicable.
    marker or replay, so this resurrection control remains a staging and deployment gate.
 8. **Malicious contribution.** A pull request modifies tests and workflows to appear safe while
    extracting credentials. PR execution remains disposable and secretless; protected review and
-   CODEOWNERS, not self-modifiable tests alone, authorize merge and later release.
+   CODEOWNERS, not self-modifiable tests alone, authorize merge and later release. The checked
+   stable-release service workflow adds a secretless verification job before its protected
+   environment, stable-tag/main-ancestry checks, exact deployment-tool pins, and closed service
+   order. Its local checker evidence does not prove hosted environment rules, credential scope,
+   operator approval, or a successful deployment.
 
 ### Lower-value and out-of-scope stories
 

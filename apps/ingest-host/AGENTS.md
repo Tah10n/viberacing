@@ -31,9 +31,9 @@ host.
 
 ## Required checks
 
-Run `pnpm run lint:ingest-host`, `pnpm run typecheck:ingest-host`,
-`pnpm run test:ingest-host:coverage`, `pnpm run build:contracts`, `pnpm run build:ingest`,
-`pnpm run build:ingest-host`, `pnpm run check:ingest-host-entrypoint`,
-`pnpm run test:ingest:postgres-integration`, `pnpm run test:ingest:signal-postgres-integration`, and
-the root `pnpm run verify`. Before committing, inspect the exact staged diff and run
+During iteration run `pnpm run lint:ingest-host`, `pnpm run typecheck:ingest-host`, and
+`pnpm run test:ingest-host`. Build and check the entry point when startup or emitted code changes.
+Run the PostgreSQL and signal integrations only when their database or process-lifecycle boundary
+changes. Use root `pnpm run verify` for handoff and `pnpm run verify:release` only at the release or
+broad cross-cutting boundary. Before committing, inspect the exact staged diff and run
 `pnpm run check:public:staged` plus `git diff --cached --check`.

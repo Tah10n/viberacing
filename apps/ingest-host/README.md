@@ -8,7 +8,11 @@ that cryptographic, contract, database, and HTTP behavior do not acquire deploym
 Every mode is disabled unless `VIBERACING_INGEST_ENABLED` is exactly `true`. The host evaluates that
 latch before `NODE_ENV`, listener, origin-proof, or database configuration and before constructing
 an application, pool, server, or socket. Missing, `false`, or any alternate spelling exits with the
-same silent status-1 startup failure. Tracked `.env.example` deliberately fixes it to `false`.
+same silent status-1 startup failure. Tracked `.env.example` deliberately fixes it to `false`. The
+separate `VIBERACING_USAGE_SYNC_ENABLED` value controls only registration of
+`POST /v1/community/usage`; exact own enumerable string `true` enables it after the primary Ingest
+latch and before application construction. Every other shape leaves the legacy route unchanged and
+the Usage Sync route absent.
 
 ## Listener contract
 
@@ -59,28 +63,28 @@ The contract runtime and Ingest workspace must be built first because the host r
 TypeScript source. Invalid or unreadable startup configuration exits with status 1 and no reflective
 output. The built-entrypoint gate exercises that behavior under a deliberately invalid environment.
 
-The current 130 host tests prove exact default-off enable admission before every other environment
+The current 132 host tests prove exact default-off enable admission before every other environment
 field or factory, local/production mode parsing, hostile environment and factory containment, real
 loopback binding through the reviewed Fastify factory, cleanup on every startup failure, idempotent
 close, shutdown-before-start, both signals, second-signal/deadline forcing, and the real synthetic
 configured application/pool composition at 100% statement, branch, function, and line coverage. They
 do not prove a deployed restart or old-instance drain, Railway deployment, public TLS, working
-database login, real origin key, edge signer, direct-origin denial, health policy, monitoring, load,
-capacity, or real-user synchronization.
+database login, real origin key, deployed edge signer, direct-origin denial, health policy,
+monitoring, load, capacity, or real-user synchronization.
 
 The separate opt-in `pnpm run test:ingest:postgres-integration` gate builds emitted contracts,
 Ingest, and host code; starts one disposable PostgreSQL container with an ephemeral loopback-only
 port; creates a synthetic login with only `viberacing_ingest`; and sends independently signed
-requests through this host. It proves accepted and duplicate acknowledgements, persistent origin
-replay and revoked-device denial, closed response headers, unique request IDs, and exact database
-stored state. It also holds four valid requests at the first replay-store call, requires a fifth
-generic 503 without a fifth replay call, and proves the four accepted responses after release. After
-closing the imported host, it starts `dist/main.js` as a separate silent process, observes the
-loopback listener with a connection-only probe, proves another exact accepted request, and forcibly
-ends only that test child before removing the container, network, and storage. It does not prove
-OS-signal delivery, graceful emitted-child settlement, deployment drain, Railway, external TLS,
-secret delivery, distributed control, a production credential, edge routing, representative load,
-real-user input, or capacity.
+requests through this host. It proves legacy and provider-attributed Usage Sync acceptance,
+duplicate acknowledgements, persistent origin replay and revoked-device denial, closed response
+headers, unique request IDs, and exact database stored state. It also holds four valid requests at
+the first replay-store call, requires a fifth generic 503 without a fifth replay call, and proves
+the four accepted responses after release. After closing the imported host, it starts `dist/main.js`
+as a separate silent process, observes the loopback listener with a connection-only probe, proves
+another exact accepted request, and forcibly ends only that test child before removing the
+container, network, and storage. It does not prove OS-signal delivery, graceful emitted-child
+settlement, deployment drain, Railway, external TLS, secret delivery, distributed control, a
+production credential, edge routing, representative load, real-user input, or capacity.
 
 The separate opt-in `pnpm run test:ingest:signal-postgres-integration` gate mounts one link-free
 exact production runtime read-only under the pinned Linux Node image, holds one independently signed

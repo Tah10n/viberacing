@@ -11,6 +11,35 @@ The repository contained no implementation when this plan was written. The separ
 described here remains proposed until that page points to corresponding code, tests, and deployment
 evidence.
 
+### Strategic revision (ADR 0068)
+
+[ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md) broadens the product direction.
+The token leaderboard becomes **agent-neutral** (initially Codex, Claude Code, opencode, Qwen Code,
+Cline, and Aider, with more agents recognized for future support) with a hybrid Community/Verified
+honesty model. The future public metric is the direct `weeklyTokenTotal` across every supported
+agent, with no provider/model/cost multiplier. A thin client is the primary connection path; MCP is
+an optional transport for integrations that can already produce the same reviewed usage contract,
+not a universal token meter. The existing racing presentation remains the visual expression of that
+one ranking. The existing security foundation is reused and generalized, not rewritten. Sections
+below that still speak only about Codex or `weeklyScore` describe the compatibility baseline. The
+broad multi-agent reader set, optional MCP, and Verified-tier work remains proposed and tracked
+through dedicated follow-on ADRs. ADRs 0071–0073 implement a narrower Codex-only vertical slice:
+server-owned attribution, `UsageSyncV1`, the current candidate connector cutover, and direct
+`community_tokens_v1` ranking. They do not implement another reader, the thin client, anonymous
+onboarding, MCP, Verified ingestion, or deployment.
+
+### Strategic revision (ADR 0069)
+
+[ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md) refines how users connect and
+onboard. The primary connection path becomes a **thin, minimal-dependency, auditable client** that
+reads each agent's local usage storage directly; the optional MCP and Rust connector paths do not
+block the thin MVP. Onboarding is **low-friction and hybrid**: anonymous/pseudonymous participation
+is allowed, GitHub device-flow is offered for a linked identity, and a passkey step-up is required
+only for critical/sensitive actions. The plan also adopts proven client practices (auto-submit hook,
+bounded backfill within the open-season horizon, sequential all-source submit, a local dry-run
+preview, and a minimal canonical-total payload) and a **ship-a-thin-MVP-first** release strategy.
+This is planning scope only; it refines, and does not yet change, the implemented baseline.
+
 ## Reading map
 
 - Product and data truth: Outcome, Product behavior, Trust model.
@@ -27,15 +56,24 @@ boundaries.
 
 ## Outcome
 
-Vibe Racing will be an English/Russian, pixel-art weekly leaderboard for Codex users. A signed local
-connector reads a narrow token-activity response from the local Codex App Server and submits bounded
-daily values to the service. Public profiles appear as cars in a live weekly race.
+Vibe Racing will be one focused English/Russian, pixel-art product: an **agent-neutral weekly token
+leaderboard**. It ranks how many tokens participating vibe coders spent across many coding agents —
+initially Codex, Claude Code, opencode, Qwen Code, Cline, and Aider, with Kimi, Gemini CLI, Cursor,
+GitHub Copilot, Windsurf, and others recognized for future support — rather than Codex alone. The
+primary connection path is a **thin, minimal-dependency, auditable client** that reads each agent's
+local usage storage directly (ADR 0069). An optional **MCP server** may transport the same canonical
+daily total for reviewed integrations, and a signed Rust connector remains an optional precision
+path. The racing presentation visualizes the same server-derived direct weekly token total
+regardless of which supported agent produced the usage.
 
 The product launches as an invite-only Community beta. Community data is self-reported and
 unverified. It cannot award money, prizes, authorization, or valuable product privileges.
 
-A separate Verified league is present only as a disabled server-owned state. It remains impossible
-to populate until a future OpenAI source supplies server-verifiable usage and account identity.
+Honesty follows a hybrid model (ADR 0068): a baseline **Community** tier that is self-reported,
+server-bounded, and explicitly labeled "not verified", plus an opportunistic **Verified** tier that
+the server populates only through a provider's server-verifiable usage API with the user's OAuth
+consent, where such an API exists. The Verified league remains a disabled server-owned state per
+provider until that provider integration is implemented, reviewed, and enabled server-side.
 
 ## Findings incorporated into this revision
 
@@ -55,19 +93,21 @@ The earlier design had several claims that were too strong for a high-quality pu
 6. Agent readability requires concise durable instructions, stable contracts, explicit invariants,
    an architecture index, and commands that are actually exercised by CI.
 
-This plan corrects those issues rather than hiding them behind anti-cheat language.
+This plan corrects those issues rather than hiding them behind vague abuse-prevention language.
 
 ## Product behavior
 
 ### Public experience
 
-- The home page opens on the current weekly race rather than a marketing-only landing page.
-- The leaderboard shows shared rank, car, display handle, weekly score, active days, optional
-  streak, freshness rounded to a day, and the number of sources contributing that week.
-- Users can inspect their score by day, connected sources, device keys, car proposal, privacy
-  controls, and deletion flow.
-- Three switchable visual themes use the same semantic race state: Neon Night Arcade, Classic Grand
-  Prix, and Cyber Rally.
+- The home page opens on the current weekly token leaderboard rather than a marketing-only landing
+  page.
+- After the token-total contract ships, the leaderboard shows shared rank, display handle,
+  `weeklyTokenTotal`, freshness rounded to a day, and the number of sources contributing that week.
+  Pixel-art cars and track position visualize that same provider-independent rank.
+- Users can inspect their private daily totals, connected agent sources, device keys, privacy
+  controls, and deletion flow. Provider-shaped component fields are neither submitted nor stored.
+- Switchable visual themes use the same semantic leaderboard state. The three racing themes (Neon
+  Night Arcade, Classic Grand Prix, Cyber Rally) change presentation only.
 - Keyboard navigation, screen-reader labels, contrast, reduced motion, and a non-animated table view
   are first-class acceptance criteria.
 - The interface and user documentation ship in English and Russian.
@@ -75,7 +115,8 @@ This plan corrects those issues rather than hiding them behind anti-cheat langua
 ### Privacy defaults
 
 - Public identity is a user-selected handle. Linking the public profile to GitHub is opt-in.
-- Exact token totals are private by default.
+- An explicitly public participating profile publishes its weekly aggregate token total. Exact
+  daily, source, provider, and component values remain private.
 - Last-sync data is rounded to a day so the UI does not expose an exact working schedule.
 - A user can pause collection, hide the profile immediately, or delete it.
 - The MVP uses no advertising, behavioral analytics, third-party tracking pixels, or remote web
@@ -83,54 +124,75 @@ This plan corrects those issues rather than hiding them behind anti-cheat langua
 
 ### Explicit non-goals
 
-- Ranking all Codex users worldwide.
-- Claiming OpenAI endorsement or verification.
+- Ranking all users of any agent worldwide.
+- Claiming OpenAI, Anthropic, Google, or any other provider endorsement or verification.
 - Supporting prizes, wagering, paid ranking, or usage-based authorization.
-- Reading prompts, conversations, repositories, model selections, API keys, or Codex authentication
-  tokens.
+- Reading prompts, conversations, repositories, model selections, API keys, agent authentication
+  tokens, or account email from any agent.
 - Arbitrary image, SVG, HTML, CSS, script, archive, or URL uploads.
-- Supporting API-key and Amazon Bedrock Codex modes in the first release.
-- Implementing the Verified league before a verifiable upstream contract exists.
+- Letting an MCP client create profile authority, widen device scope, set derived fields, or submit
+  for a source it does not own through pairing.
+- Supporting API-key and Amazon Bedrock agent modes in the first release.
+- Implementing any provider's Verified tier before a verifiable upstream contract exists for that
+  provider.
 
 ## Trust model
 
 ### Actors
 
-- Visitor: reads public race and profile data.
+- Visitor: reads the public leaderboard and public profile.
+- Anonymous user (proposed, ADR 0069): owns one Vibe Racing profile through an opaque local identity
+  credential, without GitHub; enrolled through an admission gate (invite or Turnstile).
 - GitHub user: owns one Vibe Racing profile.
-- Passkey holder: approves security-sensitive profile changes.
-- Local connector: owns a source-bound device key and submits Community data.
+- Passkey holder: approves security-sensitive profile changes and source pairing.
+- Thin client (proposed, ADR 0069): a minimal-dependency, human-auditable program that reads agent
+  local storage directly and submits bounded daily aggregates; the primary connection path.
+- Agent integration (thin-client reader, optional MCP client, or native connector): owns a
+  source-bound device key for one agent provider and submits only the canonical daily Community
+  total.
+- Provider (Verified tier): an agent provider whose server-verifiable usage API the server queries
+  with the user's OAuth consent.
 - Maintainer: develops and releases the project but has no routine need to read user usage values.
-- Operator: runs Cloudflare, Railway, and PostgreSQL with separated production roles.
-- Attacker: may control browsers, modified connectors, many GitHub accounts, network clients,
-  malicious pull requests, or leaked device credentials.
+- Operator: runs Cloudflare, Railway, and PostgreSQL with separated production roles; an optional
+  MCP transport has its own confined role and gate if introduced.
+- Attacker: may control browsers, modified or arbitrary MCP-compatible agents, many GitHub accounts,
+  network clients, malicious pull requests, or leaked device credentials.
 
 ### Residual risk
 
-A computer owner can modify the connector, fabricate token values, create several declared sources,
-or share a device. Request signatures prove which registered device sent a payload; they do not
-prove that the payload came from an honest Codex installation.
+A computer owner can modify the thin client, a connector, or an MCP-compatible agent, fabricate
+token values, create several declared sources across providers, or share a device. Request
+signatures prove which registered device sent a payload; they do not prove that the payload came
+from an honest agent installation.
 
 We contain this risk by:
 
-- keeping the league explicitly Community and reward-free;
-- applying the score cap once per profile after aggregating all sources;
-- publishing the number of sources used in a season;
-- removing raw-token tie breakers;
-- rate-limiting source creation and ingestion with deployment-configured policies;
+- keeping the leaderboard explicitly Community and reward-free;
+- applying request, source, numeric, and public-integer bounds before exact direct aggregation;
+- publishing the number of sources used in a season without exposing provider contribution details;
+- making the direct weekly token total the ranking metric, with no secondary competitive tie
+  breaker;
+- rate-limiting source creation, optional MCP connection, and ingestion with deployment-configured
+  policies;
+- requiring passkey-approved pairing before any MCP-reported source binds to a profile;
 - quarantining anomalous records without calling the heuristic verification;
-- keeping Verified ingestion unreachable.
+- keeping each provider's Verified ingestion unreachable until its integration ships.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Codex["Local Codex App Server"] --> Connector["Signed Rust connector"]
-    Connector -->|"source-bound signed request"| Edge["Cloudflare Worker, WAF, limits"]
+    Storage["Agent local storage (logs, rollout, SQLite)"] --> ThinClient["Thin auditable client (primary, ADR 0069)"]
+    Codex["Local Codex App Server"] --> Connector["Signed Rust connector (optional)"]
+    Agents["MCP-compatible agents"] --> MCP["Optional MCP submission transport"]
+    ThinClient -->|"per-source signed aggregates"| Edge["Cloudflare Worker, WAF, limits"]
+    Connector -->|"source-bound signed request"| Edge
+    MCP -->|"reviewed canonical total"| Edge
     Browser["Browser"] --> Edge
 
     GitHub["GitHub OAuth"] --> Web["Next.js Web and Auth"]
     Passkey["WebAuthn passkey"] --> Web
+    Provider["Provider usage API (Verified, OAuth)"] --> Web
 
     Edge --> Web
     Edge --> Ingest["Fastify Ingest API"]
@@ -141,6 +203,15 @@ flowchart LR
 
     Admin["Isolated admin origin"] -->|"Access plus passkey"| Web
 ```
+
+The thin client (ADR 0069) and optional MCP submission transport are proposed surfaces from
+[ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md) and
+[ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md); the provider usage API path
+is the per-provider Verified tier. They reuse the existing edge, Ingest verification kernel, pairing
+authority, and isolated database roles rather than introducing a new trust root. MCP does not define
+or derive the token metric. ADR 0071 now supplies the separate default-off Usage Sync contract and
+Codex-attributed Ingest/database path that those future clients may reuse; it adds no client or MCP
+surface.
 
 ### Runtime components
 
@@ -258,10 +329,12 @@ flowchart LR
   mounts the exact link-free emitted production graph read-only under the pinned Linux Node image,
   blocks one independently signed request at origin replay, delivers a real `SIGTERM`, releases the
   lock, and proves exact acknowledgement/persistence settlement, silent code-0 exit, session
-  release, immutable runtime contents, and cleanup. Railway/orchestrator drain, trusted external TLS
-  and edge routing, secret-manager/edge key injection, direct-origin denial, distributed
-  rate/backpressure controls, deployment login/certificate, representative load/capacity evidence,
-  real-user end-to-end integration, and deployment remain separate gates.
+  release, immutable runtime contents, and cleanup. A separate dependency-free Worker now creates
+  the exact origin proof, with local Web Crypto tests and production-verifier compatibility
+  evidence. Railway/orchestrator drain, trusted external TLS and edge routing, secret-manager/edge
+  key injection, direct-origin denial, distributed rate/backpressure controls, deployment
+  login/certificate, representative load/capacity evidence, real-user end-to-end integration, and
+  deployment remain separate gates.
 - Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
   The local runner now wraps only the twelve reviewed authentication/abandoned-enrollment/
   audit-event/invite/CarRecipe-proposal/ingest/finalized-source-day/pairing/session/
@@ -327,6 +400,146 @@ flowchart LR
 - Staging and production use different projects, databases, OAuth registrations, passkey origins,
   edge keys, and deployment credentials.
 - Pull-request previews never use production data or production secrets.
+
+## Multi-agent compatibility and token accounting
+
+Proposed by [ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md). This section frames
+the Codex compatibility contract below as the first provider instance of a general model.
+
+### Agent providers
+
+- An **AgentSource** is an opaque, user-declared Community source attributed to one provider from a
+  closed, reviewed **supported** enum: initially `codex`, `claude-code`, `opencode`, `qwen-code`,
+  `cline`, `aider`. A provider enters this enum only when a bounded reader for its local usage
+  storage is implemented and reviewed.
+- **Recognized but not yet supported** — reserved provider identifiers awaiting a working reader
+  (and, for server-side-usage agents such as GitHub Copilot, possibly a Verified-tier provider-API
+  path rather than local reading): `kimi`, `gemini-cli`, `cursor`, `github-copilot`, `windsurf`.
+  Submitting usage for a provider outside the supported enum fails closed.
+- Adding a provider to the supported enum requires a compatibility entry, a working bounded reader,
+  and, when semantics change, an ADR. Unknown or malformed provider usage fails closed and is never
+  uploaded as a partial interpretation.
+- The source remains opaque and self-declared; it is not a verified provider account identity. The
+  public Community label and contributing-source count make that limitation visible without
+  publishing a provider contribution breakdown.
+
+### Canonical token total
+
+The product ranks **provider-reported tokens**. Different tokenizers mean this is not a claim of
+equal compute, cost, energy, or work across providers. The simplicity and honesty rule is:
+
+```text
+sourceDayTokens =
+  one reviewed provider aggregate, or the sum of documented disjoint components
+
+profileDayTokens =
+  sum(latest accepted sourceDayTokens for each eligible distinct source)
+
+weeklyTokenTotal =
+  sum(profileDayTokens for dates in the season)
+```
+
+- Prefer a documented aggregate total. If none exists, sum only documented disjoint input/output
+  components. Cached, reasoning, or thought fields that are nested breakdowns are never added again.
+- Deduplicate cumulative snapshots and repeated records before daily aggregation.
+- Provider/model/cost metadata never applies a multiplier. A provider label selects a reviewed
+  compatibility reader only; it cannot change an admitted numeric total or rank.
+- The `UsageSyncV1` contract and season metric version pin the accepted reader/accounting revision
+  per provider. A semantic mapping change starts with a new season/version and never reinterprets
+  finalized values.
+- Unknown or ambiguous semantics fail closed. The client never estimates tokens from prompts,
+  responses, characters, prices, or another provider's tokenizer.
+- Every intermediate is an exact non-negative integer. A value outside the public JSON safe-integer
+  range is quarantined rather than wrapped, saturated, rounded, or published.
+- Equal `weeklyTokenTotal` values share rank. Provider, source count, active days, streak, and car
+  choice are not competitive tie breakers.
+- The current `community_v1` logarithmic `weeklyScore` remains an implemented compatibility baseline
+  only. New seasons cut over atomically to the implemented local `community_tokens_v1`; finalized
+  seasons are never rewritten or compared across metric versions.
+
+Documented API semantics used to select this rule were reviewed on 2026-07-23: OpenAI exposes an
+aggregate `total_tokens` with cached and reasoning tokens as nested details; Anthropic documents
+disjoint input, cache-creation, cache-read, and output components; Google Gemini exposes aggregate
+`totalTokenCount` across prompt, candidate, and thought tokens. Each local agent reader still
+requires fixtures for its exact storage schema and version before it becomes supported.
+
+### Connection paths
+
+- **Thin client (primary; proposed, ADR 0069).** A minimal-dependency, human-auditable client reads
+  each agent's local usage storage directly through bounded read-only readers and submits per-source
+  signed canonical daily totals. Adding an agent means adding one bounded, fixture-backed reader.
+  The thin client is the primary connection path.
+- **MCP server (optional transport).** MCP tools define arbitrary schemas and do not standardize
+  token telemetry. A future MCP surface may submit the same `UsageSyncV1` object only for an
+  integration with reviewed usage semantics. MCP compatibility alone does not make an agent
+  supported. The transport reuses the Ingest verification kernel and pairing applications and does
+  not widen the fields a device may set.
+- **Native connector (optional, precision).** The existing Rust connector remains available for
+  agents with good local usage data (Codex first), reading a narrow local usage response through a
+  version-specific handshake.
+- **Provider usage API (Verified tier).** Where a provider exposes a server-verifiable usage API,
+  the server fetches usage directly with the user's minimal-scope OAuth consent. This populates the
+  Verified tier only and stays disabled per provider until its integration ships.
+
+### MCP safety contract
+
+- Binding an MCP-reported source to a profile requires the existing pairing approval with a fresh
+  passkey step-up; an MCP client cannot create profile authority or submit for a source it does not
+  own.
+- The MCP surface reads no prompts, conversations, repositories, model selections, credentials, API
+  keys, or account email, and reflects none of it in output or logs.
+- MCP connection and ingestion are rate-limited and fail closed behind an exact default-off enable
+  gate, consistent with the existing gate pattern.
+- The MCP surface accepts no provider-shaped component fields and applies no accounting
+  interpretation or multiplier. It transports one already-derived canonical daily total.
+
+## Positioning and adopted practices
+
+The product belongs to the emerging category of public, multi-agent token-usage leaderboards. The
+goal is to be strong on every dimension that matters for this vision by combining the best of that
+category with this project's own differentiators, rather than trading one off against another.
+Comparable products are treated as prior art only; none is named or linked here.
+
+### Differentiators
+
+- **Open server, not just open client.** The web, ingest, jobs, database migrations, and scoring are
+  public and auditable, so the leaderboard and scoring themselves can be inspected, not only the
+  client.
+- **Server-side integrity.** The server computes dates, direct token totals, ranks, and seasons with
+  exact integer bounds and immutable finalization, and separates self-reported Community data from
+  opportunistically Verified provider data.
+- **Racing presentation.** Pixel-art cars and track position make the provider-independent weekly
+  token rank immediately legible without creating another scoring surface.
+- **Strict privacy defaults.** The explicitly public weekly aggregate is visible; exact daily,
+  source, provider, and component values remain private; freshness is rounded to a day; there is no
+  geo collection, advertising, analytics, or tracking.
+- **Auditable connection.** A thin client reads local usage directly across agents; MCP is an
+  optional submission transport, not a metering dependency.
+
+### Adopted practices
+
+These practices are adopted from prior art in the category because they are simple, user-trusting,
+and proven (see [ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md)):
+
+- A thin, minimal-dependency, human-auditable client as the primary connection path.
+- Direct read-only reading of each supported agent's local usage storage.
+- Low-friction onboarding: anonymous or GitHub device-flow, with passkey step-up only for critical
+  actions.
+- Auto-submit on session end, bounded backfill partitioned into independent requests by derived ISO
+  season (closed/finalized seasons are excluded per ADR 0008), and a local sequential `submit all`
+  loop that sends one independently signed single-source/single-season request at a time.
+- A local dry-run that shows exactly what would be sent before anything leaves the machine.
+- Payload minimization by construction: no model names, session counts, or provider-shaped raw token
+  components cross the reader boundary.
+
+### Honest tradeoffs
+
+Being strong on every dimension requires sequencing and accepts some tradeoffs. Anonymous
+participation lowers the barrier to entry but weakens per-human sybil resistance; this is acceptable
+because the leaderboard is reward-free and bounded (see
+[ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md) and the threat model).
+Shipping a thin MVP first is prioritized over completing the full security architecture before any
+release.
 
 ## Codex compatibility contract
 
@@ -440,22 +653,31 @@ The current contract does not document a timezone for startDate. Version 1 there
 
 ## Multi-account and multi-device model
 
-### CodexSource
+### AgentSource
 
-A CodexSource is an opaque Community source created by the user. It is not marketed as a verified
-OpenAI account identity.
+An AgentSource (formerly CodexSource; generalized by
+[ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md)) is an opaque Community source
+created by the user and attributed to one agent provider from the closed enum. It is not marketed as
+a verified provider account identity.
 
 One profile can hold at most 32 lifetime source records and 64 active plus unexpired approved device
-authorities. These are public fail-safe ceilings, not product targets. Creation and synchronization
-also remain subject to lower private fair-use, rate, and infrastructure budgets.
+authorities, across all providers. These are public fail-safe ceilings, not product targets.
+Creation and synchronization also remain subject to lower private fair-use, rate, and infrastructure
+budgets.
 
-When pairing a device, the user chooses:
+When pairing a device or enabling an optional MCP integration, the user chooses:
 
-- create a new source for another Codex account; or
-- attach this device to an existing source representing the same account.
+- create a new source for another agent account (selecting its provider); or
+- attach this device/agent to an existing source representing the same account and provider.
 
-That choice requires a current GitHub session and passkey. All devices attached to one source are
-deduplicated at the source/date level. Separate sources are summed.
+Under the proposed hybrid identity model, that choice requires a current session for the same
+profile—whether anonymous or GitHub-linked—and a fresh passkey; GitHub is not required for an
+anonymous profile that has activated a passkey. The implemented baseline remains GitHub-bound until
+ADR 0069 is accepted and implemented. Every attached device has its own private key and
+independently revocable device-authority row bound to exactly one source; a private key is never
+shared across devices. All devices attached to one source are deduplicated at the source/date level.
+Separate sources are summed directly across all providers for `community_tokens_v1`; the legacy
+profile score cap remains only in `community_v1`.
 
 This design intentionally does not read, hash, transmit, or store account email. It also does not
 pretend to prevent a malicious user from declaring the same account as several sources. The public
@@ -487,6 +709,15 @@ event.
   correction process.
 
 ## Identity, passkeys, and pairing
+
+The bullets below describe the implemented baseline (GitHub enrollment plus an initial passkey).
+[ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md) proposes a low-friction hybrid
+onboarding that would generalize it: anonymous/pseudonymous participation, GitHub device-flow, and a
+passkey step-up only for critical/sensitive actions rather than at enrollment. Its anonymous
+identity has a server-clock ownership lease so loss of the temporary credential converges to
+hide/pause and bounded system cleanup instead of indefinite retained state. ADR 0069 is Proposed
+planning scope; it does not refine VR-AUTH-001 or the one-profile-per-GitHub-ID rule unless
+accepted.
 
 ### Profile enrollment
 
@@ -682,17 +913,17 @@ only its weekly score, rank, active-day/source counts, rounded freshness, option
 visual-marker car; the UI explicitly keeps daily detail, device counts, exact usage/receipt time,
 proposal state, and identifiers out of that surface. The exact public handle can be shared as
 `/?profile=handle#profile`; invalid or duplicate values are ignored, and a missing top-32 row is
-never substituted with another profile. A separate opt-in synthetic gate now carries all three GETs
+never substituted with another profile. A separate opt-in synthetic gate now carries all four GETs
 through two emitted standalone Next production processes and a TLS-enabled disposable narrow Web
 login after applying the reviewed PostgreSQL migrations. It proves an extra-membership login fails
 without private-table mutation, validates the exact public contracts plus TLS 1.2/1.3, proves
 successful reads remain non-mutating, and exercises the exact four-request no-queue boundary with
 four observed database waits plus a rejected fifth request. Its disposable PostgreSQL preloads
 `auto_explain`; superuser-provisioned database-scoped settings apply only to the narrow synthetic
-login and disable parameter logging. A bounded fail-closed oracle now requires the three adapter
-plans and three nested projections, their reviewed indexes, bounded rows/plan shape, and no
-mutation, sequential scan of bounded-index relations, dirty/written block, temporary I/O, private
-marker, or printed/written plan artifact; container cleanup removes the ephemeral log. Authenticated
+login and disable parameter logging. A bounded fail-closed oracle now requires the four adapter
+plans and four nested projections, their reviewed indexes, bounded rows/plan shape, and no mutation,
+sequential scan of bounded-index relations, dirty/written block, temporary I/O, private marker, or
+printed/written plan artifact; container cleanup removes the ephemeral log. Authenticated
 daily/profile detail, cache, deployment certificate/login, external TLS/edge route, representative
 plan/load/capacity evidence, monitoring, real-user data, and deployment remain separate gates.
 
@@ -762,9 +993,11 @@ The ingest database role receives EXECUTE only on narrowly owned submission proc
 directly modify profiles, passkeys, invites, admin state, schema, or finalized seasons. Migration
 ownership is never assigned to a runtime service.
 
-## Scoring and seasons
+## Token accounting and seasons
 
-For each Codex-reported date:
+### Implemented compatibility baseline: `community_v1`
+
+The current code and public contracts still use the accepted legacy formula:
 
 ```text
 profileDailyTokens =
@@ -777,17 +1010,45 @@ weeklyScore =
   sum(dailyScore), capped at 7000
 ```
 
-Rules:
+This formula, one-to-seven-active-day simulator, `weeklyScore`, and historical contracts remain
+implemented evidence. They are not the target multi-agent ranking because the logarithm and
+active-day aggregation can rank fewer weekly tokens above more weekly tokens.
 
-- The profile cap is applied after all sources are summed.
-- Raw tokens are not a tie breaker.
-- Equal weekly score and active-day count share the same rank.
+### Direct metric: `community_tokens_v1`
+
+For each season:
+
+```text
+sourceDayTokens =
+  canonical total from one reviewed reader for one source/date
+
+profileDayTokens =
+  sum(latest accepted sourceDayTokens for each eligible distinct source)
+
+weeklyTokenTotal =
+  sum(profileDayTokens for dates in the season)
+```
+
+Rules for the locally implemented metric:
+
+- `weeklyTokenTotal` is the ranking value. There is no logarithm, active-day bonus, streak bonus,
+  provider/model/cost multiplier, currency conversion, or raw-token tie breaker.
+- Each reader uses one provider-documented aggregate or documented disjoint components. Nested
+  cached/reasoning/thought breakdowns are counted once; cumulative snapshots and duplicate records
+  are deduplicated. Unknown semantics fail closed.
+- Exact non-negative integer aggregation happens after source/date deduplication. An intermediate
+  outside the JSON safe-integer public contract is omitted from materialization, never wrapped,
+  saturated, rounded, or compared.
+- Equal weekly token totals share the same rank.
 - Display ordering inside a shared rank is deterministic per season and has no competitive meaning.
-- Streak is informational and does not increase score.
-- The scoring version is stored with each season and cannot change mid-season.
-- The public EN/RU simulator now applies the production formula to one hypothetical daily token
-  total and one to seven active days entirely in component memory. Synthetic-distribution tests
-  cover rest, steady, mixed, and capped weeks through the production scoring path.
+- Provider, source count, active days, streak, trust label, and CarRecipe are not competitive tie
+  breakers.
+- The metric version is stored with each season and cannot change mid-season. Existing/finalized
+  `community_v1` seasons remain immutable; a cutover creates only `community_tokens_v1` seasons, and
+  ranks from different metric versions are never merged.
+
+Rules shared by both metric versions:
+
 - A season begins on Monday according to codexReportedDate grouping.
 - [ADR 0008](decisions/0008-community-season-grace-and-finalization.md) fixes the Community grace
   deadline at Wednesday 00:00 UTC after that ISO week, 48 hours after the next Monday begins.
@@ -795,7 +1056,8 @@ Rules:
   finalizes the season. Client time cannot extend either decision.
 
 The ranking page always states that it ranks participating Vibe Racing Community profiles rather
-than all Codex users.
+than all users of any agent. Under `community_tokens_v1`, it also states that tokenizers differ and
+the displayed value is the direct sum of provider-reported tokens, not normalized compute or cost.
 
 ## CarRecipe and pixel assets
 
@@ -919,7 +1181,7 @@ ledger, and applies only an exact reviewed suffix before requiring the complete 
 opt-in synthetic gate now runs one widened and two narrow emitted processes over hostname-verified
 TLS to one disposable PostgreSQL database. It proves widened-login denial before schema creation,
 observes both narrow controllers behind one external lock holder, requires both to converge on the
-exact 40-row ledger after release, and verifies all 28 forced-RLS private tables, identity
+exact 42-row ledger after release, and verifies all 28 forced-RLS private tables, identity
 invariants, and resource cleanup. The next independent prerequisite is protected staging
 orchestration with environment-owned credentials/trust, intended replica topology, service
 compatibility, forward rollback, monitoring, and recovery; the disposable result satisfies none of
@@ -950,11 +1212,12 @@ production authorization, or deployment.
 - Sensitive actions require a reason and produce an external, append-only audit event.
 - Operators cannot retrieve Codex prompts or account email because those values are never collected.
 - Kill switches independently disable enrollment, pairing, source creation, ingestion, proposals,
-  and public ranking. Local default-off gates now cover Ingest startup, the three public-ranking
-  route modules, the four pairing route modules, new-source creation at the page plus both approval
-  service steps, CarRecipe proposal creation/approval across browser and device ingress, and the two
-  enrollment pages plus all four HTTP/service steps; deployed restart/route/cache-denial/runbook
-  behavior remains a separate gate for every control.
+  legacy public ranking, and direct-token ranking. Local default-off gates now cover Ingest startup,
+  the three legacy public-ranking route modules, the independent token route, the four pairing route
+  modules, new-source creation at the page plus both approval service steps, CarRecipe proposal
+  creation/approval across browser and device ingress, and the two enrollment pages plus all four
+  HTTP/service steps; deployed restart/route/cache-denial/runbook behavior remains a separate gate
+  for every control.
 - Operational logs are structured, redacted, retention-bounded, and avoid raw token values.
 - Alerts cover auth anomalies, pairing storms, source growth, signature and replay failures, ingest
   rejection, season jobs, deletion failures, database saturation, release events, and origin-proof
@@ -982,11 +1245,11 @@ one-to-sixteen individual opaque members. It returns no subject, email, token, k
 authorization and has no real Access policy/token, remote key refresh, passkey ceremony, host,
 origin protection, or deployment evidence.
 
-A checked capability-containment and recovery rehearsal runbook now binds all eight existing
+A checked capability-containment and recovery rehearsal runbook now binds all ten existing
 exact-default-off decisions to 24 ordered controls and eight repository commands. It requires
 protected authority, independent containment, Web process replacement, Ingest/Jobs/migration
 settlement, preserved returning security/deletion paths, redacted evidence, and recovery of one
-capability at a time; 22 unsafe or drifted variants fail closed. This is local prerequisite evidence
+capability at a time; 25 unsafe or drifted variants fail closed. This is local prerequisite evidence
 only, not a private reporting channel, deployed control plane, dynamic kill switch, monitoring,
 containment, recovery, or deployment.
 
@@ -1062,8 +1325,10 @@ The planned public tree is:
 - Cross-platform root scripts; no Unix-only command is the sole documented development path.
 - Docker Compose supplies disposable local PostgreSQL only; no production data is used for
   development.
-- One root verification entry point, `pnpm run verify`, invokes the currently implemented
-  language-specific, policy, and documentation checks.
+- The root `pnpm run verify` command is the bounded development gate for public/configuration
+  boundaries, contracts, migrations, workspace lint/types/unit tests, and Rust. Exhaustive
+  coverage/build/history/documentation/publication evidence is explicit through
+  `pnpm run verify:release` rather than blocking every iteration.
 
 ### Community and governance
 
@@ -1234,6 +1499,10 @@ measurements exist.
   rather than gaming one aggregate score.
 - Release jobs operate only from protected tags or environments and receive signing/deployment
   credentials after approval.
+- The current checked service workflow implements that boundary for stable-tag Railway/Cloudflare
+  source replacement: a secretless verification job precedes the protected environment, deployment
+  inputs are immutable-pinned, and Migration/Web/Ingest/Jobs/Edge order is fixed. Hosted environment
+  settings, credential scope, execution evidence, and connector artifact release remain pending.
 - Binaries are built in CI, checksummed, signed where platforms support it, accompanied by SBOM, and
   GitHub provenance-attested.
 - Users receive an independent verification command and expected signer identity. An attestation is
@@ -1330,13 +1599,13 @@ external TLS/edge, cache, capacity, or operational gate above.
   durable/deployed cadence, representative or deployed backlog recovery, capacity, notification,
   correction, backup purge, and deployed retention evidence remain open.
 - Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
-  gates now cover Ingest startup, all three public-ranking routes, all four pairing routes, and
-  new-source creation while preserving active existing-source pairing, plus CarRecipe proposal
-  creation/approval while preserving private read/reject, plus invite/OAuth/initial-passkey
-  enrollment while preserving returning login/recovery. The public score route also has one
-  controlled real-HTTP/PostgreSQL four-slot admission scenario with a fifth request rejected before
-  a fifth public-score query. Distributed limits, representative load/capacity, and deployed
-  operation remain open.
+  gates now cover Ingest startup, all three legacy public-ranking routes, the direct-token route,
+  all four pairing routes, and new-source creation while preserving active existing-source pairing,
+  plus CarRecipe proposal creation/approval while preserving private read/reject, plus
+  invite/OAuth/initial-passkey enrollment while preserving returning login/recovery. The public
+  score route also has one controlled real-HTTP/PostgreSQL four-slot admission scenario with a fifth
+  request rejected before a fifth public-score query. Distributed limits, representative
+  load/capacity, and deployed operation remain open.
 - Gate: source multiplication cannot exceed the profile score cap or gain privilege, and
   infrastructure limits survive load tests.
 
@@ -1366,29 +1635,226 @@ external TLS/edge, cache, capacity, or operational gate above.
 - Package the fixed-command end-user connector workflow only after the CLI is stable.
 - Gate: no arbitrary content or conversation text enters the service.
 
-### Phase 5 — Staging and invite beta
+### Phase 5 — Staging-readiness foundation (no participant beta)
 
-- Deploy isolated staging and production infrastructure.
-- Verify origin protection, migrations, backup restore, deletion replay, monitoring, incident
+- Prepare the isolated staging topology and protected deployment controllers without exposing
+  participant routes, creating a production cohort, or representing the current Codex-only
+  foundation as the thin MVP.
+- Rehearse origin protection, migrations, backup restore, deletion replay, monitoring, incident
   runbooks, connector signing, SBOM, provenance, and rollback. The checked migration,
   current-snapshot restore, and capability-containment runbooks plus the local advisory-lock
-  overlap, twice-restored database drill, exact-default-off decisions, and emitted
-  migration-controller convergence are prerequisite implementation evidence; they do not satisfy
-  successful staging migration orchestration/rollback, a protected staging restore, deployed
-  containment, stale-backup deletion replay, or any deployment gate.
-- Complete accessibility, privacy, legal, licensing, name/trademark, external security, and
-  documentation review.
-- Start with a small invite cohort and expand only after reviewing reliability, cost, abuse,
-  support, and deletion evidence. The transport-free Admin invitation kernel is a local prerequisite
-  only; it does not create or authorize that cohort.
+  overlap, twice-restored database drill, exact-default-off decisions, emitted migration-controller
+  convergence, and stable-release deployment declaration are prerequisite implementation evidence;
+  they do not satisfy successful staging migration orchestration/rollback, a protected staging
+  restore, deployed containment, stale-backup deletion replay, or any hosted deployment gate.
+- Prepare accessibility, privacy, legal, licensing, name/trademark, external security, and
+  documentation review inputs. Completion is evaluated against the Phase 8 thin-MVP artifact, not
+  against this foundation alone.
+- Gate: no invite cohort or public beta begins in this phase. The transport-free Admin invitation
+  kernel is a local prerequisite only; it does not create or authorize a cohort.
+
+The following phases implement the strategic revisions from
+[ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md) and
+[ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md). They build on the foundation
+above; each new surface ships behind its own exact default-off enable gate.
+
+Per [ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md), the work is sequenced to
+**ship a thin MVP first**: the multi-agent generalization, canonical readers, thin auditable client,
+and low-friction hybrid onboarding (Phase 6) feed the direct token-total contract and leaderboard
+(Phase 7). Only that combined artifact enters staging and invite beta (Phase 8). Optional MCP
+submission (Phase 9) and Verified provider integrations (Phase 10) are follow-on capabilities and do
+not block that core Community product.
+
+### Phase 6 — Multi-agent generalization, thin client, and hybrid onboarding
+
+Current status: ADR 0071 completes the first compatibility foundation below for the existing Codex
+source path—closed `UsageSyncV1`, exact server-derived `codex`/`codex_daily_usage_buckets_v1`
+attribution, additive migration, Edge/Ingest gate, and real PostgreSQL mapping. ADR 0073 changes the
+unreleased exact-version Windows candidate connector to emit that body and path. Additional provider
+readers, source creation, the thin client, anonymous/hybrid onboarding, ownership lease, and
+partitioned backfill remain pending, so Phase 6 is not complete.
+
+- Generalize the source model and contracts: add the provider enum and the AgentSource provider
+  dimension; introduce the multi-agent UsageSyncV1 contract alongside ConnectorSyncV1 with
+  generated-type and OpenAPI drift checks. Provider is immutable on AgentSource and is not
+  client-writable in UsageSyncV1; Ingest derives it from the verified device/source binding and
+  rejects a provider field as unknown.
+- Map existing Codex sources to provider `codex`; keep ConnectorSyncV1 accepted during a bounded
+  compatibility window.
+- Add one reviewed, versioned canonical-total mapping for each first provider. Prefer its documented
+  aggregate; otherwise sum only documented disjoint components. Prove nested cache/reasoning/thought
+  fields and cumulative snapshots are not double counted. Pin the mapping through the
+  `UsageSyncV1`/season metric versions; reject providers with ambiguous semantics.
+- Build the thin, minimal-dependency, human-auditable client with bounded read-only readers for the
+  first agent local-storage formats. Each reader extracts only the documented usage-aggregate fields
+  from mixed-content storage, enforces strict size/record/field bounds, rejects symlinks and path
+  traversal, and may ignore only explicitly recognized non-usage records. Malformed, oversized,
+  ambiguous, or unrecognized usage-bearing input invalidates the whole affected source/day; no
+  partial daily total or signed request is emitted. Independently valid source/day units may
+  continue with a bounded local error. Add the agent-local-storage trust boundary to the threat
+  model.
+- Implement anonymous enrollment bootstrap as a two-step challenge-response ceremony with two
+  separate Ed25519 credentials. The identity bootstrap key is temporary profile authority only while
+  the profile is anonymous and has no active passkey. Its closed allowlist is a short-lived
+  restricted bootstrap session, registration of exactly the first passkey, and anonymous-to-GitHub
+  upgrade; it never enters restricted recovery, adds a subsequent passkey, performs deletion, or
+  signs sync. The device-bound sync key signs only for its one bound source and cannot gain profile
+  authority. Every local installation/device generates its own credential-store-protected key with
+  no plaintext-file or product export/copy workflow; this does not claim hardware-backed
+  non-exportability, and a compromised process running with the user's authority may extract or use
+  it. One source may have multiple independently revocable device-authority rows. Every action has a
+  distinct domain-separated challenge.
+- Consume admission before challenge issuance with proof-class-specific semantics. For an invite,
+  atomically reserve one active/unexpired/unredeemed verifier for the exact enrollment transaction;
+  concurrency yields one reservation/challenge, and expiry may release only that same still-valid
+  reservation. For Turnstile or another external proof, validate it externally, discard the raw
+  token, and atomically insert a unique one-way local consumption record before challenge issuance;
+  it cannot be rolled back for reuse, so failure requires a new provider token. Completion consumes
+  the exact challenge and creates one profile/source/first-device binding atomically; the invite
+  branch also redeems its reservation. Rate-limit by bootstrap public key and network origin as
+  defense-in-depth.
+- Set a 90-day anonymous ownership lease from the database clock in the enrollment transaction. Only
+  a valid pre-expiry identity proof that establishes a restricted bootstrap session renews it to
+  database-now plus 90 days; ordinary sync, device possession, reads, failed proof, and client time
+  never renew it. At expiry, authoritative reads hide the profile, Ingest rejects sync, and one
+  serialized transition pauses every source and opens only a 30-day terminal promotion grace.
+  First-passkey or GitHub promotion during grace retires the bootstrap key but leaves the profile
+  hidden and sources paused until passkey-protected user action. After grace, a separate bounded,
+  idempotent Jobs-only system-expiry capability removes profile-owned state without fabricating a
+  user deletion request.
+- Retire the identity bootstrap credential atomically with first-passkey activation or successful
+  GitHub upgrade and persist monotonic `first-passkey-complete` state when any first passkey is
+  activated. A retained or stolen client copy is rejected after retirement. Subsequent passkey
+  addition and restricted recovery use only the normal passkey/recovery-code flows; revocation and
+  aged provenance cleanup never reset first-passkey eligibility. Loss before promotion cannot be
+  recovered with a replacement credential; the enrollment UI warns, shows the lease deadline, and
+  offers immediate first-passkey promotion. Expiry and system cleanup prevent a permanent orphan.
+- Offer GitHub device-flow as a separate enrollment identity. During beta it uses the same admission
+  gate and must prove possession of the first device's sync key before atomically creating the
+  unique GitHub profile, first source, first device binding, basic session, and one bounded
+  first-passkey authority. A GitHub-linked profile that has never activated a passkey may consume
+  that exact enrollment/upgrade transaction, or a later fresh same-ID returning device-flow
+  transaction after expiry, plus one action-bound WebAuthn challenge to register exactly the first
+  passkey. That single-purpose authority grants no login, recovery, source/device, deletion, or
+  Admin capability and is permanently unavailable after monotonic first-passkey completion.
+  Anonymous upgrade requires the bootstrap proof while no passkey exists or a fresh passkey after
+  promotion; the no-passkey branch retires bootstrap authority while preserving the bounded GitHub
+  first-passkey path. If the resolved GitHub ID already belongs to a profile, fail generically with
+  zero mutation; never merge profiles or transfer sources/scores automatically.
+- Implement bounded backfill partitioned by derived ISO season. Always send current-week dates in an
+  independent signed request; include the immediately preceding week only while it may arrive before
+  its Wednesday 00:00 UTC grace deadline, and send it as a separate request. Server receipt time
+  remains authoritative, so a previous-season deadline race cannot quarantine current-season dates.
+  Exclude closed/finalized seasons and never retry them after closure. Implement local dry-run
+  (`status`) that prints the exact ordered source/season requests before send.
+- Keep the payload minimal by construction: do not collect model names, session counts, or raw
+  provider-shaped token components. The reader emits only source/date plus the canonical daily total
+  required by `UsageSyncV1`.
+- Gate: UsageSyncV1 rejects a provider field; Ingest derives provider/accounting revision from the
+  immutable AgentSource reached through the verified device binding; relabel, wrong-source,
+  unsupported-revision, per-provider bounds, and reject-unknown tests pass. Existing Codex data and
+  sync remain compatible. Each reader extracts only the canonical total from mixed-content storage
+  with no sensitive-field leakage or component/snapshot double counting. Anonymous enrollment uses a
+  temporary identity bootstrap credential and an independently revocable device-bound sync key;
+  multiple device keys may bind one source, no private key is shared, and a sync key cannot add a
+  passkey or delete the profile. The bootstrap key cannot enter recovery, add a later passkey, or
+  perform a critical action; first-passkey and GitHub promotion retire it atomically. Fixed-clock
+  and concurrency tests prove only a valid pre-expiry bootstrap-session proof renews the 90-day
+  ownership lease; ordinary sync cannot. Expiry hides the profile, pauses all sources, rejects
+  Ingest, and leaves only the two promotion proofs for 30 days. Promotion does not automatically
+  unhide or resume; after grace the independent Jobs-only system-expiry capability removes the
+  profile idempotently and cannot impersonate user deletion. Invite concurrency yields exactly one
+  reservation/challenge and safe exact-reservation release; external-proof concurrency yields
+  exactly one one-way local consumption/challenge with no raw-token retention or reuse. Replay and
+  cross-domain proofs are rejected; enrollment creates one profile/source/first-device binding
+  atomically. Fresh GitHub enrollment proves admission plus first-device possession. GitHub
+  first-passkey authority requires a fresh same-ID device flow, is single-purpose, and cannot be
+  issued after monotonic completion or used as recovery. GitHub collision returns a generic
+  zero-mutation result, and no automatic merge exists. Anonymous passkey-bound source/device actions
+  do not require GitHub. Deletion requires a passkey. `submit all` sends sequential, independently
+  bounded and signed single-source/single-season requests with independent outcomes; cross-source
+  signing is rejected. Fixed-clock grace-boundary tests prove a previous-season quarantine cannot
+  include current-season dates; dry-run matches every ordered request. The payload rejects model
+  names, session counts, and provider-shaped component fields.
+
+### Phase 7 — Direct token-total leaderboard
+
+Current status: ADR 0072 implements this phase locally for the current Codex-only Community beta
+slice. Revision 0042 selects `community_tokens_v1` for new seasons, preserves legacy seasons, and
+adds the direct public projection. The separate default-off Web route and EN/RU token-first browser
+consumer have contract, unit, production-build, and disposable PostgreSQL evidence. Deployment and
+the broader multi-agent Phase 6 artifact remain pending.
+
+- Add the versioned `community_tokens_v1` season metric and public `weeklyTokenTotal` contract.
+  Compute one exact direct sum after source/date deduplication; do not apply logarithms, active-day
+  bonuses, provider/model/cost multipliers, currency conversion, or secondary competitive tie
+  breakers.
+- Cut over only newly created seasons. Preserve finalized `community_v1` score rows and contracts
+  unchanged, and never compare ranks across metric versions.
+- Keep the pixel-art cars, track, and the Neon Night Arcade, Classic Grand Prix, and Cyber Rally
+  themes as presentation of the canonical weekly token rank. Provider contribution details remain
+  private; the public source count and Community label communicate the self-reporting limitation.
+- Keep CarRecipe cosmetic: a provider label, source count, theme, or car choice cannot change token
+  totals, trust tier, or rank.
+- Gate: direct-sum property tests prove that a larger admitted token total can never place behind a
+  smaller total; aggregate/component, cache, reasoning/thought, snapshot-deduplication, overflow
+  quarantine, shared-rank, migration, and finalized-season immutability tests pass. The EN/RU UI
+  says tokenizers differ and the metric is provider-reported tokens, not normalized compute or cost.
+  Visual and table positions derive from the same `weeklyTokenTotal`; keyboard, screen-reader,
+  contrast, reduced-motion, and non-animated table evidence passes.
+
+### Phase 8 — Thin MVP staging and invite beta
+
+- Build one immutable Phase 6–7 thin-MVP artifact: multi-agent readers, hybrid onboarding, the
+  direct token-total contract, and the provider-neutral leaderboard. The earlier Codex-only
+  foundation is not a substitute for this artifact.
+- Deploy that exact artifact to isolated staging first, then complete origin protection, migrations,
+  backup restore, deletion replay, monitoring, incident runbooks, connector/client signing, SBOM,
+  provenance, rollback, accessibility, privacy, legal, licensing, name/trademark, external security,
+  and documentation evidence against it.
+- Deploy production only after every public-beta release gate below is satisfied. Start with a small
+  invite cohort and expand only after reviewing reliability, cost, abuse, support, and deletion
+  evidence. The transport-free Admin invitation kernel remains a local prerequisite and does not
+  create or authorize that cohort.
+- Gate: no Phase 5 foundation result, legacy Codex-only artifact, optional MCP implementation, or
+  Verified integration can stand in for the complete Phase 6–7 artifact and its staging evidence.
+
+### Phase 9 — Optional MCP submission transport
+
+- Add a bounded MCP server only as an optional Community submission transport for integrations that
+  already produce the reviewed `UsageSyncV1` canonical total. MCP compatibility alone cannot make a
+  provider supported and the server does not infer usage from arbitrary MCP fields.
+- Reuse the Ingest verification kernel, replay protection, source binding, and pairing approval.
+  Require passkey-approved pairing before an MCP-reported source binds to an existing profile; deny
+  cross-profile and cross-source submission, replay, unsupported accounting schemas, oversized
+  input, and floods. The anonymous enrollment bootstrap (Phase 6) is a separate ceremony and does
+  not use the MCP pairing path.
+- Ship behind an exact default-off MCP enable gate; read no prompts, credentials, email, model
+  names, session counts, or provider-shaped token components and reflect none in output or logs.
+- Gate: the thin client and Phase 7 leaderboard work with MCP disabled; an agent link never grants
+  profile authority; MCP negative authorization and abuse cases pass; the enrollment bootstrap and
+  MCP pairing are independently tested and cannot substitute for each other.
+
+### Phase 10 — Verified tier (per provider)
+
+- Add server-side usage fetch through a provider's server-verifiable usage API with minimal-scope
+  OAuth and exact redirect, for the first provider(s) that expose such an API.
+- Map the provider response through the same canonical-total rule used by Community readers. Trust
+  tier changes provenance only; it never applies a numeric multiplier or changes rank arithmetic.
+- Keep Verified a disabled server-owned state per provider until its integration is reviewed and
+  enabled; a Community record can never become Verified by client assertion.
+- Gate: provider tokens never enter logs, fixtures, or the repository; over-scope and cross-account
+  linking are rejected; Community/Verified separation and accounting-parity tests pass.
 
 ## Public-beta release gates
 
-The project is not ready for a public beta until all of these are true:
+Phase 8 cannot start a participant cohort, and the project is not ready for a public beta, until all
+of these are true. Optional Phase 9 MCP and Phase 10 Verified capabilities are not prerequisites;
+when disabled, their absence must not weaken or be misrepresented as evidence for the thin MVP:
 
 ### Product truth
 
-- Every ranking surface says Community and self-reported.
+- The leaderboard says Community and self-reported.
 - Verified ingestion is unreachable.
 - No reward or privilege depends on score.
 - Multi-source behavior and source count are visible and documented.
@@ -1475,6 +1941,10 @@ has implemented them.
   treating one aggregate score as proof.
 - [Developer Certificate of Origin](https://developercertificate.org/) for the selected initial
   contribution certification model.
+- The Model Context Protocol (MCP) specification for the optional submission transport proposed by
+  ADR 0068. MCP defines tool schemas and invocation, not provider token telemetry. Adding its
+  documentation host to the reviewed external-link allowlist is a separate policy review step; it is
+  intentionally not linked here until then.
 
 ## Final assessment
 
@@ -1482,3 +1952,11 @@ With these corrections, the plan is suitable as an implementation baseline for a
 project. It does not make the service impossible to abuse; no public client-reported leaderboard can
 make that promise. Instead it makes abuse low-value, bounded, observable, reversible, and honest to
 users, while keeping the codebase understandable and verifiable by both people and coding agents.
+
+The strategic revision in [ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md)
+broadens the product to an agent-neutral direct token-total leaderboard with a thin-client primary
+path and optional MCP submission without weakening that posture: the same fail-closed gates,
+isolated database roles, pairing authority, server-derived fields, and honest Community/Verified
+labeling extend to every supported agent. The multi-agent accounting, token-total contract, optional
+MCP, and per-provider Verified work remains proposed until its dedicated ADRs and implementation
+evidence land.

@@ -81,8 +81,9 @@ The implemented surface is deliberately narrow:
   values, credentials, account, and usage, and is never saved or sent by the connector;
 - fresh OS-random sync ID and nonce, canonical millisecond UTC, active-record source/device/key
   binding, and one existing exact composition/signing path;
-- one fixed `/v1/community/sync` POST with proxies and redirects disabled, platform TLS, only the
-  five device headers, an 8192-byte request, and a closed 1024-byte acknowledgement; and
+- one fixed `/v1/community/usage` `UsageSyncV1` POST with proxies and redirects disabled, platform
+  TLS, only the five device headers, an 8192-byte request, and a closed 1024-byte acknowledgement;
+  and
 - no automatic retry after an ambiguous POST and only generic accepted, duplicate, or review output.
 - one exact `propose-car` command whose seven enum flags and canonical `0..65535` seed serialize to
   `CarRecipeV1`, with no prompt, free text, profile/source/proposal ID, file, URL, or arbitrary
@@ -96,7 +97,7 @@ The implemented surface is deliberately narrow:
   encoded-signature byte buffer.
 
 `ReviewedCodexLaunch`, `PendingDevicePairingSigningKey`, `ReviewedPairingChallenge`,
-`ReviewedCommunitySyncContext`, and `ReviewedDeviceSigningKey` have no public constructors. The
+`ReviewedCommunityUsageContext`, and `ReviewedDeviceSigningKey` have no public constructors. The
 private pairing command constructs only its two pending capabilities; the private sync command can
 construct the launch/context/key capabilities only after active-record review and exact artifact
 admission from bounded fixed-name discovery or an explicit path. `check-codex` reuses only that
@@ -153,8 +154,8 @@ node scripts/check-codex-compatibility.mjs
 pnpm run test:connector:windows-portable
 ```
 
-The portable lifecycle command is Windows x86_64-only. The root `pnpm run verify` additionally
-checks formatting, Clippy, licenses, public-data safety, and the rest of the repository; on Windows
-x86_64 it also runs that release-profile smoke. Rust tests launch only target-built synthetic
-fixtures and ephemeral loopback HTTP; they never execute a local Codex account, open a real user
-credential, or upload real usage.
+The portable lifecycle command is Windows x86_64-only. The normal root `pnpm run verify` runs the
+bounded Rust and repository development checks. `pnpm run verify:release` adds licenses and the
+other exhaustive policy evidence and, on Windows x86_64, the release-profile smoke. Rust tests
+launch only target-built synthetic fixtures and ephemeral loopback HTTP; they never execute a local
+Codex account, open a real user credential, or upload real usage.

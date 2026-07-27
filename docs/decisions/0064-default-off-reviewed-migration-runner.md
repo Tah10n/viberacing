@@ -103,7 +103,7 @@ The opt-in synthetic integration now proves that PostgreSQL accepts the driver-s
 multi-statement bodies, the closed probe admits one real narrow role and rejects a deliberately
 widened role before schema creation, and the session lock composes with every migration's
 transaction lock. It observes two emitted narrow controllers behind one external holder, then
-requires both to succeed and converge on the exact 40-row ledger, 28 owner-owned forced-RLS tables,
+requires both to succeed and converge on the exact 42-row ledger, 28 owner-owned forced-RLS tables,
 and the identity invariant oracle over hostname-verified TLS. This remains local disposable
 evidence, not successful staging migration orchestration/rollback, a production credential,
 deployed-replica behavior, monitoring, capacity, deployment, or recovery.
@@ -154,7 +154,7 @@ Current local evidence includes:
 - one opt-in disposable PostgreSQL integration that builds the emitted entry point, proves a
   widened-login denial before schema creation, observes two narrow controllers behind an external
   lock holder over hostname-verified TLS, requires both generic-success exits, verifies the exact
-  40-row ledger, all 28 owner-owned forced-RLS tables, the identity invariant oracle, and complete
+  42-row ledger, all 28 owner-owned forced-RLS tables, the identity invariant oracle, and complete
   connection/lock cleanup;
 - root verifier wiring, frozen lockfile supply-chain policy, and the existing immutable migration
   checker; and

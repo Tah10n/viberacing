@@ -10,27 +10,39 @@ an owner before public beta.
 Community activity is self-reported. A user who controls a computer can fabricate usage, share a
 device, create several GitHub identities, or declare the same Codex account as several sources. The
 product contains rather than “solves” that behavior: no reward or privilege depends on score, source
-count is visible, all sources share one profile daily cap, and Verified ingestion is unreachable.
+count is visible, request/source/numeric bounds apply, and Verified ingestion is unreachable. The
+implemented `community_v1` additionally has one profile daily score cap; implemented
+`community_tokens_v1` instead omits unsafe aggregates without transforming admitted safe totals.
 
 The same behavior becomes a security or abuse defect when it crosses another profile, bypasses the
-profile cap, gains authority, reaches Verified state, evades deletion/revocation, or creates
-material availability cost.
+applicable accounting or numeric bounds, gains authority, reaches Verified state, evades
+deletion/revocation, or creates material availability cost.
 
 ## Identity, source, and scoring abuse
 
 ### VR-ABUSE-IDENTITY-SYBIL — Many enrollment identities
 
-- **Attacker:** A person or automation controlling several upstream GitHub identities.
-- **Preconditions:** Enrollment is available and the attacker can obtain or redeem invitations.
+- **Attacker:** A person or automation controlling several upstream GitHub identities, or generating
+  many cheap Ed25519 credentials for anonymous enrollment (ADR 0069).
+- **Preconditions:** Enrollment is available and the attacker can obtain or redeem invitations
+  (GitHub path), or solve admission challenges at scale (anonymous path).
 - **Abuse:** Create many profiles to occupy leaderboard positions, scrape invitations, or consume
   capacity.
 - **Impact:** Reputation noise, invite depletion, moderation load, and infrastructure cost; no
   direct privilege if the Community boundary holds.
-- **Controls:** Default-off enrollment, invite-only rollout, upstream immutable GitHub ID binding,
-  one profile per ID, server-side Turnstile checks, private fair-use controls, and no score-backed
-  benefit.
+- **Controls:** Default-off enrollment; admission gate — invite-only rollout for the beta, then
+  server-side Turnstile (or equivalent proof-of-humanity) for anonymous enrollment; unique invite
+  reservation before challenge; one-way local consumption after external-proof validation; upstream
+  immutable GitHub ID binding for the GitHub path; one profile per identity; first-device
+  key-possession proof; per-credential and per-origin rate limiting as defense-in-depth; private
+  fair-use controls; and no score-backed benefit. Anonymous profiles gain no privilege, the
+  bootstrap credential retires on first-passkey or GitHub promotion, and all sensitive actions
+  require a passkey without requiring an anonymous profile to link GitHub. A server-clock ownership
+  lease cannot be renewed by sync; expiry hides/pauses the profile and converges to bounded
+  system-expiry cleanup after promotion grace.
 - **Detection:** Bounded enrollment telemetry, invite redemption anomalies, correlated source
-  growth, and capacity alerts without publishing evasion thresholds.
+  growth, anonymous credential creation rate, and capacity alerts without publishing evasion
+  thresholds.
 - **Recovery:** Pause enrollment, revoke affected invites, hide abusive profiles, and preserve a
   minimal audited reason.
 - **Current evidence:** ADR 0060 requires exact `VIBERACING_ENROLLMENT_ENABLED=true` independently
@@ -40,23 +52,15 @@ material availability cost.
   distributed attempt policy, deployed worker coordination, invite revocation, or proof that
   already-running enabled requests were terminated. ADR 0061 separately permits only bounded Jobs
   cleanup after every retained enrollment authority expires. ADR 0063 includes that exact object in
-  a default-off local hourly catalog, fixed-clock synthetic scheduler/PostgreSQL composition, an
-  injected repeated-timer path with overlap and same-slot suppression, an injected lifecycle path
-  that settles an active real-runner call without starting the later job, and one real-clock emitted
-  startup path. That path temporarily denies only the Jobs role's backlog function, proves one
-  generic failure signal plus later terminal-job execution, restores the exact grant, injects
-  `SIGKILL` during the first finalization lock-wait, and requires exit 137, session release, plus
-  unchanged pre-retry state. It then retries successfully, uses a disposable post-insert barrier to
-  inject a second `SIGKILL`, proves complete rollback of that uncommitted projection transaction,
-  removes the barrier, retries through the clean schema, and performs one more local restart from
-  the same runtime. A separate pinned-Linux path leaves the native timer unchanged, observes one
-  refresh in a later real five-minute slot, delivers an OS `SIGTERM` while that call is
-  lock-waiting, and proves graceful settlement. Another pinned-Linux path delivers an OS `SIGTERM`
-  during the first finalization call. These prove local failure/crash containment, clean-schema
-  retry, one controlled uncommitted post-insert transaction rollback, plus host-timer and OS-signal
-  paths, not committed/external-effect or every-capability recovery, automatic privilege repair, a
-  deployed controller/orchestrator grace policy, or deployed cadence.
-- **Residual risk:** Vibe Racing cannot prove one human per GitHub account.
+  a default-off local hourly catalog, exercised through fixed-clock and real-clock synthetic
+  scheduler/PostgreSQL integrations (see [implementation status](../IMPLEMENTATION_STATUS.md) and
+  [ADR 0063](../decisions/0063-default-off-local-jobs-scheduler.md)); these prove local
+  failure/crash containment, clean-schema retry, one controlled uncommitted post-insert transaction
+  rollback, and OS-signal/host-timer settlement, not committed/external-effect or every-capability
+  recovery, automatic privilege repair, a deployed controller/orchestrator grace policy, or deployed
+  cadence.
+- **Residual risk:** Vibe Racing cannot prove one human per GitHub account or per anonymous
+  credential. The admission gate raises the cost of bulk enrollment but does not make it impossible.
 
 ### VR-ABUSE-SOURCE-DUPLICATION — Duplicate declared Codex sources
 
@@ -139,36 +143,16 @@ material availability cost.
   an extra-membership login, and checks open/finalized database state. ADR 0063 separately derives
   only the current and latest grace-eligible Monday from UTC time plus at most one oldest known
   data-backed season per hour, marks slots before sequential invocation, prevents overlap and
-  same-slot retry, and bounds shutdown. A second opt-in integration composes that production core
-  under fixed injected UTC time with the real runner and disposable PostgreSQL. A third advances the
-  fixed clock by one hour, invokes the production interval handler twice during the active
-  real-runner cycle, proves the exact recurring catalog plus overlap and same-slot suppression, and
-  verifies the rearmed terminal reset. A fourth composes the production process lifecycle, starts
-  the penultimate real-runner call before injecting its first handler, and proves that call settles
-  without starting the later job. A fifth starts the built entry point under real host time from a
-  link-free production-only runtime mounted read-only under pinned Linux Node. The harness
-  temporarily denies only the Jobs role's backlog function, then proves one generic cycle signal, no
-  backlog mutation, and later terminal-job settlement before a code-0 `SIGTERM` exit. It restores
-  and rechecks the exact grant, rearms the marker, holds the scoring mutex, and starts the same
-  runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137
-  plus session release, and proves the backlog and marker remain unchanged. After releasing the
-  holder, a restart finalizes the backlog before a silent signal exit. A disposable post-insert
-  barrier then holds a second backlog; another `SIGKILL` must roll back its whole projection
-  transaction. The barrier is removed and verified absent before a clean-schema restart finalizes
-  that backlog exactly once. A final rearm/restart proves another silent repeated cycle, session
-  cleanup after all six starts, runtime immutability, and exact state. A sixth uses the same bounded
-  runtime shape, holds the scoring mutex after startup, observes refresh in a later real five-minute
-  slot, delivers an OS `SIGTERM`, releases the mutex, and proves active-refresh settlement before
-  silent code-0 exit. A seventh uses the same bounded runtime shape, blocks the emitted first
-  finalization call, delivers an OS `SIGTERM`, and proves graceful settlement without starting
-  refresh or a later job. The fifth proves local failure/crash containment, later-job continuation,
-  successful clean-schema retries, a later repeated restart, four graceful post-startup `SIGTERM`
-  settlements, two abrupt active-call `SIGKILL` exits, and one controlled uncommitted post-insert
-  transaction rollback; the sixth proves one local host-timer recurring refresh plus active-call
-  signal settlement. Committed/external-effect or every-capability recovery, automatic privilege
-  repair, a deployed signal route, controller/orchestrator grace policy, managed restart, correction
-  authority, deployed scheduling, production database login/TLS, representative or deployed backlog
-  recovery, and operational reconciliation remain unimplemented.
+  same-slot retry, and bounds shutdown. The opt-in scheduler integrations compose that production
+  core with the real runner and disposable PostgreSQL under fixed and real clocks, proving exact
+  catalog order, recurring execution with overlap suppression, graceful and abrupt OS-signal
+  settlement, clean-schema retry, one controlled uncommitted post-insert transaction rollback, and
+  one local host-timer recurring refresh (see [implementation status](../IMPLEMENTATION_STATUS.md)
+  and [ADR 0063](../decisions/0063-default-off-local-jobs-scheduler.md)). Committed/external-effect
+  or every-capability recovery, automatic privilege repair, a deployed signal route,
+  controller/orchestrator grace policy, managed restart, correction authority, deployed scheduling,
+  production database login/TLS, representative or deployed backlog recovery, and operational
+  reconciliation remain unimplemented.
 - **Residual risk:** Operational bugs can still require a visible correction; silent history rewrite
   is never acceptable.
 
@@ -237,8 +221,8 @@ material availability cost.
   credential removal, and rotation.
 - **Detection:** Signature source, replay, platform/version, and unusual activity signals;
   user-visible device inventory.
-- **Recovery:** Immediate device revoke, optional source key rotation, quarantine affected
-  open-season records, and audited investigation.
+- **Recovery:** Immediate device revoke, separately approved replacement-device key enrollment where
+  needed, quarantine affected open-season records, and audited investigation.
 - **Current evidence:** PostgreSQL verifies exact device/source binding, nonce/idempotency replay,
   revoke rejection, and revoke-versus-submit ordering. The local Ingest kernel verifies the exact
   body-bound request under strict Ed25519 semantics, takes unknown devices through a valid dummy-key
@@ -471,8 +455,9 @@ material availability cost.
 - **Abuse:** Correlate exact sync time, token totals, GitHub identity, and activity to infer a
   person's schedule or workload.
 - **Impact:** Privacy harm, unwanted profiling, or harassment.
-- **Controls:** Exact totals private by default, freshness rounded to a day, optional GitHub link,
-  minimal public fields, hide control, cache purge, and rate policy.
+- **Controls:** Only the deliberate weekly profile aggregate is public on the token surface; daily,
+  source, provider, and exact-time detail stays private. Freshness is rounded to a day, GitHub link
+  is optional, and minimal fields, hide control, cache purge, and rate policy bound the surface.
 - **Detection:** Scrape and enumeration patterns at the edge without invasive behavioral analytics.
 - **Recovery:** Hide the profile immediately, purge public caches, delete on request, and
   investigate bypass of non-public fields.
@@ -496,19 +481,20 @@ material availability cost.
   exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` was resolved at module load; every alternate state
   returns generic 503 before query/header parsing, admission acquisition, or store work. It does not
   prove deployed route/cache denial, worker reload, or scraping protection after enablement. A
-  separate opt-in synthetic gate exercises all three GETs through two emitted standalone Next
-  production processes and TLS-enabled disposable PostgreSQL. The extra-membership login receives
-  only generic 503 responses and cannot change any private table; the narrow login returns exact
-  contract-validated active-only rows, observes TLS 1.2 or 1.3, and leaves another full
-  private-state fingerprint unchanged. The narrow path also holds four observed score queries behind
-  a controlled owner lock, requires a fifth request to return generic 503 without a fifth
-  public-score query, and validates the four original responses after rollback. Its ephemeral
-  narrow-login path also emits parameter-payload-free nested `auto_explain` only inside that
-  disposable database. Six bounded adapter/projection oracles require the reviewed indexes and
-  reject mutation/locking nodes, temporary or written blocks, bounded-index sequential scans,
-  private markers, and excess log/plan shape; the log is discarded and removed with the container.
-  Its ephemeral self-signed certificate, synthetic login, and tiny planner fixture are not
-  deployment certificate/login, external TLS/edge, cache, representative plan/load/capacity,
+  separate ADR 0072 token route has its own exact default-off module-load gate and exposes only the
+  weekly profile aggregate with rounded freshness. The opt-in synthetic gate exercises all four GETs
+  through two emitted standalone Next production processes and TLS-enabled disposable PostgreSQL.
+  The extra-membership login receives only generic 503 responses and cannot change any private
+  table; the narrow login returns exact contract-validated active-only rows, observes TLS 1.2 or
+  1.3, and leaves another full private-state fingerprint unchanged. The narrow path also holds four
+  observed score queries behind a controlled owner lock, requires a fifth request to return generic
+  503 without a fifth public-score query, and validates the four original responses after rollback.
+  Its ephemeral narrow-login path also emits parameter-payload-free nested `auto_explain` only
+  inside that disposable database. Eight bounded adapter/projection oracles require the reviewed
+  indexes and reject mutation/locking nodes, temporary or written blocks, bounded-index sequential
+  scans, private markers, and excess log/plan shape; the log is discarded and removed with the
+  container. Its ephemeral self-signed certificate, synthetic login, and tiny planner fixture are
+  not deployment certificate/login, external TLS/edge, cache, representative plan/load/capacity,
   monitoring, or real-user evidence. Revision 0015 lets only the exact possessed session read and
   set the closed `public`/`hidden` state; the same-origin form carries no profile ID and repeated
   state is a no-op. Because the public read already filters current state, a committed hide removes
@@ -600,21 +586,23 @@ material availability cost.
   exact primary and at most one complete, distinct secondary key pair, constructs only the verifier,
   and has no default or checked-in value. A forced-RLS table now stores only its key-bound digest
   and expiry; one Ingest-only function atomically consumes or replaces an expired tuple, an ordered
-  race yields one fresh result, and Jobs can delete bounded expired tuples. Cloudflare signing,
-  secret-manager/edge key injection, Railway direct-origin denial, trusted forwarding, and
-  production cleanup scheduling remain unimplemented. The local Fastify boundary preserves the exact
-  body/header evidence, sets proxy trust to false, ignores inbound request IDs, and returns only
-  generic contract-validated errors. The transport-free composer binds the same replay/device/
-  submission adapter and maps origin rejection to one generic unauthorized decision. The separate
-  host additionally requires an exact default-off enable latch before any other host/protected
-  application configuration or resource. That startup gate does not prove a deployed route denial,
-  dynamic disable, or old-instance drain. The local host accepts production startup only for exact
-  `0.0.0.0:$PORT` with an explicit `railway-edge` declaration, but that declaration neither trusts
-  forwarding nor proves the route; the origin HMAC remains mandatory. The full synthetic loopback
-  gate proves an HTTP replay of the same origin nonce is rejected without another stored snapshot,
-  and rejects a fifth request before replay-store work while four independent replay calls are
-  lock-waiting before settling after release. It does not prove an edge signer, distributed shaping,
-  or direct-origin policy.
+  race yields one fresh result, and Jobs can delete bounded expired tuples. A dependency-free local
+  Cloudflare Worker now creates one fresh exact proof, rejects caller-supplied origin authority,
+  forwards once, and passes a production-verifier compatibility test. Live secret-manager/edge key
+  injection, Railway direct-origin denial, trusted forwarding, and production cleanup scheduling
+  remain unimplemented. The local Fastify boundary preserves the exact body/header evidence, sets
+  proxy trust to false, ignores inbound request IDs, and returns only generic contract-validated
+  errors. The transport-free composer binds the same replay/device/ submission adapter and maps
+  origin rejection to one generic unauthorized decision. The separate host additionally requires an
+  exact default-off enable latch before any other host/protected application configuration or
+  resource. That startup gate does not prove a deployed route denial, dynamic disable, or
+  old-instance drain. The local host accepts production startup only for exact `0.0.0.0:$PORT` with
+  an explicit `railway-edge` declaration, but that declaration neither trusts forwarding nor proves
+  the route; the origin HMAC remains mandatory. The full synthetic loopback gate proves an HTTP
+  replay of the same origin nonce is rejected without another stored snapshot, and rejects a fifth
+  request before replay-store work while four independent replay calls are lock-waiting before
+  settling after release. It does not prove a deployed edge route, distributed shaping, or
+  direct-origin policy.
 - **Residual risk:** Infrastructure metadata exposure can increase probing but must not be the only
   protection.
 
@@ -756,7 +744,12 @@ material availability cost.
   native build scripts, and import-boundary plus transport regressions prevent an unreviewed second
   listener. The Windows portable connector job is fixed to public scan, pinned Node/Rust setup, one
   locked release-profile build, and one no-upload smoke. Configuration mutations reject a missing
-  job, runner drift, a missing smoke, and an added artifact action. No hosted pass is claimed.
+  job, runner drift, a missing smoke, and an added artifact action. A separate stable-release
+  service workflow now keeps verification secretless, attaches deployment credentials only after the
+  protected environment gate, pins Railway/Cloudflare/Wrangler inputs, and fixes migration, service,
+  and Edge order. Negative mutations reject trigger, tag, environment, secret, pin, latch, and
+  ordering drift. Its external tools are included in the deterministic license inventory. No hosted
+  pass or deployment is claimed.
 - **Residual risk:** A malicious change can modify its own tests; test success never authorizes
   merge or release by itself.
 
@@ -919,10 +912,10 @@ material availability cost.
   methods; disabled UI omits its forms and disabled HTTP/service paths stop before private work.
   Returning login/recovery remain available. This is a local gate, not a distributed enrollment rate
   limit, cleanup invocation, or deployed worker control. A checked containment/recovery rehearsal
-  now binds all eight local exact-default-off decisions to protected triage, independent capability
+  now binds all ten local exact-default-off decisions to protected triage, independent capability
   selection, Web worker replacement, Ingest/Jobs/migration settlement, preserved returning
   security/deletion paths, redacted evidence, and recovery of one capability at a time. Its 24
-  controls, eight commands, and 22 fail-closed variants do not create a private reporting channel,
+  controls, eight commands, and 25 fail-closed variants do not create a private reporting channel,
   deployed controller, dynamic switch, monitor, containment result, or recovery result. ADR 0061
   separately provides an explicit Jobs cleanup after retained authority expires, and ADR 0063
   includes only that fixed object in its default-off local catalog. Once pairing is enabled, the
@@ -944,35 +937,16 @@ material availability cost.
   one fixed maximum-10 primary-purge command, canonical season validation, closed one-row results,
   and destructive release on failure. Its synthetic integration executes those commands sequentially
   against one disposable database. The scheduler separately limits execution to one non-overlapping
-  sequential cycle, ignores timer ticks while it runs, and starts no later object after shutdown. A
-  second opt-in synthetic integration composes that production scheduler core under fixed injected
-  time with the real runner/database, proves exact dependency order, and proves a widened login
-  cannot mutate any private table. A third advances the fixed clock by one hour, invokes the
-  production interval handler twice during the active real-runner cycle, proves the exact recurring
-  catalog plus overlap and same-slot suppression, and verifies the rearmed terminal reset. A fourth
-  composes the production process lifecycle, starts an active real-runner call before injecting its
-  first handler, and proves graceful settlement without starting the later job. A fifth starts the
-  built entry point under the real host clock from a link-free read-only graph under pinned Linux
-  Node after temporarily denying only the Jobs role's backlog function. It proves one generic cycle
-  signal, no backlog mutation, and later terminal-job settlement before a code-0 OS `SIGTERM` exit.
-  The harness restores and rechecks the exact grant, rearms the marker, holds the scoring mutex, and
-  starts the same runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`,
-  requires exit 137 plus session release, and proves the backlog and marker remain unchanged. After
-  releasing the holder, a restart finalizes the backlog before a silent signal exit. A disposable
-  post-insert barrier then holds a second backlog; another `SIGKILL` must roll back its whole
-  projection transaction. The barrier is removed and verified absent before a clean-schema restart
-  finalizes that backlog exactly once. A final rearm/restart proves another silent repeated cycle,
-  session cleanup after all six starts, runtime immutability, and exact state. A sixth runs that
-  unchanged entry point from the same bounded runtime shape, holds the scoring mutex after startup,
-  observes a native minute-timer refresh in a later real five-minute slot, delivers an OS `SIGTERM`,
-  releases the mutex, and proves active-refresh settlement before silent code-0 exit. A seventh
-  holds the emitted first finalization call inside the same bounded runtime shape, delivers an OS
-  `SIGTERM`, and proves silent graceful settlement with no later job. These prove local
-  failure/crash containment and clean-schema retry, one host-timer refresh, four graceful local
-  OS-signal paths, two abrupt active-call `SIGKILL` paths, and one controlled uncommitted
-  post-insert transaction rollback, but not committed/external-effect or every-capability recovery,
-  automatic privilege repair, a deployed signal route, controller/orchestrator grace, managed
-  restart, durable/deployed cadence, or production-load capacity. The kernel itself has no
+  sequential cycle, ignores timer ticks while it runs, and starts no later object after shutdown.
+  The opt-in scheduler integrations compose that production scheduler core with the real
+  runner/database under fixed and real clocks, proving exact dependency order, widened-login
+  non-mutation, recurring execution with overlap suppression, graceful and abrupt OS-signal
+  settlement, clean-schema retry, one controlled uncommitted post-insert transaction rollback, and
+  one local host-timer refresh. These prove local failure/crash containment and clean-schema retry,
+  but not committed/external-effect or every-capability recovery, automatic privilege repair, a
+  deployed signal route, controller/orchestrator grace, managed restart, durable/deployed cadence,
+  or production-load capacity; see [implementation status](../IMPLEMENTATION_STATUS.md) and
+  [ADR 0063](../decisions/0063-default-off-local-jobs-scheduler.md). The kernel itself has no
   socket/stream authority. The separate Ingest adapter adds a four-client ceiling, 2/6/31/32-second
   checkout/lock/server/client deadlines, idle/lifetime recycling, exact one-row origin consume,
   zero-or-one device lookup, and one-row submission results, with destructive release on failure.
@@ -1000,6 +974,210 @@ material availability cost.
   quotas, edge shaping, and production load evidence remain unimplemented.
 - **Residual risk:** Public availability always permits some resource pressure; beta capacity and
   thresholds remain deployment-specific.
+
+## Token-accounting and optional MCP abuse
+
+These cases originate in [ADR 0068](../decisions/0068-multi-agent-token-leaderboard-and-mcp.md).
+ADRs 0071–0073 supply the default-off Codex `UsageSyncV1` path, immutable attribution, exact
+candidate connector request, and direct-token scoring/ranking with negative
+contract/Ingest/database/Web tests. MCP, additional readers/providers, Verified ingestion, and
+deployment remain proposed and require their own focused ADR and evidence before those surfaces
+ship.
+
+### VR-ABUSE-MCP-FORGERY — MCP agent submits for a source or profile it does not own
+
+- **Attacker:** An arbitrary MCP-compatible agent or network client that knows a service link.
+- **Preconditions:** The optional MCP submission transport is enabled and the attacker can present a
+  client.
+- **Abuse:** Submit fabricated usage for another profile's source, bind a new source without passkey
+  approval, relabel the immutable source provider, reflect arbitrary prompt/tool/MCP content, replay
+  a captured submission, or flood the MCP endpoint.
+- **Impact:** Inflated Community `weeklyTokenTotal` within accepted numeric bounds, cross-profile
+  pollution, and capacity cost; no privilege if the pairing boundary holds.
+- **Controls:** Pairing-required source binding with fresh passkey step-up, one independently
+  revocable credential-store-protected key with no plaintext-file or product export/copy workflow
+  per device authority, exact `UsageSyncV1` allowlisting, server-derived immutable AgentSource
+  provider, the existing Ingest verification kernel and replay store, four-call admission, rate
+  limits, and an exact default-off MCP enable gate.
+- **Detection:** Cross-profile/cross-source submission attempts, replay attempts, and flood signals
+  without publishing thresholds.
+- **Recovery:** Reject and quarantine the submission, revoke the device, pause the source, preserve
+  a minimal audited reason.
+- **Current evidence:** None yet; proposed by ADR 0068 and invariant VR-MCP-001.
+- **Residual risk:** A paired agent can still fabricate its own Community usage; containment, not
+  prevention.
+
+### VR-ABUSE-TOKEN-ACCOUNTING — Provider fields, nested details, or snapshots distort the total
+
+- **Attacker:** A user controlling local agent storage, a modified reader/connector, or an optional
+  MCP client.
+- **Preconditions:** Multi-agent Community ingestion accepts a provider/source/date record.
+- **Abuse:** Submit an aggregate plus its cached, reasoning, or thought breakdowns as if every field
+  were disjoint; replay cumulative snapshots as separate usage; relabel a source to trigger a more
+  favorable provider/model/cost coefficient; or force integer overflow and rounding.
+- **Impact:** A participant with fewer actual provider-reported tokens can receive a larger public
+  total or rank, undermining the only competitive metric.
+- **Controls:** One reviewed versioned mapping per supported reader; prefer one documented aggregate
+  or sum only documented disjoint components; deduplicate snapshots and repeated records; no
+  provider/model/cost multiplier; provider stored immutably on AgentSource and derived through the
+  verified device/source binding; reject any sync-body provider field, unknown fields, and ambiguous
+  schemas; exact integer aggregation; quarantine values outside the JSON safe-integer contract.
+- **Detection:** Aggregate-vs-component and cumulative-snapshot fixtures, direct-sum property tests,
+  provider-field rejection, wrong-source/relabel tests, overflow tests, and bounded anomaly signals.
+- **Recovery:** Disable the affected reader or optional transport, quarantine the source, fix the
+  mapping, and resubmit only while the season remains open. Finalized-season correction requires its
+  own accepted correction contract and is never a silent rewrite.
+- **Current evidence:** ADR 0071 rejects provider fields, path confusion, wrong source attribution,
+  unsupported accounting revision, unsafe integers, and database relabeling through synthetic unit
+  and real PostgreSQL tests. ADR 0073 shares one exact candidate request/signature vector between
+  Rust and Ingest. ADR 0072 proves direct safe-integer sums, shared ranks, legacy-season isolation,
+  overflow omission, default-off Web admission, and exact public mapping locally. No additional
+  provider reader or generic component/snapshot mapper is implemented.
+- **Residual risk:** A computer owner can still fabricate a self-reported canonical total. The
+  Community label, reward-free policy, source count, and anomaly handling contain but cannot prove
+  local honesty; different provider tokenizers also remain incomparable as compute or cost.
+
+### VR-ABUSE-BACKFILL-SEASON-RACE — Grace-boundary request suppresses current-week usage
+
+- **Attacker:** A network attacker delaying traffic, a failing client, or ordinary deadline timing.
+- **Preconditions:** First-run backfill has dates from the previous ISO week during its grace period
+  and dates from the current ISO week; ADR 0008 atomically quarantines a request containing any
+  closed-season date.
+- **Abuse:** Combine both seasons in one request or hold the previous-season request until Wednesday
+  00:00 UTC so one newly closed date causes still-open current-week dates to be quarantined.
+- **Impact:** Valid current-week usage is omitted or repeatedly retried, producing confusing private
+  state and an avoidable lower Community total.
+- **Controls:** Derive eligibility per date, partition each source into independent
+  single-source/single-season requests, send the current-season request independently, treat grace
+  as a server-receipt deadline rather than extra dates, and never retry a season after closure.
+- **Detection:** Fixed-clock Sunday/Monday/Tuesday/exact-Wednesday tests, delayed previous-season
+  request tests, and assertions that current-season persistence and outcome are independent.
+- **Recovery:** Accept or retry only the still-open current-season request under its normal
+  idempotency rules; leave the closed previous season immutable and require a future correction ADR
+  for historical import.
+- **Current evidence:** Planning scope only (ADR 0069 and ADR 0008); no multi-agent backfill client
+  is implemented.
+- **Residual risk:** Client and server clocks may disagree near the deadline, so the previous-season
+  request can still be quarantined; partitioning limits the loss to that immutable season.
+
+### VR-ABUSE-PROVIDER-OAUTH — Provider OAuth token misuse or over-scope
+
+- **Attacker:** A user or attacker interacting with the Verified-tier provider OAuth flow.
+- **Preconditions:** A provider Verified integration is enabled and requests OAuth consent.
+- **Abuse:** Request broader scope than needed, replay or steal a provider token, link another
+  account's usage, or spoof a provider response.
+- **Impact:** Unauthorized usage fetch, cross-account linking, or credential leakage.
+- **Controls:** Minimal-scope OAuth, exact redirect validation, server-side usage fetch only,
+  Community/Verified separation, no persistence of provider tokens in logs/fixtures/repository, and
+  a per-provider default-off enable gate.
+- **Detection:** Over-scope requests, redirect mismatches, and cross-account anomalies.
+- **Recovery:** Revoke the provider linkage, keep the record Community, and preserve a minimal
+  audited reason.
+- **Current evidence:** None yet; proposed by ADR 0068 and invariant VR-PROVIDER-001.
+- **Residual risk:** Verified depends on each provider's API honesty and availability; absence of an
+  API keeps that provider Community-only.
+
+### VR-ABUSE-READER-EXFILTRATION — Hostile mixed-content storage or symlink attack (proposed, ADR 0069)
+
+- **Attacker:** A local attacker or a malicious agent plugin that controls the agent's local storage
+  directory (TB-14).
+- **Preconditions:** The thin client is installed and reads agent local storage.
+- **Abuse:** Plant symlinks, directory traversals, oversized files, or malformed records in the
+  agent's storage directory to trick the reader into extracting prompts, code, credentials, or paths
+  into the sync payload, or to crash the client.
+- **Impact:** Exfiltration of sensitive content through the sync channel; denial of service to the
+  client.
+- **Controls:** Readers derive only the documented canonical daily total and discard raw components;
+  strict file size, record count, and field length bounds; closed set of recognized keys/columns;
+  symlink and path-traversal rejection; explicitly recognized non-usage record types may be ignored,
+  while malformed, oversized, ambiguous, or unrecognized usage-bearing input invalidates the whole
+  affected source/day and emits no partial daily total or signed request; the process may continue
+  with independently valid units and a bounded local error. The extraction boundary is
+  schema-enforced before the payload is signed.
+- **Detection:** Bounded reader telemetry for invalidated source/day units, ignored recognized
+  non-usage records, and rejected files; payload schema validation at the server; absence of
+  prohibited fields in the sync contract.
+- **Recovery:** Update the reader to handle the new malformed pattern; no server-side state change
+  is needed because the payload was never accepted.
+- **Current evidence:** Planning scope only (ADR 0069, TB-14, VR-CLIENT-001). No reader is
+  implemented.
+- **Residual risk:** A sufficiently novel malformed format could invalidate valid source/day data;
+  fail-closed behavior limits the impact to missing data, not leaked or partially submitted data.
+
+### VR-ABUSE-ENROLL-CREDENTIAL — Bootstrap theft, admission replay, collision, or device-key escalation (proposed, ADR 0069)
+
+- **Attacker:** A network attacker, local attacker, or concurrent client holding an enrollment
+  proof, temporary identity bootstrap credential, GitHub first-passkey authority, or device-bound
+  sync key (TB-15).
+- **Preconditions:** Proposed anonymous or GitHub enrollment is enabled and the attacker obtains a
+  credential/proof or races a legitimate enrollment or upgrade.
+- **Abuse:** (a) Use a stolen bootstrap credential before promotion to establish a restricted
+  session or register the first passkey. (b) Reuse that credential after first-passkey or GitHub
+  promotion to add a later passkey, enter recovery, or regain authority. (c) Share one source key
+  across devices, impersonate a revoked device, or use a device sync key as profile authority. (d)
+  Race or replay an invite, external proof, enrollment challenge, or completion. (e) Bind a GitHub
+  ID already owned by another profile and trigger an automatic merge, source transfer, or
+  score-history transfer. (f) Reissue GitHub first-passkey authority after a passkey was activated,
+  all passkeys were revoked, or old provenance was cleaned up, bypassing restricted recovery. (g)
+  Renew anonymous ownership through ordinary sync, client time, or an expired proof; keep a lost-key
+  profile public indefinitely; race lease expiry against promotion; or automatically resume an
+  expired profile after promotion.
+- **Impact:** Profile takeover before promotion, duplicate enrollment, cross-profile authority, or
+  unintended history transfer; indefinite retained/public orphan state; or unauthorized collection
+  after expiry. The closed design denies post-promotion bootstrap reuse, sync-key escalation,
+  duplicate completion, collision mutation, and sync-based ownership renewal.
+- **Controls:** The bootstrap credential is accepted only while the profile is anonymous, has no
+  active passkey, is not retired, and has a current server-clock ownership lease, except that the
+  two promotion proofs remain during terminal grace. Its allowlist is limited to a restricted
+  bootstrap session, exactly first-passkey registration, and GitHub upgrade; it grants neither
+  restricted recovery nor later-passkey registration. First-passkey activation or GitHub upgrade
+  atomically retires it, and every server verifier rejects retired-key use even when local deletion
+  failed. The 90-day lease is created and renewed only from database time after a valid pre-expiry
+  bootstrap-session proof; ordinary sync, device possession, reads, failed proof, and client time
+  cannot renew it. Expiry immediately hides the profile, pauses every source, invalidates bootstrap
+  sessions/challenges, and leaves only first-passkey or GitHub promotion for 30 days. Promotion
+  leaves the profile hidden/paused until an explicit passkey-protected action; otherwise a separate
+  bounded Jobs-only system-expiry capability removes profile-owned state after grace. Every device
+  key is independently generated, credential-store-protected, revocable, and bound to one source;
+  there is no plaintext-file or product export/copy workflow, but a compromised process running with
+  the user's authority may extract or use key material. Multiple keys may bind a source without
+  sharing private material. Invite admission uses one unique short reservation before challenge
+  issuance and may release only that exact still-valid reservation; externally validated proofs
+  become unique one-way local consumption records that cannot be rolled back or reused. Every
+  challenge and signature is one-time, action-bound, domain-separated, and atomically consumed.
+  Fresh GitHub enrollment also proves first-device key possession. A no-passkey GitHub-linked
+  profile receives first-passkey authority only from a fresh exact same-ID device flow while
+  monotonic `first-passkey-complete` is false; the authority has no other capability and can never
+  reset recovery. A GitHub-ID collision returns one generic result with zero mutation; profiles are
+  never automatically merged and sources or scores are never transferred.
+- **Detection:** Bounded counters for admission collisions, challenge reuse, cross-context proof,
+  retired-bootstrap use, device-key cross-use, post-completion GitHub bootstrap attempts, and
+  GitHub-ID collision, plus aggregate lease-expiry, grace-promotion, and system-expiry cleanup
+  outcomes, without retaining raw invite, external-token, key, signature, or OAuth material.
+- **Recovery:** While the legitimate user still controls a not-yet-promoted bootstrap credential,
+  the client should offer immediate first-passkey promotion, which retires the credential
+  atomically. Before lease expiry, the same proof may establish the restricted session and renew the
+  lease. During terminal grace it may only promote; promotion leaves visibility and collection
+  disabled until passkey-protected user action. After promotion, normal passkey/restricted-recovery
+  controls apply and a stolen retained bootstrap copy has no authority. Loss of the only bootstrap
+  credential before promotion is unrecoverable, but the profile is hidden/paused at lease expiry and
+  removed after grace instead of remaining an orphan. A compromised device key is revoked
+  independently or the source is paused through existing passkey authority; server revocation does
+  not claim to erase an offline private key. No enrollment, GitHub first-passkey reset, or profile
+  merge is used as recovery.
+- **Current evidence:** Planning scope only (Proposed ADR 0069, TB-15, proposed VR-ENROLL-001 and
+  VR-AUTH-001 amendment). No anonymous enrollment, GitHub device-flow enrollment/upgrade, bootstrap
+  retirement, ownership lease, promotion grace, system-expiry cleanup, bootstrap-free GitHub
+  first-passkey authority, per-device proposed sync-key lifecycle, or proof-class-specific admission
+  path is implemented.
+- **Residual risk:** A local attacker who steals the native-store bootstrap credential before
+  promotion can race the legitimate user for the first promotion. The server cannot distinguish two
+  holders of the same key; admission, warning, immediate promotion, telemetry, and terminal
+  retirement bound this risk. A key holder can also renew a current lease or promote during grace;
+  that is inherent in treating possession as ownership. Device-key theft still permits fabrication
+  for its one bound source until revoke/pause, but cannot renew ownership or gain profile authority;
+  GitHub account compromise before first-passkey activation can race the legitimate user for that
+  one bootstrap-free promotion.
 
 ## Verification mapping
 

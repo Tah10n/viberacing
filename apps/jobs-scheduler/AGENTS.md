@@ -34,51 +34,26 @@ Run from the repository root:
 ```text
 pnpm run lint:jobs-scheduler
 pnpm run typecheck:jobs-scheduler
-pnpm run test:jobs-scheduler:coverage
-pnpm run build:jobs
-pnpm run build:jobs-scheduler
-pnpm run check:jobs-scheduler-entrypoint
-pnpm run test:jobs-scheduler:postgres-integration
-pnpm run test:jobs-scheduler:timer-postgres-integration
-pnpm run test:jobs-scheduler:lifecycle-postgres-integration
-pnpm run test:jobs-scheduler:process-postgres-integration
-pnpm run test:jobs-scheduler:wall-clock-postgres-integration
-pnpm run test:jobs-scheduler:signal-postgres-integration
+pnpm run test:jobs-scheduler
 pnpm run verify
 ```
 
-The PostgreSQL commands are opt-in synthetic acceptance gates. The first composes the production
-scheduler core with a fixed injected UTC clock/timer, the real Jobs runner, and one disposable
-database. The second advances the injected clock by one hour, invokes the production interval
-handler twice during the active real-runner cycle, proves the exact recurring catalog plus overlap
-and same-slot suppression, and verifies the rearmed terminal reset. The third composes the
-production process lifecycle, starts the penultimate real-runner call before injecting its first
-handler, proves that call settles without starting the later job, and requires graceful cleanup and
-code 0. The fourth starts the built entry point from a link-free read-only production graph under
-pinned Linux Node with the real clock after temporarily removing only the Jobs role's exact
-backlog-function execution grant. It requires one generic failure signal, no backlog mutation, and
-later terminal-job settlement before a code-0 `SIGTERM` exit and session release. The harness
-restores and rechecks the grant, rearms the marker, holds the scoring mutex, and starts the same
-runtime again. It observes the first finalization lock-wait, delivers `SIGKILL`, requires exit 137
-plus session release, and proves the backlog and marker remain unchanged. After the holder is
-released, a restart finalizes the backlog before a silent code-0 signal exit. A disposable
-post-insert barrier then holds a second backlog after its first daily projection insert; another
-`SIGKILL` must release the session and roll back that transaction. The barrier is removed and
-verified absent before a clean-schema restart finalizes the backlog exactly once. It rearms and
-restarts once more to prove a silent repeated cycle, session cleanup after all six starts, runtime
-immutability, and exact state. The timer result is not host-timer delivery and the lifecycle result
-is not OS-signal delivery. The fifth uses the same bounded runtime shape, leaves the native
-clock/timer unchanged, holds the scoring mutex only after startup, observes refresh in a later real
-five-minute slot, delivers a real `SIGTERM`, releases the mutex, and proves active-refresh
-settlement, silent code-0 exit, session release, and runtime immutability. The sixth uses the same
-bounded runtime shape, blocks the emitted first finalization call, delivers a real `SIGTERM`, and
-proves graceful settlement without starting refresh or any later job. The fourth is local
-failure/crash-containment, restart-retry, one controlled uncommitted post-insert transaction
-rollback, and OS-signal evidence, the fifth is local host-timer plus OS-signal evidence, and the
-sixth is another graceful local OS-signal path. None proves committed/external-effect or
-every-capability recovery, automatic privilege repair, a deployed controller or orchestrator grace
+Run coverage, builds, and the entry-point check when scheduler behavior changes. Select only the
+PostgreSQL mode that covers the changed clock, timer, lifecycle, process, or signal boundary; run
+the full six-mode matrix only for release evidence. Those commands are opt-in synthetic acceptance
+gates. They compose the production scheduler core with the real Jobs runner and disposable
+PostgreSQL under fixed and real clocks, proving the exact ordered catalog, widened-login
+non-mutation, recurring execution with overlap suppression, graceful lifecycle and OS-signal
+settlement, failure/crash containment with clean-schema retry, one controlled uncommitted
+post-insert transaction rollback, and one local host-timer recurring refresh. None proves
+committed/external-effect or every-capability recovery, a deployed controller or orchestrator grace
 policy, a deployed signal route, managed restart, durable/deployed cadence, production
-credential/TLS, monitoring, capacity, or real-user behavior.
+credential/TLS, monitoring, capacity, or real-user behavior; see
+[IMPLEMENTATION_STATUS.md](../../docs/IMPLEMENTATION_STATUS.md) and
+[ADR 0063](../../docs/decisions/0063-default-off-local-jobs-scheduler.md).
+
+`pnpm run verify:release` is reserved for release/publication preparation or broad cross-cutting
+work.
 
 Before committing, inspect the exact staged diff and run `git diff --cached --check` plus
 `pnpm run check:public:staged`.

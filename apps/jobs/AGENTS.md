@@ -43,17 +43,14 @@ Run from the repository root:
 ```text
 pnpm run lint:jobs
 pnpm run typecheck:jobs
-pnpm run test:jobs:coverage
-pnpm run build:jobs
-pnpm run test:jobs:postgres-integration
-pnpm run test:jobs-scheduler:postgres-integration
-pnpm run test:jobs-scheduler:timer-postgres-integration
-pnpm run test:jobs-scheduler:lifecycle-postgres-integration
-pnpm run test:jobs-scheduler:process-postgres-integration
-pnpm run test:jobs-scheduler:wall-clock-postgres-integration
-pnpm run test:jobs-scheduler:signal-postgres-integration
+pnpm run test:jobs
 pnpm run verify
 ```
+
+Run Jobs coverage/build when behavior changes. Run the Jobs PostgreSQL integration when its database
+adapter or capability catalog changes, and select only the scheduler mode whose boundary changed.
+The full integration matrix and `pnpm run verify:release` are release evidence, not routine
+iteration gates.
 
 Before committing, stage only intended files, run `git diff --cached --check` and
 `pnpm run check:public:staged`, then inspect every staged manifest, lockfile, generated inventory,

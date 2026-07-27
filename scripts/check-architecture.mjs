@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import process from "node:process";
@@ -25,10 +26,12 @@ function readRequired(path) {
 }
 
 const requiredFiles = [
+  "ROADMAP.md",
   "docs/architecture/COMPATIBILITY_POLICY.md",
   "docs/architecture/DATA_FLOW.md",
   "docs/architecture/SECURITY_INVARIANTS.md",
   "docs/architecture/SYSTEM_CONTEXT.md",
+  "docs/PROJECT_PLAN.md",
   "docs/decisions/0000-template.md",
   "docs/decisions/0001-community-trust-tier.md",
   "docs/decisions/0002-opaque-multi-source-aggregation.md",
@@ -37,6 +40,8 @@ const requiredFiles = [
   "docs/decisions/0005-enum-only-car-recipe.md",
   "docs/decisions/0006-public-repository-boundary.md",
   "docs/decisions/0007-restricted-recovery-authority.md",
+  "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md",
+  "docs/decisions/0069-thin-client-and-low-friction-onboarding.md",
   "docs/decisions/README.md",
   "docs/reference/codex-compatibility.md",
   "docs/security/ABUSE_CASES.md",
@@ -268,6 +273,251 @@ if (privacy !== null) {
   }
 }
 
+const proposedArchitectureContracts = new Map([
+  [
+    "ROADMAP.md",
+    [
+      "## Phase 6 — Proposed multi-agent thin client, hybrid onboarding, and canonical accounting",
+      "## Phase 7 — Direct token-total leaderboard (local Codex slice implemented)",
+      "## Phase 8 — Thin MVP staging and invite beta",
+      "## Phase 9 — Proposed optional MCP submission",
+      "## Phase 10 — Proposed per-provider Verified tier",
+      "community_tokens_v1",
+      "MCP only as an optional",
+      "provider/model/cost multiplier",
+      "all users of any coding agent",
+      "server-clock 90-day lease",
+      "Jobs-only system-expiry cleanup",
+      "Do not claim hardware-backed non-exportability",
+    ],
+  ],
+  [
+    "docs/architecture/SECURITY_INVARIANTS.md",
+    [
+      "## Proposed invariant amendments (non-authoritative)",
+      "They do not",
+      "amend the active table above",
+      "Implementations must continue to satisfy the active table until an ADR is Accepted",
+      "server-clock 90-day ownership lease",
+      "separate bounded Jobs-only system-expiry cleanup",
+      "does not claim hardware-backed non-exportability",
+    ],
+  ],
+  [
+    "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md",
+    [
+      "- Status: Proposed",
+      "VR-TRUST-002 would be amended",
+      "Proposed new invariants (non-authoritative",
+      "The weekly token leaderboard remains the sole public ranking surface",
+      "community_tokens_v1",
+      "weeklyTokenTotal",
+      "No logarithm, active-day bonus",
+      "nested cache/reasoning/thought breakdown twice",
+      "provider/model/cost",
+      "revision cannot change mid-season",
+      "MCP compatibility alone never",
+      "provider is not client-writable",
+      "server derives it from the immutable AgentSource",
+      "provider field in the body is rejected as unknown",
+      "VR-TOKEN-001",
+      "VR-MCP-001",
+      "VR-PROVIDER-001",
+    ],
+  ],
+  [
+    "docs/decisions/0069-thin-client-and-low-friction-onboarding.md",
+    [
+      "- Status: Proposed",
+      "register exactly the first passkey",
+      "NOT enter the restricted-recovery flow",
+      "marks the identity bootstrap credential retired",
+      "unique reservation rule makes concurrent use",
+      "rejected before challenge issuance",
+      "proof is locally consumed and cannot be rolled back or reused",
+      "Sequential all-source submit",
+      "Minimal payload by construction",
+      "never automatically merged",
+      "GitHub first-passkey authority",
+      "`first-passkey-complete`",
+      "multiple independently revocable device keys",
+      "GitHub is not required",
+      "single-source/single-season",
+      "Wednesday 00:00 UTC",
+      "cannot be quarantined by the older dates",
+      "profiles.github_user_id NOT NULL UNIQUE",
+      "90-day anonymous ownership lease",
+      "ordinary sync never renews it",
+      "30-day terminal promotion grace",
+      "separate Jobs-only system-expiry capability",
+      "profile remains hidden and its sources remain paused",
+      "does not fabricate a user deletion request",
+      "No partial daily total or signed request is emitted for that source/day",
+      "explicitly recognized non-usage record type",
+      "does not claim hardware-backed non-exportability",
+    ],
+  ],
+  [
+    "docs/PROJECT_PLAN.md",
+    [
+      "registration of exactly the first passkey",
+      "proof-class-specific semantics",
+      "one-way local consumption record before challenge issuance",
+      "fail generically with zero mutation",
+      "sequential, independently bounded and signed single-source",
+      "direct `weeklyTokenTotal`",
+      "MCP compatibility alone",
+      "payload rejects model names",
+      "whether anonymous or GitHub-linked",
+      "UsageSyncV1 rejects a provider field",
+      "`first-passkey-complete`",
+      "single-source/single-season",
+      "### Phase 8 — Thin MVP staging and invite beta",
+      "90-day anonymous ownership lease",
+      "ordinary sync cannot",
+      "Jobs-only system-expiry capability",
+      "no partial daily total or signed request is emitted",
+      "does not claim hardware-backed non-exportability",
+    ],
+  ],
+  [
+    "docs/security/PRIVACY_DATA_MAP.md",
+    [
+      "Canonical source/day token total",
+      "Public weekly token total",
+      "raw provider components are discarded locally",
+      "One key per device authority",
+      "not client-writable in UsageSyncV1",
+      "arbitrary MCP request/response data outside the exact",
+      "GitHub first-passkey authority",
+      "Anonymous ownership lease and terminal-expiry state",
+      "ordinary sync never renews it",
+      "does not claim hardware-backed non-exportability",
+    ],
+  ],
+  [
+    "docs/security/ABUSE_CASES.md",
+    [
+      "VR-ABUSE-MCP-FORGERY",
+      "VR-ABUSE-TOKEN-ACCOUNTING",
+      "VR-ABUSE-BACKFILL-SEASON-RACE",
+      "VR-ABUSE-PROVIDER-OAUTH",
+      "indefinite retained/public orphan state",
+      "system-expiry cleanup",
+      "compromised process running with the user's authority may extract or use key material",
+      "emits no partial daily total or signed request",
+    ],
+  ],
+  [
+    "docs/security/THREAT_MODEL.md",
+    [
+      "sync cannot renew it",
+      "separate Jobs-only cleanup prevents an indefinite lost-key orphan",
+      "promotion-only grace without automatic reactivation",
+    ],
+  ],
+]);
+
+function normalizeContractText(value) {
+  return value.replace(/\s+/gu, " ").trim();
+}
+
+for (const [path, fragments] of proposedArchitectureContracts) {
+  const document = texts.get(path);
+  if (document === null) {
+    continue;
+  }
+  const normalizedDocument = normalizeContractText(document);
+  for (const fragment of fragments) {
+    if (!normalizedDocument.includes(normalizeContractText(fragment))) {
+      report(
+        path,
+        `required proposed-architecture contract is missing: ${JSON.stringify(fragment)}`,
+      );
+    }
+  }
+}
+
+const forbiddenProposedArchitectureText = new Map([
+  ["ROADMAP.md", ["Generate one non-exportable sync key", "skip the record or the file"]],
+  [
+    "docs/architecture/SECURITY_INVARIANTS.md",
+    ["Amended by ADR 0068", "Amended by ADR 0069", "one non-exportable key"],
+  ],
+  [
+    "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md",
+    [
+      "VR-TRUST-002 is amended",
+      "explicit provider identifier",
+      "sync contract gains a provider field",
+      "primary universal connection path",
+      "scoring gains per-provider normalization",
+      "public per-provider contribution breakdown",
+    ],
+  ],
+  [
+    "docs/decisions/0069-thin-client-and-low-friction-onboarding.md",
+    [
+      "first and subsequent passkey registration",
+      "identity credential remains as a second factor",
+      "Turnstile token is validated and locked",
+      "The envelope aggregates independently signed",
+      "causes the next submit",
+      "Granular per-field privacy toggles",
+      "generated per source",
+      "one key per source",
+      "current open season and its grace window",
+      "ordinary sync renews it",
+      "profile and sources resume automatically",
+      "user deletion job performs system expiry",
+      "skip the record or the file",
+      "generated independently, non-exportable",
+    ],
+  ],
+  [
+    "docs/PROJECT_PLAN.md",
+    [
+      "all-source aggregation",
+      "reviewed, versioned per-provider normalization",
+      "MCP server as the universal Community ingest path",
+      "bounded per-provider contribution breakdown",
+      "requires a current GitHub session and passkey",
+      "generates its own non-exportable key",
+      "skip the record or the file",
+    ],
+  ],
+  [
+    "docs/security/PRIVACY_DATA_MAP.md",
+    [
+      "tool calls, and MCP data;",
+      "one key per source",
+      "Private key client-only and non-exportable",
+    ],
+  ],
+  [
+    "docs/security/ABUSE_CASES.md",
+    [
+      "revocable non-exportable key",
+      "generated, non-exportable",
+      "skip the record or file",
+      "skip the record or the file",
+    ],
+  ],
+]);
+
+for (const [path, fragments] of forbiddenProposedArchitectureText) {
+  const document = texts.get(path);
+  if (document === null) {
+    continue;
+  }
+  const normalizedDocument = normalizeContractText(document);
+  for (const fragment of fragments) {
+    if (normalizedDocument.includes(normalizeContractText(fragment))) {
+      report(path, `forbidden proposed-architecture text is present: ${JSON.stringify(fragment)}`);
+    }
+  }
+}
+
 const abusePath = "docs/security/ABUSE_CASES.md";
 const abuse = texts.get(abusePath);
 if (abuse !== null) {
@@ -397,12 +647,36 @@ if (existsSync(decisionsDirectory)) {
   }
 }
 
-function markdownFiles(directory) {
+const ignoredMarkdownDirectories = new Set([
+  ".cache",
+  ".codex",
+  ".codex-log",
+  ".git",
+  ".idea",
+  ".next",
+  ".pnpm-store",
+  ".turbo",
+  "build",
+  "coverage",
+  "credentials",
+  "data",
+  "dist",
+  "logs",
+  "node_modules",
+  "playwright-report",
+  "secrets",
+  "target",
+  "temp",
+  "test-results",
+  "tmp",
+]);
+
+function fallbackMarkdownFiles(directory) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...markdownFiles(path));
+    if (entry.isDirectory() && !ignoredMarkdownDirectories.has(entry.name)) {
+      files.push(...fallbackMarkdownFiles(path));
     } else if (entry.isFile() && entry.name.endsWith(".md")) {
       files.push(path);
     }
@@ -410,10 +684,55 @@ function markdownFiles(directory) {
   return files;
 }
 
+function gitMarkdownFiles() {
+  if (!existsSync(resolve(root, ".git"))) {
+    return null;
+  }
+
+  const result = spawnSync(
+    "git",
+    ["-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.md"],
+    {
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024,
+      windowsHide: true,
+    },
+  );
+  if (result.error || result.status !== 0) {
+    report("repository", "Git Markdown inventory could not be derived");
+    return [];
+  }
+
+  return result.stdout
+    .split("\0")
+    .filter(Boolean)
+    .map((path) => resolve(root, path))
+    .filter((path) => existsSync(path))
+    .sort();
+}
+
+const repositoryMarkdownFiles = gitMarkdownFiles() ?? fallbackMarkdownFiles(root).sort();
 const docsDirectory = resolve(root, "docs");
 let mermaidBlocks = 0;
+const removedProductScopePatterns = [
+  /\btyping(?:-|\s)+(?:race|game)\b/i,
+  /\bkeyboard(?:-|\s)+rac(?:e|ing)\b/i,
+  /\bVR-(?:GAME|ABUSE-GAME)-[A-Z0-9-]+\b/,
+];
+for (const absolutePath of repositoryMarkdownFiles) {
+  const path = relative(root, absolutePath).replaceAll("\\", "/");
+  const text = readFileSync(absolutePath, "utf8");
+  for (const pattern of removedProductScopePatterns) {
+    if (pattern.test(text)) {
+      report(path, `removed product scope is still documented: ${pattern}`);
+    }
+  }
+}
+
 if (existsSync(docsDirectory)) {
-  for (const absolutePath of markdownFiles(docsDirectory)) {
+  for (const absolutePath of repositoryMarkdownFiles.filter((path) =>
+    relative(root, path).replaceAll("\\", "/").startsWith("docs/"),
+  )) {
     const path = relative(root, absolutePath).replaceAll("\\", "/");
     const text = readFileSync(absolutePath, "utf8");
     const starts = [...text.matchAll(/```mermaid[ \t]*\r?\n/g)];

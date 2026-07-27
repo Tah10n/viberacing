@@ -15,11 +15,23 @@ remain safe to publish verbatim.
   boundaries and the commit/publication checklist.
 - [Local development](getting-started/LOCAL_DEVELOPMENT.md) — pinned tools, repository gates, and
   synthetic web prototype and disposable PostgreSQL startup.
+- [Railway Web staging](getting-started/RAILWAY_WEB_STAGING.md) — minimal production image,
+  standalone runtime smoke, exact default-off variables, and the explicit preview-only boundary.
+- [Railway data-plane staging](getting-started/RAILWAY_DATA_PLANE_STAGING.md) — separate Web,
+  Ingest, Jobs, and migration images, dependency-free Cloudflare signer, deployment order, and
+  external PostgreSQL/identity prerequisites.
+- [GitHub Release deployment](getting-started/GITHUB_RELEASE_DEPLOYMENT.md) — protected stable-tag
+  workflow, one-time Railway/Cloudflare/GitHub setup, service order, and manual redeploy boundary.
 - [Web prototype](../apps/web/README.md) — frontend commands, module map, privacy boundary, CSP,
   synthetic data contract, and test strategy.
+- [Design system](design/README.md) — reusable brand/interface rules, canonical race-broadcast
+  direction, public-safe synthetic prototype, and the boundary between durable design decisions and
+  local OpenDesign state.
 - [Ingest boundaries](../apps/ingest/README.md) — protected origin-key reader, exact raw-request
   policy, origin/device proof, parser limits, bounded PostgreSQL adapter, focused checks, and
   explicit integration gaps.
+- [Cloudflare sync origin signer](../apps/edge/README.md) — dependency-free exact-route Worker,
+  origin-proof compatibility evidence, protected deployment inputs, and live-evidence boundary.
 - [Public protocol contracts](../contracts/README.md) — canonical JSON Schemas, generated
   TypeScript/OpenAPI artifacts, writable-field boundary, validation limits, and versioning rules.
 - [Database foundation](../database/README.md) — SQL migration ledger, privacy/table map,
@@ -44,7 +56,8 @@ remain safe to publish verbatim.
   — real-scope read-only gate selection, staged/history evidence boundaries, and fail-closed
   authority and production-claim checks.
 - [Asset provenance](reference/ASSET_PROVENANCE.md) — generation/source records, integrity digests,
-  metadata sanitation, accessibility text, and release-review status for non-code visuals.
+  metadata sanitation, accessibility text, design-reference origin, and release-review status for
+  non-code visuals.
 - [CarRecipe version 1](reference/car-recipe.md) — exact closed fields, local session-owned
   proposal/approval lifecycle, deterministic rendering, trust limits, and remaining gates.
 - [Pull-request CI trust model](architecture/CI_TRUST_MODEL.md) — untrusted-code execution boundary
@@ -90,9 +103,10 @@ remain safe to publish verbatim.
 - `security/` — incident-response and launch privacy/legal artifacts as operations become real.
 - `reference/` — public API, connector CLI, configuration, scoring, and CarRecipe reference.
 - `operations/` — checked migration, isolated current-snapshot restore, local capability-
-  containment, and profile-deletion failure rehearsal runbooks exist; Railway/Cloudflare deployment,
-  external backup storage, stale-backup deletion replay, alerts, SLOs, reporter coordination,
-  compromised release, mass revoke, and broader incident communication runbooks remain pending.
+  containment, profile-deletion failure, and local Railway/Cloudflare data-plane composition
+  documents exist; live deployment, external backup storage, stale-backup deletion replay, alerts,
+  SLOs, reporter coordination, compromised release, mass revoke, and broader incident communication
+  runbooks remain pending.
 - `decisions/` — new records whenever durable decisions change; initial ADRs exist now.
 - `releasing/` — versioning, changelog, signing, provenance, rollback, and supported-version policy.
 

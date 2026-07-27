@@ -40,14 +40,14 @@ Run from the repository root:
 ```text
 pnpm run lint:migrate
 pnpm run typecheck:migrate
-pnpm run test:migrate:coverage
-pnpm run build:migrate
-pnpm run check:migrate-entrypoint
-pnpm run check:migration-runbook
-pnpm run test:migration-runbook-check
-pnpm run test:migrate:postgres-integration
+pnpm run test:migrate
 pnpm run verify
 ```
+
+Run coverage/build/entry-point checks when controller behavior changes, the Docker PostgreSQL
+integration when catalog/login/locking behavior changes, and the runbook checker only when editing
+that operational document. The full release gate is `pnpm run verify:release`; it is not required
+for routine migration-runner iteration.
 
 Before committing, stage only intended files, run `git diff --cached --check` and
 `pnpm run check:public:staged`, then inspect every staged source, test, package, lockfile, ADR, and

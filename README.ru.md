@@ -7,35 +7,41 @@
 проверенные приватные каналы для security/conduct reports. Локальные имена и контакты не будут
 копироваться в репозиторий ради заполнения этих полей.
 
-Vibe Racing — открытый пиксельный недельный рейтинг пользователей Codex. Локальный connector
-передаёт только заявленные пользователем дневные buckets, а участники отображаются как болиды на
-общей трассе.
+Vibe Racing — открытый пиксельный недельный рейтинг вайбкодеров по расходу токенов во всех
+поддерживаемых coding agents, то есть privacy-first **vibecode rating** в виде общей гонки.
+Agent-neutral метрика напрямую суммирует документированный token total каждого поддерживаемого
+провайдера: без логарифма, бонуса за активные дни и коэффициентов провайдера, модели или стоимости.
+Текущий локальный beta-slice поддерживает только Codex: unreleased candidate connector отправляет
+`UsageSyncV1`, а новые token seasons публикуют прямой `weeklyTokenTotal` через отдельный default-off
+route. Legacy `weeklyScore` сохранён для совместимости и rollback; дополнительные agent readers,
+thin client, MCP и Verified ingestion ещё не реализованы.
 
 Сайт можно запустить локально без аккаунта, connector и базы: в этом случае он показывает явно
-помеченное синтетическое превью. Видимая гонка и таблица теперь также запрашивают текущую неделю у
-same-origin public race-status route и переключаются на Community results только после проверки
-ответа. Ответ всегда содержит округлённую до полных UTC-дней freshness и может содержать текущий
-approved enum-only автомобиль и включённый пользователем streak; exact receipt time и underlying
-daily scores остаются private. При отсутствии автомобиля браузер использует repository-owned
-presentation fallback. При ошибке остаётся синтетический fallback. Демо-профиль, три темы,
-русский/английский интерфейс и reduced-motion режим работают без реальных данных. Отдельный
-публичный EN/RU симулятор применяет production-формулу Community к условному дневному числу токенов
-и числу активных дней только в памяти компонента. Значение не отправляется, не сохраняется, не
-подставляется из аккаунта и не влияет на рейтинг. Отдельный invite-only flow теперь локально
-соединяет GitHub OAuth со state и PKCE, зашифрованное краткоживущее продолжение, атомарное
-enrollment, обязательную регистрацию passkey, повторный discoverable-credential вход, session-scoped
-список ключей доступа, страницу активного профиля, hide/show публичного профиля, список источников и
-устройств, немедленную паузу источника, восстановление paused-источника после свежей проверки
-passkey, необратимое отключение источника со свежей проверкой passkey, немедленный отзыв устройства,
-добавление резервного passkey, защищённый отзыв не текущего passkey, запрос удаления профиля после
-точного ввода handle и свежей проверки passkey, ротацию кодов восстановления с одноразовым показом
-после свежей проверки passkey, а также logout. Репозиторий не предоставляет рабочий invite issuer,
-вход по коду восстановления или замену passkey, OAuth registration, реальные secrets, live
-OAuth/authenticator/database credentials, scheduled deletion purge, cache/backup/tombstone handling,
-restore replay, edge abuse controls или evidence с реальным пользователем. Отдельное transport-free
-Admin-ядро теперь проверяет фиксированный порядок authorization, внешнего audit и единственного
-database capability для одного beta invite, но concrete Access/admin/passkey/audit adapters, host,
-UI и operational composition отсутствуют.
+помеченное синтетическое превью. Видимая гонка и таблица сначала запрашивают текущую неделю у
+same-origin direct-token route, при его недоступности используют legacy race-status route и
+переключаются на Community results только после проверки ответа. Ответ всегда содержит округлённую
+до полных UTC-дней freshness и может содержать текущий approved enum-only автомобиль и включённый
+пользователем streak; exact receipt time и underlying daily scores остаются private. При отсутствии
+автомобиля браузер использует repository-owned presentation fallback. При ошибке остаётся
+синтетический fallback. Демо-профиль, три темы, русский/английский интерфейс и reduced-motion режим
+работают без реальных данных. Отдельный публичный EN/RU симулятор применяет production-формулу
+Community к условному дневному числу токенов и числу активных дней только в памяти компонента.
+Значение не отправляется, не сохраняется, не подставляется из аккаунта и не влияет на рейтинг.
+Отдельный invite-only flow теперь локально соединяет GitHub OAuth со state и PKCE, зашифрованное
+краткоживущее продолжение, атомарное enrollment, обязательную регистрацию passkey, повторный
+discoverable-credential вход, session-scoped список ключей доступа, страницу активного профиля,
+hide/show публичного профиля, список источников и устройств, немедленную паузу источника,
+восстановление paused-источника после свежей проверки passkey, необратимое отключение источника со
+свежей проверкой passkey, немедленный отзыв устройства, добавление резервного passkey, защищённый
+отзыв не текущего passkey, запрос удаления профиля после точного ввода handle и свежей проверки
+passkey, ротацию кодов восстановления с одноразовым показом после свежей проверки passkey, а также
+logout. Репозиторий не предоставляет рабочий invite issuer, вход по коду восстановления или замену
+passkey, OAuth registration, реальные secrets, live OAuth/authenticator/database credentials,
+scheduled deletion purge, cache/backup/tombstone handling, restore replay, edge abuse controls или
+evidence с реальным пользователем. Отдельное transport-free Admin-ядро теперь проверяет
+фиксированный порядок authorization, внешнего audit и единственного database capability для одного
+beta invite, но concrete Access/admin/passkey/audit adapters, host, UI и operational composition
+отсутствуют.
 
 Страница аккаунта теперь также рендерит семь derived-баллов по дням текущей Community-недели и
 bounded summary через один объединённый server-side visibility/score checkout. Hidden-профиль не
@@ -49,9 +55,14 @@ chrome, данных аккаунта или реальной статистик
 
 ## Модель доверия
 
-Community-статистика предоставляется локальными устройствами и не подтверждается OpenAI. Её нельзя
-использовать для денежных призов, авторизации, доступа к функциям или других ценных преимуществ.
-Verified-лига останется выключенной до появления проверяемого сервером источника OpenAI.
+Community-статистика предоставляется локальными устройствами и не подтверждается каким-либо
+провайдером. Её нельзя использовать для денежных призов, авторизации, доступа к функциям или других
+ценных преимуществ. Текущий принятый инвариант оставляет Verified-лигу выключенной до появления
+проверяемого сервером источника OpenAI, прошедшего реализацию и ревью. Предложенный ADR 0068
+расширил бы это правило до отдельного выключенного по умолчанию решения для каждого провайдера;
+сейчас это решение не является нормативным и не реализовано. Токенизаторы провайдеров различаются,
+поэтому будущий прямой total означает сумму заявленных провайдерами токенов, а не нормализованные
+вычисления, стоимость, энергию или объём работы.
 
 Проект не собирает промпты, переписку, содержимое репозиториев, Codex access tokens, API-ключи или
 произвольные пользовательские файлы.
@@ -73,9 +84,13 @@ Verified-лига останется выключенной до появлен�
 - [Architecture decisions (EN)](docs/decisions/README.md)
 - [Политика данных публичного репозитория (EN)](docs/security/PUBLIC_REPOSITORY_POLICY.md)
 - [Локальная разработка (EN)](docs/getting-started/LOCAL_DEVELOPMENT.md)
+- [Railway Web staging (EN)](docs/getting-started/RAILWAY_WEB_STAGING.md)
+- [Railway data-plane staging (EN)](docs/getting-started/RAILWAY_DATA_PLANE_STAGING.md)
 - [Веб-прототип и его границы (EN)](apps/web/README.md)
+- [Дизайн-система и race-broadcast reference (EN/RU)](docs/design/README.md)
 - [Браузерная матрица Phase 1 (EN)](docs/testing/PHASE1_BROWSER_MATRIX.md)
 - [Локальное Ingest verification kernel (EN)](apps/ingest/README.md)
+- [Локальный Cloudflare origin signer (EN)](apps/edge/README.md)
 - [Connector protocol foundation (EN)](crates/connector/README.md)
 - [Локальный bounded Agent Skill для car proposal (EN)](.agents/skills/viberacing-propose-car/SKILL.md)
 - [Локальный bounded Agent Skill для проверки репозитория (EN)](.agents/skills/viberacing-verify/SKILL.md)
@@ -104,8 +119,11 @@ Agent Skill для проверки репозитория работает то
 персональные данные аккаунтов, приватные логи, реальные anti-abuse thresholds или локальные пути
 компьютера.
 
-Перед коммитом нужно выполнить `pnpm run verify`, затем проверить точный staged snapshot командой
-`pnpm run check:public:staged` и вручную просмотреть `git diff --cached`.
+Во время разработки запускайте проверки изменённого пакета и быстрый корневой `pnpm run verify`: он
+проверяет границы публичных данных и конфигурации, контракты, миграции, lint, типы, unit-тесты и
+Rust. Полный `pnpm run verify:release` нужен только перед релизом/публикацией или после широкого
+сквозного изменения. Перед коммитом проверьте точный staged snapshot командой
+`pnpm run check:public:staged` и вручную просмотрите `git diff --cached`.
 
 Локальный запуск:
 
@@ -127,50 +145,16 @@ pnpm run dev:web
 проверка, а не deployment или load/capacity evidence. Отдельная команда Ingest удерживает четыре
 независимо подписанных request на первом replay-store call, требует generic 503 для пятого без
 пятого DB call, затем отпускает lock и проверяет четыре accepted response и точное состояние. Это
-также контролируемая no-queue проверка, а не representative load/capacity evidence. Отдельная
-команда `pnpm run test:jobs-scheduler:postgres-integration` связывает production scheduler core под
-фиксированным UTC-временем с реальным Jobs runner и одноразовым PostgreSQL. Команда
-`pnpm run test:jobs-scheduler:timer-postgres-integration` сдвигает injected clock на следующий час,
-вызывает production interval handler дважды во время активного цикла, проверяет точный повторный
-каталог, подавление overlap и того же slot, а также повторный terminal reset. Это не доказательство
-доставки callback реальным host timer. Команда
-`pnpm run test:jobs-scheduler:lifecycle-postgres-integration` отдельно проверяет injected
-first-signal shutdown production lifecycle: активная DB-задача завершается, следующая
-scheduler-задача не стартует, runner/timers/handlers закрываются и выставляется код 0. Это не
-доказательство доставки реального OS signal. Команда
-`pnpm run test:jobs-scheduler:process-postgres-integration` отдельно запускает built scheduler entry
-point с реальными часами из link-free production-only runtime под pinned Linux Node. Harness сначала
-временно снимает только право Jobs-роли на выполнение backlog-функции. Первый process выдаёт ровно
-одну generic cycle-failure строку, оставляет backlog неизменённым, но доходит до более позднего
-terminal marker, после чего принимает настоящий `SIGTERM`, выходит с кодом 0 и закрывает DB session.
-Harness восстанавливает и проверяет точный grant, заново вооружает marker, удерживает scoring mutex
-и снова запускает тот же runtime. После наблюдения первого finalization lock-wait harness доставляет
-`SIGKILL`, требует exit 137 и закрытие DB session, затем доказывает неизменность backlog и terminal
-marker. После освобождения holder следующий restart финализирует backlog перед тихим code-0 signal
-exit. Затем harness заново вооружает marker, ставит одноразовый post-insert barrier для второго
-backlog и снова запускает тот же runtime. Второй `SIGKILL` после первой daily projection insert
-должен полностью откатить незавершённую PostgreSQL-транзакцию, сохранив только исходный source/day.
-Harness удаляет test-only trigger/function и проверяет отсутствие schema residue; clean-schema
-restart финализирует этот backlog ровно один раз. Финальный rearm/restart доказывает ещё один тихий
-повторный цикл; после каждого из шести запусков scheduler DB sessions закрыты, runtime fingerprint и
-итоговое состояние точны. Это локальное failure/crash-containment, restart-retry и один
-контролируемый rollback незавершённой post-insert транзакции, но не доказательство recovery для
-committed/external effects или всех Jobs capabilities, automatic privilege repair,
-deployed-controller restart либо orchestrator grace. Команда
-`pnpm run test:jobs-scheduler:wall-clock-postgres-integration` запускает тот же неизменённый entry
-point из того же bounded runtime shape. После startup она удерживает scoring mutex, наблюдает
-production refresh от нативного минутного timer в следующем реальном пятиминутном slot, доставляет
-настоящий `SIGTERM`, отпускает mutex и требует commit активного refresh, тихий выход с кодом 0,
-закрытие DB session и неизменность runtime fingerprint. Это локальное доказательство одного
-повторного host-timer refresh и graceful signal settlement, а не deployed controller, orchestrator
-grace или durable cadence. Команда `pnpm run test:jobs-scheduler:signal-postgres-integration`
-создаёт link-free production-only runtime из built scheduler, Jobs runner и точного установленного
-dependency graph, монтирует его read-only в pinned Linux Node image, удерживает первый finalization
-call и доставляет реальный `SIGTERM`. Она доказывает settlement активного call, отсутствие refresh и
-всех следующих jobs, тихий выход с кодом 0, закрытие DB session и неизменность runtime fingerprint;
-семнадцать пропущенных one-shot commands выполняются только после этого для общего exact-state
-oracle. Это локальное synthetic Linux OS-signal evidence, но не deployed signal route или
-orchestrator policy. Все девять требуют Docker и не являются deployment evidence.
+также контролируемая no-queue проверка, а не representative load/capacity evidence. Opt-in
+интеграции scheduler связывают этот production core с реальным Jobs runner и одноразовым PostgreSQL
+под фиксированным и реальным временем, доказывая точный порядок каталога, отказ login с лишними
+правами, повторное выполнение с подавлением overlap и того же slot, graceful и abrupt завершение по
+OS-signal, restart-retry и один контролируемый rollback незавершённой post-insert транзакции. Они не
+доказывают deployed cadence или маршрутизацию сигналов, controller/orchestrator grace, production
+TLS/login, мониторинг, ёмкость или retention реальных пользователей. Подробные доказательства — в
+[IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) и
+[ADR 0063](docs/decisions/0063-default-off-local-jobs-scheduler.md). Эти интеграции требуют Docker и
+не являются deployment evidence.
 
 Dev-сервер слушает только loopback. В интерфейсе нет реальных пользователей или токенов; не
 заменяйте синтетические fixtures приватными экспортами.
@@ -212,64 +196,66 @@ parser/headers/connections и задаёт 5/33/34-second request/handler/connec
 сериализует только повторно проверенные `no-store` success/problem contracts. Отдельный локальный
 host теперь запускает именно эту factory только в loopback development/test либо с явным
 Railway-edge production contract, закрывает частично созданные boundary и ограниченно обрабатывает
-SIGINT/SIGTERM. Его 130 tests и built-entrypoint check не доказывают Railway, внешний TLS, edge
+SIGINT/SIGTERM. Его 132 tests и built-entrypoint check не доказывают Railway, внешний TLS, edge
 route, live credentials или deployment. Отдельный opt-in integration test собирает emitted host,
 создаёт синтетический выделенный Ingest login в одноразовом PostgreSQL, отправляет независимо
-подписанные loopback HTTP requests и проверяет accepted, duplicate, persistent replay, revoked
-device, response headers и точные сохранённые строки. Она также удерживает четыре request на первом
-replay-store call, отклоняет пятый generic 503 без пятого DB call, затем проверяет четыре accepted
-response до полного settlement. После закрытия imported host тот же gate запускает built entry point
-отдельным тихим process, наблюдает его loopback listener без application work, доказывает ещё один
-exact accepted request и принудительно завершает только test child перед cleanup. Это не доказывает
-OS-signal delivery, graceful emitted-child settlement, deployment credential/certificate, protected
-secret delivery, distributed control, внешний edge route, representative load, real-user data или
-capacity. Live protected key injection, edge signer, direct-origin denial, distributed rate policy и
-monitoring всё ещё отсутствуют. Library-only Rust foundation теперь выполняет фиксированный stable
-handshake и только после него — candidate `0.144.5` account/usage sequence. Он подтверждает ChatGPT
-mode, отбрасывает email/plan/summary и возвращает не более 31 отсортированной строгой date/token
-записи. В репозитории есть exact release metadata, schema digests, minimal extracts, fixtures и
-drift/matrix checker. Windows x86_64 development-команда после проверки active record выбирает
-candidate только через bounded fixed-name `PATH` discovery или explicit path fallback и в обоих
-случаях допускает лишь точные size и SHA-256 официального artifact; repository tests не запускают
-пользовательский Codex account, а support matrix остаётся пустой. One-shot supervisor проверяет
-точную sequence на target-built synthetic child: фиксированный `app-server` argument, local pipes,
-очищенное ambient environment, bounded stdout/stderr/time, отклонение late output и
-reap-before-success cleanup. Reviewed-launch capability остаётся приватной для exact admission.
-Второй недоступный reviewed context теперь позволяет candidate composer превратить минимизированные
-записи в точные `ConnectorSyncV1` JSON, SHA-256 digest, unpadded base64url nonce и LF-separated
-device-signature message. Изолированный one-use signer потребляет этот закрытый материал вместе с
-таким же недоступным device-bound Ed25519 key capability и возвращает только то же body и пять
-точных header values. Общий synthetic vector проверяет exact public key/signature между Rust и
-production Ingest verifier. Отдельные pairing signer и Web verifier согласованы по точному
-domain-separated possession message. Локальная signed-in страница `/connect` принимает короткий код,
-показывает ограниченные metadata и полный fingerprint публичного ключа, явно выбирает новый или
-активный существующий opaque source без раскрытия его raw ID, а перед атомарным одобрением точного
-выбора требует свежий passkey assertion. Два закрытых локальных POST route открывают versioned
-pairing start/poll contracts через общий лимит в четыре вызова, фиксированную глобальную и 64-bucket
-PostgreSQL rate policy, ограниченные body и generic `no-store` ответы. Start, poll и два browser
-approval route остаются выключенными, пока каждый module при загрузке не получит точное
-`VIBERACING_PAIRING_ENABLED=true`; tracked default равен `false`. Выбор и завершение создания нового
-source отдельно требуют точного `VIBERACING_SOURCE_CREATION_ENABLED=true` в `/connect` и обоих
-browser approval module; его tracked default также равен `false`, а подключение к активному
-существующему source остаётся доступным при включённом pairing. Эти локальные gate не являются
-динамическими/deployed switch. Локальная Rust-команда `connect` получает Ed25519 key и анонимный
-rate ID из OS CSPRNG, сохраняет prepared/pending/active record только в нативном credential store,
-доказывает владение ключом и возобновляет прерванный poll, не печатая key, token, challenge, source
-или device ID. Отдельная точная команда `forget-local` может удалить только эту нативную запись для
-canonical origin/label, не читая её и не обращаясь к Vibe Racing; фиксированный результат
-предупреждает, что команда не выполняет server device revoke: он остаётся отдельным authenticated
-account action. Отдельная явно вызываемая команда `check-codex` выполняет только ту же exact Windows
-candidate artifact admission без origin, доступа к credential store, запуска Codex, чтения account,
-сохранения результата или сети. Её фиксированный point-in-time результат прямо сообщает, что ни одна
-версия Codex не поддерживается. Отдельная Windows x86_64 команда `sync` сначала проверяет active
-record, затем рассматривает не более 64 абсолютных `PATH` directories и четырёх exact-size hashes
-только для двух фиксированных имён либо использует explicit path fallback. После одинаковой
-canonical size/SHA-256 admission она удерживает и запускает exact `0.144.5` executable в новом
-пустом working directory, создаёт свежие request time/ID/nonce, один раз отправляет точное signed
-body на фиксированный sync path и принимает только closed acknowledgement. Она не повторяет
-ambiguous POST и не отправляет edge origin proof. Всё ещё нет macOS/Linux admission, live database
-connection, capacity evidence, credential rotation, automatic server-revoke composition, packaging,
-release, поддерживаемого sync connector и deployment.
+подписанные loopback HTTP requests и проверяет legacy и отдельно gated `UsageSyncV1` accepted,
+duplicate, persistent replay, revoked device, response headers и точные сохранённые строки. Она
+также удерживает четыре request на первом replay-store call, отклоняет пятый generic 503 без пятого
+DB call, затем проверяет четыре accepted response до полного settlement. После закрытия imported
+host тот же gate запускает built entry point отдельным тихим process, наблюдает его loopback
+listener без application work, доказывает ещё один exact accepted request и принудительно завершает
+только test child перед cleanup. Это не доказывает OS-signal delivery, graceful emitted-child
+settlement, deployment credential/certificate, protected secret delivery, distributed control,
+внешний edge route, representative load, real-user data или capacity. Локальный dependency-free
+Worker теперь создаёт совместимый origin proof, но live key injection, deployed edge
+route/direct-origin denial, distributed rate policy и monitoring всё ещё отсутствуют. Library-only
+Rust foundation теперь выполняет фиксированный stable handshake и только после него — candidate
+`0.144.5` account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает email/plan/summary и
+возвращает не более 31 отсортированной строгой date/token записи. В репозитории есть exact release
+metadata, schema digests, minimal extracts, fixtures и drift/matrix checker. Windows x86_64
+development-команда после проверки active record выбирает candidate только через bounded fixed-name
+`PATH` discovery или explicit path fallback и в обоих случаях допускает лишь точные size и SHA-256
+официального artifact; repository tests не запускают пользовательский Codex account, а support
+matrix остаётся пустой. One-shot supervisor проверяет точную sequence на target-built synthetic
+child: фиксированный `app-server` argument, local pipes, очищенное ambient environment, bounded
+stdout/stderr/time, отклонение late output и reap-before-success cleanup. Reviewed-launch capability
+остаётся приватной для exact admission. Второй недоступный reviewed context теперь позволяет
+candidate composer превратить минимизированные записи в точные `UsageSyncV1` JSON для
+`/v1/community/usage`, SHA-256 digest, unpadded base64url nonce и LF-separated device-signature
+message. Изолированный one-use signer потребляет этот закрытый материал вместе с таким же
+недоступным device-bound Ed25519 key capability и возвращает только то же body и пять точных header
+values. Общий synthetic vector проверяет exact public key/signature между Rust и production Ingest
+verifier. Отдельные pairing signer и Web verifier согласованы по точному domain-separated possession
+message. Локальная signed-in страница `/connect` принимает короткий код, показывает ограниченные
+metadata и полный fingerprint публичного ключа, явно выбирает новый или активный существующий opaque
+source без раскрытия его raw ID, а перед атомарным одобрением точного выбора требует свежий passkey
+assertion. Два закрытых локальных POST route открывают versioned pairing start/poll contracts через
+общий лимит в четыре вызова, фиксированную глобальную и 64-bucket PostgreSQL rate policy,
+ограниченные body и generic `no-store` ответы. Start, poll и два browser approval route остаются
+выключенными, пока каждый module при загрузке не получит точное `VIBERACING_PAIRING_ENABLED=true`;
+tracked default равен `false`. Выбор и завершение создания нового source отдельно требуют точного
+`VIBERACING_SOURCE_CREATION_ENABLED=true` в `/connect` и обоих browser approval module; его tracked
+default также равен `false`, а подключение к активному существующему source остаётся доступным при
+включённом pairing. Эти локальные gate не являются динамическими/deployed switch. Локальная
+Rust-команда `connect` получает Ed25519 key и анонимный rate ID из OS CSPRNG, сохраняет
+prepared/pending/active record только в нативном credential store, доказывает владение ключом и
+возобновляет прерванный poll, не печатая key, token, challenge, source или device ID. Отдельная
+точная команда `forget-local` может удалить только эту нативную запись для canonical origin/label,
+не читая её и не обращаясь к Vibe Racing; фиксированный результат предупреждает, что команда не
+выполняет server device revoke: он остаётся отдельным authenticated account action. Отдельная явно
+вызываемая команда `check-codex` выполняет только ту же exact Windows candidate artifact admission
+без origin, доступа к credential store, запуска Codex, чтения account, сохранения результата или
+сети. Её фиксированный point-in-time результат прямо сообщает, что ни одна версия Codex не
+поддерживается. Отдельная Windows x86_64 команда `sync` сначала проверяет active record, затем
+рассматривает не более 64 абсолютных `PATH` directories и четырёх exact-size hashes только для двух
+фиксированных имён либо использует explicit path fallback. После одинаковой canonical size/SHA-256
+admission она удерживает и запускает exact `0.144.5` executable в новом пустом working directory,
+создаёт свежие request time/ID/nonce, один раз отправляет точное signed body на фиксированный sync
+path и принимает только closed acknowledgement. Она не повторяет ambiguous POST и не отправляет edge
+origin proof. Всё ещё нет macOS/Linux admission, live database connection, capacity evidence,
+credential rotation, automatic server-revoke composition, packaging, release, поддерживаемого sync
+connector и deployment.
 
 Также добавлены 39 SQL-миграций: 28 приватных
 identity/passkey/recovery/source/device/pairing/audit/deletion/replay/usage/scoring/CarRecipe
@@ -378,16 +364,21 @@ terminal deletion-job cleanup, primary profile purge, scoring refresh или fin
 отдельный least-privileged config, single-client pool, проверку role/login/search path, fixed
 deadlines, prepared parameters, closed result validation и стабильный non-reflective CLI output.
 Отдельный opt-in Jobs scenario применяет reviewed migrations к одноразовой PostgreSQL, запускает все
-семнадцать emitted commands через узкий synthetic login, отклоняет login с лишней role membership до
-мутации и проверяет точное состояние перед очисткой. Сама база не проверяет wire signature;
+восемнадцать emitted commands через узкий synthetic login, отклоняет login с лишней role membership
+до мутации и проверяет точное состояние перед очисткой. Сама база не проверяет wire signature;
 локальные kernel, adapter и application объединены на synthetic/mock-pool evidence. Отдельный opt-in
 loopback Ingest scenario теперь проводит независимо подписанный HTTP request через emitted host и
 одноразовый least-privileged PostgreSQL login, включая duplicate/replay/revoke и точную проверку
-сохранённого состояния. Deployed HTTP ingest route, operational sync connector, cleanup/scoring
-scheduler, deployment Ingest/Jobs login/TLS integration, monitoring backend, deployed public score
-read, audited correction flow, cache/backup/tombstone purge, restore replay и scheduled deletion
-execution ещё не реализованы, поэтому локальный enrollment ещё не является готовой
-production-авторизацией, а приёма реальных данных пока нет.
+сохранённого состояния. Новый `UsageSyncV1` не принимает provider: Ingest выводит точную
+`codex`/`codex_daily_usage_buckets_v1` attribution из device/source binding, а revision 0041
+повторно проверяет её перед сохранением. Этот route отсутствует без точного
+`VIBERACING_USAGE_SYNC_ENABLED=true`; текущий candidate sync command отправляет именно этот
+body/path. Revision 0042 и отдельный default-off Web route реализуют Codex-only direct-token
+leaderboard локально; второй provider, thin client и MCP ещё не реализованы. Deployed HTTP ingest
+route, released connector, cleanup/scoring scheduler, deployment Ingest/Jobs login/TLS integration,
+monitoring backend, deployed public score read, audited correction flow, cache/backup/tombstone
+purge, restore replay и scheduled deletion execution ещё не реализованы, поэтому локальный
+enrollment ещё не является готовой production-авторизацией, а приёма реальных данных пока нет.
 
 Отдельная команда `pnpm run check:publication` сейчас должна завершаться ошибкой: она блокирует
 публикацию, пока реальные GitHub-настройки и ответственные лица не подтверждены.
