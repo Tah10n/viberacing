@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
 *.local
 *.secret
 *.secrets
@@ -19,6 +21,11 @@ credentials/
 session-*.jsonl
 codex-tui.log
 
+# OpenDesign local workspace output
+/.od-skills/
+/plugin-source/
+/vibe-racing-race-broadcast-prototype.html.artifact.json
+
 # Logs, databases, and local runtime data
 *.log
 logs/
@@ -30,6 +37,7 @@ data/
 # JavaScript / TypeScript
 node_modules/
 .pnpm-store/
+.wrangler/
 .next/
 dist/
 build/

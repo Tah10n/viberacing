@@ -1,0 +1,47 @@
+FROM node:24.18.0-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS manifests
+
+ENV CI=true
+
+WORKDIR /workspace
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/jobs/package.json apps/jobs/package.json
+COPY apps/jobs-scheduler/package.json apps/jobs-scheduler/package.json
+
+FROM manifests AS build
+
+RUN corepack pnpm install --filter @viberacing/jobs-scheduler... --frozen-lockfile --ignore-scripts
+
+COPY apps/jobs apps/jobs
+COPY apps/jobs-scheduler apps/jobs-scheduler
+
+RUN corepack pnpm --filter @viberacing/jobs run build
+RUN corepack pnpm --filter @viberacing/jobs-scheduler run build
+
+FROM manifests AS production-dependencies
+
+RUN corepack pnpm install \
+  --filter @viberacing/jobs-scheduler... \
+  --prod \
+  --frozen-lockfile \
+  --ignore-scripts
+
+FROM node:24.18.0-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS runtime
+
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+COPY --from=production-dependencies --chown=node:node /workspace/node_modules ./node_modules
+COPY --from=production-dependencies --chown=node:node /workspace/apps/jobs/node_modules ./apps/jobs/node_modules
+COPY --from=production-dependencies --chown=node:node /workspace/apps/jobs-scheduler/node_modules ./apps/jobs-scheduler/node_modules
+COPY --from=build --chown=node:node /workspace/apps/jobs/package.json ./apps/jobs/package.json
+COPY --from=build --chown=node:node /workspace/apps/jobs/dist ./apps/jobs/dist
+COPY --from=build --chown=node:node /workspace/apps/jobs-scheduler/package.json ./apps/jobs-scheduler/package.json
+COPY --from=build --chown=node:node /workspace/apps/jobs-scheduler/dist ./apps/jobs-scheduler/dist
+
+USER node
+
+STOPSIGNAL SIGTERM
+
+CMD ["node", "apps/jobs-scheduler/dist/main.js"]

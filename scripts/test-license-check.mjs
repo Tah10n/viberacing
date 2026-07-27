@@ -230,6 +230,87 @@ try {
     [{ workspace: "apps/web", scope: "runtime" }],
   );
 
+  const deploymentArtifacts = makeFixture("deployment-artifacts");
+  const fixtureCloudflareAction = `cloudflare/wrangler-action@${"a".repeat(40)}`;
+  const fixtureRailwayImage = `ghcr.io/example/railway:1.2.3@sha256:${"b".repeat(64)}`;
+  writeFileSync(
+    join(deploymentArtifacts, ".github", "workflows", "deploy.yml"),
+    `jobs:
+  deploy:
+    steps:
+      - uses: ${fixtureCloudflareAction}
+        with:
+          wranglerVersion: 4.5.6
+      - run: docker run --rm ${fixtureRailwayImage} railway up
+`,
+    "utf8",
+  );
+  writeFileSync(
+    join(deploymentArtifacts, "config", "license-policy.json"),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        approvedNpmLicenseExpressions: ["MIT"],
+        approvedCargoLicenseExpressions: [],
+        externalArtifacts: [
+          {
+            kind: "github-action",
+            identifier: fixtureCloudflareAction,
+            declaredLicense: "Apache-2.0",
+            redistributed: false,
+            purpose: "Fixture commit-pinned deployment action",
+          },
+          {
+            kind: "container-image",
+            identifier: fixtureRailwayImage,
+            declaredLicense: "MIT",
+            redistributed: false,
+            purpose: "Fixture digest-pinned deployment image",
+          },
+          {
+            kind: "deployment-tool",
+            identifier: "wrangler@4.5.6",
+            declaredLicense: "MIT OR Apache-2.0",
+            redistributed: false,
+            purpose: "Fixture exact deployment command version",
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  expectPass("deployment artifact inventory", run(deploymentArtifacts, "--write"));
+  const deploymentInventory = JSON.parse(
+    readFileSync(
+      join(deploymentArtifacts, "docs", "reference", "dependency-inventory.json"),
+      "utf8",
+    ),
+  );
+  assert.deepEqual(
+    new Set(deploymentInventory.externalArtifacts.map((entry) => entry.identifier)),
+    new Set([fixtureCloudflareAction, fixtureRailwayImage, "wrangler@4.5.6"]),
+  );
+
+  const mutableDeploymentTool = makeFixture("mutable-deployment-tool");
+  writeFileSync(
+    join(mutableDeploymentTool, ".github", "workflows", "deploy.yml"),
+    `jobs:
+  deploy:
+    steps:
+      - uses: ${fixtureCloudflareAction}
+        with:
+          wranglerVersion: latest
+`,
+    "utf8",
+  );
+  expectFailure(
+    "mutable deployment tool",
+    run(mutableDeploymentTool, "--write"),
+    "pin one exact Wrangler version",
+  );
+
   const stale = makeFixture("stale");
   expectPass("stale fixture generation", run(stale, "--write"));
   const inventoryPath = join(stale, "docs", "reference", "dependency-inventory.json");
@@ -348,7 +429,7 @@ try {
     "referenced external artifact is missing",
   );
 
-  console.log("License checker tests passed (10 cases).");
+  console.log("License checker tests passed (12 cases).");
 } finally {
   rmSync(fixtureRoot, { force: true, recursive: true });
 }

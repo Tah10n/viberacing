@@ -122,8 +122,9 @@ overload, generic-error, response-contract, and production-build regressions.
 
 `config/license-policy.json` is a reviewed allowlist of the license expressions currently present;
 it is not a general statement that a license is suitable for every future distribution. The checker
-also binds pinned Actions and container images to explicit notices. Unknown, missing, changed,
-orphaned, or unreviewed declarations fail closed.
+also inventories every workflow and binds pinned Actions, command-invoked container images, and
+exact deployment tools to explicit notices. Unknown, missing, changed, orphaned, mutable, or
+unreviewed declarations fail closed.
 
 `pnpm-workspace.yaml` enforces:
 
@@ -198,14 +199,16 @@ or supported-platform change. Automated RustSec/cargo-deny release enforcement, 
 binary and credential-store testing, SBOM generation, notice bundling, and binary audit remain
 required before connector distribution.
 
-The Node CI job performs the public-file scan first, installs the pinned minimal Rust toolchain, and
-runs `cargo fetch --locked` before deterministic repository verification. Fetch resolves only the
-committed checksums and does not execute crate build scripts. The license checker then runs Cargo
-metadata offline. The separate Rust job compiles and tests the same lock graph; neither job receives
-secrets or release authority. After deterministic Node verification, the secretless Node job runs
-ten separate synthetic disposable-PostgreSQL integrations, including the real local Web and Ingest
-HTTP boundaries plus separate OS-signal checks for emitted Ingest and Jobs-scheduler processes; they
-use no production credential or artifact upload and are not release or deployment evidence.
+The pull-request Node job performs the public-file scan first, installs the frozen npm graph without
+lifecycle scripts, and runs the bounded development gate. The `main` or manually dispatched Node job
+also installs the pinned minimal Rust toolchain and runs `cargo fetch --locked` before the
+exhaustive release gate. Fetch resolves only committed checksums and does not execute crate build
+scripts; the license checker then runs Cargo metadata offline. The separate Rust job compiles and
+tests the same lock graph for every event; no job receives secrets or release authority. After
+exhaustive Node verification, the secretless `main` or manual job runs eleven synthetic
+disposable-PostgreSQL integrations, including the real local Web and Ingest HTTP boundaries plus
+separate OS-signal checks for emitted Ingest and Jobs-scheduler processes. They use no production
+credential or artifact upload and are not release or deployment evidence.
 
 New crates require the same necessity, maintenance, license, provenance, and advisory review as npm
 packages. Native code, build scripts, proc macros, network clients, cryptography, parsers, and
@@ -220,6 +223,12 @@ permissions, no secrets, no writable cache, and bounded job timeouts.
 An action update is reviewed by comparing the old and new commits in the action's canonical
 repository. A version comment is informative; the SHA is authoritative.
 
+The protected service workflow uses
+`cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0` (`v4.0.0`) only after its
+secretless verification job and protected GitHub Environment approval. It selects exact
+`wrangler@4.112.0`; either pin change requires renewed canonical-source, release, permission,
+license, and workflow-regression review.
+
 ## Containers
 
 Container references use a human-readable version tag plus a SHA-256 index digest. The digest is
@@ -230,8 +239,11 @@ The current PostgreSQL container is local development infrastructure only. The s
 container is a test-profile-only Linux runtime for emitted Ingest and scheduler signal integrations;
 each host mounts only its exact generated production graph read-only, while the Ingest client
 receives only one synthetic signed request over stdin. It is not a product image and is not
-redistributed. Production images will have separate build, scanning, SBOM, provenance, and
-deployment policies.
+redistributed. The protected workflow invokes Railway CLI `5.26.0` only through
+`ghcr.io/railwayapp/cli` at the reviewed index digest, with a read-only filesystem/workspace,
+bounded temporary filesystems and resources, all Linux capabilities dropped, and
+`no-new-privileges`. Production application images still require separate build, scanning, SBOM,
+provenance, and deployment policies.
 
 ## Review checklist
 

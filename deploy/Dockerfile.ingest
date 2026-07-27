@@ -1,0 +1,52 @@
+FROM node:24.18.0-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS manifests
+
+ENV CI=true
+
+WORKDIR /workspace
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/ingest/package.json apps/ingest/package.json
+COPY apps/ingest-host/package.json apps/ingest-host/package.json
+COPY packages/contracts/package.json packages/contracts/package.json
+
+FROM manifests AS build
+
+RUN corepack pnpm install --filter @viberacing/ingest-host... --frozen-lockfile --ignore-scripts
+
+COPY apps/ingest apps/ingest
+COPY apps/ingest-host apps/ingest-host
+COPY packages/contracts packages/contracts
+
+RUN corepack pnpm --filter @viberacing/contracts run build
+RUN corepack pnpm --filter @viberacing/ingest run build
+RUN corepack pnpm --filter @viberacing/ingest-host run build
+
+FROM manifests AS production-dependencies
+
+RUN corepack pnpm install \
+  --filter @viberacing/ingest-host... \
+  --prod \
+  --frozen-lockfile \
+  --ignore-scripts
+
+FROM node:24.18.0-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS runtime
+
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+COPY --from=production-dependencies --chown=node:node /workspace/node_modules ./node_modules
+COPY --from=production-dependencies --chown=node:node /workspace/apps/ingest/node_modules ./apps/ingest/node_modules
+COPY --from=production-dependencies --chown=node:node /workspace/apps/ingest-host/node_modules ./apps/ingest-host/node_modules
+COPY --from=build --chown=node:node /workspace/packages/contracts/package.json ./packages/contracts/package.json
+COPY --from=build --chown=node:node /workspace/packages/contracts/dist ./packages/contracts/dist
+COPY --from=build --chown=node:node /workspace/apps/ingest/package.json ./apps/ingest/package.json
+COPY --from=build --chown=node:node /workspace/apps/ingest/dist ./apps/ingest/dist
+COPY --from=build --chown=node:node /workspace/apps/ingest-host/package.json ./apps/ingest-host/package.json
+COPY --from=build --chown=node:node /workspace/apps/ingest-host/dist ./apps/ingest-host/dist
+
+USER node
+
+STOPSIGNAL SIGTERM
+
+CMD ["node", "apps/ingest-host/dist/main.js"]

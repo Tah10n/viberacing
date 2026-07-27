@@ -46,6 +46,14 @@ dependency.
 | [Vitest](https://github.com/vitest-dev/vitest)                              | Unit and component test runner           | MIT              |
 | [YAML](https://eemeli.org/yaml/)                                            | Safe parsing of repository YAML policy   | ISC              |
 
+## External deployment tools
+
+| Component                                                                   | Purpose                                   | Declared license  |
+| --------------------------------------------------------------------------- | ----------------------------------------- | ----------------- |
+| [Cloudflare Wrangler Action](https://github.com/cloudflare/wrangler-action) | Protected Worker deployment               | Apache-2.0        |
+| [Railway CLI](https://github.com/railwayapp/cli)                            | Protected Railway service deployment      | MIT               |
+| [Wrangler](https://github.com/cloudflare/workers-sdk)                       | Exact Cloudflare Worker deployment client | MIT OR Apache-2.0 |
+
 The connector directly pins Serde and serde_json for closed JSON records, RustCrypto SHA-2 with
 default features disabled, Dalek Ed25519 with only zeroization enabled, getrandom for operating-
 system entropy, keyring with the selected Windows/macOS/Linux native-store backends, and ureq with
@@ -53,15 +61,16 @@ Rustls plus the platform certificate verifier. Its active `x86_64-pc-windows-msv
 non-workspace packages; the full cross-target Cargo lock graph contains 209 registry packages,
 including mutually exclusive native-store branches. The exact machine inventory remains
 authoritative. `compose.yaml` references official PostgreSQL and Node images for disposable local
-database and Linux signal-lifecycle verification; both images are pulled separately and are not
-redistributed in this source tree.
+database and Linux signal-lifecycle verification. The protected release workflow separately invokes
+the digest-pinned Railway CLI image, commit-pinned Cloudflare action, and exact Wrangler release.
+These tools are fetched for CI use and are not redistributed in this source tree.
 
 The machine-readable [dependency inventory](docs/reference/dependency-inventory.json) records every
-locked npm package, every future non-workspace Cargo package, and reviewed external CI/container
-artifact. It is deterministically compared with lockfiles and installed package manifests. The
-CSpell graph includes an English common-misspellings dictionary declared under CC BY-SA 4.0 and an
-argument parser declared under Python-2.0; both are development-only inputs and are not
-redistributed as part of the planned product. The web graph also contains MPL-2.0 Lightning CSS
+locked npm package, every future non-workspace Cargo package, and reviewed external CI, container,
+and deployment tool. It is deterministically compared with lockfiles and installed package
+manifests. The CSpell graph includes an English common-misspellings dictionary declared under CC
+BY-SA 4.0 and an argument parser declared under Python-2.0; both are development-only inputs and are
+not redistributed as part of the planned product. The web graph also contains MPL-2.0 Lightning CSS
 build/runtime variants and the development-only axe-core checker, CC-BY-4.0 browser compatibility
 data, CC0 metadata, and other permissive declarations recorded exactly in the inventory. The unused
 optional `sharp`/libvips graph is explicitly removed from Next.js resolution and must be reviewed

@@ -252,7 +252,7 @@ if (verifySkill !== null) {
     "Inspect each untracked path directly with read-only file inspection; `git diff` does not show its content.",
     "Use only read-only Git inspection commands",
     "Do not stage, edit, discard, reset, commit, or install anything merely to make verification easier.",
-    "A focused gate is not a substitute for the canonical repository gate",
+    "A focused gate is not a substitute for the canonical release gate",
     "do not upgrade or install it",
     "Never bypass a hook or checker",
     "Run a named opt-in gate only when the user explicitly requests it",
@@ -274,7 +274,7 @@ if (verifySkill !== null) {
 
   const expectedVerifyCommands = [
     "git status --short\ngit diff --check",
-    "pnpm run verify",
+    "pnpm run verify:release",
     "git diff --cached --check\npnpm run check:public:staged",
     "pnpm run check:history",
   ];
@@ -285,7 +285,7 @@ if (verifySkill !== null) {
     report(verifySkillPath, "executable examples differ from the reviewed verification allowlist");
   }
 
-  for (const scriptName of ["verify", "check:public:staged", "check:history"]) {
+  for (const scriptName of ["verify", "verify:release", "check:public:staged", "check:history"]) {
     if (typeof packageValue?.scripts?.[scriptName] !== "string") {
       report(packagePath, `required verification script is missing: ${scriptName}`);
     }

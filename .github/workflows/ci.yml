@@ -45,52 +45,71 @@ jobs:
         run: node scripts/check-public-files.mjs --all
 
       - name: Install pinned Rust for Cargo license metadata
+        if: github.event_name != 'pull_request'
         run: rustup toolchain install 1.94.0 --profile minimal
 
       - name: Fetch the exact locked Cargo graph without building it
+        if: github.event_name != 'pull_request'
         run: cargo fetch --locked
 
       - name: Install locked dependencies without lifecycle scripts
         run: >-
           pnpm install --frozen-lockfile --ignore-scripts --registry=https://registry.npmjs.org/
 
-      - name: Run deterministic Node and repository gates
+      - name: Run the core pull-request gate
+        if: github.event_name == 'pull_request'
         run: pnpm run verify:node
 
+      - name: Run the exhaustive release gate
+        if: github.event_name != 'pull_request'
+        run: pnpm run verify:release:node
+
       - name: Exercise the emitted migration controllers against PostgreSQL
+        if: github.event_name != 'pull_request'
         run: pnpm run test:migrate:postgres-integration
 
       - name: Exercise the local Web HTTP-to-PostgreSQL path
+        if: github.event_name != 'pull_request'
         run: pnpm run test:web:postgres-integration
 
       - name: Exercise the local Ingest HTTP-to-PostgreSQL path
+        if: github.event_name != 'pull_request'
         run: pnpm run test:ingest:postgres-integration
 
       - name: Exercise the OS-signalled Ingest process-to-PostgreSQL path
+        if: github.event_name != 'pull_request'
         run: pnpm run test:ingest:signal-postgres-integration
 
       - name: Exercise the local Jobs CLI-to-PostgreSQL path
+        if: github.event_name != 'pull_request'
         run: pnpm run test:jobs:postgres-integration
 
       - name: Exercise the fixed-clock Jobs scheduler-to-PostgreSQL path
+        if: github.event_name != 'pull_request'
         run: pnpm run test:jobs-scheduler:postgres-integration
 
       - name: Exercise the repeated Jobs scheduler timer-to-PostgreSQL path
+        if: github.event_name != 'pull_request'
         run: pnpm run test:jobs-scheduler:timer-postgres-integration
 
       - name: Exercise the injected Jobs scheduler lifecycle-to-PostgreSQL path
+        if: github.event_name != 'pull_request'
         run: pnpm run test:jobs-scheduler:lifecycle-postgres-integration
 
       - name: Exercise the real-clock Jobs scheduler process-to-PostgreSQL path
+        if: github.event_name != 'pull_request'
         run: pnpm run test:jobs-scheduler:process-postgres-integration
 
       - name: Exercise the recurring wall-clock Jobs scheduler process-to-PostgreSQL path
+        if: github.event_name != 'pull_request'
         run: pnpm run test:jobs-scheduler:wall-clock-postgres-integration
 
       - name: Exercise the OS-signalled Jobs scheduler process-to-PostgreSQL path
+        if: github.event_name != 'pull_request'
         run: pnpm run test:jobs-scheduler:signal-postgres-integration
 
       - name: Audit the locked dependency graph
+        if: github.event_name != 'pull_request'
         run: pnpm audit --audit-level high --registry=https://registry.npmjs.org/
 
   rust:
@@ -113,6 +132,7 @@ jobs:
 
   connector_windows_portable:
     name: Windows portable connector lifecycle
+    if: github.event_name != 'pull_request'
     runs-on: windows-2025
     timeout-minutes: 15
     steps:

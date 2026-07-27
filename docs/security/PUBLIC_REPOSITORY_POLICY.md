@@ -71,7 +71,7 @@ remove it from Git history.
 
 ## Required review before GitHub publication
 
-- run `pnpm run verify` and require `pnpm run check:publication` to pass;
+- run `pnpm run verify:release` and require `pnpm run check:publication` to pass;
 - scan every reachable Git object, not only the current tree;
 - confirm every reachable commit has a non-placeholder public Git identity and one exact
   author-matching DCO sign-off;

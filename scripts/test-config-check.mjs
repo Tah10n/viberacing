@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { parseDocument } from "yaml";
 import {
   validateCompose,
   validateDependencyOverrides,
@@ -8,6 +10,7 @@ import {
   validateWorkflow,
   validateEnvExampleText,
 } from "./check-config.mjs";
+import { validateReleaseDeploymentInputs } from "./check-release-deployment-inputs.mjs";
 
 const goodEnvExample = `DATABASE_HOST=127.0.0.1
 DATABASE_PORT=54329
@@ -22,6 +25,7 @@ VIBERACING_JOBS_DATABASE_PASSWORD=replace-with-local-jobs-password
 VIBERACING_JOBS_DATABASE_TLS_MODE=disable
 VIBERACING_JOBS_SCHEDULER_ENABLED=false
 VIBERACING_INGEST_ENABLED=false
+VIBERACING_USAGE_SYNC_ENABLED=false
 VIBERACING_INGEST_LISTENER_HOST=127.0.0.1
 VIBERACING_INGEST_LISTENER_PORT=8788
 VIBERACING_INGEST_TLS_TERMINATION=loopback-cleartext
@@ -37,6 +41,7 @@ VIBERACING_CAR_PROPOSALS_ENABLED=false
 VIBERACING_ENROLLMENT_ENABLED=false
 VIBERACING_PAIRING_ENABLED=false
 VIBERACING_PUBLIC_RANKING_ENABLED=false
+VIBERACING_TOKEN_RANKING_ENABLED=false
 VIBERACING_SOURCE_CREATION_ENABLED=false
 VIBERACING_WEB_DATABASE_HOST=127.0.0.1
 VIBERACING_WEB_DATABASE_PORT=54329
@@ -64,6 +69,15 @@ assert.match(
 assert.match(
   validateEnvExampleText(
     goodEnvExample.replace(
+      "VIBERACING_TOKEN_RANKING_ENABLED=false",
+      "VIBERACING_TOKEN_RANKING_ENABLED=true",
+    ),
+  ).join("\n"),
+  /must retain the reviewed public-safe example value/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
       "VIBERACING_CAR_PROPOSALS_ENABLED=false",
       "VIBERACING_CAR_PROPOSALS_ENABLED=true",
     ),
@@ -73,6 +87,15 @@ assert.match(
 assert.match(
   validateEnvExampleText(
     goodEnvExample.replace("VIBERACING_INGEST_ENABLED=false", "VIBERACING_INGEST_ENABLED=true"),
+  ).join("\n"),
+  /must retain the reviewed public-safe example value/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_USAGE_SYNC_ENABLED=false",
+      "VIBERACING_USAGE_SYNC_ENABLED=true",
+    ),
   ).join("\n"),
   /must retain the reviewed public-safe example value/,
 );
@@ -218,20 +241,57 @@ assert.deepEqual(validateWorkflow("good.yml", goodWorkflow), []);
 
 const requiredNodeSteps = [
   { run: "node scripts/check-public-files.mjs --all" },
-  { run: "rustup toolchain install 1.94.0 --profile minimal" },
-  { run: "cargo fetch --locked" },
-  { run: "pnpm run verify:node" },
-  { run: "pnpm run test:migrate:postgres-integration" },
-  { run: "pnpm run test:web:postgres-integration" },
-  { run: "pnpm run test:ingest:postgres-integration" },
-  { run: "pnpm run test:ingest:signal-postgres-integration" },
-  { run: "pnpm run test:jobs:postgres-integration" },
-  { run: "pnpm run test:jobs-scheduler:postgres-integration" },
-  { run: "pnpm run test:jobs-scheduler:timer-postgres-integration" },
-  { run: "pnpm run test:jobs-scheduler:lifecycle-postgres-integration" },
-  { run: "pnpm run test:jobs-scheduler:process-postgres-integration" },
-  { run: "pnpm run test:jobs-scheduler:wall-clock-postgres-integration" },
-  { run: "pnpm run test:jobs-scheduler:signal-postgres-integration" },
+  {
+    run: "rustup toolchain install 1.94.0 --profile minimal",
+    if: "github.event_name != 'pull_request'",
+  },
+  { run: "cargo fetch --locked", if: "github.event_name != 'pull_request'" },
+  { run: "pnpm run verify:node", if: "github.event_name == 'pull_request'" },
+  { run: "pnpm run verify:release:node", if: "github.event_name != 'pull_request'" },
+  {
+    run: "pnpm run test:migrate:postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
+  {
+    run: "pnpm run test:web:postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
+  {
+    run: "pnpm run test:ingest:postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
+  {
+    run: "pnpm run test:ingest:signal-postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
+  {
+    run: "pnpm run test:jobs:postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
+  {
+    run: "pnpm run test:jobs-scheduler:postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
+  {
+    run: "pnpm run test:jobs-scheduler:timer-postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
+  {
+    run: "pnpm run test:jobs-scheduler:lifecycle-postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
+  {
+    run: "pnpm run test:jobs-scheduler:process-postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
+  {
+    run: "pnpm run test:jobs-scheduler:wall-clock-postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
+  {
+    run: "pnpm run test:jobs-scheduler:signal-postgres-integration",
+    if: "github.event_name != 'pull_request'",
+  },
 ];
 const windowsPortableSteps = [
   {
@@ -259,6 +319,7 @@ const goodCiWorkflow = {
     },
     connector_windows_portable: {
       ...goodWorkflow.jobs.verify,
+      if: "github.event_name != 'pull_request'",
       "runs-on": "windows-2025",
       "timeout-minutes": 15,
       steps: windowsPortableSteps,
@@ -266,6 +327,34 @@ const goodCiWorkflow = {
   },
 };
 assert.deepEqual(validateWorkflow(".github/workflows/ci.yml", goodCiWorkflow), []);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      node: {
+        ...goodCiWorkflow.jobs.node,
+        steps: requiredNodeSteps.map((step) =>
+          step.run === "pnpm run verify:node" ? { run: step.run } : step,
+        ),
+      },
+    },
+  }).join("\n"),
+  /only the core gate on pull requests/,
+);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      connector_windows_portable: {
+        ...goodCiWorkflow.jobs.connector_windows_portable,
+        if: undefined,
+      },
+    },
+  }).join("\n"),
+  /main\/manual release-only job/,
+);
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
     ...goodCiWorkflow,
@@ -615,6 +704,156 @@ assert.match(
   /container must be pinned/,
 );
 
+const goodReleaseDeploymentInputs = {
+  CLOUDFLARE_ACCOUNT_ID: "a".repeat(32),
+  VIBERACING_PUBLIC_ORIGIN: "https://racing.example",
+  VIBERACING_USAGE_SYNC_ENABLED: "false",
+};
+assert.deepEqual(validateReleaseDeploymentInputs(goodReleaseDeploymentInputs), []);
+assert.match(
+  validateReleaseDeploymentInputs({
+    ...goodReleaseDeploymentInputs,
+    CLOUDFLARE_ACCOUNT_ID: "A".repeat(32),
+  }).join("\n"),
+  /CLOUDFLARE_ACCOUNT_ID/,
+);
+for (const origin of [
+  "http://racing.example",
+  "https://racing.example/",
+  "https://localhost",
+  "https://127.0.0.1",
+  "https://racing.example/path",
+]) {
+  assert.match(
+    validateReleaseDeploymentInputs({
+      ...goodReleaseDeploymentInputs,
+      VIBERACING_PUBLIC_ORIGIN: origin,
+    }).join("\n"),
+    /VIBERACING_PUBLIC_ORIGIN/,
+  );
+}
+assert.match(
+  validateReleaseDeploymentInputs({
+    ...goodReleaseDeploymentInputs,
+    VIBERACING_USAGE_SYNC_ENABLED: "yes",
+  }).join("\n"),
+  /VIBERACING_USAGE_SYNC_ENABLED/,
+);
+assert.equal(validateReleaseDeploymentInputs({}).length, 3);
+
+const releaseDeploymentWorkflowPath = ".github/workflows/deploy-release.yml";
+const goodReleaseDeploymentWorkflow = parseDocument(
+  readFileSync(new URL("../.github/workflows/deploy-release.yml", import.meta.url), "utf8"),
+  { strict: true, uniqueKeys: true, version: "1.2" },
+).toJS();
+assert.deepEqual(
+  validateWorkflow(releaseDeploymentWorkflowPath, goodReleaseDeploymentWorkflow),
+  [],
+);
+
+function mutateReleaseDeployment(mutator) {
+  const workflow = structuredClone(goodReleaseDeploymentWorkflow);
+  mutator(workflow);
+  return validateWorkflow(releaseDeploymentWorkflowPath, workflow).join("\n");
+}
+
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    workflow.on.release.types.push("created");
+  }),
+  /stable published releases/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    delete workflow.jobs.verify_release.if;
+  }),
+  /stable-tag-only/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    delete workflow.jobs.deploy.environment;
+  }),
+  /protected production environment/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    delete workflow.jobs.deploy.needs;
+  }),
+  /wait for verification/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    workflow.jobs.verify_release.env.EXTRA = "${{ secrets.EXTRA }}";
+  }),
+  /two exact deployment secrets/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    workflow.jobs.deploy.steps[5].run = workflow.jobs.deploy.steps[5].run.replace(
+      /@sha256:[a-f0-9]{64}/,
+      ":latest",
+    );
+  }),
+  /pinned CLI/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    delete workflow.jobs.deploy.steps[7].if;
+  }),
+  /closed migration latch/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    [workflow.jobs.deploy.steps[8], workflow.jobs.deploy.steps[10]] = [
+      workflow.jobs.deploy.steps[10],
+      workflow.jobs.deploy.steps[8],
+    ];
+  }),
+  /exact closed order/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    workflow.jobs.deploy.steps[12].uses = "cloudflare/wrangler-action@v4";
+  }),
+  /does not pin uses|Edge deployment/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    workflow.jobs.deploy.steps[12].with.wranglerVersion = "latest";
+  }),
+  /Edge deployment/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    workflow.concurrency["cancel-in-progress"] = true;
+  }),
+  /serialized execution/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    workflow.jobs.deploy.steps[0].with.ref = "main";
+  }),
+  /revalidate the tag/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    workflow.jobs.deploy.steps[13].run += "\necho ${{ secrets.RAILWAY_TOKEN }}";
+  }),
+  /directly in shell code/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    workflow.jobs.extra = structuredClone(workflow.jobs.verify_release);
+  }),
+  /only verify_release and deploy jobs/,
+);
+assert.match(
+  mutateReleaseDeployment((workflow) => {
+    delete workflow.jobs.deploy.steps[12].env.VIBERACING_USAGE_SYNC_ENABLED;
+  }),
+  /Edge deployment/,
+);
+
 const goodNodeProcessSignalService = {
   image: `node:24.18.0-bookworm-slim@sha256:${"c".repeat(64)}`,
   profiles: ["test"],
@@ -904,4 +1143,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (55 cases).");
+console.log("Configuration checker tests passed (79 cases).");

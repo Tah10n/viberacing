@@ -11,6 +11,75 @@ const exactPackageSelector = /^(?:@[^/\s]+\/[^@\s]+|[^@\s]+)@\d+\.\d+\.\d+(?:-[0
 const exactOverrideSelector =
   /^(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?>(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)$/;
 const hostedRunners = new Set(["ubuntu-24.04", "windows-2025", "macos-15"]);
+const releaseDeploymentWorkflowPath = ".github/workflows/deploy-release.yml";
+const checkoutAction = "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd";
+const setupNodeAction = "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e";
+const cloudflareAction = "cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0";
+const railwayCliImage =
+  "ghcr.io/railwayapp/cli:5.26.0@sha256:30293385a4793e30b54b1616dd0fddf6a60d355ed70767ae06bdbc5e8253f883";
+const releaseJobCondition =
+  "(github.event_name == 'release' && github.event.release.prerelease == false) || " +
+  "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')";
+const releaseTagCheck = [
+  'if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then',
+  '  echo "Release deployment requires a stable vMAJOR.MINOR.PATCH tag." >&2',
+  "  exit 1",
+  "fi",
+  'tag_commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"',
+  'if [[ "$(git rev-parse HEAD)" != "$tag_commit" ]]; then',
+  '  echo "Checked-out source does not match the release tag." >&2',
+  "  exit 1",
+  "fi",
+  'if ! git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main; then',
+  '  echo "Release tag is not reachable from origin/main." >&2',
+  "  exit 1",
+  "fi",
+].join("\n");
+const releaseVerifyStepNames = [
+  "Check out the exact release without persisted credentials",
+  "Require a stable tag reachable from main",
+  "Set up pinned Node.js",
+  "Activate pinned pnpm",
+  "Scan public files before dependency installation",
+  "Install pinned Rust for Cargo license metadata",
+  "Fetch the exact locked Cargo graph",
+  "Install locked dependencies without lifecycle scripts",
+  "Run the exhaustive release gate",
+  "Verify the Edge-to-Ingest proof contract",
+  "Exercise migrations against disposable PostgreSQL",
+  "Exercise Web against disposable PostgreSQL",
+  "Exercise Ingest against disposable PostgreSQL",
+];
+const releaseDeployStepNames = [
+  "Check out the verified release without persisted credentials",
+  "Recheck the stable tag before privileged work",
+  "Set up pinned Node.js",
+  "Activate pinned pnpm",
+  "Validate non-secret deployment inputs",
+  "Enable the one-shot migration service",
+  "Run reviewed migrations",
+  "Close the migration service latch",
+  "Deploy Web",
+  "Configure the Ingest usage gate",
+  "Deploy Ingest",
+  "Deploy Jobs scheduler",
+  "Deploy the Usage Sync edge",
+  "Smoke-check the public Web origin",
+];
+const railwayDockerPrefix =
+  "docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m " +
+  "--tmpfs /root:rw,noexec,nosuid,size=16m --cap-drop ALL " +
+  "--security-opt no-new-privileges --pids-limit 128 --memory 512m " +
+  '--env RAILWAY_TOKEN --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace ';
+const releaseSmokeCheck = [
+  'response_headers="$(mktemp)"',
+  `trap 'rm -f "$response_headers"' EXIT`,
+  `status="$(curl --silent --show-error --output /dev/null --dump-header "$response_headers" --write-out '%{http_code}' --max-time 30 --max-redirs 0 --proto '=https' --proto-redir '=https' --tlsv1.2 "$VIBERACING_PUBLIC_ORIGIN/")"`,
+  'test "$status" = "200"',
+  "grep -Eiq '^content-security-policy:' \"$response_headers\"",
+  "grep -Eiq '^strict-transport-security:' \"$response_headers\"",
+  "grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' \"$response_headers\"",
+].join("\n");
 const windowsPortableRuns = [
   "node scripts/check-public-files.mjs --all",
   "rustup toolchain install 1.94.0 --profile minimal",
@@ -37,6 +106,7 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_INGEST_DATABASE_TLS_MODE", "disable"],
   ["VIBERACING_INGEST_DATABASE_USER", "replace_with_local_ingest_login"],
   ["VIBERACING_INGEST_ENABLED", "false"],
+  ["VIBERACING_USAGE_SYNC_ENABLED", "false"],
   ["VIBERACING_INGEST_LISTENER_HOST", "127.0.0.1"],
   ["VIBERACING_INGEST_LISTENER_PORT", "8788"],
   ["VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL", "replace-with-random-32-byte-base64url-key"],
@@ -46,6 +116,7 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_ENROLLMENT_ENABLED", "false"],
   ["VIBERACING_PAIRING_ENABLED", "false"],
   ["VIBERACING_PUBLIC_RANKING_ENABLED", "false"],
+  ["VIBERACING_TOKEN_RANKING_ENABLED", "false"],
   ["VIBERACING_SOURCE_CREATION_ENABLED", "false"],
   ["VIBERACING_WEB_DATABASE_HOST", "127.0.0.1"],
   ["VIBERACING_WEB_DATABASE_NAME", "viberacing_local"],
@@ -97,6 +168,268 @@ function pinnedContainerImage(image) {
   return typeof image === "string" && /^[^\s@]+@sha256:[a-f0-9]{64}$/.test(image);
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => canonicalJson(entry)).join(",")}]`;
+  }
+  if (isObject(value)) {
+    return `{${Object.keys(value)
+      .sort((left, right) => left.localeCompare(right))
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function exactValue(actual, expected) {
+  return canonicalJson(actual) === canonicalJson(expected);
+}
+
+function railwayCommand(command) {
+  return `${railwayDockerPrefix}${railwayCliImage} /usr/bin/railway ${command}`;
+}
+
+export function validateReleaseDeploymentWorkflow(workflow) {
+  const findings = [];
+  if (
+    workflow.name !== "Deploy stable release" ||
+    !exactValue(workflow.on, {
+      release: { types: ["published"] },
+      workflow_dispatch: {
+        inputs: {
+          release_tag: {
+            description: "Stable vMAJOR.MINOR.PATCH tag to redeploy",
+            required: true,
+            type: "string",
+          },
+        },
+      },
+    })
+  ) {
+    findings.push("release deployment must use only stable published releases or one exact tag");
+  }
+  if (
+    !exactValue(workflow.permissions, { contents: "read" }) ||
+    !exactValue(workflow.concurrency, {
+      group: "production-release",
+      "cancel-in-progress": false,
+    }) ||
+    !exactValue(workflow.defaults, { run: { shell: "bash" } })
+  ) {
+    findings.push("release deployment must retain read-only permissions and serialized execution");
+  }
+  if (
+    !isObject(workflow.jobs) ||
+    !exactValue(Object.keys(workflow.jobs).sort(), ["deploy", "verify_release"])
+  ) {
+    findings.push("release deployment must contain only verify_release and deploy jobs");
+    return findings;
+  }
+
+  const verify = workflow.jobs.verify_release;
+  const deploy = workflow.jobs.deploy;
+  const exactReleaseEnvironment = {
+    RELEASE_TAG: "${{ github.event.release.tag_name || inputs.release_tag }}",
+  };
+  if (
+    verify.if !== releaseJobCondition ||
+    verify["runs-on"] !== "ubuntu-24.04" ||
+    verify["timeout-minutes"] !== 60 ||
+    verify.environment !== undefined ||
+    verify.needs !== undefined ||
+    !exactValue(verify.env, exactReleaseEnvironment)
+  ) {
+    findings.push("release verification must remain secretless, bounded, and stable-tag-only");
+  }
+  if (
+    deploy.if !== releaseJobCondition ||
+    deploy.needs !== "verify_release" ||
+    deploy["runs-on"] !== "ubuntu-24.04" ||
+    deploy["timeout-minutes"] !== 60 ||
+    !exactValue(deploy.environment, {
+      name: "production",
+      url: "${{ vars.VIBERACING_PUBLIC_ORIGIN }}",
+    }) ||
+    !exactValue(deploy.env, exactReleaseEnvironment)
+  ) {
+    findings.push(
+      "release deployment must wait for verification and use only the protected production environment",
+    );
+  }
+
+  const verifySteps = Array.isArray(verify.steps) ? verify.steps : [];
+  const deploySteps = Array.isArray(deploy.steps) ? deploy.steps : [];
+  if (
+    !exactValue(
+      verifySteps.map((step) => step?.name),
+      releaseVerifyStepNames,
+    ) ||
+    !exactValue(
+      deploySteps.map((step) => step?.name),
+      releaseDeployStepNames,
+    )
+  ) {
+    findings.push("release verification and deployment steps must retain their exact closed order");
+    return findings;
+  }
+
+  const checkoutWith = {
+    "fetch-depth": 0,
+    "persist-credentials": false,
+    ref: "${{ env.RELEASE_TAG }}",
+  };
+  const setupNodeWith = {
+    "node-version-file": ".node-version",
+    "package-manager-cache": false,
+  };
+  if (
+    verifySteps[0].uses !== checkoutAction ||
+    !exactValue(verifySteps[0].with, checkoutWith) ||
+    verifySteps[1].run !== releaseTagCheck ||
+    verifySteps[2].uses !== setupNodeAction ||
+    !exactValue(verifySteps[2].with, setupNodeWith) ||
+    !exactValue(
+      verifySteps.slice(3).map((step) => step.run),
+      [
+        "corepack enable\ncorepack install --global pnpm@11.7.0",
+        "node scripts/check-public-files.mjs --all",
+        "rustup toolchain install 1.94.0 --profile minimal",
+        "cargo fetch --locked",
+        "pnpm install --frozen-lockfile --ignore-scripts --registry=https://registry.npmjs.org/",
+        "pnpm run verify:release",
+        "pnpm run test:edge-ingest-compatibility",
+        "pnpm run test:migrate:postgres-integration",
+        "pnpm run test:web:postgres-integration",
+        "pnpm run test:ingest:postgres-integration",
+      ],
+    )
+  ) {
+    findings.push("release verification must retain the exact pinned checkout and release gates");
+  }
+
+  if (
+    deploySteps[0].uses !== checkoutAction ||
+    !exactValue(deploySteps[0].with, checkoutWith) ||
+    deploySteps[1].run !== releaseTagCheck ||
+    deploySteps[2].uses !== setupNodeAction ||
+    !exactValue(deploySteps[2].with, setupNodeWith) ||
+    deploySteps[3].run !== "corepack enable\ncorepack install --global pnpm@11.7.0" ||
+    deploySteps[4].run !== "node scripts/check-release-deployment-inputs.mjs" ||
+    !exactValue(deploySteps[4].env, {
+      CLOUDFLARE_ACCOUNT_ID: "${{ vars.CLOUDFLARE_ACCOUNT_ID }}",
+      VIBERACING_PUBLIC_ORIGIN: "${{ vars.VIBERACING_PUBLIC_ORIGIN }}",
+      VIBERACING_USAGE_SYNC_ENABLED: "${{ vars.VIBERACING_USAGE_SYNC_ENABLED }}",
+    })
+  ) {
+    findings.push("privileged deployment must revalidate the tag and non-secret inputs first");
+  }
+
+  const railwayToken = { RAILWAY_TOKEN: "${{ secrets.RAILWAY_TOKEN }}" };
+  const expectedRailwaySteps = [
+    {
+      index: 5,
+      id: "enable_migrations",
+      env: railwayToken,
+      run: railwayCommand(
+        "variable set VIBERACING_MIGRATIONS_ENABLED=true --service viberacing-migrate --skip-deploys",
+      ),
+    },
+    {
+      index: 6,
+      id: "deploy_migrations",
+      env: railwayToken,
+      run: railwayCommand("up --yes --service viberacing-migrate"),
+    },
+    {
+      index: 7,
+      if: "${{ always() && steps.enable_migrations.outcome != 'skipped' }}",
+      env: railwayToken,
+      run: railwayCommand(
+        "variable set VIBERACING_MIGRATIONS_ENABLED=false --service viberacing-migrate --skip-deploys",
+      ),
+    },
+    {
+      index: 8,
+      env: railwayToken,
+      run: railwayCommand("up --yes --service viberacing-web"),
+    },
+    {
+      index: 9,
+      env: {
+        RAILWAY_TOKEN: "${{ secrets.RAILWAY_TOKEN }}",
+        VIBERACING_USAGE_SYNC_ENABLED: "${{ vars.VIBERACING_USAGE_SYNC_ENABLED }}",
+      },
+      run: railwayCommand(
+        'variable set "VIBERACING_USAGE_SYNC_ENABLED=$VIBERACING_USAGE_SYNC_ENABLED" --service viberacing-ingest --skip-deploys',
+      ),
+    },
+    {
+      index: 10,
+      env: railwayToken,
+      run: railwayCommand("up --yes --service viberacing-ingest"),
+    },
+    {
+      index: 11,
+      env: railwayToken,
+      run: railwayCommand("up --yes --service viberacing-jobs-scheduler"),
+    },
+  ];
+  if (
+    expectedRailwaySteps.some(({ index, ...expected }) => {
+      const actual = deploySteps[index];
+      return (
+        actual.run !== expected.run ||
+        !exactValue(actual.env, expected.env) ||
+        actual.id !== expected.id ||
+        actual.if !== expected.if
+      );
+    })
+  ) {
+    findings.push(
+      "Railway deployment must retain the pinned CLI, closed migration latch, and exact service order",
+    );
+  }
+
+  if (
+    deploySteps[12].uses !== cloudflareAction ||
+    !exactValue(deploySteps[12].with, {
+      apiToken: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+      accountId: "${{ vars.CLOUDFLARE_ACCOUNT_ID }}",
+      workingDirectory: "apps/edge",
+      wranglerVersion: "4.112.0",
+      packageManager: "pnpm",
+      command: "deploy --config wrangler.jsonc",
+      vars: "VIBERACING_USAGE_SYNC_ENABLED",
+      quiet: true,
+    }) ||
+    !exactValue(deploySteps[12].env, {
+      VIBERACING_USAGE_SYNC_ENABLED: "${{ vars.VIBERACING_USAGE_SYNC_ENABLED }}",
+    }) ||
+    deploySteps[13].run !== releaseSmokeCheck ||
+    !exactValue(deploySteps[13].env, {
+      VIBERACING_PUBLIC_ORIGIN: "${{ vars.VIBERACING_PUBLIC_ORIGIN }}",
+    })
+  ) {
+    findings.push("Edge deployment and public smoke must retain their exact pinned closed surface");
+  }
+
+  const verifySecrets = [
+    ...canonicalJson(verify).matchAll(/\$\{\{ secrets\.([A-Z0-9_]+) \}\}/g),
+  ].map((match) => match[1]);
+  const deploySecrets = new Set(
+    [...canonicalJson(deploy).matchAll(/\$\{\{ secrets\.([A-Z0-9_]+) \}\}/g)].map(
+      (match) => match[1],
+    ),
+  );
+  if (
+    verifySecrets.length !== 0 ||
+    !exactValue([...deploySecrets].sort(), ["CLOUDFLARE_API_TOKEN", "RAILWAY_TOKEN"])
+  ) {
+    findings.push("only the protected deploy job may consume the two exact deployment secrets");
+  }
+  return findings;
+}
+
 export function validateWorkflow(path, workflow) {
   const findings = [];
   if (!isObject(workflow)) {
@@ -130,7 +463,14 @@ export function validateWorkflow(path, workflow) {
     if (!hostedRunners.has(job["runs-on"])) {
       findings.push(`job ${jobName} must use an allowlisted GitHub-hosted runner`);
     }
-    if (job.environment !== undefined) {
+    const allowedReleaseEnvironment =
+      path === releaseDeploymentWorkflowPath &&
+      jobName === "deploy" &&
+      exactValue(job.environment, {
+        name: "production",
+        url: "${{ vars.VIBERACING_PUBLIC_ORIGIN }}",
+      });
+    if (job.environment !== undefined && !allowedReleaseEnvironment) {
       findings.push(`job ${jobName} must not attach a privileged environment`);
     }
     const jobContainer = typeof job.container === "string" ? job.container : job.container?.image;
@@ -194,8 +534,12 @@ export function validateWorkflow(path, workflow) {
     }
   }
 
-  if (JSON.stringify(workflow).includes("${{ secrets.")) {
+  if (path !== releaseDeploymentWorkflowPath && JSON.stringify(workflow).includes("${{ secrets.")) {
     findings.push(`${path} references secrets; pull-request CI must remain secretless`);
+  }
+
+  if (path === releaseDeploymentWorkflowPath) {
+    findings.push(...validateReleaseDeploymentWorkflow(workflow));
   }
 
   if (path === ".github/workflows/ci.yml") {
@@ -213,6 +557,7 @@ export function validateWorkflow(path, workflow) {
       "rustup toolchain install 1.94.0 --profile minimal",
       "cargo fetch --locked",
       "pnpm run verify:node",
+      "pnpm run verify:release:node",
       "pnpm run test:migrate:postgres-integration",
       "pnpm run test:web:postgres-integration",
       "pnpm run test:ingest:postgres-integration",
@@ -230,13 +575,31 @@ export function validateWorkflow(path, workflow) {
     );
     if (positions.some((position) => position === -1)) {
       findings.push(
-        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run verify:node, and run all eleven synthetic PostgreSQL integrations using exact commands",
+        "Node CI must scan public files, install pinned minimal Rust, fetch Cargo with --locked, run the core PR and release Node gates, and retain all eleven synthetic PostgreSQL integrations using exact commands",
       );
     } else if (
       !positions.every((position, index) => index === 0 || position > positions[index - 1])
     ) {
       findings.push(
-        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, offline repository verification, and all eleven synthetic PostgreSQL integrations",
+        "Node CI must scan public files before pinned Rust setup, locked Cargo fetch, the core PR and release gates, and all eleven synthetic PostgreSQL integrations",
+      );
+    }
+    const pullRequestStep = nodeSteps.find(
+      (step) => isObject(step) && step.run === "pnpm run verify:node",
+    );
+    const releaseOnlyRuns = [...requiredRuns.slice(1, 3), ...requiredRuns.slice(4)];
+    if (
+      !isObject(pullRequestStep) ||
+      pullRequestStep.if !== "github.event_name == 'pull_request'" ||
+      releaseOnlyRuns.some((command) => {
+        const step = nodeSteps.find(
+          (candidate) => isObject(candidate) && candidate.run === command,
+        );
+        return !isObject(step) || step.if !== "github.event_name != 'pull_request'";
+      })
+    ) {
+      findings.push(
+        "Node CI must run only the core gate on pull requests and reserve Cargo license setup, the release gate, and synthetic PostgreSQL integrations for main or manual runs",
       );
     }
 
@@ -250,6 +613,9 @@ export function validateWorkflow(path, workflow) {
     }
     if (windowsPortableJob["timeout-minutes"] !== 15) {
       findings.push("Windows portable connector CI must retain the exact 15-minute timeout");
+    }
+    if (windowsPortableJob.if !== "github.event_name != 'pull_request'") {
+      findings.push("Windows portable connector CI must remain a main/manual release-only job");
     }
     const windowsPortableSteps = windowsPortableJob.steps;
     if (!Array.isArray(windowsPortableSteps)) {

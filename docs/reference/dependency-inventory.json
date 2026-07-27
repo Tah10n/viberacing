@@ -3,6 +3,7 @@
   "generatedFrom": [
     "package.json",
     "apps/admin/package.json",
+    "apps/edge/package.json",
     "apps/ingest/package.json",
     "apps/ingest-host/package.json",
     "apps/jobs/package.json",
@@ -14,7 +15,8 @@
     "config/npm-package-metadata.json",
     "Cargo.lock",
     "compose.yaml",
-    ".github/workflows/ci.yml"
+    ".github/workflows/ci.yml",
+    ".github/workflows/deploy-release.yml"
   ],
   "npmPackages": [
     { "name": "@asamuzakjp/css-color", "version": "5.1.11", "license": "MIT", "direct": [] },
@@ -2281,6 +2283,20 @@
       "purpose": "Pinned Node.js setup in CI"
     },
     {
+      "kind": "github-action",
+      "identifier": "cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0",
+      "declaredLicense": "Apache-2.0",
+      "redistributed": false,
+      "purpose": "Protected stable-release deployment of the exact Cloudflare Worker"
+    },
+    {
+      "kind": "container-image",
+      "identifier": "ghcr.io/railwayapp/cli:5.26.0@sha256:30293385a4793e30b54b1616dd0fddf6a60d355ed70767ae06bdbc5e8253f883",
+      "declaredLicense": "MIT",
+      "redistributed": false,
+      "purpose": "Pinned Railway service deployment client in the protected release workflow"
+    },
+    {
       "kind": "container-image",
       "identifier": "postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15",
       "declaredLicense": "PostgreSQL",
@@ -2293,6 +2309,13 @@
       "declaredLicense": "MIT and Debian package licenses",
       "redistributed": false,
       "purpose": "Pinned Linux Node runtime for disposable process-signal integrations"
+    },
+    {
+      "kind": "deployment-tool",
+      "identifier": "wrangler@4.112.0",
+      "declaredLicense": "MIT OR Apache-2.0",
+      "redistributed": false,
+      "purpose": "Exact Cloudflare Worker deployment client selected by the protected action"
     }
   ]
 }

@@ -553,6 +553,7 @@ for (const entry of cargoPackages) {
 }
 
 const observedExternal = new Set();
+const workflowInventoryPaths = [];
 try {
   const compose = parseYaml(readFileSync(resolve(root, "compose.yaml"), "utf8"));
   for (const service of Object.values(compose.services ?? {})) {
@@ -563,18 +564,62 @@ try {
 } catch (error) {
   report("compose.yaml", `could not inventory images: ${error.message}`);
 }
-try {
-  const workflow = parseYaml(readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8"));
-  for (const job of Object.values(workflow.jobs ?? {})) {
-    for (const step of job.steps ?? []) {
-      if (typeof step.uses === "string") {
-        observedExternal.add(step.uses);
+
+const workflowsDirectory = resolve(root, ".github", "workflows");
+if (existsSync(workflowsDirectory)) {
+  for (const entry of readdirSync(workflowsDirectory, { withFileTypes: true })) {
+    if (!entry.isFile() || !/\.ya?ml$/.test(entry.name)) {
+      continue;
+    }
+    const workflowPath = `.github/workflows/${entry.name}`;
+    workflowInventoryPaths.push(workflowPath);
+    try {
+      const workflow = parseYaml(readFileSync(resolve(root, workflowPath), "utf8"));
+      for (const job of Object.values(workflow.jobs ?? {})) {
+        const jobContainer =
+          typeof job.container === "string" ? job.container : job.container?.image;
+        if (typeof jobContainer === "string") {
+          observedExternal.add(jobContainer);
+        }
+        for (const service of Object.values(job.services ?? {})) {
+          const serviceImage = typeof service === "string" ? service : service?.image;
+          if (typeof serviceImage === "string") {
+            observedExternal.add(serviceImage);
+          }
+        }
+        for (const step of job.steps ?? []) {
+          if (typeof step.uses === "string") {
+            observedExternal.add(step.uses);
+          }
+          if (typeof step.run === "string") {
+            for (const match of step.run.matchAll(
+              /(?:^|[\s"'=])([a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]+@sha256:[a-f0-9]{64})(?=$|[\s"'])/g,
+            )) {
+              observedExternal.add(match[1]);
+            }
+          }
+          if (
+            typeof step.uses === "string" &&
+            step.uses.startsWith("cloudflare/wrangler-action@")
+          ) {
+            const wranglerVersion = step.with?.wranglerVersion;
+            if (
+              typeof wranglerVersion !== "string" ||
+              !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(wranglerVersion)
+            ) {
+              report(workflowPath, "Cloudflare deployment must pin one exact Wrangler version");
+            } else {
+              observedExternal.add(`wrangler@${wranglerVersion}`);
+            }
+          }
+        }
       }
+    } catch (error) {
+      report(workflowPath, `could not inventory actions or images: ${error.message}`);
     }
   }
-} catch (error) {
-  report(".github/workflows/ci.yml", `could not inventory actions: ${error.message}`);
 }
+workflowInventoryPaths.sort((left, right) => left.localeCompare(right));
 
 const externalIdentifiers = new Set();
 for (const [index, entry] of (policy.externalArtifacts ?? []).entries()) {
@@ -588,7 +633,7 @@ for (const [index, entry] of (policy.externalArtifacts ?? []).entries()) {
     continue;
   }
   if (
-    !new Set(["container-image", "github-action"]).has(entry.kind) ||
+    !new Set(["container-image", "deployment-tool", "github-action"]).has(entry.kind) ||
     typeof entry.identifier !== "string" ||
     typeof entry.declaredLicense !== "string" ||
     typeof entry.purpose !== "string" ||
@@ -642,7 +687,7 @@ const inventory = {
     npmMetadataRelativePath,
     "Cargo.lock",
     "compose.yaml",
-    ".github/workflows/ci.yml",
+    ...workflowInventoryPaths,
   ],
   npmPackages,
   cargoPackages,

@@ -8,10 +8,10 @@
 
 ## Context
 
-The repository now has one stable deterministic `pnpm run verify` gate, scoped commands documented
-under the relevant agent instructions, exact staged public-data checks, and a separate history/DCO
-gate. An agent still has to rediscover which evidence is complete, which Docker or browser gates are
-opt-in, and which live, network, publication, or deployment operations require separate authority.
+The repository has a bounded `pnpm run verify` development gate, an explicit exhaustive
+`pnpm run verify:release` gate, scoped commands documented under the relevant agent instructions,
+exact staged public-data checks, and a separate history/DCO gate. An agent still has to distinguish
+normal handoff evidence from release, Docker, browser, live, publication, or deployment evidence.
 That ambiguity can produce a false readiness claim or turn a verification request into an
 unauthorized mutation.
 
@@ -31,8 +31,8 @@ The skill requires an agent to:
 - read the root and applicable nested agent instructions;
 - inspect the user-selected Git scope, including untracked and staged/unstaged differences, with
   read-only commands;
-- use focused gates only as iteration evidence and `pnpm run verify` for a complete deterministic
-  repository result;
+- use focused gates plus `pnpm run verify` for normal handoff evidence and `pnpm run verify:release`
+  only when complete release/readiness verification is explicitly requested;
 - run the exact staged whitespace/public-blob gates only for an already staged scope;
 - run the history/DCO gate only after a commit exists or when the user explicitly requests it;
 - keep Docker, browser capture, network, live, publication, release, push, and deployment evidence

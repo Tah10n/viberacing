@@ -1,0 +1,223 @@
+name: Deploy stable release
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Stable vMAJOR.MINOR.PATCH tag to redeploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify_release:
+    name: Verify immutable stable release
+    if:
+      (github.event_name == 'release' && github.event.release.prerelease == false) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+    steps:
+      - name: Check out the exact release without persisted credentials
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Require a stable tag reachable from main
+        run: |-
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release deployment requires a stable vMAJOR.MINOR.PATCH tag." >&2
+            exit 1
+          fi
+          tag_commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          if [[ "$(git rev-parse HEAD)" != "$tag_commit" ]]; then
+            echo "Checked-out source does not match the release tag." >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main; then
+            echo "Release tag is not reachable from origin/main." >&2
+            exit 1
+          fi
+
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Activate pinned pnpm
+        run: |-
+          corepack enable
+          corepack install --global pnpm@11.7.0
+
+      - name: Scan public files before dependency installation
+        run: node scripts/check-public-files.mjs --all
+
+      - name: Install pinned Rust for Cargo license metadata
+        run: rustup toolchain install 1.94.0 --profile minimal
+
+      - name: Fetch the exact locked Cargo graph
+        run: cargo fetch --locked
+
+      - name: Install locked dependencies without lifecycle scripts
+        run: >-
+          pnpm install --frozen-lockfile --ignore-scripts --registry=https://registry.npmjs.org/
+
+      - name: Run the exhaustive release gate
+        run: pnpm run verify:release
+
+      - name: Verify the Edge-to-Ingest proof contract
+        run: pnpm run test:edge-ingest-compatibility
+
+      - name: Exercise migrations against disposable PostgreSQL
+        run: pnpm run test:migrate:postgres-integration
+
+      - name: Exercise Web against disposable PostgreSQL
+        run: pnpm run test:web:postgres-integration
+
+      - name: Exercise Ingest against disposable PostgreSQL
+        run: pnpm run test:ingest:postgres-integration
+
+  deploy:
+    name: Deploy protected production services
+    if:
+      (github.event_name == 'release' && github.event.release.prerelease == false) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    needs: verify_release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment:
+      name: production
+      url: ${{ vars.VIBERACING_PUBLIC_ORIGIN }}
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+    steps:
+      - name: Check out the verified release without persisted credentials
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Recheck the stable tag before privileged work
+        run: |-
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release deployment requires a stable vMAJOR.MINOR.PATCH tag." >&2
+            exit 1
+          fi
+          tag_commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          if [[ "$(git rev-parse HEAD)" != "$tag_commit" ]]; then
+            echo "Checked-out source does not match the release tag." >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main; then
+            echo "Release tag is not reachable from origin/main." >&2
+            exit 1
+          fi
+
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Activate pinned pnpm
+        run: |-
+          corepack enable
+          corepack install --global pnpm@11.7.0
+
+      - name: Validate non-secret deployment inputs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          VIBERACING_PUBLIC_ORIGIN: ${{ vars.VIBERACING_PUBLIC_ORIGIN }}
+          VIBERACING_USAGE_SYNC_ENABLED: ${{ vars.VIBERACING_USAGE_SYNC_ENABLED }}
+        run: node scripts/check-release-deployment-inputs.mjs
+
+      - name: Enable the one-shot migration service
+        id: enable_migrations
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |-
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /root:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m --env RAILWAY_TOKEN --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace ghcr.io/railwayapp/cli:5.26.0@sha256:30293385a4793e30b54b1616dd0fddf6a60d355ed70767ae06bdbc5e8253f883 /usr/bin/railway variable set VIBERACING_MIGRATIONS_ENABLED=true --service viberacing-migrate --skip-deploys
+
+      - name: Run reviewed migrations
+        id: deploy_migrations
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |-
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /root:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m --env RAILWAY_TOKEN --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace ghcr.io/railwayapp/cli:5.26.0@sha256:30293385a4793e30b54b1616dd0fddf6a60d355ed70767ae06bdbc5e8253f883 /usr/bin/railway up --yes --service viberacing-migrate
+
+      - name: Close the migration service latch
+        if: ${{ always() && steps.enable_migrations.outcome != 'skipped' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |-
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /root:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m --env RAILWAY_TOKEN --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace ghcr.io/railwayapp/cli:5.26.0@sha256:30293385a4793e30b54b1616dd0fddf6a60d355ed70767ae06bdbc5e8253f883 /usr/bin/railway variable set VIBERACING_MIGRATIONS_ENABLED=false --service viberacing-migrate --skip-deploys
+
+      - name: Deploy Web
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |-
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /root:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m --env RAILWAY_TOKEN --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace ghcr.io/railwayapp/cli:5.26.0@sha256:30293385a4793e30b54b1616dd0fddf6a60d355ed70767ae06bdbc5e8253f883 /usr/bin/railway up --yes --service viberacing-web
+
+      - name: Configure the Ingest usage gate
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          VIBERACING_USAGE_SYNC_ENABLED: ${{ vars.VIBERACING_USAGE_SYNC_ENABLED }}
+        run: |-
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /root:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m --env RAILWAY_TOKEN --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace ghcr.io/railwayapp/cli:5.26.0@sha256:30293385a4793e30b54b1616dd0fddf6a60d355ed70767ae06bdbc5e8253f883 /usr/bin/railway variable set "VIBERACING_USAGE_SYNC_ENABLED=$VIBERACING_USAGE_SYNC_ENABLED" --service viberacing-ingest --skip-deploys
+
+      - name: Deploy Ingest
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |-
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /root:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m --env RAILWAY_TOKEN --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace ghcr.io/railwayapp/cli:5.26.0@sha256:30293385a4793e30b54b1616dd0fddf6a60d355ed70767ae06bdbc5e8253f883 /usr/bin/railway up --yes --service viberacing-ingest
+
+      - name: Deploy Jobs scheduler
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |-
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /root:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m --env RAILWAY_TOKEN --volume "$GITHUB_WORKSPACE:/workspace:ro" --workdir /workspace ghcr.io/railwayapp/cli:5.26.0@sha256:30293385a4793e30b54b1616dd0fddf6a60d355ed70767ae06bdbc5e8253f883 /usr/bin/railway up --yes --service viberacing-jobs-scheduler
+
+      - name: Deploy the Usage Sync edge
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/edge
+          wranglerVersion: 4.112.0
+          packageManager: pnpm
+          command: deploy --config wrangler.jsonc
+          vars: VIBERACING_USAGE_SYNC_ENABLED
+          quiet: true
+        env:
+          VIBERACING_USAGE_SYNC_ENABLED: ${{ vars.VIBERACING_USAGE_SYNC_ENABLED }}
+
+      - name: Smoke-check the public Web origin
+        env:
+          VIBERACING_PUBLIC_ORIGIN: ${{ vars.VIBERACING_PUBLIC_ORIGIN }}
+        run: |-
+          response_headers="$(mktemp)"
+          trap 'rm -f "$response_headers"' EXIT
+          status="$(curl --silent --show-error --output /dev/null --dump-header "$response_headers" --write-out '%{http_code}' --max-time 30 --max-redirs 0 --proto '=https' --proto-redir '=https' --tlsv1.2 "$VIBERACING_PUBLIC_ORIGIN/")"
+          test "$status" = "200"
+          grep -Eiq '^content-security-policy:' "$response_headers"
+          grep -Eiq '^strict-transport-security:' "$response_headers"
+          grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' "$response_headers"

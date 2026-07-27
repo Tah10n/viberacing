@@ -197,7 +197,13 @@ expectFailure(
 
 expectFailure(
   "verification command widening",
-  (directory) => mutate(directory, verifySkillPath, "pnpm run verify", "pnpm run verify -- --fix"),
+  (directory) =>
+    mutate(
+      directory,
+      verifySkillPath,
+      "pnpm run verify:release",
+      "pnpm run verify:release -- --fix",
+    ),
   /executable examples differ from the reviewed verification allowlist/,
 );
 
@@ -231,8 +237,8 @@ expectFailure(
     mutate(
       directory,
       verifySkillPath,
-      "A focused gate is\nnot a substitute",
-      "A focused gate is\na substitute",
+      "normal handoff. A focused gate is not a substitute",
+      "normal handoff. A focused gate is a substitute",
     ),
   /required fail-closed instruction is missing/,
 );

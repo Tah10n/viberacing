@@ -13,6 +13,12 @@ Only protected `main` history can produce a release. Pull-request workflows rema
 never receive signing, deployment, registry, or production credentials. Trusted release and deploy
 workflows must be separate, environment-protected, least-privileged, and manually approvable.
 
+The checked `Deploy stable release` workflow is only the service-source deployment half of this
+boundary. It consumes an already published stable tag, reruns secretless verification, and then
+requires the protected `production` Environment before sequential Railway/Cloudflare replacement. It
+does not create or attest the tag, publish an artifact, satisfy the evidence below, or establish a
+released application/connector until its hosted controls and results are independently recorded.
+
 Secretless pull-request CI may compile a release-profile binary only as ephemeral test input. The
 bounded Windows portable copy/removal smoke uploads nothing and does not establish a package,
 installer, immutable version, signature, checksum publication, SBOM, provenance, clean-machine

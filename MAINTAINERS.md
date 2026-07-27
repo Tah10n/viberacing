@@ -31,7 +31,7 @@ Before the repository is announced or outside contributions are accepted:
 3. Protect `.github/`, SECURITY.md, and CODE_OF_CONDUCT.md with CODEOWNERS rules.
 4. Configure and test private security and conduct-reporting channels.
 5. Verify hosted branch protection, multi-factor authentication, and least-privilege access.
-6. Run `pnpm run verify` and `pnpm run check:publication`.
+6. Run `pnpm run verify:release` and `pnpm run check:publication`.
 
 Two independent maintainers are recommended before public beta and required before a process claims
 independent approval or resilient incident response.

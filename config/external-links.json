@@ -14,8 +14,16 @@
       "purpose": "Canonical Developer Certificate of Origin"
     },
     {
+      "hostname": "developers.cloudflare.com",
+      "purpose": "Official Cloudflare Workers deployment documentation"
+    },
+    {
       "hostname": "docs.github.com",
       "purpose": "GitHub security, OAuth, contribution, and release guidance"
+    },
+    {
+      "hostname": "docs.railway.com",
+      "purpose": "Official Railway deployment and CLI documentation"
     },
     {
       "hostname": "eemeli.org",

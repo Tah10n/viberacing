@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
@@ -70,7 +71,82 @@ const nextBin = webRequire.resolve("next/dist/bin/next");
 const tscBin = webRequire.resolve("typescript/bin/tsc");
 const vitestBin = resolve(dirname(webRequire.resolve("vitest")), "vitest.mjs");
 const nodeOnly = process.argv.includes("--node-only");
-const checks = [
+const releaseMode = process.argv.includes("--release");
+const unknownArguments = process.argv
+  .slice(2)
+  .filter((argument) => argument !== "--node-only" && argument !== "--release");
+if (unknownArguments.length > 0) {
+  console.error(`Unknown verification argument: ${unknownArguments[0]}`);
+  process.exit(2);
+}
+
+const corepackEntrypoint = [
+  resolve(dirname(process.execPath), "node_modules", "corepack", "dist", "corepack.js"),
+  resolve(
+    dirname(process.execPath),
+    "..",
+    "lib",
+    "node_modules",
+    "corepack",
+    "dist",
+    "corepack.js",
+  ),
+].find((path) => existsSync(path));
+if (corepackEntrypoint === undefined) {
+  console.error("Corepack is required to run workspace verification with the pinned pnpm version.");
+  process.exit(1);
+}
+const coreChecks = [
+  [
+    "public-file boundary",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-public-files.mjs"), "--all"],
+  ],
+  ["configuration boundary", process.execPath, [resolve(import.meta.dirname, "check-config.mjs")]],
+  ["versioned contracts", process.execPath, [resolve(import.meta.dirname, "check-contracts.mjs")]],
+  ["database migrations", process.execPath, [resolve(import.meta.dirname, "check-database.mjs")]],
+  [
+    "workspace lint",
+    process.execPath,
+    [
+      corepackEntrypoint,
+      "pnpm",
+      "--recursive",
+      "--workspace-concurrency=4",
+      "--if-present",
+      "run",
+      "lint",
+    ],
+  ],
+  [
+    "workspace types",
+    process.execPath,
+    [
+      corepackEntrypoint,
+      "pnpm",
+      "--recursive",
+      "--workspace-concurrency=4",
+      "--if-present",
+      "run",
+      "typecheck",
+    ],
+  ],
+  [
+    "workspace unit tests",
+    process.execPath,
+    [
+      corepackEntrypoint,
+      "pnpm",
+      "--recursive",
+      "--workspace-concurrency=4",
+      "--if-present",
+      "run",
+      "test",
+    ],
+  ],
+];
+
+const releaseChecks = [
   [
     "agent-skill checker behavior",
     process.execPath,
@@ -276,6 +352,21 @@ const checks = [
     [ingestTscBin, "--project", "tsconfig.build.json"],
     ingestRoot,
   ],
+  [
+    "Cloudflare edge lint",
+    process.execPath,
+    [corepackEntrypoint, "pnpm", "--filter", "@viberacing/edge", "run", "lint"],
+  ],
+  [
+    "Cloudflare edge tests",
+    process.execPath,
+    [corepackEntrypoint, "pnpm", "--filter", "@viberacing/edge", "run", "test"],
+  ],
+  [
+    "Cloudflare edge and Ingest verifier compatibility",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-edge-ingest-compatibility.mjs")],
+  ],
   ["Ingest host lint", process.execPath, [ingestHostEslintBin, "."], ingestHostRoot],
   ["Ingest host types", process.execPath, [ingestHostTscBin, "--noEmit"], ingestHostRoot],
   [
@@ -357,6 +448,11 @@ const checks = [
     [resolve(import.meta.dirname, "check-web-build.mjs")],
   ],
   [
+    "web standalone runtime",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-web-standalone.mjs")],
+  ],
+  [
     "formatting",
     process.execPath,
     [join(dirname(require.resolve("prettier")), "bin", "prettier.cjs"), "--check", "."],
@@ -368,13 +464,15 @@ const checks = [
   ],
 ];
 
+const checks = releaseMode ? releaseChecks : coreChecks;
+
 if (!nodeOnly) {
   checks.push([
     "Rust workspace",
     process.execPath,
     [resolve(import.meta.dirname, "check-rust.mjs")],
   ]);
-  if (process.platform === "win32" && process.arch === "x64") {
+  if (releaseMode && process.platform === "win32" && process.arch === "x64") {
     checks.push(
       [
         "Windows release-profile connector build",
@@ -416,4 +514,4 @@ for (const [label, command, args, cwd = root] of checks) {
   }
 }
 
-console.log("\nRepository verification passed.");
+console.log(`\nRepository ${releaseMode ? "release" : "core"} verification passed.`);

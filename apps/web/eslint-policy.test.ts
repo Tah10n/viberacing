@@ -4,6 +4,8 @@ import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
 describe("frontend lint policy", () => {
+  // The first cold ESLint config/program construction can exceed 30 seconds after earlier
+  // monorepo coverage gates on Windows; this assertion tests policy, not lint-startup latency.
   it("rejects importing the intentionally unavailable sharp runtime", async () => {
     const eslint = new ESLint({ cwd: import.meta.dirname });
     const [result] = await eslint.lintText(
@@ -23,7 +25,7 @@ describe("frontend lint policy", () => {
         ruleId === "no-restricted-syntax" && message.includes("Sharp is intentionally unavailable"),
     );
     expect(restrictions).toHaveLength(5);
-  }, 30_000);
+  }, 60_000);
 
   it("confines every Ed25519 access shape to reviewed server verifier modules", async () => {
     const eslint = new ESLint({ cwd: import.meta.dirname });

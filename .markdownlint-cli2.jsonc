@@ -7,5 +7,12 @@
     },
     "MD033": false,
   },
-  "globs": ["**/*.md", "!**/.git/**", "!**/.next/**", "!**/node_modules/**"],
+  "globs": [
+    "**/*.md",
+    "!**/.git/**",
+    "!**/.next/**",
+    "!.od-skills/**",
+    "!**/node_modules/**",
+    "!plugin-source/**",
+  ],
 }

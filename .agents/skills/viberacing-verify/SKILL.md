@@ -38,11 +38,12 @@ make verification easier.
 
 ## Run deterministic verification
 
-Use the focused commands documented in the governing `AGENTS.md` while iterating. A focused gate is
-not a substitute for the canonical repository gate when the user asks for complete verification:
+Use the focused commands documented in the governing `AGENTS.md` while iterating and the bounded
+`pnpm run verify` gate for a normal handoff. A focused gate is not a substitute for the canonical
+release gate when the user explicitly asks for complete release/readiness verification:
 
 ```text
-pnpm run verify
+pnpm run verify:release
 ```
 
 Use repository-pinned Node, pnpm, and Rust versions. If the active tool violates the declared

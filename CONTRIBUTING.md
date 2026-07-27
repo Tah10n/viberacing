@@ -81,6 +81,12 @@ pnpm install --frozen-lockfile --ignore-scripts
 pnpm run verify
 ```
 
+Use the package-specific lint, type, and unit-test commands while iterating. The root `verify`
+command is the bounded cross-workspace development gate; it deliberately excludes coverage,
+production builds, reachable-history scans, checker mutation suites, visual evidence, and
+Docker-backed integrations. Run `pnpm run verify:release` only for release/publication preparation
+or a broad cross-cutting change.
+
 Before a commit, stage only the intended files and run:
 
 ```text
