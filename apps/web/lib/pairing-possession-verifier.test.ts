@@ -5,7 +5,7 @@ import { Buffer } from "node:buffer";
 import { verifyAsync as verifyEd25519Strict } from "@noble/ed25519";
 import pairingPolicy from "../../../contracts/v1/connector-pairing-authentication.json";
 import pairingVector from "../../../contracts/v1/connector-pairing-possession.test-vector.json";
-import syncVector from "../../../contracts/v1/connector-sync-device-request.test-vector.json";
+import syncVector from "../../../contracts/v1/connector-usage-sync-device-request.test-vector.json";
 import { describe, expect, it, vi } from "vitest";
 
 import {

@@ -67,10 +67,12 @@ VALUES (
 SET LOCAL ROLE viberacing_ingest;
 
 SELECT *
-FROM viberacing_api.submit_community_sync(
+FROM viberacing_api.submit_usage_sync(
   '00000000-0000-4000-8000-000000015401',
   'dev_' || pg_catalog.repeat('9', 22),
   'src_' || pg_catalog.repeat('9', 22),
+  'codex',
+  'codex_daily_usage_buckets_v1',
   '00000000-0000-4000-8000-000000015501',
   'syn_' || pg_catalog.repeat('9', 22),
   pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),

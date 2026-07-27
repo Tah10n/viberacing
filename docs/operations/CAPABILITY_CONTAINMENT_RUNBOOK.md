@@ -102,10 +102,11 @@ Source creation and CarRecipe proposal mutation remain independently containable
 Enrollment remains independently containable from returning login and recovery. Legacy public
 ranking and direct-token ranking remain independently containable from each other; closing either is
 not evidence that private data or ingestion is contained. Ingest, Jobs, and migrations require their
-own process and database-session verification. Usage Sync remains independently containable from the
-legacy Community sync route. Removing its protected value requires replacing both the Ingest host,
-which resolves it at startup, and the Edge worker; it does not terminate an already-running process
-or prove that an old route is unreachable.
+own process and database-session verification. Usage Sync is the sole Community usage-ingest route
+and remains independently containable at both layers. Removing its protected value requires
+replacing both the Ingest host, which resolves it at startup, and the Edge worker; it does not
+terminate an already-running process or prove that an old artifact is unreachable. The flag is a
+containment control, not a protocol-migration switch.
 
 ## Preserve security and deletion paths
 

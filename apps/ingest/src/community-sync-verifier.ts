@@ -1,19 +1,13 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import { verifyAsync as verifyEd25519Strict } from "@noble/ed25519";
-import {
-  validateConnectorSyncV1,
-  validateUsageSyncV1,
-  type ConnectorSyncV1,
-  type UsageSyncV1,
-} from "@viberacing/contracts";
+import { validateUsageSyncV1, type UsageSyncV1 } from "@viberacing/contracts";
 
 import { parseBoundedCommunitySyncJson } from "./bounded-json.js";
 import {
   canonicalTimestampMilliseconds,
   communitySyncMediaType,
   communitySyncMethod,
-  communitySyncRequestTarget,
   type CommunitySyncRequestTarget,
   createDeviceSignatureMessage,
   createOriginProofMessage,
@@ -101,7 +95,7 @@ export interface VerifiedCommunitySync {
   readonly deviceKeyId: string;
   readonly idempotencyKey: string;
   readonly nonceDigestHex: string;
-  readonly payload: ConnectorSyncV1 | UsageSyncV1;
+  readonly payload: UsageSyncV1;
   readonly provider: AgentProvider;
   readonly requestTarget: CommunitySyncRequestTarget;
   readonly signatureBase64Url: string;
@@ -307,7 +301,7 @@ function readRawRequest(value: unknown): RawRequestEnvelope {
     const requestTarget = ownRequestDataValue(value, "requestTarget");
     if (
       ownRequestDataValue(value, "method") !== communitySyncMethod ||
-      (requestTarget !== communitySyncRequestTarget && requestTarget !== usageSyncRequestTarget)
+      requestTarget !== usageSyncRequestTarget
     ) {
       fail("invalid_request");
     }
@@ -365,25 +359,6 @@ function readRawRequest(value: unknown): RawRequestEnvelope {
     }
     fail("invalid_request");
   }
-}
-
-function canonicalPayload(value: ConnectorSyncV1): ConnectorSyncV1 {
-  return Object.freeze({
-    schemaVersion: 1,
-    sourceId: value.sourceId,
-    syncId: value.syncId,
-    observedAt: value.observedAt,
-    connectorVersion: value.connectorVersion,
-    codexVersion: value.codexVersion,
-    dailyEntries: Object.freeze(
-      value.dailyEntries.map((entry) =>
-        Object.freeze({
-          codexReportedDate: entry.codexReportedDate,
-          tokens: entry.tokens,
-        }),
-      ),
-    ),
-  });
 }
 
 function canonicalUsagePayload(value: UsageSyncV1): UsageSyncV1 {
@@ -481,20 +456,11 @@ class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
     } catch {
       fail("invalid_body");
     }
-    let payload: ConnectorSyncV1 | UsageSyncV1;
-    if (envelope.requestTarget === usageSyncRequestTarget) {
-      const validation = validateUsageSyncV1(parsed);
-      if (!validation.ok) {
-        fail("invalid_body");
-      }
-      payload = canonicalUsagePayload(validation.value);
-    } else {
-      const validation = validateConnectorSyncV1(parsed);
-      if (!validation.ok) {
-        fail("invalid_body");
-      }
-      payload = canonicalPayload(validation.value);
+    const validation = validateUsageSyncV1(parsed);
+    if (!validation.ok) {
+      fail("invalid_body");
     }
+    const payload = canonicalUsagePayload(validation.value);
 
     const deviceId = envelope.headers[headerNames.deviceId];
     const deviceNonce = envelope.headers[headerNames.deviceNonce];

@@ -28,7 +28,7 @@ Codex-only path from the existing reader through `UsageSyncV1` to a direct token
 | Cloudflare sync origin signer and production-Ingest proof compatibility                  | Implemented (local)                | `test:edge`, `test:edge-ingest-compatibility`, ADR 0070                                                           |
 | Design system and standalone race-broadcast exploration                                  | Documented reference only          | `docs/design/`; manual reference review, not implemented in `apps/web`                                            |
 | Contracts: JSON Schema, generated TypeScript/OpenAPI, runtime validator                  | Implemented                        | `check:contracts`, `test:contracts:coverage`                                                                      |
-| Database: 42 migrations, forced-RLS private tables, isolated roles, procedures           | Implemented (local integration)    | `check:database`, `test:database:integration`                                                                     |
+| Database: 43 migrations, forced-RLS private tables, isolated roles, procedures           | Implemented (local integration)    | `check:database`, `test:database:integration`                                                                     |
 | Public score/race/status/token routes and least-privilege Web adapters                   | Implemented (local, default-off)   | `test:web:postgres-integration`, `test:web-query-plan-evidence`                                                   |
 | Identity, passkeys, restricted recovery, sessions, account controls                      | Implemented (local, synthetic)     | `test:web:coverage`                                                                                               |
 | Source/device lifecycle and pairing approval                                             | Implemented (local, default-off)   | `test:web:coverage`                                                                                               |
@@ -157,7 +157,7 @@ plus strict build and built disabled-startup checks. A separate opt-in synthetic
 one widened and two narrow emitted processes against one disposable hostname-verified TLS PostgreSQL
 database. It denies the widened login before schema creation, observes both narrow controllers
 behind one external holder, requires both to converge successfully after release, and verifies the
-exact 42-row ledger, all 28 owner-owned forced-RLS private tables, identity invariants, and
+exact 43-row ledger, all 28 owner-owned forced-RLS private tables, identity invariants, and
 connection/lock cleanup. It proves no production credential/TLS, staging orchestration/rollback,
 deployed-replica behavior, monitoring, deployment, or recovery. A local Ingest kernel now bounds and
 authenticates the exact Community sync envelope, consumes an injected origin nonce, parses bounded
@@ -234,7 +234,7 @@ service tokens, email-shaped or unknown subjects, broad/expired assertions, and 
 redacted `invite_issue` actor identity. The combined 236 deterministic tests reach 98.9% statements,
 98.89% lines, 97.8% branches, and 100% functions. Complete authorization and external audit remain
 fixture-injected; the unit suite adds one OS-backed credential-shape check. A separate opt-in
-synthetic integration applies the reviewed 42-migration ledger to disposable hostname-verified TLS
+synthetic integration applies the reviewed 43-migration ledger to disposable hostname-verified TLS
 PostgreSQL, rejects an extra-membership login before any private mutation, and composes the built
 production kernel through the narrow login to prove one exact active invite, one database audit row,
 no non-target mutation, role reset, and connection cleanup. There is no Admin host, real Access
@@ -469,24 +469,22 @@ scheduler/cadence exists.
   for schema/CLI drift, command or authority widening, contradictory invocation input, unsafe shell
   input, retry permission, stale success output, Git-scope/runtime/public-output/evidence drift,
   front-matter widening, and UI metadata.
-- Sixteen canonical JSON Schema 2020-12 contracts for bounded Community connector sync and pairing
-  start/poll requests and responses, a non-sensitive sync acknowledgement, stable problem details, a
-  one-field public score season query, a response-only top-32 Community score page with constant
-  trust metadata, a separate compatible race page with one optional exact recipe, a third compatible
-  status page with required rounded freshness and optional streak, a direct token-race status page,
-  provider-neutral Usage Sync request/result contracts, plus the exact nine-field `CarRecipeV1`.
-  Every object is closed; scalar and collection values are bounded; the recipe accepts only
-  project-owned enums and a 0-to-65535 seed; reviewed date-range/ISO-weekday extensions make the
-  score calendar executable; connector input has an executable writable-field allowlist that
-  excludes identity, trust, rank, score, season, moderation, credentials, and prohibited data.
+- Fourteen canonical JSON Schema 2020-12 contracts for bounded Community Usage Sync, connector
+  pairing start/poll, and device CarRecipe proposal requests and responses; stable problem details;
+  a one-field public score season query; response-only score, race, race-status, and direct-token
+  pages; plus the exact nine-field `CarRecipeV1`. Every object is closed; scalar and collection
+  values are bounded; the recipe accepts only project-owned enums and a 0-to-65535 seed; reviewed
+  date-range/ISO-weekday extensions make the score calendar executable; connector input has an
+  executable writable-field allowlist that excludes identity, trust, rank, score, season,
+  moderation, credentials, and prohibited data.
 - Deterministically generated readonly TypeScript types, embedded validator wrappers, source digest,
-  and an OpenAPI 3.1 document with nine explicitly `implemented-local` Community
-  score/race/status/token/sync/usage, device CarRecipe proposal, and connector pairing start/poll
+  and an OpenAPI 3.1 document with eight explicitly `implemented-local` Community
+  score/race/status/token/usage, device CarRecipe proposal, and connector pairing start/poll
   operations. Their exact method-specific query/body, response/problem, admission,
   authentication-reference, `no-store`, `Vary: Accept`, generated request ID, and same-origin CORS
-  policies are manifest-driven without claiming deployment. All five inventoried
+  policies are manifest-driven without claiming deployment. All four inventoried
   authentication/transport policies participate in the generated source digest. A
-  manifest/schema/drift checker has 63 black-box cases covering generated operation/status/evidence
+  manifest/schema/drift checker has 62 black-box cases covering generated operation/status/evidence
   semantics, unsafe/duplicate/drifted operations, unknown fields, missing bounds, client-derived
   score aliases, Community trust/problem/date drift, private response fields,
   unlisted/path-traversing schemas, unsupported keywords, missing date deduplication, and stale
@@ -494,15 +492,15 @@ scheduler/cadence exists.
 - A dependency-free runtime contract validator with fail-closed reflection handling; strict
   calendar/range/ISO-weekday/UTC timestamp and safe-integer checks; depth, node, key, item, and
   issue budgets; and privacy-safe issue output that never echoes unknown property names or submitted
-  values. Thirty-two unit/security cases cover valid/invalid query boundaries, hostile structures,
-  response trust/privacy, connector input, and validator resource limits at 100% statement/line/
-  function and 97.22% branch coverage.
+  values. Thirty-five unit/security cases cover valid/invalid query boundaries, hostile structures,
+  response trust/privacy, connector input, and validator resource limits at 100% statement, line,
+  and function coverage plus 97.22% branch coverage.
 - A pure local Community sync verifier over a closed copied raw request envelope. It admits only
-  exact `POST /v1/community/sync` JSON with bounded raw bytes and header pairs, rejects duplicate
+  exact `POST /v1/community/usage` JSON with bounded raw bytes and header pairs, rejects duplicate
   required headers, authenticates a body-bound HMAC-SHA-256 origin proof before parser or device
   work, applies a one-time injected origin-nonce capability, parses strict UTF-8 JSON under explicit
   depth/node/fanout/string/number budgets with decoded duplicate-key rejection, and validates
-  `ConnectorSyncV1`. It binds the device timestamp and idempotency header to the body, accepts only
+  `UsageSyncV1`. It binds the device timestamp and idempotency header to the body, accepts only
   minimal source-bound device material, verifies the exact-body Ed25519 request with strict RFC
   8032/FIPS semantics, and returns one frozen database-ready allowlist. One hundred seventeen
   adversarial tests cover policy drift, grammar/encoding/bounds, proxy/accessor/sparse/shared-buffer
@@ -517,7 +515,7 @@ scheduler/cadence exists.
   both IDs and key material must differ. The config-backed factory accepts only exact nonce, clock,
   and device-lookup dependencies, constructs the verifier internally, exposes no reusable key
   container, overwrites temporary decoded buffers, and emits only generic bounded configuration
-  errors. Twenty-eight adversarial config/dependency/proof-path cases remain in the 446-test Ingest
+  errors. Twenty-eight adversarial config/dependency/proof-path cases remain in the 441-test Ingest
   suite at 100% statement/branch/function/line coverage. Synthetic environment values prove no
   secret-manager binding, deployed signer, real rotation, or deployment.
 - A bounded local Ingest PostgreSQL configuration/pool/adapter boundary. It accepts only six
@@ -531,7 +529,7 @@ scheduler/cadence exists.
   allowlist to the fixed 13-parameter submission procedure. It copies bytes/arrays, generates a
   server UUID, validates coherent accepted/duplicate/quarantined output, destroys failed clients,
   and emits only bounded internal errors. One hundred eighteen
-  configuration/pool/mapper/import-isolation cases remain in the current 446-test Ingest suite at
+  configuration/pool/mapper/import-isolation cases remain in the current 441-test Ingest suite at
   100% statement/branch/function/line coverage. Focused tests use mock pools; the separate opt-in
   integration exercises the same adapter through a synthetic dedicated loopback login. No deployment
   credential, certificate/TLS result, or production connection is claimed.
@@ -680,65 +678,64 @@ scheduler/cadence exists.
   failure, and exposes only `execute` plus `close`. Each execution creates one server-owned 128-bit
   request ID before verification, requires the frozen verifier allowlist, waits for database
   settlement, reconstructs coherent accepted/duplicate/quarantined output, and validates either a
-  frozen null-prototype result matching the legacy or Usage Sync path, or the closed generic
-  `ProblemDetailsV1` subset. Origin/device rejection is one unauthorized result; dependency outages
-  are generic retryable 503; internal drift and unknown failures are non-reflective 500. Adversarial
-  and composition cases are included in the current 446-test Ingest suite. Signed synthetic requests
-  pass through the actual production verifier, replay and device capabilities, adapter mapper, and
-  submission order using a mock pool. No HTTP object, serialization/header policy, or socket belongs
-  to this application layer; the separate opt-in integration composes it through the host and
-  disposable PostgreSQL. No log sink, deployment login/certificate, edge path, connector, or
-  deployment is claimed.
+  frozen null-prototype `UsageSyncResultV1` or the closed generic `ProblemDetailsV1` subset.
+  Origin/device rejection is one unauthorized result; dependency outages are generic retryable 503;
+  internal drift and unknown failures are non-reflective 500. Adversarial and composition cases are
+  included in the current 441-test Ingest suite. Signed synthetic requests pass through the actual
+  production verifier, replay and device capabilities, adapter mapper, and submission order using a
+  mock pool. No HTTP object, serialization/header policy, or socket belongs to this application
+  layer; the separate opt-in integration composes it through the host and disposable PostgreSQL. No
+  log sink, deployment login/certificate, edge path, connector, or deployment is claimed.
 - A bounded local Community sync Fastify server factory. Only one reviewed Ingest module may import
-  the exact-pinned framework. It always registers exact `POST /v1/community/sync` and registers
-  exact `POST /v1/community/usage` only after a boolean host decision, while both routes share one
-  four-call no-queue admission budget. It copies at most 8192 raw body bytes and the original
-  raw-header sequence, disables proxy trust, inbound request IDs, and framework logging, and admits
-  four unsettled application calls without a queue. Explicit 16384 header-byte, 64 raw-header-pair,
-  32-connection, 16-request-per-socket, and 5/33/34-second request/ handler/connection policies
-  bound one process. Closed content/`Accept`/route/method handling, generic 400/404/405/406/500/503
-  transport problems, `no-store`, `Vary: Accept`, `nosniff`, no CORS grant, CSPRNG request IDs, and
-  final generated-contract validation prevent request or framework reflection. Adversarial injection
-  and real-loopback framing/drain cases bring the current Ingest suite to 446 tests, plus strict
-  lint, type checking, and production build. The handler limit is bound and classified but is not a
-  production capacity result. This factory still owns no listener or process lifecycle. The separate
-  local Worker supplies a compatible signer, but no deployed direct-origin denial, trusted route,
-  external TLS evidence, deployment database credential, monitoring, connector, load evidence, or
-  deployment is claimed.
+  the exact-pinned framework. It registers exact `POST /v1/community/usage` only after a boolean
+  host decision; the removed `/v1/community/sync` path returns 404 before application or storage
+  work. The sole route has one four-call no-queue admission budget. It copies at most 8192 raw body
+  bytes and the original raw-header sequence, disables proxy trust, inbound request IDs, and
+  framework logging, and admits four unsettled application calls without a queue. Explicit 16384
+  header-byte, 64 raw-header-pair, 32-connection, 16-request-per-socket, and 5/33/34-second request/
+  handler/connection policies bound one process. Closed content/`Accept`/route/method handling,
+  generic 400/404/405/406/500/503 transport problems, `no-store`, `Vary: Accept`, `nosniff`, no CORS
+  grant, CSPRNG request IDs, and final generated-contract validation prevent request or framework
+  reflection. Adversarial injection and real-loopback framing/drain cases bring the current Ingest
+  suite to 441 tests, plus strict lint, type checking, and production build. The handler limit is
+  bound and classified but is not a production capacity result. This factory still owns no listener
+  or process lifecycle. The separate local Worker supplies a compatible signer, but no deployed
+  direct-origin denial, trusted route, external TLS evidence, deployment database credential,
+  monitoring, connector, load evidence, or deployment is claimed.
 - A separate local Ingest host workspace that owns only closed listener configuration, one bind,
   startup composition, and process shutdown. Exact `VIBERACING_INGEST_ENABLED=true` is required
   before any other host field or protected application configuration is inspected; missing or any
   alternate value fails with the existing generic silent startup behavior. The frozen validated
   config also carries literal `enabled: true`, while tracked `.env.example` remains false.
   Separately, only exact own enumerable string `VIBERACING_USAGE_SYNC_ENABLED=true` registers the
-  additive route before application construction; every other shape leaves it absent without
-  changing the legacy route. Development/test then admits cleartext only on exact IPv4 or IPv6
-  loopback; production requires exact `0.0.0.0:$PORT`, the explicit `railway-edge` external-TLS
-  declaration, and a canonical 40-to-300-second Railway drain window. It composes only the reviewed
-  configured application and Fastify factories, closes every completed lower boundary on startup
-  failure, and returns one idempotent close controller. Signal handlers are installed before
-  startup; the first SIGINT/SIGTERM starts a 36-second close deadline, while a second signal,
-  deadline, or close failure forces unsuccessful exit. Runtime ESM package exports and a black-box
-  emitted-entrypoint check prevent a TypeScript-only or reflective startup failure. Its 132 tests
-  have 100% statement/branch/function/line coverage with strict lint, type checking, and production
-  builds. The `railway-edge` value is an operator assertion, not proof of Railway, external TLS,
-  Cloudflare routing, direct-origin denial, protected secrets, a deployment login, capacity, or
-  deployment. The latch is startup-only and proves no deployed restart, route denial, old-instance
-  drain, operator audit, monitoring, or other capability switch.
+  sole Usage Sync route before application construction; every other shape leaves it absent. This is
+  fail-closed containment, not a migration switch. Development/test then admits cleartext only on
+  exact IPv4 or IPv6 loopback; production requires exact `0.0.0.0:$PORT`, the explicit
+  `railway-edge` external-TLS declaration, and a canonical 40-to-300-second Railway drain window. It
+  composes only the reviewed configured application and Fastify factories, closes every completed
+  lower boundary on startup failure, and returns one idempotent close controller. Signal handlers
+  are installed before startup; the first SIGINT/SIGTERM starts a 36-second close deadline, while a
+  second signal, deadline, or close failure forces unsuccessful exit. Runtime ESM package exports
+  and a black-box emitted-entrypoint check prevent a TypeScript-only or reflective startup failure.
+  Its 132 tests have 100% statement/branch/function/line coverage with strict lint, type checking,
+  and production builds. The `railway-edge` value is an operator assertion, not proof of Railway,
+  external TLS, Cloudflare routing, direct-origin denial, protected secrets, a deployment login,
+  capacity, or deployment. The latch is startup-only and proves no deployed restart, route denial,
+  old-instance drain, operator audit, monitoring, or other capability switch.
 - An opt-in full local Ingest HTTP-to-PostgreSQL gate. It builds emitted contracts, Ingest, and host
   code; starts one disposable `postgres-test` container with an ephemeral loopback-only port;
-  applies all 42 reviewed migrations; creates a synthetic login with only `viberacing_ingest`; and
+  applies all 43 reviewed migrations; creates a synthetic login with only `viberacing_ingest`; and
   seeds two synthetic source-bound Ed25519 devices. Independently composed signed requests prove a
-  legacy accepted write, a separate provider-attributed Usage Sync write through the same mature
-  storage path, an exact duplicate under a fresh origin nonce, persistent origin replay denial,
-  revoked-device denial, and the closed success/problem headers. A controlled owner lock then holds
-  four valid requests at `consume_origin_nonce`; `pg_stat_activity` observes exactly four
+  provider-attributed Usage Sync write through the mature storage path, removed-path rejection
+  before upstream work, an exact duplicate under a fresh origin nonce, persistent origin replay
+  denial, revoked-device denial, and the closed success/problem headers. A controlled owner lock
+  then holds four valid requests at `consume_origin_nonce`; `pg_stat_activity` observes exactly four
   lock-waiting Ingest calls, a fifth valid request returns generic 503 without a fifth replay call,
   and all four original requests return exact accepted acknowledgements after release. The imported
   host then closes, the built `dist/main.js` entry point starts as a separate silent process, a
   connection-only probe observes its loopback listener without application work, and a separate
   signed request returns exact accepted before the harness forcibly ends only that test child.
-  Eleven server request IDs are unique. Owner-only state verification proves nine consumed origin
+  Twelve server request IDs are unique. Owner-only state verification proves nine consumed origin
   nonces, seven device nonces, seven exact accepted snapshots/entries, six current source/date
   values, the exact `codex`/`codex_daily_usage_buckets_v1` attribution and mapped client/agent
   versions, terminal first-device revocation, no revoked-device snapshot, no state for the rejected
@@ -792,7 +789,7 @@ scheduler/cadence exists.
 - An opt-in full local Web HTTP-to-PostgreSQL gate. It builds the emitted contract runtime and Web
   standalone artifact, explicitly bundles Next's otherwise externalized reviewed `pg` driver,
   generates one ephemeral self-signed DNS certificate, starts one TLS-enabled disposable
-  `postgres-test` container with an ephemeral loopback-only port, applies all 42 reviewed
+  `postgres-test` container with an ephemeral loopback-only port, applies all 43 reviewed
   migrations, seeds only synthetic public/private state, and starts two sequential emitted Next
   production processes. The deliberately widened login receives exact generic 503 contracts from all
   four public-ranking GETs while a SHA-256 fingerprint over every private table remains unchanged.
@@ -927,7 +924,7 @@ scheduler/cadence exists.
   the emitted entry point with a widened negative login and two narrow logins against one disposable
   hostname-verified TLS PostgreSQL database. It proves the widened process fails generically before
   schema creation, observes both narrow processes behind one external holder of the fixed session
-  key, then requires both to succeed and converge on the exact 42-row ledger. The same oracle checks
+  key, then requires both to succeed and converge on the exact 43-row ledger. The same oracle checks
   all 28 private tables remain owner-owned with forced RLS, runs the identity invariants, and proves
   the controller sessions and lock are gone before deleting every resource. This is actual local
   DDL/driver/TLS/convergence evidence, but not production TLS/login, staging rollout/rollback,
@@ -1464,7 +1461,7 @@ scheduler/cadence exists.
   default-off Jobs scheduler, or one-shot migration runner and their exact production dependency
   graphs. Their separate Railway configurations fix the reviewed Dockerfile, replica, restart,
   overlap, and drain decisions. Local builds run as the unprivileged image user; disabled executions
-  fail closed, and the migration image resolves the exact 42-file catalog. This is packaging
+  fail closed, and the migration image resolves the exact 43-file catalog. This is packaging
   evidence, not a compatible hosted PostgreSQL service, role provisioning, secret delivery,
   scheduler cadence, migration execution, monitoring, or deployment.
 - A dependency-free Cloudflare Worker now admits only exact Community sync, preserves the bounded

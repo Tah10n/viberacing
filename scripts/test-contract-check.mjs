@@ -135,7 +135,6 @@ async function expectGeneratedPublicOperations(name) {
     "/v1/community/race/status",
     "/v1/community/race",
     "/v1/community/scores",
-    "/v1/community/sync",
     "/v1/community/tokens",
     "/v1/community/usage",
     "/v1/connector/cars/proposals",
@@ -200,54 +199,6 @@ async function expectGeneratedPublicOperations(name) {
   });
   for (const status of ["400", "406", "429", "500", "503"]) {
     assert.deepEqual(operation.responses[status].content["application/problem+json"].schema, {
-      $ref: "#/components/schemas/ProblemDetailsV1",
-    });
-  }
-
-  const syncOperation = document.paths["/v1/community/sync"].post;
-  assert.equal(syncOperation.operationId, "postCommunitySyncV1");
-  assert.equal(syncOperation["x-viberacing-status"], "implemented-local");
-  assert.equal(syncOperation["x-viberacing-admission-policy"], "no-queue-4");
-  assert.equal(
-    syncOperation["x-viberacing-authentication-contract"],
-    "contracts/v1/connector-sync-authentication.json",
-  );
-  assert.equal(syncOperation["x-viberacing-cache-policy"], "no-store");
-  assert.equal(syncOperation["x-viberacing-cors-policy"], "same-origin");
-  assert.equal(syncOperation["x-viberacing-query-contract"], "none");
-  assert.equal(syncOperation["x-viberacing-query-policy"], "none");
-  assert.equal(syncOperation["x-viberacing-request-body-policy"], "exact-raw-json-8192");
-  assert.deepEqual(syncOperation["x-viberacing-request-contract"], {
-    $ref: "#/components/schemas/ConnectorSyncV1",
-  });
-  assert.equal(Object.hasOwn(syncOperation, "parameters"), false);
-  assert.equal(Object.hasOwn(syncOperation, "security"), false);
-  assert.equal(syncOperation.requestBody.required, true);
-  assert.deepEqual(syncOperation.requestBody.content["application/json"].schema, {
-    $ref: "#/components/schemas/ConnectorSyncV1",
-  });
-  assert.deepEqual(Object.keys(syncOperation.responses), [
-    "200",
-    "400",
-    "401",
-    "405",
-    "406",
-    "422",
-    "500",
-    "503",
-  ]);
-  assert.deepEqual(syncOperation.responses["200"].content["application/json"].schema, {
-    $ref: "#/components/schemas/ConnectorSyncResultV1",
-  });
-  assert.equal(syncOperation.responses["405"].headers.Allow.schema.const, "POST");
-  for (const response of Object.values(syncOperation.responses)) {
-    assert.equal(response.headers["Cache-Control"].schema.const, "no-store");
-    assert.equal(response.headers.Vary.schema.const, "Accept");
-    assert.equal(response.headers["x-request-id"].schema.pattern, "^req_[A-Za-z0-9_-]{22}$");
-    assert.equal(Object.hasOwn(response.headers, "Access-Control-Allow-Origin"), false);
-  }
-  for (const status of ["400", "401", "405", "406", "422", "500", "503"]) {
-    assert.deepEqual(syncOperation.responses[status].content["application/problem+json"].schema, {
       $ref: "#/components/schemas/ProblemDetailsV1",
     });
   }
@@ -445,7 +396,7 @@ try {
   await expectFailure(
     "derived-client-field",
     (root) => {
-      const { path, schema } = readSchema(root, "connector-sync.schema.json");
+      const { path, schema } = readSchema(root, "usage-sync.schema.json");
       schema.required.push("trustTier");
       schema.properties.trustTier = {
         type: "string",
@@ -460,7 +411,7 @@ try {
   await expectFailure(
     "derived-client-score-alias",
     (root) => {
-      const { path, schema } = readSchema(root, "connector-sync.schema.json");
+      const { path, schema } = readSchema(root, "usage-sync.schema.json");
       const dailyEntry = schema.properties.dailyEntries.items;
       dailyEntry.required.push("weeklyScore");
       dailyEntry.properties.weeklyScore = {
@@ -473,9 +424,9 @@ try {
     /server-owned or prohibited field weeklyScore/,
   );
   await expectFailure(
-    "connector-extra-daily-field",
+    "usage-extra-daily-field",
     (root) => {
-      const { path, schema } = readSchema(root, "connector-sync.schema.json");
+      const { path, schema } = readSchema(root, "usage-sync.schema.json");
       const dailyEntry = schema.properties.dailyEntries.items;
       dailyEntry.required.push("points");
       dailyEntry.properties.points = {
@@ -756,30 +707,30 @@ try {
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[3].requestBodyPolicy = "unbounded-json";
+      manifest.operations[4].requestBodyPolicy = "unbounded-json";
       writeJson(path, manifest);
     },
-    /contract operation 4 has unsafe names or shape/,
+    /contract operation 5 has unsafe names or shape/,
   );
   await expectFailure(
     "unknown-request-schema",
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[3].requestSchema = "MissingRequestV1";
+      manifest.operations[4].requestSchema = "MissingRequestV1";
       writeJson(path, manifest);
     },
-    /contract operation 4 references invalid schemas/,
+    /contract operation 5 references invalid schemas/,
   );
   await expectFailure(
     "unknown-authentication-policy",
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[3].authenticationContract = "connector-missing-authentication.json";
+      manifest.operations[4].authenticationContract = "connector-missing-authentication.json";
       writeJson(path, manifest);
     },
-    /contract operation 4 references an unknown policy/,
+    /contract operation 5 references an unknown policy/,
   );
   await expectFailure(
     "duplicate-authentication-policy-id",
@@ -872,17 +823,17 @@ try {
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[3].problemStatuses = [400, 401, 405, 406, 422, 429, 500, 503];
+      manifest.operations[4].problemStatuses = [400, 401, 405, 406, 422, 429, 500, 503];
       writeJson(path, manifest);
     },
-    /Community sync operation differs from the reviewed HTTP contract/,
+    /provider-neutral Community usage sync operation differs from the reviewed HTTP contract/,
   );
   await expectFailure(
     "token-operation-drift",
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[4].responseSchema = "CommunityRaceStatusPageV1";
+      manifest.operations[3].responseSchema = "CommunityRaceStatusPageV1";
       writeJson(path, manifest);
     },
     /public Community token operation differs from the reviewed HTTP contract/,
@@ -892,7 +843,7 @@ try {
     (root) => {
       const path = resolve(root, "contracts", "v1", "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[6].problemStatuses = [400, 401, 405, 406, 429, 500, 503];
+      manifest.operations[5].problemStatuses = [400, 401, 405, 406, 429, 500, 503];
       writeJson(path, manifest);
     },
     /connector car proposal operation differs from review/,
@@ -926,7 +877,7 @@ try {
   await expectFailure(
     "authentication-contract-digest-drift",
     (root) => {
-      const path = resolve(root, "contracts", "v1", "connector-sync-authentication.json");
+      const path = resolve(root, "contracts", "v1", "connector-usage-sync-authentication.json");
       const policy = JSON.parse(readFileSync(path, "utf8"));
       policy.maximumBodyBytes = 4096;
       writeJson(path, policy);
@@ -941,7 +892,7 @@ try {
       policy.requestTarget = "/v1/community/sync";
       writeJson(path, policy);
     },
-    /usage sync authentication must differ/,
+    /usage sync authentication differs from the reviewed boundary/,
   );
   await expectFailure(
     "usage-sync-vector-message-drift",
@@ -1021,15 +972,6 @@ try {
       writeJson(path, manifest);
     },
     /unsafe names or shape/,
-  );
-  await expectFailure(
-    "missing-date-dedup",
-    (root) => {
-      const { path, schema } = readSchema(root, "connector-sync.schema.json");
-      delete schema.properties.dailyEntries["x-viberacing-uniqueBy"];
-      writeJson(path, schema);
-    },
-    /unique by codexReportedDate/,
   );
   await expectFailure(
     "missing-usage-date-dedup",

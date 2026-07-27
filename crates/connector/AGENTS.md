@@ -19,8 +19,8 @@ changing it.
   account email, or App Server paths.
 - Treat exact usage bodies, daily usage, nonces, and device-signature messages as private security
   material. Keep their types non-reflective, bind signatures to returned bytes, and match the
-  `UsageSyncV1` Ingest authentication policy and shared synthetic vector exactly. The legacy
-  Community sync route remains server compatibility surface, not a second connector fallback.
+  `UsageSyncV1` Ingest authentication policy and shared synthetic vector exactly. No legacy
+  Community sync route or connector fallback exists before the first release.
 - Keep source/device/time/nonce context construction confined to the reviewed one-shot sync command,
   which owns source binding, canonical time, and replay behavior. The composer/signer boundary must
   not grow a scheduler, generic upload client, or Codex network client. Pairing key

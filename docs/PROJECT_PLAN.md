@@ -591,54 +591,55 @@ preview mode to the same candidate check: it emits only a closed version/admissi
 retains failed-admission status, omits local values, and neither saves nor sends output. The
 candidate still does not run on all platforms, create a supported release, or create a matrix row.
 ADR 0024 adds an inaccessible reviewed source/device/time/nonce context whose minimized daily usage
-produces one exact bounded `ConnectorSyncV1` body, SHA-256 digest, and LF-separated device message.
-ADR 0025 removes public access to that unsigned material and adds an isolated one-use signer behind
-an equally inaccessible device-bound key capability. A shared Rust/Ingest vector proves exact body,
-public-key, and signature agreement. ADR 0026 adds a second domain-separated pairing-possession
-policy, inaccessible pending-key/challenge signer, and pure strict Web verifier with a shared
-synthetic vector. A separate local Web/Auth slice implements browser approval for a signed-in
-passkey session. ADR 0027 adds the server-side half of the final activation step: exact 32-byte poll
-tokens become primary/secondary HMAC-SHA-256 verifier candidates, one probed read-write Web pool
-selects at most one approved transaction, the strict proof is mandatory, and only server-owned IDs
-reach the atomic procedure. Its four-call admission and 250-millisecond floor are local process
-safeguards, not an anonymous route or distributed client-rate policy. ADR 0028 adds the
-transport-free server-side start half: closed public-key/device metadata enters, fresh server IDs, a
-32-byte poll token and challenge, separate primary poll/code HMAC verifiers, a 60-bit human code,
-and a nine-minute expiry reach only the fixed `start_pairing` procedure. Malformed admitted input
-performs fixed-shape local work but no database write. Revision 0021 separately gives the
-authenticated browser approval lookup a session-bound distributed attempt window and a closed
-primary/secondary code probe. Revision 0013 and ADR 0029 add the separate Jobs-side physical
-cleanup: at most 1000 expired non-activated transactions and exact pending keys per call, with
-activated and live state preserved. ADR 0030 now closes the local connection journey with four
-versioned start/poll request/response contracts, exact no-store POST routes, one aggregate four-call
-application boundary, revision 0022's fixed global-and-64-bucket distributed rate windows, and one
-pairing-only Rust command. The client uses OS randomness, native credential storage without a
-plaintext fallback, HTTPS with platform trust (or loopback HTTP for development), bounded
-bodies/time/retries, exact possession proof, resumable prepared/pending/active state, and
-non-reflective output. ADR 0057 places connector start/poll and both signed-in approval operations
-behind exact `VIBERACING_PAIRING_ENABLED=true` at route-module evaluation. Disabled POST cancels an
-available body and returns generic no-store 503 before parsing, runtime/service construction,
-admission acquisition, protected configuration, or database work; explicit connector non-POST
-methods retain 405. The tracked example remains false. ADR 0058 separately requires exact
-`VIBERACING_SOURCE_CREATION_ENABLED=true` in `/connect` and both approval modules for a new source
-while preserving active existing-source pairing. The service repeats literal-true checks at options
-and verification; the sealed choice and v2 context digest close in-flight new-source completion
-after a disabled module reload. Both tracked flags remain false. This evidence is still local and
-synthetic: there is no live Web login/database result, edge capacity policy, cross-platform
-execution matrix, released binary, Codex support, scheduler, or deployed result. ADR 0031 adds the
-next one-shot Windows development command: exact artifact admission, fresh context from the active
-record, the existing composer/signer, and one fixed no-proxy/no-redirect upload with a closed
-acknowledgement. ADR 0051 adds resource-bounded discovery through two fixed filenames and at most
-four exact-size hashes, plus the unchanged explicit path fallback. ADR 0052 adds a credential-free
-candidate artifact check that performs only that admission and emits an explicit unsupported result;
-the sync command still re-admits only after active-record validation. ADR 0053 then builds the
-locked Windows release profile, copies it under a bounded temporary root, checks only help and
-missing-candidate behavior with no ambient credential/network environment, and removes it. ADR 0054
-adds the closed redacted stdout preview to the same candidate check without changing admission or
-support. These decisions add no retry, edge proof, cross-platform evidence, package, installer,
-release, or support claim. ADR 0041 adds a separate exact `forget-local` command that deletes only
-the native origin/label record without reading it or contacting the service. It is idempotent and
-explicitly does not claim server revoke; rotation and revoke composition remain separate gates.
+produces one exact bounded request body, SHA-256 digest, and LF-separated device message. ADR 0075
+narrows that unreleased wire surface to `UsageSyncV1` only. ADR 0025 removes public access to the
+unsigned material and adds an isolated one-use signer behind an equally inaccessible device-bound
+key capability. A shared Rust/Ingest vector proves exact body, public-key, and signature agreement.
+ADR 0026 adds a second domain-separated pairing-possession policy, inaccessible
+pending-key/challenge signer, and pure strict Web verifier with a shared synthetic vector. A
+separate local Web/Auth slice implements browser approval for a signed-in passkey session. ADR 0027
+adds the server-side half of the final activation step: exact 32-byte poll tokens become
+primary/secondary HMAC-SHA-256 verifier candidates, one probed read-write Web pool selects at most
+one approved transaction, the strict proof is mandatory, and only server-owned IDs reach the atomic
+procedure. Its four-call admission and 250-millisecond floor are local process safeguards, not an
+anonymous route or distributed client-rate policy. ADR 0028 adds the transport-free server-side
+start half: closed public-key/device metadata enters, fresh server IDs, a 32-byte poll token and
+challenge, separate primary poll/code HMAC verifiers, a 60-bit human code, and a nine-minute expiry
+reach only the fixed `start_pairing` procedure. Malformed admitted input performs fixed-shape local
+work but no database write. Revision 0021 separately gives the authenticated browser approval lookup
+a session-bound distributed attempt window and a closed primary/secondary code probe. Revision 0013
+and ADR 0029 add the separate Jobs-side physical cleanup: at most 1000 expired non-activated
+transactions and exact pending keys per call, with activated and live state preserved. ADR 0030 now
+closes the local connection journey with four versioned start/poll request/response contracts, exact
+no-store POST routes, one aggregate four-call application boundary, revision 0022's fixed
+global-and-64-bucket distributed rate windows, and one pairing-only Rust command. The client uses OS
+randomness, native credential storage without a plaintext fallback, HTTPS with platform trust (or
+loopback HTTP for development), bounded bodies/time/retries, exact possession proof, resumable
+prepared/pending/active state, and non-reflective output. ADR 0057 places connector start/poll and
+both signed-in approval operations behind exact `VIBERACING_PAIRING_ENABLED=true` at route-module
+evaluation. Disabled POST cancels an available body and returns generic no-store 503 before parsing,
+runtime/service construction, admission acquisition, protected configuration, or database work;
+explicit connector non-POST methods retain 405. The tracked example remains false. ADR 0058
+separately requires exact `VIBERACING_SOURCE_CREATION_ENABLED=true` in `/connect` and both approval
+modules for a new source while preserving active existing-source pairing. The service repeats
+literal-true checks at options and verification; the sealed choice and v2 context digest close
+in-flight new-source completion after a disabled module reload. Both tracked flags remain false.
+This evidence is still local and synthetic: there is no live Web login/database result, edge
+capacity policy, cross-platform execution matrix, released binary, Codex support, scheduler, or
+deployed result. ADR 0031 adds the next one-shot Windows development command: exact artifact
+admission, fresh context from the active record, the existing composer/signer, and one fixed
+no-proxy/no-redirect upload with a closed acknowledgement. ADR 0051 adds resource-bounded discovery
+through two fixed filenames and at most four exact-size hashes, plus the unchanged explicit path
+fallback. ADR 0052 adds a credential-free candidate artifact check that performs only that admission
+and emits an explicit unsupported result; the sync command still re-admits only after active-record
+validation. ADR 0053 then builds the locked Windows release profile, copies it under a bounded
+temporary root, checks only help and missing-candidate behavior with no ambient credential/network
+environment, and removes it. ADR 0054 adds the closed redacted stdout preview to the same candidate
+check without changing admission or support. These decisions add no retry, edge proof,
+cross-platform evidence, package, installer, release, or support claim. ADR 0041 adds a separate
+exact `forget-local` command that deletes only the native origin/label record without reading it or
+contacting the service. It is idempotent and explicitly does not claim server revoke; rotation and
+revoke composition remain separate gates.
 
 ### Date semantics
 
@@ -927,7 +928,7 @@ printed/written plan artifact; container cleanup removes the ephemeral log. Auth
 daily/profile detail, cache, deployment certificate/login, external TLS/edge route, representative
 plan/load/capacity evidence, monitoring, real-user data, and deployment remain separate gates.
 
-### ConnectorSyncV1
+### UsageSyncV1
 
 The minimum payload contains:
 
@@ -935,29 +936,29 @@ The minimum payload contains:
 - sourceId;
 - syncId;
 - observedAt for replay protection only;
-- connectorVersion and Codex version;
-- bounded daily entries with codexReportedDate and tokens.
+- clientVersion and agentVersion;
+- bounded daily entries with reportedDate and dailyTokenTotal.
 
 Trust tier, score, rank, streak, profile ID, season, receivedAt, and moderation state are
 server-derived and absent from client-writable schemas.
 
-ADR 0015 and `connector-sync-authentication.json` now make the local pre-database verification
-boundary executable. They fix the exact method/target/media type, copied raw envelope and JSON
-budgets, canonical base64url/timestamps, and LF-separated origin/device messages. A pure verifier
-checks a replay-consumed exact-body origin HMAC before parsing or device lookup, validates the
-generated payload contract, and verifies the source-bound exact-body request under strict Ed25519
-semantics. ADR 0016 adds a separate bounded PostgreSQL config/pool/mapper for only the minimal
-device lookup and verified submission procedures, with per-checkout least-privilege probes and
-mock-pool evidence. ADR 0017 adds exact protected primary/secondary origin-key configuration and a
-factory that constructs the verifier without returning raw configuration. ADR 0018 adds the
-forced-RLS origin replay tuple, atomic Ingest-only consume, Jobs cleanup extension, and strict local
-adapter mapping. ADR 0019 composes one configured database boundary with that verifier, generates a
-server-owned request ID, waits for submission, and validates only the closed result/problem
-contracts. ADR 0020 adds the local exact Fastify POST boundary with copied raw bytes/headers,
-no-queue admission, fixed connection and deadline budgets, no proxy/request-ID trust, and closed
-contract serialization. ADR 0033 adds a separate local executable host with exact loopback and
-Railway production declarations, buildable runtime package exports, one bind call, complete partial-
-startup cleanup, and a 36-second process shutdown deadline. ADR 0055 adds exact
+ADR 0015, as narrowed by ADR 0075, and `connector-usage-sync-authentication.json` make the local
+pre-database verification boundary executable. They fix the exact method/target/media type, copied
+raw envelope and JSON budgets, canonical base64url/timestamps, and LF-separated origin/device
+messages. A pure verifier checks a replay-consumed exact-body origin HMAC before parsing or device
+lookup, validates the generated payload contract, and verifies the source-bound exact-body request
+under strict Ed25519 semantics. ADR 0016 adds a separate bounded PostgreSQL config/pool/mapper for
+only the minimal device lookup and verified submission procedures, with per-checkout least-privilege
+probes and mock-pool evidence. ADR 0017 adds exact protected primary/secondary origin-key
+configuration and a factory that constructs the verifier without returning raw configuration. ADR
+0018 adds the forced-RLS origin replay tuple, atomic Ingest-only consume, Jobs cleanup extension,
+and strict local adapter mapping. ADR 0019 composes one configured database boundary with that
+verifier, generates a server-owned request ID, waits for submission, and validates only the closed
+result/problem contracts. ADR 0020 adds the local exact Fastify POST boundary with copied raw
+bytes/headers, no-queue admission, fixed connection and deadline budgets, no proxy/request-ID trust,
+and closed contract serialization. ADR 0033 adds a separate local executable host with exact
+loopback and Railway production declarations, buildable runtime package exports, one bind call,
+complete partial- startup cleanup, and a 36-second process shutdown deadline. ADR 0055 adds exact
 `VIBERACING_INGEST_ENABLED=true` admission before any other host field, protected application
 configuration, factory, pool, server, or listener; the tracked example remains false. That host is
 not live secret-manager/edge integration, a verified external TLS route, a deployment database
@@ -1181,7 +1182,7 @@ ledger, and applies only an exact reviewed suffix before requiring the complete 
 opt-in synthetic gate now runs one widened and two narrow emitted processes over hostname-verified
 TLS to one disposable PostgreSQL database. It proves widened-login denial before schema creation,
 observes both narrow controllers behind one external lock holder, requires both to converge on the
-exact 42-row ledger after release, and verifies all 28 forced-RLS private tables, identity
+exact 43-row ledger after release, and verifies all 28 forced-RLS private tables, identity
 invariants, and resource cleanup. The next independent prerequisite is protected staging
 orchestration with environment-owned credentials/trust, intended replica topology, service
 compatibility, forward rollback, monitoring, and recovery; the disposable result satisfies none of
@@ -1667,20 +1668,19 @@ not block that core Community product.
 
 ### Phase 6 — Multi-agent generalization, thin client, and hybrid onboarding
 
-Current status: ADR 0071 completes the first compatibility foundation below for the existing Codex
-source path—closed `UsageSyncV1`, exact server-derived `codex`/`codex_daily_usage_buckets_v1`
-attribution, additive migration, Edge/Ingest gate, and real PostgreSQL mapping. ADR 0073 changes the
-unreleased exact-version Windows candidate connector to emit that body and path. Additional provider
-readers, source creation, the thin client, anonymous/hybrid onboarding, ownership lease, and
-partitioned backfill remain pending, so Phase 6 is not complete.
+Current status: ADR 0075 closes the existing Codex source path around one `UsageSyncV1` protocol,
+exact server-derived `codex`/`codex_daily_usage_buckets_v1` attribution, the Edge/Ingest containment
+gate, and real PostgreSQL mapping. It removes the unused predecessor because neither the site nor
+connector was released. The exact-version Windows candidate emits only that body and path.
+Additional provider readers, source creation, the thin client, anonymous/hybrid onboarding,
+ownership lease, and partitioned backfill remain pending, so Phase 6 is not complete.
 
 - Generalize the source model and contracts: add the provider enum and the AgentSource provider
-  dimension; introduce the multi-agent UsageSyncV1 contract alongside ConnectorSyncV1 with
-  generated-type and OpenAPI drift checks. Provider is immutable on AgentSource and is not
-  client-writable in UsageSyncV1; Ingest derives it from the verified device/source binding and
-  rejects a provider field as unknown.
-- Map existing Codex sources to provider `codex`; keep ConnectorSyncV1 accepted during a bounded
-  compatibility window.
+  dimension; use the multi-agent `UsageSyncV1` contract with generated-type and OpenAPI drift
+  checks. Provider is immutable on AgentSource and is not client-writable in `UsageSyncV1`; Ingest
+  derives it from the verified device/source binding and rejects a provider field as unknown.
+- Map repository-created Codex sources to provider `codex`; no protocol compatibility window is
+  required before the first release.
 - Add one reviewed, versioned canonical-total mapping for each first provider. Prefer its documented
   aggregate; otherwise sum only documented disjoint components. Prove nested cache/reasoning/thought
   fields and cumulative snapshots are not double counted. Pin the mapping through the

@@ -1,10 +1,10 @@
 # ADR 0070: Dependency-free Cloudflare Ingest origin signer
 
-- Status: Accepted (local Worker and compatibility evidence; deployment pending)
+- Status: Superseded
 - Date: 2026-07-26
 - Decision owners: Edge, Ingest, Security, Privacy, Operations, and Dependencies
 - Supersedes: None
-- Superseded by: None
+- Superseded by: ADR 0075
 
 ## Context
 

@@ -370,10 +370,12 @@ SET LOCAL ROLE viberacing_ingest;
 SELECT pg_temp.assert_true(
   (
     SELECT outcome = 'quarantined' AND accepted_entries = 0
-    FROM viberacing_api.submit_community_sync(
+    FROM viberacing_api.submit_usage_sync(
       '00000000-0000-4000-8000-000000016402',
       'dev_' || pg_catalog.repeat('K', 22),
       'src_' || pg_catalog.repeat('K', 22),
+      'codex',
+      'codex_daily_usage_buckets_v1',
       '00000000-0000-4000-8000-000000016502',
       'syn_' || pg_catalog.repeat('K', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
@@ -392,10 +394,12 @@ SELECT pg_temp.assert_true(
 SELECT pg_temp.assert_true(
   (
     SELECT outcome = 'duplicate' AND accepted_entries = 0
-    FROM viberacing_api.submit_community_sync(
+    FROM viberacing_api.submit_usage_sync(
       '00000000-0000-4000-8000-000000016402',
       'dev_' || pg_catalog.repeat('K', 22),
       'src_' || pg_catalog.repeat('K', 22),
+      'codex',
+      'codex_daily_usage_buckets_v1',
       '00000000-0000-4000-8000-000000016502',
       'syn_' || pg_catalog.repeat('K', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
@@ -448,10 +452,12 @@ SET LOCAL ROLE viberacing_ingest;
 SELECT pg_temp.assert_true(
   (
     SELECT outcome = 'quarantined' AND accepted_entries = 0
-    FROM viberacing_api.submit_community_sync(
+    FROM viberacing_api.submit_usage_sync(
       '00000000-0000-4000-8000-000000016402',
       'dev_' || pg_catalog.repeat('K', 22),
       'src_' || pg_catalog.repeat('K', 22),
+      'codex',
+      'codex_daily_usage_buckets_v1',
       '00000000-0000-4000-8000-000000016503',
       'syn_' || pg_catalog.repeat('R', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),

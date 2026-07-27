@@ -63,10 +63,12 @@ LANGUAGE plpgsql
 AS $function$
 BEGIN
   PERFORM submission.outcome
-  FROM viberacing_api.submit_community_sync(
+  FROM viberacing_api.submit_usage_sync(
     p_device_key_id,
     'dev_' || pg_catalog.repeat(p_fixture_letter, 22),
     'src_' || pg_catalog.repeat(p_fixture_letter, 22),
+    'codex',
+    'codex_daily_usage_buckets_v1',
     p_usage_snapshot_id,
     'syn_' || pg_catalog.repeat(p_fixture_letter, 22),
     pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),

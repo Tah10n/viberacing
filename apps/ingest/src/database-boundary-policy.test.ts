@@ -24,7 +24,7 @@ describe("Ingest capability lint policy", () => {
         message === "Only database-pool.ts may import the PostgreSQL driver.",
     );
     expect(restrictions).toHaveLength(5);
-  }, 15_000);
+  }, 30_000);
 
   it("keeps listener imports and environment reads outside the database boundary", async () => {
     const eslint = new ESLint({ cwd: resolve(import.meta.dirname, "..") });
@@ -44,7 +44,7 @@ describe("Ingest capability lint policy", () => {
         ({ ruleId }) => ruleId === "no-restricted-syntax" || ruleId === "no-restricted-imports",
       ),
     ).toHaveLength(4);
-  }, 15_000);
+  }, 30_000);
 
   it("rejects every Fastify import form outside the reviewed listener", async () => {
     const eslint = new ESLint({ cwd: resolve(import.meta.dirname, "..") });
@@ -65,7 +65,7 @@ describe("Ingest capability lint policy", () => {
         ({ ruleId }) => ruleId === "no-restricted-syntax" || ruleId === "no-restricted-imports",
       ),
     ).toHaveLength(5);
-  }, 15_000);
+  }, 30_000);
 
   it("confines Fastify to the reviewed listener without widening database or environment access", async () => {
     const eslint = new ESLint({ cwd: resolve(import.meta.dirname, "..") });
@@ -93,7 +93,7 @@ describe("Ingest capability lint policy", () => {
         ({ ruleId }) => ruleId === "no-restricted-syntax" || ruleId === "no-restricted-imports",
       ),
     ).toHaveLength(3);
-  }, 15_000);
+  }, 30_000);
 
   it.each(["database-config.ts", "origin-proof-config.ts"])(
     "permits environment reads only in the reviewed %s boundary",
@@ -107,6 +107,6 @@ describe("Ingest capability lint policy", () => {
         result?.messages.filter(({ ruleId }) => ruleId === "no-restricted-syntax"),
       ).toHaveLength(0);
     },
-    15_000,
+    30_000,
   );
 });

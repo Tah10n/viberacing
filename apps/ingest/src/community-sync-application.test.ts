@@ -1,10 +1,6 @@
 import crypto, { createHmac, generateKeyPairSync, sign } from "node:crypto";
 
-import {
-  validateConnectorSyncResultV1,
-  validateProblemDetailsV1,
-  validateUsageSyncResultV1,
-} from "@viberacing/contracts";
+import { validateProblemDetailsV1, validateUsageSyncResultV1 } from "@viberacing/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -31,7 +27,6 @@ import { OriginProofConfigurationError } from "./origin-proof-config.js";
 import {
   communitySyncMediaType,
   communitySyncMethod,
-  communitySyncRequestTarget,
   createDeviceSignatureMessage,
   createOriginProofMessage,
   digestBody,
@@ -90,13 +85,13 @@ function validPayload(entryCount = 2): VerifiedCommunitySync["payload"] {
     sourceId,
     syncId,
     observedAt,
-    connectorVersion: "1.2.3",
-    codexVersion: "2.3.4",
+    clientVersion: "1.2.3",
+    agentVersion: "2.3.4",
     dailyEntries: Object.freeze(
       Array.from({ length: entryCount }, (_, index) =>
         Object.freeze({
-          codexReportedDate: `2026-07-${String(14 + index).padStart(2, "0")}`,
-          tokens: 123 + index,
+          reportedDate: `2026-07-${String(14 + index).padStart(2, "0")}`,
+          dailyTokenTotal: 123 + index,
         }),
       ),
     ),
@@ -112,36 +107,6 @@ function validVerifiedSubmission(entryCount = 2): VerifiedCommunitySync {
     idempotencyKey: syncId,
     nonceDigestHex: "22".repeat(32),
     payload: validPayload(entryCount),
-    provider: codexProvider,
-    requestTarget: communitySyncRequestTarget,
-    signatureBase64Url: Buffer.alloc(64, 0x44).toString("base64url"),
-  });
-}
-
-function validUsageVerifiedSubmission(entryCount = 2): VerifiedCommunitySync {
-  return Object.freeze({
-    accountingRevision: codexAccountingRevision,
-    bodyDigestHex: "11".repeat(32),
-    deviceId,
-    deviceKeyId,
-    idempotencyKey: syncId,
-    nonceDigestHex: "22".repeat(32),
-    payload: Object.freeze({
-      agentVersion: "0.144.5",
-      clientVersion: "1.2.3",
-      dailyEntries: Object.freeze(
-        Array.from({ length: entryCount }, (_, index) =>
-          Object.freeze({
-            dailyTokenTotal: 123 + index,
-            reportedDate: `2026-07-${String(14 + index).padStart(2, "0")}`,
-          }),
-        ),
-      ),
-      observedAt,
-      schemaVersion: 1,
-      sourceId,
-      syncId,
-    }),
     provider: codexProvider,
     requestTarget: usageSyncRequestTarget,
     signatureBase64Url: Buffer.alloc(64, 0x44).toString("base64url"),
@@ -259,7 +224,7 @@ function buildSignedRawRequest(): Readonly<{
       headerNames.originProof,
       originProof,
     ]),
-    requestTarget: communitySyncRequestTarget,
+    requestTarget: usageSyncRequestTarget,
   });
 }
 
@@ -303,7 +268,7 @@ describe("Community sync application", () => {
     expect(Object.isFrozen(decision)).toBe(true);
     expect(Object.isFrozen(decision.body)).toBe(true);
     expect(Object.getPrototypeOf(decision.body)).toBeNull();
-    expect(validateConnectorSyncResultV1(decision.body)).toMatchObject({ ok: true });
+    expect(validateUsageSyncResultV1(decision.body)).toMatchObject({ ok: true });
   });
 
   it.each([
@@ -325,19 +290,6 @@ describe("Community sync application", () => {
       });
     },
   );
-
-  it("returns the provider-neutral result contract for a verified UsageSyncV1 request", async () => {
-    const harness = createHarness({ submission: validUsageVerifiedSubmission() });
-
-    const decision = await harness.application.execute({});
-
-    expect(decision).toMatchObject({
-      body: { acceptedEntries: 2, outcome: "accepted", requestId, syncId },
-      ok: true,
-      status: 200,
-    });
-    expect(validateUsageSyncResultV1(decision.body)).toMatchObject({ ok: true });
-  });
 
   it("uses distinct cryptographic request IDs by default", async () => {
     const submission = validVerifiedSubmission();
@@ -725,9 +677,6 @@ describe("Community sync application", () => {
         },
       ]),
     );
-    const submitCommunitySync = vi.fn(() =>
-      Promise.resolve([{ accepted_entries: 2, outcome: "accepted" }]),
-    );
     const submitUsageSync = vi.fn(() =>
       Promise.resolve([{ accepted_entries: 2, outcome: "accepted" }]),
     );
@@ -735,7 +684,6 @@ describe("Community sync application", () => {
       consumeOriginNonce,
       readDeviceVerificationMaterial,
       release,
-      submitCommunitySync,
       submitUsageSync,
       verifyRuntimeBoundary,
     };
@@ -770,12 +718,12 @@ describe("Community sync application", () => {
     expect(verifyRuntimeBoundary).toHaveBeenCalledTimes(3);
     expect(consumeOriginNonce).toHaveBeenCalledTimes(1);
     expect(readDeviceVerificationMaterial).toHaveBeenCalledWith(deviceId);
-    expect(submitCommunitySync).toHaveBeenCalledTimes(1);
+    expect(submitUsageSync).toHaveBeenCalledTimes(1);
     expect(consumeOriginNonce.mock.invocationCallOrder[0]).toBeLessThan(
       readDeviceVerificationMaterial.mock.invocationCallOrder[0]!,
     );
     expect(readDeviceVerificationMaterial.mock.invocationCallOrder[0]).toBeLessThan(
-      submitCommunitySync.mock.invocationCallOrder[0]!,
+      submitUsageSync.mock.invocationCallOrder[0]!,
     );
     expect(release).toHaveBeenCalledTimes(3);
     expect(release).toHaveBeenNthCalledWith(1, false);

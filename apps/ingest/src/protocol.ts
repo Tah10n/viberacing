@@ -1,10 +1,8 @@
 import { createHash } from "node:crypto";
 
 export const communitySyncMethod = "POST";
-export const communitySyncRequestTarget = "/v1/community/sync";
 export const usageSyncRequestTarget = "/v1/community/usage";
-export type CommunitySyncRequestTarget =
-  typeof communitySyncRequestTarget | typeof usageSyncRequestTarget;
+export type CommunitySyncRequestTarget = typeof usageSyncRequestTarget;
 export const communitySyncMediaType = "application/json";
 export const maximumCommunitySyncBodyBytes = 8_192;
 export const maximumCommunitySyncRawHeaderPairs = 64;
@@ -102,7 +100,7 @@ export function createOriginProofMessage(
       originProofMessagePrefix,
       input.keyId,
       communitySyncMethod,
-      input.requestTarget ?? communitySyncRequestTarget,
+      input.requestTarget ?? usageSyncRequestTarget,
       input.bodyDigestBase64Url,
       input.timestamp,
       input.nonce,
@@ -125,7 +123,7 @@ export function createDeviceSignatureMessage(
     [
       deviceSignatureMessagePrefix,
       communitySyncMethod,
-      input.requestTarget ?? communitySyncRequestTarget,
+      input.requestTarget ?? usageSyncRequestTarget,
       input.bodyDigestBase64Url,
       input.deviceId,
       input.nonce,

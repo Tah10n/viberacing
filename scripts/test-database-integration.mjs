@@ -1878,10 +1878,12 @@ FOR UPDATE;
     "ingest-retry-lock-ready",
     [
       `SET ROLE viberacing_ingest;
-SELECT * FROM viberacing_api.submit_community_sync(
+SELECT * FROM viberacing_api.submit_usage_sync(
   '00000000-0000-4000-8000-000000011401',
   'dev_' || pg_catalog.repeat('S', 22),
   'src_' || pg_catalog.repeat('S', 22),
+  'codex',
+  'codex_daily_usage_buckets_v1',
   '00000000-0000-4000-8000-000000011500',
   'syn_' || pg_catalog.repeat('S', 22),
   ${sqlStringLiteral(ingestRetryObservedAt)},
@@ -1899,10 +1901,12 @@ SELECT * FROM viberacing_api.submit_community_sync(
   ARRAY[321]::bigint[]
 );`,
       `SET ROLE viberacing_ingest;
-SELECT * FROM viberacing_api.submit_community_sync(
+SELECT * FROM viberacing_api.submit_usage_sync(
   '00000000-0000-4000-8000-000000011401',
   'dev_' || pg_catalog.repeat('S', 22),
   'src_' || pg_catalog.repeat('S', 22),
+  'codex',
+  'codex_daily_usage_buckets_v1',
   '00000000-0000-4000-8000-000000011500',
   'syn_' || pg_catalog.repeat('S', 22),
   ${sqlStringLiteral(ingestRetryObservedAt)},
@@ -1934,10 +1938,12 @@ FOR UPDATE;
     "ingest-devices-lock-ready",
     [
       `SET ROLE viberacing_ingest;
-SELECT * FROM viberacing_api.submit_community_sync(
+SELECT * FROM viberacing_api.submit_usage_sync(
   '00000000-0000-4000-8000-000000011402',
   'dev_' || pg_catalog.repeat('T', 22),
   'src_' || pg_catalog.repeat('T', 22),
+  'codex',
+  'codex_daily_usage_buckets_v1',
   '00000000-0000-4000-8000-000000011501',
   'syn_' || pg_catalog.repeat('T', 22),
   pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
@@ -1955,10 +1961,12 @@ SELECT * FROM viberacing_api.submit_community_sync(
   ARRAY[700]::bigint[]
 );`,
       `SET ROLE viberacing_ingest;
-SELECT * FROM viberacing_api.submit_community_sync(
+SELECT * FROM viberacing_api.submit_usage_sync(
   '00000000-0000-4000-8000-000000011403',
   'dev_' || pg_catalog.repeat('U', 22),
   'src_' || pg_catalog.repeat('T', 22),
+  'codex',
+  'codex_daily_usage_buckets_v1',
   '00000000-0000-4000-8000-000000011502',
   'syn_' || pg_catalog.repeat('U', 22),
   pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
@@ -1997,10 +2005,12 @@ SELECT viberacing_api.pause_source(
   'req_' || pg_catalog.repeat('1', 22)
 );`,
     `SET ROLE viberacing_ingest;
-SELECT * FROM viberacing_api.submit_community_sync(
+SELECT * FROM viberacing_api.submit_usage_sync(
   '00000000-0000-4000-8000-000000011404',
   'dev_' || pg_catalog.repeat('W', 22),
   'src_' || pg_catalog.repeat('W', 22),
+  'codex',
+  'codex_daily_usage_buckets_v1',
   '00000000-0000-4000-8000-000000011503',
   'syn_' || pg_catalog.repeat('W', 22),
   pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
@@ -2041,10 +2051,12 @@ SELECT viberacing_api.revoke_device(
   'req_' || pg_catalog.repeat('2', 22)
 );`,
     `SET ROLE viberacing_ingest;
-SELECT * FROM viberacing_api.submit_community_sync(
+SELECT * FROM viberacing_api.submit_usage_sync(
   '00000000-0000-4000-8000-000000011405',
   'dev_' || pg_catalog.repeat('Z', 22),
   'src_' || pg_catalog.repeat('Z', 22),
+  'codex',
+  'codex_daily_usage_buckets_v1',
   '00000000-0000-4000-8000-000000011504',
   'syn_' || pg_catalog.repeat('Z', 22),
   pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
@@ -2156,10 +2168,12 @@ SELECT pg_catalog.pg_advisory_xact_lock(
     "ingest-season-order-lock-ready",
     [
       `SET ROLE viberacing_ingest;
-SELECT * FROM viberacing_api.submit_community_sync(
+SELECT * FROM viberacing_api.submit_usage_sync(
   '00000000-0000-4000-8000-000000011401',
   'dev_' || pg_catalog.repeat('S', 22),
   'src_' || pg_catalog.repeat('S', 22),
+  'codex',
+  'codex_daily_usage_buckets_v1',
   '00000000-0000-4000-8000-000000011505',
   'syn_' || pg_catalog.repeat('3', 22),
   pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
@@ -2181,10 +2195,12 @@ SELECT * FROM viberacing_api.submit_community_sync(
   ARRAY[400, 100]::bigint[]
 );`,
       `SET ROLE viberacing_ingest;
-SELECT * FROM viberacing_api.submit_community_sync(
+SELECT * FROM viberacing_api.submit_usage_sync(
   '00000000-0000-4000-8000-000000011402',
   'dev_' || pg_catalog.repeat('T', 22),
   'src_' || pg_catalog.repeat('T', 22),
+  'codex',
+  'codex_daily_usage_buckets_v1',
   '00000000-0000-4000-8000-000000011506',
   'syn_' || pg_catalog.repeat('7', 22),
   pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
@@ -2300,10 +2316,12 @@ SELECT * FROM viberacing_api.finalize_community_season(
   pg_catalog.current_setting('viberacing.test_week_start')::date - 14
 );`,
       `SET ROLE viberacing_ingest;
-SELECT * FROM viberacing_api.submit_community_sync(
+SELECT * FROM viberacing_api.submit_usage_sync(
   '00000000-0000-4000-8000-000000017401',
   'dev_' || pg_catalog.repeat('M', 22),
   'src_' || pg_catalog.repeat('M', 22),
+  'codex',
+  'codex_daily_usage_buckets_v1',
   '00000000-0000-4000-8000-000000017502',
   'syn_' || pg_catalog.repeat('N', 22),
   pg_catalog.date_trunc('milliseconds', pg_catalog.statement_timestamp()),
@@ -2900,6 +2918,14 @@ SELECT viberacing_api.complete_passkey_login(
       );`,
       `${role} device verification material read`,
     );
+  }
+
+  for (const role of [
+    "viberacing_web",
+    "viberacing_ingest",
+    "viberacing_jobs",
+    "viberacing_admin",
+  ]) {
     expectDenied(
       role,
       `SELECT * FROM viberacing_api.submit_community_sync(
@@ -2917,7 +2943,7 @@ SELECT viberacing_api.complete_passkey_login(
         ARRAY['2026-07-15'],
         ARRAY[1]::bigint[]
       );`,
-      `${role} Community sync submission`,
+      `${role} retired direct Community sync submission`,
     );
   }
 

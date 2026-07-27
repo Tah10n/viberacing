@@ -124,22 +124,6 @@ const expectedFields = new Map([
     ],
   ],
   [
-    "connector-sync.schema.json",
-    [
-      "schemaVersion",
-      "sourceId",
-      "syncId",
-      "observedAt",
-      "connectorVersion",
-      "codexVersion",
-      "dailyEntries",
-    ],
-  ],
-  [
-    "connector-sync-result.schema.json",
-    ["schemaVersion", "requestId", "syncId", "outcome", "acceptedEntries"],
-  ],
-  [
     "problem-details.schema.json",
     ["schemaVersion", "requestId", "status", "errorCode", "title", "retryable"],
   ],
@@ -243,19 +227,6 @@ const implementedLocalEvidencePaths = new Map([
       "apps/web/lib/public-community-score-store.ts",
       "database/migrations/0042_direct_community_token_leaderboard.sql",
       "database/tests/community_token_leaderboard.sql",
-    ],
-  ],
-  [
-    "postCommunitySyncV1",
-    [
-      "apps/ingest/src/community-sync-admission.test.ts",
-      "apps/ingest/src/community-sync-admission.ts",
-      "apps/ingest/src/community-sync-application.test.ts",
-      "apps/ingest/src/community-sync-application.ts",
-      "apps/ingest/src/community-sync-http-server-contract-failure.test.ts",
-      "apps/ingest/src/community-sync-http-server.test.ts",
-      "apps/ingest/src/community-sync-http-server.ts",
-      "scripts/test-ingest-postgres-integration.mjs",
     ],
   ],
   [
@@ -999,7 +970,6 @@ if (sources !== undefined) {
         "connector-car-proposal-authentication.json",
         "connector-pairing-authentication.json",
         "connector-pairing-transport.json",
-        "connector-sync-authentication.json",
         "connector-usage-sync-authentication.json",
       ],
     )
@@ -1023,26 +993,109 @@ if (sources !== undefined) {
       validatePairingTransportPolicy(record);
     }
   }
-  const connectorSyncPolicy = policies.find(
-    ({ entry }) => entry.file === "connector-sync-authentication.json",
-  )?.policy;
   const usageSyncPolicy = policies.find(
     ({ entry }) => entry.file === "connector-usage-sync-authentication.json",
   )?.policy;
   if (
-    !isObject(connectorSyncPolicy) ||
-    connectorSyncPolicy.protocolId !== "viberacing-community-sync-auth-v1" ||
-    connectorSyncPolicy.requestTarget !== "/v1/community/sync" ||
     !isObject(usageSyncPolicy) ||
     !isDeepStrictEqual(usageSyncPolicy, {
-      ...connectorSyncPolicy,
+      schemaVersion: 1,
       protocolId: "viberacing-usage-sync-auth-v1",
+      method: "POST",
       requestTarget: "/v1/community/usage",
+      mediaType: "application/json",
+      maximumBodyBytes: 8192,
+      maximumRawHeaderPairs: 64,
+      maximumHeaderNameCharacters: 64,
+      maximumHeaderValueCharacters: 256,
+      maximumJsonDepth: 8,
+      maximumJsonNodes: 128,
+      maximumJsonObjectMembers: 64,
+      maximumJsonArrayItems: 64,
+      maximumJsonNumberCharacters: 64,
+      maximumDecodedJsonStringCodeUnits: 256,
+      canonicalMessageEncoding: "UTF-8",
+      canonicalMessageSeparator: "LF",
+      canonicalMessageTrailingSeparator: false,
+      binaryEncoding: "base64url-unpadded",
+      digestEncoding: "base64url-unpadded",
+      httpTransport: {
+        framework: "fastify-v5",
+        admissionMode: "no-queue",
+        admissionLimit: 4,
+        maximumHeaderBytes: 16384,
+        maximumConnections: 32,
+        maximumRequestsPerSocket: 16,
+        requestTimeoutMilliseconds: 5000,
+        handlerTimeoutMilliseconds: 33000,
+        connectionTimeoutMilliseconds: 34000,
+        keepAliveTimeoutMilliseconds: 5000,
+        trustProxy: false,
+        forwardedHeadersTrusted: false,
+        inboundRequestIdAccepted: false,
+        requestLogging: false,
+        acceptPolicy: "closed-json",
+        cacheControl: "no-store",
+        corsPolicy: "same-origin",
+      },
+      originProof: {
+        messagePrefix: "viberacing-origin-proof-v1",
+        algorithm: "HMAC-SHA-256",
+        keyBytes: 32,
+        proofBytes: 32,
+        nonceBytes: 16,
+        maximumAgeMilliseconds: 60000,
+        maximumAgeBoundary: "exclusive",
+        maximumFutureSkewMilliseconds: 5000,
+        maximumFutureSkewBoundary: "inclusive",
+        keyIdPattern: "^edge_[A-Za-z0-9_-]{1,22}$",
+        headers: {
+          keyId: "x-viberacing-origin-key-id",
+          timestamp: "x-viberacing-origin-timestamp",
+          nonce: "x-viberacing-origin-nonce",
+          proof: "x-viberacing-origin-proof",
+        },
+        canonicalFields: [
+          "messagePrefix",
+          "keyId",
+          "method",
+          "requestTarget",
+          "bodyDigestBase64Url",
+          "timestamp",
+          "nonce",
+        ],
+      },
+      deviceSignature: {
+        messagePrefix: "viberacing-device-request-v1",
+        algorithm: "Ed25519",
+        publicKeyBytes: 32,
+        signatureBytes: 64,
+        nonceBytes: 16,
+        deviceIdPattern: "^dev_[A-Za-z0-9_-]{22}$",
+        idempotencyKeyPattern: "^syn_[A-Za-z0-9_-]{22}$",
+        headers: {
+          deviceId: "x-viberacing-device-id",
+          timestamp: "x-viberacing-device-timestamp",
+          nonce: "x-viberacing-device-nonce",
+          signature: "x-viberacing-device-signature",
+          idempotencyKey: "idempotency-key",
+        },
+        canonicalFields: [
+          "messagePrefix",
+          "method",
+          "requestTarget",
+          "bodyDigestBase64Url",
+          "deviceId",
+          "nonce",
+          "timestamp",
+          "idempotencyKey",
+        ],
+      },
     })
   ) {
     report(
       "contracts/v1/connector-usage-sync-authentication.json",
-      "usage sync authentication must differ from the reviewed connector policy only by protocol ID and exact request target",
+      "usage sync authentication differs from the reviewed boundary",
     );
   }
   validateCarProposalVector();
@@ -1087,12 +1140,9 @@ if (sources !== undefined) {
     if (expected === undefined || !sameEntries(fields, expected)) {
       report(scope, "top-level fields differ from the reviewed contract boundary");
     }
-    if (entry.file === "connector-sync.schema.json" || entry.file === "usage-sync.schema.json") {
+    if (entry.file === "usage-sync.schema.json") {
       const dailyEntry = schema?.properties?.dailyEntries?.items;
-      const isUsageSync = entry.file === "usage-sync.schema.json";
-      const expectedDailyFields = isUsageSync
-        ? ["reportedDate", "dailyTokenTotal"]
-        : ["codexReportedDate", "tokens"];
+      const expectedDailyFields = ["reportedDate", "dailyTokenTotal"];
       if (!sameEntries(Object.keys(dailyEntry?.properties ?? {}), expectedDailyFields)) {
         report(scope, "sync daily-entry fields differ from the exact writable allowlist");
       }
@@ -1115,7 +1165,7 @@ if (sources !== undefined) {
           );
         }
       }
-      const expectedUniqueField = isUsageSync ? "reportedDate" : "codexReportedDate";
+      const expectedUniqueField = "reportedDate";
       if (schema?.properties?.dailyEntries?.["x-viberacing-uniqueBy"] !== expectedUniqueField) {
         report(scope, `daily entries must remain unique by ${expectedUniqueField}`);
       }
@@ -1456,7 +1506,7 @@ if (sources !== undefined) {
 
   const publicRaceStatusOperation = operations[0];
   if (
-    operations.length !== 9 ||
+    operations.length !== 8 ||
     publicRaceStatusOperation?.entry.method !== "get" ||
     publicRaceStatusOperation.entry.path !== "/v1/community/race/status" ||
     publicRaceStatusOperation.entry.operationId !== "getCommunityRaceStatusV1" ||
@@ -1482,7 +1532,7 @@ if (sources !== undefined) {
 
   const publicRaceOperation = operations[1];
   if (
-    operations.length !== 9 ||
+    operations.length !== 8 ||
     publicRaceOperation?.entry.method !== "get" ||
     publicRaceOperation.entry.path !== "/v1/community/race" ||
     publicRaceOperation.entry.operationId !== "getCommunityRaceV1" ||
@@ -1508,7 +1558,7 @@ if (sources !== undefined) {
 
   const publicScoreOperation = operations[2];
   if (
-    operations.length !== 9 ||
+    operations.length !== 8 ||
     publicScoreOperation?.entry.method !== "get" ||
     publicScoreOperation.entry.path !== "/v1/community/scores" ||
     publicScoreOperation.entry.operationId !== "getCommunityScoresV1" ||
@@ -1532,36 +1582,7 @@ if (sources !== undefined) {
     );
   }
 
-  const communitySyncOperation = operations[3];
-  if (
-    operations.length !== 9 ||
-    communitySyncOperation?.entry.method !== "post" ||
-    communitySyncOperation.entry.path !== "/v1/community/sync" ||
-    communitySyncOperation.entry.operationId !== "postCommunitySyncV1" ||
-    communitySyncOperation.entry.implementationStatus !== "implemented-local" ||
-    communitySyncOperation.entry.summary !== "Submit one bounded Community usage snapshot" ||
-    communitySyncOperation.entry.admissionPolicy !== "no-queue-4" ||
-    communitySyncOperation.entry.authenticationContract !== "connector-sync-authentication.json" ||
-    communitySyncOperation.entry.querySchema !== "none" ||
-    communitySyncOperation.entry.requestSchema !== "ConnectorSyncV1" ||
-    communitySyncOperation.entry.responseSchema !== "ConnectorSyncResultV1" ||
-    communitySyncOperation.entry.problemSchema !== "ProblemDetailsV1" ||
-    !sameEntries(
-      communitySyncOperation.entry.problemStatuses,
-      [400, 401, 405, 406, 422, 500, 503],
-    ) ||
-    communitySyncOperation.entry.queryPolicy !== "none" ||
-    communitySyncOperation.entry.requestBodyPolicy !== "exact-raw-json-8192" ||
-    communitySyncOperation.entry.cacheControl !== "no-store" ||
-    communitySyncOperation.entry.corsPolicy !== "same-origin"
-  ) {
-    report(
-      "contracts/v1/manifest.json",
-      "Community sync operation differs from the reviewed HTTP contract",
-    );
-  }
-
-  const publicTokenOperation = operations[4];
+  const publicTokenOperation = operations[3];
   if (
     publicTokenOperation?.entry.method !== "get" ||
     publicTokenOperation.entry.path !== "/v1/community/tokens" ||
@@ -1586,7 +1607,7 @@ if (sources !== undefined) {
     );
   }
 
-  const communityUsageSyncOperation = operations[5];
+  const communityUsageSyncOperation = operations[4];
   if (
     communityUsageSyncOperation?.entry.method !== "post" ||
     communityUsageSyncOperation.entry.path !== "/v1/community/usage" ||
@@ -1616,7 +1637,7 @@ if (sources !== undefined) {
     );
   }
 
-  const carProposalOperation = operations[6];
+  const carProposalOperation = operations[5];
   if (
     carProposalOperation?.entry.method !== "post" ||
     carProposalOperation.entry.path !== "/v1/connector/cars/proposals" ||
@@ -1642,7 +1663,7 @@ if (sources !== undefined) {
     report("contracts/v1/manifest.json", "connector car proposal operation differs from review");
   }
 
-  const pairingPollOperation = operations[7];
+  const pairingPollOperation = operations[6];
   if (
     pairingPollOperation?.entry.method !== "post" ||
     pairingPollOperation.entry.path !== "/v1/connector/pairing/poll" ||
@@ -1664,7 +1685,7 @@ if (sources !== undefined) {
     report("contracts/v1/manifest.json", "pairing poll operation differs from review");
   }
 
-  const pairingStartOperation = operations[8];
+  const pairingStartOperation = operations[7];
   if (
     pairingStartOperation?.entry.method !== "post" ||
     pairingStartOperation.entry.path !== "/v1/connector/pairing/start" ||

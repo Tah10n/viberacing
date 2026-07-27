@@ -1,8 +1,8 @@
 # Ingest workspace guidance
 
-Read the root `AGENTS.md`, `contracts/README.md`, `contracts/v1/connector-sync-authentication.json`,
-the security invariants, threat model, abuse cases, privacy data map, and ADRs 0015–0020 before
-changing this workspace.
+Read the root `AGENTS.md`, `contracts/README.md`,
+`contracts/v1/connector-usage-sync-authentication.json`, the security invariants, threat model,
+abuse cases, privacy data map, ADRs 0015–0020, and ADR 0075 before changing this workspace.
 
 ## Non-negotiable boundaries
 
@@ -28,7 +28,7 @@ changing this workspace.
   key-returning APIs.
 - The application composer must generate one server-owned 128-bit request ID before verification,
   then run verifier before submission and wait for database settlement. Return only a validated
-  `ConnectorSyncResultV1` or the closed generic `ProblemDetailsV1` subset. Never accept an inbound
+  `UsageSyncResultV1` or the closed generic `ProblemDetailsV1` subset. Never accept an inbound
   request ID, expose an anomaly reason, or acknowledge a failed submission.
 - Only `community-sync-http-server.ts` may import Fastify or own HTTP server behavior. Preserve the
   exact copied body bytes and raw-header sequence, keep proxy trust and inbound request IDs

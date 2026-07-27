@@ -440,11 +440,11 @@ ADR 0031 adds no persistent field, log, metric, cache, analytics event, export, 
 The private sync command transiently reads the active record's already mapped source/device IDs and
 device key, generates one random sync ID and nonce, and formats current millisecond UTC. ADR 0073
 makes the current candidate send only the `UsageSyncV1` body plus five device-authentication headers
-to the explicit origin; legacy `ConnectorSyncV1` remains server compatibility only. Only the
-selected exact version is displayed locally before launch. The canonical executable path, exact
-usage, body, key, nonce, signature, identifiers, and acknowledgement request ID are neither sent as
-diagnostics nor printed. The synthetic HTTP test uses only reserved values; repository tests never
-open a real credential or local account.
+to the explicit origin. ADR 0075 removes the unreleased `ConnectorSyncV1` public contract because
+there is no deployed compatibility population. Only the selected exact version is displayed locally
+before launch. The canonical executable path, exact usage, body, key, nonce, signature, identifiers,
+and acknowledgement request ID are neither sent as diagnostics nor printed. The synthetic HTTP test
+uses only reserved values; repository tests never open a real credential or local account.
 
 ADR 0051 adds no collected or retained field and no new sink. Only after active-record validation,
 the candidate sync command may transiently read a `PATH` value of at most 65,536 encoded bytes,

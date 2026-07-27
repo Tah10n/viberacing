@@ -190,25 +190,29 @@ function атомарно consume-ит tuple, а observed race доказыва�
 application boundary теперь генерирует server-owned request ID, связывает этот
 replay/device/submission adapter с точным verifier, дожидается settlement базы и возвращает только
 валидированный acknowledgement либо generic problem decision. Отдельная локальная Fastify server
-factory сохраняет точные raw body/header evidence для `POST /v1/community/sync`, не доверяет proxy
+factory сохраняет точные raw body/header evidence для `POST /v1/community/usage`, не доверяет proxy
 headers и входящему request ID, без очереди допускает четыре application call, ограничивает
 parser/headers/connections и задаёт 5/33/34-second request/handler/connection deadlines, после чего
 сериализует только повторно проверенные `no-store` success/problem contracts. Отдельный локальный
 host теперь запускает именно эту factory только в loopback development/test либо с явным
 Railway-edge production contract, закрывает частично созданные boundary и ограниченно обрабатывает
 SIGINT/SIGTERM. Его 132 tests и built-entrypoint check не доказывают Railway, внешний TLS, edge
-route, live credentials или deployment. Отдельный opt-in integration test собирает emitted host,
-создаёт синтетический выделенный Ingest login в одноразовом PostgreSQL, отправляет независимо
-подписанные loopback HTTP requests и проверяет legacy и отдельно gated `UsageSyncV1` accepted,
-duplicate, persistent replay, revoked device, response headers и точные сохранённые строки. Она
-также удерживает четыре request на первом replay-store call, отклоняет пятый generic 503 без пятого
-DB call, затем проверяет четыре accepted response до полного settlement. После закрытия imported
-host тот же gate запускает built entry point отдельным тихим process, наблюдает его loopback
-listener без application work, доказывает ещё один exact accepted request и принудительно завершает
-только test child перед cleanup. Это не доказывает OS-signal delivery, graceful emitted-child
-settlement, deployment credential/certificate, protected secret delivery, distributed control,
-внешний edge route, representative load, real-user data или capacity. Локальный dependency-free
-Worker теперь создаёт совместимый origin proof, но live key injection, deployed edge
+route, live credentials или deployment. Единственный локальный протокол `UsageSyncV1` доступен
+только при точном `VIBERACING_USAGE_SYNC_ENABLED=true` на Edge и Ingest; это fail-closed
+containment, а не переключатель миграции. Поскольку сайт и connector не выпускались,
+неиспользованные `ConnectorSyncV1` и `/v1/community/sync` удалены, а revision 0043 запрещает
+runtime-ролям прямой вызов оставшейся owner-internal SQL function. Отдельный opt-in integration test
+собирает emitted host, создаёт синтетический выделенный Ingest login в одноразовом PostgreSQL,
+отправляет независимо подписанные loopback HTTP requests и проверяет `UsageSyncV1` accepted, отказ
+удалённого пути, duplicate, persistent replay, revoked device, response headers и точные сохранённые
+строки. Она также удерживает четыре request на первом replay-store call, отклоняет пятый generic 503
+без пятого DB call, затем проверяет четыре accepted response до полного settlement. После закрытия
+imported host тот же gate запускает built entry point отдельным тихим process, наблюдает его
+loopback listener без application work, доказывает ещё один exact accepted request и принудительно
+завершает только test child перед cleanup. Это не доказывает OS-signal delivery, graceful
+emitted-child settlement, deployment credential/certificate, protected secret delivery, distributed
+control, внешний edge route, representative load, real-user data или capacity. Локальный
+dependency-free Worker теперь создаёт совместимый origin proof, но live key injection, deployed edge
 route/direct-origin denial, distributed rate policy и monitoring всё ещё отсутствуют. Library-only
 Rust foundation теперь выполняет фиксированный stable handshake и только после него — candidate
 `0.144.5` account/usage sequence. Он подтверждает ChatGPT mode, отбрасывает email/plan/summary и

@@ -2,10 +2,8 @@ import { Buffer } from "node:buffer";
 import crypto from "node:crypto";
 
 import {
-  validateConnectorSyncResultV1,
   validateProblemDetailsV1,
   validateUsageSyncResultV1,
-  type ConnectorSyncResultV1,
   type ProblemDetailsV1,
   type UsageSyncResultV1,
 } from "@viberacing/contracts";
@@ -25,11 +23,7 @@ import {
 } from "./community-sync-verifier.js";
 import type { IngestDatabasePoolSignalSink } from "./database-pool.js";
 import { createConfiguredCommunitySyncVerifier } from "./origin-proof-config.js";
-import {
-  communitySyncRequestTarget,
-  usageSyncRequestTarget,
-  type CommunitySyncRequestTarget,
-} from "./protocol.js";
+import { usageSyncRequestTarget, type CommunitySyncRequestTarget } from "./protocol.js";
 
 const requestEntropyBytes = 16;
 const syncIdPattern = /^syn_[A-Za-z0-9_-]{22}$/;
@@ -45,15 +39,6 @@ const verifiedSubmissionKeys = new Set([
   "provider",
   "requestTarget",
   "signatureBase64Url",
-]);
-const connectorPayloadKeys = new Set([
-  "codexVersion",
-  "connectorVersion",
-  "dailyEntries",
-  "observedAt",
-  "schemaVersion",
-  "sourceId",
-  "syncId",
 ]);
 const usagePayloadKeys = new Set([
   "agentVersion",
@@ -90,7 +75,7 @@ export class CommunitySyncApplicationError extends Error {
 
 export type CommunitySyncApplicationDecision =
   | Readonly<{
-      body: ConnectorSyncResultV1 | UsageSyncResultV1;
+      body: UsageSyncResultV1;
       ok: true;
       status: 200;
     }>
@@ -294,13 +279,10 @@ function readVerifiedSummary(value: unknown): VerifiedSummary | undefined {
     if (
       accountingRevision !== codexAccountingRevision ||
       provider !== codexProvider ||
-      (requestTarget !== communitySyncRequestTarget && requestTarget !== usageSyncRequestTarget) ||
+      requestTarget !== usageSyncRequestTarget ||
       !isPlainRecord(payload) ||
       !Object.isFrozen(payload) ||
-      !hasExactKeys(
-        payload,
-        requestTarget === usageSyncRequestTarget ? usagePayloadKeys : connectorPayloadKeys,
-      )
+      !hasExactKeys(payload, usagePayloadKeys)
     ) {
       return undefined;
     }
@@ -346,7 +328,6 @@ function readSubmissionResult(
 
 function createSuccessDecision(
   requestId: string,
-  requestTarget: CommunitySyncRequestTarget,
   syncId: string,
   result: CommunitySyncSubmissionResult,
 ): CommunitySyncApplicationDecision {
@@ -356,15 +337,11 @@ function createSuccessDecision(
     syncId,
     outcome: result.outcome,
     acceptedEntries: result.acceptedEntries,
-  } as const satisfies ConnectorSyncResultV1 & UsageSyncResultV1;
+  } as const satisfies UsageSyncResultV1;
   const body = Object.freeze(
     Object.assign(Object.create(null) as object, values),
-  ) as ConnectorSyncResultV1 & UsageSyncResultV1;
-  const valid =
-    requestTarget === usageSyncRequestTarget
-      ? validateUsageSyncResultV1(body).ok
-      : validateConnectorSyncResultV1(body).ok;
-  if (!valid) {
+  ) as UsageSyncResultV1;
+  if (!validateUsageSyncResultV1(body).ok) {
     fail("contract_rejected");
   }
   return Object.freeze({ body, ok: true, status: 200 });
@@ -432,7 +409,7 @@ export function createCommunitySyncApplication(dependencies: unknown): Community
       const result = readSubmissionResult(rawResult, summary.entryCount);
       return result === undefined
         ? createProblemDecision("internal_error", requestId)
-        : createSuccessDecision(requestId, summary.requestTarget, summary.syncId, result);
+        : createSuccessDecision(requestId, summary.syncId, result);
     },
   });
 }

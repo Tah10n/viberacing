@@ -54,25 +54,6 @@ const consumeOriginNonceQuery = `SELECT
     $3::timestamptz
   ) AS consumed`;
 
-const submitCommunitySyncQuery = `SELECT
-  submission.outcome AS outcome,
-  submission.accepted_entries AS accepted_entries
-FROM viberacing_api.submit_community_sync(
-  $1::uuid,
-  $2::text,
-  $3::text,
-  $4::uuid,
-  $5::text,
-  $6::timestamptz,
-  $7::text,
-  $8::text,
-  $9::bytea,
-  $10::bytea,
-  $11::bytea,
-  $12::text[],
-  $13::bigint[]
-) AS submission`;
-
 const submitUsageSyncQuery = `SELECT
   submission.outcome AS outcome,
   submission.accepted_entries AS accepted_entries
@@ -93,22 +74,6 @@ FROM viberacing_api.submit_usage_sync(
   $14::text[],
   $15::bigint[]
 ) AS submission`;
-
-export interface IngestDatabaseSubmission {
-  readonly bodyDigest: Uint8Array;
-  readonly codexReportedDates: readonly string[];
-  readonly codexVersion: string;
-  readonly connectorVersion: string;
-  readonly deviceId: string;
-  readonly deviceKeyId: string;
-  readonly nonceDigest: Uint8Array;
-  readonly observedAt: string;
-  readonly signature: Uint8Array;
-  readonly snapshotId: string;
-  readonly sourceId: string;
-  readonly syncId: string;
-  readonly tokens: readonly number[];
-}
 
 export interface IngestDatabaseOriginNonce {
   readonly expiresAt: string;
@@ -143,7 +108,6 @@ export interface IngestDatabaseClient {
   consumeOriginNonce(input: IngestDatabaseOriginNonce): Promise<unknown>;
   readDeviceVerificationMaterial(deviceId: string): Promise<unknown>;
   release(destroy?: boolean): void;
-  submitCommunitySync(input: IngestDatabaseSubmission): Promise<unknown>;
   submitUsageSync(input: IngestDatabaseUsageSubmission): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
 }
@@ -203,23 +167,6 @@ function wrapClient(client: NodePostgresClient): IngestDatabaseClient {
     },
     release(destroy = false): void {
       client.release(destroy);
-    },
-    submitCommunitySync(input: IngestDatabaseSubmission): Promise<unknown> {
-      return fixedQuery(submitCommunitySyncQuery, [
-        input.deviceKeyId,
-        input.deviceId,
-        input.sourceId,
-        input.snapshotId,
-        input.syncId,
-        input.observedAt,
-        input.connectorVersion,
-        input.codexVersion,
-        Buffer.from(input.bodyDigest),
-        Buffer.from(input.signature),
-        Buffer.from(input.nonceDigest),
-        [...input.codexReportedDates],
-        input.tokens.map(String),
-      ]);
     },
     submitUsageSync(input: IngestDatabaseUsageSubmission): Promise<unknown> {
       return fixedQuery(submitUsageSyncQuery, [

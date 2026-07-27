@@ -245,7 +245,7 @@ mod tests {
     fn shares_the_same_synthetic_public_key_as_the_sync_vector() {
         let pairing = shared_test_vector();
         let sync: Value = serde_json::from_str(include_str!(
-            "../../../contracts/v1/connector-sync-device-request.test-vector.json"
+            "../../../contracts/v1/connector-usage-sync-device-request.test-vector.json"
         ))
         .expect("shared Community sync vector must remain valid JSON");
 

@@ -1,10 +1,10 @@
 # ADR 0071: Provider-attributed UsageSyncV1 foundation
 
-- Status: Accepted (local Usage Sync foundation; deployment pending)
+- Status: Superseded
 - Date: 2026-07-26
 - Decision owners: Contracts, Edge, Ingest, Database, Security, Privacy, and Compatibility
 - Supersedes: None
-- Superseded by: None
+- Superseded by: ADR 0075
 
 ## Context
 

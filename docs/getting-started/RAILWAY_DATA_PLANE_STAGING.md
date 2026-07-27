@@ -68,7 +68,7 @@ docker build --file deploy/Dockerfile.migrate --tag viberacing-migrate:local .
 The image definitions use the repository-pinned Node image, install with the frozen lockfile and
 blocked scripts, copy only the emitted production graph, and run as the existing unprivileged `node`
 user. The local edge compatibility test proves that the Worker's exact HMAC is accepted by the
-production Ingest verifier. The migration and Web integrations prove the exact 42-row ledger and all
+production Ingest verifier. The migration and Web integrations prove the exact 43-row ledger and all
 four public production routes through separate least-privileged verified-TLS logins. The
 Docker-backed Ingest/PostgreSQL integration remains an optional stronger synthetic prerequisite:
 
@@ -121,9 +121,9 @@ not set the local listener host or port and do not override the image command. S
 Generate the origin key in a protected secret manager. Use the same pair only in Ingest and the
 Cloudflare Worker. Do not add a health route or broaden the restart policy to hide startup failure.
 One replica and a 40-second drain are already fixed in the Railway configuration. Keep Usage Sync
-false during closed deployment. Enabling it later requires one coordinated Ingest replacement and
-Cloudflare Worker replacement with exact `true`; changing only one side must leave the new route
-unavailable.
+false during closed deployment. Enabling the sole usage-ingest route later requires one coordinated
+Ingest replacement and Cloudflare Worker replacement with exact `true`; changing only one side must
+leave it unavailable. This is containment sequencing, not a protocol migration.
 
 ## 4. Deploy the sync edge
 
@@ -181,7 +181,7 @@ Record only redacted aggregate results outside the public repository:
 
 - Web root and static assets return `200` with CSP and HSTS;
 - every capability left disabled returns its documented generic failure;
-- the migration ledger equals all 42 reviewed revisions;
+- the migration ledger equals all 43 reviewed revisions;
 - Web, Ingest, Jobs, and migration probes each admit only their one intended login/group;
 - database connections use hostname-verified TLS;
 - direct-origin sync lacks a valid proof and produces no private mutation;

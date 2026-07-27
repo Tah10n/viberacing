@@ -2,21 +2,21 @@
 
 This directory is the language-neutral source of truth for Vibe Racing wire shapes. The current
 files establish request and response boundaries plus locally implemented public score, race, and
-sync operations; revision 0007 maps the bounded Community sync into a database-only procedure,
-revision 0041 adds server-owned provider attribution and a separate Usage Sync wrapper, revision
-0011 provides a database-only score projection, and revision 0027 adds a compatible active-recipe
-race projection. A local pure Ingest kernel now authenticates and parses the exact bounded sync
-request, a separate local adapter constrains its PostgreSQL mapping, and a transport-free
-application boundary composes them into validated result/problem decisions. A separate bounded
-Fastify server factory now preserves the exact raw request and serializes only those validated
-decisions. The candidate Rust connector now signs one exact pairing-possession message, then
-separately composes exact unsigned body/device-message material and signs it behind an inaccessible
-source-bound key capability. A server-only Web kernel strictly verifies the pairing proof against
-the exact approved database material. A separate proposal-only Rust/Web path now shares an exact
-`CarRecipeV1` body/device-signature vector and never grants activation authority. One legacy
-[`sync vector`](v1/connector-sync-device-request.test-vector.json) and one current
-[`UsageSyncV1` vector](v1/connector-usage-sync-device-request.test-vector.json) prove exact bodies,
-digests, nonces, messages, public keys, and signatures against production Ingest code; another
+Usage Sync operations; revision 0007 maps bounded Community usage into a database-only procedure,
+revision 0041 adds server-owned provider attribution and the public Usage Sync wrapper, revision
+0043 makes that wrapper the sole runtime submission capability, revision 0011 provides a
+database-only score projection, and revision 0027 adds a compatible active-recipe race projection. A
+local pure Ingest kernel now authenticates and parses the exact bounded sync request, a separate
+local adapter constrains its PostgreSQL mapping, and a transport-free application boundary composes
+them into validated result/problem decisions. A separate bounded Fastify server factory now
+preserves the exact raw request and serializes only those validated decisions. The candidate Rust
+connector now signs one exact pairing-possession message, then separately composes exact unsigned
+body/device-message material and signs it behind an inaccessible source-bound key capability. A
+server-only Web kernel strictly verifies the pairing proof against the exact approved database
+material. A separate proposal-only Rust/Web path now shares an exact `CarRecipeV1`
+body/device-signature vector and never grants activation authority. One
+[`UsageSyncV1` vector](v1/connector-usage-sync-device-request.test-vector.json) proves the exact
+body, digest, nonce, message, public key, and signature against production Ingest code; another
 vector proves the exact Rust/Web pairing message and signature. Local Web/Auth boundaries now
 compose a generated nine- minute pairing start, protected keyed poll lookup, strict proof, and
 atomic activation through exact versioned routes. Local Rust commands retain the real key in the
@@ -65,28 +65,19 @@ input, or capacity.
 - [`CommunityScoreQueryV1`](v1/community-score-query.schema.json) accepts exactly one inclusive
   Monday `seasonStart` from `1999-12-27` through `2099-12-28`. The Web URL parser rejects duplicate,
   missing, encoded-name, and unknown parameters before applying the generated value validator.
-- [`ConnectorSyncV1`](v1/connector-sync.schema.json) accepts one bounded, self-reported Community
-  snapshot from a source-bound device. It contains no trust tier, profile ID, rank, score, season,
-  moderation state, account email, prompt, repository, credential, or server receipt time.
-- [`UsageSyncV1`](v1/usage-sync.schema.json) is the additive provider-neutral request for exact
+- [`UsageSyncV1`](v1/usage-sync.schema.json) is the sole provider-neutral request for exact
   `POST /v1/community/usage`. It carries only opaque source/sync IDs, canonical observation time,
   client/agent versions, and one through 31 unique date/daily-total pairs. Provider and accounting
   revision are deliberately absent and derived from the registered source.
 - [`connector-usage-sync-authentication.json`](v1/connector-usage-sync-authentication.json) retains
-  the sync proof and transport policy but binds both signatures to the separate Usage Sync path. The
-  Edge and Ingest implementations keep that route absent unless their exact independent
-  `VIBERACING_USAGE_SYNC_ENABLED=true` decision is present.
+  the sync proof and transport policy and binds both signatures to the Usage Sync path. The Edge and
+  Ingest implementations keep that route absent unless their exact independent
+  `VIBERACING_USAGE_SYNC_ENABLED=true` decision is present. That decision is capability containment,
+  not a migration switch.
 - [`connector-usage-sync-device-request.test-vector.json`](v1/connector-usage-sync-device-request.test-vector.json)
   fixes the current candidate connector's exact `UsageSyncV1` body, SHA-256 digest, nonce,
   path-bound device message, public key, and signature for Rust/Ingest verification. It contains no
   private key or real identifier.
-- [`connector-sync-authentication.json`](v1/connector-sync-authentication.json) fixes the exact
-  method, target, media type, raw body/header/JSON budgets, required headers, canonical base64url
-  and timestamp encodings, LF-separated origin/device proof messages, and bounded local HTTP
-  transport policy. The local Ingest verifier binds both proofs to SHA-256 of the exact received
-  body, rejects duplicate headers and decoded JSON keys, consumes a fresh origin nonce before body
-  parsing or device lookup, validates `ConnectorSyncV1`, and verifies the source-bound signature
-  under strict RFC 8032/FIPS semantics.
 - [`connector-pairing-authentication.json`](v1/connector-pairing-authentication.json) fixes the
   domain-separated pairing-possession message over one canonical version-4 transaction ID, exact
   32-byte server challenge, and exact pending Ed25519 public key. It also records that exact poll
@@ -108,36 +99,30 @@ input, or capacity.
   global-and-64-bucket database shaping, no-store policy, and same-origin/no-CORS response boundary.
 - [`connector-pairing-possession.test-vector.json`](v1/connector-pairing-possession.test-vector.json)
   fixes one synthetic pairing ID/challenge, exact message, public key, and signature shared by the
-  Rust signer and Web verifier. It deliberately reuses the sync vector's synthetic public key and
-  contains no private key or bearer token.
-- [`connector-sync-device-request.test-vector.json`](v1/connector-sync-device-request.test-vector.json)
-  fixes one synthetic exact body, SHA-256 digest, 16-byte nonce encoding, and canonical device
-  message plus a synthetic public key/signature for cross-language Rust/Ingest verification. It
-  contains no private key and is not a production request sample.
-- [`ConnectorSyncResultV1`](v1/connector-sync-result.schema.json) acknowledges accepted, duplicate,
-  or quarantined input without returning a private anomaly reason. The local Ingest application now
-  reconstructs and validates this body only after verification and database settlement.
-- [`UsageSyncResultV1`](v1/usage-sync-result.schema.json) preserves the same closed acknowledgement
-  vocabulary for the additive Usage Sync operation without exposing derived source attribution.
+  Rust signer and Web verifier. It deliberately reuses the Usage Sync vector's synthetic public key
+  and contains no private key or bearer token.
+- [`UsageSyncResultV1`](v1/usage-sync-result.schema.json) acknowledges accepted, duplicate, or
+  quarantined input without returning a private anomaly reason or derived source attribution. The
+  local Ingest application reconstructs and validates this body only after verification and database
+  settlement.
 - [`ProblemDetailsV1`](v1/problem-details.schema.json) returns a stable error code and request ID,
   plus one fixed generic title, never a stack trace, SQL detail, secret, request body, or internal
   hostname. A server-only Web factory now generates an opaque 128-bit request ID, fixes each
   status/title/retry mapping, validates the complete body, and emits `no-store`
   `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
 - [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
-  type/export names, closed authentication-policy inventory, and the locally implemented nine
-  operations: the four Community score/race/status/token GETs, `POST /v1/community/sync`,
-  `POST /v1/community/usage`, `POST /v1/connector/cars/proposals`, and the two pairing start/poll
-  POST routes, with method-specific query/body, response, problem, no-queue, authentication, cache,
-  same-origin CORS, and repository-status policies.
+  type/export names, closed authentication-policy inventory, and the locally implemented eight
+  operations: the four Community score/race/status/token GETs, `POST /v1/community/usage`,
+  `POST /v1/connector/cars/proposals`, and the two pairing start/poll POST routes, with
+  method-specific query/body, response, problem, no-queue, authentication, cache, same-origin CORS,
+  and repository-status policies.
 
 Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
 timestamp is bounded. Reviewed date-range and ISO-weekday extensions make the score season boundary
-executable instead of relying on prose. The legacy contract retains `codexReportedDate`; the new
-provider-neutral request uses `reportedDate`, and connector input; only `observedAt` uses a
-canonical UTC timestamp, and server receipt time remains authoritative for replay and season
-deadlines. Duplicate sync dates and duplicate public display positions are rejected by the
-documented `x-viberacing-uniqueBy` extension.
+executable instead of relying on prose. The provider-neutral request uses `reportedDate`; only
+`observedAt` uses a canonical UTC timestamp, and server receipt time remains authoritative for
+replay and season deadlines. Duplicate sync dates and duplicate public display positions are
+rejected by the documented `x-viberacing-uniqueBy` extension.
 
 The token maximum is a numeric serialization safety bound, not an honesty claim. A valid signature
 identifies the registered device, not the truth of self-reported usage. Server-side anomaly and

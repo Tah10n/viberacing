@@ -504,10 +504,10 @@ In the current local slice, Edge and Ingest expose the Usage Sync request only a
 immutable `codex`/`codex_daily_usage_buckets_v1` pair from the registered device/source lookup, and
 the Ingest-only database wrapper rechecks it before mapping client/agent/date/total fields into the
 unchanged Community snapshot procedure. The current candidate connector's bounded Codex App Server
-reader creates this provider-neutral body and signs the new path. The legacy `/v1/community/sync`
-path remains accepted for compatibility. New seasons use `community_tokens_v1`; the independent
-default-off public token route returns the direct weekly total while legacy score routes remain
-unchanged.
+reader creates this provider-neutral body and signs the sole path. Because there is no released site
+or connector population, ADR 0075 removes the unused `/v1/community/sync` path instead of creating a
+compatibility window. New seasons use `community_tokens_v1`; the independent default-off public
+token route returns the direct weekly total while the score routes remain unchanged.
 
 An optional MCP tool may carry the same already-derived `UsageSyncV1` object for a reviewed
 integration. It cannot carry arbitrary MCP/tool/prompt context. MCP compatibility does not discover
@@ -575,10 +575,10 @@ devices, pause, and revoke.
 ADR 0015 implements a pure local part of the Ingest application step. A closed raw envelope copies
 the exact body and required headers, enforces transport and JSON budgets, rejects duplicate required
 headers and decoded JSON keys, and verifies a fresh HMAC-SHA-256 origin proof before body parsing or
-device lookup. The parser then validates `ConnectorSyncV1` or `UsageSyncV1` from the exact request
-path; timestamp and idempotency headers must equal their body fields; and a minimal injected device
-tuple verifies the exact-body request with strict Ed25519 semantics before a frozen database-ready
-allowlist is returned.
+device lookup. ADR 0075 narrows the parser to `UsageSyncV1` on the exact Usage path; timestamp and
+idempotency headers must equal their body fields; and a minimal injected device tuple verifies the
+exact-body request with strict Ed25519 semantics before a frozen database-ready allowlist is
+returned.
 
 ADR 0016 adds the local application-to-database mapping. A dedicated four-client pool parses only
 namespaced settings, requires certificate-verified non-loopback TLS, and probes the exact Ingest
@@ -604,16 +604,17 @@ callers contend for one expired tuple.
 ADR 0019 adds the transport-free orchestration around those existing boundaries. One configured
 factory uses the same bounded database object for origin consume, device lookup, and submission; the
 verifier must settle before submission, and submission must settle before acknowledgement. One
-server-generated request ID correlates only a validated `ConnectorSyncResultV1` or generic
+server-generated request ID correlates only a validated `UsageSyncResultV1` or generic
 `ProblemDetailsV1` decision. A signed synthetic request exercises that production code order with a
 mock pool. No inbound ID, private anomaly reason, callback error, or submitted field is reflected.
 
-ADR 0020 adds the local HTTP step shown in the sequence. One confined Fastify server accepts only
-the exact sync POST, copies the raw body/header evidence into ADR 0019, disables proxy and inbound
-request-ID trust plus framework logging, bounds body/header/connection/socket/time work, and admits
-four unsettled application calls without a queue. It revalidates every application decision and
-returns only generic `no-store` acknowledgement/problem contracts. Real loopback tests exercise
-malformed framing and partial sockets; injection tests exercise route, overload, and serialization.
+ADR 0020 adds the local HTTP step shown in the sequence. ADR 0075 narrows the confined Fastify
+server to exact `POST /v1/community/usage`; the removed path receives 404 before application work.
+The server copies the raw body/header evidence into ADR 0019, disables proxy and inbound request-ID
+trust plus framework logging, bounds body/header/connection/socket/time work, and admits four
+unsettled application calls without a queue. It revalidates every application decision and returns
+only generic `no-store` acknowledgement/problem contracts. Real loopback tests exercise malformed
+framing and partial sockets; injection tests exercise route, overload, and serialization.
 
 ADR 0033 adds only the local listener/process step around that reviewed composition. ADR 0055 makes
 exact `VIBERACING_INGEST_ENABLED=true` a prerequisite before any other host field, protected

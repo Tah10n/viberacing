@@ -268,7 +268,6 @@ SELECT pg_temp.assert_true(
         procedure.proname IN (
           'consume_origin_nonce',
           'read_device_verification_material',
-          'submit_community_sync',
           'submit_usage_sync'
         )
       )

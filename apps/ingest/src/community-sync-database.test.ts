@@ -12,10 +12,9 @@ import type {
   IngestDatabaseClient,
   IngestDatabaseOriginNonce,
   IngestDatabasePool,
-  IngestDatabaseSubmission,
   IngestDatabaseUsageSubmission,
 } from "./database-pool.js";
-import { communitySyncRequestTarget, usageSyncRequestTarget } from "./protocol.js";
+import { usageSyncRequestTarget } from "./protocol.js";
 
 const deviceId = "dev_AAAAAAAAAAAAAAAAAAAAAA";
 const sourceId = "src_BBBBBBBBBBBBBBBBBBBBBB";
@@ -42,32 +41,6 @@ const explicitEnvironment = {
 } as const;
 
 function verifiedSubmission(): Record<string, unknown> {
-  return {
-    accountingRevision: codexAccountingRevision,
-    bodyDigestHex: "11".repeat(32),
-    deviceId,
-    deviceKeyId,
-    idempotencyKey: syncId,
-    nonceDigestHex: "22".repeat(32),
-    payload: {
-      codexVersion: "1.2.3",
-      connectorVersion: "1.2.3",
-      dailyEntries: [
-        { codexReportedDate: "2026-07-13", tokens: 42 },
-        { codexReportedDate: "2026-07-14", tokens: 84 },
-      ],
-      observedAt: "2026-07-15T12:00:00.000Z",
-      schemaVersion: 1,
-      sourceId,
-      syncId,
-    },
-    provider: codexProvider,
-    requestTarget: communitySyncRequestTarget,
-    signatureBase64Url: Buffer.alloc(64, 3).toString("base64url"),
-  };
-}
-
-function usageVerifiedSubmission(): Record<string, unknown> {
   return {
     accountingRevision: codexAccountingRevision,
     bodyDigestHex: "11".repeat(32),
@@ -117,7 +90,6 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
   readDevice: ReturnType<typeof vi.fn>;
   release: ReturnType<typeof vi.fn>;
   submit: ReturnType<typeof vi.fn>;
-  submitUsage: ReturnType<typeof vi.fn>;
   verifyBoundary: ReturnType<typeof vi.fn>;
 }> {
   const readDevice = vi.fn(() =>
@@ -135,13 +107,6 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
         : [{ accepted_entries: 2, outcome: "accepted" }],
     ),
   );
-  const submitUsage = vi.fn(() =>
-    Promise.resolve(
-      Object.hasOwn(options, "submissionRows")
-        ? options.submissionRows
-        : [{ accepted_entries: 2, outcome: "accepted" }],
-    ),
-  );
   const verifyBoundary = vi.fn(() =>
     Promise.resolve(Object.hasOwn(options, "runtimeRows") ? options.runtimeRows : runtimeBoundary),
   );
@@ -150,8 +115,7 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
     consumeOriginNonce: consumeOrigin,
     readDeviceVerificationMaterial: readDevice,
     release,
-    submitCommunitySync: submit,
-    submitUsageSync: submitUsage,
+    submitUsageSync: submit,
     verifyRuntimeBoundary: verifyBoundary,
   };
   const connect = vi.fn(() => Promise.resolve(client));
@@ -165,7 +129,6 @@ function createFixture(options: FixtureOptions = {}): Readonly<{
     readDevice,
     release,
     submit,
-    submitUsage,
     verifyBoundary,
   });
 }
@@ -314,7 +277,7 @@ describe("Community sync database adapter", () => {
     expect(fixture.release).toHaveBeenCalledWith(false);
   });
 
-  it("maps a verified submission to the exact procedure input and copies mutable values", async () => {
+  it("maps a verified UsageSyncV1 submission to the exact provider-derived input", async () => {
     const fixture = createFixture();
     const database = createCommunitySyncDatabase(fixture.pool, () => snapshotId);
     const input = verifiedSubmission();
@@ -324,40 +287,7 @@ describe("Community sync database adapter", () => {
     expect(result).toEqual({ acceptedEntries: 2, outcome: "accepted" });
     expect(Object.isFrozen(result)).toBe(true);
     expect(fixture.submit).toHaveBeenCalledOnce();
-    const mapped = fixture.submit.mock.calls[0]![0] as IngestDatabaseSubmission;
-    expect(mapped).toMatchObject({
-      codexReportedDates: ["2026-07-13", "2026-07-14"],
-      codexVersion: "1.2.3",
-      connectorVersion: "1.2.3",
-      deviceId,
-      deviceKeyId,
-      observedAt: "2026-07-15T12:00:00.000Z",
-      snapshotId,
-      sourceId,
-      syncId,
-      tokens: [42, 84],
-    });
-    expect(mapped.bodyDigest).toEqual(Buffer.alloc(32, 0x11));
-    expect(mapped.nonceDigest).toEqual(Buffer.alloc(32, 0x22));
-    expect(mapped.signature).toEqual(Buffer.alloc(64, 3));
-    expect(Object.isFrozen(mapped)).toBe(true);
-    expect(Object.isFrozen(mapped.codexReportedDates)).toBe(true);
-    expect(Object.isFrozen(mapped.tokens)).toBe(true);
-    expect(fixture.release).toHaveBeenCalledWith(false);
-  });
-
-  it("maps UsageSyncV1 to the distinct provider-derived procedure input", async () => {
-    const fixture = createFixture();
-    const database = createCommunitySyncDatabase(fixture.pool, () => snapshotId);
-
-    await expect(database.submit(usageVerifiedSubmission())).resolves.toEqual({
-      acceptedEntries: 2,
-      outcome: "accepted",
-    });
-
-    expect(fixture.submit).not.toHaveBeenCalled();
-    expect(fixture.submitUsage).toHaveBeenCalledOnce();
-    const mapped = fixture.submitUsage.mock.calls[0]![0] as IngestDatabaseUsageSubmission;
+    const mapped = fixture.submit.mock.calls[0]![0] as IngestDatabaseUsageSubmission;
     expect(mapped).toMatchObject({
       accountingRevision: codexAccountingRevision,
       agentVersion: "0.144.5",
@@ -378,6 +308,7 @@ describe("Community sync database adapter", () => {
     expect(Object.isFrozen(mapped)).toBe(true);
     expect(Object.isFrozen(mapped.reportedDates)).toBe(true);
     expect(Object.isFrozen(mapped.dailyTokenTotals)).toBe(true);
+    expect(fixture.release).toHaveBeenCalledWith(false);
   });
 
   it.each([
@@ -402,7 +333,7 @@ describe("Community sync database adapter", () => {
 
     await database.submit(verifiedSubmission());
 
-    const mapped = fixture.submit.mock.calls[0]![0] as IngestDatabaseSubmission;
+    const mapped = fixture.submit.mock.calls[0]![0] as IngestDatabaseUsageSubmission;
     expect(mapped.snapshotId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
@@ -445,7 +376,7 @@ describe("Community sync database adapter", () => {
       ...verifiedSubmission(),
       payload: {
         ...(verifiedSubmission().payload as object),
-        dailyEntries: [{ codexReportedDate: "2026-07-13", tokens: 42, extra: true }],
+        dailyEntries: [{ reportedDate: "2026-07-13", dailyTokenTotal: 42, extra: true }],
       },
     },
   ])("rejects malformed verified input before acquiring a connection", async (input) => {
@@ -456,8 +387,8 @@ describe("Community sync database adapter", () => {
     expect(fixture.connect).not.toHaveBeenCalled();
   });
 
-  it("rejects malformed UsageSyncV1 shapes before acquiring a connection", async () => {
-    const base = usageVerifiedSubmission();
+  it("rejects additional malformed UsageSyncV1 shapes before acquiring a connection", async () => {
+    const base = verifiedSubmission();
     const payload = base.payload as Record<string, unknown>;
     const inputs = [
       { ...base, payload: null },
@@ -496,7 +427,7 @@ describe("Community sync database adapter", () => {
     const sparse = verifiedSubmission();
     (sparse.payload as { dailyEntries: unknown[] }).dailyEntries = new Array(1);
     const exotic = verifiedSubmission();
-    const exoticEntries = [{ codexReportedDate: "2026-07-13", tokens: 42 }];
+    const exoticEntries = [{ reportedDate: "2026-07-13", dailyTokenTotal: 42 }];
     Object.setPrototypeOf(exoticEntries, null);
     (exotic.payload as { dailyEntries: unknown[] }).dailyEntries = exoticEntries;
 
@@ -504,10 +435,10 @@ describe("Community sync database adapter", () => {
     const oversized = verifiedSubmission();
     (oversized.payload as { dailyEntries: unknown[] }).dailyEntries = Array.from(
       { length: 32 },
-      (_, index) => ({ codexReportedDate: "2026-07-13", tokens: index }),
+      (_, index) => ({ reportedDate: "2026-07-13", dailyTokenTotal: index }),
     );
     const falseDescriptor = verifiedSubmission();
-    const proxiedEntries = new Proxy([{ codexReportedDate: "2026-07-13", tokens: 42 }], {
+    const proxiedEntries = new Proxy([{ reportedDate: "2026-07-13", dailyTokenTotal: 42 }], {
       getOwnPropertyDescriptor(target, key) {
         const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
         return key === "0" && descriptor !== undefined

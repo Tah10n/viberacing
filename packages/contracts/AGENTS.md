@@ -18,8 +18,8 @@ this workspace's `README.md` before changing a public contract or validator.
   property names, values, bodies, signatures, identifiers, or internal exceptions.
 - Do not add `eval`, dynamic code generation, network schema resolution, remote references, or a
   runtime dependency merely for convenience.
-- `observedAt` is client time for replay checks only. `codexReportedDate` has no claimed timezone,
-  and neither value may control finalization.
+- `observedAt` is client time for replay checks only. `reportedDate` has no claimed timezone, and
+  neither value may control finalization.
 
 ## Required workflow
 

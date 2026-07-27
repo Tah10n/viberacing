@@ -67,10 +67,12 @@ RETURNS TABLE (outcome text, accepted_entries integer)
 LANGUAGE sql
 AS $function$
   SELECT *
-  FROM viberacing_api.submit_community_sync(
+  FROM viberacing_api.submit_usage_sync(
     p_device_key_id,
     p_device_id,
     p_source_id,
+    'codex',
+    'codex_daily_usage_buckets_v1',
     p_usage_snapshot_id,
     p_sync_id,
     p_observed_at,
@@ -825,10 +827,12 @@ SELECT pg_temp.expect_operation_failure(
 
 SELECT pg_temp.expect_operation_failure(
   $sql$
-    SELECT * FROM viberacing_api.submit_community_sync(
+    SELECT * FROM viberacing_api.submit_usage_sync(
       '00000000-0000-4000-8000-000000010401',
       'dev_' || pg_catalog.repeat('A', 22),
       'src_' || pg_catalog.repeat('A', 22),
+      'codex',
+      'codex_daily_usage_buckets_v1',
       '00000000-0000-4000-8000-000000010515',
       'syn_' || pg_catalog.repeat('O', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),
@@ -839,15 +843,17 @@ SELECT pg_temp.expect_operation_failure(
       ARRAY[pg_temp.current_week_date(0)], ARRAY[100]::bigint[]
     )
   $sql$,
-  'invalid connector version fails closed'
+  'invalid client version fails closed'
 );
 
 SELECT pg_temp.expect_operation_failure(
   $sql$
-    SELECT * FROM viberacing_api.submit_community_sync(
+    SELECT * FROM viberacing_api.submit_usage_sync(
       '00000000-0000-4000-8000-000000010401',
       'dev_' || pg_catalog.repeat('A', 22),
       'src_' || pg_catalog.repeat('A', 22),
+      'codex',
+      'codex_daily_usage_buckets_v1',
       '00000000-0000-4000-8000-000000010516',
       'syn_' || pg_catalog.repeat('R', 22),
       pg_catalog.date_trunc('milliseconds', pg_catalog.transaction_timestamp()),

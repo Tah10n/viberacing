@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { verifyAsync as verifyEd25519Strict } from "@noble/ed25519";
-import { validateConnectorSyncV1, validateUsageSyncV1 } from "@viberacing/contracts";
+import { validateUsageSyncV1 } from "@viberacing/contracts";
 import { describe, expect, it } from "vitest";
 
 import { communitySyncHttpPolicy } from "./community-sync-http-server.js";
@@ -9,7 +9,6 @@ import {
   canonicalTimestampMilliseconds,
   communitySyncMediaType,
   communitySyncMethod,
-  communitySyncRequestTarget,
   createDeviceSignatureMessage,
   createOriginProofMessage,
   decodeCanonicalBase64Url,
@@ -43,20 +42,20 @@ import {
   usageSyncRequestTarget,
 } from "./protocol";
 
-describe("canonical Community sync protocol", () => {
+describe("canonical Community usage sync protocol", () => {
   it("matches the language-neutral v1 authentication policy exactly", () => {
     const policy = JSON.parse(
       readFileSync(
-        new URL("../../../contracts/v1/connector-sync-authentication.json", import.meta.url),
+        new URL("../../../contracts/v1/connector-usage-sync-authentication.json", import.meta.url),
         "utf8",
       ),
     ) as unknown;
 
     expect(policy).toEqual({
       schemaVersion: 1,
-      protocolId: "viberacing-community-sync-auth-v1",
+      protocolId: "viberacing-usage-sync-auth-v1",
       method: communitySyncMethod,
-      requestTarget: communitySyncRequestTarget,
+      requestTarget: usageSyncRequestTarget,
       mediaType: communitySyncMediaType,
       maximumBodyBytes: maximumCommunitySyncBodyBytes,
       maximumRawHeaderPairs: maximumCommunitySyncRawHeaderPairs,
@@ -146,18 +145,6 @@ describe("canonical Community sync protocol", () => {
         ],
       },
     });
-
-    const usagePolicy = JSON.parse(
-      readFileSync(
-        new URL("../../../contracts/v1/connector-usage-sync-authentication.json", import.meta.url),
-        "utf8",
-      ),
-    ) as unknown;
-    expect(usagePolicy).toEqual({
-      ...(policy as Readonly<Record<string, unknown>>),
-      protocolId: "viberacing-usage-sync-auth-v1",
-      requestTarget: usageSyncRequestTarget,
-    });
   });
 
   it("accepts only canonical millisecond UTC timestamps", () => {
@@ -199,7 +186,7 @@ describe("canonical Community sync protocol", () => {
         "viberacing-origin-proof-v1",
         "edge_primary",
         "POST",
-        "/v1/community/sync",
+        "/v1/community/usage",
         "digest",
         "2026-07-15T18:00:00.000Z",
         "nonce",
@@ -220,7 +207,7 @@ describe("canonical Community sync protocol", () => {
       [
         "viberacing-device-request-v1",
         "POST",
-        "/v1/community/sync",
+        "/v1/community/usage",
         "digest",
         "dev_AAAAAAAAAAAAAAAAAAAAAA",
         "nonce",
@@ -228,93 +215,6 @@ describe("canonical Community sync protocol", () => {
         "syn_CCCCCCCCCCCCCCCCCCCCCC",
       ].join("\n"),
     );
-  });
-
-  it("binds the separate Usage Sync target into both canonical proofs", () => {
-    expect(
-      createOriginProofMessage({
-        bodyDigestBase64Url: "digest",
-        keyId: "edge_primary",
-        nonce: "nonce",
-        requestTarget: usageSyncRequestTarget,
-        timestamp: "2026-07-15T18:00:00.000Z",
-      }).toString("utf8"),
-    ).toContain("\n/v1/community/usage\n");
-    expect(
-      createDeviceSignatureMessage({
-        bodyDigestBase64Url: "digest",
-        deviceId: "dev_AAAAAAAAAAAAAAAAAAAAAA",
-        idempotencyKey: "syn_CCCCCCCCCCCCCCCCCCCCCC",
-        nonce: "nonce",
-        requestTarget: usageSyncRequestTarget,
-        timestamp: "2026-07-15T18:00:00.000Z",
-      }).toString("utf8"),
-    ).toContain("\n/v1/community/usage\n");
-  });
-
-  it("matches and verifies the shared Rust exact-body device request vector", async () => {
-    const vector = JSON.parse(
-      readFileSync(
-        new URL(
-          "../../../contracts/v1/connector-sync-device-request.test-vector.json",
-          import.meta.url,
-        ),
-        "utf8",
-      ),
-    ) as Readonly<{
-      body: string;
-      bodyDigestBase64Url: string;
-      deviceId: string;
-      deviceNonceBase64Url: string;
-      deviceNonceBytes: readonly number[];
-      devicePublicKeyBase64Url: string;
-      deviceSignatureBase64Url: string;
-      deviceSignatureMessage: string;
-      observedAt: string;
-      schemaVersion: number;
-      sourceId: string;
-      syncId: string;
-    }>;
-    const body = Buffer.from(vector.body, "utf8");
-    const parsedBody = JSON.parse(vector.body) as unknown;
-
-    expect(vector.schemaVersion).toBe(1);
-    expect(vector.deviceNonceBytes).toHaveLength(deviceNonceBytes);
-    expect(validateConnectorSyncV1(parsedBody).ok).toBe(true);
-    expect(body.byteLength).toBeLessThanOrEqual(maximumCommunitySyncBodyBytes);
-    expect(digestBody(body).base64Url).toBe(vector.bodyDigestBase64Url);
-    expect(Buffer.from(vector.deviceNonceBytes).toString("base64url")).toBe(
-      vector.deviceNonceBase64Url,
-    );
-    expect(
-      createDeviceSignatureMessage({
-        bodyDigestBase64Url: vector.bodyDigestBase64Url,
-        deviceId: vector.deviceId,
-        idempotencyKey: vector.syncId,
-        nonce: vector.deviceNonceBase64Url,
-        timestamp: vector.observedAt,
-      }).toString("utf8"),
-    ).toBe(vector.deviceSignatureMessage);
-    expect((parsedBody as Readonly<{ sourceId?: unknown }>).sourceId).toBe(vector.sourceId);
-
-    const publicKey = decodeCanonicalBase64Url(
-      vector.devicePublicKeyBase64Url,
-      devicePublicKeyBytes,
-    );
-    const signature = decodeCanonicalBase64Url(
-      vector.deviceSignatureBase64Url,
-      deviceSignatureBytes,
-    );
-    if (publicKey === undefined || signature === undefined) {
-      throw new Error("shared device signature vector must use canonical fixed-length values");
-    }
-    const message = Buffer.from(vector.deviceSignatureMessage, "utf8");
-    expect(await verifyEd25519Strict(signature, message, publicKey, { zip215: false })).toBe(true);
-    expect(
-      await verifyEd25519Strict(signature, Buffer.concat([message, Buffer.from("\n")]), publicKey, {
-        zip215: false,
-      }),
-    ).toBe(false);
   });
 
   it("matches and verifies the shared Rust UsageSyncV1 device request vector", async () => {
@@ -357,7 +257,6 @@ describe("canonical Community sync protocol", () => {
         deviceId: vector.deviceId,
         idempotencyKey: vector.syncId,
         nonce: vector.deviceNonceBase64Url,
-        requestTarget: usageSyncRequestTarget,
         timestamp: vector.observedAt,
       }).toString("utf8"),
     ).toBe(vector.deviceSignatureMessage);
@@ -374,14 +273,13 @@ describe("canonical Community sync protocol", () => {
     if (publicKey === undefined || signature === undefined) {
       throw new Error("shared usage signature vector must use canonical fixed-length values");
     }
+    const message = Buffer.from(vector.deviceSignatureMessage, "utf8");
+    expect(await verifyEd25519Strict(signature, message, publicKey, { zip215: false })).toBe(true);
     expect(
-      await verifyEd25519Strict(
-        signature,
-        Buffer.from(vector.deviceSignatureMessage, "utf8"),
-        publicKey,
-        { zip215: false },
-      ),
-    ).toBe(true);
+      await verifyEd25519Strict(signature, Buffer.concat([message, Buffer.from("\n")]), publicKey, {
+        zip215: false,
+      }),
+    ).toBe(false);
   });
 
   it("keeps protocol identifiers inside their closed alphabets", () => {

@@ -60,7 +60,7 @@ rereads an exact ledger prefix, and applies only remaining reviewed SQL bodies b
 complete ledger. A separate opt-in synthetic integration runs a widened-login emitted process and
 two narrow-login emitted processes against one disposable certificate-verified PostgreSQL database.
 It proves widened-login denial before schema creation, observes both narrow controllers behind one
-external holder, requires both to converge successfully after release, and verifies the exact 42-row
+external holder, requires both to converge successfully after release, and verifies the exact 43-row
 ledger, all 28 forced-RLS private tables, identity invariants, TLS, and connection/lock cleanup. It
 has no production credential/TLS, deployed replica, staging orchestration/rollback, monitoring,
 deployment, or recovery result. A checked staging migration and forward-recovery runbook now binds
@@ -232,26 +232,29 @@ A second checked local Agent Skill now selects only repository-owned read-only v
 real Git scope, distinguishes focused, root, staged, history, synthetic, and live evidence, and has
 no edit, staging, commit, installation, network, publication, push, or deployment authority.
 
-A dependency-free local Cloudflare Worker now always accepts the exact legacy Community sync route
-and accepts the additive Usage Sync route only after exact independent enablement. It preserves the
-device-signed body, rejects caller-supplied origin authority, and adds one fresh path/body-bound
-HMAC before one no-retry HTTPS origin request. Twenty local Fetch/Web Crypto tests and one
-production-Ingest verifier compatibility gate cover the boundary. Revision 0041 adds immutable exact
-`codex`/`codex_daily_usage_buckets_v1` source attribution, extends the Ingest device lookup, and
-adds one Ingest-only provider-attributed wrapper over the unchanged mature submission procedure.
-`UsageSyncV1` contains no provider field; Edge and Ingest keep its separate route absent unless
-`VIBERACING_USAGE_SYNC_ENABLED=true`, while the legacy route remains available. Unit, contract, and
-disposable PostgreSQL evidence proves exact path binding, relabel rejection, source backfill, and
-stored field mapping. Revision 0042, a fourth public route, and the EN/RU token-first browser
-consumer implement a direct Codex Community token leaderboard locally. This proves no second
-provider reader, thin client, onboarding, production value, external route, credential, or
-deployment. Separate pinned production images and Railway configurations package the Web preview,
-Ingest host, Jobs scheduler, and one-shot migration runner. They prove local builds and closed
-startup only; no compatible hosted PostgreSQL, Cloudflare route/secret, Railway service, external
-TLS path, direct-origin result, monitoring, capacity, real user, or deployment is claimed. A
-separate checked stable-release workflow serializes Migration, Web, Ingest, Jobs, and Edge source
-replacement after secretless verification and protected-environment approval. It contains no
-credential and proves no hosted environment, service, route, migration, or deployment.
+A dependency-free local Cloudflare Worker accepts only the exact Usage Sync route after exact
+independent enablement. It preserves the device-signed body, rejects caller-supplied origin
+authority, and adds one fresh path/body-bound HMAC before one no-retry HTTPS origin request. Twenty
+local Fetch/Web Crypto tests and one production-Ingest verifier compatibility gate cover the
+boundary. Revision 0041 adds immutable exact `codex`/`codex_daily_usage_buckets_v1` source
+attribution, extends the Ingest device lookup, and adds one Ingest-only provider-attributed wrapper
+over the unchanged mature submission procedure. `UsageSyncV1` contains no provider field; Edge and
+Ingest keep the sole route absent unless `VIBERACING_USAGE_SYNC_ENABLED=true`. The unreleased
+`ConnectorSyncV1` contract and `/v1/community/sync` route are removed rather than retained for a
+nonexistent migration population. Revision 0043 revokes direct runtime-role execution of the
+owner-internal legacy submission function, leaving `submit_usage_sync` as the only runtime
+capability. Unit, contract, and disposable PostgreSQL evidence proves exact path binding, legacy
+path rejection, relabel rejection, source backfill, and stored field mapping. Revision 0042, a
+fourth public route, and the EN/RU token-first browser consumer implement a direct Codex Community
+token leaderboard locally. This proves no second provider reader, thin client, onboarding,
+production value, external route, credential, or deployment. Separate pinned production images and
+Railway configurations package the Web preview, Ingest host, Jobs scheduler, and one-shot migration
+runner. They prove local builds and closed startup only; no compatible hosted PostgreSQL, Cloudflare
+route/secret, Railway service, external TLS path, direct-origin result, monitoring, capacity, real
+user, or deployment is claimed. A separate checked stable-release workflow serializes Migration,
+Web, Ingest, Jobs, and Edge source replacement after secretless verification and
+protected-environment approval. It contains no credential and proves no hosted environment, service,
+route, migration, or deployment.
 
 A separate checked profile-deletion failure rehearsal runbook binds the atomic Web request,
 Jobs-only maximum-ten purge, separate 30-day terminal retention, scheduler catalog, and existing
@@ -475,7 +478,7 @@ replay, real-user deletion, recovery, or deployment.
 - `pnpm run test:migrate:postgres-integration` builds the emitted migration entry point, creates one
   disposable certificate-verified PostgreSQL database plus synthetic narrow and widened logins,
   proves widened-login denial before schema mutation, observes two narrow controllers behind one
-  external advisory-lock holder, and requires both to converge on the exact 42-row ledger and 28
+  external advisory-lock holder, and requires both to converge on the exact 43-row ledger and 28
   forced-RLS private tables before checking identity invariants and resource cleanup. It proves no
   production credential/TLS, deployed replica, staging rollout/rollback, monitoring, deployment, or
   recovery.

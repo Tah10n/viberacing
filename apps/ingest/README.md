@@ -2,23 +2,21 @@
 
 This private TypeScript workspace implements local application boundaries for Community sync
 requests. The verification kernel validates a bounded raw request, verifies a fresh replay-consumed
-edge proof, parses JSON without losing duplicate-key evidence, validates either `ConnectorSyncV1` or
-the separate `UsageSyncV1` selected by the exact path, reads minimal device verification material
-plus server-owned provider/accounting attribution through an injected capability, and verifies the
-canonical Ed25519 device signature. The database adapter can atomically consume that origin nonce,
-provide the device lookup, and submit only the verified allowlist through least-privileged
-PostgreSQL procedures. A transport-free application boundary composes those exact capabilities,
-creates one server-owned request ID before verification, waits for submission settlement, and
-returns only a validated matching sync result or generic `ProblemDetailsV1` decision. A separate
-Fastify server factory exposes the legacy operation and registers the additive Usage Sync operation
-only after exact host enablement, without adding a deployment entry point to this workspace. The
-separate `apps/ingest-host` workspace now consumes only those reviewed factories for closed listener
-configuration, one bind call, and bounded process shutdown.
+edge proof, parses JSON without losing duplicate-key evidence, validates `UsageSyncV1` on its exact
+path, reads minimal device verification material plus server-owned provider/accounting attribution
+through an injected capability, and verifies the canonical Ed25519 device signature. The database
+adapter can atomically consume that origin nonce, provide the device lookup, and submit only the
+verified allowlist through least-privileged PostgreSQL procedures. A transport-free application
+boundary composes those exact capabilities, creates one server-owned request ID before verification,
+waits for submission settlement, and returns only a validated matching sync result or generic
+`ProblemDetailsV1` decision. A separate Fastify server factory registers only the Usage Sync
+operation after exact host enablement, without adding a deployment entry point to this workspace.
+The separate `apps/ingest-host` workspace now consumes only those reviewed factories for closed
+listener configuration, one bind call, and bounded process shutdown.
 
-The language-neutral wire policies are
-[`connector-sync-authentication.json`](../../contracts/v1/connector-sync-authentication.json) and
+The language-neutral wire policy is
 [`connector-usage-sync-authentication.json`](../../contracts/v1/connector-usage-sync-authentication.json).
-Both proof messages use UTF-8 fields separated by one LF and no trailing LF. Both bind the SHA-256
+Its proof messages use UTF-8 fields separated by one LF and no trailing LF. Both bind the SHA-256
 digest of the exact received body bytes. The device timestamp and idempotency header must exactly
 match `observedAt` and `syncId` in the validated body.
 
@@ -50,34 +48,34 @@ non-reflective internal problem. Accepted, duplicate, and quarantined acknowledg
 the request ID, sync ID, coarse outcome, and accepted count. The application creates no `Response`,
 HTTP header, socket, log, cache, or retained request-ID copy.
 
-The HTTP factory always registers exact `POST /v1/community/sync`; it registers exact
-`POST /v1/community/usage` only when passed the boolean enable decision. Both share the same
-admission ceiling and closed 404/405 handling. It removes default content parsers, accepts at most
-8192 raw JSON bytes, and gives the verifier a copy of those exact bytes and the original raw-header
-sequence. It does not trust forwarded headers or an inbound request ID, disables framework logging,
-admits four unsettled application calls without a queue, and binds 5/33/34-second
+The HTTP factory registers exact `POST /v1/community/usage` only when passed the boolean enable
+decision. The removed `/v1/community/sync` path receives the same closed 404 response before
+application or storage work. The server removes default content parsers, accepts at most 8192 raw
+JSON bytes, and gives the verifier a copy of those exact bytes and the original raw-header sequence.
+It does not trust forwarded headers or an inbound request ID, disables framework logging, admits
+four unsettled application calls without a queue, and binds 5/33/34-second
 request/handler/connection deadlines, 32 connections, 16 requests per socket, 16384 parsed header
 bytes, and 64 raw header pairs. A bounded JSON `Accept` grammar, same-origin/no-CORS posture,
 `no-store`, `Vary: Accept`, `nosniff`, generic errors, CSPRNG request IDs, and final
 generated-contract validation apply before serialization. Malformed HTTP framing uses the same
 generic problem shape or closes the socket if safe serialization is impossible.
 
-The canonical manifest and generated OpenAPI describe both implemented-local POSTs alongside the
-public reads. They bind the exact request/result/problem schemas, problem matrix, shared no-queue
-policy, and separate authentication policies; documentation does not imply deployment.
+The canonical manifest and generated OpenAPI describe the sole implemented-local Usage Sync POST
+alongside the public reads. They bind the exact request/result/problem schemas, problem matrix,
+no-queue policy, and authentication policy; documentation does not imply deployment.
 
 The focused tests use synthetic keys and mock pools; one signed request exercises the actual
 verifier and database adapter together, while the isolated PostgreSQL suite separately proves
 persistent atomic consume and cleanup races. Loopback socket tests prove malformed framing,
 duplicate-header evidence, partial-request closure, and active-listener drain; injection tests prove
-the remaining route, overload, timeout policy, and serialization behavior. The current 446-test
+the remaining route, overload, timeout policy, and serialization behavior. The current 441-test
 Ingest suite has 100% statement, branch, function, and line coverage. This workspace still owns no
 listener or process lifecycle; the separate host's 132 local tests prove only its closed
 configuration, composition, bind, and shutdown behavior. A separate opt-in root integration builds
 the emitted host, creates a synthetic dedicated Ingest login in disposable PostgreSQL, sends
-independently composed signed loopback requests, and proves legacy plus Usage Sync acceptance,
-duplicate, persistent replay denial, revoked-device denial, closed response headers, and exact
-stored state. A controlled owner lock additionally holds four valid requests at
+independently composed signed loopback requests, and proves Usage Sync acceptance, legacy-path
+rejection, duplicate, persistent replay denial, revoked-device denial, closed response headers, and
+exact stored state. A controlled owner lock additionally holds four valid requests at
 `consume_origin_nonce`, proves a fifth receives generic 503 without a fifth replay call, and then
 proves the first four accept after release. After the imported host closes, the gate starts the
 built host entry point as a silent child, proves a separate accepted request through its listener,

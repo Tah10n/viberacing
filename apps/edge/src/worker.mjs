@@ -1,5 +1,4 @@
 const syncMethod = "POST";
-const connectorSyncRequestTarget = "/v1/community/sync";
 const usageSyncRequestTarget = "/v1/community/usage";
 const syncMediaType = "application/json";
 const maximumBodyBytes = 8_192;
@@ -299,10 +298,7 @@ function validateRequest(request, environment) {
     throw new EdgeRequestError(404, "not_found");
   }
   const requestTarget = url.pathname;
-  if (
-    requestTarget !== connectorSyncRequestTarget &&
-    (requestTarget !== usageSyncRequestTarget || !usageSyncIsEnabled(environment))
-  ) {
+  if (requestTarget !== usageSyncRequestTarget || !usageSyncIsEnabled(environment)) {
     throw new EdgeRequestError(404, "not_found");
   }
   if (request.method !== syncMethod) {

@@ -55,7 +55,7 @@ export {
   type IngestDatabasePool,
   type IngestDatabasePoolSignal,
   type IngestDatabasePoolSignalSink,
-  type IngestDatabaseSubmission,
+  type IngestDatabaseUsageSubmission,
 } from "./database-pool.js";
 export {
   OriginProofConfigurationError,

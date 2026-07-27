@@ -24,7 +24,7 @@ describe("Admin dependency boundary lint policy", () => {
         message === "Only database-pool.ts may import the PostgreSQL driver.",
     );
     expect(restrictions).toHaveLength(5);
-  }, 15_000);
+  }, 30_000);
 
   it("rejects every JOSE import outside the fixed Access verifier", async () => {
     const eslint = new ESLint({ cwd: resolve(import.meta.dirname, "..") });
@@ -46,5 +46,5 @@ describe("Admin dependency boundary lint policy", () => {
         message === "Only access-verifier.ts may import the JOSE verifier.",
     );
     expect(restrictions).toHaveLength(5);
-  }, 15_000);
+  }, 30_000);
 });

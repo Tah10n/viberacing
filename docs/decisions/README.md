@@ -78,11 +78,12 @@ what it costs, how it is verified, and how it can be replaced.
 | [0067](0067-bounded-admin-access-membership-verifier.md)        | Bounded Admin Access and membership verifier                         | Accepted; local verifier; passkey/host pending         |
 | [0068](0068-multi-agent-token-leaderboard-and-mcp.md)           | Multi-agent token accounting and leaderboard                         | Proposed; direct total, thin primary, optional MCP     |
 | [0069](0069-thin-client-and-low-friction-onboarding.md)         | Thin auditable multi-agent client and low-friction hybrid onboarding | Proposed; direction only; subsystem ADRs pending       |
-| [0070](0070-dependency-free-cloudflare-ingest-origin-signer.md) | Dependency-free Cloudflare Ingest origin signer                      | Accepted; local Worker; deployment pending             |
-| [0071](0071-provider-attributed-usage-sync-foundation.md)       | Provider-attributed UsageSyncV1 foundation                           | Accepted; local Codex slice; deployment pending        |
+| [0070](0070-dependency-free-cloudflare-ingest-origin-signer.md) | Dependency-free Cloudflare Ingest origin signer                      | Superseded by ADR 0075                                 |
+| [0071](0071-provider-attributed-usage-sync-foundation.md)       | Provider-attributed UsageSyncV1 foundation                           | Superseded by ADR 0075                                 |
 | [0072](0072-direct-community-token-leaderboard.md)              | Direct Community token leaderboard                                   | Accepted; local Codex beta; deployment pending         |
-| [0073](0073-candidate-connector-usage-sync-cutover.md)          | Candidate connector UsageSyncV1 cutover                              | Accepted; local candidate; release/deployment pending  |
+| [0073](0073-candidate-connector-usage-sync-cutover.md)          | Candidate connector UsageSyncV1 cutover                              | Superseded by ADR 0075                                 |
 | [0074](0074-release-driven-protected-service-deployment.md)     | Release-driven protected service deployment                          | Accepted; checked workflow; hosted execution pending   |
+| [0075](0075-single-unreleased-usage-sync-protocol.md)           | Single unreleased Usage Sync protocol                                | Accepted; local implementation; deployment pending     |
 
 ## Lifecycle
 

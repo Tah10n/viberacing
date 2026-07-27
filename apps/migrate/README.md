@@ -74,7 +74,7 @@ and creates one disposable TLS-enabled PostgreSQL container with an ephemeral lo
 synthetic narrow and deliberately widened logins. It requires the widened emitted process to fail
 generically before application-schema creation, then observes two narrow emitted processes waiting
 behind one external holder of the fixed advisory key. After release, both processes must emit the
-exact generic success, the ledger must equal all 42 reviewed revisions, all 28 private tables must
+exact generic success, the ledger must equal all 43 reviewed revisions, all 28 private tables must
 remain owner-owned with forced RLS, the identity invariant oracle must pass, and every controller
 connection and lock must be gone. The gate removes its generated certificate/key, container,
 network, and storage and never touches the normal local database volume.

@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import {
-  validateConnectorSyncV1,
-  validateUsageSyncV1,
-  type ConnectorSyncV1,
-  type UsageSyncV1,
-} from "@viberacing/contracts";
+import { validateUsageSyncV1, type UsageSyncV1 } from "@viberacing/contracts";
 
 import {
   createIngestDatabasePool,
@@ -13,7 +8,6 @@ import {
   type IngestDatabaseOriginNonce,
   type IngestDatabasePool,
   type IngestDatabasePoolSignalSink,
-  type IngestDatabaseSubmission,
   type IngestDatabaseUsageSubmission,
 } from "./database-pool.js";
 import { resolveIngestDatabaseConfig } from "./database-config.js";
@@ -23,7 +17,6 @@ import type {
 } from "./community-sync-verifier.js";
 import { codexAccountingRevision, codexProvider } from "./community-sync-verifier.js";
 import {
-  communitySyncRequestTarget,
   decodeCanonicalBase64Url,
   deviceIdPattern,
   devicePublicKeyBytes,
@@ -45,15 +38,6 @@ const verifiedSubmissionKeys = new Set([
   "requestTarget",
   "signatureBase64Url",
 ]);
-const connectorPayloadKeys = new Set([
-  "codexVersion",
-  "connectorVersion",
-  "dailyEntries",
-  "observedAt",
-  "schemaVersion",
-  "sourceId",
-  "syncId",
-]);
 const usagePayloadKeys = new Set([
   "agentVersion",
   "clientVersion",
@@ -63,7 +47,6 @@ const usagePayloadKeys = new Set([
   "sourceId",
   "syncId",
 ]);
-const dailyEntryKeys = new Set(["codexReportedDate", "tokens"]);
 const usageDailyEntryKeys = new Set(["dailyTokenTotal", "reportedDate"]);
 const deviceRowKeys = new Set([
   "accounting_revision",
@@ -125,9 +108,9 @@ interface ValidatedSubmission {
   readonly deviceId: string;
   readonly deviceKeyId: string;
   readonly nonceDigest: Buffer;
-  readonly payload: ConnectorSyncV1 | UsageSyncV1;
+  readonly payload: UsageSyncV1;
   readonly provider: typeof codexProvider;
-  readonly requestTarget: typeof communitySyncRequestTarget | typeof usageSyncRequestTarget;
+  readonly requestTarget: typeof usageSyncRequestTarget;
   readonly signature: Buffer;
 }
 
@@ -228,51 +211,6 @@ function readDenseArray(value: unknown, maximumLength: number): unknown[] {
   return copy;
 }
 
-function readConnectorPayload(value: unknown): ConnectorSyncV1 {
-  if (!isPlainRecord(value) || !hasExactKeys(value, connectorPayloadKeys)) {
-    fail("input_invalid");
-  }
-  const rawEntries = readDenseArray(ownDataValue(value, "dailyEntries", "input_invalid"), 31);
-  const dailyEntries = rawEntries.map((entry) => {
-    if (!isPlainRecord(entry) || !hasExactKeys(entry, dailyEntryKeys)) {
-      fail("input_invalid");
-    }
-    return {
-      codexReportedDate: ownDataValue(entry, "codexReportedDate", "input_invalid"),
-      tokens: ownDataValue(entry, "tokens", "input_invalid"),
-    };
-  });
-  const candidate = {
-    codexVersion: ownDataValue(value, "codexVersion", "input_invalid"),
-    connectorVersion: ownDataValue(value, "connectorVersion", "input_invalid"),
-    dailyEntries,
-    observedAt: ownDataValue(value, "observedAt", "input_invalid"),
-    schemaVersion: ownDataValue(value, "schemaVersion", "input_invalid"),
-    sourceId: ownDataValue(value, "sourceId", "input_invalid"),
-    syncId: ownDataValue(value, "syncId", "input_invalid"),
-  };
-  const validation = validateConnectorSyncV1(candidate);
-  if (!validation.ok) {
-    fail("input_invalid");
-  }
-  return Object.freeze({
-    codexVersion: validation.value.codexVersion,
-    connectorVersion: validation.value.connectorVersion,
-    dailyEntries: Object.freeze(
-      validation.value.dailyEntries.map((entry) =>
-        Object.freeze({
-          codexReportedDate: entry.codexReportedDate,
-          tokens: entry.tokens,
-        }),
-      ),
-    ),
-    observedAt: validation.value.observedAt,
-    schemaVersion: 1,
-    sourceId: validation.value.sourceId,
-    syncId: validation.value.syncId,
-  });
-}
-
 function readUsagePayload(value: unknown): UsageSyncV1 {
   if (!isPlainRecord(value) || !hasExactKeys(value, usagePayloadKeys)) {
     fail("input_invalid");
@@ -338,13 +276,10 @@ function readVerifiedSubmission(value: unknown): ValidatedSubmission {
     const nonceDigest = decodeHex(ownDataValue(value, "nonceDigestHex", "input_invalid"));
     const provider = ownDataValue(value, "provider", "input_invalid");
     const requestTarget = ownDataValue(value, "requestTarget", "input_invalid");
-    if (requestTarget !== usageSyncRequestTarget && requestTarget !== communitySyncRequestTarget) {
+    if (requestTarget !== usageSyncRequestTarget) {
       fail("input_invalid");
     }
-    const payload =
-      requestTarget === usageSyncRequestTarget
-        ? readUsagePayload(ownDataValue(value, "payload", "input_invalid"))
-        : readConnectorPayload(ownDataValue(value, "payload", "input_invalid"));
+    const payload = readUsagePayload(ownDataValue(value, "payload", "input_invalid"));
     const signatureValue = ownDataValue(value, "signatureBase64Url", "input_invalid");
     const signature =
       typeof signatureValue === "string"
@@ -596,53 +531,24 @@ function createSnapshotId(factory: SnapshotIdFactory): string {
 function toDatabaseSubmission(
   submission: ValidatedSubmission,
   snapshotId: string,
-):
-  | Readonly<{ kind: "connector"; value: IngestDatabaseSubmission }>
-  | Readonly<{ kind: "usage"; value: IngestDatabaseUsageSubmission }> {
-  if (submission.requestTarget === usageSyncRequestTarget) {
-    const payload = submission.payload as UsageSyncV1;
-    return Object.freeze({
-      kind: "usage",
-      value: Object.freeze({
-        accountingRevision: submission.accountingRevision,
-        agentVersion: payload.agentVersion,
-        bodyDigest: Buffer.from(submission.bodyDigest),
-        clientVersion: payload.clientVersion,
-        dailyTokenTotals: Object.freeze(payload.dailyEntries.map((entry) => entry.dailyTokenTotal)),
-        deviceId: submission.deviceId,
-        deviceKeyId: submission.deviceKeyId,
-        nonceDigest: Buffer.from(submission.nonceDigest),
-        observedAt: payload.observedAt,
-        provider: submission.provider,
-        reportedDates: Object.freeze(payload.dailyEntries.map((entry) => entry.reportedDate)),
-        signature: Buffer.from(submission.signature),
-        snapshotId,
-        sourceId: payload.sourceId,
-        syncId: payload.syncId,
-      }),
-    });
-  }
-
-  const payload = submission.payload as ConnectorSyncV1;
+): IngestDatabaseUsageSubmission {
+  const payload = submission.payload;
   return Object.freeze({
-    kind: "connector",
-    value: Object.freeze({
-      bodyDigest: Buffer.from(submission.bodyDigest),
-      codexReportedDates: Object.freeze(
-        payload.dailyEntries.map((entry) => entry.codexReportedDate),
-      ),
-      codexVersion: payload.codexVersion,
-      connectorVersion: payload.connectorVersion,
-      deviceId: submission.deviceId,
-      deviceKeyId: submission.deviceKeyId,
-      nonceDigest: Buffer.from(submission.nonceDigest),
-      observedAt: payload.observedAt,
-      signature: Buffer.from(submission.signature),
-      snapshotId,
-      sourceId: payload.sourceId,
-      syncId: payload.syncId,
-      tokens: Object.freeze(payload.dailyEntries.map((entry) => entry.tokens)),
-    }),
+    accountingRevision: submission.accountingRevision,
+    agentVersion: payload.agentVersion,
+    bodyDigest: Buffer.from(submission.bodyDigest),
+    clientVersion: payload.clientVersion,
+    dailyTokenTotals: Object.freeze(payload.dailyEntries.map((entry) => entry.dailyTokenTotal)),
+    deviceId: submission.deviceId,
+    deviceKeyId: submission.deviceKeyId,
+    nonceDigest: Buffer.from(submission.nonceDigest),
+    observedAt: payload.observedAt,
+    provider: submission.provider,
+    reportedDates: Object.freeze(payload.dailyEntries.map((entry) => entry.reportedDate)),
+    signature: Buffer.from(submission.signature),
+    snapshotId,
+    sourceId: payload.sourceId,
+    syncId: payload.syncId,
   });
 }
 
@@ -673,9 +579,7 @@ export function createCommunitySyncDatabase(
       const databaseSubmission = toDatabaseSubmission(submission, snapshotId);
       return withClient(pool, async (client) =>
         readSubmissionResult(
-          databaseSubmission.kind === "usage"
-            ? await client.submitUsageSync(databaseSubmission.value)
-            : await client.submitCommunitySync(databaseSubmission.value),
+          await client.submitUsageSync(databaseSubmission),
           submission.payload.dailyEntries.length,
         ),
       );

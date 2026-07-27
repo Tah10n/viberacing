@@ -16,10 +16,10 @@ const { codexAccountingRevision, codexProvider } = await import(ingestVerifierUr
 const {
   communitySyncMediaType,
   communitySyncMethod,
-  communitySyncRequestTarget,
   createDeviceSignatureMessage,
   digestBody,
   headerNames,
+  usageSyncRequestTarget,
 } = await import(ingestProtocolUrl.href);
 const { handleIngestEdgeRequest } = await import(edgeWorkerUrl.href);
 
@@ -43,9 +43,9 @@ const body = Buffer.from(
     sourceId,
     syncId,
     observedAt: deviceTimestamp,
-    connectorVersion: "0.0.0",
-    codexVersion: "0.144.5",
-    dailyEntries: [{ codexReportedDate: "2026-07-26", tokens: 123 }],
+    clientVersion: "0.0.0",
+    agentVersion: "0.144.5",
+    dailyEntries: [{ reportedDate: "2026-07-26", dailyTokenTotal: 123 }],
   }),
   "utf8",
 );
@@ -56,7 +56,7 @@ const signature = sign(
     deviceId,
     idempotencyKey: syncId,
     nonce: deviceNonce,
-    requestTarget: communitySyncRequestTarget,
+    requestTarget: usageSyncRequestTarget,
     timestamp: deviceTimestamp,
   }),
   keyPair.privateKey,
@@ -85,7 +85,7 @@ const verifier = createCommunitySyncVerifier({
 let verified;
 let entropyCall = 0;
 const response = await handleIngestEdgeRequest(
-  new Request(`https://sync.example.com${communitySyncRequestTarget}`, {
+  new Request(`https://sync.example.com${usageSyncRequestTarget}`, {
     body,
     headers: {
       "content-type": communitySyncMediaType,
@@ -101,10 +101,11 @@ const response = await handleIngestEdgeRequest(
     VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL: originKey.toString("base64url"),
     VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID: originKeyId,
     VIBERACING_INGEST_ORIGIN_URL: "https://ingest.example.com",
+    VIBERACING_USAGE_SYNC_ENABLED: "true",
   },
   {
     async fetch(url, options) {
-      assert.equal(url, `https://ingest.example.com${communitySyncRequestTarget}`);
+      assert.equal(url, `https://ingest.example.com${usageSyncRequestTarget}`);
       assert.equal(options.method, communitySyncMethod);
       assert.deepEqual(Buffer.from(options.body), body);
       const rawHeaders = [];
@@ -115,7 +116,7 @@ const response = await handleIngestEdgeRequest(
         method: options.method,
         rawBody: Buffer.from(options.body),
         rawHeaders,
-        requestTarget: communitySyncRequestTarget,
+        requestTarget: usageSyncRequestTarget,
       });
       return new Response(
         JSON.stringify({

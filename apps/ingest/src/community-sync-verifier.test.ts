@@ -16,7 +16,6 @@ import {
 import {
   communitySyncMediaType,
   communitySyncMethod,
-  communitySyncRequestTarget,
   type CommunitySyncRequestTarget,
   createDeviceSignatureMessage,
   createOriginProofMessage,
@@ -82,21 +81,6 @@ function validPayload(): Readonly<Record<string, unknown>> {
     sourceId,
     syncId,
     observedAt,
-    connectorVersion: "1.2.3",
-    codexVersion: "2.3.4",
-    dailyEntries: [
-      { codexReportedDate: "2026-07-14", tokens: 123 },
-      { codexReportedDate: "2026-07-15", tokens: 456 },
-    ],
-  };
-}
-
-function validUsagePayload(): Readonly<Record<string, unknown>> {
-  return {
-    schemaVersion: 1,
-    sourceId,
-    syncId,
-    observedAt,
     clientVersion: "1.2.3",
     agentVersion: "0.144.5",
     dailyEntries: [
@@ -125,7 +109,7 @@ function buildRequest(options: RequestOptions = {}): RawRequest {
   const selectedOriginKeyId = options.originKeyId ?? originKeyId;
   const selectedOriginNonce = options.originNonce ?? originNonce;
   const selectedOriginTimestamp = options.originTimestamp ?? observedAt;
-  const selectedRequestTarget = options.requestTarget ?? communitySyncRequestTarget;
+  const selectedRequestTarget = options.requestTarget ?? usageSyncRequestTarget;
   const bodyDigest = digestBody(body).base64Url;
   const signature =
     options.signature ??
@@ -431,7 +415,8 @@ describe("Community sync raw request boundary", () => {
     null,
     [],
     { ...buildRequest(), method: "GET" },
-    { ...buildRequest(), requestTarget: "/v1/community/sync?extra=1" },
+    { ...buildRequest(), requestTarget: "/v1/community/sync" as never },
+    { ...buildRequest(), requestTarget: "/v1/community/usage?extra=1" as never },
     { ...buildRequest(), extra: true },
     { method: communitySyncMethod },
     { ...buildRequest(), rawBody: "{}" },
@@ -624,7 +609,7 @@ describe("Community sync body and device verification", () => {
         .digest("hex"),
       payload: validPayload(),
       provider: codexProvider,
-      requestTarget: communitySyncRequestTarget,
+      requestTarget: usageSyncRequestTarget,
       signatureBase64Url: headerValue(request, headerNames.deviceSignature),
     });
     expect(Object.isFrozen(result)).toBe(true);
@@ -649,28 +634,6 @@ describe("Community sync body and device verification", () => {
     expect(harness.now).toHaveBeenCalledOnce();
   });
 
-  it("accepts UsageSyncV1 only with the new path bound into both proofs", async () => {
-    const request = buildRequest({
-      payload: validUsagePayload(),
-      requestTarget: usageSyncRequestTarget,
-    });
-    const result = await createHarness().verifier.verify(request);
-
-    expect(result).toMatchObject({
-      accountingRevision: codexAccountingRevision,
-      payload: validUsagePayload(),
-      provider: codexProvider,
-      requestTarget: usageSyncRequestTarget,
-    });
-
-    const pathConfused = buildRequest({
-      payload: validUsagePayload(),
-      requestTarget: usageSyncRequestTarget,
-    });
-    pathConfused.requestTarget = communitySyncRequestTarget;
-    await expectFailure(createHarness().verifier.verify(pathConfused), "origin_rejected");
-  });
-
   it("accepts a whitespace-padded body at the exact raw-byte ceiling", async () => {
     const encoded = Buffer.from(JSON.stringify(validPayload()), "utf8");
     const body = Buffer.concat([
@@ -691,30 +654,22 @@ describe("Community sync body and device verification", () => {
       JSON.stringify({
         ...validPayload(),
         dailyEntries: [
-          { codexReportedDate: "2026-07-15", tokens: 1 },
-          { codexReportedDate: "2026-07-15", tokens: 2 },
+          { reportedDate: "2026-07-15", dailyTokenTotal: 1 },
+          { reportedDate: "2026-07-15", dailyTokenTotal: 2 },
         ],
+      }),
+      "utf8",
+    ),
+    Buffer.from(
+      JSON.stringify({
+        ...validPayload(),
+        dailyEntries: [{ reportedDate: "2026-07-14", dailyTokenTotal: -1 }],
       }),
       "utf8",
     ),
   ])("maps malformed or contract-invalid bodies to one stable failure", async (rawBody) => {
     const harness = createHarness();
     await expectFailure(harness.verifier.verify(buildRequest({ rawBody })), "invalid_body");
-    expect(harness.consumeOriginNonce).toHaveBeenCalledOnce();
-    expect(harness.readDeviceVerificationMaterial).not.toHaveBeenCalled();
-  });
-
-  it("maps a contract-invalid UsageSyncV1 body to the same stable failure", async () => {
-    const harness = createHarness();
-    const payload = {
-      ...validUsagePayload(),
-      dailyEntries: [{ dailyTokenTotal: -1, reportedDate: "2026-07-14" }],
-    };
-
-    await expectFailure(
-      harness.verifier.verify(buildRequest({ payload, requestTarget: usageSyncRequestTarget })),
-      "invalid_body",
-    );
     expect(harness.consumeOriginNonce).toHaveBeenCalledOnce();
     expect(harness.readDeviceVerificationMaterial).not.toHaveBeenCalled();
   });
@@ -797,7 +752,7 @@ describe("Community sync body and device verification", () => {
 
   it("reaches device verification only when a body change has a fresh edge proof", async () => {
     const request = buildRequest();
-    request.rawBody = Buffer.from(JSON.stringify({ ...validPayload(), connectorVersion: "9.9.9" }));
+    request.rawBody = Buffer.from(JSON.stringify({ ...validPayload(), clientVersion: "9.9.9" }));
     replaceOriginProof(request);
     await expectFailure(createHarness().verifier.verify(request), "device_rejected");
   });

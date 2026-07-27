@@ -24,5 +24,5 @@ describe("migration database boundary lint policy", () => {
         message === "Only database-pool.ts may import the PostgreSQL driver.",
     );
     expect(restrictions).toHaveLength(5);
-  }, 15_000);
+  }, 30_000);
 });

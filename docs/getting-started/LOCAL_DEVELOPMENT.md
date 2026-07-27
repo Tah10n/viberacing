@@ -296,9 +296,9 @@ After those ordered builds, the emitted entrypoint is `node apps/ingest-host/dis
 with Node directly so SIGTERM reaches the process. Tracked `.env.example` values are deliberately
 non-working and keep `VIBERACING_INGEST_ENABLED=false`. An ignored local environment must first set
 that field to exact `true`; only then can exact loopback host/port and `loopback-cleartext` be
-evaluated. The independent tracked `VIBERACING_USAGE_SYNC_ENABLED=false` keeps
-`POST /v1/community/usage` absent while preserving the legacy route; set it to exact `true` only
-when intentionally exercising the additive Usage Sync contract, and use the same decision at Edge.
+evaluated. The independent tracked `VIBERACING_USAGE_SYNC_ENABLED=false` keeps the sole
+`POST /v1/community/usage` route absent; set it to exact `true` only when intentionally exercising
+Usage Sync, and use the same containment decision at Edge. It is not a protocol-migration switch.
 Production additionally requires exact `0.0.0.0`, Railway-injected `PORT`, `railway-edge`, and a
 40-to-300-second platform drain declaration. The latch is startup-only: it does not prove a deployed
 restart, route denial, or already-running instance drain. Do not add real login/key values to a
@@ -398,7 +398,7 @@ pnpm run test:migrate:postgres-integration
 The integration builds the emitted entry point and starts one TLS-enabled disposable `postgres-test`
 container on an ephemeral loopback port. It proves one deliberately widened login fails before
 schema creation, holds the fixed session lock externally until two narrow emitted controllers are
-observed waiting over hostname-verified TLS, and then requires both to converge on the exact 42-row
+observed waiting over hostname-verified TLS, and then requires both to converge on the exact 43-row
 ledger. It also checks all 28 owner-owned forced-RLS private tables, identity invariants, and
 complete connection/lock cleanup before removing the generated certificate/key, container, network,
 and storage. It never uses the normal local database volume and proves no production credential/TLS,

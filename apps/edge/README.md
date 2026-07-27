@@ -1,11 +1,11 @@
 # Edge origin signer
 
-This Worker is the narrow public ingress for `POST /v1/community/sync` and the independently
-default-off `POST /v1/community/usage`. It preserves the client's raw JSON body and
-device-authentication fields, rejects caller-supplied origin fields, adds one fresh body-bound
-HMAC-SHA-256 origin proof, and forwards once to the configured HTTPS Ingest origin. It reads at most
-8192 response bytes and relays only the exact sync-result or endpoint-problem contract whose request
-ID matches the validated upstream header.
+This Worker is the narrow, independently default-off public ingress for exact
+`POST /v1/community/usage`. It preserves the client's raw JSON body and device-authentication
+fields, rejects caller-supplied origin fields, adds one fresh body-bound HMAC-SHA-256 origin proof,
+and forwards once to the configured HTTPS Ingest origin. It reads at most 8192 response bytes and
+relays only the exact Usage Sync result or endpoint-problem contract whose request ID matches the
+validated upstream header. The unreleased `/v1/community/sync` path is not registered.
 
 It has no database, queue, cache, retry, user session, analytics sink, generic proxy route, or
 runtime dependency. All local failures are bounded problem responses without reflected values.
@@ -20,9 +20,9 @@ corepack pnpm --filter @viberacing/edge run test
 ```
 
 The tests run under Node's standards-compatible Fetch and Web Crypto APIs. They prove the exact
-canonical messages for both paths, exact Usage Sync enablement, body preservation, key rebinding,
-route/header/body limits, generic failures, and a single upstream attempt. The separate root
-compatibility test builds the real Ingest package and requires this Worker's proof to pass the
+canonical Usage Sync messages, exact enablement, legacy-path rejection, body preservation, key
+rebinding, route/header/body limits, generic failures, and a single upstream attempt. The separate
+root compatibility test builds the real Ingest package and requires this Worker's proof to pass the
 production verifier:
 
 ```text
@@ -62,9 +62,9 @@ tracked default false and use the one reviewed non-secret deployment override:
 corepack pnpm dlx wrangler@4.112.0 deploy --var VIBERACING_USAGE_SYNC_ENABLED:true --config apps/edge/wrangler.jsonc
 ```
 
-The tracked false value is a startup/deployment default, not a dynamic incident control. The
-override enables only the already checked `/v1/community/usage` route and must be removed again for
-containment or rollback.
+The tracked false value is a startup/deployment default, not a dynamic incident control or protocol
+migration switch. The override enables only the already checked `/v1/community/usage` route and must
+be removed again for containment or rollback.
 
 For rotation, first configure the new Ingest primary and retain the old value as its bounded
 secondary. Then replace the Worker's active pair and deploy it. Remove the Ingest secondary only

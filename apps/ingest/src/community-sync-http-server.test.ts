@@ -12,7 +12,7 @@ import {
   createCommunitySyncHttpServer,
   writeCommunitySyncClientError,
 } from "./community-sync-http-server.js";
-import { communitySyncRequestTarget, usageSyncRequestTarget } from "./protocol.js";
+import { usageSyncRequestTarget } from "./protocol.js";
 
 const requestId = "req_AAAAAAAAAAAAAAAAAAAAAA";
 const problemRequestId = "req_BBBBBBBBBBBBBBBBBBBBBB";
@@ -88,7 +88,7 @@ function application(
   return close === undefined ? Object.freeze({ execute }) : Object.freeze({ close, execute });
 }
 
-function buildServer(app: unknown, usageSyncEnabled = false): FastifyInstance {
+function buildServer(app: unknown, usageSyncEnabled = true): FastifyInstance {
   const server = createCommunitySyncHttpServer(app, usageSyncEnabled);
   openServers.add(server);
   return server;
@@ -102,7 +102,7 @@ function postOptions(overrides: Record<string, unknown> = {}): Record<string, un
     },
     method: "POST",
     payload: requestPayload,
-    url: communitySyncRequestTarget,
+    url: usageSyncRequestTarget,
     ...overrides,
   };
 }
@@ -313,7 +313,7 @@ describe("Community sync Fastify construction", () => {
       ),
     );
     const port = await listenOnLoopback(server);
-    const responsePromise = fetch(`http://127.0.0.1:${String(port)}${communitySyncRequestTarget}`, {
+    const responsePromise = fetch(`http://127.0.0.1:${String(port)}${usageSyncRequestTarget}`, {
       body: requestPayload,
       headers: {
         accept: "application/json",
@@ -358,7 +358,7 @@ describe("Community sync Fastify construction", () => {
 describe("Community sync HTTP decisions", () => {
   it("keeps Usage Sync absent by default and exposes it only after exact host enablement", async () => {
     const execute = vi.fn(() => Promise.resolve(successDecision()));
-    const disabledServer = buildServer(application(execute));
+    const disabledServer = buildServer(application(execute), false);
     const disabled = await disabledServer.inject(postOptions({ url: usageSyncRequestTarget }));
 
     expect(disabled.statusCode).toBe(404);
@@ -411,7 +411,7 @@ describe("Community sync HTTP decisions", () => {
     ]);
     expect((captured as { readonly method: string }).method).toBe("POST");
     expect((captured as { readonly requestTarget: string }).requestTarget).toBe(
-      communitySyncRequestTarget,
+      usageSyncRequestTarget,
     );
     expect((captured as { readonly rawBody: Buffer }).rawBody.equals(requestPayload)).toBe(true);
     expect(
@@ -447,11 +447,11 @@ describe("Community sync HTTP decisions", () => {
       }),
     );
     const response = await server.inject(
-      postOptions({ url: `${communitySyncRequestTarget}?unexpected=1` }),
+      postOptions({ url: `${usageSyncRequestTarget}?unexpected=1` }),
     );
 
     expect((captured as { readonly requestTarget: string }).requestTarget).toBe(
-      `${communitySyncRequestTarget}?unexpected=1`,
+      `${usageSyncRequestTarget}?unexpected=1`,
     );
     expect(response.statusCode).toBe(400);
   });
@@ -604,13 +604,13 @@ describe("Community sync HTTP rejection and resource policy", () => {
           ? await server.inject({
               headers: { "content-type": "text/plain" },
               method,
-              url: communitySyncRequestTarget,
+              url: usageSyncRequestTarget,
             })
           : await server.inject({
               headers: { "content-type": "text/plain" },
               method,
               payload: "not-json",
-              url: communitySyncRequestTarget,
+              url: usageSyncRequestTarget,
             });
 
       expect(response.statusCode).toBe(405);
@@ -623,30 +623,23 @@ describe("Community sync HTTP rejection and resource policy", () => {
     },
   );
 
-  it("returns the same closed 405 for an enabled Usage Sync route", async () => {
-    const execute = vi.fn(() => Promise.resolve(successDecision()));
-    const server = buildServer(application(execute), true);
-    const response = await server.inject({
-      headers: { "content-type": "text/plain" },
-      method: "GET",
-      url: usageSyncRequestTarget,
-    });
+  it.each(["/v1/community/unknown", "/v1/community/sync"])(
+    "returns a generic 404 for unregistered path %s",
+    async (url) => {
+      const execute = vi.fn(() => Promise.resolve(successDecision()));
+      const server = buildServer(application(execute));
+      const response = await server.inject({
+        headers: { "content-type": "application/json" },
+        method: "POST",
+        payload: "{}",
+        url,
+      });
 
-    expect(response.statusCode).toBe(405);
-    expect(response.headers.allow).toBe("POST");
-    expect(response.json()).toMatchObject({ errorCode: "method_not_allowed", status: 405 });
-    expect(execute).not.toHaveBeenCalled();
-  });
-
-  it("returns a generic 404 for every unregistered path", async () => {
-    const execute = vi.fn(() => Promise.resolve(successDecision()));
-    const server = buildServer(application(execute));
-    const response = await server.inject({ method: "GET", url: "/v1/community/unknown" });
-
-    expect(response.statusCode).toBe(404);
-    expect(response.json()).toMatchObject({ errorCode: "not_found", status: 404 });
-    expect(execute).not.toHaveBeenCalled();
-  });
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toMatchObject({ errorCode: "not_found", status: 404 });
+      expect(execute).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects an unacceptable response media range before application work", async () => {
     const execute = vi.fn(() => Promise.resolve(successDecision()));
@@ -693,7 +686,7 @@ describe("Community sync HTTP rejection and resource policy", () => {
     const response = await server.inject({
       headers: { accept: "application/json" },
       method: "POST",
-      url: communitySyncRequestTarget,
+      url: usageSyncRequestTarget,
     });
 
     expect((captured as { readonly rawBody: Buffer }).rawBody).toEqual(Buffer.alloc(0));
@@ -770,36 +763,6 @@ describe("Community sync HTTP rejection and resource policy", () => {
     await expect(server.inject(postOptions())).resolves.toMatchObject({ statusCode: 200 });
   });
 
-  it("shares one no-queue admission budget across legacy and Usage Sync routes", async () => {
-    const resolvers: ((decision: unknown) => void)[] = [];
-    const execute = vi.fn(
-      () =>
-        new Promise<unknown>((resolve) => {
-          resolvers.push(resolve);
-        }),
-    );
-    const server = buildServer(application(execute), true);
-    const active = Array.from({ length: communitySyncHttpPolicy.admissionLimit }, (_, index) =>
-      server.inject(
-        postOptions({
-          url: index % 2 === 0 ? communitySyncRequestTarget : usageSyncRequestTarget,
-        }),
-      ),
-    );
-    await vi.waitFor(() => {
-      expect(resolvers).toHaveLength(communitySyncHttpPolicy.admissionLimit);
-    });
-
-    const rejected = await server.inject(postOptions({ url: usageSyncRequestTarget }));
-    expect(rejected.statusCode).toBe(503);
-    expect(execute).toHaveBeenCalledTimes(communitySyncHttpPolicy.admissionLimit);
-
-    for (const resolve of resolvers) {
-      resolve(successDecision());
-    }
-    await Promise.all(active);
-  });
-
   it("maps a handler-style deadline failure to a generic retryable 503", async () => {
     const timeout = Object.assign(new Error("private timeout detail"), { statusCode: 503 });
     const execute = vi
@@ -829,7 +792,7 @@ describe("Community sync raw listener behavior", () => {
     for (const method of ["COPY", "PROPFIND", "REPORT", "SEARCH", "TRACE"]) {
       const response = await exchangeRaw(
         port,
-        `${method} ${communitySyncRequestTarget} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`,
+        `${method} ${usageSyncRequestTarget} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`,
       );
 
       expect(response).toContain("HTTP/1.1 405 Method Not Allowed");
@@ -837,15 +800,6 @@ describe("Community sync raw listener behavior", () => {
       expect(response).toContain('"errorCode":"method_not_allowed"');
     }
 
-    const usageServer = buildServer(application(execute), true);
-    const usagePort = await listenOnLoopback(usageServer);
-    const usageResponse = await exchangeRaw(
-      usagePort,
-      `PROPFIND ${usageSyncRequestTarget} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`,
-    );
-    expect(usageResponse).toContain("HTTP/1.1 405 Method Not Allowed");
-    expect(usageResponse).toContain("allow: POST");
-    expect(usageResponse).toContain('"errorCode":"method_not_allowed"');
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -868,7 +822,7 @@ describe("Community sync raw listener behavior", () => {
     const response = await exchangeRaw(
       port,
       [
-        `POST ${communitySyncRequestTarget} HTTP/1.1`,
+        `POST ${usageSyncRequestTarget} HTTP/1.1`,
         "Host: viberacing.invalid",
         "Connection: close",
         "Accept: application/json",
@@ -906,7 +860,7 @@ describe("Community sync raw listener behavior", () => {
       disconnectedSocket.once("connect", () => {
         disconnectedSocket.write(
           [
-            `POST ${communitySyncRequestTarget} HTTP/1.1`,
+            `POST ${usageSyncRequestTarget} HTTP/1.1`,
             "Host: viberacing.invalid",
             "Accept: application/json",
             "Content-Type: application/json",
@@ -944,7 +898,7 @@ describe("Community sync raw listener behavior", () => {
     const response = await exchangeRaw(
       port,
       [
-        `POST ${communitySyncRequestTarget} HTTP/1.1`,
+        `POST ${usageSyncRequestTarget} HTTP/1.1`,
         "Host: viberacing.invalid",
         "Connection: close",
         "Content-Type: application/json",
@@ -970,7 +924,7 @@ describe("Community sync raw listener behavior", () => {
     const requestWithExtraHeaders = (extraHeaderCount: number): string => {
       const body = "{}";
       return [
-        `POST ${communitySyncRequestTarget} HTTP/1.1`,
+        `POST ${usageSyncRequestTarget} HTTP/1.1`,
         "Host: viberacing.invalid",
         "Connection: close",
         "Accept: application/json",
@@ -1001,7 +955,7 @@ describe("Community sync raw listener behavior", () => {
     const response = await exchangeRaw(
       port,
       [
-        `POST ${communitySyncRequestTarget} HTTP/1.1`,
+        `POST ${usageSyncRequestTarget} HTTP/1.1`,
         "Host: viberacing.invalid",
         "Connection: close",
         `X-Oversized: ${"a".repeat(communitySyncHttpPolicy.maximumHeaderBytes)}`,
@@ -1048,7 +1002,7 @@ describe("Community sync raw listener behavior", () => {
     const response = await exchangeRaw(
       port,
       [
-        `POST ${communitySyncRequestTarget} HTTP/1.1`,
+        `POST ${usageSyncRequestTarget} HTTP/1.1`,
         "Host: viberacing.invalid",
         "Connection: close",
         "Accept: application/json",

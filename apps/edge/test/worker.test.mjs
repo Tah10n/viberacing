@@ -4,18 +4,21 @@ import { describe, it } from "node:test";
 
 import worker, { handleIngestEdgeRequest } from "../src/worker.mjs";
 
-const requestTarget = "/v1/community/sync";
-const usageRequestTarget = "/v1/community/usage";
+const requestTarget = "/v1/community/usage";
 const originKeyId = "edge_staging";
 const originKey = Buffer.from(Array.from({ length: 32 }, (_, index) => index + 1));
 const originKeyBase64Url = originKey.toString("base64url");
 const upstreamRequestId = "req_AQEBAQEBAQEBAQEBAQEBAQ";
 const fixedNow = Date.parse("2026-07-26T12:34:56.789Z");
 
-const validEnvironment = Object.freeze({
+const configuredEnvironment = Object.freeze({
   VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL: originKeyBase64Url,
   VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID: originKeyId,
   VIBERACING_INGEST_ORIGIN_URL: "https://ingest.example.com",
+});
+const validEnvironment = Object.freeze({
+  ...configuredEnvironment,
+  VIBERACING_USAGE_SYNC_ENABLED: "true",
 });
 
 const validHeaders = Object.freeze({
@@ -152,51 +155,13 @@ describe("Cloudflare Community sync edge", () => {
     });
   });
 
-  it("forwards Usage Sync only after exact enablement and binds its path into the proof", async () => {
-    const rawBody = '{"schemaVersion":1,"syncId":"syn_BBBBBBBBBBBBBBBBBBBBBB"}';
-    let observedUrl;
-    let observedOptions;
-    const response = await handleIngestEdgeRequest(
-      createRequest({
-        body: rawBody,
-        url: `https://sync.example.com${usageRequestTarget}`,
-      }),
-      Object.freeze({
-        ...validEnvironment,
-        VIBERACING_USAGE_SYNC_ENABLED: "true",
-      }),
-      createDependencies(async (url, options) => {
-        observedUrl = url;
-        observedOptions = options;
-        return upstreamResponse();
-      }),
-    );
-
-    assert.equal(response.status, 200);
-    assert.equal(observedUrl, `https://ingest.example.com${usageRequestTarget}`);
-    const bodyDigest = createHash("sha256").update(rawBody).digest("base64url");
-    const message = [
-      "viberacing-origin-proof-v1",
-      originKeyId,
-      "POST",
-      usageRequestTarget,
-      bodyDigest,
-      "2026-07-26T12:34:56.789Z",
-      Buffer.alloc(16, 3).toString("base64url"),
-    ].join("\n");
-    assert.equal(
-      observedOptions.headers.get("x-viberacing-origin-proof"),
-      createHmac("sha256", originKey).update(message).digest("base64url"),
-    );
-  });
-
-  it("keeps Usage Sync absent for every non-exact enablement shape", async () => {
+  it("keeps the sole Usage Sync route absent for every non-exact enablement shape", async () => {
     const inherited = Object.assign(
       Object.create({ VIBERACING_USAGE_SYNC_ENABLED: "true" }),
-      validEnvironment,
+      configuredEnvironment,
     );
     const accessor = Object.defineProperty(
-      { ...validEnvironment },
+      { ...configuredEnvironment },
       "VIBERACING_USAGE_SYNC_ENABLED",
       {
         enumerable: true,
@@ -204,7 +169,7 @@ describe("Cloudflare Community sync edge", () => {
       },
     );
     const nonEnumerable = Object.defineProperty(
-      { ...validEnvironment },
+      { ...configuredEnvironment },
       "VIBERACING_USAGE_SYNC_ENABLED",
       { enumerable: false, value: "true" },
     );
@@ -221,9 +186,9 @@ describe("Cloudflare Community sync edge", () => {
     );
 
     for (const environment of [
-      validEnvironment,
-      { ...validEnvironment, VIBERACING_USAGE_SYNC_ENABLED: "false" },
-      { ...validEnvironment, VIBERACING_USAGE_SYNC_ENABLED: "TRUE" },
+      configuredEnvironment,
+      { ...configuredEnvironment, VIBERACING_USAGE_SYNC_ENABLED: "false" },
+      { ...configuredEnvironment, VIBERACING_USAGE_SYNC_ENABLED: "TRUE" },
       inherited,
       accessor,
       nonEnumerable,
@@ -231,7 +196,7 @@ describe("Cloudflare Community sync edge", () => {
     ]) {
       let fetchCalls = 0;
       const response = await handleIngestEdgeRequest(
-        createRequest({ url: `https://sync.example.com${usageRequestTarget}` }),
+        createRequest(),
         environment,
         createDependencies(async () => {
           fetchCalls += 1;
@@ -271,8 +236,14 @@ describe("Cloudflare Community sync edge", () => {
   for (const [label, request, status, errorCode] of [
     ["unknown route", createRequest({ url: "https://sync.example.com/nope" }), 404, "not_found"],
     [
+      "unreleased legacy route",
+      createRequest({ url: "https://sync.example.com/v1/community/sync" }),
+      404,
+      "not_found",
+    ],
+    [
       "query string",
-      createRequest({ url: "https://sync.example.com/v1/community/sync?x=1" }),
+      createRequest({ url: "https://sync.example.com/v1/community/usage?x=1" }),
       404,
       "not_found",
     ],
@@ -503,6 +474,6 @@ describe("Cloudflare Community sync edge", () => {
   it("exposes only the module fetch handler", async () => {
     assert.deepEqual(Object.keys(worker), ["fetch"]);
     const response = await worker.fetch(createRequest(), {});
-    assert.equal(response.status, 503);
+    assert.equal(response.status, 404);
   });
 });

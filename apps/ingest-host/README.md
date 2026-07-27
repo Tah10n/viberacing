@@ -11,8 +11,8 @@ an application, pool, server, or socket. Missing, `false`, or any alternate spel
 same silent status-1 startup failure. Tracked `.env.example` deliberately fixes it to `false`. The
 separate `VIBERACING_USAGE_SYNC_ENABLED` value controls only registration of
 `POST /v1/community/usage`; exact own enumerable string `true` enables it after the primary Ingest
-latch and before application construction. Every other shape leaves the legacy route unchanged and
-the Usage Sync route absent.
+latch and before application construction. Every other shape leaves the sole usage-ingest route
+absent. This is a fail-closed containment decision, not a protocol-migration switch.
 
 ## Listener contract
 
@@ -75,16 +75,17 @@ monitoring, load, capacity, or real-user synchronization.
 The separate opt-in `pnpm run test:ingest:postgres-integration` gate builds emitted contracts,
 Ingest, and host code; starts one disposable PostgreSQL container with an ephemeral loopback-only
 port; creates a synthetic login with only `viberacing_ingest`; and sends independently signed
-requests through this host. It proves legacy and provider-attributed Usage Sync acceptance,
-duplicate acknowledgements, persistent origin replay and revoked-device denial, closed response
-headers, unique request IDs, and exact database stored state. It also holds four valid requests at
-the first replay-store call, requires a fifth generic 503 without a fifth replay call, and proves
-the four accepted responses after release. After closing the imported host, it starts `dist/main.js`
-as a separate silent process, observes the loopback listener with a connection-only probe, proves
-another exact accepted request, and forcibly ends only that test child before removing the
-container, network, and storage. It does not prove OS-signal delivery, graceful emitted-child
-settlement, deployment drain, Railway, external TLS, secret delivery, distributed control, a
-production credential, edge routing, representative load, real-user input, or capacity.
+requests through this host. It proves provider-attributed Usage Sync acceptance, removed-path
+rejection before application work, duplicate acknowledgements, persistent origin replay and
+revoked-device denial, closed response headers, unique request IDs, and exact database stored state.
+It also holds four valid requests at the first replay-store call, requires a fifth generic 503
+without a fifth replay call, and proves the four accepted responses after release. After closing the
+imported host, it starts `dist/main.js` as a separate silent process, observes the loopback listener
+with a connection-only probe, proves another exact accepted request, and forcibly ends only that
+test child before removing the container, network, and storage. It does not prove OS-signal
+delivery, graceful emitted-child settlement, deployment drain, Railway, external TLS, secret
+delivery, distributed control, a production credential, edge routing, representative load, real-user
+input, or capacity.
 
 The separate opt-in `pnpm run test:ingest:signal-postgres-integration` gate mounts one link-free
 exact production runtime read-only under the pinned Linux Node image, holds one independently signed

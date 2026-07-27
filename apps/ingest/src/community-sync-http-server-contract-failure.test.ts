@@ -1,14 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type {
-  ConnectorSyncResultV1,
-  ProblemDetailsV1,
-  ValidationResult,
-} from "@viberacing/contracts";
+import type { ProblemDetailsV1, UsageSyncResultV1, ValidationResult } from "@viberacing/contracts";
 
 interface ContractsModule extends Record<string, unknown> {
-  validateConnectorSyncResultV1(value: unknown): ValidationResult<ConnectorSyncResultV1>;
   validateProblemDetailsV1(value: unknown): ValidationResult<ProblemDetailsV1>;
+  validateUsageSyncResultV1(value: unknown): ValidationResult<UsageSyncResultV1>;
 }
 
 const validationControl = vi.hoisted(() => ({
@@ -20,10 +16,10 @@ vi.mock("@viberacing/contracts", async (importOriginal) => {
   const actual = await importOriginal<ContractsModule>();
   return {
     ...actual,
-    validateConnectorSyncResultV1: (value: unknown) =>
+    validateUsageSyncResultV1: (value: unknown) =>
       validationControl.rejectResult
         ? { issues: [{ code: "type", path: "$" }], ok: false as const }
-        : actual.validateConnectorSyncResultV1(value),
+        : actual.validateUsageSyncResultV1(value),
     validateProblemDetailsV1: (value: unknown) =>
       validationControl.rejectProblem
         ? { issues: [{ code: "type", path: "$" }], ok: false as const }
@@ -35,7 +31,7 @@ import {
   createCommunitySyncHttpServer,
   writeCommunitySyncClientError,
 } from "./community-sync-http-server.js";
-import { communitySyncRequestTarget } from "./protocol.js";
+import { usageSyncRequestTarget } from "./protocol.js";
 
 function frozenRecord<T extends object>(values: T): T {
   return Object.freeze(Object.assign(Object.create(null) as object, values));
@@ -65,12 +61,13 @@ describe("Community sync HTTP contract fail-closed paths", () => {
     validationControl.rejectResult = true;
     const server = createCommunitySyncHttpServer(
       Object.freeze({ execute: () => Promise.resolve(successDecision()) }),
+      true,
     );
     const response = await server.inject({
       headers: { accept: "application/json", "content-type": "application/json" },
       method: "POST",
       payload: "{}",
-      url: communitySyncRequestTarget,
+      url: usageSyncRequestTarget,
     });
 
     expect(response.statusCode).toBe(500);

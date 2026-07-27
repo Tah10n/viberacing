@@ -252,6 +252,12 @@
       "name": "direct_community_token_leaderboard",
       "path": "database/migrations/0042_direct_community_token_leaderboard.sql",
       "sha256": "14b2490a81e74c35770dccecf255696e82142c548b238b66b135a857a4f10cd7"
+    },
+    {
+      "revision": 43,
+      "name": "single_usage_sync_runtime_capability",
+      "path": "database/migrations/0043_single_usage_sync_runtime_capability.sql",
+      "sha256": "de0b8ded79b03f95de4cb722309ff3517b1c6240c3358123ade2d732e8395ba9"
     }
   ]
 }

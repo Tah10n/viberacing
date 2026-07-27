@@ -10,10 +10,10 @@ import Fastify, {
   type RawServerDefault,
 } from "fastify";
 import {
-  validateConnectorSyncResultV1,
   validateProblemDetailsV1,
-  type ConnectorSyncResultV1,
+  validateUsageSyncResultV1,
   type ProblemDetailsV1,
+  type UsageSyncResultV1,
 } from "@viberacing/contracts";
 
 import { createCommunitySyncAdmission } from "./community-sync-admission.js";
@@ -21,7 +21,6 @@ import { ingestDatabaseConcurrencyLimit, ingestDatabaseQueryTimeoutMs } from "./
 import {
   communitySyncMediaType,
   communitySyncMethod,
-  communitySyncRequestTarget,
   maximumCommunitySyncBodyBytes,
   maximumCommunitySyncRawHeaderPairs,
   usageSyncRequestTarget,
@@ -118,7 +117,7 @@ interface ParsedAcceptRange {
 }
 
 interface SerializedDecision {
-  readonly body: ConnectorSyncResultV1 | ProblemDetailsV1;
+  readonly body: UsageSyncResultV1 | ProblemDetailsV1;
   readonly contentType:
     "application/json; charset=utf-8" | "application/problem+json; charset=utf-8";
   readonly requestId: string;
@@ -303,7 +302,7 @@ function readApplicationDecision(value: unknown): SerializedDecision | undefined
     if (candidate === undefined) {
       return undefined;
     }
-    const validation = validateConnectorSyncResultV1(candidate);
+    const validation = validateUsageSyncResultV1(candidate);
     return validation.ok
       ? Object.freeze({
           body: validation.value,
@@ -609,11 +608,9 @@ export function createCommunitySyncHttpServer(
     }
   });
   server.setNotFoundHandler((request, reply) => {
-    const enabledRequestTargets = usageSyncEnabled
-      ? [communitySyncRequestTarget, usageSyncRequestTarget]
-      : [communitySyncRequestTarget];
     if (
-      enabledRequestTargets.includes(String(request.raw.url)) &&
+      usageSyncEnabled &&
+      String(request.raw.url) === usageSyncRequestTarget &&
       request.raw.method !== communitySyncMethod
     ) {
       return sendProblem(reply, "method_not_allowed", true);
@@ -665,7 +662,6 @@ export function createCommunitySyncHttpServer(
     );
   }
 
-  registerSyncRoute(communitySyncRequestTarget);
   if (usageSyncEnabled) {
     registerSyncRoute(usageSyncRequestTarget);
   }

@@ -531,14 +531,15 @@ Runtime access must remain procedure-only and must have positive and negative in
   millisecond expiry within 65 seconds of the database clock. It atomically inserts or replaces only
   an expired exact tuple, returns `false` for an unexpired replay, and rechecks expiry after lock
   wait so delayed work cannot reopen acceptance.
-- `submit_community_sync` revalidates the exact activated device/source binding, schema-level
-  identifier/version/date/token/digest bounds, millisecond timestamp precision, and a server-time
-  replay window. It records one nonce per device and one snapshot per device/sync ID, returns an
-  exact retry as `duplicate`, quarantines a whole decrease, quarantined source, or payload touching
-  a server-closed season, and advances one monotonic current value per source/date without summing
-  devices. Server `receivedAt` is captured after the affected season locks so waiting cannot
-  backdate acceptance. Paused/unlinked sources, revoked devices, and deletion-pending profiles fail
-  closed.
+- `submit_usage_sync` is the sole runtime submission capability. It rechecks the immutable
+  device/source provider attribution before delegating to the owner-internal mature implementation,
+  which revalidates identifier/version/date/token/digest bounds, millisecond timestamp precision,
+  and a server-time replay window. It records one nonce per device and one snapshot per device/sync
+  ID, returns an exact retry as `duplicate`, quarantines a whole decrease, quarantined source, or
+  payload touching a server-closed season, and advances one monotonic current value per source/date
+  without summing devices. Server `receivedAt` is captured after the affected season locks so
+  waiting cannot backdate acceptance. Paused/unlinked sources, revoked devices, and deletion-pending
+  profiles fail closed.
 - `cleanup_expired_ingest_state` accepts only a batch size from 1 through 1000, derives its cutoff
   from server time, and serializes Jobs callers. Each call independently deletes at most one batch
   of expired origin nonces, device nonces, and raw snapshots. Snapshot entries cascade; current
@@ -584,31 +585,31 @@ verified the exact WebAuthn RP ID, origin, challenge, transaction context, signa
 user-verification result against the returned credential material. ADRs 0026 and 0027 now provide a
 strict external Ed25519 pairing verifier and a closed local adapter that calls activation only after
 that proof over the exact returned material. These SQL procedures still implement neither
-cryptographic verification nor network rate limiting. ADR 0015's local Ingest kernel validates the
-exact bounded `ConnectorSyncV1` body, body-bound origin proof, and canonical strict Ed25519 request
-against an injected minimal lookup. ADRs 0016 and 0018 let the adapter atomically consume the origin
-replay tuple, provide that lookup, and map only a reconstructed, contract-revalidated allowlist to
-`submit_community_sync` through fixed parameterized SQL, a four-client deadline-bound pool, and an
-exact Ingest login/role/search-path probe. The database still independently enforces binding,
-replay, time, lifecycle, season, and monotonic state. The local HTTP service preserves the exact raw
-envelope, uses ADR 0017's protected key reader plus ADR 0018's persistent replay capability,
-composes verifier and adapter, and maps only a generic public acknowledgement. The opt-in synthetic
-loopback gate exercises that complete path through a disposable least-privileged login. It is not
-deployment TLS/credential, edge, capacity, or real-user evidence. The local returning-login options
-route keeps its challenge only in an encrypted browser continuation and creates no database state
-before valid proof, but it is not launch-ready without edge/service limits. Revision 0023 supplies
-bounded cleanup after expiry, and ADR 0063 includes the exact command in a default-off local catalog
-plus the combined synthetic PostgreSQL integration; deployed execution and retention evidence remain
-required. Procedures use one generic failure message for closed authorization and constraint
-failures; HTTP status mapping and response shaping remain application work. Recovery SQL now uses a
-short-lived restricted authority and never represents it as an ordinary session. The local
-application now performs bounded matching/dummy Argon2id work under the protected pepper, generic
-configured-floor HTTP handling, and exact replacement WebAuthn verification before these fixed
-calls. Distributed edge attempt controls, deployed cleanup cadence, notifications, live integration,
-and operational monitoring remain absent. The deletion procedures now implement immediate lock-down,
-local primary purge, and 30-day terminal-job retention; cache purge, tombstones, backup replay,
-deployed scheduling, and user-visible progress remain unimplemented. Fixed-clock synthetic
-scheduler/PostgreSQL composition is proven.
+cryptographic verification nor network rate limiting. ADR 0015's local Ingest kernel, as narrowed by
+ADR 0075, validates the exact bounded `UsageSyncV1` body, body-bound origin proof, and canonical
+strict Ed25519 request against an injected minimal lookup. ADRs 0016 and 0018 let the adapter
+atomically consume the origin replay tuple and provide that lookup; revisions 0041 and 0043 expose
+only `submit_usage_sync` to Ingest for the reconstructed, contract-revalidated allowlist. The
+database still independently enforces binding, replay, time, lifecycle, season, and monotonic state.
+The local HTTP service preserves the exact raw envelope, uses ADR 0017's protected key reader plus
+ADR 0018's persistent replay capability, composes verifier and adapter, and maps only a generic
+public acknowledgement. The opt-in synthetic loopback gate exercises that complete path through a
+disposable least-privileged login. It is not deployment TLS/credential, edge, capacity, or real-user
+evidence. The local returning-login options route keeps its challenge only in an encrypted browser
+continuation and creates no database state before valid proof, but it is not launch-ready without
+edge/service limits. Revision 0023 supplies bounded cleanup after expiry, and ADR 0063 includes the
+exact command in a default-off local catalog plus the combined synthetic PostgreSQL integration;
+deployed execution and retention evidence remain required. Procedures use one generic failure
+message for closed authorization and constraint failures; HTTP status mapping and response shaping
+remain application work. Recovery SQL now uses a short-lived restricted authority and never
+represents it as an ordinary session. The local application now performs bounded matching/dummy
+Argon2id work under the protected pepper, generic configured-floor HTTP handling, and exact
+replacement WebAuthn verification before these fixed calls. Distributed edge attempt controls,
+deployed cleanup cadence, notifications, live integration, and operational monitoring remain absent.
+The deletion procedures now implement immediate lock-down, local primary purge, and 30-day
+terminal-job retention; cache purge, tombstones, backup replay, deployed scheduling, and
+user-visible progress remain unimplemented. Fixed-clock synthetic scheduler/PostgreSQL composition
+is proven.
 
 ## Data and privacy map
 
@@ -999,15 +1000,20 @@ private date/source and public season-state keys. The eighteen-command integrati
 scheduler/PostgreSQL modes prove exact local progress, but not representative backlog capacity,
 production login/TLS, deployed cadence, monitoring, or real-user recovery.
 
-Revision 0041 keeps the physical source table and existing ConnectorSyncV1 path intact while adding
-two non-null server-owned attribution columns. The only admitted pair is
-`codex`/`codex_daily_usage_buckets_v1`, matching the only implemented bounded reader. The exact
-device lookup returns that pair, and only Ingest may invoke `submit_usage_sync`, which independently
-rechecks the device/source attribution before mapping provider-neutral client/agent/date/total
-fields into the existing replay-safe submission procedure. The database suite inserts one
-revision-0040 source before applying 0041 to prove the backfill, then exercises positive and
-wrong-attribution calls plus the grant matrix. This proves no second provider, source-creation
-workflow, production credential, migration rollout, or deployment.
+Revision 0041 keeps the physical source table intact while adding two non-null server-owned
+attribution columns. The only admitted pair is `codex`/`codex_daily_usage_buckets_v1`, matching the
+only implemented bounded reader. The exact device lookup returns that pair, and only Ingest may
+invoke `submit_usage_sync`, which independently rechecks the device/source attribution before
+mapping provider-neutral client/agent/date/total fields into the existing replay-safe submission
+procedure. The database suite inserts one revision-0040 source before applying 0041 to prove the
+backfill, then exercises positive and wrong-attribution calls plus the grant matrix. This proves no
+second provider, source-creation workflow, production credential, migration rollout, or deployment.
+
+Revision 0043 makes `submit_usage_sync` the only direct runtime submission capability. The
+pre-existing `submit_community_sync` function remains an owner-internal implementation detail
+because the Usage wrapper delegates to it, but direct execution is revoked from `PUBLIC` and every
+runtime role. This is forward repository-ledger maintenance for immutable migration history, not
+evidence of a production database migration.
 
 Revision 0042 preserves every existing and finalized `community_v1` season while selecting
 `community_tokens_v1` for a newly created season on or after 2026-07-27. Its refresh sums each
@@ -1097,7 +1103,7 @@ ephemeral host key directories.
 The Migration suite runs one widened emitted controller and requires generic denial before either
 application schema exists. It then holds the fixed session advisory key externally, observes two
 narrow emitted controllers waiting behind that holder over TLS 1.2/1.3, releases it, and requires
-both controllers to succeed. The final oracle checks the exact 42-row manifest ledger, all 28
+both controllers to succeed. The final oracle checks the exact 43-row manifest ledger, all 28
 owner-owned forced-RLS private tables, identity invariants, zero controller connections, and a free
 session lock. This is local disposable controller convergence, not staging orchestration, a
 production login/certificate, deployed replica behavior, monitoring, rollback, or recovery.

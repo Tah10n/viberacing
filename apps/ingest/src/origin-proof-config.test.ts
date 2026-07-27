@@ -16,10 +16,10 @@ import {
 import {
   communitySyncMediaType,
   communitySyncMethod,
-  communitySyncRequestTarget,
   createOriginProofMessage,
   digestBody,
   headerNames,
+  usageSyncRequestTarget,
 } from "./protocol";
 
 const nowMilliseconds = Date.UTC(2026, 6, 15, 18);
@@ -104,7 +104,7 @@ function originAuthenticatedInvalidBodyRequest(keyId: string, key: Uint8Array): 
       headerNames.originTimestamp,
       timestamp,
     ],
-    requestTarget: communitySyncRequestTarget,
+    requestTarget: usageSyncRequestTarget,
   };
 }
 

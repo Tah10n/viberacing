@@ -4,7 +4,6 @@ import { resolveIngestDatabaseConfig } from "./database-config.js";
 import {
   createIngestDatabasePool,
   type IngestDatabaseOriginNonce,
-  type IngestDatabaseSubmission,
   type IngestDatabaseUsageSubmission,
 } from "./database-pool.js";
 
@@ -18,22 +17,6 @@ const config = resolveIngestDatabaseConfig({
   VIBERACING_INGEST_DATABASE_USER: "viberacing_ingest_login",
 });
 
-const submission: IngestDatabaseSubmission = {
-  bodyDigest: Buffer.alloc(32, 1),
-  codexReportedDates: ["2026-07-13"],
-  codexVersion: "1.2.3",
-  connectorVersion: "1.2.3",
-  deviceId: "dev_AAAAAAAAAAAAAAAAAAAAAA",
-  deviceKeyId: "00000000-0000-4000-8000-000000000101",
-  nonceDigest: Buffer.alloc(32, 2),
-  observedAt: "2026-07-15T12:00:00.000Z",
-  signature: Buffer.alloc(64, 3),
-  snapshotId: "00000000-0000-4000-8000-000000000102",
-  sourceId: "src_BBBBBBBBBBBBBBBBBBBBBB",
-  syncId: "syn_CCCCCCCCCCCCCCCCCCCCCC",
-  tokens: [42],
-};
-
 const originNonce: IngestDatabaseOriginNonce = {
   expiresAt: "2026-07-15T12:01:00.000Z",
   nonceDigest: Buffer.alloc(32, 4),
@@ -46,15 +29,15 @@ const usageSubmission: IngestDatabaseUsageSubmission = {
   bodyDigest: Buffer.alloc(32, 5),
   clientVersion: "0.0.0",
   dailyTokenTotals: [84],
-  deviceId: submission.deviceId,
-  deviceKeyId: submission.deviceKeyId,
+  deviceId: "dev_AAAAAAAAAAAAAAAAAAAAAA",
+  deviceKeyId: "00000000-0000-4000-8000-000000000101",
   nonceDigest: Buffer.alloc(32, 6),
-  observedAt: submission.observedAt,
+  observedAt: "2026-07-15T12:00:00.000Z",
   provider: "codex",
   reportedDates: ["2026-07-14"],
   signature: Buffer.alloc(64, 7),
-  snapshotId: submission.snapshotId,
-  sourceId: submission.sourceId,
+  snapshotId: "00000000-0000-4000-8000-000000000102",
+  sourceId: "src_BBBBBBBBBBBBBBBBBBBBBB",
   syncId: "syn_DDDDDDDDDDDDDDDDDDDDDD",
 };
 
@@ -83,13 +66,12 @@ describe("Ingest database pool", () => {
 
     await expect(client.verifyRuntimeBoundary()).resolves.toEqual([{ value: 1 }]);
     await expect(client.consumeOriginNonce(originNonce)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.readDeviceVerificationMaterial(submission.deviceId)).resolves.toEqual([
+    await expect(client.readDeviceVerificationMaterial(usageSubmission.deviceId)).resolves.toEqual([
       { value: 1 },
     ]);
-    await expect(client.submitCommunitySync(submission)).resolves.toEqual([{ value: 1 }]);
     await expect(client.submitUsageSync(usageSubmission)).resolves.toEqual([{ value: 1 }]);
     expect(client).not.toHaveProperty("query");
-    expect(query).toHaveBeenCalledTimes(5);
+    expect(query).toHaveBeenCalledTimes(4);
     expect(query.mock.calls[0]![0]).toMatchObject({ values: [] });
     const boundaryQuery = query.mock.calls[0]![0].text;
     expect(boundaryQuery).toContain("CURRENT_USER = 'viberacing_ingest'");
@@ -120,7 +102,7 @@ describe("Ingest database pool", () => {
       originNonce.expiresAt,
     ]);
     expect(originQuery.values[1]).not.toBe(originNonce.nonceDigest);
-    expect(query.mock.calls[2]![0]).toMatchObject({ values: [submission.deviceId] });
+    expect(query.mock.calls[2]![0]).toMatchObject({ values: [usageSubmission.deviceId] });
     expect(query.mock.calls[2]![0].text).toBe(
       `SELECT
   material.device_key_id::text AS device_key_id,
@@ -130,41 +112,7 @@ describe("Ingest database pool", () => {
   material.accounting_revision AS accounting_revision
 FROM viberacing_api.read_device_verification_material($1::text) AS material`,
     );
-    const submitQuery = query.mock.calls[3]![0];
-    expect(submitQuery.text).toContain("viberacing_api.submit_community_sync(");
-    expect(submitQuery.text).not.toContain(";");
-    expect(submitQuery.text.match(/\$[0-9]+/g)).toEqual(
-      Array.from({ length: 13 }, (_, index) => `$${String(index + 1)}`),
-    );
-    expect(submitQuery.text).toContain("$1::uuid");
-    expect(submitQuery.text).toContain("$4::uuid");
-    expect(submitQuery.text).toContain("$6::timestamptz");
-    expect(submitQuery.text).toContain("$9::bytea");
-    expect(submitQuery.text).toContain("$10::bytea");
-    expect(submitQuery.text).toContain("$11::bytea");
-    expect(submitQuery.text).toContain("$12::text[]");
-    expect(submitQuery.text).toContain("$13::bigint[]");
-    expect(submitQuery.values).toEqual([
-      submission.deviceKeyId,
-      submission.deviceId,
-      submission.sourceId,
-      submission.snapshotId,
-      submission.syncId,
-      submission.observedAt,
-      submission.connectorVersion,
-      submission.codexVersion,
-      submission.bodyDigest,
-      submission.signature,
-      submission.nonceDigest,
-      ["2026-07-13"],
-      ["42"],
-    ]);
-    expect(submitQuery.values[8]).not.toBe(submission.bodyDigest);
-    expect(submitQuery.values[9]).not.toBe(submission.signature);
-    expect(submitQuery.values[10]).not.toBe(submission.nonceDigest);
-    expect(submitQuery.values[11]).not.toBe(submission.codexReportedDates);
-    expect(submitQuery.values[12]).not.toBe(submission.tokens);
-    const usageQuery = query.mock.calls[4]![0];
+    const usageQuery = query.mock.calls[3]![0];
     expect(usageQuery.text).toContain("viberacing_api.submit_usage_sync(");
     expect(usageQuery.text).not.toContain(";");
     expect(usageQuery.text.match(/\$[0-9]+/g)).toEqual(

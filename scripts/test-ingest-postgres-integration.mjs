@@ -126,6 +126,7 @@ const signalProcessRuntimeInventory = Object.freeze([
 ]);
 const requestIdPattern = /^req_[A-Za-z0-9_-]{22}$/;
 const maximumResponseBytes = 2_048;
+const removedSyncRequestTarget = "/v1/community/sync";
 const maximumBlockerOutputBytes = 64 * 1024;
 const maximumSignalClientOutputBytes = 8 * 1024;
 const databaseBlockerTimeoutMs = 10_000;
@@ -525,32 +526,21 @@ async function findAvailableListenerPort() {
 
 function readAuthenticationPolicy() {
   const value = JSON.parse(
-    readFileSync(resolve(root, "contracts", "v1", "connector-sync-authentication.json"), "utf8"),
+    readFileSync(
+      resolve(root, "contracts", "v1", "connector-usage-sync-authentication.json"),
+      "utf8",
+    ),
   );
   assert.equal(value.schemaVersion, 1);
+  assert.equal(value.protocolId, "viberacing-usage-sync-auth-v1");
   assert.equal(value.method, "POST");
-  assert.equal(value.requestTarget, "/v1/community/sync");
+  assert.equal(value.requestTarget, "/v1/community/usage");
   assert.equal(value.mediaType, "application/json");
   assert.equal(value.canonicalMessageEncoding, "UTF-8");
   assert.equal(value.canonicalMessageSeparator, "LF");
   assert.equal(value.canonicalMessageTrailingSeparator, false);
   assert.equal(value.originProof.algorithm, "HMAC-SHA-256");
   assert.equal(value.deviceSignature.algorithm, "Ed25519");
-  return value;
-}
-
-function readUsageAuthenticationPolicy(legacyPolicy) {
-  const value = JSON.parse(
-    readFileSync(
-      resolve(root, "contracts", "v1", "connector-usage-sync-authentication.json"),
-      "utf8",
-    ),
-  );
-  assert.deepEqual(value, {
-    ...legacyPolicy,
-    protocolId: "viberacing-usage-sync-auth-v1",
-    requestTarget: "/v1/community/usage",
-  });
   return value;
 }
 
@@ -579,23 +569,6 @@ function readDevicePublicKey(keyPair) {
 function createPayload(
   syncId,
   observedAt,
-  tokens,
-  { codexReportedDate = observedAt.slice(0, 10), payloadSourceId = sourceId } = {},
-) {
-  return {
-    schemaVersion: 1,
-    sourceId: payloadSourceId,
-    syncId,
-    observedAt,
-    connectorVersion: "1.2.3",
-    codexVersion: "0.144.5",
-    dailyEntries: [{ codexReportedDate, tokens }],
-  };
-}
-
-function createUsagePayload(
-  syncId,
-  observedAt,
   dailyTokenTotal,
   { payloadSourceId = sourceId, reportedDate = observedAt.slice(0, 10) } = {},
 ) {
@@ -604,7 +577,7 @@ function createUsagePayload(
     sourceId: payloadSourceId,
     syncId,
     observedAt,
-    clientVersion: "0.0.0",
+    clientVersion: "1.2.3",
     agentVersion: "0.144.5",
     dailyEntries: [{ reportedDate, dailyTokenTotal }],
   };
@@ -716,6 +689,34 @@ function assertSuccess(result, expected) {
   assert.equal(result.body.acceptedEntries, expected.acceptedEntries);
 }
 
+function assertNotFound(result) {
+  assert.equal(result.status, 404);
+  assert.deepEqual(Object.keys(result.body).sort(), [
+    "errorCode",
+    "requestId",
+    "retryable",
+    "schemaVersion",
+    "status",
+    "title",
+  ]);
+  assert.deepEqual(
+    {
+      errorCode: result.body.errorCode,
+      retryable: result.body.retryable,
+      schemaVersion: result.body.schemaVersion,
+      status: result.body.status,
+      title: result.body.title,
+    },
+    {
+      errorCode: "not_found",
+      retryable: false,
+      schemaVersion: 1,
+      status: 404,
+      title: "Not found",
+    },
+  );
+}
+
 function assertUnauthorized(result) {
   assert.equal(result.status, 401);
   assert.deepEqual(Object.keys(result.body).sort(), [
@@ -791,7 +792,7 @@ async function exerciseNoQueueAdmission(baseUrl, policy, keyPair) {
         originNonceBytes: Buffer.alloc(16, 0x41 + index),
         originTimestamp: observedAt,
         payload: createPayload(admissionSyncIds[index], observedAt, 200 + index, {
-          codexReportedDate: utcDateDaysBefore(observedAt, 4 - index),
+          reportedDate: utcDateDaysBefore(observedAt, 4 - index),
           payloadSourceId: admissionSourceId,
         }),
         policy,
@@ -809,7 +810,7 @@ async function exerciseNoQueueAdmission(baseUrl, policy, keyPair) {
       originNonceBytes: Buffer.alloc(16, 0x45),
       originTimestamp: observedAt,
       payload: createPayload(rejectedAdmissionSyncId, observedAt, 204, {
-        codexReportedDate: utcDateDaysBefore(observedAt, 5),
+        reportedDate: utcDateDaysBefore(observedAt, 5),
         payloadSourceId: admissionSourceId,
       }),
       policy,
@@ -1584,7 +1585,6 @@ async function main() {
   buildWorkspace("apps/ingest-host", "Ingest host production build");
 
   const policy = readAuthenticationPolicy();
-  const usagePolicy = readUsageAuthenticationPolicy(policy);
   const keyPair = generateKeyPairSync("ed25519");
   const publicKey = readDevicePublicKey(keyPair);
   const admissionKeyPair = generateKeyPairSync("ed25519");
@@ -1715,6 +1715,12 @@ COMMIT;`,
         payload: acceptedPayload,
         policy,
       });
+      const removedPathResult = await postSignedRequest(
+        host.baseUrl,
+        { ...policy, requestTarget: removedSyncRequestTarget },
+        acceptedRequest,
+      );
+      assertNotFound(removedPathResult);
       const acceptedResult = await postSignedRequest(host.baseUrl, policy, acceptedRequest);
       assertSuccess(acceptedResult, {
         acceptedEntries: 1,
@@ -1728,10 +1734,10 @@ COMMIT;`,
         keyPair,
         originNonceBytes: Buffer.alloc(16, 0x24),
         originTimestamp: usageObservedAt,
-        payload: createUsagePayload(usageSyncId, usageObservedAt, 321),
-        policy: usagePolicy,
+        payload: createPayload(usageSyncId, usageObservedAt, 321),
+        policy,
       });
-      const usageResult = await postSignedRequest(host.baseUrl, usagePolicy, usageRequest);
+      const usageResult = await postSignedRequest(host.baseUrl, policy, usageRequest);
       assertSuccess(usageResult, {
         acceptedEntries: 1,
         outcome: "accepted",
@@ -1802,6 +1808,7 @@ COMMIT;`,
       );
 
       const requestIds = new Set([
+        removedPathResult.body.requestId,
         acceptedResult.body.requestId,
         usageResult.body.requestId,
         duplicateResult.body.requestId,
@@ -1810,7 +1817,7 @@ COMMIT;`,
         ...admissionResults.map((result) => result.body.requestId),
         emittedProcessResult.body.requestId,
       ]);
-      assert.equal(requestIds.size, 11);
+      assert.equal(requestIds.size, 12);
 
       const storedState = JSON.parse(
         psqlScalar(
@@ -1948,11 +1955,11 @@ SELECT pg_catalog.jsonb_build_object(
         unexpectedSyncCount: 0,
         usageSnapshotAccountingRevision: "codex_daily_usage_buckets_v1",
         usageSnapshotProvider: "codex",
-        usageSnapshotVersions: ["0.0.0", "0.144.5"],
+        usageSnapshotVersions: ["1.2.3", "0.144.5"],
       });
 
       console.log(
-        "Ingest PostgreSQL integration passed (legacy and Usage Sync acceptance, duplicate, replay denial, revocation denial, four-slot no-queue admission, emitted-process acceptance, and exact stored state).",
+        "Ingest PostgreSQL integration passed (Usage Sync acceptance, removed-path rejection, duplicate, replay denial, revocation denial, four-slot no-queue admission, emitted-process acceptance, and exact stored state).",
       );
     }
   } catch (error) {

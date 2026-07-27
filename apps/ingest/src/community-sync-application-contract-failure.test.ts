@@ -1,14 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type {
-  ConnectorSyncResultV1,
-  ProblemDetailsV1,
-  ValidationResult,
-} from "@viberacing/contracts";
+import type { ProblemDetailsV1, UsageSyncResultV1, ValidationResult } from "@viberacing/contracts";
 
 interface ContractsModule extends Record<string, unknown> {
-  validateConnectorSyncResultV1(value: unknown): ValidationResult<ConnectorSyncResultV1>;
   validateProblemDetailsV1(value: unknown): ValidationResult<ProblemDetailsV1>;
+  validateUsageSyncResultV1(value: unknown): ValidationResult<UsageSyncResultV1>;
 }
 
 const validationControl = vi.hoisted(() => ({
@@ -20,10 +16,10 @@ vi.mock("@viberacing/contracts", async (importOriginal) => {
   const actual = await importOriginal<ContractsModule>();
   return {
     ...actual,
-    validateConnectorSyncResultV1: (value: unknown) =>
+    validateUsageSyncResultV1: (value: unknown) =>
       validationControl.rejectResult
         ? { issues: [{ code: "type", path: "$" }], ok: false as const }
-        : actual.validateConnectorSyncResultV1(value),
+        : actual.validateUsageSyncResultV1(value),
     validateProblemDetailsV1: (value: unknown) =>
       validationControl.rejectProblem
         ? { issues: [{ code: "type", path: "$" }], ok: false as const }
@@ -41,7 +37,7 @@ import {
   CommunitySyncVerificationError,
   type VerifiedCommunitySync,
 } from "./community-sync-verifier.js";
-import { communitySyncRequestTarget } from "./protocol.js";
+import { usageSyncRequestTarget } from "./protocol.js";
 
 const submission = Object.freeze({
   accountingRevision: codexAccountingRevision,
@@ -55,12 +51,14 @@ const submission = Object.freeze({
     sourceId: "src_BBBBBBBBBBBBBBBBBBBBBB",
     syncId: "syn_CCCCCCCCCCCCCCCCCCCCCC",
     observedAt: "2026-07-15T18:00:00.000Z",
-    connectorVersion: "1.2.3",
-    codexVersion: "2.3.4",
-    dailyEntries: Object.freeze([Object.freeze({ codexReportedDate: "2026-07-15", tokens: 123 })]),
+    clientVersion: "1.2.3",
+    agentVersion: "2.3.4",
+    dailyEntries: Object.freeze([
+      Object.freeze({ reportedDate: "2026-07-15", dailyTokenTotal: 123 }),
+    ]),
   }),
   provider: codexProvider,
-  requestTarget: communitySyncRequestTarget,
+  requestTarget: usageSyncRequestTarget,
   signatureBase64Url: Buffer.alloc(64, 0x44).toString("base64url"),
 }) satisfies VerifiedCommunitySync;
 

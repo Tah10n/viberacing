@@ -617,6 +617,16 @@ Versioning where its guarantees are applicable.
   field allowlist, active-profile filtering, post-hide re-ranking, fixed ordering, and no implied
   HTTP route, cache, profile detail, or complete race DTO.
 
+### Changed
+
+- Removed the unreleased `ConnectorSyncV1` contract, `/v1/community/sync` operation, Edge/Ingest
+  branches, generated artifacts, and direct runtime access to its internal SQL implementation.
+  `UsageSyncV1` on exact `/v1/community/usage` is now the sole usage-ingest protocol, while
+  `VIBERACING_USAGE_SYNC_ENABLED` remains a fail-closed containment decision rather than a migration
+  switch. ADR 0075 records that no released site, connector, or production traffic requires a
+  compatibility window; revision 0043 preserves immutable migration history while revoking the old
+  function from runtime roles.
+
 ### Security
 
 - Distinguished a normally completed HTTP request stream from an aborted upload after asynchronous

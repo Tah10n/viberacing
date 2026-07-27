@@ -168,7 +168,8 @@ persistent local replay and transport-free verifier/adapter composition with sep
 
 ## References
 
-- [Connector authentication policy](../../contracts/v1/connector-sync-authentication.json)
+- [Current Usage Sync authentication policy](../../contracts/v1/connector-usage-sync-authentication.json)
+- [Current single-protocol decision](0075-single-unreleased-usage-sync-protocol.md)
 - [Contract boundary](../../contracts/README.md)
 - [Ingest verification kernel](../../apps/ingest/README.md)
 - [Project plan](../PROJECT_PLAN.md)

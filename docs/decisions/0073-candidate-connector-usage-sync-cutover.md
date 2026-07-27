@@ -1,10 +1,10 @@
 # ADR 0073: Candidate connector UsageSyncV1 cutover
 
-- Status: Accepted (local candidate connector; release and deployment pending)
+- Status: Superseded
 - Date: 2026-07-26
 - Decision owners: Connector, Contracts, Ingest, Compatibility, Security, and Privacy
 - Supersedes: None
-- Superseded by: None
+- Superseded by: ADR 0075
 
 ## Context
 
