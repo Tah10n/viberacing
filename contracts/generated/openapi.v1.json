@@ -2400,7 +2400,7 @@
             "type": "string",
             "minLength": 35,
             "maxLength": 512,
-            "pattern": "^(?:https://[A-Za-z0-9.-]+(?::[0-9]{2,5})?|http://(?:localhost|127\\.0\\.0\\.1)(?::[0-9]{2,5})?)/connect\\?code=[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$"
+            "pattern": "^(?:https://(?:[A-Za-z0-9.-]+|\\[[0-9A-Fa-f:]+\\])(?::[0-9]{2,5})?|http://(?:localhost|127\\.0\\.0\\.1|\\[::1\\])(?::[0-9]{2,5})?)/connect\\?code=[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$"
           },
           "expiresAt": {
             "type": "string",
@@ -3182,6 +3182,6 @@
       }
     }
   },
-  "x-viberacing-contract-source": "sha256:98005af838c9dd402130e4ef1e6e38be9b2a4563f99a50a47829f5b4ef502d8e",
+  "x-viberacing-contract-source": "sha256:cc1bc14900833fb161d51df37fa7d638a8dae59303aede01c2ca246bb11384af",
   "x-viberacing-status": "mixed-local"
 }

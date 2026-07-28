@@ -34,8 +34,9 @@ pub use codex_reader::{
 };
 pub use connect::{ConnectorCliError, run_connector_cli};
 pub use pairing::{
-    PAIRING_CHALLENGE_BYTES, PAIRING_POLL_POSSESSION_MESSAGE_PREFIX, PairingPollPossessionProof,
-    PairingPollSigningError, PairingPollV1Signer, PendingInstallationSigningKey,
+    MAX_DISCOVERY_CANDIDATES, PAIRING_CHALLENGE_BYTES, PAIRING_POLL_POSSESSION_MESSAGE_PREFIX,
+    PAIRING_START_POSSESSION_MESSAGE_PREFIX, PairingPollPossessionProof, PairingPollSigningError,
+    PairingPollV1Signer, PairingStartSigningError, PendingInstallationSigningKey,
     ReviewedPairingPollChallenge,
 };
 pub use process::{

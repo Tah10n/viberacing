@@ -6,6 +6,15 @@ use ed25519_dalek::{Signer, SigningKey};
 
 use crate::sync::encode_base64url;
 
+mod start;
+
+pub(crate) use start::{
+    DiscoveryCandidateV1, DiscoveryManifestV1, PairingStartV1Signer, PreparedPairingStart,
+};
+pub use start::{
+    MAX_DISCOVERY_CANDIDATES, PAIRING_START_POSSESSION_MESSAGE_PREFIX, PairingStartSigningError,
+};
+
 /// Version 1 domain-separation prefix for pairing-poll key possession.
 pub const PAIRING_POLL_POSSESSION_MESSAGE_PREFIX: &str = "viberacing-pairing-poll-possession-v1";
 

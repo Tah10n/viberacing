@@ -13,8 +13,8 @@ use crate::car_proposal::{
 };
 
 use super::{
-    ConnectorCliError, CredentialStore, Origin, REQUEST_ID_HEADER, RecordState, all_zero,
-    digest_origin, new_http_agent, valid_json_content_type, valid_public_id,
+    AccountState, ConnectorCliError, CredentialStore, InstallationState, Origin, REQUEST_ID_HEADER,
+    all_zero, new_http_agent, valid_json_content_type, valid_public_id,
 };
 
 const DEVICE_ID_HEADER: &str = "x-viberacing-device-id";
@@ -29,11 +29,23 @@ pub(super) fn run_car_proposal(
     store: &mut dyn CredentialStore,
     output: &mut dyn Write,
 ) -> Result<(), ConnectorCliError> {
-    let mut record = store
-        .load(&digest_origin(origin))?
+    let installation = store
+        .load_installation()?
         .ok_or(ConnectorCliError::NotConnected)?;
-    if record.state != RecordState::Active {
+    if installation.state != InstallationState::Active
+        || installation.origin()?.value != origin.value
+    {
         return Err(ConnectorCliError::NotConnected);
+    }
+    let slot = installation
+        .active_slots()
+        .next()
+        .ok_or(ConnectorCliError::NotConnected)?;
+    let record = store
+        .load_account(slot, &installation.origin_digest)?
+        .ok_or(ConnectorCliError::SecureStorageInvalid)?;
+    if record.state != AccountState::Active {
+        return Err(ConnectorCliError::SecureStorageInvalid);
     }
     let mut nonce = [0_u8; CAR_PROPOSAL_NONCE_BYTES];
     getrandom::fill(&mut nonce).map_err(|_| ConnectorCliError::EntropyUnavailable)?;
@@ -52,7 +64,6 @@ pub(super) fn run_car_proposal(
         .map_err(|_| ConnectorCliError::ProposalPreparationUnavailable)?;
     let signed = CandidateCarProposalV1Signer::sign(key, prepared)
         .map_err(|_| ConnectorCliError::SecureStorageInvalid)?;
-    record.clear();
     HttpCarProposalTransport::new(origin).send(&signed)?;
     writeln!(output, "Car proposal submitted. Review it in your account.")
         .map_err(|_| ConnectorCliError::OutputUnavailable)
@@ -184,10 +195,17 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::connect::CredentialRecord;
+    use crate::connect::credentials::AccountCredential;
+    use crate::connect::digest_origin;
+    use crate::connect::discovery::DiscoveredAccount;
+    use crate::reader::{
+        AccountingScope, AgentProvider, CanonicalDailyUsage, FingerprintKind, ReaderStatus,
+    };
 
     const DEVICE_ID: &str = "dev_BBBBBBBBBBBBBBBBBBBBBB";
     const AGENT_ACCOUNT_ID: &str = "acc_AAAAAAAAAAAAAAAAAAAAAA";
+    const DEVICE_KEY_ID: &str = "key_DDDDDDDDDDDDDDDDDDDDDD";
+    const CANDIDATE_ID: &str = "cand_EEEEEEEEEEEEEEEEEEEEEE";
     const REQUEST_ID: &str = "req_CCCCCCCCCCCCCCCCCCCCCC";
 
     fn recipe() -> CarRecipeSelection {
@@ -204,9 +222,24 @@ mod tests {
         .unwrap()
     }
 
-    fn active_record(origin: &Origin) -> CredentialRecord {
-        let mut record = CredentialRecord::new(digest_origin(origin)).unwrap();
-        record.make_active(AGENT_ACCOUNT_ID, DEVICE_ID).unwrap();
+    fn active_record(origin: &Origin) -> AccountCredential {
+        let account = DiscoveredAccount {
+            provider: AgentProvider::Codex,
+            reader_version: "codex_app_server_0_144_5_v1",
+            accounting_revision: 1,
+            scope_kind: AccountingScope::AgentAccount,
+            fingerprint_kind: FingerprintKind::Unavailable,
+            account_fingerprint_digest: None,
+            safe_display_label: "Codex account".to_owned(),
+            status: ReaderStatus::Ready,
+            daily_usage: CanonicalDailyUsage::new(Vec::new()).unwrap(),
+        };
+        let mut record =
+            AccountCredential::new_pending(digest_origin(origin), CANDIDATE_ID, &account, [7; 32])
+                .unwrap();
+        record
+            .make_active(AGENT_ACCOUNT_ID, DEVICE_ID, DEVICE_KEY_ID)
+            .unwrap();
         record
     }
 

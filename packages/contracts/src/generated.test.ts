@@ -222,6 +222,30 @@ describe("generated clean product contracts", () => {
       }).ok,
     ).toBe(true);
     expect(
+      validateConnectorPairingStartResultV1({
+        schemaVersion: 1,
+        pairingId: `pair_${opaque22}`,
+        pollToken: publicKey,
+        pairingChallenge: publicKey,
+        userCode: "ABCD-EFGH-JKLM",
+        approvalUrl: "http://[::1]:3000/connect?code=ABCD-EFGH-JKLM",
+        expiresAt: "2026-07-28T18:09:00.000Z",
+        requestId: `req_${opaque22}`,
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateConnectorPairingStartResultV1({
+        schemaVersion: 1,
+        pairingId: `pair_${opaque22}`,
+        pollToken: publicKey,
+        pairingChallenge: publicKey,
+        userCode: "ABCD-EFGH-JKLM",
+        approvalUrl: "http://example.test/connect?code=ABCD-EFGH-JKLM",
+        expiresAt: "2026-07-28T18:09:00.000Z",
+        requestId: `req_${opaque22}`,
+      }).ok,
+    ).toBe(false);
+    expect(
       validateConnectorPairingApprovalV1({
         schemaVersion: 1,
         pairingId: `pair_${opaque22}`,

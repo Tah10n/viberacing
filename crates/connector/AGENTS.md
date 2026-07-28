@@ -1,7 +1,7 @@
 # Connector guidance
 
-This crate is the native, least-privileged Codex App Server protocol boundary. Read the root
-`AGENTS.md`, `docs/architecture/SECURITY_INVARIANTS.md`,
+This crate is the native, least-privileged provider-reader and connector protocol boundary. Read the
+root `AGENTS.md`, `docs/architecture/SECURITY_INVARIANTS.md`,
 `docs/architecture/COMPATIBILITY_POLICY.md`, and `docs/reference/codex-compatibility.md` before
 changing it.
 
@@ -21,10 +21,11 @@ changing it.
   material. Keep their types non-reflective, bind signatures to returned bytes, and match the
   `UsageSyncV1` Ingest authentication policy and shared synthetic vector exactly. No legacy
   Community sync route or connector fallback exists before the first release.
-- Keep source/device/time/nonce context construction confined to the reviewed one-shot sync command,
-  which owns source binding, canonical time, and replay behavior. The composer/signer boundary must
-  not grow a scheduler, generic upload client, or Codex network client. Pairing key
-  generation/storage remains confined to the one-command native-store boundary.
+- Keep AgentAccount/device/time/nonce context construction confined to the reviewed account-scoped
+  sync command, which owns server binding, canonical time, and replay behavior. The composer/signer
+  boundary must not grow a scheduler, generic upload client, or provider network client.
+  Installation and per-candidate key generation/storage remain confined to the native-store
+  boundary.
 - Keep candidate executable selection confined to Windows x86_64, the two reviewed fixed filenames,
   absolute `PATH` entries, canonical path/directory/hash budgets, exact candidate size/SHA-256, and
   the retained no-write-sharing handle. `sync` must perform that selection only after validation of
@@ -40,13 +41,15 @@ changing it.
   an active native device record, sign the exact proposal-domain body message, send once without
   retry, and accept only the generic acknowledgement. Never add prompts, conversation, arbitrary
   JSON, proposal reads, approval, activation, or profile administration to this command.
-- Pairing possession must match `connector-pairing-authentication.json` byte for byte. Keep the
-  pending key/challenge capabilities inaccessible outside the crate, sign only the fixed
-  domain-separated message, and keep poll-token custody, HTTP, and native storage in `connect.rs`;
-  browser approval remains server-side.
-- Keep `forget-local` confined to exact canonical origin/label credential deletion. It must not load
-  or decode the record, construct a signer, contact a server, imply revoke, reveal whether an entry
-  existed, or become callable through the proposal-only Agent Skill.
+- Pairing-start and poll possession must match `connector-pairing-authentication.json` byte for
+  byte. Bind start proof to the canonical ordered manifest and persist an uncertain-start state
+  before HTTP. Keep pending key/challenge capabilities inaccessible outside the crate, keep
+  poll-token custody, HTTP, and native storage in `connect.rs`, and leave browser approval
+  server-side.
+- Keep `forget-local` confined to deletion of the fixed installation entry and deterministic
+  account-slot inventory. It must not load or decode a record, construct a signer, contact a server,
+  imply revoke, reveal which entries existed, or become callable through the proposal-only Agent
+  Skill.
 - A generated schema proves only the exact Codex CLI version that generated it. Do not mark a
   version supported until its checked-in fixtures and fail-closed compatibility tests pass.
 - Candidate schema/parser evidence is not support. Keep the public matrix empty until the manifest

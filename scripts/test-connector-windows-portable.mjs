@@ -28,10 +28,15 @@ const maximumOutputBytes = 16 * 1024;
 const processTimeoutMilliseconds = 5_000;
 const expectedUsage =
   "Usage:\n" +
-  "  viberacing-connector connect --origin <https-origin> --label <device-label>\n" +
-  "  viberacing-connector forget-local --origin <https-origin> --label <device-label>\n" +
+  "  viberacing-connector connect --origin <https-origin>\n" +
+  "  viberacing-connector sync [--codex <absolute-path>]\n" +
+  "  viberacing-connector status\n" +
+  "  viberacing-connector doctor\n" +
+  "  viberacing-connector account list\n" +
+  "  viberacing-connector account sync <1..16>\n" +
+  "  viberacing-connector disconnect\n" +
+  "  viberacing-connector forget-local\n" +
   "  viberacing-connector check-codex [--codex <absolute-path>] [--diagnostic-preview]\n" +
-  "  viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]\n" +
   "  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>\n";
 const expectedCandidateFailure = "no exact Codex executable was admitted\n";
 

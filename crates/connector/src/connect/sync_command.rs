@@ -1,29 +1,26 @@
 //! One-shot collection, signing, and upload for an already connected device.
 
-use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 
-use crate::admission::{ADMITTED_CODEX_VERSION, admit_candidate_selection};
-use crate::codex_reader::{CODEX_APP_SERVER_0_144_5_READER_VERSION, CodexAppServer01445Reader};
-use crate::process::{
-    CandidateCodex01445Collector, ReviewedCodexLaunch, current_allowed_environment,
-};
+use crate::CanonicalDailyUsage;
+use crate::codex_reader::CODEX_APP_SERVER_0_144_5_READER_VERSION;
+use crate::reader::AgentProvider;
 use crate::sync::{
     DEVICE_NONCE_BYTES, ReviewedDeviceSigningKey, ReviewedUsageSyncContext, SignedUsageSync,
     USAGE_SYNC_MEDIA_TYPE, USAGE_SYNC_REQUEST_TARGET, UsageSyncV1Composer, UsageSyncV1Signer,
     encode_base64url,
 };
-use crate::{AgentUsageReader, CanonicalDailyUsage, UtcUsageWindow, validate_reader_metadata};
 
+use super::discovery::{admitted_codex_version, collect_codex_account};
 use super::{
-    ConnectorCliError, CredentialRecord, CredentialStore, Origin, REQUEST_ID_HEADER, RecordState,
-    all_zero, digest_origin, map_admission_error, new_http_agent, valid_json_content_type,
-    valid_public_id,
+    AccountCredential, AccountState, ConnectCompletion, ConnectorCliError, CredentialStore,
+    InstallationState, Origin, REQUEST_ID_HEADER, all_zero, digest_origin, new_http_agent,
+    now_epoch_seconds, valid_json_content_type, valid_public_id,
 };
 
 const DEVICE_ID_HEADER: &str = "x-viberacing-device-id";
@@ -32,67 +29,151 @@ const DEVICE_NONCE_HEADER: &str = "x-viberacing-device-nonce";
 const DEVICE_SIGNATURE_HEADER: &str = "x-viberacing-device-signature";
 const IDEMPOTENCY_KEY_HEADER: &str = "idempotency-key";
 const MAX_SYNC_RESPONSE_BYTES: u64 = 1024;
-const TEMP_DIRECTORY_ATTEMPTS: usize = 4;
-
 pub(super) fn run_sync(
     origin: &Origin,
     codex_path: Option<&Path>,
     store: &mut dyn CredentialStore,
     output: &mut dyn Write,
 ) -> Result<(), ConnectorCliError> {
-    let mut record = store
-        .load(&digest_origin(origin))?
+    run_sync_selection(origin, codex_path, store, None, output)
+}
+
+pub(super) fn run_sync_slot(
+    origin: &Origin,
+    slot: usize,
+    store: &mut dyn CredentialStore,
+    output: &mut dyn Write,
+) -> Result<(), ConnectorCliError> {
+    run_sync_selection(origin, None, store, Some(slot), output)
+}
+
+fn run_sync_selection(
+    origin: &Origin,
+    codex_path: Option<&Path>,
+    store: &mut dyn CredentialStore,
+    selected_slot: Option<usize>,
+    output: &mut dyn Write,
+) -> Result<(), ConnectorCliError> {
+    let installation = store
+        .load_installation()?
         .ok_or(ConnectorCliError::NotConnected)?;
-    if record.state != RecordState::Active {
+    if installation.state != InstallationState::Active
+        || installation.origin()?.value != origin.value
+    {
         return Err(ConnectorCliError::NotConnected);
     }
 
-    let admitted = admit_candidate_selection(codex_path).map_err(map_admission_error)?;
-    writeln!(output, "Using admitted Codex {ADMITTED_CODEX_VERSION}.")
+    writeln!(output, "Using admitted Codex {}.", admitted_codex_version())
         .map_err(|_| ConnectorCliError::OutputUnavailable)?;
-
-    let working_directory = EmptyWorkingDirectory::create()?;
-    let (executable, artifact_guard) = admitted.into_parts();
-    let launch = ReviewedCodexLaunch::from_admitted(
-        executable,
-        working_directory.path().to_owned(),
-        current_allowed_environment(),
-        artifact_guard,
-    );
-    let collection = CandidateCodex01445Collector::collect(launch);
-    working_directory.cleanup()?;
-    let provider_usage = collection.map_err(|_| ConnectorCliError::CodexUnavailable)?;
-    if provider_usage.is_empty() {
-        return Err(ConnectorCliError::NoUsage);
+    let discovered = collect_codex_account(codex_path)?;
+    let active_slots = installation.active_slots().collect::<Vec<_>>();
+    let mut matching_slots = Vec::new();
+    for slot in &active_slots {
+        let record = store
+            .load_account(*slot, &installation.origin_digest)?
+            .ok_or(ConnectorCliError::SecureStorageInvalid)?;
+        if record.state != AccountState::Active {
+            return Err(ConnectorCliError::SecureStorageInvalid);
+        }
+        if account_matches_discovery(&record, &discovered)? {
+            matching_slots.push(*slot);
+        }
     }
-    let first_date = provider_usage
-        .entries()
-        .first()
-        .ok_or(ConnectorCliError::NoUsage)?
-        .codex_reported_date()
-        .to_owned();
-    let last_date = provider_usage
-        .entries()
-        .last()
-        .ok_or(ConnectorCliError::NoUsage)?
-        .codex_reported_date()
-        .to_owned();
-    let reader = CodexAppServer01445Reader::from_collected(provider_usage);
-    validate_reader_metadata(&reader).map_err(|_| ConnectorCliError::CodexUnavailable)?;
-    let candidate = reader
-        .discover_accounts()
-        .map_err(|_| ConnectorCliError::CodexUnavailable)?
-        .pop()
-        .ok_or(ConnectorCliError::CodexUnavailable)?;
-    let window = UtcUsageWindow::new(first_date, last_date)
-        .map_err(|_| ConnectorCliError::CodexUnavailable)?;
-    let daily_usage = reader
-        .read_daily_usage(candidate.handle(), &window)
-        .map_err(|_| ConnectorCliError::CodexUnavailable)?;
+    let selected_slots = resolve_sync_slots(&active_slots, &matching_slots, selected_slot)?;
+    let mut synced = 0_usize;
+    for slot in selected_slots {
+        let mut record = store
+            .load_account(slot, &installation.origin_digest)?
+            .ok_or(ConnectorCliError::SecureStorageInvalid)?;
+        if record.state != AccountState::Active
+            || record.provider() != AgentProvider::Codex
+            || record.reader_version()? != CODEX_APP_SERVER_0_144_5_READER_VERSION
+        {
+            return Err(ConnectorCliError::SecureStorageInvalid);
+        }
+        let result = submit_account_usage(origin, &record, &discovered.daily_usage)?;
+        record.mark_synced(now_epoch_seconds()?);
+        store.save_account(slot, &record)?;
+        write_sync_outcome(output, result)?;
+        synced += 1;
+    }
+    if synced == 0 {
+        Err(ConnectorCliError::NotConnected)
+    } else {
+        Ok(())
+    }
+}
+
+fn account_matches_discovery(
+    record: &AccountCredential,
+    discovered: &super::DiscoveredAccount,
+) -> Result<bool, ConnectorCliError> {
+    Ok(record.provider() == discovered.provider
+        && record.reader_version()? == discovered.reader_version
+        && record.accounting_revision == discovered.accounting_revision
+        && record.scope_kind() == discovered.scope_kind
+        && record.safe_display_label()? == discovered.safe_display_label)
+}
+
+fn resolve_sync_slots(
+    active_slots: &[usize],
+    matching_slots: &[usize],
+    selected_slot: Option<usize>,
+) -> Result<Vec<usize>, ConnectorCliError> {
+    if active_slots.is_empty() {
+        return Err(ConnectorCliError::NotConnected);
+    }
+    if let Some(selected) = selected_slot {
+        if !active_slots.contains(&selected) {
+            return Err(ConnectorCliError::InvalidAccountSelector);
+        }
+        if matching_slots != [selected] {
+            return Err(ConnectorCliError::AccountMappingUnavailable);
+        }
+        return Ok(vec![selected]);
+    }
+    if active_slots != matching_slots || matching_slots.len() != 1 {
+        return Err(ConnectorCliError::AccountMappingUnavailable);
+    }
+    Ok(matching_slots.to_vec())
+}
+
+pub(super) fn run_first_sync(
+    origin: &Origin,
+    store: &mut dyn CredentialStore,
+    completion: &ConnectCompletion,
+    output: &mut dyn Write,
+) -> Result<(), ConnectorCliError> {
+    for slot in &completion.active_slots {
+        let usage = completion
+            .discovered_accounts
+            .get(*slot)
+            .ok_or(ConnectorCliError::CodexUnavailable)?;
+        let mut record = store
+            .load_account(*slot, &digest_origin(origin))?
+            .ok_or(ConnectorCliError::SecureStorageInvalid)?;
+        let result = submit_account_usage(origin, &record, &usage.daily_usage)?;
+        record.mark_synced(now_epoch_seconds()?);
+        store.save_account(*slot, &record)?;
+        write_sync_outcome(output, result)?;
+    }
+    Ok(())
+}
+
+fn submit_account_usage(
+    origin: &Origin,
+    record: &AccountCredential,
+    daily_usage: &CanonicalDailyUsage,
+) -> Result<SyncOutcome, ConnectorCliError> {
     let submitted_entries = daily_usage.len();
-    let signed = prepare_fresh_sync(&record, &daily_usage)?;
-    let result = HttpSyncTransport::new(origin).send(&signed, submitted_entries)?;
-    record.clear();
+    let signed = prepare_fresh_sync(record, daily_usage)?;
+    HttpSyncTransport::new(origin).send(&signed, submitted_entries)
+}
+
+fn write_sync_outcome(
+    output: &mut dyn Write,
+    result: SyncOutcome,
+) -> Result<(), ConnectorCliError> {
     match result {
         SyncOutcome::Accepted => write_line(output, "Usage synced."),
         SyncOutcome::Duplicate => write_line(output, "Usage was already synced."),
@@ -101,7 +182,7 @@ pub(super) fn run_sync(
 }
 
 fn prepare_fresh_sync(
-    record: &CredentialRecord,
+    record: &AccountCredential,
     daily_usage: &CanonicalDailyUsage,
 ) -> Result<SignedUsageSync, ConnectorCliError> {
     let mut sync_random = [0_u8; 16];
@@ -121,13 +202,13 @@ fn prepare_fresh_sync(
 }
 
 fn prepare_sync(
-    record: &CredentialRecord,
+    record: &AccountCredential,
     daily_usage: &CanonicalDailyUsage,
     observed_at: String,
     sync_random: [u8; 16],
     device_nonce: [u8; DEVICE_NONCE_BYTES],
 ) -> Result<SignedUsageSync, ConnectorCliError> {
-    if record.state != RecordState::Active || daily_usage.is_empty() {
+    if record.state != AccountState::Active || daily_usage.is_empty() {
         return Err(if daily_usage.is_empty() {
             ConnectorCliError::NoUsage
         } else {
@@ -143,7 +224,7 @@ fn prepare_sync(
     let sync_id = format!("syn_{}", encode_base64url(&sync_random));
     let context = ReviewedUsageSyncContext::from_active_account(
         agent_account_id,
-        CODEX_APP_SERVER_0_144_5_READER_VERSION.to_owned(),
+        record.reader_version()?.to_owned(),
         sync_id,
         observed_at,
         device_id.clone(),
@@ -155,7 +236,7 @@ fn prepare_sync(
     UsageSyncV1Signer::sign(key, prepared).map_err(|_| ConnectorCliError::SecureStorageInvalid)
 }
 
-fn format_utc_milliseconds(time: SystemTime) -> Result<String, ConnectorCliError> {
+pub(super) fn format_utc_milliseconds(time: SystemTime) -> Result<String, ConnectorCliError> {
     let elapsed = time
         .duration_since(UNIX_EPOCH)
         .map_err(|_| ConnectorCliError::SyncPreparationUnavailable)?;
@@ -189,45 +270,6 @@ fn civil_from_days(days_since_unix_epoch: i64) -> (i64, i64, i64) {
     let month = month_prime + if month_prime < 10 { 3 } else { -9 };
     year += i64::from(month <= 2);
     (year, month, day)
-}
-
-struct EmptyWorkingDirectory {
-    path: Option<PathBuf>,
-}
-
-impl EmptyWorkingDirectory {
-    fn create() -> Result<Self, ConnectorCliError> {
-        for _ in 0..TEMP_DIRECTORY_ATTEMPTS {
-            let mut random = [0_u8; 16];
-            getrandom::fill(&mut random).map_err(|_| ConnectorCliError::EntropyUnavailable)?;
-            let path =
-                std::env::temp_dir().join(format!("viberacing-sync-{}", encode_base64url(&random)));
-            random.fill(0);
-            match fs::create_dir(&path) {
-                Ok(()) => return Ok(Self { path: Some(path) }),
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-                Err(_) => return Err(ConnectorCliError::SyncPreparationUnavailable),
-            }
-        }
-        Err(ConnectorCliError::SyncPreparationUnavailable)
-    }
-
-    fn path(&self) -> &Path {
-        self.path.as_deref().expect("working directory must exist")
-    }
-
-    fn cleanup(mut self) -> Result<(), ConnectorCliError> {
-        let path = self.path.take().expect("working directory must exist");
-        fs::remove_dir(path).map_err(|_| ConnectorCliError::CodexUnavailable)
-    }
-}
-
-impl Drop for EmptyWorkingDirectory {
-    fn drop(&mut self) {
-        if let Some(path) = self.path.take() {
-            let _ = fs::remove_dir(path);
-        }
-    }
 }
 
 #[derive(Clone, Copy, Deserialize, Eq, PartialEq)]
@@ -368,8 +410,10 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use crate::ConnectorHandshake;
+    use crate::{AgentUsageReader, CodexAppServer01445Reader, ConnectorHandshake, UtcUsageWindow};
 
+    use super::super::credentials::InstallationRecord;
+    use super::super::discovery::DiscoveredAccount;
     use super::*;
 
     const INITIALIZE_RESPONSE: &[u8] = b"{\"id\":0,\"result\":{\"codexHome\":\"/synthetic/codex-home\",\"platformFamily\":\"unix\",\"platformOs\":\"linux\",\"userAgent\":\"codex-cli/0.144.5\"}}\n";
@@ -379,6 +423,8 @@ mod tests {
         include_bytes!("../../../../compat/codex/0.144.5/fixtures/usage-daily.jsonl");
     const AGENT_ACCOUNT_ID: &str = "acc_AAAAAAAAAAAAAAAAAAAAAA";
     const DEVICE_ID: &str = "dev_BBBBBBBBBBBBBBBBBBBBBB";
+    const DEVICE_KEY_ID: &str = "key_DDDDDDDDDDDDDDDDDDDDDD";
+    const CANDIDATE_ID: &str = "cand_EEEEEEEEEEEEEEEEEEEEEE";
     const REQUEST_ID: &str = "req_CCCCCCCCCCCCCCCCCCCCCC";
 
     fn daily_usage() -> CanonicalDailyUsage {
@@ -404,9 +450,24 @@ mod tests {
             .unwrap()
     }
 
-    fn active_record(origin: &Origin) -> CredentialRecord {
-        let mut record = CredentialRecord::new(digest_origin(origin)).unwrap();
-        record.make_active(AGENT_ACCOUNT_ID, DEVICE_ID).unwrap();
+    fn active_record(origin: &Origin) -> AccountCredential {
+        let account = DiscoveredAccount {
+            provider: AgentProvider::Codex,
+            reader_version: CODEX_APP_SERVER_0_144_5_READER_VERSION,
+            accounting_revision: 1,
+            scope_kind: crate::reader::AccountingScope::AgentAccount,
+            fingerprint_kind: crate::reader::FingerprintKind::Unavailable,
+            account_fingerprint_digest: None,
+            safe_display_label: "Codex account".to_owned(),
+            status: crate::reader::ReaderStatus::Ready,
+            daily_usage: daily_usage(),
+        };
+        let mut record =
+            AccountCredential::new_pending(digest_origin(origin), CANDIDATE_ID, &account, [7; 32])
+                .unwrap();
+        record
+            .make_active(AGENT_ACCOUNT_ID, DEVICE_ID, DEVICE_KEY_ID)
+            .unwrap();
         record
     }
 
@@ -459,6 +520,27 @@ mod tests {
         assert!(valid_public_id(signed.idempotency_key(), "syn_"));
         assert_eq!(signed.device_nonce().len(), 22);
         assert_eq!(signed.device_signature().len(), 86);
+    }
+
+    #[test]
+    fn account_mapping_fails_closed_for_duplicate_or_unmatched_local_accounts() {
+        assert_eq!(
+            resolve_sync_slots(&[0, 1], &[0, 1], None).err(),
+            Some(ConnectorCliError::AccountMappingUnavailable)
+        );
+        assert_eq!(
+            resolve_sync_slots(&[0, 1], &[0, 1], Some(0)).err(),
+            Some(ConnectorCliError::AccountMappingUnavailable)
+        );
+        assert_eq!(resolve_sync_slots(&[0, 1], &[0], Some(0)).unwrap(), vec![0]);
+        assert_eq!(
+            resolve_sync_slots(&[0], &[], Some(0)).err(),
+            Some(ConnectorCliError::AccountMappingUnavailable)
+        );
+        assert_eq!(
+            resolve_sync_slots(&[0], &[0], Some(1)).err(),
+            Some(ConnectorCliError::InvalidAccountSelector)
+        );
     }
 
     #[test]
@@ -577,19 +659,39 @@ mod tests {
     struct EmptyStore;
 
     impl CredentialStore for EmptyStore {
-        fn load(
-            &mut self,
-            _expected_origin: &[u8; 32],
-        ) -> Result<Option<CredentialRecord>, ConnectorCliError> {
+        fn load_installation(&mut self) -> Result<Option<InstallationRecord>, ConnectorCliError> {
             Ok(None)
         }
 
-        fn save(&mut self, _record: &CredentialRecord) -> Result<(), ConnectorCliError> {
-            unreachable!("sync never creates a credential")
+        fn save_installation(
+            &mut self,
+            _record: &InstallationRecord,
+        ) -> Result<(), ConnectorCliError> {
+            unreachable!("sync never creates an installation")
         }
 
-        fn delete(&mut self) -> Result<(), ConnectorCliError> {
+        fn load_account(
+            &mut self,
+            _slot: usize,
+            _expected_origin: &[u8; 32],
+        ) -> Result<Option<AccountCredential>, ConnectorCliError> {
+            Ok(None)
+        }
+
+        fn save_account(
+            &mut self,
+            _slot: usize,
+            _record: &AccountCredential,
+        ) -> Result<(), ConnectorCliError> {
+            unreachable!("sync never creates an account")
+        }
+
+        fn delete_account(&mut self, _slot: usize) -> Result<(), ConnectorCliError> {
             unreachable!("sync never deletes a credential")
+        }
+
+        fn delete_all(&mut self) -> Result<(), ConnectorCliError> {
+            unreachable!("sync never deletes all credentials")
         }
     }
 
