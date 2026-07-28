@@ -11,7 +11,13 @@
       "revision": 2,
       "name": "authentication_passkeys_and_recovery",
       "path": "database/migrations/0002_authentication_passkeys_and_recovery.sql",
-      "sha256": "f94c824a145f917248afcd9a19196046caaa7a7a3bbd543c0a205617727c758d"
+      "sha256": "8854141caa7242ff0d57f277a7bb3489e35ca3f5d0868cfe33edac8e5613e92d"
+    },
+    {
+      "revision": 3,
+      "name": "agent_accounts_installations_and_pairing",
+      "path": "database/migrations/0003_agent_accounts_installations_and_pairing.sql",
+      "sha256": "e322132e6d59dc119d2d8a0146e2624887d003a32db51d7148b21f55be93d0d5"
     }
   ]
 }

@@ -349,6 +349,10 @@ try {
     psql(readFileSync(resolve(root, "database", "tests", "identity_auth.sql"), "utf8")),
     "identity and authentication oracle",
   );
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database", "tests", "agent_accounts_pairing.sql"), "utf8")),
+    "agent-account and batch-pairing oracle",
+  );
 
   const directRead = psql(`
 SET SESSION AUTHORIZATION viberacing_web;
@@ -461,5 +465,5 @@ FROM viberacing_private.schema_migrations;
 }
 
 console.log(
-  `Database integration passed (${catalog.length} clean logical migrations, forced-RLS and least-privilege identity/auth semantics, concurrent GitHub convergence, and two snapshot restores with byte-stable ${restoreEvidence.schemaBytes}-byte schema/${restoreEvidence.dataBytes}-byte data evidence).`,
+  `Database integration passed (${catalog.length} clean logical migrations, forced-RLS and least-privilege identity/auth semantics, concurrent GitHub convergence, adversarial multi-account batch pairing/device lifecycle, and two snapshot restores with byte-stable ${restoreEvidence.schemaBytes}-byte schema/${restoreEvidence.dataBytes}-byte data evidence).`,
 );

@@ -20,6 +20,11 @@ corresponding end-to-end slices land. The final inventory is bounded to seven re
   sessions, passkeys, WebAuthn challenges, recovery-code storage, GitHub profile open/create,
   initial-passkey activation, returning-passkey login, private profile/visibility controls, and
   immediate deletion lock-down.
+- `0003_agent_accounts_installations_and_pairing.sql` creates the closed provider catalog, immutable
+  accounting revisions and AgentAccounts, installation identity, independent account-scoped device
+  keys, digest-bound batch pairing, one-assertion atomic decisions, bounded fallback-code attempts,
+  activation, inventory, and lifecycle controls. Providers remain `recognized` until their reader
+  evidence is complete.
 - `manifest.json` is the sole ordered inventory and SHA-256 source used by the static checker and
   default-off migration runner.
 

@@ -13,6 +13,11 @@ BEGIN
     FROM viberacing_private.schema_migrations
     WHERE revision = 2
       AND name = 'authentication_passkeys_and_recovery'
+  ) OR NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.schema_migrations
+    WHERE revision = 3
+      AND name = 'agent_accounts_installations_and_pairing'
   ) THEN
     RAISE EXCEPTION 'clean bootstrap ledger is incomplete';
   END IF;
@@ -27,8 +32,20 @@ BEGIN
   WHERE namespace.nspname = 'viberacing_private'
     AND relation.relkind = 'r';
 
-  IF v_private_table_count <> 7 OR v_forced_rls_count <> v_private_table_count THEN
+  IF v_private_table_count <> 15 OR v_forced_rls_count <> v_private_table_count THEN
     RAISE EXCEPTION 'private tables are not exactly force-RLS protected';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.agent_providers
+    WHERE provider_code = 'codex'
+      AND state = 'recognized'
+  ) OR (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.agent_providers
+  ) <> 6 THEN
+    RAISE EXCEPTION 'closed recognized provider inventory is invalid';
   END IF;
 
   IF EXISTS (
