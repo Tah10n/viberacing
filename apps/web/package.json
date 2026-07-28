@@ -24,7 +24,7 @@
     "@viberacing/contracts": "workspace:*",
     "next": "16.2.11",
     "pg": "8.22.0",
-    "react": "19.2.7",
+    "react": "19.2.8",
     "react-dom": "19.2.7"
   },
   "devDependencies": {
