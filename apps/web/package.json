@@ -22,7 +22,7 @@
     "@simplewebauthn/browser": "13.3.0",
     "@simplewebauthn/server": "13.3.2",
     "@viberacing/contracts": "workspace:*",
-    "next": "16.2.11",
+    "next": "16.2.12",
     "pg": "8.22.0",
     "react": "19.2.7",
     "react-dom": "19.2.7"
