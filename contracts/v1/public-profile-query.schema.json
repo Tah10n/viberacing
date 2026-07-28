@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/public-profile-query.schema.json",
+  "title": "PublicProfileQueryV1",
+  "description": "Closed single-value query for the current Community profile snapshot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["trustTier"],
+  "properties": {
+    "trustTier": {
+      "description": "Competitive self-reported Community tier.",
+      "type": "string",
+      "const": "community",
+      "minLength": 9,
+      "maxLength": 9
+    }
+  }
+}

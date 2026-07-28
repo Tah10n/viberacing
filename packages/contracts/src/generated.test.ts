@@ -2,28 +2,34 @@ import { describe, expect, it } from "vitest";
 
 import * as publicApi from "./index";
 import {
-  communityRacePageV1Schema,
-  communityRaceStatusPageV1Schema,
-  communityScorePageV1Schema,
-  communityScoreQueryV1Schema,
-  communityTokenRaceStatusPageV1Schema,
-  connectorCarProposalResultV1Schema,
-  usageSyncV1Schema,
+  connectorDiscoveryManifestV1Schema,
+  contractSourceDigest,
+  contractVersion,
+  leaderboardSnapshotV1Schema,
+  validateAgentProviderV1,
   validateCarRecipeV1,
-  validateCommunityRacePageV1,
-  validateCommunityRaceStatusPageV1,
-  validateCommunityScorePageV1,
-  validateCommunityScoreQueryV1,
-  validateCommunityTokenRaceStatusPageV1,
   validateConnectorCarProposalResultV1,
+  validateConnectorDiscoveryManifestV1,
+  validateConnectorPairingApprovalV1,
   validateConnectorPairingPollResultV1,
   validateConnectorPairingPollV1,
   validateConnectorPairingStartResultV1,
   validateConnectorPairingStartV1,
+  validateLeaderboardQueryV1,
+  validateLeaderboardSeasonPathV1,
+  validateLeaderboardSnapshotV1,
   validateProblemDetailsV1,
+  validatePublicProfilePathV1,
+  validatePublicProfileQueryV1,
+  validatePublicProfileSummaryV1,
   validateUsageSyncResultV1,
   validateUsageSyncV1,
 } from "./generated";
+
+const opaque22 = "0123456789ABCDEFGHIJKL";
+const publicKey = "A".repeat(43);
+const signature = "B".repeat(86);
+const digest = "c".repeat(64);
 
 function validCarRecipe() {
   return {
@@ -39,71 +45,70 @@ function validCarRecipe() {
   };
 }
 
-function validScorePage() {
+function validDiscoveryManifest() {
   return {
     schemaVersion: 1,
-    trustTier: "community",
-    selfReported: true,
-    participants: [
+    installationPublicKey: publicKey,
+    connectorVersion: "0.1.0",
+    osFamily: "windows",
+    architecture: "x86_64",
+    candidates: [
       {
-        seasonStart: "2026-07-13",
-        seasonEnd: "2026-07-19",
-        scoreVersion: "community_v1",
-        seasonFinalized: false,
-        handle: "demo_driver",
-        weeklyScore: 4321,
-        activeDays: 6,
-        sourceCount: 2,
-        rankPosition: 1,
-        displayPosition: 1,
+        candidateId: `cand_${opaque22}`,
+        provider: "codex",
+        readerVersion: "codex_app_server_0_144_5_v1",
+        accountingRevision: 1,
+        scopeKind: "agent_account",
+        fingerprintKind: "stable_opaque",
+        accountFingerprintDigest: digest,
+        safeDisplayLabel: "Codex account",
+        syncPublicKey: publicKey,
+        preview: {
+          currentWeekTokenTotal: "9007199254740993",
+          lastUsageDate: "2026-07-27",
+          status: "ready",
+        },
       },
     ],
   };
 }
 
-function validRacePage() {
-  const scorePage = validScorePage();
-  return {
-    ...scorePage,
-    participants: scorePage.participants.map((participant) => ({
-      ...participant,
-      carRecipe: validCarRecipe(),
-    })),
-  };
-}
-
-function validRaceStatusPage() {
-  const racePage = validRacePage();
-  return {
-    ...racePage,
-    participants: racePage.participants.map((participant) => ({
-      ...participant,
-      freshnessDays: 2,
-      streakDays: 13,
-    })),
-  };
-}
-
-function validTokenRaceStatusPage() {
+function validPairingStart() {
   return {
     schemaVersion: 1,
+    discoveryManifest: validDiscoveryManifest(),
+    installationPossessionProof: {
+      signedAt: "2026-07-28T18:00:00.000Z",
+      nonce: opaque22,
+      signature,
+    },
+    clientRateIdentifier: opaque22,
+  };
+}
+
+function validLeaderboardSnapshot() {
+  return {
+    schemaVersion: 1,
+    metricVersion: "provider_reported_tokens_v1",
     trustTier: "community",
-    selfReported: true,
+    seasonStart: "2026-07-27",
+    seasonEnd: "2026-08-02",
+    seasonState: "open",
+    generatedAt: "2026-07-28T18:00:00.000000Z",
+    snapshotRevision: 3,
+    participantCount: 1,
+    page: 1,
+    pageSize: 100,
+    nextPage: null,
     participants: [
       {
-        seasonStart: "2026-07-27",
-        seasonEnd: "2026-08-02",
-        metricVersion: "community_tokens_v1",
-        seasonFinalized: false,
-        handle: "token_driver",
-        carRecipe: validCarRecipe(),
-        weeklyTokenTotal: 12_345_678,
-        activeDays: 6,
-        sourceCount: 2,
+        handle: "demo_driver",
+        weeklyTokenTotal: "9007199254740993",
         rankPosition: 1,
         displayPosition: 1,
         freshnessDays: 0,
-        streakDays: 13,
+        carRecipe: validCarRecipe(),
+        providerBreakdown: [{ provider: "codex", percentage: 100 }],
       },
     ],
   };
@@ -112,829 +117,298 @@ function validTokenRaceStatusPage() {
 function validUsageSync() {
   return {
     schemaVersion: 1,
-    sourceId: "src_0123456789ABCDEFGHIJKL",
-    syncId: "syn_0123456789ABCDEFGHIJKL",
-    observedAt: "2026-07-14T17:00:00.000Z",
+    agentAccountId: `acc_${opaque22}`,
+    syncId: `syn_${opaque22}`,
+    observedAt: "2026-07-28T18:00:00.000Z",
     clientVersion: "0.1.0",
-    agentVersion: "0.144.5",
+    readerVersion: "codex_app_server_0_144_5_v1",
     dailyEntries: [
-      { reportedDate: "2026-07-13", dailyTokenTotal: 123_456 },
-      { reportedDate: "2026-07-14", dailyTokenTotal: 234_567 },
+      { usageDate: "2026-07-27", dailyTokenTotal: "9007199254740993" },
+      { usageDate: "2026-07-28", dailyTokenTotal: "9".repeat(30) },
     ],
   };
 }
 
-function usageIssueCodes(value: unknown): string[] {
-  const result = validateUsageSyncV1(value);
-  return result.ok ? [] : result.issues.map((issue) => issue.code);
-}
-
-function scoreIssueCodes(value: unknown): string[] {
-  const result = validateCommunityScorePageV1(value);
-  return result.ok ? [] : result.issues.map((issue) => issue.code);
-}
-
-function queryIssueCodes(value: unknown): string[] {
-  const result = validateCommunityScoreQueryV1(value);
-  return result.ok ? [] : result.issues.map((issue) => issue.code);
-}
-
-describe("generated CarRecipe contract", () => {
-  it("accepts the exact project-owned enum recipe", () => {
-    const input = validCarRecipe();
-    const result = validateCarRecipeV1(input);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBe(input);
-      expect(result.value.seed).toBe(42);
-    }
-  });
-
-  it("rejects arbitrary content, unknown versions, enums, and seeds", () => {
-    for (const input of [
-      { ...validCarRecipe(), assetUrl: "https://invalid.example/car.svg" },
-      { ...validCarRecipe(), markup: "<svg></svg>" },
-      { ...validCarRecipe(), conversation: "make a branded car" },
-      { ...validCarRecipe(), palette: "#ffffff" },
-      { ...validCarRecipe(), schemaVersion: 2 },
-      { ...validCarRecipe(), seed: -1 },
-      { ...validCarRecipe(), seed: 65_536 },
-      { ...validCarRecipe(), seed: 1.5 },
-    ]) {
-      expect(validateCarRecipeV1(input).ok).toBe(false);
-    }
-  });
-});
-
-describe("generated provider-neutral usage sync contract", () => {
-  it("accepts only the bounded provider-neutral writable payload", () => {
-    const input = validUsageSync();
-    const result = validateUsageSyncV1(input);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBe(input);
-      expect(result.value.dailyEntries[0]?.dailyTokenTotal).toBe(123_456);
-    }
-    expect(Object.isFrozen(usageSyncV1Schema)).toBe(true);
-    expect(Object.isFrozen(usageSyncV1Schema.properties.dailyEntries.items.properties)).toBe(true);
+describe("generated clean product contracts", () => {
+  it("exports only the generated bounded contract surface", () => {
+    expect(contractVersion).toBe("v1");
+    expect(contractSourceDigest).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(Object.hasOwn(publicApi, "validateContract")).toBe(false);
+    expect(Object.isFrozen(connectorDiscoveryManifestV1Schema)).toBe(true);
+    expect(Object.isFrozen(leaderboardSnapshotV1Schema.properties.participants.items)).toBe(true);
   });
 
-  it("rejects provider attribution, accounting metadata, and arbitrary local detail", () => {
-    for (const input of [
-      { ...validUsageSync(), provider: "codex" },
-      { ...validUsageSync(), accountingRevision: "codex_daily_usage_buckets_v1" },
-      { ...validUsageSync(), model: "private-model" },
-      {
-        ...validUsageSync(),
-        dailyEntries: [
-          {
-            reportedDate: "2026-07-14",
-            dailyTokenTotal: 1,
-            prompt: "private prompt",
-          },
-        ],
-      },
-    ]) {
-      const result = validateUsageSyncV1(input);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(JSON.stringify(result.issues)).not.toContain("private");
-      }
-    }
+  it("keeps the supported provider enum closed", () => {
+    expect(validateAgentProviderV1("codex")).toMatchObject({ ok: true, value: "codex" });
+    expect(validateAgentProviderV1("claude_code").ok).toBe(false);
+    expect(validateAgentProviderV1({ provider: "codex" }).ok).toBe(false);
   });
 
-  it("rejects malformed schema, identifiers, versions, timestamps, and dates", () => {
-    expect(usageIssueCodes({ ...validUsageSync(), schemaVersion: 2 })).toContain("const");
-    expect(usageIssueCodes({ ...validUsageSync(), sourceId: "src_short" })).toContain("min_length");
-    expect(usageIssueCodes({ ...validUsageSync(), syncId: "syn_../../private-value" })).toContain(
-      "pattern",
-    );
-    expect(usageIssueCodes({ ...validUsageSync(), clientVersion: "latest" })).toContain("pattern");
-    expect(usageIssueCodes({ ...validUsageSync(), agentVersion: "unknown" })).toContain("pattern");
+  it("validates the project-owned car and generic proposal acknowledgement", () => {
+    expect(validateCarRecipeV1(validCarRecipe()).ok).toBe(true);
     expect(
-      usageIssueCodes({ ...validUsageSync(), observedAt: "2026-02-30T17:00:00.000Z" }),
-    ).toContain("format");
-    expect(
-      usageIssueCodes({ ...validUsageSync(), observedAt: "2026-07-14T25:00:00.000Z" }),
-    ).toContain("format");
-  });
-
-  it("enforces collection, date, integer, and same-date deduplication bounds", () => {
-    expect(usageIssueCodes({ ...validUsageSync(), dailyEntries: [] })).toContain("min_items");
-    expect(
-      usageIssueCodes({
-        ...validUsageSync(),
-        dailyEntries: Array.from({ length: 32 }, (_, index) => ({
-          reportedDate: `2026-07-${String((index % 28) + 1).padStart(2, "0")}`,
-          dailyTokenTotal: index,
-        })),
-      }),
-    ).toEqual(expect.arrayContaining(["max_items", "duplicate_item_key"]));
-    expect(
-      usageIssueCodes({
-        ...validUsageSync(),
-        dailyEntries: [
-          { reportedDate: "2026-07-14", dailyTokenTotal: 1 },
-          { reportedDate: "2026-07-14", dailyTokenTotal: 2 },
-        ],
-      }),
-    ).toContain("duplicate_item_key");
-    expect(
-      usageIssueCodes({
-        ...validUsageSync(),
-        dailyEntries: [{ reportedDate: "2026-02-30", dailyTokenTotal: 1 }],
-      }),
-    ).toContain("format");
-    expect(
-      usageIssueCodes({
-        ...validUsageSync(),
-        dailyEntries: [{ reportedDate: "2026-07-14", dailyTokenTotal: -1 }],
-      }),
-    ).toContain("minimum");
-    expect(
-      usageIssueCodes({
-        ...validUsageSync(),
-        dailyEntries: [{ reportedDate: "2026-07-14", dailyTokenTotal: 9_007_199_254_740_992 }],
-      }),
-    ).toContain("type");
-    expect(
-      usageIssueCodes({
-        ...validUsageSync(),
-        dailyEntries: [{ reportedDate: "2026-07-14", dailyTokenTotal: 1.5 }],
-      }),
-    ).toContain("type");
-  });
-
-  it("rejects unknown daily fields at the bounded schema path without reflection", () => {
-    const input = validUsageSync();
-    input.dailyEntries[0] = {
-      ...input.dailyEntries[0],
-      dailyTokenTotal: 1,
-      rawPrompt: "do not echo",
-    } as { dailyTokenTotal: number; reportedDate: string };
-    const result = validateUsageSyncV1(input);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.issues).toContainEqual({
-        code: "unknown_field",
-        path: "$.dailyEntries[0]",
-      });
-      expect(JSON.stringify(result.issues)).not.toContain("rawPrompt");
-    }
-  });
-});
-
-describe("generated connector pairing transport contracts", () => {
-  it("accepts the exact start and poll request/result shapes", () => {
-    expect(
-      validateConnectorPairingStartV1({
-        schemaVersion: 1,
-        devicePublicKeyBase64Url: "A".repeat(43),
-        deviceLabel: "Synthetic device",
-        connectorVersion: "0.0.0-test",
-        osFamily: "windows",
-        architecture: "x86_64",
-      }).ok,
-    ).toBe(true);
-    expect(
-      validateConnectorPairingStartResultV1({
-        schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        pairingId: "00000000-0000-4000-8000-000000000401",
-        pollToken: "A".repeat(43),
-        pairingChallengeBase64Url: "A".repeat(43),
-        userCode: "ABCD-EFGH-JKLM",
-        expiresAt: "2026-07-17T06:09:00.000Z",
-      }).ok,
-    ).toBe(true);
-    expect(
-      validateConnectorPairingPollV1({
-        schemaVersion: 1,
-        pollToken: "A".repeat(43),
-        possessionSignature: "A".repeat(86),
-      }).ok,
-    ).toBe(true);
-    expect(
-      validateConnectorPairingPollResultV1({
-        schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        deviceBindings: [
-          {
-            sourceId: "src_0123456789ABCDEFGHIJKL",
-            deviceId: "dev_0123456789ABCDEFGHIJKL",
-          },
-        ],
-      }).ok,
-    ).toBe(true);
-    expect(
-      validateConnectorPairingPollResultV1({
-        schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        deviceBindings: [],
-      }).ok,
-    ).toBe(true);
-  });
-
-  it("rejects unknown fields, malformed proof material, and multiple bindings", () => {
-    expect(
-      validateConnectorPairingStartV1({
-        schemaVersion: 1,
-        devicePublicKeyBase64Url: "A".repeat(43),
-        deviceLabel: "Synthetic device",
-        connectorVersion: "0.0.0-test",
-        osFamily: "windows",
-        architecture: "x86_64",
-        accountEmail: "private@example.invalid",
-      }).ok,
+      validateCarRecipeV1({ ...validCarRecipe(), assetUrl: "https://invalid.example" }).ok,
     ).toBe(false);
-    expect(
-      validateConnectorPairingPollV1({
-        schemaVersion: 1,
-        pollToken: "short",
-        possessionSignature: "invalid",
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateConnectorPairingPollResultV1({
-        schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        deviceBindings: [
-          {
-            sourceId: "src_0123456789ABCDEFGHIJKL",
-            deviceId: "dev_0123456789ABCDEFGHIJKL",
-          },
-          {
-            sourceId: "src_ABCDEFGHIJKL0123456789",
-            deviceId: "dev_ABCDEFGHIJKL0123456789",
-          },
-        ],
-      }).ok,
-    ).toBe(false);
-  });
-});
-
-describe("generated response contracts", () => {
-  it("accepts bounded sync acknowledgements and public problem details", () => {
     expect(
       validateConnectorCarProposalResultV1({
         schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
+        requestId: `req_${opaque22}`,
         outcome: "accepted",
       }).ok,
     ).toBe(true);
-    expect(Object.isFrozen(connectorCarProposalResultV1Schema)).toBe(true);
+    expect(
+      validateConnectorCarProposalResultV1({
+        schemaVersion: 1,
+        requestId: `req_${opaque22}`,
+        outcome: "accepted",
+        profileId: "private",
+      }).ok,
+    ).toBe(false);
+  });
+
+  it("accepts one privacy-minimized discovery manifest and rejects private reader detail", () => {
+    const manifest = validDiscoveryManifest();
+    expect(validateConnectorDiscoveryManifestV1(manifest).ok).toBe(true);
+    expect(
+      validateConnectorDiscoveryManifestV1({
+        ...manifest,
+        candidates: [{ ...manifest.candidates[0], accountFingerprintDigest: undefined }],
+      }).ok,
+    ).toBe(false);
+    const [firstCandidate] = manifest.candidates;
+    if (firstCandidate === undefined) {
+      throw new Error("fixture must contain one candidate");
+    }
+    const { accountFingerprintDigest: ignoredDigest, ...candidateWithoutDigest } = firstCandidate;
+    void ignoredDigest;
+    const withoutOptionalDigest = {
+      ...manifest,
+      candidates: [
+        {
+          ...candidateWithoutDigest,
+          fingerprintKind: "unavailable",
+        },
+      ],
+    };
+    expect(validateConnectorDiscoveryManifestV1(withoutOptionalDigest).ok).toBe(true);
+    for (const privateField of ["email", "localPath", "repository", "model", "accessToken"]) {
+      expect(
+        validateConnectorDiscoveryManifestV1({
+          ...manifest,
+          candidates: [{ ...manifest.candidates[0], [privateField]: "private" }],
+        }).ok,
+      ).toBe(false);
+    }
+    expect(
+      validateConnectorDiscoveryManifestV1({
+        ...manifest,
+        candidates: [manifest.candidates[0], manifest.candidates[0]],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it("validates batch start, approval, poll, and bounded activation material", () => {
+    expect(validateConnectorPairingStartV1(validPairingStart()).ok).toBe(true);
+    expect(
+      validateConnectorPairingStartResultV1({
+        schemaVersion: 1,
+        pairingId: `pair_${opaque22}`,
+        pollToken: publicKey,
+        pairingChallenge: publicKey,
+        userCode: "ABCD-EFGH-JKLM",
+        approvalUrl: "https://example.test/connect?code=ABCD-EFGH-JKLM",
+        expiresAt: "2026-07-28T18:09:00.000Z",
+        requestId: `req_${opaque22}`,
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateConnectorPairingApprovalV1({
+        schemaVersion: 1,
+        pairingId: `pair_${opaque22}`,
+        manifestDigest: digest,
+        decisions: [
+          {
+            candidateId: `cand_${opaque22}`,
+            action: "create",
+            privateLabel: "Primary Codex",
+          },
+        ],
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateConnectorPairingPollV1({
+        schemaVersion: 1,
+        pairingId: `pair_${opaque22}`,
+        pollToken: publicKey,
+        possessionSignature: signature,
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateConnectorPairingPollResultV1({
+        schemaVersion: 1,
+        requestId: `req_${opaque22}`,
+        pairingState: "activated",
+        candidateActivations: [
+          {
+            candidateId: `cand_${opaque22}`,
+            activationState: "active",
+            agentAccountId: `acc_${opaque22}`,
+            deviceId: `dev_${opaque22}`,
+            serverBindingMaterial: {
+              deviceKeyId: `key_${opaque22}`,
+              usageEndpoint: "/v1/usage",
+              signatureProtocol: "viberacing-usage-sync-auth-v1",
+            },
+            nextAction: "sync",
+          },
+        ],
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("validates exact public path and query contracts", () => {
+    expect(validateLeaderboardQueryV1({ trustTier: "community", page: 1 }).ok).toBe(true);
+    expect(validateLeaderboardSeasonPathV1({ seasonStart: "2026-07-27" }).ok).toBe(true);
+    expect(validateLeaderboardSeasonPathV1({ seasonStart: "2026-07-28" }).ok).toBe(false);
+    expect(validatePublicProfilePathV1({ handle: "demo_driver" }).ok).toBe(true);
+    expect(validatePublicProfilePathV1({ handle: "../private" }).ok).toBe(false);
+    expect(validatePublicProfileQueryV1({ trustTier: "community" }).ok).toBe(true);
+    expect(validatePublicProfileQueryV1({ trustTier: "verified" }).ok).toBe(false);
+  });
+
+  it("validates direct-token snapshots with nullability and optional public presentation only", () => {
+    const snapshot = validLeaderboardSnapshot();
+    expect(validateLeaderboardSnapshotV1(snapshot).ok).toBe(true);
+    expect(
+      validateLeaderboardSnapshotV1({
+        ...snapshot,
+        participants: [
+          {
+            ...snapshot.participants[0],
+            carRecipe: undefined,
+            providerBreakdown: undefined,
+            freshnessDays: null,
+          },
+        ],
+      }).ok,
+    ).toBe(false);
+    const minimalParticipant = { ...snapshot.participants[0], freshnessDays: null };
+    delete minimalParticipant.carRecipe;
+    delete minimalParticipant.providerBreakdown;
+    expect(
+      validateLeaderboardSnapshotV1({ ...snapshot, participants: [minimalParticipant] }).ok,
+    ).toBe(true);
+    expect(
+      validateLeaderboardSnapshotV1({
+        ...snapshot,
+        participants: [{ ...snapshot.participants[0], accountCount: 2 }],
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateLeaderboardSnapshotV1({
+        ...snapshot,
+        participants: [
+          {
+            ...snapshot.participants[0],
+            weeklyTokenTotal: Number.MAX_SAFE_INTEGER + 1,
+          },
+        ],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it("validates a precomputed public profile and explicit absent car recipe", () => {
+    const profile = {
+      schemaVersion: 1,
+      handle: "demo_driver",
+      trustTier: "community",
+      season: {
+        seasonStart: "2026-07-27",
+        seasonEnd: "2026-08-02",
+        seasonState: "open",
+      },
+      weeklyTokenTotal: "9007199254740993",
+      rankPosition: 1,
+      participantCount: 10,
+      providerBreakdown: [{ provider: "codex", percentage: 100 }],
+      freshnessDays: null,
+      carRecipe: null,
+    };
+    expect(validatePublicProfileSummaryV1(profile).ok).toBe(true);
+    expect(validatePublicProfileSummaryV1({ ...profile, deviceId: `dev_${opaque22}` }).ok).toBe(
+      false,
+    );
+    expect(validatePublicProfileSummaryV1({ ...profile, carRecipe: validCarRecipe() }).ok).toBe(
+      true,
+    );
+  });
+
+  it("accepts decimal strings beyond JavaScript safe integers without rounding", () => {
+    const input = validUsageSync();
+    const result = validateUsageSyncV1(input);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.dailyEntries[0]?.dailyTokenTotal).toBe("9007199254740993");
+      expect(result.value.dailyEntries[1]?.dailyTokenTotal).toBe("9".repeat(30));
+    }
+    expect(
+      validateUsageSyncV1({
+        ...input,
+        dailyEntries: [{ usageDate: "2026-07-27", dailyTokenTotal: "9".repeat(31) }],
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateUsageSyncV1({
+        ...input,
+        dailyEntries: [{ usageDate: "2026-07-27", dailyTokenTotal: 9007199254740992 }],
+      }).ok,
+    ).toBe(false);
+    for (const field of ["provider", "accountingRevision", "trustTier", "rank", "model"]) {
+      expect(validateUsageSyncV1({ ...input, [field]: "private" }).ok).toBe(false);
+    }
+  });
+
+  it("validates only coarse usage outcomes and bounded generic problems", () => {
     expect(
       validateUsageSyncResultV1({
         schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        syncId: "syn_0123456789ABCDEFGHIJKL",
-        outcome: "accepted",
-        acceptedEntries: 2,
+        requestId: `req_${opaque22}`,
+        syncId: `syn_${opaque22}`,
+        outcome: "quarantined",
+        acceptedEntries: 0,
+        nextAllowedSyncAt: "2026-07-28T18:01:00.000Z",
+        recoveryAction: "contact_support",
       }).ok,
     ).toBe(true);
     expect(
+      validateUsageSyncResultV1({
+        schemaVersion: 1,
+        requestId: `req_${opaque22}`,
+        syncId: `syn_${opaque22}`,
+        outcome: "quarantined",
+        acceptedEntries: 0,
+        quarantineReason: "private",
+      }).ok,
+    ).toBe(false);
+    expect(
       validateProblemDetailsV1({
         schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        status: 429,
-        errorCode: "rate_limited",
-        title: "Rate limited",
+        requestId: `req_${opaque22}`,
+        status: 503,
+        errorCode: "temporarily_unavailable",
+        title: "Temporarily unavailable",
         retryable: true,
       }).ok,
     ).toBe(true);
     expect(
       validateProblemDetailsV1({
         schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        status: 405,
-        errorCode: "method_not_allowed",
-        title: "Method not allowed",
-        retryable: false,
-      }).ok,
-    ).toBe(true);
-    expect(
-      validateProblemDetailsV1({
-        schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        status: 406,
-        errorCode: "not_acceptable",
-        title: "Not acceptable",
-        retryable: false,
-      }).ok,
-    ).toBe(true);
-  });
-
-  it("rejects internal reasons, invalid outcomes, status values, and oversized titles", () => {
-    expect(
-      validateConnectorCarProposalResultV1({
-        schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        outcome: "accepted",
-        proposalId: "private-proposal",
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateConnectorCarProposalResultV1({
-        schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        outcome: "pending",
-      }).ok,
-    ).toBe(false);
-    const result = validateUsageSyncResultV1({
-      schemaVersion: 1,
-      requestId: "req_0123456789ABCDEFGHIJKL",
-      syncId: "syn_0123456789ABCDEFGHIJKL",
-      outcome: "accepted",
-      acceptedEntries: 1,
-      internalReason: "private detector name",
-    });
-    expect(result.ok).toBe(false);
-    expect(
-      validateUsageSyncResultV1({
-        schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        syncId: "syn_0123456789ABCDEFGHIJKL",
-        outcome: "verified",
-        acceptedEntries: 1,
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateProblemDetailsV1({
-        schemaVersion: 1,
-        requestId: "req_0123456789ABCDEFGHIJKL",
-        status: 200,
+        requestId: `req_${opaque22}`,
+        status: 500,
         errorCode: "internal_error",
-        title: "x".repeat(121),
-        retryable: false,
-      }).ok,
-    ).toBe(false);
-  });
-});
-
-describe("generated Community score query contract", () => {
-  it("accepts only supported inclusive Monday season boundaries", () => {
-    const input = { seasonStart: "2026-07-13" };
-    const result = validateCommunityScoreQueryV1(input);
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBe(input);
-      expect(result.value.seasonStart).toBe("2026-07-13");
-    }
-    expect(validateCommunityScoreQueryV1({ seasonStart: "1999-12-27" }).ok).toBe(true);
-    expect(validateCommunityScoreQueryV1({ seasonStart: "2099-12-28" }).ok).toBe(true);
-    expect(Object.isFrozen(communityScoreQueryV1Schema)).toBe(true);
-    expect(Object.isFrozen(communityScoreQueryV1Schema.properties.seasonStart)).toBe(true);
-  });
-
-  it("rejects malformed, out-of-range, non-Monday, missing, and accessor-backed values", () => {
-    expect(queryIssueCodes({ seasonStart: "2026-02-30" })).toContain("format");
-    expect(queryIssueCodes({ seasonStart: "1999-12-20" })).toContain("date_minimum");
-    expect(queryIssueCodes({ seasonStart: "2100-01-04" })).toContain("date_maximum");
-    expect(queryIssueCodes({ seasonStart: "2026-07-14" })).toContain("iso_weekday");
-    expect(queryIssueCodes({})).toContain("required");
-
-    let reads = 0;
-    const accessor = {} as { seasonStart?: string };
-    Object.defineProperty(accessor, "seasonStart", {
-      enumerable: true,
-      get() {
-        reads += 1;
-        return "2026-07-13";
-      },
-    });
-    expect(queryIssueCodes(accessor)).toEqual(
-      expect.arrayContaining(["invalid_structure", "required"]),
-    );
-    expect(reads).toBe(0);
-  });
-
-  it("rejects unknown query fields without reflecting their names or values", () => {
-    const result = validateCommunityScoreQueryV1({
-      seasonStart: "2026-07-13",
-      privateFilter: "private-value-that-must-not-be-reflected",
-    });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.issues).toContainEqual({ code: "unknown_field", path: "$" });
-      expect(JSON.stringify(result.issues)).not.toContain("privateFilter");
-      expect(JSON.stringify(result.issues)).not.toContain(
-        "private-value-that-must-not-be-reflected",
-      );
-    }
-  });
-});
-
-describe("generated Community score response contract", () => {
-  it("accepts bounded public rows, explicit Community metadata, and an empty page", () => {
-    const input = validScorePage();
-    const result = validateCommunityScorePageV1(input);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBe(input);
-      expect(result.value.participants[0]?.weeklyScore).toBe(4321);
-      expect(result.value.trustTier).toBe("community");
-      expect(result.value.selfReported).toBe(true);
-    }
-    expect(
-      validateCommunityScorePageV1({
-        schemaVersion: 1,
-        trustTier: "community",
-        selfReported: true,
-        participants: [],
-      }).ok,
-    ).toBe(true);
-    const participant = input.participants[0];
-    if (!participant) {
-      throw new Error("valid score fixture is missing its participant");
-    }
-    expect(
-      validateCommunityScorePageV1({
-        ...input,
-        participants: Array.from({ length: 32 }, (_, index) => ({
-          ...participant,
-          handle: `driver_${String(index + 1).padStart(2, "0")}`,
-          weeklyScore: 7000 - index,
-          rankPosition: index + 1,
-          displayPosition: index + 1,
-        })),
-      }).ok,
-    ).toBe(true);
-    expect(
-      validateCommunityScorePageV1({
-        ...input,
-        participants: [{ ...participant, seasonStart: "1999-12-27", seasonEnd: "2000-01-02" }],
-      }).ok,
-    ).toBe(true);
-    expect(
-      validateCommunityScorePageV1({
-        ...input,
-        participants: [{ ...participant, seasonStart: "2099-12-28", seasonEnd: "2100-01-03" }],
-      }).ok,
-    ).toBe(true);
-    expect(Object.isFrozen(communityScorePageV1Schema)).toBe(true);
-    expect(
-      Object.isFrozen(communityScorePageV1Schema.properties.participants.items.properties),
-    ).toBe(true);
-  });
-
-  it("rejects private and unknown fields without echoing their names or values", () => {
-    const rootResult = validateCommunityScorePageV1({
-      ...validScorePage(),
-      cacheKey: "private-cache-value",
-    });
-    expect(rootResult.ok).toBe(false);
-    if (!rootResult.ok) {
-      expect(rootResult.issues).toContainEqual({ code: "unknown_field", path: "$" });
-      expect(JSON.stringify(rootResult.issues)).not.toContain("cacheKey");
-      expect(JSON.stringify(rootResult.issues)).not.toContain("private-cache-value");
-    }
-
-    const input = validScorePage();
-    input.participants[0] = {
-      ...input.participants[0],
-      profileId: "private-profile-value",
-      rawTokens: 123_456,
-    } as (typeof input.participants)[number];
-    const result = validateCommunityScorePageV1(input);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.issues).toContainEqual({
-        code: "unknown_field",
-        path: "$.participants[0]",
-      });
-      expect(JSON.stringify(result.issues)).not.toContain("profileId");
-      expect(JSON.stringify(result.issues)).not.toContain("private-profile-value");
-      expect(JSON.stringify(result.issues)).not.toContain("rawTokens");
-    }
-  });
-
-  it("rejects trust drift, malformed rows, oversized pages, and duplicate display positions", () => {
-    expect(scoreIssueCodes({ ...validScorePage(), trustTier: "verified" })).toContain("const");
-    expect(scoreIssueCodes({ ...validScorePage(), selfReported: false })).toContain("const");
-    const { selfReported: removedTrustFlag, ...missingTrustFlag } = validScorePage();
-    expect(removedTrustFlag).toBe(true);
-    expect(scoreIssueCodes(missingTrustFlag)).toContain("required");
-
-    const input = validScorePage();
-    const participant = input.participants[0];
-    if (!participant) {
-      throw new Error("valid score fixture is missing its participant");
-    }
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [{ ...participant, seasonStart: "2026-02-30" }],
-      }),
-    ).toContain("format");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [{ ...participant, seasonStart: "2026-07-14" }],
-      }),
-    ).toContain("iso_weekday");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [{ ...participant, seasonEnd: "2026-07-20" }],
-      }),
-    ).toContain("iso_weekday");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [{ ...participant, seasonStart: "1999-12-26" }],
-      }),
-    ).toContain("pattern");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [{ ...participant, seasonEnd: "2100-01-04" }],
-      }),
-    ).toContain("pattern");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [{ ...participant, handle: "Private Driver" }],
-      }),
-    ).toContain("pattern");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [{ ...participant, weeklyScore: 7001 }],
-      }),
-    ).toContain("maximum");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [{ ...participant, activeDays: 8 }],
-      }),
-    ).toContain("maximum");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [{ ...participant, sourceCount: 33 }],
-      }),
-    ).toContain("maximum");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [{ ...participant, rankPosition: 0 }],
-      }),
-    ).toContain("minimum");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: Array.from({ length: 33 }, (_, index) => ({
-          ...participant,
-          displayPosition: index + 1,
-        })),
-      }),
-    ).toContain("max_items");
-    expect(
-      scoreIssueCodes({
-        ...input,
-        participants: [participant, { ...participant, handle: "other_driver" }],
-      }),
-    ).toContain("duplicate_item_key");
-  });
-});
-
-describe("generated Community race response contract", () => {
-  it("accepts a canonical active recipe and preserves an absent recipe", () => {
-    const input = validRacePage();
-    const result = validateCommunityRacePageV1(input);
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBe(input);
-      expect(result.value.participants[0]?.carRecipe?.palette).toBe("magenta");
-    }
-
-    const participant = input.participants[0];
-    if (!participant) {
-      throw new Error("valid race fixture is missing its participant");
-    }
-    const { carRecipe, ...participantWithoutRecipe } = participant;
-    expect(carRecipe).toEqual(validCarRecipe());
-    expect(
-      validateCommunityRacePageV1({
-        ...input,
-        participants: [participantWithoutRecipe],
-      }).ok,
-    ).toBe(true);
-    expect(Object.isFrozen(communityRacePageV1Schema)).toBe(true);
-    expect(
-      Object.isFrozen(
-        communityRacePageV1Schema.properties.participants.items.properties.carRecipe.properties,
-      ),
-    ).toBe(true);
-  });
-
-  it("rejects arbitrary recipe content, proposal state, malformed recipes, and private fields", () => {
-    const input = validRacePage();
-    const participant = input.participants[0];
-    if (!participant) {
-      throw new Error("valid race fixture is missing its participant");
-    }
-    for (const carRecipe of [
-      { ...validCarRecipe(), assetUrl: "https://invalid.example/car.svg" },
-      { ...validCarRecipe(), palette: "#ffffff" },
-      { ...validCarRecipe(), proposalId: "private-proposal" },
-      { ...validCarRecipe(), seed: 65_536 },
-      null,
-    ]) {
-      expect(
-        validateCommunityRacePageV1({
-          ...input,
-          participants: [{ ...participant, carRecipe }],
-        }).ok,
-      ).toBe(false);
-    }
-
-    expect(
-      validateCommunityRacePageV1({
-        ...input,
-        participants: [{ ...participant, proposal: validCarRecipe() }],
-      }).ok,
-    ).toBe(false);
-  });
-
-  it("does not silently widen the stable score response component", () => {
-    const scorePage = validScorePage();
-    const participant = scorePage.participants[0];
-    if (!participant) {
-      throw new Error("valid score fixture is missing its participant");
-    }
-    expect(
-      validateCommunityScorePageV1({
-        ...scorePage,
-        participants: [{ ...participant, carRecipe: validCarRecipe() }],
-      }).ok,
-    ).toBe(false);
-  });
-});
-
-describe("generated Community race status response contract", () => {
-  it("accepts bounded freshness and an optional profile-visible streak", () => {
-    const input = validRaceStatusPage();
-    const result = validateCommunityRaceStatusPageV1(input);
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBe(input);
-      expect(result.value.participants[0]?.freshnessDays).toBe(2);
-      expect(result.value.participants[0]?.streakDays).toBe(13);
-    }
-
-    const participant = input.participants[0];
-    if (!participant) {
-      throw new Error("valid race status fixture is missing its participant");
-    }
-    expect(
-      validateCommunityRaceStatusPageV1({
-        ...input,
-        participants: [{ ...participant, streakDays: 36_533 }],
-      }).ok,
-    ).toBe(true);
-    const { carRecipe, streakDays, ...participantWithoutOptionals } = participant;
-    expect(carRecipe).toEqual(validCarRecipe());
-    expect(streakDays).toBe(13);
-    expect(
-      validateCommunityRaceStatusPageV1({
-        ...input,
-        participants: [participantWithoutOptionals],
-      }).ok,
-    ).toBe(true);
-    expect(Object.isFrozen(communityRaceStatusPageV1Schema)).toBe(true);
-  });
-
-  it("rejects missing or out-of-range status, exact timestamps, and private detail", () => {
-    const input = validRaceStatusPage();
-    const participant = input.participants[0];
-    if (!participant) {
-      throw new Error("valid race status fixture is missing its participant");
-    }
-    const { freshnessDays: _freshnessDays, ...withoutFreshness } = participant;
-    void _freshnessDays;
-
-    for (const invalidParticipant of [
-      withoutFreshness,
-      { ...participant, freshnessDays: -1 },
-      { ...participant, freshnessDays: 65_536 },
-      { ...participant, streakDays: -1 },
-      { ...participant, streakDays: 36_534 },
-      { ...participant, streakDays: null },
-      { ...participant, receivedAt: "2026-07-18T12:34:56.789Z" },
-      { ...participant, dailyScores: [100, 200] },
-      { ...participant, profileId: "private-profile" },
-    ]) {
-      expect(
-        validateCommunityRaceStatusPageV1({
-          ...input,
-          participants: [invalidParticipant],
-        }).ok,
-      ).toBe(false);
-    }
-  });
-
-  it("keeps both earlier closed response components unchanged", () => {
-    const statusPage = validRaceStatusPage();
-    const participant = statusPage.participants[0];
-    if (!participant) {
-      throw new Error("valid race status fixture is missing its participant");
-    }
-    expect(
-      validateCommunityRacePageV1({
-        ...statusPage,
-        participants: [participant],
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateCommunityScorePageV1({
-        ...statusPage,
-        participants: [participant],
-      }).ok,
-    ).toBe(false);
-  });
-});
-
-describe("generated Community token race status response contract", () => {
-  it("accepts exact JavaScript-safe weekly token totals and optional presentation state", () => {
-    const input = validTokenRaceStatusPage();
-    const result = validateCommunityTokenRaceStatusPageV1(input);
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBe(input);
-      expect(result.value.participants[0]?.weeklyTokenTotal).toBe(12_345_678);
-    }
-
-    const participant = input.participants[0];
-    if (!participant) {
-      throw new Error("valid token fixture is missing its participant");
-    }
-    expect(
-      validateCommunityTokenRaceStatusPageV1({
-        ...input,
-        participants: [{ ...participant, weeklyTokenTotal: Number.MAX_SAFE_INTEGER }],
-      }).ok,
-    ).toBe(true);
-    const { carRecipe, streakDays, ...participantWithoutOptionals } = participant;
-    expect(carRecipe).toEqual(validCarRecipe());
-    expect(streakDays).toBe(13);
-    expect(
-      validateCommunityTokenRaceStatusPageV1({
-        ...input,
-        participants: [participantWithoutOptionals],
-      }).ok,
-    ).toBe(true);
-    expect(Object.isFrozen(communityTokenRaceStatusPageV1Schema)).toBe(true);
-  });
-
-  it("rejects normalized scores, unsafe totals, metric drift, and private usage detail", () => {
-    const input = validTokenRaceStatusPage();
-    const participant = input.participants[0];
-    if (!participant) {
-      throw new Error("valid token fixture is missing its participant");
-    }
-
-    for (const invalidParticipant of [
-      { ...participant, weeklyTokenTotal: -1 },
-      { ...participant, weeklyTokenTotal: Number.MAX_SAFE_INTEGER + 1 },
-      { ...participant, weeklyTokenTotal: 12.5 },
-      { ...participant, metricVersion: "community_v1" },
-      { ...participant, weeklyScore: 7000 },
-      { ...participant, dailyTokenTotals: [100, 200] },
-      { ...participant, provider: "codex" },
-      { ...participant, profileId: "private-profile" },
-    ]) {
-      expect(
-        validateCommunityTokenRaceStatusPageV1({
-          ...input,
-          participants: [invalidParticipant],
-        }).ok,
-      ).toBe(false);
-    }
-  });
-
-  it("does not reinterpret the earlier closed score or race-status components", () => {
-    const tokenPage = validTokenRaceStatusPage();
-    const participant = tokenPage.participants[0];
-    if (!participant) {
-      throw new Error("valid token fixture is missing its participant");
-    }
-    expect(
-      validateCommunityRaceStatusPageV1({
-        ...tokenPage,
-        participants: [participant],
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateCommunityScorePageV1({
-        ...tokenPage,
-        participants: [participant],
+        title: "Internal server error",
+        retryable: true,
+        stack: "private",
       }).ok,
     ).toBe(false);
   });

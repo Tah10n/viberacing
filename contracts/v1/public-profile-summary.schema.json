@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/public-profile-summary.schema.json",
+  "title": "PublicProfileSummaryV1",
+  "description": "Precomputed current-season public profile summary with no account, device, raw daily usage, private label, or internal identifier.",
+  "type": "object",
+  "additionalProperties": false,
+  "x-viberacing-optionalProperties": ["providerBreakdown"],
+  "required": [
+    "schemaVersion",
+    "handle",
+    "trustTier",
+    "season",
+    "weeklyTokenTotal",
+    "rankPosition",
+    "participantCount",
+    "freshnessDays",
+    "carRecipe"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "minimum": 1,
+      "maximum": 1
+    },
+    "handle": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 25,
+      "pattern": "^[a-z0-9](?:[a-z0-9_-]{1,22}[a-z0-9])$"
+    },
+    "trustTier": {
+      "type": "string",
+      "const": "community",
+      "minLength": 9,
+      "maxLength": 9
+    },
+    "season": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seasonStart", "seasonEnd", "seasonState"],
+      "properties": {
+        "seasonStart": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$",
+          "format": "date",
+          "x-viberacing-dateMinimum": "1999-12-27",
+          "x-viberacing-dateMaximum": "2099-12-28",
+          "x-viberacing-isoWeekday": 1
+        },
+        "seasonEnd": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}$",
+          "format": "date"
+        },
+        "seasonState": {
+          "type": "string",
+          "enum": ["finalized", "grace", "open"],
+          "minLength": 4,
+          "maxLength": 9
+        }
+      }
+    },
+    "weeklyTokenTotal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "pattern": "^(?:0|[1-9][0-9]{0,59})$"
+    },
+    "rankPosition": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000
+    },
+    "participantCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000
+    },
+    "freshnessDays": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 366
+    },
+    "providerBreakdown": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "x-viberacing-uniqueBy": "provider",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider", "percentage"],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["codex"],
+            "minLength": 5,
+            "maxLength": 5
+          },
+          "percentage": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      }
+    },
+    "carRecipe": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "chassis",
+        "nose",
+        "cockpit",
+        "wing",
+        "wheels",
+        "palette",
+        "trail",
+        "seed"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "const": 1,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "chassis": {
+          "type": "string",
+          "enum": ["formula", "rally", "roadster"],
+          "minLength": 5,
+          "maxLength": 8
+        },
+        "nose": {
+          "type": "string",
+          "enum": ["classic", "scoop", "wedge"],
+          "minLength": 5,
+          "maxLength": 7
+        },
+        "cockpit": {
+          "type": "string",
+          "enum": ["canopy", "open", "rally"],
+          "minLength": 4,
+          "maxLength": 6
+        },
+        "wing": {
+          "type": "string",
+          "enum": ["high", "low", "none"],
+          "minLength": 3,
+          "maxLength": 4
+        },
+        "wheels": {
+          "type": "string",
+          "enum": ["all-terrain", "slick", "street"],
+          "minLength": 5,
+          "maxLength": 11
+        },
+        "palette": {
+          "type": "string",
+          "enum": ["magenta", "mint", "redline", "sunburst", "turbo-blue"],
+          "minLength": 4,
+          "maxLength": 10
+        },
+        "trail": {
+          "type": "string",
+          "enum": ["grid", "none", "spark"],
+          "minLength": 4,
+          "maxLength": 5
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      }
+    }
+  }
+}

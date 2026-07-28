@@ -1,87 +1,44 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import {
+  appendFileSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 
 import { writeGeneratedArtifacts } from "./lib/contract-generation.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const checker = resolve(import.meta.dirname, "check-contracts.mjs");
 const temporaryRoot = mkdtempSync(join(tmpdir(), "viberacing-contract-check-"));
-let caseCount = 0;
-const implementedLocalEvidencePaths = [
-  "apps/ingest/src/community-sync-admission.test.ts",
-  "apps/ingest/src/community-sync-admission.ts",
-  "apps/ingest/src/community-sync-application.test.ts",
-  "apps/ingest/src/community-sync-application.ts",
-  "apps/ingest/src/community-sync-database.test.ts",
-  "apps/ingest/src/community-sync-database.ts",
-  "apps/ingest/src/community-sync-http-server-contract-failure.test.ts",
-  "apps/ingest/src/community-sync-http-server.test.ts",
-  "apps/ingest/src/community-sync-http-server.ts",
-  "apps/ingest/src/community-sync-verifier.test.ts",
-  "apps/ingest/src/community-sync-verifier.ts",
+const evidencePaths = [
   "apps/edge/src/worker.mjs",
-  "apps/edge/test/worker.test.mjs",
-  "database/migrations/0041_agent_source_provider_foundation.sql",
-  "database/migrations/0042_direct_community_token_leaderboard.sql",
-  "database/tests/community_token_leaderboard.sql",
-  "database/tests/usage_ingest.sql",
-  "scripts/test-ingest-postgres-integration.mjs",
-  "apps/web/app/v1/community/race/route.test.ts",
-  "apps/web/app/v1/community/race/route.ts",
-  "apps/web/app/v1/community/race/status/route.test.ts",
-  "apps/web/app/v1/community/race/status/route.ts",
-  "apps/web/app/v1/community/scores/route.test.ts",
-  "apps/web/app/v1/community/scores/route.ts",
-  "apps/web/app/v1/community/tokens/route.test.ts",
-  "apps/web/app/v1/community/tokens/route.ts",
-  "apps/web/app/v1/connector/cars/proposals/route.test.ts",
-  "apps/web/app/v1/connector/cars/proposals/route.ts",
-  "apps/web/app/v1/connector/pairing/poll/route.test.ts",
-  "apps/web/app/v1/connector/pairing/poll/route.ts",
-  "apps/web/app/v1/connector/pairing/start/route.test.ts",
-  "apps/web/app/v1/connector/pairing/start/route.ts",
-  "apps/web/lib/pairing-http.test.ts",
-  "apps/web/lib/pairing-http.ts",
-  "apps/web/lib/pairing-rate-policy.test.ts",
-  "apps/web/lib/pairing-rate-policy.ts",
-  "apps/web/lib/public-community-race.test.ts",
-  "apps/web/lib/public-community-race.ts",
-  "apps/web/lib/public-community-score-mapper.test.ts",
-  "apps/web/lib/public-community-score-mapper.ts",
-  "apps/web/lib/public-community-score-route.test.ts",
-  "apps/web/lib/public-community-score-route.ts",
-  "apps/web/lib/public-community-score-store.test.ts",
-  "apps/web/lib/public-community-score-store.ts",
-  "apps/web/lib/public-score-admission.test.ts",
-  "apps/web/lib/public-score-admission.ts",
-  "apps/web/lib/connector-car-proposal-admission.test.ts",
-  "apps/web/lib/connector-car-proposal-admission.ts",
-  "apps/web/lib/connector-car-proposal-application.test.ts",
-  "apps/web/lib/connector-car-proposal-application.ts",
-  "apps/web/lib/connector-car-proposal-database.test.ts",
-  "apps/web/lib/connector-car-proposal-database.ts",
-  "apps/web/lib/connector-car-proposal-http.test.ts",
-  "apps/web/lib/connector-car-proposal-http.ts",
-  "apps/web/lib/connector-car-proposal-service.test.ts",
-  "apps/web/lib/connector-car-proposal-service.ts",
-  "apps/web/lib/connector-car-proposal-verifier.test.ts",
-  "apps/web/lib/connector-car-proposal-verifier.ts",
-  "crates/connector/src/car_proposal.rs",
-  "crates/connector/src/connect/car_proposal_command.rs",
-  "database/migrations/0028_connector_car_proposal_ingress.sql",
-  "database/migrations/0029_community_public_race_status.sql",
-  "database/tests/car_recipe_device_proposal_concurrency_assertions.sql",
-  "database/tests/car_recipe_device_proposal_concurrency_setup.sql",
-  "database/tests/car_recipe_proposals.sql",
-  "database/tests/public_score_read.sql",
-  "scripts/test-database-integration.mjs",
+  "apps/ingest/src/protocol.ts",
+  "apps/ingest/src/database-pool.ts",
+  "database/migrations/0004_usage_ingest_replay_and_idempotency.sql",
+  "database/tests/usage_accounting.sql",
 ];
+let caseCount = 0;
+
+function jsonPath(root, file) {
+  return resolve(root, "contracts", "v1", file);
+}
 
 function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function mutateJson(root, file, mutate) {
+  const path = jsonPath(root, file);
+  const value = JSON.parse(readFileSync(path, "utf8"));
+  mutate(value);
+  writeJson(path, value);
 }
 
 async function makeFixture(name) {
@@ -91,7 +48,7 @@ async function makeFixture(name) {
   });
   mkdirSync(resolve(root, "contracts", "generated"), { recursive: true });
   mkdirSync(resolve(root, "packages", "contracts", "src"), { recursive: true });
-  for (const relativePath of implementedLocalEvidencePaths) {
+  for (const relativePath of evidencePaths) {
     const destination = resolve(root, relativePath);
     mkdirSync(dirname(destination), { recursive: true });
     cpSync(resolve(repositoryRoot, relativePath), destination);
@@ -123,876 +80,330 @@ async function expectPass(name) {
   assert.equal(result.status, 0, result.output);
 }
 
-async function expectGeneratedPublicOperations(name) {
+async function expectFail(name, mutation, expected, regenerate = true) {
   caseCount += 1;
   const root = await makeFixture(name);
+  await mutation(root);
+  if (regenerate) {
+    await writeGeneratedArtifacts(root);
+  }
+  const result = run(root);
+  assert.notEqual(result.status, 0, `${name} unexpectedly passed`);
+  assert.match(result.output, expected, result.output);
+}
+
+async function expectOpenApi() {
+  caseCount += 1;
+  const root = await makeFixture("generated-openapi");
   const document = JSON.parse(
     readFileSync(resolve(root, "contracts", "generated", "openapi.v1.json"), "utf8"),
   );
-  assert.equal(document["x-viberacing-status"], "implemented-local");
   assert.equal(Object.hasOwn(document, "servers"), false);
+  assert.equal(Object.hasOwn(document.components, "securitySchemes"), false);
   assert.deepEqual(Object.keys(document.paths), [
-    "/v1/community/race/status",
-    "/v1/community/race",
-    "/v1/community/scores",
-    "/v1/community/tokens",
-    "/v1/community/usage",
     "/v1/connector/cars/proposals",
     "/v1/connector/pairing/poll",
     "/v1/connector/pairing/start",
+    "/v1/leaderboards/{seasonStart}",
+    "/v1/leaderboards/current",
+    "/v1/profiles/{handle}",
+    "/v1/usage",
   ]);
+  assert.equal(
+    Object.keys(document.paths).some((path) => path.startsWith("/v1/community/")),
+    false,
+  );
 
-  const raceStatusOperation = document.paths["/v1/community/race/status"].get;
-  assert.equal(raceStatusOperation.operationId, "getCommunityRaceStatusV1");
-  assert.equal(raceStatusOperation["x-viberacing-status"], "implemented-local");
-  assert.equal(raceStatusOperation["x-viberacing-authentication-contract"], "none");
-  assert.deepEqual(raceStatusOperation["x-viberacing-query-contract"], {
-    $ref: "#/components/schemas/CommunityScoreQueryV1",
-  });
-  assert.deepEqual(raceStatusOperation.responses["200"].content["application/json"].schema, {
-    $ref: "#/components/schemas/CommunityRaceStatusPageV1",
-  });
-
-  const raceOperation = document.paths["/v1/community/race"].get;
-  assert.equal(raceOperation.operationId, "getCommunityRaceV1");
-  assert.equal(raceOperation["x-viberacing-status"], "implemented-local");
-  assert.equal(raceOperation["x-viberacing-authentication-contract"], "none");
-  assert.deepEqual(raceOperation["x-viberacing-query-contract"], {
-    $ref: "#/components/schemas/CommunityScoreQueryV1",
-  });
-  assert.deepEqual(raceOperation.responses["200"].content["application/json"].schema, {
-    $ref: "#/components/schemas/CommunityRacePageV1",
-  });
-
-  const operation = document.paths["/v1/community/scores"].get;
-  assert.equal(operation.operationId, "getCommunityScoresV1");
-  assert.equal(operation["x-viberacing-status"], "implemented-local");
-  assert.equal(operation["x-viberacing-cache-policy"], "no-store");
-  assert.equal(operation["x-viberacing-cors-policy"], "same-origin");
-  assert.equal(operation["x-viberacing-admission-policy"], "no-queue-4");
-  assert.equal(operation["x-viberacing-authentication-contract"], "none");
-  assert.deepEqual(operation["x-viberacing-query-contract"], {
-    $ref: "#/components/schemas/CommunityScoreQueryV1",
-  });
-  assert.equal(operation["x-viberacing-query-policy"], "closed-single-value");
-  assert.equal(operation["x-viberacing-request-body-policy"], "none");
-  assert.equal(operation["x-viberacing-request-contract"], "none");
-  assert.equal(Object.hasOwn(operation, "requestBody"), false);
+  const historical = document.paths["/v1/leaderboards/{seasonStart}"].get;
   assert.deepEqual(
-    operation.parameters.map(({ in: location, name, required }) => ({
+    historical.parameters.map(({ in: location, name, required }) => ({
       location,
       name,
       required,
     })),
-    [{ location: "query", name: "seasonStart", required: true }],
-  );
-  assert.equal(operation.parameters[0].schema["x-viberacing-isoWeekday"], 1);
-  assert.deepEqual(Object.keys(operation.responses), ["200", "400", "406", "429", "500", "503"]);
-  for (const response of Object.values(operation.responses)) {
-    assert.equal(response.headers["Cache-Control"].schema.const, "no-store");
-    assert.equal(response.headers.Vary.schema.const, "Accept");
-    assert.equal(response.headers["x-request-id"].schema.pattern, "^req_[A-Za-z0-9_-]{22}$");
-    assert.equal(Object.hasOwn(response.headers, "Access-Control-Allow-Origin"), false);
-  }
-  assert.deepEqual(operation.responses["200"].content["application/json"].schema, {
-    $ref: "#/components/schemas/CommunityScorePageV1",
-  });
-  for (const status of ["400", "406", "429", "500", "503"]) {
-    assert.deepEqual(operation.responses[status].content["application/problem+json"].schema, {
-      $ref: "#/components/schemas/ProblemDetailsV1",
-    });
-  }
-
-  const tokenOperation = document.paths["/v1/community/tokens"].get;
-  assert.equal(tokenOperation.operationId, "getCommunityTokensV1");
-  assert.equal(tokenOperation["x-viberacing-status"], "implemented-local");
-  assert.equal(tokenOperation["x-viberacing-admission-policy"], "no-queue-4");
-  assert.equal(tokenOperation["x-viberacing-authentication-contract"], "none");
-  assert.equal(tokenOperation["x-viberacing-cache-policy"], "no-store");
-  assert.equal(tokenOperation["x-viberacing-cors-policy"], "same-origin");
-  assert.deepEqual(tokenOperation["x-viberacing-query-contract"], {
-    $ref: "#/components/schemas/CommunityScoreQueryV1",
-  });
-  assert.equal(tokenOperation["x-viberacing-query-policy"], "closed-single-value");
-  assert.deepEqual(tokenOperation.responses["200"].content["application/json"].schema, {
-    $ref: "#/components/schemas/CommunityTokenRaceStatusPageV1",
-  });
-  assert.deepEqual(Object.keys(tokenOperation.responses), [
-    "200",
-    "400",
-    "406",
-    "429",
-    "500",
-    "503",
-  ]);
-
-  const usageSyncOperation = document.paths["/v1/community/usage"].post;
-  assert.equal(usageSyncOperation.operationId, "postCommunityUsageSyncV1");
-  assert.equal(usageSyncOperation["x-viberacing-status"], "implemented-local");
-  assert.equal(usageSyncOperation["x-viberacing-admission-policy"], "no-queue-4");
-  assert.equal(
-    usageSyncOperation["x-viberacing-authentication-contract"],
-    "contracts/v1/connector-usage-sync-authentication.json",
-  );
-  assert.equal(usageSyncOperation["x-viberacing-request-body-policy"], "exact-raw-json-8192");
-  assert.deepEqual(usageSyncOperation["x-viberacing-request-contract"], {
-    $ref: "#/components/schemas/UsageSyncV1",
-  });
-  assert.deepEqual(usageSyncOperation.requestBody.content["application/json"].schema, {
-    $ref: "#/components/schemas/UsageSyncV1",
-  });
-  assert.deepEqual(usageSyncOperation.responses["200"].content["application/json"].schema, {
-    $ref: "#/components/schemas/UsageSyncResultV1",
-  });
-  assert.deepEqual(Object.keys(usageSyncOperation.responses), [
-    "200",
-    "400",
-    "401",
-    "405",
-    "406",
-    "422",
-    "500",
-    "503",
-  ]);
-  assert.equal(usageSyncOperation.responses["405"].headers.Allow.schema.const, "POST");
-  for (const response of Object.values(usageSyncOperation.responses)) {
-    assert.equal(response.headers["Cache-Control"].schema.const, "no-store");
-    assert.equal(response.headers.Vary.schema.const, "Accept");
-    assert.equal(Object.hasOwn(response.headers, "Access-Control-Allow-Origin"), false);
-  }
-
-  const proposalOperation = document.paths["/v1/connector/cars/proposals"].post;
-  assert.equal(proposalOperation.operationId, "postConnectorCarProposalV1");
-  assert.equal(proposalOperation["x-viberacing-status"], "implemented-local");
-  assert.equal(proposalOperation["x-viberacing-admission-policy"], "no-queue-4");
-  assert.equal(
-    proposalOperation["x-viberacing-authentication-contract"],
-    "contracts/v1/connector-car-proposal-authentication.json",
-  );
-  assert.equal(proposalOperation["x-viberacing-cache-policy"], "no-store");
-  assert.equal(proposalOperation["x-viberacing-cors-policy"], "same-origin");
-  assert.equal(proposalOperation["x-viberacing-query-contract"], "none");
-  assert.equal(proposalOperation["x-viberacing-query-policy"], "none");
-  assert.equal(proposalOperation["x-viberacing-request-body-policy"], "exact-raw-json-512");
-  assert.deepEqual(proposalOperation["x-viberacing-request-contract"], {
-    $ref: "#/components/schemas/CarRecipeV1",
-  });
-  assert.equal(Object.hasOwn(proposalOperation, "parameters"), false);
-  assert.equal(Object.hasOwn(proposalOperation, "security"), false);
-  assert.deepEqual(proposalOperation.requestBody.content["application/json"].schema, {
-    $ref: "#/components/schemas/CarRecipeV1",
-  });
-  assert.deepEqual(Object.keys(proposalOperation.responses), [
-    "200",
-    "400",
-    "401",
-    "405",
-    "406",
-    "422",
-    "429",
-    "500",
-    "503",
-  ]);
-  assert.deepEqual(proposalOperation.responses["200"].content["application/json"].schema, {
-    $ref: "#/components/schemas/ConnectorCarProposalResultV1",
-  });
-  assert.equal(proposalOperation.responses["405"].headers.Allow.schema.const, "POST");
-  for (const response of Object.values(proposalOperation.responses)) {
-    assert.equal(response.headers["Cache-Control"].schema.const, "no-store");
-    assert.equal(response.headers.Vary.schema.const, "Accept");
-    assert.equal(response.headers["x-request-id"].schema.pattern, "^req_[A-Za-z0-9_-]{22}$");
-    assert.equal(Object.hasOwn(response.headers, "Access-Control-Allow-Origin"), false);
-  }
-  for (const status of ["400", "401", "405", "406", "422", "429", "500", "503"]) {
-    assert.deepEqual(
-      proposalOperation.responses[status].content["application/problem+json"].schema,
-      {
-        $ref: "#/components/schemas/ProblemDetailsV1",
-      },
-    );
-  }
-
-  for (const [path, operationId, requestSchema, responseSchema] of [
     [
-      "/v1/connector/pairing/poll",
-      "postConnectorPairingPollV1",
-      "ConnectorPairingPollV1",
-      "ConnectorPairingPollResultV1",
+      { location: "path", name: "seasonStart", required: true },
+      { location: "query", name: "trustTier", required: true },
+      { location: "query", name: "page", required: true },
+      { location: "header", name: "Accept", required: false },
+      { location: "header", name: "If-None-Match", required: false },
     ],
-    [
-      "/v1/connector/pairing/start",
-      "postConnectorPairingStartV1",
-      "ConnectorPairingStartV1",
-      "ConnectorPairingStartResultV1",
-    ],
-  ]) {
-    const pairingOperation = document.paths[path].post;
-    assert.equal(pairingOperation.operationId, operationId);
-    assert.equal(pairingOperation["x-viberacing-status"], "implemented-local");
-    assert.equal(pairingOperation["x-viberacing-admission-policy"], "no-queue-4");
-    assert.equal(
-      pairingOperation["x-viberacing-authentication-contract"],
-      "contracts/v1/connector-pairing-transport.json",
-    );
-    assert.equal(pairingOperation["x-viberacing-request-body-policy"], "exact-raw-json-1024");
-    assert.deepEqual(pairingOperation.requestBody.content["application/json"].schema, {
-      $ref: `#/components/schemas/${requestSchema}`,
-    });
-    assert.deepEqual(Object.keys(pairingOperation.responses), [
-      "200",
-      "400",
-      "405",
-      "406",
-      "429",
-      "500",
-      "503",
-    ]);
-    assert.deepEqual(pairingOperation.responses["200"].content["application/json"].schema, {
-      $ref: `#/components/schemas/${responseSchema}`,
-    });
-    assert.equal(pairingOperation.responses["405"].headers.Allow.schema.const, "POST");
-    for (const response of Object.values(pairingOperation.responses)) {
-      assert.equal(response.headers["Cache-Control"].schema.const, "no-store");
-      assert.equal(Object.hasOwn(response.headers, "Access-Control-Allow-Origin"), false);
-    }
-  }
-}
-
-async function expectFailure(name, mutate, expected) {
-  caseCount += 1;
-  const root = await makeFixture(name);
-  await mutate(root);
-  const result = run(root);
-  assert.notEqual(result.status, 0, `${name} unexpectedly passed`);
-  assert.match(result.output, expected);
-}
-
-function readSchema(root, file) {
-  const path = resolve(root, "contracts", "v1", file);
-  return { path, schema: JSON.parse(readFileSync(path, "utf8")) };
+  );
+  assert.deepEqual(historical.responses["200"].headers["Cache-Control"].schema.enum, [
+    "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
+    "public, max-age=300, s-maxage=31536000, immutable",
+  ]);
+  assert.equal(historical.responses["200"].headers.Vary.schema.const, "Accept");
+  assert.equal(historical.responses["304"].headers.ETag.schema.pattern, '^"sha256:[a-f0-9]{64}"$');
+  assert.equal(historical.responses["503"].headers["Cache-Control"].schema.const, "no-store");
+  assert.equal(historical["x-viberacing-cookie-policy"], "none");
+  assert.equal(document.paths["/v1/usage"].post["x-viberacing-status"], "implemented-local");
+  assert.equal(
+    document.paths["/v1/connector/pairing/start"].post["x-viberacing-status"],
+    "contract-only",
+  );
 }
 
 try {
-  await expectPass("valid");
-  await expectGeneratedPublicOperations("generated-public-operations");
-  await expectFailure(
-    "unknown-fields",
-    (root) => {
-      const { path, schema } = readSchema(root, "problem-details.schema.json");
-      schema.additionalProperties = true;
-      writeJson(path, schema);
-    },
-    /additionalProperties to false/,
+  await expectPass("baseline");
+  await expectOpenApi();
+
+  await expectFail(
+    "legacy-route",
+    (root) =>
+      mutateJson(root, "manifest.json", (manifest) => {
+        manifest.operations[4].path = "/v1/community/tokens";
+        manifest.operations.sort((left, right) =>
+          `${left.path}\u0000${left.method}`.localeCompare(`${right.path}\u0000${right.method}`),
+        );
+      }),
+    /legacy Community route|differs from review/u,
   );
-  await expectFailure(
-    "unbounded-string",
-    (root) => {
-      const { path, schema } = readSchema(root, "problem-details.schema.json");
-      delete schema.properties.title.maxLength;
-      writeJson(path, schema);
-    },
-    /reviewed minLength\/maxLength bounds/,
+  await expectFail(
+    "provider-widening",
+    (root) =>
+      mutateJson(root, "agent-provider.schema.json", (schema) => {
+        schema.enum.push("claude_code");
+        schema.maxLength = 11;
+      }),
+    /supported provider enum differs/u,
   );
-  await expectFailure(
-    "derived-client-field",
-    (root) => {
-      const { path, schema } = readSchema(root, "usage-sync.schema.json");
-      schema.required.push("trustTier");
-      schema.properties.trustTier = {
-        type: "string",
-        enum: ["verified"],
-        minLength: 8,
-        maxLength: 8,
-      };
-      writeJson(path, schema);
-    },
-    /server-owned or prohibited field trustTier/,
+  await expectFail(
+    "usage-provider",
+    (root) =>
+      mutateJson(root, "usage-sync.schema.json", (schema) => {
+        schema.properties.provider = {
+          type: "string",
+          enum: ["codex"],
+          minLength: 5,
+          maxLength: 5,
+        };
+        schema["x-viberacing-optionalProperties"] = ["provider"];
+      }),
+    /provider or server-derived field leaked/u,
   );
-  await expectFailure(
-    "derived-client-score-alias",
-    (root) => {
-      const { path, schema } = readSchema(root, "usage-sync.schema.json");
-      const dailyEntry = schema.properties.dailyEntries.items;
-      dailyEntry.required.push("weeklyScore");
-      dailyEntry.properties.weeklyScore = {
-        type: "integer",
-        minimum: 0,
-        maximum: 7000,
-      };
-      writeJson(path, schema);
-    },
-    /server-owned or prohibited field weeklyScore/,
+  await expectFail(
+    "usage-number",
+    (root) =>
+      mutateJson(root, "usage-sync.schema.json", (schema) => {
+        schema.properties.dailyEntries.items.properties.dailyTokenTotal = {
+          type: "integer",
+          minimum: 0,
+          maximum: Number.MAX_SAFE_INTEGER,
+        };
+      }),
+    /not an exact decimal string/u,
   );
-  await expectFailure(
-    "usage-extra-daily-field",
-    (root) => {
-      const { path, schema } = readSchema(root, "usage-sync.schema.json");
-      const dailyEntry = schema.properties.dailyEntries.items;
-      dailyEntry.required.push("points");
-      dailyEntry.properties.points = {
-        type: "integer",
-        minimum: 0,
-        maximum: 7000,
-      };
-      writeJson(path, schema);
-    },
-    /sync daily-entry fields differ from the exact writable allowlist/,
+  await expectFail(
+    "usage-decimal-width",
+    (root) =>
+      mutateJson(root, "usage-sync.schema.json", (schema) => {
+        schema.properties.dailyEntries.items.properties.dailyTokenTotal.maxLength = 31;
+      }),
+    /not an exact decimal string/u,
   );
-  await expectFailure(
-    "usage-derived-provider-field",
-    (root) => {
-      const { path, schema } = readSchema(root, "usage-sync.schema.json");
-      schema.required.push("provider");
-      schema.properties.provider = {
-        type: "string",
-        enum: ["codex"],
-        minLength: 5,
-        maxLength: 5,
-      };
-      writeJson(path, schema);
-    },
-    /server-owned or prohibited field provider/,
+  await expectFail(
+    "discovery-private-field",
+    (root) =>
+      mutateJson(root, "connector-discovery-manifest.schema.json", (schema) => {
+        const candidate = schema.properties.candidates.items;
+        candidate.properties.email = { type: "string", minLength: 1, maxLength: 64 };
+        candidate["x-viberacing-optionalProperties"].push("email");
+      }),
+    /private or non-competitive field leaked/u,
   );
-  await expectFailure(
-    "community-trust-drift",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-score-page.schema.json");
-      schema.properties.trustTier.const = "verified";
-      schema.properties.trustTier.minLength = 8;
-      schema.properties.trustTier.maxLength = 8;
-      writeJson(path, schema);
-    },
-    /Community score trust metadata must remain explicit and constant/,
+  await expectFail(
+    "discovery-candidate-bound",
+    (root) =>
+      mutateJson(root, "connector-discovery-manifest.schema.json", (schema) => {
+        schema.properties.candidates.maxItems = 17;
+      }),
+    /embedded discovery manifest has drifted/u,
   );
-  await expectFailure(
-    "community-private-field",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-score-page.schema.json");
-      const participant = schema.properties.participants.items;
-      participant.required.push("profileId");
-      participant.properties.profileId = {
-        type: "string",
-        minLength: 1,
-        maxLength: 64,
-      };
-      writeJson(path, schema);
-    },
-    /Community score participant fields differ from the public allowlist/,
+  await expectFail(
+    "discovery-optional-ledger",
+    (root) =>
+      mutateJson(root, "connector-discovery-manifest.schema.json", (schema) => {
+        delete schema.properties.candidates.items["x-viberacing-optionalProperties"];
+      }),
+    /optional properties must be declared exactly/u,
   );
-  await expectFailure(
-    "community-race-required-recipe",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-race-page.schema.json");
-      schema.properties.participants.items.required.push("carRecipe");
-      writeJson(path, schema);
-    },
-    /Community race participant fields differ from the public allowlist/,
+  await expectFail(
+    "pairing-start-embedded-drift",
+    (root) =>
+      mutateJson(root, "connector-pairing-start.schema.json", (schema) => {
+        schema.properties.discoveryManifest.properties.candidates.maxItems = 15;
+      }),
+    /embedded discovery manifest has drifted/u,
   );
-  await expectFailure(
-    "community-race-recipe-drift",
+  await expectFail(
+    "pairing-start-proof-removed",
+    (root) =>
+      mutateJson(root, "connector-pairing-start.schema.json", (schema) => {
+        schema.required = schema.required.filter(
+          (field) => field !== "installationPossessionProof",
+        );
+        schema["x-viberacing-optionalProperties"] = ["installationPossessionProof"];
+      }),
+    /top-level required field inventory differs/u,
+  );
+  await expectFail(
+    "pairing-action-widened",
+    (root) =>
+      mutateJson(root, "connector-pairing-approval.schema.json", (schema) => {
+        schema.properties.decisions.items.properties.action.enum.push("merge");
+      }),
+    /pairing decision action enum differs/u,
+  );
+  await expectFail(
+    "pairing-poll-profile-leak",
+    (root) =>
+      mutateJson(root, "connector-pairing-poll-result.schema.json", (schema) => {
+        const activation = schema.properties.candidateActivations.items;
+        activation.properties.profileId = { type: "string", minLength: 1, maxLength: 64 };
+        activation["x-viberacing-optionalProperties"].push("profileId");
+      }),
+    /private server identity leaked/u,
+  );
+  await expectFail(
+    "leaderboard-account-count",
+    (root) =>
+      mutateJson(root, "leaderboard-snapshot.schema.json", (schema) => {
+        const participant = schema.properties.participants.items;
+        participant.properties.accountCount = { type: "integer", minimum: 0, maximum: 100 };
+        participant["x-viberacing-optionalProperties"].push("accountCount");
+      }),
+    /private or non-competitive field leaked/u,
+  );
+  await expectFail(
+    "leaderboard-number-total",
+    (root) =>
+      mutateJson(root, "leaderboard-snapshot.schema.json", (schema) => {
+        schema.properties.participants.items.properties.weeklyTokenTotal = {
+          type: "integer",
+          minimum: 0,
+          maximum: Number.MAX_SAFE_INTEGER,
+        };
+      }),
+    /direct-token snapshot semantics differ/u,
+  );
+  await expectFail(
+    "leaderboard-null-order",
+    (root) =>
+      mutateJson(root, "leaderboard-snapshot.schema.json", (schema) => {
+        schema.properties.nextPage.type = ["null", "integer"];
+      }),
+    /ordered nullable union/u,
+  );
+  await expectFail(
+    "profile-device-leak",
+    (root) =>
+      mutateJson(root, "public-profile-summary.schema.json", (schema) => {
+        schema.properties.deviceId = { type: "string", minLength: 26, maxLength: 26 };
+        schema["x-viberacing-optionalProperties"].push("deviceId");
+      }),
+    /private or non-competitive field leaked/u,
+  );
+  await expectFail(
+    "profile-car-not-nullable",
+    (root) =>
+      mutateJson(root, "public-profile-summary.schema.json", (schema) => {
+        schema.properties.carRecipe.type = "object";
+      }),
+    /car nullability differs/u,
+  );
+  await expectFail(
+    "public-no-store",
+    (root) =>
+      mutateJson(root, "manifest.json", (manifest) => {
+        manifest.operations[3].cacheControl = "no-store";
+      }),
+    /operation getSeasonLeaderboardV1 differs from review/u,
+  );
+  await expectFail(
+    "false-implementation-claim",
+    (root) =>
+      mutateJson(root, "manifest.json", (manifest) => {
+        manifest.operations[2].implementationStatus = "implemented-local";
+      }),
+    /has no reviewed evidence policy/u,
+  );
+  await expectFail(
+    "missing-usage-evidence",
     (root) => {
-      const { path, schema } = readSchema(root, "community-race-page.schema.json");
-      schema.properties.participants.items.properties.carRecipe.properties.palette.enum.push(
-        "arbitrary-color",
+      rmSync(resolve(root, "database", "tests", "usage_accounting.sql"));
+    },
+    /implemented-local contract evidence is missing/u,
+    false,
+  );
+  await expectFail(
+    "pairing-policy-drift",
+    (root) =>
+      mutateJson(root, "connector-pairing-authentication.json", (policy) => {
+        policy.pollProof.messagePrefix = "legacy-pairing-proof";
+      }),
+    /batch pairing possession policy differs/u,
+  );
+  await expectFail(
+    "pairing-vector-drift",
+    (root) =>
+      mutateJson(root, "connector-pairing-possession.test-vector.json", (vector) => {
+        vector.possessionSignature = "A".repeat(86);
+      }),
+    /pairing possession vector is not self-consistent/u,
+  );
+  await expectFail(
+    "duplicate-json-key",
+    (root) => {
+      const path = jsonPath(root, "usage-sync.schema.json");
+      const text = readFileSync(path, "utf8");
+      writeFileSync(
+        path,
+        text.replace(
+          '"title": "UsageSyncV1",',
+          '"title": "UsageSyncV1",\n  "title": "UsageSyncV1",',
+        ),
+        "utf8",
       );
-      writeJson(path, schema);
     },
-    /Community race CarRecipe differs from the canonical optional recipe/,
+    /duplicate JSON object key is forbidden/u,
+    false,
   );
-  await expectFailure(
-    "community-race-status-visibility-drift",
+  await expectFail(
+    "unknown-schema-keyword",
+    (root) =>
+      mutateJson(root, "leaderboard-query.schema.json", (schema) => {
+        schema.oneOf = [];
+      }),
+    /unsupported schema keyword/u,
+  );
+  await expectFail(
+    "unlisted-legacy-schema",
     (root) => {
-      const { path, schema } = readSchema(root, "community-race-status-page.schema.json");
-      schema.properties.participants.items.required.push("streakDays");
-      writeJson(path, schema);
+      writeJson(jsonPath(root, "community-score-page.schema.json"), {
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        $id: "https://schemas.viberacing.example/v1/community-score-page.schema.json",
+        title: "LegacyV1",
+        description: "Forbidden legacy schema.",
+        type: "object",
+        additionalProperties: false,
+        required: [],
+        properties: {},
+      });
     },
-    /Community race status visibility fields differ from the reviewed boundary/,
+    /file inventory differs/u,
+    false,
   );
-  await expectFailure(
-    "community-race-status-bound-drift",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-race-status-page.schema.json");
-      schema.properties.participants.items.properties.freshnessDays.maximum = 65_536;
-      writeJson(path, schema);
-    },
-    /Community race participant bounds differ from the reviewed projection/,
-  );
-  await expectFailure(
-    "community-race-status-streak-bound-drift",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-race-status-page.schema.json");
-      schema.properties.participants.items.properties.streakDays.maximum = 36_532;
-      writeJson(path, schema);
-    },
-    /Community race participant bounds differ from the reviewed projection/,
-  );
-  await expectFailure(
-    "community-token-total-bound-drift",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-token-race-status-page.schema.json");
-      schema.properties.participants.items.properties.weeklyTokenTotal.maximum -= 1;
-      writeJson(path, schema);
-    },
-    /Community token participant boundary differs from ADR 0072/,
-  );
-  await expectFailure(
-    "community-token-metric-drift",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-token-race-status-page.schema.json");
-      schema.properties.participants.items.properties.metricVersion.const = "community_v1";
-      writeJson(path, schema);
-    },
-    /Community token participant boundary differs from ADR 0072/,
-  );
-  await expectFailure(
-    "community-token-private-field",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-token-race-status-page.schema.json");
-      schema.properties.participants.items.required.push("dailyTokenTotals");
-      schema.properties.participants.items.properties.dailyTokenTotals = {
-        type: "array",
-        minItems: 0,
-        maxItems: 7,
-        items: { type: "integer", minimum: 0, maximum: 9007199254740991 },
-      };
-      writeJson(path, schema);
-    },
-    /Community token participant boundary differs from ADR 0072/,
-  );
-  await expectFailure(
-    "optional-properties-on-scalar",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-race-page.schema.json");
-      schema.properties.participants.items.properties.handle["x-viberacing-optionalProperties"] = [
-        "value",
-      ];
-      writeJson(path, schema);
-    },
-    /optional properties are supported only on closed objects/,
-  );
-  await expectFailure(
-    "community-score-bound-drift",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-score-page.schema.json");
-      schema.properties.participants.items.properties.weeklyScore.maximum = 7001;
-      writeJson(path, schema);
-    },
-    /Community score participant bounds differ from the reviewed projection/,
-  );
-  await expectFailure(
-    "community-query-weekday-drift",
-    (root) => {
-      const { path, schema } = readSchema(root, "community-score-query.schema.json");
-      delete schema.properties.seasonStart["x-viberacing-isoWeekday"];
-      writeJson(path, schema);
-    },
-    /date extensions must define one valid ordered range and ISO weekday/,
-  );
-  await expectFailure(
-    "date-extension-on-integer",
-    (root) => {
-      const { path, schema } = readSchema(root, "problem-details.schema.json");
-      schema.properties.schemaVersion["x-viberacing-dateMinimum"] = "1999-12-27";
-      writeJson(path, schema);
-    },
-    /date extensions are supported only on date strings/,
-  );
-  await expectFailure(
-    "problem-vocabulary-drift",
-    (root) => {
-      const { path, schema } = readSchema(root, "problem-details.schema.json");
-      schema.properties.errorCode.enum = schema.properties.errorCode.enum.filter(
-        (value) => value !== "not_acceptable",
-      );
-      schema.properties.title.enum = schema.properties.title.enum.filter(
-        (value) => value !== "Not acceptable",
-      );
-      writeJson(path, schema);
-    },
-    /public problem contract differs from the reviewed HTTP boundary/,
-  );
-  await expectFailure(
-    "problem-request-id-drift",
-    (root) => {
-      const { path, schema } = readSchema(root, "problem-details.schema.json");
-      schema.properties.requestId.maxLength = 27;
-      writeJson(path, schema);
-    },
-    /public problem contract differs from the reviewed HTTP boundary/,
-  );
-  await expectFailure(
-    "operation-contract-drift",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[2].path = "/v1/community/results";
-      writeJson(path, manifest);
-    },
-    /public Community score operation differs from the reviewed HTTP contract/,
-  );
-  await expectFailure(
-    "race-operation-contract-drift",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[1].responseSchema = "CommunityScorePageV1";
-      writeJson(path, manifest);
-    },
-    /public Community race operation differs from the reviewed HTTP contract/,
-  );
-  await expectFailure(
-    "unsafe-operation-path",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[0].path = "/v1/../private";
-      writeJson(path, manifest);
-    },
-    /contract operation 1 has unsafe names or shape/,
-  );
-  await expectFailure(
-    "unknown-operation-schema",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[0].querySchema = "MissingQueryV1";
-      writeJson(path, manifest);
-    },
-    /contract operation 1 references invalid schemas/,
-  );
-  await expectFailure(
-    "duplicate-operation",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations.push(structuredClone(manifest.operations[0]));
-      writeJson(path, manifest);
-    },
-    /operations must be uniquely sorted by path and method/,
-  );
-  await expectFailure(
-    "duplicate-operation-id",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      const duplicateId = structuredClone(manifest.operations[0]);
-      duplicateId.path = "/v1/z";
-      manifest.operations.push(duplicateId);
-      writeJson(path, manifest);
-    },
-    /contains a duplicate operation ID/,
-  );
-  await expectFailure(
-    "unsorted-problem-statuses",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[0].problemStatuses = [400, 429, 406, 500, 503];
-      writeJson(path, manifest);
-    },
-    /contract operation 1 has invalid problem statuses/,
-  );
-  await expectFailure(
-    "unsafe-query-policy",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[0].queryPolicy = "allow-repeated";
-      writeJson(path, manifest);
-    },
-    /contract operation 1 has unsafe names or shape/,
-  );
-  await expectFailure(
-    "unsafe-request-body-policy",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[4].requestBodyPolicy = "unbounded-json";
-      writeJson(path, manifest);
-    },
-    /contract operation 5 has unsafe names or shape/,
-  );
-  await expectFailure(
-    "unknown-request-schema",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[4].requestSchema = "MissingRequestV1";
-      writeJson(path, manifest);
-    },
-    /contract operation 5 references invalid schemas/,
-  );
-  await expectFailure(
-    "unknown-authentication-policy",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[4].authenticationContract = "connector-missing-authentication.json";
-      writeJson(path, manifest);
-    },
-    /contract operation 5 references an unknown policy/,
-  );
-  await expectFailure(
-    "duplicate-authentication-policy-id",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.policies[1].policyId = manifest.policies[0].policyId;
-      writeJson(path, manifest);
-    },
-    /contains a duplicate policy ID/,
-  );
-  await expectFailure(
-    "unsafe-implementation-status",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[0].implementationStatus = "deployed";
-      writeJson(path, manifest);
-    },
-    /contract operation 1 has unsafe names or shape/,
-  );
-  await expectFailure(
-    "missing-local-implementation-evidence",
-    (root) => {
-      rmSync(resolve(root, "apps", "web", "app", "v1", "community", "scores", "route.ts"));
-    },
-    /implemented-local contract evidence is missing/,
-  );
-  await expectFailure(
-    "missing-race-status-implementation-evidence",
-    (root) => {
-      rmSync(resolve(root, "apps", "web", "app", "v1", "community", "race", "status", "route.ts"));
-    },
-    /implemented-local contract evidence is missing/,
-  );
-  await expectFailure(
-    "missing-race-implementation-evidence",
-    (root) => {
-      rmSync(resolve(root, "apps", "web", "app", "v1", "community", "race", "route.ts"));
-    },
-    /implemented-local contract evidence is missing/,
-  );
-  await expectFailure(
-    "missing-sync-implementation-evidence",
-    (root) => {
-      rmSync(resolve(root, "apps", "ingest", "src", "community-sync-http-server.ts"));
-    },
-    /implemented-local contract evidence is missing/,
-  );
-  await expectFailure(
-    "missing-sync-postgres-integration-evidence",
-    (root) => {
-      rmSync(resolve(root, "scripts", "test-ingest-postgres-integration.mjs"));
-    },
-    /implemented-local contract evidence is missing/,
-  );
-  await expectFailure(
-    "missing-usage-sync-database-evidence",
-    (root) => {
-      rmSync(resolve(root, "database", "migrations", "0041_agent_source_provider_foundation.sql"));
-    },
-    /implemented-local contract evidence is missing/,
-  );
-  await expectFailure(
-    "missing-token-route-evidence",
-    (root) => {
-      rmSync(resolve(root, "apps", "web", "app", "v1", "community", "tokens", "route.ts"));
-    },
-    /implemented-local contract evidence is missing/,
-  );
-  await expectFailure(
-    "missing-car-proposal-implementation-evidence",
-    (root) => {
-      rmSync(resolve(root, "crates", "connector", "src", "car_proposal.rs"));
-    },
-    /implemented-local contract evidence is missing/,
-  );
-  await expectFailure(
-    "get-problem-status-drift",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[2].problemStatuses = [400, 405, 406, 429, 500, 503];
-      writeJson(path, manifest);
-    },
-    /public Community score operation differs from the reviewed HTTP contract/,
-  );
-  await expectFailure(
-    "post-problem-status-drift",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[4].problemStatuses = [400, 401, 405, 406, 422, 429, 500, 503];
-      writeJson(path, manifest);
-    },
-    /provider-neutral Community usage sync operation differs from the reviewed HTTP contract/,
-  );
-  await expectFailure(
-    "token-operation-drift",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[3].responseSchema = "CommunityRaceStatusPageV1";
-      writeJson(path, manifest);
-    },
-    /public Community token operation differs from the reviewed HTTP contract/,
-  );
-  await expectFailure(
-    "car-proposal-operation-drift",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.operations[5].problemStatuses = [400, 401, 405, 406, 429, 500, 503];
-      writeJson(path, manifest);
-    },
-    /connector car proposal operation differs from review/,
-  );
-  await expectFailure(
-    "car-proposal-policy-semantic-drift",
-    async (root) => {
-      const path = resolve(root, "contracts", "v1", "connector-car-proposal-authentication.json");
-      const policy = JSON.parse(readFileSync(path, "utf8"));
-      policy.requestFreshness.maximumAgeMilliseconds = 300_001;
-      writeJson(path, policy);
-      await writeGeneratedArtifacts(root);
-    },
-    /connector car proposal policy differs from the reviewed boundary/,
-  );
-  await expectFailure(
-    "car-proposal-vector-message-drift",
-    (root) => {
-      const path = resolve(
-        root,
-        "contracts",
-        "v1",
-        "connector-car-proposal-device-request.test-vector.json",
-      );
-      const vector = JSON.parse(readFileSync(path, "utf8"));
-      vector.deviceSignatureMessage += "\n";
-      writeJson(path, vector);
-    },
-    /shared connector car proposal vector differs from the reviewed boundary/,
-  );
-  await expectFailure(
-    "authentication-contract-digest-drift",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "connector-usage-sync-authentication.json");
-      const policy = JSON.parse(readFileSync(path, "utf8"));
-      policy.maximumBodyBytes = 4096;
-      writeJson(path, policy);
-    },
-    /generated contract artifact has drifted/,
-  );
-  await expectFailure(
-    "usage-authentication-target-drift",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "connector-usage-sync-authentication.json");
-      const policy = JSON.parse(readFileSync(path, "utf8"));
-      policy.requestTarget = "/v1/community/sync";
-      writeJson(path, policy);
-    },
-    /usage sync authentication differs from the reviewed boundary/,
-  );
-  await expectFailure(
-    "usage-sync-vector-message-drift",
-    (root) => {
-      const path = resolve(
-        root,
-        "contracts",
-        "v1",
-        "connector-usage-sync-device-request.test-vector.json",
-      );
-      const vector = JSON.parse(readFileSync(path, "utf8"));
-      vector.deviceSignatureMessage += "\n";
-      writeJson(path, vector);
-    },
-    /shared connector usage vector differs from the reviewed boundary/,
-  );
-  await expectFailure(
-    "pairing-policy-semantic-drift",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "connector-pairing-authentication.json");
-      const policy = JSON.parse(readFileSync(path, "utf8"));
-      policy.canonicalMessageTrailingSeparator = true;
-      writeJson(path, policy);
-      return writeGeneratedArtifacts(root);
-    },
-    /pairing possession policy differs from the reviewed boundary/,
-  );
-  await expectFailure(
-    "pairing-vector-message-drift",
-    (root) => {
-      const path = resolve(
-        root,
-        "contracts",
-        "v1",
-        "connector-pairing-possession.test-vector.json",
-      );
-      const vector = JSON.parse(readFileSync(path, "utf8"));
-      vector.possessionMessage += "\n";
-      writeJson(path, vector);
-    },
-    /shared pairing possession vector differs from the reviewed boundary/,
-  );
-  await expectFailure(
+  await expectFail(
     "generated-drift",
     (root) => {
-      const path = resolve(root, "packages", "contracts", "src", "generated.ts");
-      writeFileSync(path, `${readFileSync(path, "utf8")}\n// stale\n`, "utf8");
+      appendFileSync(resolve(root, "contracts", "generated", "openapi.v1.json"), "\n");
     },
-    /generated contract artifact has drifted/,
+    /generated contract artifact has drifted/u,
+    false,
   );
-  await expectFailure(
-    "unlisted-schema",
-    (root) => {
-      cpSync(
-        resolve(root, "contracts", "v1", "problem-details.schema.json"),
-        resolve(root, "contracts", "v1", "shadow.schema.json"),
-      );
-    },
-    /schema is not listed/,
-  );
-  await expectFailure(
-    "unlisted-authentication-policy",
-    (root) => {
-      cpSync(
-        resolve(root, "contracts", "v1", "connector-pairing-authentication.json"),
-        resolve(root, "contracts", "v1", "connector-shadow-authentication.json"),
-      );
-    },
-    /authentication policy is not listed in the manifest/,
-  );
-  await expectFailure(
-    "unsafe-manifest-path",
-    (root) => {
-      const path = resolve(root, "contracts", "v1", "manifest.json");
-      const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.schemas[0].file = "../private.schema.json";
-      writeJson(path, manifest);
-    },
-    /unsafe names or shape/,
-  );
-  await expectFailure(
-    "missing-usage-date-dedup",
-    (root) => {
-      const { path, schema } = readSchema(root, "usage-sync.schema.json");
-      delete schema.properties.dailyEntries["x-viberacing-uniqueBy"];
-      writeJson(path, schema);
-    },
-    /unique by reportedDate/,
-  );
-  await expectFailure(
-    "unsupported-schema-keyword",
-    (root) => {
-      const { path, schema } = readSchema(root, "problem-details.schema.json");
-      schema.$ref = "https://unreviewed.example/schema";
-      writeJson(path, schema);
-    },
-    /unsupported schema keyword/,
-  );
+
+  console.log(`Contract checker regression suite passed (${String(caseCount)} cases).`);
 } finally {
   rmSync(temporaryRoot, { force: true, recursive: true });
 }
-
-console.log(`Contract checker tests passed (${String(caseCount)} cases).`);

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/agent-provider.schema.json",
+  "title": "AgentProviderV1",
+  "description": "Closed enum of agent providers with a repository-implemented competitive reader. Recognition alone does not add a provider to this contract.",
+  "type": "string",
+  "enum": ["codex"],
+  "minLength": 5,
+  "maxLength": 5
+}

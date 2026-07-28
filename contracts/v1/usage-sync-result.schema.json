@@ -2,9 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.viberacing.example/v1/usage-sync-result.schema.json",
   "title": "UsageSyncResultV1",
-  "description": "Non-sensitive acknowledgement for one validated provider-neutral usage synchronization. Derived provider and internal anomaly reasons are intentionally absent.",
+  "description": "Non-sensitive acknowledgement for one validated provider-neutral usage synchronization. Derived provider and private anomaly reasons are intentionally absent; an optional coarse recovery action carries no internal cause.",
   "type": "object",
   "additionalProperties": false,
+  "x-viberacing-optionalProperties": ["nextAllowedSyncAt", "recoveryAction"],
   "required": ["schemaVersion", "requestId", "syncId", "outcome", "acceptedEntries"],
   "properties": {
     "schemaVersion": {
@@ -35,6 +36,19 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 31
+    },
+    "nextAllowedSyncAt": {
+      "type": "string",
+      "minLength": 24,
+      "maxLength": 24,
+      "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:00\\.000Z$",
+      "format": "date-time"
+    },
+    "recoveryAction": {
+      "type": "string",
+      "enum": ["update_connector", "reconnect_account", "contact_support", "retry_later"],
+      "minLength": 11,
+      "maxLength": 17
     }
   }
 }

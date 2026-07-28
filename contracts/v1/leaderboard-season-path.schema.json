@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.viberacing.example/v1/community-score-query.schema.json",
-  "title": "CommunityScoreQueryV1",
-  "description": "Closed value contract for one bounded public Community score season. A future URL parser must reject duplicate parameters before applying this schema.",
+  "$id": "https://schemas.viberacing.example/v1/leaderboard-season-path.schema.json",
+  "title": "LeaderboardSeasonPathV1",
+  "description": "One canonical UTC Monday season path parameter.",
   "type": "object",
   "additionalProperties": false,
   "required": ["seasonStart"],
   "properties": {
     "seasonStart": {
-      "description": "Inclusive Monday season start from 1999-12-27 through 2099-12-28.",
+      "description": "Inclusive UTC Monday season start.",
       "type": "string",
       "minLength": 10,
       "maxLength": 10,

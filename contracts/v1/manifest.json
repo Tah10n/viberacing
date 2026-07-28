@@ -21,39 +21,29 @@
   ],
   "schemas": [
     {
+      "file": "agent-provider.schema.json",
+      "exportName": "agentProviderV1",
+      "typeName": "AgentProviderV1"
+    },
+    {
       "file": "car-recipe.schema.json",
       "exportName": "carRecipeV1",
       "typeName": "CarRecipeV1"
     },
     {
-      "file": "community-race-page.schema.json",
-      "exportName": "communityRacePageV1",
-      "typeName": "CommunityRacePageV1"
-    },
-    {
-      "file": "community-race-status-page.schema.json",
-      "exportName": "communityRaceStatusPageV1",
-      "typeName": "CommunityRaceStatusPageV1"
-    },
-    {
-      "file": "community-score-page.schema.json",
-      "exportName": "communityScorePageV1",
-      "typeName": "CommunityScorePageV1"
-    },
-    {
-      "file": "community-score-query.schema.json",
-      "exportName": "communityScoreQueryV1",
-      "typeName": "CommunityScoreQueryV1"
-    },
-    {
-      "file": "community-token-race-status-page.schema.json",
-      "exportName": "communityTokenRaceStatusPageV1",
-      "typeName": "CommunityTokenRaceStatusPageV1"
-    },
-    {
       "file": "connector-car-proposal-result.schema.json",
       "exportName": "connectorCarProposalResultV1",
       "typeName": "ConnectorCarProposalResultV1"
+    },
+    {
+      "file": "connector-discovery-manifest.schema.json",
+      "exportName": "connectorDiscoveryManifestV1",
+      "typeName": "ConnectorDiscoveryManifestV1"
+    },
+    {
+      "file": "connector-pairing-approval.schema.json",
+      "exportName": "connectorPairingApprovalV1",
+      "typeName": "ConnectorPairingApprovalV1"
     },
     {
       "file": "connector-pairing-poll-result.schema.json",
@@ -76,9 +66,39 @@
       "typeName": "ConnectorPairingStartV1"
     },
     {
+      "file": "leaderboard-query.schema.json",
+      "exportName": "leaderboardQueryV1",
+      "typeName": "LeaderboardQueryV1"
+    },
+    {
+      "file": "leaderboard-season-path.schema.json",
+      "exportName": "leaderboardSeasonPathV1",
+      "typeName": "LeaderboardSeasonPathV1"
+    },
+    {
+      "file": "leaderboard-snapshot.schema.json",
+      "exportName": "leaderboardSnapshotV1",
+      "typeName": "LeaderboardSnapshotV1"
+    },
+    {
       "file": "problem-details.schema.json",
       "exportName": "problemDetailsV1",
       "typeName": "ProblemDetailsV1"
+    },
+    {
+      "file": "public-profile-path.schema.json",
+      "exportName": "publicProfilePathV1",
+      "typeName": "PublicProfilePathV1"
+    },
+    {
+      "file": "public-profile-query.schema.json",
+      "exportName": "publicProfileQueryV1",
+      "typeName": "PublicProfileQueryV1"
+    },
+    {
+      "file": "public-profile-summary.schema.json",
+      "exportName": "publicProfileSummaryV1",
+      "typeName": "PublicProfileSummaryV1"
     },
     {
       "file": "usage-sync-result.schema.json",
@@ -94,103 +114,15 @@
   "operations": [
     {
       "admissionPolicy": "no-queue-4",
-      "authenticationContract": "none",
-      "cacheControl": "no-store",
-      "corsPolicy": "same-origin",
-      "implementationStatus": "implemented-local",
-      "method": "get",
-      "operationId": "getCommunityRaceStatusV1",
-      "path": "/v1/community/race/status",
-      "problemSchema": "ProblemDetailsV1",
-      "problemStatuses": [400, 406, 429, 500, 503],
-      "queryPolicy": "closed-single-value",
-      "querySchema": "CommunityScoreQueryV1",
-      "requestBodyPolicy": "none",
-      "requestSchema": "none",
-      "responseSchema": "CommunityRaceStatusPageV1",
-      "summary": "Read one bounded Community race status page"
-    },
-    {
-      "admissionPolicy": "no-queue-4",
-      "authenticationContract": "none",
-      "cacheControl": "no-store",
-      "corsPolicy": "same-origin",
-      "implementationStatus": "implemented-local",
-      "method": "get",
-      "operationId": "getCommunityRaceV1",
-      "path": "/v1/community/race",
-      "problemSchema": "ProblemDetailsV1",
-      "problemStatuses": [400, 406, 429, 500, 503],
-      "queryPolicy": "closed-single-value",
-      "querySchema": "CommunityScoreQueryV1",
-      "requestBodyPolicy": "none",
-      "requestSchema": "none",
-      "responseSchema": "CommunityRacePageV1",
-      "summary": "Read one bounded Community race page"
-    },
-    {
-      "admissionPolicy": "no-queue-4",
-      "authenticationContract": "none",
-      "cacheControl": "no-store",
-      "corsPolicy": "same-origin",
-      "implementationStatus": "implemented-local",
-      "method": "get",
-      "operationId": "getCommunityScoresV1",
-      "path": "/v1/community/scores",
-      "problemSchema": "ProblemDetailsV1",
-      "problemStatuses": [400, 406, 429, 500, 503],
-      "queryPolicy": "closed-single-value",
-      "querySchema": "CommunityScoreQueryV1",
-      "requestBodyPolicy": "none",
-      "requestSchema": "none",
-      "responseSchema": "CommunityScorePageV1",
-      "summary": "Read one bounded Community score page"
-    },
-    {
-      "admissionPolicy": "no-queue-4",
-      "authenticationContract": "none",
-      "cacheControl": "no-store",
-      "corsPolicy": "same-origin",
-      "implementationStatus": "implemented-local",
-      "method": "get",
-      "operationId": "getCommunityTokensV1",
-      "path": "/v1/community/tokens",
-      "problemSchema": "ProblemDetailsV1",
-      "problemStatuses": [400, 406, 429, 500, 503],
-      "queryPolicy": "closed-single-value",
-      "querySchema": "CommunityScoreQueryV1",
-      "requestBodyPolicy": "none",
-      "requestSchema": "none",
-      "responseSchema": "CommunityTokenRaceStatusPageV1",
-      "summary": "Read one bounded Community token leaderboard page"
-    },
-    {
-      "admissionPolicy": "no-queue-4",
-      "authenticationContract": "connector-usage-sync-authentication.json",
-      "cacheControl": "no-store",
-      "corsPolicy": "same-origin",
-      "implementationStatus": "implemented-local",
-      "method": "post",
-      "operationId": "postCommunityUsageSyncV1",
-      "path": "/v1/community/usage",
-      "problemSchema": "ProblemDetailsV1",
-      "problemStatuses": [400, 401, 405, 406, 422, 500, 503],
-      "queryPolicy": "none",
-      "querySchema": "none",
-      "requestBodyPolicy": "exact-raw-json-8192",
-      "requestSchema": "UsageSyncV1",
-      "responseSchema": "UsageSyncResultV1",
-      "summary": "Submit one bounded provider-neutral Community usage snapshot"
-    },
-    {
-      "admissionPolicy": "no-queue-4",
       "authenticationContract": "connector-car-proposal-authentication.json",
       "cacheControl": "no-store",
       "corsPolicy": "same-origin",
-      "implementationStatus": "implemented-local",
+      "implementationStatus": "contract-only",
       "method": "post",
       "operationId": "postConnectorCarProposalV1",
       "path": "/v1/connector/cars/proposals",
+      "pathPolicy": "none",
+      "pathSchema": "none",
       "problemSchema": "ProblemDetailsV1",
       "problemStatuses": [400, 401, 405, 406, 422, 429, 500, 503],
       "queryPolicy": "none",
@@ -205,10 +137,12 @@
       "authenticationContract": "connector-pairing-transport.json",
       "cacheControl": "no-store",
       "corsPolicy": "same-origin",
-      "implementationStatus": "implemented-local",
+      "implementationStatus": "contract-only",
       "method": "post",
       "operationId": "postConnectorPairingPollV1",
       "path": "/v1/connector/pairing/poll",
+      "pathPolicy": "none",
+      "pathSchema": "none",
       "problemSchema": "ProblemDetailsV1",
       "problemStatuses": [400, 405, 406, 429, 500, 503],
       "queryPolicy": "none",
@@ -216,25 +150,107 @@
       "requestBodyPolicy": "exact-raw-json-1024",
       "requestSchema": "ConnectorPairingPollV1",
       "responseSchema": "ConnectorPairingPollResultV1",
-      "summary": "Poll and complete one approved connector pairing"
+      "summary": "Poll one bounded connector pairing batch"
     },
     {
       "admissionPolicy": "no-queue-4",
       "authenticationContract": "connector-pairing-transport.json",
       "cacheControl": "no-store",
       "corsPolicy": "same-origin",
-      "implementationStatus": "implemented-local",
+      "implementationStatus": "contract-only",
       "method": "post",
       "operationId": "postConnectorPairingStartV1",
       "path": "/v1/connector/pairing/start",
+      "pathPolicy": "none",
+      "pathSchema": "none",
       "problemSchema": "ProblemDetailsV1",
       "problemStatuses": [400, 405, 406, 429, 500, 503],
       "queryPolicy": "none",
       "querySchema": "none",
-      "requestBodyPolicy": "exact-raw-json-1024",
+      "requestBodyPolicy": "exact-raw-json-32768",
       "requestSchema": "ConnectorPairingStartV1",
       "responseSchema": "ConnectorPairingStartResultV1",
-      "summary": "Start one bounded connector pairing transaction"
+      "summary": "Start one bounded connector pairing batch"
+    },
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "none",
+      "cacheControl": "snapshot-by-season-state",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "contract-only",
+      "method": "get",
+      "operationId": "getSeasonLeaderboardV1",
+      "path": "/v1/leaderboards/{seasonStart}",
+      "pathPolicy": "closed",
+      "pathSchema": "LeaderboardSeasonPathV1",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 404, 406, 429, 500, 503],
+      "queryPolicy": "closed-single-value",
+      "querySchema": "LeaderboardQueryV1",
+      "requestBodyPolicy": "none",
+      "requestSchema": "none",
+      "responseSchema": "LeaderboardSnapshotV1",
+      "summary": "Read one precomputed historical leaderboard snapshot page"
+    },
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "none",
+      "cacheControl": "snapshot-by-season-state",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "contract-only",
+      "method": "get",
+      "operationId": "getCurrentLeaderboardV1",
+      "path": "/v1/leaderboards/current",
+      "pathPolicy": "none",
+      "pathSchema": "none",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 404, 406, 429, 500, 503],
+      "queryPolicy": "closed-single-value",
+      "querySchema": "LeaderboardQueryV1",
+      "requestBodyPolicy": "none",
+      "requestSchema": "none",
+      "responseSchema": "LeaderboardSnapshotV1",
+      "summary": "Read one precomputed current leaderboard snapshot page"
+    },
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "none",
+      "cacheControl": "snapshot-by-season-state",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "contract-only",
+      "method": "get",
+      "operationId": "getCurrentPublicProfileV1",
+      "path": "/v1/profiles/{handle}",
+      "pathPolicy": "closed",
+      "pathSchema": "PublicProfilePathV1",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 404, 406, 429, 500, 503],
+      "queryPolicy": "closed-single-value",
+      "querySchema": "PublicProfileQueryV1",
+      "requestBodyPolicy": "none",
+      "requestSchema": "none",
+      "responseSchema": "PublicProfileSummaryV1",
+      "summary": "Read one precomputed current public profile summary"
+    },
+    {
+      "admissionPolicy": "no-queue-4",
+      "authenticationContract": "connector-usage-sync-authentication.json",
+      "cacheControl": "no-store",
+      "corsPolicy": "same-origin",
+      "implementationStatus": "implemented-local",
+      "method": "post",
+      "operationId": "postUsageSyncV1",
+      "path": "/v1/usage",
+      "pathPolicy": "none",
+      "pathSchema": "none",
+      "problemSchema": "ProblemDetailsV1",
+      "problemStatuses": [400, 401, 405, 406, 422, 429, 500, 503],
+      "queryPolicy": "none",
+      "querySchema": "none",
+      "requestBodyPolicy": "exact-raw-json-8192",
+      "requestSchema": "UsageSyncV1",
+      "responseSchema": "UsageSyncResultV1",
+      "summary": "Submit one bounded AgentAccount usage snapshot"
     }
   ]
 }

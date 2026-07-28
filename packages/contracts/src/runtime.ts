@@ -1,4 +1,4 @@
-export type ContractSchemaType = "array" | "boolean" | "integer" | "object" | "string";
+export type ContractSchemaType = "array" | "boolean" | "integer" | "null" | "object" | "string";
 
 export interface ContractSchema {
   readonly $id?: string;
@@ -11,7 +11,7 @@ export interface ContractSchema {
   readonly additionalProperties?: false;
   readonly const?: boolean | number | string;
   readonly description?: string;
-  readonly enum?: readonly (boolean | number | string)[];
+  readonly enum?: readonly (boolean | null | number | string)[];
   readonly format?: "date" | "date-time";
   readonly items?: ContractSchema;
   readonly maxItems?: number;
@@ -24,7 +24,7 @@ export interface ContractSchema {
   readonly properties?: Readonly<Record<string, ContractSchema>>;
   readonly required?: readonly string[];
   readonly title?: string;
-  readonly type: ContractSchemaType;
+  readonly type: ContractSchemaType | readonly ContractSchemaType[];
 }
 
 export type ValidationIssueCode =
@@ -160,27 +160,22 @@ function calendarDate(value: string): Date | undefined {
 
 function isCanonicalUtcDateTime(value: string): boolean {
   const match =
-    /^(20[0-9]{2})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})\.([0-9]{3})Z$/.exec(
+    /^(20[0-9]{2})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})\.([0-9]{3,6})Z$/.exec(
       value,
     );
   if (match === null) {
     return false;
   }
-  const [year, month, day, hour, minute, second, millisecond] = match
-    .slice(1)
-    .map((part) => Number(part));
-  if (
-    year === undefined ||
-    month === undefined ||
-    day === undefined ||
-    hour === undefined ||
-    minute === undefined ||
-    second === undefined ||
-    millisecond === undefined ||
-    hour > 23 ||
-    minute > 59 ||
-    second > 59
-  ) {
+  const [yearText, monthText, dayText, hourText, minuteText, secondText, fractionalText] =
+    match.slice(1);
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const millisecond = Number(fractionalText?.slice(0, 3));
+  if (hour > 23 || minute > 59 || second > 59) {
     return false;
   }
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
@@ -440,6 +435,12 @@ function validateObject(
   }
 }
 
+function schemaTypeList(
+  type: ContractSchemaType | readonly ContractSchemaType[],
+): readonly ContractSchemaType[] {
+  return typeof type === "string" ? [type] : type;
+}
+
 function valueMatchesType(type: ContractSchemaType, value: unknown): boolean {
   switch (type) {
     case "array":
@@ -448,11 +449,14 @@ function valueMatchesType(type: ContractSchemaType, value: unknown): boolean {
       return typeof value === "boolean";
     case "integer":
       return typeof value === "number" && Number.isSafeInteger(value);
+    case "null":
+      return value === null;
     case "object":
       return value !== null && typeof value === "object" && !Array.isArray(value);
     case "string":
       return typeof value === "string";
   }
+  return false;
 }
 
 function validateNode(
@@ -467,7 +471,8 @@ function validateNode(
     addIssue(state, path, "budget_exceeded");
     return;
   }
-  if (!valueMatchesType(schema.type, value)) {
+  const schemaTypes = schemaTypeList(schema.type);
+  if (!schemaTypes.some((type) => valueMatchesType(type, value))) {
     addIssue(state, path, "type");
     return;
   }
@@ -478,7 +483,7 @@ function validateNode(
     addIssue(state, path, "enum");
   }
   if (
-    schema.type !== "string" &&
+    !schemaTypes.includes("string") &&
     (schema["x-viberacing-dateMaximum"] !== undefined ||
       schema["x-viberacing-dateMinimum"] !== undefined ||
       schema["x-viberacing-isoWeekday"] !== undefined)
@@ -487,7 +492,11 @@ function validateNode(
     return;
   }
 
-  switch (schema.type) {
+  if (value === null) {
+    return;
+  }
+  const concreteType = schemaTypes.find((candidate) => valueMatchesType(candidate, value));
+  switch (concreteType) {
     case "array":
       validateArray(schema, value as unknown[], path, depth, state);
       break;
@@ -495,6 +504,8 @@ function validateNode(
       break;
     case "integer":
       validateInteger(schema, value as number, path, state);
+      break;
+    case "null":
       break;
     case "object":
       validateObject(schema, value as object, path, depth, state);

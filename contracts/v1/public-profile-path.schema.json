@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/public-profile-path.schema.json",
+  "title": "PublicProfilePathV1",
+  "description": "One canonical public profile handle path parameter.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["handle"],
+  "properties": {
+    "handle": {
+      "description": "Lowercase public handle.",
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 25,
+      "pattern": "^[a-z0-9](?:[a-z0-9_-]{1,22}[a-z0-9])$"
+    }
+  }
+}
